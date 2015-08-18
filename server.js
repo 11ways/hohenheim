@@ -37,7 +37,8 @@ alchemy.start(function onAlchemyReady() {
 
 	// Create the dispatcher
 	alchemy.dispatcher = new alchemy.classes.SiteDispatcher({
-		redirectHost: '10.20.1.1',
+		fallbackAddress: 'http://localhost:8080', // Set to false to disable fallback
+		redirectHost: 'localhost', // localhost is the default value
 		proxyPort: 4747,
 		firstPort: 4748
 	});

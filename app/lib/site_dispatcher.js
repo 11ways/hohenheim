@@ -20,7 +20,7 @@ alchemy.create(function SiteDispatcher() {
 	 *
 	 * @author   Jelle De Loecker   <jelle@codedor.be>
 	 * @since    0.0.1
-	 * @version  0.0.1
+	 * @version  0.0.2
 	 *
 	 * @param    {Object}   options
 	 */
@@ -61,6 +61,9 @@ alchemy.create(function SiteDispatcher() {
 
 		// The host to redirect to
 		this.redirectHost = options.redirectHost || 'localhost';
+
+		// The address to fallback to when no site is found (if enabled)
+		this.fallbackAddress = options.fallbackAddress || false;
 
 		// Create the queue
 		this.queue = new Fuery();
@@ -162,7 +165,7 @@ alchemy.create(function SiteDispatcher() {
 	 *
 	 * @author   Jelle De Loecker   <jelle@codedor.be>
 	 * @since    0.0.1
-	 * @version  0.0.1
+	 * @version  0.0.2
 	 * 
 	 * @param    {IncommingMessage}   req
 	 * @param    {ServerResponse}     res
@@ -195,6 +198,11 @@ alchemy.create(function SiteDispatcher() {
 		site = this.getSite(req.headers);
 
 		if (!site) {
+
+			if (this.fallbackAddress) {
+				return this.proxy.web(req, res, {target: this.fallbackAddress});
+			}
+
 			res.writeHead(404, {'Content-Type': 'text/plain'});
 			res.end('There is no such domain here!');
 		} else {

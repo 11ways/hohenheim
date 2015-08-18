@@ -4,8 +4,8 @@
 	"version": "0.0.2",
 	"dependencies": {
 		"alchemymvc": "0.0.x",
-		"http-proxy": "1.0.2",
-		"process-monitor": "0.3.0",
+		"http-proxy": "1.11.1",
+		"process-monitor": "skerit/process-monitor",
 		"chimera": "git+https://github.com/codedor/alchemy-chimera.git#master",
 		"i18n": "git+https://github.com/codedor/alchemy-i18n.git#master",
 		"styleboost": "git+https://github.com/codedor/alchemy-styleboost.git#master",
