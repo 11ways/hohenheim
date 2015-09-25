@@ -59,6 +59,9 @@ alchemy.create(function SiteDispatcher() {
 		// Where the ports start
 		this.firstPort = options.firstPort || 4701;
 
+		// The ipv6 address
+		this.ipv6Address = options.ipv6Address;
+
 		// The host to redirect to
 		this.redirectHost = options.redirectHost || 'localhost';
 
@@ -85,7 +88,7 @@ alchemy.create(function SiteDispatcher() {
 	 *
 	 * @author   Jelle De Loecker   <jelle@codedor.be>
 	 * @since    0.0.1
-	 * @version  0.0.1
+	 * @version  0.0.2
 	 */
 	this.startProxy = function startProxy() {
 
@@ -99,6 +102,12 @@ alchemy.create(function SiteDispatcher() {
 
 		// Make the proxy server listen on the given port
 		this.server.listen(this.proxyPort);
+
+		// See if there is a ipv6 server defined)
+		if (this.ipv6Address) {
+			this.server_ipv6 = http.createServer(this.request.bind(this));
+			this.server_ipv6.listen(this.proxyPort, this.ipv6Address);
+		}
 
 		// Listen for error events
 		this.proxy.on('error', this.requestError.bind(this));

@@ -39,6 +39,7 @@ alchemy.start(function onAlchemyReady() {
 	alchemy.dispatcher = new alchemy.classes.SiteDispatcher({
 		fallbackAddress: 'http://localhost:8080', // Set to false to disable fallback
 		redirectHost: 'localhost', // localhost is the default value
+		ipv6Address: '', // Listen to this ipv6 address, too
 		proxyPort: 4747,
 		firstPort: 4748
 	});
