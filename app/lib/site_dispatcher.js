@@ -1,5 +1,4 @@
-var Fuery     = alchemy.use('fuery'),
-    child     = require('child_process'),
+var child     = require('child_process'),
     httpProxy = require('http-proxy'),
     http      = require('http'),
     path      = require('path'),
@@ -7,728 +6,298 @@ var Fuery     = alchemy.use('fuery'),
     ansiHTML  = require('ansi-html');
 
 /**
- * The Site Dispatcher class
+ * The Site Dispathcer class
  *
- * @author   Jelle De Loecker   <jelle@codedor.be>
+ * @constructor
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.0.1
+ * @version  0.1.0
  */
-alchemy.create(function SiteDispatcher() {
+var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispatcher(options) {
 
-	/**
-	 * Prepare the site dispatcher
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.2
-	 *
-	 * @param    {Object}   options
-	 */
-	this.init = function init(options) {
+	var that = this;
 
-		var that = this;
-
-		if (!options) {
-			options = {};
-		}
-
-		// Get the site model
-		this.Site = Model.get('Site');
-
-		// Count the number of made hits
-		this.hitCounter = 0;
-
-		// Count the number of made connections
-		this.connectionCounter = 0;
-
-		// Store sites by id in here
-		this.ids = {};
-
-		// Store sites by domain in here
-		this.domains = {};
-
-		// Store sites by name in here
-		this.names = {};
-
-		// The ports that are in use
-		this.ports = {};
-
-		// The port the proxy runs on
-		this.proxyPort = options.proxyPort || 8080;
-
-		// Where the ports start
-		this.firstPort = options.firstPort || 4701;
-
-		// The ipv6 address
-		this.ipv6Address = options.ipv6Address;
-
-		// The host to redirect to
-		this.redirectHost = options.redirectHost || 'localhost';
-
-		// The address to fallback to when no site is found (if enabled)
-		this.fallbackAddress = options.fallbackAddress || false;
-
-		// Create the queue
-		this.queue = new Fuery();
-
-		// Start the queue by getting the sites first
-		this.queue.start(function(done) {
-			that.Site.getSites(done);
-		});
-
-		// Listen to the site updat event
-		this.Site.on('siteUpdate', this.update.bind(this));
-
-		// Create the proxy server
-		this.startProxy();
-	};
-
-	/**
-	 * Start the proxy server
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.2
-	 */
-	this.startProxy = function startProxy() {
-
-		var that = this;
-
-		// Create the proxy
-		this.proxy = httpProxy.createProxyServer({});
-
-		// Create the server
-		this.server = http.createServer(this.request.bind(this));
-
-		// Make the proxy server listen on the given port
-		this.server.listen(this.proxyPort);
-
-		// See if there is a ipv6 server defined)
-		if (this.ipv6Address) {
-			this.server_ipv6 = http.createServer(this.request.bind(this));
-			this.server_ipv6.listen(this.proxyPort, this.ipv6Address);
-		}
-
-		// Listen for error events
-		this.proxy.on('error', this.requestError.bind(this));
-
-		// Intercept proxy responses
-		//this.proxy.on('proxyRes', this.response.bind(this));
-	};
-
-	/**
-	 * Handle request errors
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 * 
-	 * @param    {Error}              error
-	 * @param    {IncommingMessage}   req
-	 * @param    {ServerResponse}     res
-	 */
-	this.requestError = function requestError(error, req, res) {
-
-		if (!req.errorCount) {
-			req.errorCount = 1;
-		} else {
-			req.errorCount++;
-		}
-
-		// Retry 4 times
-		if (req.errorCount > 4) {
-			log.error('Retried connection ' + req.connectionId + ' four times, giving up');
-			res.writeHead(502, {'Content-Type': 'text/plain'});
-			res.end('Failed to reach server!');
-		} else {
-			// Make the request again
-			this.request(req, res);
-		}
-	};
-
-	/**
-	 * Get the site object based on the headers
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 * 
-	 * @param    {Object}   headers
-	 */
-	this.getSite = function getSite(headers) {
-
-		// Get the host (including port)
-		var domain = headers.host;
-
-		// Split it by colons
-		domain = domain.split(':');
-
-		// The first part is the domain
-		domain = domain[0];
-
-		return this.domains[domain];
-	};
-
-	/**
-	 * Handle a new proxy request
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.2
-	 * 
-	 * @param    {IncommingMessage}   req
-	 * @param    {ServerResponse}     res
-	 */
-	this.request = function request(req, res) {
-
-		var that = this,
-		    domain,
-		    read,
-		    site,
-		    hit;
-
-		req.startTime = Date.now();
-
-		// Get the hit id
-		hit = ++this.hitCounter;
-
-		if (!req.socket.connectionId) {
-
-			req.socket.connectionId = ++this.connectionCounter;
-			res.socket.connectionId = req.socket.connectionId;
-		}
-
-		req.connectionId = req.socket.connectionId;
-		req.hitId = hit;
-
-		req.headers.hitId = hit;
-		req.headers.connectionId = req.connectionId;
-		
-		site = this.getSite(req.headers);
-
-		if (!site) {
-
-			if (this.fallbackAddress) {
-				return this.proxy.web(req, res, {target: this.fallbackAddress});
-			}
-
-			res.writeHead(404, {'Content-Type': 'text/plain'});
-			res.end('There is no such domain here!');
-		} else {
-
-			// Only register this hit if the error count has not been set
-			// meaning it's the first time this request has passed through here
-			if (!req.errorCount) {
-				site.registerHit(req, res);
-			}
-
-			site.getAddress(function gotAddress(address) {
-				that.proxy.web(req, res, {target: address});
-			});
-		}
-	};
-
-	/**
-	 * Get a free port number,
-	 * and immediately reserve it for the given site
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 *
-	 * @param    {alchemy.classes.Site}   site   A site instance
-	 */
-	this.getPort = function getPort(site) {
-
-		var port = this.firstPort;
-
-		while (port !== this.proxyPort && typeof this.ports[port] !== 'undefined') {
-			port++;
-		}
-
-		this.ports[port] = site;
-
-		return port;
-	};
-
-	/**
-	 * Free up the given port number
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 *
-	 * @param    {Number}   portNumber
-	 */
-	this.freePort = function freePort(portNumber) {
-		delete this.ports[portNumber];
-	};
-
-	/**
-	 * Update the sites
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 *
-	 * @param    {Object}   sitesById   An object of site records by their id
-	 */
-	this.update = function update(sitesById) {
-
-		var removed,
-		    created,
-		    shared,
-		    id;
-
-		// Pause the dispatcher queue
-		this.queue.pause();
-
-		removed = alchemy.getDifference(this.ids, sitesById);
-
-		// Destroy all the removed id sites
-		for (id in removed) {
-			this.ids[id].remove();
-		}
-
-		created = alchemy.getDifference(sitesById, this.ids);
-
-		// Create all the new sites
-		for (id in created) {
-			new alchemy.classes.Site(this, created[id]);
-		}
-
-		shared = alchemy.getShared(this.ids, sitesById);
-
-		// Update all the existing sites
-		for (id in shared) {
-			this.ids[id].update(shared[id]);
-		}
-
-		// Resume the queue
-		this.queue.start();
-	};
+	if (!options) {
+		options = {};
+	}
 
+	// Get the site model
+	this.Site = Model.get('Site');
+
+	// Count the number of made hits
+	this.hitCounter = 0;
+
+	// Count the number of made connections
+	this.connectionCounter = 0;
+
+	// Store sites by id in here
+	this.ids = {};
+
+	// Store sites by domain in here
+	this.domains = {};
+
+	// Store sites by name in here
+	this.names = {};
+
+	// The ports that are in use
+	this.ports = {};
+
+	// The port the proxy runs on
+	this.proxyPort = options.proxyPort || 8080;
+
+	// Where the ports start
+	this.firstPort = options.firstPort || 4701;
+
+	// The ipv6 address
+	this.ipv6Address = options.ipv6Address;
+
+	// The host to redirect to
+	this.redirectHost = options.redirectHost || 'localhost';
+
+	// The address to fallback to when no site is found (if enabled)
+	this.fallbackAddress = options.fallbackAddress || false;
+
+	// Create the queue
+	this.queue = Function.createQueue();
+
+	// Start the queue by getting the sites first
+	this.queue.start(function(done) {
+		that.Site.getSites(done);
+	});
+
+	// Listen to the site updat event
+	this.Site.on('siteUpdate', this.update.bind(this));
+
+	// Create the proxy server
+	this.startProxy();
 });
 
 /**
- * The Site class
+ * Start the proxy server
  *
- * @author   Jelle De Loecker   <jelle@codedor.be>
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.0.1
+ * @version  0.1.0
+ */
+SiteDispatcher.setMethod(function startProxy() {
+
+	var that = this;
+
+	log.info('Proxy server is starting on port ' + this.proxyPort);
+
+	// Create the proxy
+	this.proxy = httpProxy.createProxyServer({});
+
+	// Create the server
+	this.server = http.createServer(this.request.bind(this));
+
+	// Make the proxy server listen on the given port
+	this.server.listen(this.proxyPort);
+
+	// See if there is a ipv6 server defined)
+	if (this.ipv6Address) {
+		this.server_ipv6 = http.createServer(this.request.bind(this));
+		this.server_ipv6.listen(this.proxyPort, this.ipv6Address);
+	}
+
+	// Listen for error events
+	this.proxy.on('error', this.requestError.bind(this));
+
+	// Intercept proxy responses
+	//this.proxy.on('proxyRes', this.response.bind(this));
+});
+
+/**
+ * Handle request errors
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.0.1
+ * @version  0.1.0
+ * 
+ * @param    {Error}              error
+ * @param    {IncommingMessage}   req
+ * @param    {ServerResponse}     res
+ */
+SiteDispatcher.setMethod(function requestError(error, req, res) {
+
+	if (!req.errorCount) {
+		req.errorCount = 1;
+	} else {
+		req.errorCount++;
+	}
+
+	// Retry 4 times
+	if (req.errorCount > 4) {
+		log.error('Retried connection ' + req.connectionId + ' four times, giving up');
+		res.writeHead(502, {'Content-Type': 'text/plain'});
+		res.end('Failed to reach server!');
+	} else {
+		// Make the request again
+		this.request(req, res);
+	}
+});
+
+/**
+ * Get the site object based on the headers
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
  * @version  0.0.1
+ * 
+ * @param    {Object}   headers
  */
-alchemy.create(function Site() {
+SiteDispatcher.setMethod(function getSite(headers) {
 
-	/**
-	 * Initialize this site instance
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 *
-	 * @param    {alchemy.classes.SiteDispatcher}   siteDispatcher
-	 * @param    {Object}                           record
-	 */
-	this.init = function init(siteDispatcher, record) {
+	// Get the host (including port)
+	var domain = headers.host;
 
-		// The parent site dispatcher
-		this.parent = siteDispatcher;
+	// Split it by colons
+	domain = domain.split(':');
 
-		// The id in the database
-		this.id = record._id;
+	// The first part is the domain
+	domain = domain[0];
 
-		// The running processes
-		this.processes = {};
+	return this.domains[domain];
+});
 
-		// The amount of running processes
-		this.running = 0;
+/**
+ * Handle a new proxy request
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.0.1
+ * @version  0.1.0
+ * 
+ * @param    {IncommingMessage}   req
+ * @param    {ServerResponse}     res
+ */
+SiteDispatcher.setMethod(function request(req, res) {
 
-		// The incoming bytes
-		this.incoming = 0;
+	var that = this,
+	    domain,
+	    read,
+	    site,
+	    hit;
 
-		// The outgoing bytes
-		this.outgoing = 0;
+	req.startTime = Date.now();
 
-		// Counters per path
-		this.pathCounters = {};
+	// Get the hit id
+	hit = ++this.hitCounter;
 
-		// The redirecthost
-		this.redirectHost = siteDispatcher.redirectHost;
+	if (!req.socket.connectionId) {
 
-		// The request log model
-		this.Log = Model.get('Request');
+		req.socket.connectionId = ++this.connectionCounter;
+		res.socket.connectionId = req.socket.connectionId;
+	}
 
-		// The ProcLog
-		this.Proclog = Model.get('Proclog');
+	req.connectionId = req.socket.connectionId;
+	req.hitId = hit;
 
-		this.update(record);
-	};
+	req.headers.hitId = hit;
+	req.headers.connectionId = req.connectionId;
+	
+	site = this.getSite(req.headers);
 
-	/**
-	 * Start a new process
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.2
-	 *
-	 * @param    {Function}   callback
-	 */
-	this.start = function start(callback) {
+	if (!site) {
 
-		var that = this,
-		    processStats,
-		    process,
-		    port;
+		if (this.fallbackAddress) {
+			return this.proxy.web(req, res, {target: this.fallbackAddress});
+		}
 
-		// Get an open port number
-		port = this.parent.getPort(this);
+		res.writeHead(404, {'Content-Type': 'text/plain'});
+		res.end('There is no such domain here!');
+	} else {
 
-		// Start the server
-		process = child.fork(this.script, ['--port=' + port, 'hohenchild'], {cwd: this.cwd, silent: true});
+		// Only register this hit if the error count has not been set
+		// meaning it's the first time this request has passed through here
+		if (!req.errorCount) {
+			site.registerHit(req, res);
+		}
 
-		process.proclog_id = null;
-		process.procarray = [];
-
-		// Get the child process' output
-		process.stdout.on('data', function onData(data) {
-
-			Function.series(function getId(next) {
-				if (process.proclog_id) {
-					return next();
-				}
-
-				that.Proclog.save({
-					site_id: that.id,
-					log: []
-				}, function saved(err, data) {
-
-					if (err) {
-						return next(err);
-					}
-
-					process.proclog_id = data[0].item._id;
-					next();
-				});
-			}, function done(err) {
-
-				var str;
-
-				if (err) {
-					log.error('Error saving proclog', {err: err});
-					return;
-				}
-
-				str = data.toString();
-				process.procarray.push({time: Date.now(), html: ansiHTML(str)});
-
-				that.Proclog.save({
-					_id: process.proclog_id,
-					log: process.procarray
-				});
-			});
+		site.getAddress(function gotAddress(address) {
+			that.proxy.web(req, res, {target: address});
 		});
-
-		// Store the port it should be running on
-		process.port = port;
-
-		// Store the time this was started
-		process.startTime = Date.now();
-
-		this.processes[process.pid] = process;
-
-		this.running++;
-
-		// Handle cpu & memory information from the process
-		processStats = function processStats(stats) {
-			that.processStats(process, stats.cpu, stats.mem);
-		};
-
-		// Attach process monitor
-		process.monitor = procmon.monitor({
-			pid: process.pid,
-			interval: 6000,
-			technique: 'proc'
-		}).start();
-
-		// Listen for process information
-		process.monitor.on('stats', processStats);
-
-		// Listen for exit events
-		process.on('exit', function(code, signal) {
-
-			// Clean up the process
-			that.processExit(process, code, signal);
-
-			// Stop the process monitor
-			process.monitor.stop();
-
-			// Delete the monitor from the process
-			delete process.monitor;
-		});
-
-		// Listen for the message that tells us the server is ready
-		process.on('message', function listenForReady(message) {
-
-			if (typeof message !== 'object') {
-				return;
-			}
-
-			if (message.alchemy && message.alchemy.ready) {
-
-				// Add this to the process object
-				process.ready = true;
-
-				// Execute the callback
-				if (callback) callback();
-
-				// Remove the event listener
-				process.removeListener('message', listenForReady);
-			}
-		});
-	};
-
-	/**
-	 * Handle child process cpu & memory information
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 *
-	 * @param    {ChildProcess}   process
-	 * @param    {Number}         cpu       Cpu usage in percentage
-	 * @param    {Number}         mem       Memory usage in kilobytes
-	 */
-	this.processStats = function processStats(process, cpu, mem) {
-
-		process.cpu = ~~cpu;
-		process.mem = ~~(mem/1024);
-
-		if (cpu > 50) {
-			pr('Site "' + this.name.bold + '" process id ' + process.pid + ' is using ' + process.cpu + '% cpu and ' + process.mem + ' MiB memory');
-		}
-	};
-
-	/**
-	 * Handle child process exits
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 *
-	 * @param    {ChildProcess}   process
-	 * @param    {Number}         code
-	 * @param    {String}         signal
-	 */
-	this.processExit = function processExit(process, code, signal) {
-
-		// Tell the parent this port is free again
-		this.parent.freePort(process.port);
-
-		// Decrease the running counter
-		this.running--;
-
-		// Remove the process from the processes object
-		delete this.processes[process.pid];
-
-		log.warn('Process ' + String(process.pid).bold + ' for site ' + this.name.bold + ' has exited with code ' + String(code).bold + ' and signal ' + String(signal).bold);
-	};
-
-	/**
-	 * Get an adress to proxy to
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 *
-	 * @param    {Function}   callback
-	 */
-	this.getAddress = function getAddress(callback) {
-
-		var that = this,
-		    fnc;
-
-		if (this.url) {
-			return callback(this.url);
-		}
-
-		fnc = function addressCreator() {
-			var pid;
-
-			// @todo: do some load balancing
-			for (pid in that.processes) {
-				return callback('http://' + that.redirectHost + ':' + that.processes[pid].port);
-			}
-		};
-
-		if (!this.running) {
-			this.start(fnc);
-		} else {
-			fnc();
-		}
-	};
-
-	/**
-	 * Remove this site completely
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 */
-	this.remove = function remove() {
-		this.cleanParent();
-	};
-
-	/**
-	 * Remove this site from the parent entries
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 */
-	this.cleanParent = function cleanParent() {
-
-		var domain,
-		    name;
-
-		delete this.parent.ids[this.id];
-
-		// Remove this instance from the parent's domains
-		for (domain in this.parent.domains) {
-			if (this.parent.domains[domain] == this) {
-				delete this.parent.domains[domain];
-			}
-		}
-
-		// Remove this instance from the parent's names
-		for (name in this.parent.names) {
-			if (this.parent.names[name] == this) {
-				delete this.parent.names[name];
-			}
-		}
-	};
-
-	/**
-	 * Update this site,
-	 * recreate the entries in the parent dispatcher
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 *
-	 * @param    {Object}   record
-	 */
-	this.update = function update(record) {
-
-		var that = this;
-
-		// The db record itself
-		this._record = record;
-
-		this.name = record.name;
-		this.domains = record.domain || [];
-		this.script = record.script;
-
-		if (this.script) {
-			this.cwd = path.dirname(this.script);
-		}
-
-		// We can also proxy to an existing url (apache sites)
-		this.url = record.url;
-
-		// Remove this instance from the parent
-		this.remove();
-
-		// Add by id
-		this.parent.ids[this.id] = this;
-
-		// Add by domains
-		this.domains.filter(function(domain) {
-			that.parent.domains[domain] = that;
-		});
-
-		// Re-add the instance by name
-		this.parent.names[this.name] = this;
-	};
-
-	/**
-	 * This site has been hit,
-	 * register some metrics
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 * 
-	 * @param    {IncommingMessage}   req
-	 * @param    {ServerResponse}     res
-	 * @param    {Function}           callback
-	 */
-	this.registerHit = function registerHit(req, res, callback) {
-
-		var that = this,
-		    bytesPrevRead,
-		    remoteAddress,
-		    bytesRead,
-		    fullPath,
-		    path,
-		    read;
-
-		fullPath = req.url;
-
-		// Get the wanted path
-		path = fullPath.split('?')[0];
-
-		// Get the previous amount of bytes read on this socket
-		bytesPrevRead = req.socket.prevRead || 0;
-		bytesRead = req.socket.bytesRead;
-
-		// The total amount of bytes read for this request
-		read = bytesRead - bytesPrevRead;
-
-		// Set the new previous read amount of bytes
-		req.socket.prevRead = req.socket.bytesRead;
-
-		// Get the remote address
-		remoteAddress = req.socket.remoteAddress;
-
-		res.on('finish', function finalizeHitRegister() {
-
-			var bytesPrevWritten = req.socket.prevWritten || 0,
-			    bytesWritten = req.socket.bytesWritten,
-			    sent = bytesWritten - bytesPrevWritten;
-
-			that.incoming += read;
-			that.outgoing += sent;
-
-			if (typeof that.pathCounters[path] === 'undefined') {
-				that.pathCounters[path] = {
-					incoming: 0,
-					outgoing: 0
-				};
-			}
-
-			that.pathCounters[path].incoming += read;
-			that.pathCounters[path].outgoing += sent;
-
-			// Set the new written amount
-			req.socket.prevWritten = bytesWritten;
-
-			that.Log.registerHit({
-				site_id: that.id,
-				host: req.headers.host,
-				path: fullPath,
-				status: res.statusCode,
-				request_size: read,
-				response_size: sent,
-				referer: req.headers.referer,
-				user_agent: req.headers['user-agent'],
-				remote_address: remoteAddress,
-				duration: Date.now() - req.startTime
-			});
-
-			pr(that.name.bold + ' has now received ' + ~~(that.incoming/1024) + ' KiBs and submitted ' + ~~(that.outgoing/1024) + ' KiBs');
-		});
-	};
-
+	}
+});
+
+/**
+ * Get a free port number,
+ * and immediately reserve it for the given site
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.0.1
+ * @version  0.0.1
+ *
+ * @param    {Develry.Site}   site   A site instance
+ */
+SiteDispatcher.setMethod(function getPort(site) {
+
+	var port = this.firstPort;
+
+	while (port !== this.proxyPort && typeof this.ports[port] !== 'undefined') {
+		port++;
+	}
+
+	this.ports[port] = site;
+
+	return port;
+});
+
+/**
+ * Free up the given port number
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.0.1
+ * @version  0.1.0
+ *
+ * @param    {Number}   portNumber
+ */
+SiteDispatcher.setMethod(function freePort(portNumber) {
+	delete this.ports[portNumber];
+});
+
+/**
+ * Update the sites
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.0.1
+ * @version  0.1.0
+ *
+ * @param    {Object}   sitesById   An object of site records by their id
+ */
+SiteDispatcher.setMethod(function update(sitesById) {
+
+	var removed,
+	    created,
+	    shared,
+	    id;
+
+	// Pause the dispatcher queue
+	this.queue.pause();
+
+	removed = alchemy.getDifference(this.ids, sitesById);
+
+	// Destroy all the removed id sites
+	for (id in removed) {
+		this.ids[id].remove();
+	}
+
+	created = alchemy.getDifference(sitesById, this.ids);
+
+	// Create all the new sites
+	for (id in created) {
+		new Classes.Develry.Site(this, created[id]);
+	}
+
+	shared = alchemy.getShared(this.ids, sitesById);
+
+	// Update all the existing sites
+	for (id in shared) {
+		this.ids[id].update(shared[id]);
+	}
+
+	// Resume the queue
+	this.queue.start();
 });
 
 /**

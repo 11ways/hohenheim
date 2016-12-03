@@ -1,5 +1,4 @@
-var Fuery = alchemy.use('fuery'),
-    sitesByName = alchemy.shared('Sites.byName'),
+var sitesByName = alchemy.shared('Sites.byName'),
     sitesByDomain = alchemy.shared('Sites.byDomain'),
     sitesById = alchemy.shared('Sites.byId');
 
@@ -8,119 +7,108 @@ var Fuery = alchemy.use('fuery'),
  *
  * @constructor
  *
- * @author   Jelle De Loecker   <jelle@codedor.be>
+ * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.0.1
+ * @version  0.1.0
  */
-Model.extend(function SiteModel() {
+var Site = Function.inherits('Alchemy.AppModel', function SiteModel(conduit, options) {
+	SiteModel.super.call(this, conduit, options);
 
-	this.preInit = function preInit() {
-
-		this.parent();
-
-		this.blueprint = {
-			name: {
-				type: 'String'
-			},
-			domain: {
-				type: 'String',
-				array: true
-			},
-			script: {
-				type: 'Path'
-			},
-			url: {
-				type: 'String'
-			}
-		};
-
-		this.modelEdit = {
-			general: {
-				title: __('chimera', 'General'),
-				fields: [
-					'name',
-					'domain',
-					'script',
-					'url'
-				]
-			},
-			control: {
-				title: 'Control',
-				fields: [
-					{
-						field: '_id',
-						type: 'site_stat'
-					}
-				]
-			}
-		};
-	};
-
-	this.init = function init() {
-
-		var queue,
-		    that = this;
-
-		this.parent();
-	};
-
-	/**
-	 * Update the sites after a save, and pause the queue while doing so
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 */
-	this.afterSave = function afterSave() {
-
-		this.parent();
+	this.on('saved', function saved() {
 		this.getSites();
+	});
+});
 
-	};
+/**
+ * Constitute the class wide schema
+ *
+ * @author   Jelle De Loecker <jelle@develry.be>
+ * @since    0.1.0
+ * @version  0.1.0
+ */
+Site.constitute(function addFields() {
+	this.addField('name', 'String');
+	this.addField('domain', 'String', {array: true});
+	this.addField('script', 'String');
+	this.addField('url', 'String');
+});
 
-	/**
-	 * Get all the sites in the database
-	 *
-	 * @author   Jelle De Loecker   <jelle@codedor.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 */
-	this.getSites = function getSites(callback) {
+/**
+ * Configure chimera for this model
+ *
+ * @author   Jelle De Loecker <jelle@develry.be>
+ * @since    0.1.0
+ * @version  0.1.0
+ */
+Site.constitute(function chimeraConfig() {
 
-		var that = this;
+	var list,
+	    edit;
 
-		that.find('all', function(err, results) {
+	if (!this.chimera) {
+		return;
+	}
 
-			var byName = {},
-			    byDomain = {},
-			    byId = {};
+	// Get the list group
+	list = this.chimera.getActionFields('list');
 
-			results.filter(function(value) {
+	list.addField('name');
+	list.addField('domain');
 
-				var site = value['Site'];
+	// Get the edit group
+	edit = this.chimera.getActionFields('edit');
 
-				// Store it by each domain name
-				site.domain.filter(function(domainName) {
-					byDomain[domainName] = site;
-				});
+	edit.addField('name');
+	edit.addField('domain');
+	edit.addField('script');
+	edit.addField('url');
 
-				// Store it by site name
-				byName[site.name] = site;
+	// @TODO: Add stat & control buttons
+});
 
-				// Store it by id
-				byId[site._id] = site;
+/**
+ * Get all the sites in the database
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.0.1
+ * @version  0.1.0
+ *
+ * @param    {Function}   callback
+ */
+Site.setMethod(function getSites(callback) {
+	var that = this;
+
+	that.find('all', {document: false}, function gotRecords(err, results) {
+
+		var byName = {},
+		    byDomain = {},
+		    byId = {};
+
+		results.filter(function(value) {
+
+			var site = value['Site'];
+
+			// Store it by each domain name
+			site.domain.filter(function(domainName) {
+				byDomain[domainName] = site;
 			});
 
-			alchemy.overwrite(sitesByDomain, byDomain);
-			alchemy.overwrite(sitesByName, byName);
-			alchemy.overwrite(sitesById, byId);
+			// Store it by site name
+			byName[site.name] = site;
 
-			// Emit the siteUpdate event
-			that.emit('siteUpdate', sitesById, sitesByDomain, sitesByName);
-
-			if (callback) {
-				callback(sitesById, sitesByDomain, sitesByName);
-			}
+			// Store it by id
+			byId[site._id] = site;
 		});
-	};
+
+		alchemy.overwrite(sitesByDomain, byDomain);
+		alchemy.overwrite(sitesByName, byName);
+		alchemy.overwrite(sitesById, byId);
+
+		// Emit the siteUpdate event
+		that.emit('siteUpdate', sitesById, sitesByDomain, sitesByName);
+
+		if (callback) {
+			callback(sitesById, sitesByDomain, sitesByName);
+		}
+	});
 });

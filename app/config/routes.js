@@ -1,2 +1,8 @@
 
-alchemy.connect('static::home', {nl: '/thuis', en: '/home'}, {controller: 'static', action: 'home'});
+Router.add({
+	name       : 'Home',
+	methods    : 'get',
+	paths      : '/',
+	handler    : 'Static#home',
+	breadcrumb : 'static.home'
+});

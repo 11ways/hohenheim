@@ -1,66 +1,48 @@
 /**
- * The Request Model class
+ * The Request Model
  *
  * @constructor
  *
- * @author   Jelle De Loecker   <jelle@codedor.be>
- * @since    0.0.1
- * @version  0.0.1
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.0.2
+ * @version  0.1.0
  */
-Model.extend(function RequestModel() {
+var Request = Function.inherits('Alchemy.AppModel', function RequestModel(conduit, options) {
+	RequestModel.super.call(this, conduit, options);
+});
 
-	this.preInit = function preInit() {
+/**
+ * Constitute the class wide schema
+ *
+ * @author   Jelle De Loecker <jelle@develry.be>
+ * @since    0.1.0
+ * @version  0.1.0
+ */
+Request.constitute(function addFields() {
 
-		this.parent();
+	// This belongs to a certain site
+	this.belongsTo('Site');
 
-		// Don't cache this model
-		this.cacheDuration = false;
+	this.addField('host', 'String');
+	this.addField('path', 'String');
+	this.addField('status', 'Number');
+	this.addField('request_size', 'Number');
+	this.addField('response_size', 'Number');
+	this.addField('referer', 'String');
+	this.addField('user_agent', 'String');
+	this.addField('remote_address', 'String');
+	this.addField('duration', 'Number');
+});
 
-		this.blueprint = {
-			updated: false,
-			site_id: {
-				type: 'ObjectId'
-			},
-			host: {
-				type: 'String'
-			},
-			path: {
-				type: 'String'
-			},
-			status: {
-				type: 'Number'
-			},
-			request_size: {
-				type: 'Number'
-			},
-			response_size: {
-				type: 'Number'
-			},
-			referer: {
-				type: 'String'
-			},
-			user_agent: {
-				type: 'String'
-			},
-			remote_address: {
-				type: 'String'
-			},
-			duration: {
-				type: 'Number'
-			}
-		};
-	};
-
-	/**
-	 * Save the given data in the database
-	 *
-	 * @author   Jelle De Loecker   <jelle@kipdola.be>
-	 * @since    0.0.1
-	 * @version  0.0.1
-	 *
-	 * @param    {Object}   data   The data to save
-	 */
-	this.registerHit = function registerHit(data) {
-		this.save(data);
-	};
+/**
+ * Save the given data in the database
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.0.1
+ * @version  0.1.0
+ *
+ * @param    {Object}   data   The data to save
+ */
+Request.setMethod(function registerHit(data) {
+	this.save(data);
 });

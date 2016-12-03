@@ -3,12 +3,10 @@
  *
  * @constructor
  *
- * @author   Jelle De Loecker   <jelle@kipdola.be>
+ * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.0.1
+ * @version  0.1.0
  */
-Model.extend(function AppModel() {
-
-	this.useTable = false;
-	
+var AppModel = Function.inherits('Alchemy.Model', function AppModel(conduit, options) {
+	AppModel.super.call(this, conduit, options);
 });
