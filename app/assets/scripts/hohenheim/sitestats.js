@@ -108,8 +108,6 @@ var updateSite = function updateSite(siteId) {
 			result = [];
 		}
 
-		console.log('Logs:', result);
-
 		html += '<table class="table table-striped">';
 		html += '<tr><th></th><th>Created</th><th>Updated</th></tr>';
 

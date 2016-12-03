@@ -27,10 +27,16 @@ var Site = Function.inherits('Alchemy.AppModel', function SiteModel(conduit, opt
  * @version  0.1.0
  */
 Site.constitute(function addFields() {
+
+	var site_types = alchemy.getClassGroup('site_type');
+
 	this.addField('name', 'String');
 	this.addField('domain', 'String', {array: true});
 	this.addField('script', 'String');
 	this.addField('url', 'String');
+
+	this.addField('site_type', 'Enum', {values: site_types});
+	this.addField('settings', 'Schema', {schema: 'site_type'});
 });
 
 /**
@@ -52,6 +58,7 @@ Site.constitute(function chimeraConfig() {
 	// Get the list group
 	list = this.chimera.getActionFields('list');
 
+	list.addField('site_type');
 	list.addField('name');
 	list.addField('domain');
 
@@ -62,6 +69,8 @@ Site.constitute(function chimeraConfig() {
 	edit.addField('domain');
 	edit.addField('script');
 	edit.addField('url');
+	edit.addField('site_type');
+	edit.addField('settings');
 
 	// @TODO: Add stat & control buttons
 	edit.addField('statistics', '_id', {type: 'SiteStat'});

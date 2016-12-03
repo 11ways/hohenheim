@@ -1,5 +1,6 @@
-var httpProxy = require('http-proxy'),
-    http      = require('http');
+var site_types = alchemy.getClassGroup('site_type'),
+    httpProxy  = require('http-proxy'),
+    http       = require('http');
 
 /**
  * The Site Dispatcher class
@@ -263,7 +264,8 @@ SiteDispatcher.setMethod(function freePort(portNumber) {
  */
 SiteDispatcher.setMethod(function update(sitesById) {
 
-	var removed,
+	var SiteConstructor,
+	    removed,
 	    created,
 	    shared,
 	    id;
@@ -282,7 +284,13 @@ SiteDispatcher.setMethod(function update(sitesById) {
 
 	// Create all the new sites
 	for (id in created) {
-		new Classes.Develry.Site(this, created[id]);
+		SiteConstructor = site_types[created[id].site_type];
+
+		if (!SiteConstructor) {
+			SiteConstructor = Classes.Develry.Site;
+		}
+
+		new SiteConstructor(this, created[id]);
 	}
 
 	shared = alchemy.getShared(this.ids, sitesById);

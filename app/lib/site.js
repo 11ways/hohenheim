@@ -1,7 +1,4 @@
-var child     = require('child_process'),
-    path      = require('path'),
-    procmon   = require('process-monitor'),
-    ansiHTML  = require('ansi-html');
+var libpath = require('path');
 
 /**
  * The Site class
@@ -13,21 +10,15 @@ var child     = require('child_process'),
  * @version  0.1.0
  *
  * @param    {Develry.SiteDispatcher}   siteDispatcher
- * @param    {Object}                           record
+ * @param    {Object}                   record
  */
-var Site = Function.inherits('Informer', 'Develry', function Site(siteDispatcher, record) {
+var Site = Function.inherits('Alchemy.Base', 'Develry', function Site(siteDispatcher, record) {
 
 	// The parent site dispatcher
 	this.parent = siteDispatcher;
 
 	// The id in the database
 	this.id = record._id;
-
-	// The running processes
-	this.processes = {};
-
-	// The amount of running processes
-	this.running = 0;
 
 	// The incoming bytes
 	this.incoming = 0;
@@ -47,7 +38,56 @@ var Site = Function.inherits('Informer', 'Develry', function Site(siteDispatcher
 	// The ProcLog
 	this.Proclog = Model.get('Proclog');
 
+	// The site settings
+	this.settings = record.settings || {};
+
 	this.update(record);
+});
+
+/**
+ * This is an abstract class
+ *
+ * @type {Boolean}
+ */
+Site.setProperty('is_abstract_class', true);
+
+/**
+ * This class starts a new group
+ *
+ * @type {Boolean}
+ */
+Site.setProperty('starts_new_group', true);
+
+/**
+ * The name of this group
+ *
+ * @type {String}
+ */
+Site.setProperty('group_name', 'site_type');
+
+/**
+ * Return the class-wide schema
+ *
+ * @type   {Schema}
+ */
+Site.setProperty(function schema() {
+	return this.constructor.schema;
+});
+
+/**
+ * Set the site type schema
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.1.0
+ * @version  0.1.0
+ */
+Site.constitute(function setSchema() {
+
+	var schema;
+
+	// Create a new schema
+	schema = new Classes.Alchemy.Schema(this);
+	this.schema = schema;
 });
 
 /**
@@ -60,163 +100,7 @@ var Site = Function.inherits('Informer', 'Develry', function Site(siteDispatcher
  * @param    {Function}   callback
  */
 Site.setMethod(function start(callback) {
-
-	var that = this,
-	    processStats,
-	    process,
-	    port;
-
-	// Get an open port number
-	port = this.parent.getPort(this);
-
-	// Start the server
-	process = child.fork(this.script, ['--port=' + port, 'hohenchild'], {cwd: this.cwd, silent: true});
-
-	process.proclog_id = null;
-	process.procarray = [];
-
-	// Get the child process' output
-	process.stdout.on('data', function onData(data) {
-
-		Function.series(function getId(next) {
-			if (process.proclog_id) {
-				return next();
-			}
-
-			that.Proclog.save({
-				site_id: that.id,
-				log: []
-			}, {document: false}, function saved(err, data) {
-
-				if (err) {
-					return next(err);
-				}
-
-				process.proclog_id = data[0]._id;
-				next();
-			});
-		}, function done(err) {
-
-			var str;
-
-			if (err) {
-				log.error('Error saving proclog', {err: err});
-				return;
-			}
-
-			str = data.toString();
-			process.procarray.push({time: Date.now(), html: ansiHTML(str)});
-
-			that.Proclog.save({
-				_id: process.proclog_id,
-				log: process.procarray
-			});
-		});
-	});
-
-	// Store the port it should be running on
-	process.port = port;
-
-	// Store the time this was started
-	process.startTime = Date.now();
-
-	this.processes[process.pid] = process;
-
-	this.running++;
-
-	// Handle cpu & memory information from the process
-	processStats = function processStats(stats) {
-		that.processStats(process, stats.cpu, stats.mem);
-	};
-
-	// Attach process monitor
-	process.monitor = procmon.monitor({
-		pid: process.pid,
-		interval: 6000,
-		technique: 'proc'
-	}).start();
-
-	// Listen for process information
-	process.monitor.on('stats', processStats);
-
-	// Listen for exit events
-	process.on('exit', function(code, signal) {
-
-		// Clean up the process
-		that.processExit(process, code, signal);
-
-		// Stop the process monitor
-		process.monitor.stop();
-
-		// Delete the monitor from the process
-		delete process.monitor;
-	});
-
-	// Listen for the message that tells us the server is ready
-	process.on('message', function listenForReady(message) {
-
-		if (typeof message !== 'object') {
-			return;
-		}
-
-		if (message.alchemy && message.alchemy.ready) {
-
-			// Add this to the process object
-			process.ready = true;
-
-			// Execute the callback
-			if (callback) callback();
-
-			// Remove the event listener
-			process.removeListener('message', listenForReady);
-		}
-	});
-});
-
-/**
- * Handle child process cpu & memory information
- *
- * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.0.1
- * @version  0.1.0
- *
- * @param    {ChildProcess}   process
- * @param    {Number}         cpu       Cpu usage in percentage
- * @param    {Number}         mem       Memory usage in kilobytes
- */
-Site.setMethod(function processStats(process, cpu, mem) {
-
-	process.cpu = ~~cpu;
-	process.mem = ~~(mem/1024);
-
-	if (cpu > 50) {
-		pr('Site "' + this.name.bold + '" process id ' + process.pid + ' is using ' + process.cpu + '% cpu and ' + process.mem + ' MiB memory');
-	}
-});
-
-/**
- * Handle child process exits
- *
- * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.0.1
- * @version  0.1.0
- *
- * @param    {ChildProcess}   process
- * @param    {Number}         code
- * @param    {String}         signal
- */
-Site.setMethod(function processExit(process, code, signal) {
-
-	// Tell the parent this port is free again
-	this.parent.freePort(process.port);
-
-	// Decrease the running counter
-	this.running--;
-
-	// Remove the process from the processes object
-	delete this.processes[process.pid];
-
-	log.warn('Process ' + String(process.pid).bold + ' for site ' + this.name.bold + ' has exited with code ' + String(code).bold + ' and signal ' + String(signal).bold);
+	callback(new Error('Start method has not been implemented'));
 });
 
 /**
@@ -229,28 +113,7 @@ Site.setMethod(function processExit(process, code, signal) {
  * @param    {Function}   callback
  */
 Site.setMethod(function getAddress(callback) {
-
-	var that = this,
-	    fnc;
-
-	if (this.url) {
-		return callback(this.url);
-	}
-
-	fnc = function addressCreator() {
-		var pid;
-
-		// @todo: do some load balancing
-		for (pid in that.processes) {
-			return callback('http://' + that.redirectHost + ':' + that.processes[pid].port);
-		}
-	};
-
-	if (!this.running) {
-		this.start(fnc);
-	} else {
-		fnc();
-	}
+	callback(new Error('GetAddress method has not been implemented'));
 });
 
 /**
@@ -299,7 +162,7 @@ Site.setMethod(function cleanParent() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.0.1
+ * @version  0.1.0
  *
  * @param    {Object}   record
  */
@@ -315,11 +178,8 @@ Site.setMethod(function update(record) {
 	this.script = record.script;
 
 	if (this.script) {
-		this.cwd = path.dirname(this.script);
+		this.cwd = libpath.dirname(this.script);
 	}
-
-	// We can also proxy to an existing url (apache sites)
-	this.url = record.url;
 
 	// Remove this instance from the parent
 	this.remove();
