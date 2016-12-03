@@ -1,12 +1,8 @@
-var child     = require('child_process'),
-    httpProxy = require('http-proxy'),
-    http      = require('http'),
-    path      = require('path'),
-    procmon   = require('process-monitor'),
-    ansiHTML  = require('ansi-html');
+var httpProxy = require('http-proxy'),
+    http      = require('http');
 
 /**
- * The Site Dispathcer class
+ * The Site Dispatcher class
  *
  * @constructor
  *
@@ -195,7 +191,7 @@ SiteDispatcher.setMethod(function request(req, res) {
 
 	req.headers.hitId = hit;
 	req.headers.connectionId = req.connectionId;
-	
+
 	site = this.getSite(req.headers);
 
 	if (!site) {
@@ -316,13 +312,13 @@ Resource.register('sitestat', function(data, callback) {
 	    pid;
 
 	if (!siteId) {
-		return callback({err: 'no id given'});
+		return callback(new Error('No site_id given'));
 	}
 
 	site = alchemy.dispatcher.ids[siteId];
 
 	if (!site) {
-		return callback({err: 'site does not exist'});
+		return callback(new Error('Site does not exist'));
 	}
 
 	// Get the amount of processes running
@@ -346,7 +342,7 @@ Resource.register('sitestat', function(data, callback) {
 	result.incoming = site.incoming;
 	result.outgoing = site.outgoing;
 
-	callback(result);
+	callback(null, result);
 });
 
 /**
@@ -365,24 +361,24 @@ Resource.register('sitestat-kill', function(data, callback) {
 	    pid;
 
 	if (!siteId) {
-		return callback({err: 'no id given'});
+		return callback(new Error('No site_id given'));
 	}
 
 	site = alchemy.dispatcher.ids[siteId];
 
 	if (!site) {
-		return callback({err: 'site does not exist'});
+		return callback(new Error('Site does not exist'));
 	}
 
 	process = site.processes[data.pid];
 
 	if (!process) {
-		return callback({err: 'pid does not exist'});
+		return callback(new Error('pid does not exist'));
 	}
 
 	process.kill();
 
-	callback({success: 'process killed'});
+	callback(null, {success: 'process killed'});
 });
 
 /**
@@ -401,18 +397,18 @@ Resource.register('sitestat-start', function(data, callback) {
 	    pid;
 
 	if (!siteId) {
-		return callback({err: 'no id given'});
+		return callback(new Error('No site_id given'));
 	}
 
 	site = alchemy.dispatcher.ids[siteId];
 
 	if (!site) {
-		return callback({err: 'site does not exist'});
+		return callback(new Error('Site does not exist'));
 	}
 
 	site.start();
 
-	callback({success: 'process started'});
+	callback(null, {success: 'process started'});
 });
 
 /**
@@ -432,19 +428,24 @@ Resource.register('sitestat-logs', function(data, callback) {
 	    pid;
 
 	if (!siteId) {
-		return callback({err: 'no id given'});
+		return callback(new Error('No site_id given'));
 	}
 
 	site = alchemy.dispatcher.ids[siteId];
 
 	if (!site) {
-		return callback({err: 'site does not exist'});
+		return callback(new Error('Site does not exist'));
 	}
 
-	Proclog.find('all', {conditions: {site_id: siteId}, fields: ['_id', 'created', 'updated']}, function(err, data) {
+	Proclog.find('all', {document: false, conditions: {site_id: siteId}, fields: ['_id', 'created', 'updated']}, function(err, data) {
+
+		if (err) {
+			return callback(err);
+		}
+
 		data = Object.extract(data, '$..Proclog');
 		data = Array.cast(data);
-		callback(data);
+		callback(null, data);
 	});
 });
 
@@ -461,11 +462,11 @@ Resource.register('sitestat-log', function(data, callback) {
 	    Proclog = Model.get('Proclog');
 
 	if (!logId) {
-		return callback({err: 'no id given'});
+		return callback(new Error('No site_id given'));
 	}
 
-	Proclog.find('all', {conditions: {_id: logId}}, function(err, data) {
+	Proclog.find('all', {document: false, conditions: {_id: logId}}, function(err, data) {
 		data = Object.extract(data, '$..Proclog');
-		callback(data);
+		callback(null, data);
 	});
 });

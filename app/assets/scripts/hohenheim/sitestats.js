@@ -1,11 +1,9 @@
-(function() {
-
 /**
  * Update the site statistics
  *
- * @author   Jelle De Loecker   <jelle@kipdola.be>
+ * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.0.1
+ * @version  0.1.0
  *
  * @param    {ObjectId}   siteId
  */
@@ -20,7 +18,7 @@ var updateSite = function updateSite(siteId) {
 	$this = $('div[data-site-stats][data-site-id="' + siteId + '"]');
 	$logs = $('div[data-site-logs][data-site-id="' + siteId + '"]');
 
-	hawkejs.getResource('sitestat', {id: siteId}, function(result) {
+	hawkejs.scene.helpers.Alchemy.getResource('sitestat', {id: siteId}, function(err, result) {
 
 		var process,
 		    html,
@@ -28,7 +26,10 @@ var updateSite = function updateSite(siteId) {
 		    mem,
 		    cpu;
 
-		if (result.err) {
+		console.log('Get resource result:', err, result);
+
+		if (err) {
+			console.log('Sitestat error:', err);
 			return;
 		}
 
@@ -86,7 +87,7 @@ var updateSite = function updateSite(siteId) {
 
 			e.preventDefault();
 
-			hawkejs.getResource('sitestat-kill', {id: siteId, pid: $this.attr('data-kill-pid')}, function(data) {
+			hawkejs.scene.helpers.Alchemy.getResource('sitestat-kill', {id: siteId, pid: $this.attr('data-kill-pid')}, function(data) {
 
 				if (data.err) {
 					toastr.err(data.err);
@@ -99,9 +100,15 @@ var updateSite = function updateSite(siteId) {
 	});
 
 	// Show available logs
-	hawkejs.getResource('sitestat-logs', {id: siteId}, function(result) {
+	hawkejs.scene.helpers.Alchemy.getResource('sitestat-logs', {id: siteId}, function(err, result) {
 
 		var html = '';
+
+		if (!result) {
+			result = [];
+		}
+
+		console.log('Logs:', result);
 
 		html += '<table class="table table-striped">';
 		html += '<tr><th></th><th>Created</th><th>Updated</th></tr>';
@@ -121,7 +128,7 @@ var updateSite = function updateSite(siteId) {
 			var $this = $(this);
 			e.preventDefault();
 
-			hawkejs.getResource('sitestat-log', {logid: $this.data('log-id')}, function(log) {
+			hawkejs.scene.helpers.Alchemy.getResource('sitestat-log', {logid: $this.data('log-id')}, function(err, log) {
 
 				var prevdate;
 
@@ -153,9 +160,9 @@ var updateSite = function updateSite(siteId) {
 	});
 };
 
-hawkejs.spot.introduced('[data-site-control]', function(elements) {
+hawkejs.scene.on({type: 'set', template: 'chimera/fields/site_stat_edit'}, function applyField(element, variables) {
 
-	var $elements = $(elements);
+	var $elements = $(element);
 
 	$('[data-site-stats]', $elements).each(function() {
 
@@ -174,16 +181,15 @@ hawkejs.spot.introduced('[data-site-control]', function(elements) {
 
 		siteId = $this.data('site-id');
 
-		hawkejs.getResource('sitestat-start', {id: siteId}, function(data) {
+		hawkejs.scene.helpers.Alchemy.getResource('sitestat-start', {id: siteId}, function(err, data) {
 
-			if (data.err) {
-				toastr.err(data.err);
-			} else {
-				toastr.success('New process has been started');
-				updateSite(siteId);
+			if (err) {
+				throw err;
 			}
+
+			console.log('New process has been started');
+			updateSite(siteId);
 		});
 	});
-});
 
-}());
+});

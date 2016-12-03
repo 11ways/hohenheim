@@ -1,3 +1,8 @@
+var child     = require('child_process'),
+    path      = require('path'),
+    procmon   = require('process-monitor'),
+    ansiHTML  = require('ansi-html');
+
 /**
  * The Site class
  *
@@ -81,13 +86,13 @@ Site.setMethod(function start(callback) {
 			that.Proclog.save({
 				site_id: that.id,
 				log: []
-			}, function saved(err, data) {
+			}, {document: false}, function saved(err, data) {
 
 				if (err) {
 					return next(err);
 				}
 
-				process.proclog_id = data[0].item._id;
+				process.proclog_id = data[0]._id;
 				next();
 			});
 		}, function done(err) {

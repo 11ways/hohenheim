@@ -64,6 +64,7 @@ Site.constitute(function chimeraConfig() {
 	edit.addField('url');
 
 	// @TODO: Add stat & control buttons
+	edit.addField('statistics', '_id', {type: 'SiteStat'});
 });
 
 /**
