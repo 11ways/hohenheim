@@ -57,13 +57,15 @@ Site.setMethod(function start(callback) {
 	port = this.parent.getPort(this);
 
 	// Start the server
-	process = child.fork(this.script, ['--port=' + port, 'hohenchild'], {cwd: this.cwd, silent: true});
+	process = child.fork(this.settings.script, ['--port=' + port, 'hohenchild'], {cwd: this.cwd, silent: true});
 
 	process.proclog_id = null;
 	process.procarray = [];
 
 	// Get the child process' output
 	process.stdout.on('data', function onData(data) {
+
+		console.log('[SITE ' + that._record.name + '] ' + data);
 
 		Function.series(function getId(next) {
 			if (process.proclog_id) {

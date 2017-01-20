@@ -29,6 +29,19 @@ module.exports = {
 	// Decode json, multipart, urlencode in body
 	decoding: true,
 
+	// Enable Hohenheim's letsencrypt/greenlock support
+	letsencrypt: true,
+
+	// Letsencrypt email for the TOS
+	letsencrypt_email: '',
+
+	// The challenge type (tls-sni-01 is currently broken, as of 2017-01)
+	letsencrypt_challenge: 'http-01',
+
+	// Enable letsencrypt debugging
+	// Also switches to staging server.
+	letsencrypt_debug: false,
+
 	// Enable hawkejs on the client side
 	hawkejs_client: true,
 

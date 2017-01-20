@@ -26,8 +26,6 @@ var updateSite = function updateSite(siteId) {
 		    mem,
 		    cpu;
 
-		console.log('Get resource result:', err, result);
-
 		if (err) {
 			console.log('Sitestat error:', err);
 			return;
@@ -103,6 +101,11 @@ var updateSite = function updateSite(siteId) {
 	hawkejs.scene.helpers.Alchemy.getResource('sitestat-logs', {id: siteId}, function(err, result) {
 
 		var html = '';
+
+		if (err) {
+			console.error('Err:', err);
+			return;
+		}
 
 		if (!result) {
 			result = [];

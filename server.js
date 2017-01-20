@@ -55,9 +55,9 @@ alchemy.start(function onAlchemyReady() {
 	alchemy.dispatcher = new Classes.Develry.SiteDispatcher({
 		fallbackAddress: 'http://localhost:8080', // Set to false to disable fallback
 		redirectHost: 'localhost', // localhost is the default value
-		ipv6Address: '', // Listen to this ipv6 address, too
-		proxyPort: 4747,
-		firstPort: 4748
+		ipv6Address: alchemy.settings.ipv6Address || '', // Listen to this ipv6 address, too
+		proxyPort: alchemy.settings.proxyPort || 80,
+		firstPort: alchemy.settings.firstPort || 4748
 	});
 
 });

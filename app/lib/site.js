@@ -79,7 +79,7 @@ Site.setProperty(function schema() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.1.0
- * @version  0.1.0
+ * @version  0.2.0
  */
 Site.constitute(function setSchema() {
 
@@ -87,6 +87,13 @@ Site.constitute(function setSchema() {
 
 	// Create a new schema
 	schema = new Classes.Alchemy.Schema(this);
+
+	// If letsencrypt is enabled, allow the user to set certain parameters
+	if (alchemy.settings.letsencrypt) {
+		schema.addField('letsencrypt_email', 'String');
+		schema.addField('letsencrypt_force', 'Boolean');
+	}
+
 	this.schema = schema;
 });
 
@@ -176,6 +183,7 @@ Site.setMethod(function update(record) {
 	this.name = record.name;
 	this.domains = record.domain || [];
 	this.script = record.script;
+	this.settings = record.settings;
 
 	if (this.script) {
 		this.cwd = libpath.dirname(this.script);
@@ -187,9 +195,22 @@ Site.setMethod(function update(record) {
 	// Add by id
 	this.parent.ids[this.id] = this;
 
-	// Add by domains
-	this.domains.filter(function(domain) {
-		that.parent.domains[domain] = that;
+	// Store it by each domain name
+	this.domains.forEach(function eachDomain(domain) {
+
+		var temp;
+
+		if (domain.hostname) {
+
+			temp = {site: that, domain};
+
+			domain.hostname.forEach(function eachHostname(hostname) {
+				// Ignore accidental 'null' (string) values
+				if (hostname && hostname != 'null') {
+					that.parent.domains[hostname] = temp;
+				}
+			});
+		}
 	});
 
 	// Re-add the instance by name

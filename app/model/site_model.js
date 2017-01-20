@@ -15,6 +15,7 @@ var Site = Function.inherits('Alchemy.AppModel', function SiteModel(conduit, opt
 	SiteModel.super.call(this, conduit, options);
 
 	this.on('saved', function saved() {
+		console.log('Site', this, 'has been saved');
 		this.getSites();
 	});
 });
@@ -28,15 +29,27 @@ var Site = Function.inherits('Alchemy.AppModel', function SiteModel(conduit, opt
  */
 Site.constitute(function addFields() {
 
-	var site_types = alchemy.getClassGroup('site_type');
+	var site_types = alchemy.getClassGroup('site_type'),
+	    domain_schema = new Classes.Alchemy.Schema(),
+	    header_schema = new Classes.Alchemy.Schema();
 
+	// The name of the site
 	this.addField('name', 'String');
-	this.addField('domain', 'String', {array: true});
-	this.addField('script', 'String');
-	this.addField('url', 'String');
 
+	// The type of site
 	this.addField('site_type', 'Enum', {values: site_types});
+
+	// Site specific settings
 	this.addField('settings', 'Schema', {schema: 'site_type'});
+
+	// Header schema
+	header_schema.addField('name', 'String');
+	header_schema.addField('value', 'String');
+
+	domain_schema.addField('hostname', 'String', {array: true});
+	domain_schema.addField('headers', 'Schema', {array: true, schema: header_schema});
+
+	this.addField('domain', 'Schema', {array: true, schema: domain_schema});
 });
 
 /**
@@ -66,13 +79,13 @@ Site.constitute(function chimeraConfig() {
 	edit = this.chimera.getActionFields('edit');
 
 	edit.addField('name');
-	edit.addField('domain');
-	edit.addField('script');
-	edit.addField('url');
 	edit.addField('site_type');
 	edit.addField('settings');
 
-	// @TODO: Add stat & control buttons
+	// Add domains in a new tab
+	edit.addField('domains', 'domain');
+
+	// Add statistics & control field in a new tab
 	edit.addField('statistics', '_id', {type: 'SiteStat'});
 });
 
@@ -94,14 +107,26 @@ Site.setMethod(function getSites(callback) {
 		    byDomain = {},
 		    byId = {};
 
-		results.filter(function(value) {
+		results.filter(function eachSite(value) {
 
 			var site = value['Site'];
 
-			// Store it by each domain name
-			site.domain.filter(function(domainName) {
-				byDomain[domainName] = site;
-			});
+			if (site.domain) {
+				// Store it by each domain name
+				site.domain.forEach(function eachDomain(domain) {
+
+					var temp;
+
+					if (domain.hostname) {
+
+						temp = {site, domain};
+
+						domain.hostname.forEach(function eachHostname(hostname) {
+							byDomain[hostname] = temp;
+						});
+					}
+				});
+			}
 
 			// Store it by site name
 			byName[site.name] = site;
@@ -115,10 +140,34 @@ Site.setMethod(function getSites(callback) {
 		alchemy.overwrite(sitesById, byId);
 
 		// Emit the siteUpdate event
-		that.emit('siteUpdate', sitesById, sitesByDomain, sitesByName);
+		alchemy.emit('siteUpdate', sitesById, sitesByDomain, sitesByName);
 
 		if (callback) {
 			callback(sitesById, sitesByDomain, sitesByName);
 		}
 	});
+});
+
+/**
+ * Get all the hostnames for this site in an array
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.2.0
+ * @version  0.2.0
+ *
+ * @return   {Array}
+ */
+Site.setDocumentMethod(function getHostnames() {
+
+	var result = [];
+
+	for (let i = 0; i < this.domain.length; i++) {
+		let domain = this.domain[i];
+
+		for (let j = 0; j < domain.hostname.length; j++) {
+			result.push(domain.hostname[j]);
+		}
+	}
+
+	return result;
 });
