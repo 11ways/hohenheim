@@ -121,7 +121,7 @@ SiteDispatcher.setMethod(function startProxy() {
 	// Make the proxy server listen on the given port
 	this.server.listen(this.proxyPort);
 
-	// See if there is a ipv6 server defined)
+	// See if there is a specific ipv6 address defined
 	if (this.ipv6Address) {
 		this.server_ipv6 = http.createServer(this.request.bind(this));
 		this.server_ipv6.listen(this.proxyPort, this.ipv6Address);
@@ -344,6 +344,11 @@ SiteDispatcher.setMethod(function getSite(headers) {
 
 	// Get the host (including port)
 	var domain = headers.host;
+
+	if (!domain) {
+		console.warn('No host header found in:', headers);
+		return null;
+	}
 
 	// Split it by colons
 	domain = domain.split(':');
