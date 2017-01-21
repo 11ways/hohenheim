@@ -175,7 +175,7 @@ SiteDispatcher.setMethod(function initGreenlock() {
 		debug = false;
 	}
 
-	if (alchemy.settings.env != 'live' || alchemy.settings.debug || alchemy.settings.letsencrypt_debug) {
+	if (alchemy.settings.environment != 'live' || alchemy.settings.debug || alchemy.settings.letsencrypt_debug) {
 		console.warn('Using letsencrypt staging servers');
 		server_type = GreenLock.stagingServerUrl;
 	} else {
