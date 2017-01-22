@@ -443,8 +443,6 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 
 	site = this.getSite(req.headers);
 
-	console.log('Got site', site, 'for', req.headers, this.fallbackAddress);
-
 	if (!site) {
 
 		if (this.fallbackAddress) {
