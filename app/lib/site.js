@@ -94,7 +94,48 @@ Site.constitute(function setSchema() {
 		schema.addField('letsencrypt_force', 'Boolean');
 	}
 
+	// Add basic auth settings
+	schema.addField('basic_auth', 'String', {array: true});
+
 	this.schema = schema;
+});
+
+/**
+ * See if this site matches the given hostname
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.2.0
+ * @version  0.2.0
+ *
+ * @return   {Boolean}   Returns true if the hostname matches
+ */
+Site.setMethod(function matches(hostname) {
+
+	var domain,
+	    i,
+	    j;
+
+	if (!hostname) {
+		return false;
+	}
+
+	for (i = 0; i < this.domains.length; i++) {
+		domain = this.domains[i];
+
+		if (domain.hostname == hostname) {
+			return true;
+		}
+
+		if (domain.regexes) {
+			for (j = 0; j < domain.regexes.length; j++) {
+				if (domain.regexes[j].exec(hostname) !== null) {
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
 });
 
 /**
@@ -202,9 +243,33 @@ Site.setMethod(function update(record) {
 
 		if (domain.hostname) {
 
-			temp = {site: that, domain};
+			temp = {
+				site   : that,
+				domain : domain
+			};
 
 			domain.hostname.forEach(function eachHostname(hostname) {
+
+				var regex;
+
+				if (!hostname) {
+					console.warn('No hostname in', domain);
+					return;
+				}
+
+				// Check for regexes
+				if (hostname[0] == '/') {
+					regex = RegExp.interpret(hostname);
+
+					if (regex) {
+						if (!domain.regexes) {
+							domain.regexes = [];
+						}
+
+						domain.regexes.push(regex);
+					}
+				}
+
 				// Ignore accidental 'null' (string) values
 				if (hostname && hostname != 'null') {
 					that.parent.domains[hostname] = temp;
@@ -215,6 +280,49 @@ Site.setMethod(function update(record) {
 
 	// Re-add the instance by name
 	this.parent.names[this.name] = this;
+});
+
+/**
+ * Check for basic auth
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.2.0
+ * @version  0.2.0
+ */
+Site.setMethod(function checkBasicAuth(req, res, next) {
+
+	var b64auth;
+
+	if (this.settings.basic_auth && this.settings.basic_auth.length) {
+
+		// Deny by default
+		let deny = true;
+
+		// Get the credentials after the initial 'Basic ' string
+		let b64auth = (req.headers.authorization || '').split(' ')[1] || '';
+
+		// Decode them
+		let credentials = new Buffer(b64auth, 'base64').toString().trim();
+
+		if (credentials) {
+			for (let i = 0; i < this.settings.basic_auth.length; i++) {
+				if (this.settings.basic_auth[i] == credentials) {
+					deny = false;
+					break;
+				}
+			}
+		}
+
+		if (deny) {
+			res.writeHead(401, {'WWW-Authenticate': 'Basic realm="' + this._record.name + '"'});
+			res.end('Unauthorized');
+		} else {
+			next();
+		}
+	} else {
+		// No basic auth configured
+		return next();
+	}
 });
 
 /**

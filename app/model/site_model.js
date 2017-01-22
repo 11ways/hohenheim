@@ -101,15 +101,13 @@ Site.constitute(function chimeraConfig() {
 Site.setMethod(function getSites(callback) {
 	var that = this;
 
-	that.find('all', {document: false}, function gotRecords(err, results) {
+	that.find('all', {document: true}, function gotRecords(err, results) {
 
 		var byName = {},
 		    byDomain = {},
 		    byId = {};
 
-		results.filter(function eachSite(value) {
-
-			var site = value['Site'];
+		results.forEach(function eachSite(site) {
 
 			if (site.domain) {
 				// Store it by each domain name
@@ -155,9 +153,11 @@ Site.setMethod(function getSites(callback) {
  * @since    0.2.0
  * @version  0.2.0
  *
+ * @param    {String}   found_domain
+ *
  * @return   {Array}
  */
-Site.setDocumentMethod(function getHostnames() {
+Site.setDocumentMethod(function getHostnames(found_domain) {
 
 	var result = [];
 
@@ -165,8 +165,17 @@ Site.setDocumentMethod(function getHostnames() {
 		let domain = this.domain[i];
 
 		for (let j = 0; j < domain.hostname.length; j++) {
+
+			if (domain.hostname[j][0] == '/') {
+				continue;
+			}
+
 			result.push(domain.hostname[j]);
 		}
+	}
+
+	if (found_domain && result.indexOf(found_domain) == -1) {
+		result.push(found_domain);
 	}
 
 	return result;

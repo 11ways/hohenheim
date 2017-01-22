@@ -214,39 +214,37 @@ SiteDispatcher.setMethod(function initGreenlock() {
 		},
 		getCertificates : function getCertificates(domain, certs, cb) {
 
-			Site.find('first', {conditions: {'domain.hostname': domain}}, function gotSite(err, site) {
+			var hostnames,
+			    settings,
+			    options,
+			    site;
 
-				var hostnames,
-				    settings,
-				    options;
+			site = that.getSite(domain);
 
-				if (err) {
-					return cb(err);
-				}
+			if (!site) {
+				return cb(new Error('Domain "' + domain + '" was not found on this server'));
+			} else {
+				site = site.site._record;
+			}
 
-				if (!site.length) {
-					return cb(new Error('Domain "' + domain + '" was not found on this server'));
-				}
+			// Get all the hostnames for this site
+			hostnames = site.getHostnames(domain);
 
-				// Get all the hostnames for this site
-				hostnames = site.getHostnames();
+			// Get the site settings
+			settings = site.settings;
 
-				// Get the site settings
-				settings = site.settings;
+			options = {
+				domains       : hostnames,
+				email         : settings.letsencrypt_email || alchemy.settings.letsencrypt_email,
+				agreeTos      : true,
+				rsaKeySize    : 2048,
+				challengeType : settings.letsencrypt_challenge || alchemy.settings.letsencrypt_challenge
+			};
 
-				options = {
-					domains       : hostnames,
-					email         : settings.letsencrypt_email || alchemy.settings.letsencrypt_email,
-					agreeTos      : true,
-					rsaKeySize    : 2048,
-					challengeType : settings.letsencrypt_challenge || alchemy.settings.letsencrypt_challenge
-				};
-
-				that.greenlock.register(options).then(function onResult(result) {
-					cb(null, result);
-				}, function onError(err) {
-					cb(err);
-				});
+			that.greenlock.register(options).then(function onResult(result) {
+				cb(null, result);
+			}, function onError(err) {
+				cb(err);
 			});
 		}
 	});
@@ -314,6 +312,10 @@ SiteDispatcher.setMethod(function initGreenlock() {
  */
 SiteDispatcher.setMethod(function requestError(error, req, res) {
 
+	if (!req) {
+		throw new Error('Request error without request? ' + error);
+	}
+
 	if (!req.errorCount) {
 		req.errorCount = 1;
 	} else {
@@ -336,14 +338,24 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.0.1
+ * @version  0.2.0
  * 
  * @param    {Object}   headers
  */
 SiteDispatcher.setMethod(function getSite(headers) {
 
 	// Get the host (including port)
-	var domain = headers.host;
+	var matches,
+	    domain,
+	    entry,
+	    site,
+	    key;
+
+	if (typeof headers == 'string') {
+		domain = headers;
+	} else {
+		domain = headers.host;
+	}
 
 	if (!domain) {
 		console.warn('No host header found in:', headers);
@@ -356,7 +368,20 @@ SiteDispatcher.setMethod(function getSite(headers) {
 	// The first part is the domain
 	domain = domain[0];
 
-	return this.domains[domain];
+	if (this.domains[domain] != null) {
+		return this.domains[domain];
+	}
+
+	for (key in this.domains) {
+		entry = this.domains[key];
+
+		if (entry.site.matches(domain)) {
+			console.log('Returning', entry)
+			return entry;
+		}
+	}
+
+	return null;
 });
 
 /**
@@ -419,6 +444,8 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 
 	site = this.getSite(req.headers);
 
+	console.log('Got site', site, 'for', req.headers, this.fallbackAddress);
+
 	if (!site) {
 
 		if (this.fallbackAddress) {
@@ -446,8 +473,10 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 			site.site.registerHit(req, res);
 		}
 
-		site.site.getAddress(function gotAddress(address) {
-			that.proxy.web(req, res, {target: address});
+		site.site.checkBasicAuth(req, res, function done() {
+			site.site.getAddress(function gotAddress(address) {
+				that.proxy.web(req, res, {target: address});
+			});
 		});
 	}
 });
@@ -568,7 +597,7 @@ Resource.register('sitestat', function(data, callback) {
 	site = alchemy.dispatcher.ids[siteId];
 
 	if (!site) {
-		return callback(new Error('Site does not exist'));
+		return callback(new Error('Site "' + siteId + '" does not exist'));
 	}
 
 	// Get the amount of processes running
