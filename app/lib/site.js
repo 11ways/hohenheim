@@ -291,9 +291,25 @@ Site.setMethod(function update(record) {
  */
 Site.setMethod(function checkBasicAuth(req, res, next) {
 
-	var b64auth;
+	var b64auth,
+	    truthy;
 
 	if (this.settings.basic_auth && this.settings.basic_auth.length) {
+
+		for (let i = 0; i < this.settings.basic_auth.length; i++) {
+			let val = this.settings.basic_auth[i];
+
+			if (!val || val == 'null') {
+				continue;
+			} else {
+				truthy = true;
+				break;
+			}
+		}
+
+		if (!truthy) {
+			return next();
+		}
 
 		// Deny by default
 		let deny = true;

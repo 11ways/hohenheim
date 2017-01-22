@@ -376,7 +376,6 @@ SiteDispatcher.setMethod(function getSite(headers) {
 		entry = this.domains[key];
 
 		if (entry.site.matches(domain)) {
-			console.log('Returning', entry)
 			return entry;
 		}
 	}
