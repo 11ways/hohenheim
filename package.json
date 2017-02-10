@@ -4,7 +4,7 @@
 	"version": "0.1.0",
 	"dependencies": {
 		"alchemymvc": "~0.3.3",
-		"http-proxy": "~1.16.0",
+		"http-proxy": "~1.16.2",
 		"process-monitor": "skerit/process-monitor",
 		"ansi-html": "~0.0.6",
 		"greenlock": "^2.1.9",
