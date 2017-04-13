@@ -42,7 +42,7 @@ Site.constitute(function addFields() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.2.0
  *
  * @param    {Function}   callback
  */
@@ -55,6 +55,8 @@ Site.setMethod(function start(callback) {
 
 	// Get an open port number
 	port = this.parent.getPort(this);
+
+	log.info('Starting node script', this.settings.script, 'on port', port);
 
 	// Start the server
 	process = child.fork(this.settings.script, ['--port=' + port, 'hohenchild'], {cwd: this.cwd, silent: true});
@@ -181,7 +183,7 @@ Site.setMethod(function processStats(process, cpu, mem) {
 	process.mem = ~~(mem/1024);
 
 	if (cpu > 50) {
-		pr('Site "' + this.name.bold + '" process id ' + process.pid + ' is using ' + process.cpu + '% cpu and ' + process.mem + ' MiB memory');
+		log.warn('Site', JSON.stringify(this.name), 'process id', process.pid, 'is using', process.cpu, '% cpu and', process.mem, 'MiB memory');
 	}
 });
 
@@ -207,7 +209,7 @@ Site.setMethod(function processExit(process, code, signal) {
 	// Remove the process from the processes object
 	delete this.processes[process.pid];
 
-	log.warn('Process ' + String(process.pid).bold + ' for site ' + this.name.bold + ' has exited with code ' + String(code).bold + ' and signal ' + String(signal).bold);
+	log.warn('Process', process.pid, 'for site', this.name, 'has exited with code', code, 'and signal', signal);
 });
 
 /**

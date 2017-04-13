@@ -416,6 +416,8 @@ Site.setMethod(function registerHit(req, res, callback) {
 			duration: Date.now() - req.startTime
 		});
 
-		pr(that.name.bold + ' has now received ' + ~~(that.incoming/1024) + ' KiBs and submitted ' + ~~(that.outgoing/1024) + ' KiBs');
+		if (Blast.DEBUG) {
+			log.info(that.name, 'has now received', ~~(that.incoming/1024), 'KiBs and submitted', ~~(that.outgoing/1024), 'KiBs');
+		}
 	});
 });

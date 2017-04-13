@@ -228,13 +228,14 @@ SiteDispatcher.setMethod(function initGreenlock() {
 			}
 
 			// Get all the hostnames for this site
-			hostnames = site.getHostnames(domain);
+			// We DON'T bundle domains anymore. If 1 breaks, all of them break!
+			//hostnames = site.getHostnames(domain);
 
 			// Get the site settings
 			settings = site.settings;
 
 			options = {
-				domains       : hostnames,
+				domains       : [domain],
 				email         : settings.letsencrypt_email || alchemy.settings.letsencrypt_email,
 				agreeTos      : true,
 				rsaKeySize    : 2048,

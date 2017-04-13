@@ -7,7 +7,7 @@
 		"http-proxy": "~1.16.2",
 		"process-monitor": "skerit/process-monitor",
 		"ansi-html": "~0.0.6",
-		"greenlock": "^2.1.9",
+		"greenlock": "^2.1.13",
 		"le-store-certbot": "^2.0.3",
 		"le-challenge-fs": "^2.0.8",
 		"le-sni-auto": "^2.1.0"
