@@ -296,6 +296,11 @@ SiteDispatcher.setMethod(function initGreenlock() {
 		});
 	});
 
+	// Listen for HTTPS websocket upgrades
+	this.https_server.on('upgrade', function gotRequest(req, socket, head) {
+		that.websocketRequest(req, socket, head);
+	});
+
 	// Listen on the HTTPS port
 	this.https_server.listen(443);
 });
@@ -382,6 +387,65 @@ SiteDispatcher.setMethod(function getSite(headers) {
 	}
 
 	return null;
+});
+
+/**
+ * Handle a new proxy request
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.2.0
+ * @version  0.2.0
+ * 
+ * @param    {IncommingMessage}   req
+ * @param    {Socket}             socket
+ * @param    {Buffer}             head
+ */
+SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
+
+	var that = this,
+	    new_location,
+	    domain,
+	    read,
+	    site,
+	    host,
+	    hit;
+
+	// Detect infinite loops
+	// @TODO: this will break after the first loop,
+	// maybe add a counter to allow more loops in case it's wanted functionality?
+	if (req.headers['x-proxied-by'] == 'hohenheim') {
+		return socket.end();
+	}
+
+	// Get the hit id
+	hit = ++this.hitCounter;
+
+	if (!req.socket.connectionId) {
+		req.socket.connectionId = ++this.connectionCounter;
+		socket.connectionId = req.socket.connectionId;
+	}
+
+	req.connectionId = req.socket.connectionId;
+	req.hitId = hit;
+
+	req.headers.hitId = hit;
+	req.headers.connectionId = req.connectionId;
+
+	site = this.getSite(req.headers);
+
+	if (!site) {
+
+		if (this.fallbackAddress) {
+			return this.proxy.ws(req, socket, {target: this.fallbackAddress});
+		}
+
+		socket.end('There is no such domain here!');
+	} else {
+
+		site.site.getAddress(function gotAddress(address) {
+			that.proxy.ws(req, socket, {target: address});
+		});
+	}
 });
 
 /**
