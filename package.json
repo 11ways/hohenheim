@@ -3,7 +3,7 @@
 	"description": "The hohenheim dispatcher",
 	"version": "0.1.0",
 	"dependencies": {
-		"alchemymvc": "~0.3.3",
+		"alchemymvc": "~0.4.0",
 		"http-proxy": "~1.16.2",
 		"process-monitor": "skerit/process-monitor",
 		"ansi-html": "~0.0.6",

@@ -41,9 +41,8 @@ alchemy.overwrite = function overwrite(target, obj) {
 // Intercept uncaught exceptions so the server won't crash
 // @todo: this should be expanded and integrated into alchemy itself
 process.on('uncaughtException', function(error) {
-
 	// Indicate we caught an exception
-	log.error('Uncaught Exception!', {err: error});
+	alchemy.printLog('error', ['Uncaught Exception!', String(error), error], {err: error, level: -2});
 
 });
 
