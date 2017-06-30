@@ -19,9 +19,13 @@ var Site = Function.inherits('Develry.Site', function NodeSite(siteDispatcher, r
 
 	// The running processes
 	this.processes = {};
+	this.process_list = []
 
 	// The amount of running processes
 	this.running = 0;
+
+	// The amount of processes ready
+	this.ready = 0;
 
 	NodeSite.super.call(this, siteDispatcher, record);
 });
@@ -49,6 +53,10 @@ Site.constitute(function addFields() {
 Site.setMethod(function start(callback) {
 
 	var that = this;
+
+	if (!callback) {
+		callback = Function.thrower;
+	}
 
 	// Get the port
 	this.parent.getPort(this, function gotPort(err, port) {
@@ -134,6 +142,9 @@ Site.setMethod(function startOnPort(port, callback) {
 	// Store the time this was started
 	process.startTime = Date.now();
 
+	// When overload started
+	process.startOverload = 0;
+
 	this.processes[process.pid] = process;
 
 	this.running++;
@@ -146,7 +157,7 @@ Site.setMethod(function startOnPort(port, callback) {
 	// Attach process monitor
 	process.monitor = procmon.monitor({
 		pid: process.pid,
-		interval: 6000,
+		interval: 4000,
 		technique: 'proc'
 	}).start();
 
@@ -179,6 +190,11 @@ Site.setMethod(function startOnPort(port, callback) {
 				// Add this to the process object
 				process.ready = true;
 
+				// Up the ready counter
+				that.ready++;
+
+				that.process_list.push(process);
+
 				// Execute the callback
 				if (callback) callback();
 
@@ -209,6 +225,38 @@ Site.setMethod(function processStats(process, cpu, mem) {
 	process.mem = ~~(mem/1024);
 
 	if (cpu > 50) {
+		let now = Date.now();
+		process.startIdle = 0;
+
+		if (!process.startOverload) {
+			process.startOverload = now;
+		} else if (now - process.startOverload > 15000) {
+			// The process is in overload for over 15 seconds, start a new one?
+			if (this.running < 5) {
+				log.warn('Starting new', this.name, 'process because others are too busy');
+				this.start();
+
+				// Reset the overload timer, so we don't start another one on the next stat
+				process.startOverload = 0;
+			}
+		}
+	} else {
+		process.startOverload = 0;
+
+		if (cpu == 0) {
+			let now = Date.now();
+
+			if (!process.startIdle) {
+				process.startIdle = now;
+			} else if (now - process.startIdle > 180000 && this.process_list.length > 1) {
+				process.kill();
+			}
+		} else {
+			process.startIdle = 0;
+		}
+	}
+
+	if (cpu > 50) {
 		log.warn('Site', JSON.stringify(this.name), 'process id', process.pid, 'is using', process.cpu, '% cpu and', process.mem, 'MiB memory');
 	}
 });
@@ -231,9 +279,20 @@ Site.setMethod(function processExit(process, code, signal) {
 
 	// Decrease the running counter
 	this.running--;
+	this.ready--;
+
+	if (this.ready == 0) {
+		this.initial_hinder = null;
+	}
 
 	// Remove the process from the processes object
 	delete this.processes[process.pid];
+
+	let index = this.process_list.indexOf(process);
+
+	if (index > -1) {
+		this.process_list.splice(index, 1);
+	}
 
 	log.warn('Process', process.pid, 'for site', this.name, 'has exited with code', code, 'and signal', signal);
 });
@@ -254,19 +313,41 @@ Site.setMethod(function getAddress(callback) {
 
 	fnc = function addressCreator() {
 
-		var pid,
-		    url;
+		var site_process,
+		    url,
+		    i;
 
-		// @todo: do some load balancing
-		for (pid in that.processes) {
-			url = 'http://' + that.redirectHost + ':' + that.processes[pid].port;
+		// Shuffle the process list
+		if (that.process_list.length > 1) {
+			that.process_list.shuffle();
 
-			return callback(url);
+			for (i = 0; i < that.process_list.length; i++) {
+				site_process = that.process_list[i];
+
+				if (site_process.cpu > 95) {
+					continue;
+				} else {
+					break;
+				}
+			}
+		} else {
+			site_process = that.process_list[0];
 		}
+
+		url = 'http://' + that.redirectHost + ':' + site_process.port;
+		return callback(url);
 	};
 
-	if (!this.running) {
-		this.start(fnc);
+	if (!this.ready) {
+		if (this.initial_hinder) {
+			this.initial_hinder.push(fnc);
+		} else {
+			this.initial_hinder = Function.hinder(function startFirstProcess(done) {
+				that.start(done);
+			});
+
+			this.initial_hinder.push(fnc);
+		}
 	} else {
 		fnc();
 	}
