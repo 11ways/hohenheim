@@ -48,18 +48,41 @@ Site.constitute(function addFields() {
  */
 Site.setMethod(function start(callback) {
 
+	var that = this;
+
+	// Get the port
+	this.parent.getPort(this, function gotPort(err, port) {
+
+		if (err) {
+			return callback(err);
+		}
+
+		that.startOnPort(port, callback);
+	});
+});
+
+/**
+ * Start a new process on the specified port
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.0.1
+ * @version  0.2.0
+ *
+ * @param    {Function}   callback
+ */
+Site.setMethod(function startOnPort(port, callback) {
+
 	var that = this,
 	    processStats,
 	    process,
 	    port;
 
-	// Get an open port number
-	port = this.parent.getPort(this);
-
 	log.info('Starting node script', this.settings.script, 'on port', port);
-
+port = 2999
 	// Start the server
 	process = child.fork(this.settings.script, ['--port=' + port, 'hohenchild'], {cwd: this.cwd, silent: true});
+
+	console.log('Process:', process);
 
 	process.proclog_id = null;
 	process.procarray = [];
@@ -70,6 +93,8 @@ Site.setMethod(function start(callback) {
 		if (alchemy.settings.debug) {
 			console.log('[SITE ' + that._record.name + '] ' + data);
 		}
+
+		return console.log('[SITE ' + that._record.name + '] ' + data);
 
 		Function.series(function getId(next) {
 			if (process.proclog_id) {
@@ -152,16 +177,21 @@ Site.setMethod(function start(callback) {
 			return;
 		}
 
-		if (message.alchemy && message.alchemy.ready) {
+		if (message.alchemy) {
+			if (message.alchemy.ready) {
 
-			// Add this to the process object
-			process.ready = true;
+				// Add this to the process object
+				process.ready = true;
 
-			// Execute the callback
-			if (callback) callback();
+				// Execute the callback
+				if (callback) callback();
 
-			// Remove the event listener
-			process.removeListener('message', listenForReady);
+				// Remove the event listener
+				process.removeListener('message', listenForReady);
+			} else if (!process.ready && message.alchemy.error && message.alchemy.error.code == 'EADDRINUSE') {
+				// Try again if the port is already in use
+				that.start(callback);
+			}
 		}
 	});
 });
@@ -182,9 +212,11 @@ Site.setMethod(function processStats(process, cpu, mem) {
 	process.cpu = ~~cpu;
 	process.mem = ~~(mem/1024);
 
-	if (cpu > 50) {
+	if (this.name != 'Sentana') return
+
+	//if (cpu > 50) {
 		log.warn('Site', JSON.stringify(this.name), 'process id', process.pid, 'is using', process.cpu, '% cpu and', process.mem, 'MiB memory');
-	}
+	//}
 });
 
 /**
@@ -227,11 +259,17 @@ Site.setMethod(function getAddress(callback) {
 	    fnc;
 
 	fnc = function addressCreator() {
-		var pid;
+
+		var pid,
+		    url;
 
 		// @todo: do some load balancing
 		for (pid in that.processes) {
-			return callback('http://' + that.redirectHost + ':' + that.processes[pid].port);
+			url = 'http://' + that.redirectHost + ':' + that.processes[pid].port;
+
+			console.log('Calling back with', url);
+
+			return callback(url);
 		}
 	};
 

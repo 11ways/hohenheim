@@ -5,7 +5,8 @@ var site_types  = alchemy.getClassGroup('site_type'),
     GreenLock   = alchemy.use('greenlock'),
     httpProxy   = require('http-proxy'),
     libpath     = require('path'),
-    http        = require('http');
+    http        = require('http'),
+    net         = require('net');
 
 /**
  * The Site Dispatcher class
@@ -537,7 +538,14 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 
 		site.site.checkBasicAuth(req, res, function done() {
 			site.site.getAddress(function gotAddress(address) {
-				that.proxy.web(req, res, {target: address});
+
+				if (site.site.settings.delay) {
+					setTimeout(function doDelay() {
+						that.proxy.web(req, res, {target: address});
+					}, site.site.settings.delay);
+				} else {
+					that.proxy.web(req, res, {target: address});
+				}
 			});
 		});
 	}
@@ -548,22 +556,74 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
  * and immediately reserve it for the given site
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.0.1
- * @version  0.0.1
- *
- * @param    {Develry.Site}   site   A site instance
+ * @since    0.2.0
+ * @version  0.2.0
  */
-SiteDispatcher.setMethod(function getPort(site) {
+SiteDispatcher.setMethod(function getTestPort(start) {
 
-	var port = this.firstPort;
+	var port = start || this.firstPort;
 
 	while (port !== this.proxyPort && typeof this.ports[port] !== 'undefined') {
 		port++;
 	}
 
-	this.ports[port] = site;
-
 	return port;
+});
+
+/**
+ * Get a free port number,
+ * and immediately reserve it for the given site
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.0.1
+ * @version  0.2.0
+ *
+ * @param    {Develry.Site}   site      A site instance
+ * @param    {Function}       callback
+ */
+SiteDispatcher.setMethod(function getPort(site, callback) {
+
+	var that = this,
+	    first_port = this.firstPort,
+	    last_port = first_port + 5000,
+	    test_port = this.getTestPort(),
+	    port;
+
+	Function.while(function test() {
+		if (!port && test_port < last_port) {
+			return true;
+		}
+	}, function testPort(next) {
+
+		var probe;
+
+		probe = net.createServer().listen(test_port, '::');
+
+		// If listening is successfull, this port can be used
+		probe.on('listening', function onListening() {
+			probe.close();
+			port = test_port;
+			next();
+		});
+
+		// If there is an error, proceed to the next port
+		probe.on('error', function onError() {
+			test_port = that.getTestPort(test_port + 1);
+			next();
+		});
+	}, function done(err) {
+
+		if (err) {
+			return callback(err);
+		}
+
+		if (!port) {
+			return callback(new Error('Could not find free port'));
+		}
+
+		that.ports[port] = site;
+		callback(null, port);
+	});
 });
 
 /**

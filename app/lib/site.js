@@ -94,6 +94,9 @@ Site.constitute(function setSchema() {
 		schema.addField('letsencrypt_force', 'Boolean');
 	}
 
+	// Add delay time in ms
+	schema.addField('delay', 'Number');
+
 	// Add basic auth settings
 	schema.addField('basic_auth', 'String', {array: true});
 
