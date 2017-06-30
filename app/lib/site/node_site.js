@@ -78,11 +78,9 @@ Site.setMethod(function startOnPort(port, callback) {
 	    port;
 
 	log.info('Starting node script', this.settings.script, 'on port', port);
-port = 2999
+
 	// Start the server
 	process = child.fork(this.settings.script, ['--port=' + port, 'hohenchild'], {cwd: this.cwd, silent: true});
-
-	console.log('Process:', process);
 
 	process.proclog_id = null;
 	process.procarray = [];
@@ -93,8 +91,6 @@ port = 2999
 		if (alchemy.settings.debug) {
 			console.log('[SITE ' + that._record.name + '] ' + data);
 		}
-
-		return console.log('[SITE ' + that._record.name + '] ' + data);
 
 		Function.series(function getId(next) {
 			if (process.proclog_id) {
@@ -212,11 +208,9 @@ Site.setMethod(function processStats(process, cpu, mem) {
 	process.cpu = ~~cpu;
 	process.mem = ~~(mem/1024);
 
-	if (this.name != 'Sentana') return
-
-	//if (cpu > 50) {
+	if (cpu > 50) {
 		log.warn('Site', JSON.stringify(this.name), 'process id', process.pid, 'is using', process.cpu, '% cpu and', process.mem, 'MiB memory');
-	//}
+	}
 });
 
 /**
@@ -266,8 +260,6 @@ Site.setMethod(function getAddress(callback) {
 		// @todo: do some load balancing
 		for (pid in that.processes) {
 			url = 'http://' + that.redirectHost + ':' + that.processes[pid].port;
-
-			console.log('Calling back with', url);
 
 			return callback(url);
 		}
