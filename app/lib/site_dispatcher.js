@@ -103,6 +103,11 @@ SiteDispatcher.setMethod(function startProxy() {
 		// Let the target server know hohenheim is in front of it
 		proxyReq.setHeader('X-Proxied-By', 'hohenheim');
 
+		if (req.connection && req.connection.remoteAddress) {
+			// Set the original ip address
+			proxyReq.setHeader('X-Forwarded-For', req.connection.remoteAddress);
+		}
+
 		// Get the target site
 		site = that.getSite(req.headers);
 
@@ -121,6 +126,9 @@ SiteDispatcher.setMethod(function startProxy() {
 
 	// Make the proxy server listen on the given port
 	this.server.listen(this.proxyPort);
+
+	// Do not limit the incoming connections
+	this.server.maxHeadersCount = 0;
 
 	// See if there is a specific ipv6 address defined
 	if (this.ipv6Address) {
@@ -289,6 +297,9 @@ SiteDispatcher.setMethod(function initGreenlock() {
 
 	// Listen for HTTPS requests
 	this.https_server.on('request', function gotRequest(req, res) {
+
+		// Let the site know it's being run behind HTTPS
+		req.headers['X-Forwarded-Proto'] = 'https';
 
 		// Do the letsencrypt middleware
 		that.le_middleware(req, res, function didMiddleware() {
