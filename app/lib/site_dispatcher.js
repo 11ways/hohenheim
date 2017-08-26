@@ -81,19 +81,26 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.2.0
  */
 SiteDispatcher.setMethod(function startProxy() {
 
-	var that = this;
+	var that = this,
+	    agent;
 
 	log.info('Proxy server is starting on port ' + this.proxyPort);
 
 	// Init greenlock (let's encrypt)
 	this.initGreenlock();
 
+	// Create an agent for keep-alive
+	agent = new http.Agent({
+		keepAlive  : true,
+		maxSockets : Number.MAX_VALUE
+	});
+
 	// Create the proxy
-	this.proxy = httpProxy.createProxyServer({});
+	this.proxy = httpProxy.createProxyServer({agent: agent});
 
 	// Modify proxy request headers
 	this.proxy.on('proxyReq', function onProxyReq(proxyReq, req, res, options) {
