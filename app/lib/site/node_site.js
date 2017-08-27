@@ -111,8 +111,8 @@ Site.setMethod(function startOnPort(port, callback) {
 	if (this.settings.user) {
 		log.info(' - Starting as uid', this.settings.user);
 
-		config.uid = this.settings.user;
-		config.gid = this.settings.user;
+		config.uid = Number(this.settings.user);
+		config.gid = Number(this.settings.user);
 	}
 
 	// Start the server
