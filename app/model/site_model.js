@@ -16,7 +16,7 @@ var Site = Function.inherits('Alchemy.AppModel', function SiteModel(conduit, opt
 	SiteModel.super.call(this, conduit, options);
 
 	this.on('saved', function saved() {
-		console.log('Site', this, 'has been saved');
+		console.log('Site', this._id+'', this.name, 'has been saved');
 		this.getSites();
 	});
 });

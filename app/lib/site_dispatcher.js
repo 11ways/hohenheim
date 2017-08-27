@@ -446,7 +446,6 @@ SiteDispatcher.setMethod(function getSite(req_or_domain) {
 	}
 
 	if (!domain) {
-		console.warn('No host header found in:', headers);
 		return null;
 	}
 
@@ -725,7 +724,7 @@ SiteDispatcher.setMethod(function freePort(portNumber) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.2.0
  *
  * @param    {Object}   sitesById   An object of site records by their id
  */
@@ -735,12 +734,15 @@ SiteDispatcher.setMethod(function update(sitesById) {
 	    removed,
 	    created,
 	    shared,
+	    site,
+	    name,
+	    key,
 	    id;
 
 	// Pause the dispatcher queue
 	this.queue.pause();
 
-	console.log('Update:', sitesById);
+	console.log('Updating sites ...');
 
 	removed = alchemy.getDifference(this.ids, sitesById);
 
@@ -751,28 +753,43 @@ SiteDispatcher.setMethod(function update(sitesById) {
 
 	created = alchemy.getDifference(sitesById, this.ids);
 
-	console.log('Created:', created);
-
 	// Create all the new sites
 	for (id in created) {
-		SiteConstructor = site_types[created[id].site_type];
+		site = created[id];
+
+		console.log('Enabling site', id, site.name);
+
+		SiteConstructor = site_types[site.site_type];
 
 		if (!SiteConstructor) {
 			SiteConstructor = Classes.Develry.Site;
 		}
 
-		new SiteConstructor(this, created[id]);
+		new SiteConstructor(this, site);
 	}
 
 	shared = alchemy.getShared(this.ids, sitesById);
 
 	// Update all the existing sites
 	for (id in shared) {
-		console.log('Updating', id);
-		this.ids[id].update(shared[id]);
+		site = shared[id];
+
+		console.log('Updating site', id, site.name);
+		this.ids[id].update(site);
 	}
 
-	console.log('Current domains:', this.domains);
+	console.log('Domains currently enabled:');
+
+	for (key in this.domains) {
+
+		if (this.domains[key] && this.domains[key].site) {
+			name = this.domains[key].site.name;
+		} else {
+			name = null;
+		}
+
+		console.log(' -', key, '»', name);
+	}
 
 	// Resume the queue
 	this.queue.start();
