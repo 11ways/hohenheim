@@ -3,10 +3,12 @@ var site_types  = alchemy.getClassGroup('site_type'),
     LeCertbot   = alchemy.use('le-store-certbot'),
     LeSniAuto   = alchemy.use('le-sni-auto'),
     GreenLock   = alchemy.use('greenlock'),
+    local_ips   = alchemy.shared('local_ips'),
     httpProxy   = require('http-proxy'),
     libpath     = require('path'),
     http        = require('http'),
-    net         = require('net');
+    net         = require('net'),
+    os          = require('os');
 
 /**
  * The Site Dispatcher class
@@ -65,15 +67,57 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
 	this.queue = Function.createQueue();
 
 	// Start the queue by getting the sites first
-	this.queue.start(function(done) {
+	this.queue.start(function gettingSites(done) {
 		that.Site.getSites(done);
 	});
 
 	// Listen to the site update event
 	alchemy.on('siteUpdate', this.update.bind(this));
 
+	// Get the local ip addresses
+	this.getLocalIps();
+
 	// Create the proxy server
 	this.startProxy();
+});
+
+/**
+ * Get the local ip addresses
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.2.0
+ * @version  0.2.0
+ */
+SiteDispatcher.setMethod(function getLocalIps() {
+
+	var interfaces = os.networkInterfaces(),
+	    config,
+	    iface,
+	    name,
+	    temp = [],
+	    i;
+
+	for (name in interfaces) {
+		iface = interfaces[name];
+
+		for (i = 0; i < iface.length; i++) {
+			config = iface[i];
+
+			temp.push({
+				title    : config.family + ' ' + config.address,
+				family   : config.family,
+				internal : config.internal,
+				address  : config.address
+			});
+		}
+	}
+
+	temp.sortByPath(1, 'title');
+
+	for (i = 0; i < temp.length; i++) {
+		config = temp[i];
+		local_ips[config.address] = config;
+	}
 });
 
 /**
@@ -116,7 +160,7 @@ SiteDispatcher.setMethod(function startProxy() {
 		}
 
 		// Get the target site
-		site = that.getSite(req.headers);
+		site = that.getSite(req);
 
 		// Set the custom header values
 		if (site && site.domain.headers && site.domain.headers.length) {
@@ -365,20 +409,39 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
  * @since    0.0.1
  * @version  0.2.0
  * 
- * @param    {Object}   headers
+ * @param    {String|Object}   req_or_domain
  */
-SiteDispatcher.setMethod(function getSite(headers) {
+SiteDispatcher.setMethod(function getSite(req_or_domain) {
 
 	// Get the host (including port)
 	var matches,
+	    headers,
 	    domain,
 	    entry,
 	    site,
-	    key;
+	    key,
+	    req,
+	    ip;
 
-	if (typeof headers == 'string') {
-		domain = headers;
-	} else {
+	if (typeof req_or_domain == 'string') {
+		domain = req_or_domain;
+	} else if (req_or_domain && typeof req_or_domain == 'object') {
+		if (req_or_domain.headers) {
+			req = req_or_domain;
+		} else {
+			headers = req_or_domain;
+		}
+	}
+
+	if (req) {
+		headers = req.headers;
+
+		if (req.socket) {
+			ip = req.socket.localAddress;
+		}
+	}
+
+	if (headers) {
 		domain = headers.host;
 	}
 
@@ -400,7 +463,7 @@ SiteDispatcher.setMethod(function getSite(headers) {
 	for (key in this.domains) {
 		entry = this.domains[key];
 
-		if (entry.site.matches(domain)) {
+		if (entry.site.matches(domain, ip)) {
 			return entry;
 		}
 	}
@@ -450,7 +513,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 	req.headers.hitId = hit;
 	req.headers.connectionId = req.connectionId;
 
-	site = this.getSite(req.headers);
+	site = this.getSite(req);
 
 	if (!site) {
 
@@ -474,7 +537,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
  * @since    0.0.1
  * @version  0.2.0
  * 
- * @param    {IncommingMessage}   req
+ * @param    {IncomingMessage}    req
  * @param    {ServerResponse}     res
  * @param    {Boolean}            skip_le   Skips letsconnect middleware if true
  */
@@ -525,7 +588,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	req.headers.hitId = hit;
 	req.headers.connectionId = req.connectionId;
 
-	site = this.getSite(req.headers);
+	site = this.getSite(req);
 
 	if (!site) {
 

@@ -4,6 +4,9 @@
 * Added websocket proxy support
 * Ports are tested before a node process starts
 * Should a port still be in use when a new process starts hohenheim will try a new one
+* Add `posix` module, so we can increase the filelimit
+* Enable keep-alive
+* Each configured site domain now **requires** you to assign an available ip address
 
 ## 0.1.0
 

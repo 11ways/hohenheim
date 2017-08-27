@@ -110,11 +110,16 @@ Site.constitute(function setSchema() {
  * @since    0.2.0
  * @version  0.2.0
  *
+ * @param    {String}    hostname   The hostname
+ * @param    {String}    [ip]       The optional ip to match
+ *
  * @return   {Boolean}   Returns true if the hostname matches
  */
-Site.setMethod(function matches(hostname) {
+Site.setMethod(function matches(hostname, ip) {
 
 	var domain,
+	    found,
+	    ip2,
 	    i,
 	    j;
 
@@ -122,8 +127,33 @@ Site.setMethod(function matches(hostname) {
 		return false;
 	}
 
+	if (ip) {
+		ip2 = '::ffff:' + ip;
+	}
+
 	for (i = 0; i < this.domains.length; i++) {
 		domain = this.domains[i];
+
+		// If an ip is given, it has to match
+		if (ip) {
+			found = false;
+
+			// If no ips are configured here, continue
+			if (!domain.listen_on) {
+				continue;
+			}
+
+			for (j = 0; j < domain.listen_on.length; j++) {
+				if (domain.listen_on[j] == ip || domain.listen_on[j] == ip2) {
+					found = true;
+					break;
+				}
+			}
+
+			if (!found) {
+				continue;
+			}
+		}
 
 		if (domain.hostname == hostname) {
 			return true;

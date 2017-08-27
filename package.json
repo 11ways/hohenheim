@@ -3,14 +3,15 @@
 	"description": "The hohenheim dispatcher",
 	"version": "0.2.0",
 	"dependencies": {
-		"alchemymvc": "~0.4.0",
-		"http-proxy": "~1.16.2",
-		"process-monitor": "skerit/process-monitor",
-		"ansi-html": "~0.0.6",
-		"greenlock": "^2.1.13",
-		"le-store-certbot": "^2.0.3",
-		"le-challenge-fs": "^2.0.8",
-		"le-sni-auto": "^2.1.0"
+		"alchemymvc"       : "~0.4.0",
+		"http-proxy"       : "~1.16.2",
+		"process-monitor"  : "skerit/process-monitor",
+		"ansi-html"        : "~0.0.6",
+		"greenlock"        : "^2.1.13",
+		"le-store-certbot" : "^2.0.3",
+		"le-challenge-fs"  : "^2.0.8",
+		"le-sni-auto"      : "^2.1.0",
+		"posix"            : "^4.1.1"
 	},
 	"engines": {
 		"node": ">=0.10"

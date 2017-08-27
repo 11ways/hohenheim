@@ -43,7 +43,6 @@ alchemy.overwrite = function overwrite(target, obj) {
 process.on('uncaughtException', function(error) {
 	// Indicate we caught an exception
 	alchemy.printLog('error', ['Uncaught Exception!', String(error), error], {err: error, level: -2});
-
 });
 
 alchemy.start(function onAlchemyReady() {
@@ -52,11 +51,26 @@ alchemy.start(function onAlchemyReady() {
 
 	// Create the dispatcher
 	alchemy.dispatcher = new Classes.Develry.SiteDispatcher({
-		fallbackAddress: 'http://localhost:8080', // Set to false to disable fallback
-		redirectHost: 'localhost', // localhost is the default value
-		ipv6Address: alchemy.settings.ipv6Address || '', // Listen to this ipv6 address, too
-		proxyPort: alchemy.settings.proxyPort || 80,
-		firstPort: alchemy.settings.firstPort || 4748
-	});
 
+		// Set to false to disable fallback
+		fallbackAddress : 'http://localhost:8080',
+
+		// localhost is the default value
+		redirectHost    : 'localhost',
+
+		// Listen to this ipv6 address, too
+		ipv6Address     : alchemy.settings.ipv6Address || '',
+
+		// The port on which the proxy will listen (probably 80)
+		proxyPort       : alchemy.settings.proxyPort || 80,
+
+		// The first port to use for child node instances
+		firstPort       : alchemy.settings.firstPort || 4748
+	});
 });
+
+// Get the posix package
+var posix = require('posix');
+
+// Increase the file limit
+posix.setrlimit('nofile', {soft: 60000});

@@ -1,6 +1,7 @@
-var sitesByName = alchemy.shared('Sites.byName'),
+var sitesByName   = alchemy.shared('Sites.byName'),
     sitesByDomain = alchemy.shared('Sites.byDomain'),
-    sitesById = alchemy.shared('Sites.byId');
+    sitesById     = alchemy.shared('Sites.byId'),
+    local_ips     = alchemy.shared('local_ips');
 
 /**
  * The Site Model class
@@ -25,7 +26,7 @@ var Site = Function.inherits('Alchemy.AppModel', function SiteModel(conduit, opt
  *
  * @author   Jelle De Loecker <jelle@develry.be>
  * @since    0.1.0
- * @version  0.1.0
+ * @version  0.2.0
  */
 Site.constitute(function addFields() {
 
@@ -46,7 +47,13 @@ Site.constitute(function addFields() {
 	header_schema.addField('name', 'String');
 	header_schema.addField('value', 'String');
 
+	// The ip addresses to listen to
+	domain_schema.addField('listen_on', 'Enum', {array: true, values: local_ips});
+
+	// The hostname to listen to
 	domain_schema.addField('hostname', 'String', {array: true});
+
+	// Optional headers to forward
 	domain_schema.addField('headers', 'Schema', {array: true, schema: header_schema});
 
 	this.addField('domain', 'Schema', {array: true, schema: domain_schema});
@@ -57,7 +64,7 @@ Site.constitute(function addFields() {
  *
  * @author   Jelle De Loecker <jelle@develry.be>
  * @since    0.1.0
- * @version  0.1.0
+ * @version  0.2.0
  */
 Site.constitute(function chimeraConfig() {
 
@@ -113,7 +120,31 @@ Site.setMethod(function getSites(callback) {
 				// Store it by each domain name
 				site.domain.forEach(function eachDomain(domain) {
 
-					var temp;
+					var length,
+					    config,
+					    temp,
+					    ip,
+					    i;
+
+					if (domain.listen_on && domain.listen_on.length) {
+						length = domain.listen_on.length;
+
+						for (i = 0; i < length; i++) {
+							ip = domain.listen_on[i];
+							config = local_ips[ip];
+
+							if (!config) {
+								local_ips[ip] = 'Old: ' + ip;
+							} else if (config.family == 'IPv4') {
+								// Add an IPv6-ified IPv4 address,
+								// because on IPv6 enabled interfaces
+								// these addresses get identified as such
+								if (ip[0] != ':') {
+									domain.listen_on.push('::ffff:' + ip);
+								}
+							}
+						}
+					}
 
 					if (domain.hostname) {
 
