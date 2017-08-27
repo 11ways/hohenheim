@@ -367,7 +367,7 @@ Site.setMethod(function getAddress(callback) {
 		}
 
 		url = 'http://' + that.redirectHost + ':' + site_process.port;
-		return callback(url);
+		return callback(null, url);
 	};
 
 	if (!this.ready) {

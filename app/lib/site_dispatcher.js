@@ -584,7 +584,12 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 		socket.end('There is no such domain here!');
 	} else {
 
-		site.site.getAddress(function gotAddress(address) {
+		site.site.getAddress(function gotAddress(err, address) {
+
+			if (err) {
+				return socket.end('Error: ' + err);
+			}
+
 			that.proxy.ws(req, socket, {target: address});
 		});
 	}
@@ -678,7 +683,13 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 		}
 
 		site.site.checkBasicAuth(req, res, function done() {
-			site.site.getAddress(function gotAddress(address) {
+			site.site.getAddress(function gotAddress(err, address) {
+
+				if (err) {
+					res.writeHead(500, {'Content-Type': 'text/plain'});
+					res.end('' + err);
+					return;
+				}
 
 				if (site.site.settings.delay) {
 					setTimeout(function doDelay() {
