@@ -11,6 +11,7 @@
 		"le-store-certbot" : "^2.0.3",
 		"le-challenge-fs"  : "^2.0.8",
 		"le-sni-auto"      : "^2.1.0",
+		"parse-passwd"     : "^1.0.0",
 		"posix"            : "^4.1.1"
 	},
 	"engines": {

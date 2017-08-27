@@ -1,9 +1,11 @@
 var site_types  = alchemy.getClassGroup('site_type'),
     LeChallenge = alchemy.use('le-challenge-fs'),
+    parsePasswd = alchemy.use('parse-passwd'),
     LeCertbot   = alchemy.use('le-store-certbot'),
     LeSniAuto   = alchemy.use('le-sni-auto'),
     GreenLock   = alchemy.use('greenlock'),
     local_ips   = alchemy.shared('local_ips'),
+    local_users = alchemy.shared('local_users'),
     httpProxy   = require('http-proxy'),
     libpath     = require('path'),
     http        = require('http'),
@@ -17,7 +19,7 @@ var site_types  = alchemy.getClassGroup('site_type'),
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.2.0
  */
 var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispatcher(options) {
 
@@ -74,11 +76,57 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
 	// Listen to the site update event
 	alchemy.on('siteUpdate', this.update.bind(this));
 
+	// Populate the available users
+	this.getLocalUsers();
+
 	// Get the local ip addresses
 	this.getLocalIps();
 
 	// Create the proxy server
 	this.startProxy();
+});
+
+/**
+ * Get the local ip addresses
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.2.0
+ * @version  0.2.0
+ */
+SiteDispatcher.setMethod(function getLocalUsers() {
+
+	var fullname,
+	    result,
+	    title,
+	    user,
+	    i;
+
+	result = parsePasswd(fs.readFileSync('/etc/passwd', 'utf8'));
+
+	for (i = 0; i < result.length; i++) {
+		user = result[i];
+
+		if (user.gecos) {
+			fullname = user.gecos.split(',')[0] || '';
+		} else {
+			fullname = '';
+		}
+
+		title = user.username;
+
+		if (fullname) {
+			title += ' - ' + fullname + ' -';
+		}
+
+		title += ' (' + user.uid + ':' + user.gid + ')';
+
+		local_users[user.uid] = {
+			title : title,
+			uid   : user.uid,
+			gid   : user.gid,
+			home  : user.homedir
+		};
+	}
 });
 
 /**
