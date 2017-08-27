@@ -155,8 +155,12 @@ Site.setMethod(function matches(hostname, ip) {
 			}
 		}
 
-		if (domain.hostname == hostname) {
-			return true;
+		if (domain.hostname && domain.hostname.length) {
+			for (j = 0; j < domain.hostname.length; j++) {
+				if (domain.hostname[j] == hostname) {
+					return true;
+				}
+			}
 		}
 
 		if (domain.regexes) {

@@ -8,6 +8,7 @@
 * Enable keep-alive
 * Each configured site domain now **requires** you to assign an available ip address
 * You can now define the uid a node site runs as
+* Fix `Site#matches` so it also searches through defined `hostname`s
 
 ## 0.1.0
 

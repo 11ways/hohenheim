@@ -506,7 +506,18 @@ SiteDispatcher.setMethod(function getSite(req_or_domain) {
 	domain = domain[0];
 
 	if (this.domains[domain] != null) {
-		return this.domains[domain];
+		entry = this.domains[domain];
+
+		// When we don't have to match an ip address,
+		// just return the entry
+		if (!ip) {
+			return entry;
+		}
+
+		// We do have an ip address to match
+		if (entry.site.matches(domain, ip)) {
+			return entry;
+		}
 	}
 
 	for (key in this.domains) {
