@@ -7,6 +7,7 @@
 * Add `posix` module, so we can increase the filelimit
 * Enable keep-alive
 * Each configured site domain now **requires** you to assign an available ip address
+* You can now define the uid a node site runs as
 
 ## 0.1.0
 

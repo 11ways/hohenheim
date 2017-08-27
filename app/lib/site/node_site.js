@@ -35,10 +35,15 @@ var Site = Function.inherits('Develry.Site', function NodeSite(siteDispatcher, r
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.1.0
- * @version  0.1.0
+ * @version  0.2.0
  */
 Site.constitute(function addFields() {
+
+	// The script to run
 	this.schema.addField('script', 'String');
+
+	// The user to run the script as
+	this.schema.addField('user', 'Enum', {values: alchemy.shared('local_users')});
 });
 
 /**
@@ -83,12 +88,29 @@ Site.setMethod(function startOnPort(port, callback) {
 	var that = this,
 	    processStats,
 	    process,
+	    config,
+	    args,
 	    port;
 
 	log.info('Starting node script', this.settings.script, 'on port', port);
 
+	args = [
+		'--port=' + port,
+		'hohenchild'
+	];
+
+	config = {
+		cwd    : this.cwd,
+		silent : true
+	};
+
+	if (this._record.user) {
+		config.uid = this._record.user;
+		config.gid = this._record.user;
+	}
+
 	// Start the server
-	process = child.fork(this.settings.script, ['--port=' + port, 'hohenchild'], {cwd: this.cwd, silent: true});
+	process = child.fork(this.settings.script, args, config);
 
 	process.proclog_id = null;
 	process.procarray = [];

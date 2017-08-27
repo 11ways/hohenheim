@@ -103,6 +103,8 @@ SiteDispatcher.setMethod(function getLocalUsers() {
 
 	result = parsePasswd(fs.readFileSync('/etc/passwd', 'utf8'));
 
+	result.sortByPath(1, 'username');
+
 	for (i = 0; i < result.length; i++) {
 		user = result[i];
 
