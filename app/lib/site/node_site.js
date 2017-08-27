@@ -330,7 +330,7 @@ Site.setMethod(function processExit(process, code, signal) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.2.0
  *
  * @param    {Function}   callback
  */
@@ -344,6 +344,10 @@ Site.setMethod(function getAddress(callback) {
 		var site_process,
 		    url,
 		    i;
+
+		if (!that.process_list.length) {
+			return callback(new Error('Failed to start node site process'));
+		}
 
 		// Shuffle the process list
 		if (that.process_list.length > 1) {
