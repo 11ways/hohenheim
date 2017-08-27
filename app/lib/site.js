@@ -247,7 +247,7 @@ Site.setMethod(function cleanParent() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.2.0
  *
  * @param    {Object}   record
  */
@@ -260,8 +260,8 @@ Site.setMethod(function update(record) {
 
 	this.name = record.name;
 	this.domains = record.domain || [];
-	this.script = record.script;
-	this.settings = record.settings;
+	this.settings = record.settings || {};
+	this.script = this.settings.script;
 
 	if (this.script) {
 		this.cwd = libpath.dirname(this.script);
