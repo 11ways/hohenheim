@@ -94,6 +94,10 @@ Site.setMethod(function startOnPort(port, callback) {
 
 	log.info('Starting node script', this.settings.script, 'on port', port);
 
+	if (!this.cwd) {
+		return callback(new Error('Working directory is not set, can not start script!'));
+	}
+
 	args = [
 		'--port=' + port,
 		'hohenchild'
@@ -105,6 +109,8 @@ Site.setMethod(function startOnPort(port, callback) {
 	};
 
 	if (this._record.user) {
+		log.info(' - Starting as uid', this._record.user);
+
 		config.uid = this._record.user;
 		config.gid = this._record.user;
 	}
