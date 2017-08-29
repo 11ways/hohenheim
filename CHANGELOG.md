@@ -13,6 +13,7 @@
 * The callback provided to `Site#getAddress` will now accept error objects
 * Fix `NodeSite` cwd not being set properly
 * Fix `NodeSite#ready` going under 0, which made it stop creating a new process
+* You can now set which node version a `NodeSite` uses (defaults to `which node`, no more forking)
 
 ## 0.1.0
 

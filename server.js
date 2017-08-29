@@ -48,6 +48,7 @@ process.on('uncaughtException', function(error) {
 alchemy.start(function onAlchemyReady() {
 
 	// Do certain things when alchemy is ready
+	log.info('Creating site dispatcher');
 
 	// Create the dispatcher
 	alchemy.dispatcher = new Classes.Develry.SiteDispatcher({

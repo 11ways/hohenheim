@@ -1,7 +1,9 @@
 var child     = require('child_process'),
-    path      = require('path'),
+    libpath   = require('path'),
     procmon   = require('process-monitor'),
-    ansiHTML  = require('ansi-html');
+    ansiHTML  = require('ansi-html'),
+    fs        = require('fs'),
+    versions  = {};
 
 /**
  * The Node Site class
@@ -44,6 +46,191 @@ Site.constitute(function addFields() {
 
 	// The user to run the script as
 	this.schema.addField('user', 'Enum', {values: alchemy.shared('local_users')});
+
+	// The node version to use
+	this.schema.addField('node', 'Enum', {values: versions});
+});
+
+/**
+ * Get available node versions
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.2.0
+ * @version  0.2.0
+ */
+Site.setStatic(function updateVersions(callback) {
+
+	if (!callback) {
+		callback = Function.thrower;
+	}
+
+	log.info('Updating node.js version info');
+
+	Function.parallel(function getOldVersions(next) {
+
+		var conditions = {
+			site_type : 'node_site'
+		};
+
+		Model.get('Site').find('all', {conditions}, function gotSites(err, records) {
+
+			if (err) {
+				return next();
+			}
+
+			records.forEach(function eachRecord(record) {
+
+				if (!record.settings || !record.settings.node) {
+					return;
+				}
+
+				if (!versions[record.settings.node]) {
+					versions[record.settings.node] = {
+						title   : 'removed [' + record.settings.node + ']',
+						version : record.settings.node
+					};
+				}
+			});
+
+			next();
+		});
+	}, function getNVersions(next) {
+
+		var versions_path = '/usr/local/n/versions/node';
+
+		fs.readdir(versions_path, function gotNVersions(err, contents) {
+
+			// N is probably not used here
+			if (err) {
+				return next();
+			}
+
+			let tasks = [];
+
+			for (let i = 0; i < contents.length; i++) {
+				let bin_path,
+				    version;
+
+				version = contents[i];
+				bin_path = libpath.resolve(versions_path, version, 'bin/node');
+
+				tasks.push(function checkFile(next) {
+
+					fs.stat(bin_path, function gotStat(err, stats) {
+
+						if (err) {
+							return next();
+						}
+
+						versions[version] = {
+							title   : 'v' + version,
+							version : version,
+							bin     : bin_path
+						};
+
+						next();
+					});
+				});
+			}
+
+			Function.parallel(tasks, function gotVersions(err) {
+				next();
+			});
+		});
+	}, function getSystemVersion(next) {
+
+		child.exec('which node', function gotMainNode(err, stdout, stderr) {
+
+			// No system node found
+			if (err) {
+				return next();
+			}
+
+			let bin_path = stdout.trim();
+
+			if (!bin_path) {
+				return next();
+			}
+
+			child.exec(bin_path + ' --version', function gotVersion(err, stdout) {
+
+				if (err) {
+					return next();
+				}
+
+				let version = stdout.trim();
+
+				if (version[0] == 'v') {
+					version = version.slice(1);
+				}
+
+				versions.system = {
+					title   : 'system [currently v' + version + ']',
+					version : version,
+					bin     : bin_path
+				};
+
+				next();
+			});
+		});
+	}, function getMainBin(next) {
+
+		let bin_path = '/usr/bin/node';
+
+		child.exec(bin_path + ' --version', function gotVersion(err, stdout) {
+
+			// No main bin version
+			if (err) {
+				return next();
+			}
+
+			let version = stdout.trim();
+
+			if (version[0] == 'v') {
+				version = version.slice(1);
+			}
+
+			versions.main_bin = {
+				title   : bin_path + ' [currently v' + version + ']',
+				version : version,
+				bin     : bin_path
+			};
+
+			next();
+		});
+	}, function getLocalBin(next) {
+
+		let bin_path = '/usr/local/bin/node';
+
+		child.exec(bin_path + ' --version', function gotVersion(err, stdout) {
+
+			// No main bin version
+			if (err) {
+				return next();
+			}
+
+			let version = stdout.trim();
+
+			if (version[0] == 'v') {
+				version = version.slice(1);
+			}
+
+			versions.local_bin = {
+				title   : bin_path + ' [currently v' + version + ']',
+				version : version,
+				bin     : bin_path
+			};
+
+			next();
+		});
+	}, function done(err) {
+
+		if (err) {
+			return callback(err);
+		}
+
+		callback(null, versions);
+	});
 });
 
 /**
@@ -87,10 +274,16 @@ Site.setMethod(function startOnPort(port, callback) {
 
 	var that = this,
 	    processStats,
+	    node_config,
+	    bin_path,
 	    process,
 	    config,
 	    args,
 	    port;
+
+	if (!this.settings.script) {
+		return callback(new Error('No script has been set'));
+	}
 
 	log.info('Starting node script', this.settings.script, 'on port', port);
 
@@ -98,14 +291,35 @@ Site.setMethod(function startOnPort(port, callback) {
 		return callback(new Error('Working directory is not set, can not start script!'));
 	}
 
+	if (this.settings.node) {
+		node_config = versions[this.settings.node];
+
+		if (!node_config || !node_config.bin) {
+
+			if (node_config) {
+				log.info(' -', 'Version', this.settings.node, 'is no longer available');
+			}
+
+			node_config = null;
+		}
+	}
+
+	// If no node configuration was found,
+	// then we use the system-wide node version
+	if (!node_config) {
+		node_config = versions.system;
+		log.info(' -', 'Falling back to using system node instance v' + node_config.version);
+	}
+
 	args = [
+		this.settings.script,
 		'--port=' + port,
 		'hohenchild'
 	];
 
 	config = {
 		cwd    : this.cwd,
-		silent : true
+		stdio  : ['pipe', 'pipe', 'pipe', 'ipc']
 	};
 
 	if (this.settings.user) {
@@ -116,7 +330,7 @@ Site.setMethod(function startOnPort(port, callback) {
 	}
 
 	// Start the server
-	process = child.fork(this.settings.script, args, config);
+	process = child.spawn(node_config.bin, args, config)
 
 	process.proclog_id = null;
 	process.procarray = [];
@@ -393,4 +607,39 @@ Site.setMethod(function getAddress(callback, attempt) {
 	} else {
 		fnc();
 	}
+});
+
+/**
+ * Before starting the actual server, we need the node versions
+ *
+ * @author        Jelle De Loecker   <jelle@develry.be>
+ * @since         0.2.0
+ * @version       0.2.0
+ */
+alchemy.sputnik.beforeSerial('startServer', function getNodeVersions(done) {
+
+	// We have to wait for blast & classes to have loaded
+	Blast.loaded(function hasLoaded() {
+		// Update all the node versions
+		Site.updateVersions(function gotVersions(err, versions) {
+
+			if (err) {
+				log.error('Error getting node versions:', err);
+				return done();
+			}
+
+			let entry,
+			    key;
+
+			log.info('Got', Object.size(versions), 'node versions');
+
+			for (key in versions) {
+				entry = versions[key];
+
+				log.info(' -', entry.version, '(' + entry.title + ')', '@', entry.bin);
+			}
+
+			done();
+		});
+	});
 });
