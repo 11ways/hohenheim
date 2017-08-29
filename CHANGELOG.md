@@ -12,6 +12,7 @@
 * `Site#getAddress` will callback with an error when it fails to start
 * The callback provided to `Site#getAddress` will now accept error objects
 * Fix `NodeSite` cwd not being set properly
+* Fix `NodeSite#ready` going under 0, which made it stop creating a new process
 
 ## 0.1.0
 

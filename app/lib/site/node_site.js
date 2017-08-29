@@ -294,7 +294,7 @@ Site.setMethod(function processStats(process, cpu, mem) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.2.0
  *
  * @param    {ChildProcess}   process
  * @param    {Number}         code
@@ -307,7 +307,20 @@ Site.setMethod(function processExit(process, code, signal) {
 
 	// Decrease the running counter
 	this.running--;
-	this.ready--;
+
+	// If the process was ready, also decrease that
+	if (process.ready) {
+		this.ready--;
+	}
+
+	// Just a paranoid check to make sure nothing goes under 0
+	if (this.ready < 0) {
+		this.ready = 0;
+	}
+
+	if (this.running < 0) {
+		this.running = 0;
+	}
 
 	if (this.ready == 0) {
 		this.initial_hinder = null;
@@ -333,8 +346,9 @@ Site.setMethod(function processExit(process, code, signal) {
  * @version  0.2.0
  *
  * @param    {Function}   callback
+ * @param    {Number}     attempt
  */
-Site.setMethod(function getAddress(callback) {
+Site.setMethod(function getAddress(callback, attempt) {
 
 	var that = this,
 	    fnc;
@@ -344,10 +358,6 @@ Site.setMethod(function getAddress(callback) {
 		var site_process,
 		    url,
 		    i;
-
-		if (!that.process_list.length) {
-			return callback(new Error('Failed to start node site process'));
-		}
 
 		// Shuffle the process list
 		if (that.process_list.length > 1) {
