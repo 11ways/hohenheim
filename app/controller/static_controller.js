@@ -88,7 +88,7 @@ Static.setMethod(function sitestat(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.1
- * @version  0.0.1
+ * @version  0.2.0
  */
 Static.setMethod(function sitestatKill(conduit) {
 
@@ -98,6 +98,8 @@ Static.setMethod(function sitestatKill(conduit) {
 	    process,
 	    site,
 	    pid;
+
+	log.info('Manual sitekill requested for pid', data.pid);
 
 	if (!siteId) {
 		return conduit.error(new Error('No site_id given'));
