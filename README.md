@@ -189,3 +189,7 @@ You can configure your websites to use a specific node.js version, these version
 * All global installed versions through the `n` module
 
 If a configured version is not found, the system node binary will be used.
+
+## Thanks
+
+Many thanks go out to [Félix "passcod" Saparelli](https://github.com/passcod) who allowed me to use the `hohenheim` package name on npm.
