@@ -12,6 +12,10 @@ Hohenheim requires at least node.js version 6.6.0. Your sites can use lower vers
 
 You will need a mongodb server.
 
+### n
+
+Although technically not required, you can configure your sites to use a specific node.js version installed through [the **n** node version manager](https://github.com/tj/n)
+
 ### Capabilities
 
 Hohenheim requires that your node.js binary has some extra capabilities. These are:
@@ -42,6 +46,68 @@ Should you ever want to remove all capabilities from the binary, you can do so l
 ```bash
 sudo setcap -r /usr/local/bin/hohenode
 ```
+
+## Configuration
+
+You will need to configure the following files
+
+### app/config/local.js
+
+```javascript
+module.exports = {
+
+    // The main port to listen on
+    proxyPort: 80,
+
+    // The main port to listen on for HTTPS traffic
+    proxyPortHttps: 443,
+
+    // Your current environment. Can be dev, preview or live
+    environment: 'live',
+
+    // When no sites match, this address will be tried last
+    // (This can be your apache server, for instance)
+    fallbackAddress: 'http://localhost:8080',
+
+    // The host hohenheim will use to access the spawned node sites,
+    // this should probably remain "localhost"
+    redirectHost: 'localhost',
+
+    // The first port to use for child node instances
+    firstPort: 4748,
+
+    // This is the port the admin interface listens on
+    port: 2999,
+
+    // Set to true to enable letsencrypt (only way to enable https for now)
+    letsencrypt: true,
+
+    // The default e-mail address to use for letsencrypt registrations
+    letsencrypt_email: 'your@email.address',
+
+    // Add the ipv6 address you want to listen on
+    ipv6Address: ''
+};
+```
+
+### app/config/dev/database.js or app/config/live/database.js
+
+You'll find the database settings here, by default these are:
+
+```javascript
+Datasource.create('mongo', 'default', {
+    host     : '127.0.0.1',
+    database : 'hohenheim-live',
+    login    : false,
+    password : false
+});
+```
+
+### Admin interface
+
+Once you have everything configured and running, you can go to the admin interface at http://localhost:2999/chimera
+
+The default credentials are `admin:admin`
 
 ## Systemd
 

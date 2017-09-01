@@ -53,6 +53,9 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
 	// The port the proxy runs on
 	this.proxyPort = options.proxyPort || 8080;
 
+	// The https proxy port
+	this.proxyPortHttps = options.proxyPortHttps,
+
 	// Where the ports start
 	this.firstPort = options.firstPort || 4701;
 
@@ -264,6 +267,10 @@ SiteDispatcher.setMethod(function initGreenlock() {
 		return;
 	}
 
+	if (!this.proxyPortHttps) {
+		return log.warn('HTTPS is disabled');
+	}
+
 	this._inited_greenlock = true;
 
 	if (alchemy.settings.letsencrypt === false) {
@@ -415,7 +422,7 @@ SiteDispatcher.setMethod(function initGreenlock() {
 	});
 
 	// Listen on the HTTPS port
-	this.https_server.listen(443);
+	this.https_server.listen(this.proxyPortHttps);
 });
 
 /**
@@ -621,7 +628,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	}
 
 	// Use the letsencrypt middleware first
-	if (skip_le !== true && alchemy.settings.letsencrypt !== false) {
+	if (skip_le !== true && alchemy.settings.letsencrypt !== false && this.proxyPortHttps) {
 
 		this.le_middleware(req, res, function done() {
 			// Greenlock didn't do anything, we can continue

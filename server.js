@@ -54,16 +54,19 @@ alchemy.start(function onAlchemyReady() {
 	alchemy.dispatcher = new Classes.Develry.SiteDispatcher({
 
 		// Set to false to disable fallback
-		fallbackAddress : 'http://localhost:8080',
+		fallbackAddress : alchemy.settings.fallbackAddress || null,
 
 		// localhost is the default value
-		redirectHost    : 'localhost',
+		redirectHost    : alchemy.settings.redirectHost || 'localhost',
 
 		// Listen to this ipv6 address, too
 		ipv6Address     : alchemy.settings.ipv6Address || '',
 
 		// The port on which the proxy will listen (probably 80)
 		proxyPort       : alchemy.settings.proxyPort || 80,
+
+		// The https proxy port
+		proxyPortHttps  : alchemy.settings.proxyPortHttps,
 
 		// The first port to use for child node instances
 		firstPort       : alchemy.settings.firstPort || 4748
