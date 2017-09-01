@@ -4,12 +4,12 @@
  * The place where the magic starts
  *
  * Alchemy: a node.js framework
- * Copyright 2013, Jelle De Loecker
+ * Copyright 2013-2017, Jelle De Loecker
  *
  * Licensed under The MIT License
  * Redistributions of files must retain the above copyright notice.
  *
- * @copyright     Copyright 2013, Jelle De Loecker
+ * @copyright     Copyright 2013-2017, Jelle De Loecker
  * @link          
  * @license       MIT License (http://www.opensource.org/licenses/mit-license.php)
  */

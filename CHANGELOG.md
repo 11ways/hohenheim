@@ -1,4 +1,4 @@
-## 0.2.0 (WIP)
+## 0.2.0 (2017-09-01)
 
 * Add Letsencrypt support using the `greenlock` module
 * Added websocket proxy support

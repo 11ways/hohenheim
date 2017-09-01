@@ -10,6 +10,7 @@
 		"alchemy-menu"           : "~0.4.0",
 		"alchemy-styleboost"     : "~0.4.0",
 		"alchemy-web-components" : "~0.4.0",
+		"alchemy-ajatar-theme"   : "~1.0.0",
 		"ansi-html"              : "~0.0.7",
 		"greenlock"              : "^2.1.15",
 		"http-proxy"             : "~1.16.2",
@@ -20,6 +21,7 @@
 		"posix"                  : "^4.1.1",
 		"process-monitor"        : "skerit/process-monitor"
 	},
+	"license": "GPLv3",
 	"engines": {
 		"node": ">=6.6.0"
 	}
