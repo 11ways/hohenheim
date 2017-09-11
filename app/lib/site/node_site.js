@@ -37,7 +37,7 @@ var Site = Function.inherits('Develry.Site', function NodeSite(siteDispatcher, r
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.1.0
- * @version  0.2.0
+ * @version  0.2.1
  */
 Site.constitute(function addFields() {
 
@@ -49,6 +49,21 @@ Site.constitute(function addFields() {
 
 	// The node version to use
 	this.schema.addField('node', 'Enum', {values: versions});
+
+	// Wait for the child to tell us it's ready?
+	this.schema.addField('wait_for_ready', 'Boolean');
+
+	// Create new subschema for environment variables
+	let env_schema = new Classes.Alchemy.Schema(this);
+
+	// Set the env name
+	env_schema.addField('name', 'String');
+
+	// And the env value
+	env_schema.addField('value', 'String');
+
+	// Set process environment variables
+	this.schema.addField('environment_variables', 'Schema', {schema: env_schema, array: true});
 });
 
 /**
@@ -266,7 +281,7 @@ Site.setMethod(function start(callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.0
+ * @version  0.2.1
  *
  * @param    {Function}   callback
  */
@@ -275,11 +290,13 @@ Site.setMethod(function startOnPort(port, callback) {
 	var that = this,
 	    processStats,
 	    node_config,
+	    child_proc,
 	    bin_path,
-	    process,
 	    config,
 	    args,
-	    port;
+	    port,
+	    key,
+	    env;
 
 	if (!this.settings.script) {
 		return callback(new Error('No script has been set'));
@@ -311,6 +328,24 @@ Site.setMethod(function startOnPort(port, callback) {
 		log.info(' -', 'Falling back to using system node instance v' + node_config.version);
 	}
 
+	env = {};
+
+	for (key in process.env) {
+		env[key] = process.env[key];
+	}
+
+	if (this.settings.environment_variables && this.settings.environment_variables.length) {
+		let entry,
+		    i;
+
+		for (i = 0; i < this.settings.environment_variables.length; i++) {
+			entry = this.settings.environment_variables[i];
+			env[entry.name] = entry.value;
+		}
+	}
+
+	env.PORT = port;
+
 	args = [
 		this.settings.script,
 		'--port=' + port,
@@ -319,7 +354,8 @@ Site.setMethod(function startOnPort(port, callback) {
 
 	config = {
 		cwd    : this.cwd,
-		stdio  : ['pipe', 'pipe', 'pipe', 'ipc']
+		stdio  : ['pipe', 'pipe', 'pipe', 'ipc'],
+		env    : env
 	};
 
 	if (this.settings.user) {
@@ -330,20 +366,20 @@ Site.setMethod(function startOnPort(port, callback) {
 	}
 
 	// Start the server
-	process = child.spawn(node_config.bin, args, config)
+	child_proc = child.spawn(node_config.bin, args, config)
 
-	process.proclog_id = null;
-	process.procarray = [];
+	child_proc.proclog_id = null;
+	child_proc.procarray = [];
 
 	// Get the child process' output
-	process.stdout.on('data', function onData(data) {
+	child_proc.stdout.on('data', function onData(data) {
 
 		if (alchemy.settings.debug) {
 			console.log('[SITE ' + that._record.name + '] ' + data);
 		}
 
 		Function.series(function getId(next) {
-			if (process.proclog_id) {
+			if (child_proc.proclog_id) {
 				return next();
 			}
 
@@ -356,7 +392,7 @@ Site.setMethod(function startOnPort(port, callback) {
 					return next(err);
 				}
 
-				process.proclog_id = data[0]._id;
+				child_proc.proclog_id = data[0]._id;
 				next();
 			});
 		}, function done(err) {
@@ -369,83 +405,103 @@ Site.setMethod(function startOnPort(port, callback) {
 			}
 
 			str = data.toString();
-			process.procarray.push({time: Date.now(), html: ansiHTML(str)});
+			child_proc.procarray.push({time: Date.now(), html: ansiHTML(str)});
 
 			that.Proclog.save({
-				_id: process.proclog_id,
-				log: process.procarray
+				_id: child_proc.proclog_id,
+				log: child_proc.procarray
 			});
 		});
 	});
 
 	// Store the port it should be running on
-	process.port = port;
+	child_proc.port = port;
 
 	// Store the time this was started
-	process.startTime = Date.now();
+	child_proc.startTime = Date.now();
 
 	// When overload started
-	process.startOverload = 0;
+	child_proc.startOverload = 0;
 
-	this.processes[process.pid] = process;
+	this.processes[child_proc.pid] = child_proc;
 
 	this.running++;
 
 	// Handle cpu & memory information from the process
 	processStats = function processStats(stats) {
-		that.processStats(process, stats.cpu, stats.mem);
+		that.processStats(child_proc, stats.cpu, stats.mem);
 	};
 
 	// Attach process monitor
-	process.monitor = procmon.monitor({
-		pid: process.pid,
-		interval: 4000,
-		technique: 'proc'
+	child_proc.monitor = procmon.monitor({
+		pid       : child_proc.pid,
+		interval  : 4000,
+		technique : 'proc'
 	}).start();
 
 	// Listen for process information
-	process.monitor.on('stats', processStats);
+	child_proc.monitor.on('stats', processStats);
 
 	// Listen for exit events
-	process.on('exit', function(code, signal) {
+	child_proc.on('exit', function(code, signal) {
 
 		// Clean up the process
-		that.processExit(process, code, signal);
+		that.processExit(child_proc, code, signal);
 
 		// Stop the process monitor
-		process.monitor.stop();
+		child_proc.monitor.stop();
 
 		// Delete the monitor from the process
-		delete process.monitor;
+		delete child_proc.monitor;
 	});
 
+	// Only wait for the ready message when it has been enabled
+	if (!this.settings.wait_for_ready) {
+
+		child_proc.ready = true;
+		that.ready++;
+		that.process_list.push(child_proc);
+
+		if (callback) {
+			callback();
+		}
+
+		return;
+	}
+
 	// Listen for the message that tells us the server is ready
-	process.on('message', function listenForReady(message) {
+	child_proc.on('message', function listenForReady(message) {
+
+		var data;
 
 		if (typeof message !== 'object') {
 			return;
 		}
 
-		if (message.alchemy) {
-			if (message.alchemy.ready) {
+		data = message.hohenheim || message.alchemy;
 
-				// Add this to the process object
-				process.ready = true;
+		if (!data) {
+			return;
+		}
 
-				// Up the ready counter
-				that.ready++;
+		if (data.ready) {
 
-				that.process_list.push(process);
+			// Add this to the process object
+			child_proc.ready = true;
 
-				// Execute the callback
-				if (callback) callback();
+			// Up the ready counter
+			that.ready++;
 
-				// Remove the event listener
-				process.removeListener('message', listenForReady);
-			} else if (!process.ready && message.alchemy.error && message.alchemy.error.code == 'EADDRINUSE') {
-				// Try again if the port is already in use
-				that.start(callback);
-			}
+			that.process_list.push(child_proc);
+
+			// Execute the callback
+			if (callback) callback();
+
+			// Remove the event listener
+			child_proc.removeListener('message', listenForReady);
+		} else if (!child_proc.ready && data.error && data.error.code == 'EADDRINUSE') {
+			// Try again if the port is already in use
+			that.start(callback);
 		}
 	});
 });
