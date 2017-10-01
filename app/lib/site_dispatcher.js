@@ -449,6 +449,8 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
 	}
 
 	// Retry 4 times
+	// @TODO: This is PER SOCKET,
+	// so shared keep-alive requests in total will only be tried 4 times
 	if (req.errorCount > 4) {
 		log.error('Retried connection ' + req.connectionId + ' four times, giving up');
 		res.writeHead(502, {'Content-Type': 'text/plain'});
@@ -569,6 +571,8 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 	// Get the hit id
 	hit = ++this.hitCounter;
 
+	// This will set the connectionId only ONCE per socket,
+	// so multiple keep-alive requests will share this connectionId
 	if (!req.socket.connectionId) {
 		req.socket.connectionId = ++this.connectionCounter;
 		socket.connectionId = req.socket.connectionId;
