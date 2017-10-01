@@ -60,6 +60,15 @@ module.exports = {
 	// Extra import paths
 	less_import_paths: false,
 
+	// Log access to database?
+	log_access_to_database: false,
+
+	// Log access to file?
+	log_access_to_file: true,
+
+	// Path to the access log
+	log_access_path: '/var/log/hohenheim/access.log',
+
 	// Set the debug level
 	log_level: 4,
 

@@ -16,3 +16,28 @@ alchemy.usePlugin('acl', {baselayout: 'layouts/base', bodylayout: 'layouts/body'
 alchemy.usePlugin('menu');
 alchemy.usePlugin('web-components');
 alchemy.usePlugin('chimera', {title: 'Hohenheim'});
+
+/**
+ * Ensure the access log path can be reached
+ * @TODO: make 'done()' work
+ */
+alchemy.sputnik.before('startServer', function beforeStartServer(done) {
+
+	if (!alchemy.settings.log_access_to_file) {
+		return;
+	}
+
+	let libpath = alchemy.use('path'),
+	    fs = alchemy.use('fs');
+
+	let path = libpath.dirname(alchemy.settings.log_access_path);
+
+	try {
+		fs.mkdirSync(path);
+	} catch (err) {
+		if (err.code !== 'EEXIST') {
+			log.warn('Disabling access.log file:', err);
+			alchemy.settings.log_access_to_file = false;
+		}
+	}
+});

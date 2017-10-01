@@ -384,7 +384,7 @@ Site.setMethod(function checkBasicAuth(req, res, next) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.2.1
  * 
  * @param    {IncommingMessage}   req
  * @param    {ServerResponse}     res
@@ -397,10 +397,14 @@ Site.setMethod(function registerHit(req, res, callback) {
 	    remoteAddress,
 	    bytesRead,
 	    fullPath,
+	    start,
 	    path,
 	    read;
 
 	fullPath = req.url;
+
+	// Create new date
+	start = new Date();
 
 	// Get the wanted path
 	path = fullPath.split('?')[0];
@@ -441,17 +445,18 @@ Site.setMethod(function registerHit(req, res, callback) {
 		req.socket.prevWritten = bytesWritten;
 
 		that.Log.registerHit({
-			site_id: that.id,
-			host: req.headers.host,
-			path: fullPath,
-			status: res.statusCode,
-			request_size: read,
-			response_size: sent,
-			referer: req.headers.referer,
-			user_agent: req.headers['user-agent'],
-			remote_address: remoteAddress,
-			duration: Date.now() - req.startTime
-		});
+			created        : start,
+			site_id        : that.id,
+			host           : req.headers.host,
+			path           : fullPath,
+			status         : res.statusCode,
+			request_size   : read,
+			response_size  : sent,
+			referer        : req.headers.referer,
+			user_agent     : req.headers['user-agent'],
+			remote_address : remoteAddress,
+			duration       : Date.now() - req.startTime
+		}, req, res);
 
 		if (Blast.DEBUG) {
 			log.info(that.name, 'has now received', ~~(that.incoming/1024), 'KiBs and submitted', ~~(that.outgoing/1024), 'KiBs');

@@ -1,5 +1,10 @@
 ## 0.2.1 (WIP)
 
+* Also set the node.js port to use on the child process PORT env variable
+* Regular `Node` sites don't need to send a "ready" message anymore
+* Added `Alchemy` site, which inherits from `Node`
+* Log access to file (instead of database) at `/var/log/hohenheim/access.log`
+
 ## 0.2.0 (2017-09-01)
 
 * Add Letsencrypt support using the `greenlock` module
