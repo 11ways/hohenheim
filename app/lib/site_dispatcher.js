@@ -19,7 +19,7 @@ var site_types  = alchemy.getClassGroup('site_type'),
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.0
+ * @version  0.2.1
  */
 var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispatcher(options) {
 
@@ -430,7 +430,7 @@ SiteDispatcher.setMethod(function initGreenlock() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.2.1
  * 
  * @param    {Error}              error
  * @param    {IncommingMessage}   req
@@ -452,7 +452,7 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
 	// @TODO: This is PER SOCKET,
 	// so shared keep-alive requests in total will only be tried 4 times
 	if (req.errorCount > 4) {
-		log.error('Retried connection ' + req.connectionId + ' four times, giving up');
+		log.error('Retried connection', req.connectionId, 'four times, giving up on:', req.url);
 		res.writeHead(502, {'Content-Type': 'text/plain'});
 		res.end('Failed to reach server!');
 	} else {
@@ -825,7 +825,7 @@ SiteDispatcher.setMethod(function update(sitesById) {
 	// Pause the dispatcher queue
 	this.queue.pause();
 
-	console.log('Updating sites ...');
+	log.info('Updating sites ...');
 
 	removed = alchemy.getDifference(this.ids, sitesById);
 
@@ -840,7 +840,7 @@ SiteDispatcher.setMethod(function update(sitesById) {
 	for (id in created) {
 		site = created[id];
 
-		console.log('Enabling site', id, site.name);
+		log.info('Enabling site', id, site.name);
 
 		SiteConstructor = site_types[site.site_type];
 
@@ -857,11 +857,11 @@ SiteDispatcher.setMethod(function update(sitesById) {
 	for (id in shared) {
 		site = shared[id];
 
-		console.log('Updating site', id, site.name);
+		log.info('Updating site', id, site.name);
 		this.ids[id].update(site);
 	}
 
-	console.log('Domains currently enabled:');
+	log.info('Domains currently enabled:');
 
 	for (key in this.domains) {
 
@@ -871,7 +871,7 @@ SiteDispatcher.setMethod(function update(sitesById) {
 			name = null;
 		}
 
-		console.log(' -', key, '»', name);
+		log.info(' -', key, '»', name);
 	}
 
 	// Resume the queue

@@ -4,6 +4,8 @@
 * Regular `Node` sites don't need to send a "ready" message anymore
 * Added `Alchemy` site, which inherits from `Node`
 * Log access to file (instead of database) at `/var/log/hohenheim/access.log`
+* Log the URL when giving up on a request
+* Node sites now have a `minimum_processes` and `maximum_processes` field
 
 ## 0.2.0 (2017-09-01)
 

@@ -1,4 +1,5 @@
-var child     = require('child_process'),
+var sitesById = alchemy.shared('Sites.byId'),
+    child     = require('child_process'),
     libpath   = require('path'),
     procmon   = require('process-monitor'),
     ansiHTML  = require('ansi-html'),
@@ -12,7 +13,7 @@ var child     = require('child_process'),
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.2.1
  *
  * @param    {Develry.SiteDispatcher}   siteDispatcher
  * @param    {Object}                   record
@@ -23,12 +24,16 @@ var Site = Function.inherits('Develry.Site', function NodeSite(siteDispatcher, r
 	this.processes = {};
 	this.process_list = []
 
+	// The amount of processes that will start
+	this.requested = 0;
+
 	// The amount of running processes
 	this.running = 0;
 
 	// The amount of processes ready
 	this.ready = 0;
 
+	// Call the parent constructor
 	NodeSite.super.call(this, siteDispatcher, record);
 });
 
@@ -52,6 +57,12 @@ Site.constitute(function addFields() {
 
 	// Wait for the child to tell us it's ready?
 	this.schema.addField('wait_for_ready', 'Boolean');
+
+	// Minimum amount of processes?
+	this.schema.addField('minimum_processes', 'Number');
+
+	// Maximum amount of processes?
+	this.schema.addField('maximum_processes', 'Number');
 
 	// Create new subschema for environment variables
 	let env_schema = new Classes.Alchemy.Schema(this);
@@ -249,6 +260,38 @@ Site.setStatic(function updateVersions(callback) {
 });
 
 /**
+ * The number of running + requested sites
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.2.1
+ * @version  0.2.1
+ *
+ * @type     {Number}
+ */
+Site.setProperty(function total_proc_count() {
+	return this.requested + this.running;
+});
+
+/**
+ * Update this site,
+ * recreate the entries in the parent dispatcher
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.2.1
+ * @version  0.2.1
+ *
+ * @param    {Object}   record
+ */
+Site.setMethod(function update(record) {
+
+	// Call the parent method
+	update.super.call(this, record);
+
+	// Check if we need to start a server already
+	this.startMinimumServers();
+});
+
+/**
  * Start a new process
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
@@ -265,14 +308,75 @@ Site.setMethod(function start(callback) {
 		callback = Function.thrower;
 	}
 
+	// Increase the requested count
+	// (Because the `running` count won't be incremented until `startOnPort`)
+	this.requested++;
+
 	// Get the port
 	this.parent.getPort(this, function gotPort(err, port) {
+
+		// Decrease the requested count again
+		that.requested--;
 
 		if (err) {
 			return callback(err);
 		}
 
 		that.startOnPort(port, callback);
+	});
+});
+
+/**
+ * Process stdout data
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.2.1
+ * @version  0.2.1
+ *
+ * @param    {ChildProcess}   proc
+ * @param    {Buffer}         data
+ */
+Site.setMethod(function onStdout(proc, data) {
+
+	var that = this;
+
+	if (alchemy.settings.debug) {
+		console.log('[SITE ' + that._record.name + '] ' + data);
+	}
+
+	Function.series(function getId(next) {
+		if (proc.proclog_id) {
+			return next();
+		}
+
+		that.Proclog.save({
+			site_id: that.id,
+			log: []
+		}, {document: false}, function saved(err, doc) {
+
+			if (err) {
+				return next(err);
+			}
+
+			proc.proclog_id = doc[0]._id;
+			next();
+		});
+	}, function done(err) {
+
+		var str;
+
+		if (err) {
+			log.error('Error saving proclog', {err: err});
+			return;
+		}
+
+		str = data.toString();
+		proc.procarray.push({time: Date.now(), html: ansiHTML(str)});
+
+		that.Proclog.save({
+			_id: proc.proclog_id,
+			log: proc.procarray
+		});
 	});
 });
 
@@ -354,7 +458,7 @@ Site.setMethod(function startOnPort(port, callback) {
 
 	config = {
 		cwd    : this.cwd,
-		stdio  : ['pipe', 'pipe', 'pipe', 'ipc'],
+		stdio  : ['pipe', 'pipe', 'pipe', 'ipc', 'pipe'],
 		env    : env
 	};
 
@@ -366,52 +470,14 @@ Site.setMethod(function startOnPort(port, callback) {
 	}
 
 	// Start the server
-	child_proc = child.spawn(node_config.bin, args, config)
+	child_proc = child.spawn(node_config.bin, args, config);
 
 	child_proc.proclog_id = null;
 	child_proc.procarray = [];
 
 	// Get the child process' output
 	child_proc.stdout.on('data', function onData(data) {
-
-		if (alchemy.settings.debug) {
-			console.log('[SITE ' + that._record.name + '] ' + data);
-		}
-
-		Function.series(function getId(next) {
-			if (child_proc.proclog_id) {
-				return next();
-			}
-
-			that.Proclog.save({
-				site_id: that.id,
-				log: []
-			}, {document: false}, function saved(err, data) {
-
-				if (err) {
-					return next(err);
-				}
-
-				child_proc.proclog_id = data[0]._id;
-				next();
-			});
-		}, function done(err) {
-
-			var str;
-
-			if (err) {
-				log.error('Error saving proclog', {err: err});
-				return;
-			}
-
-			str = data.toString();
-			child_proc.procarray.push({time: Date.now(), html: ansiHTML(str)});
-
-			that.Proclog.save({
-				_id: child_proc.proclog_id,
-				log: child_proc.procarray
-			});
-		});
+		that.onStdout(child_proc, data);
 	});
 
 	// Store the port it should be running on
@@ -426,6 +492,9 @@ Site.setMethod(function startOnPort(port, callback) {
 	this.processes[child_proc.pid] = child_proc;
 
 	this.running++;
+
+	// Emit this new process
+	this.emit('child', child_proc);
 
 	// Handle cpu & memory information from the process
 	processStats = function processStats(stats) {
@@ -443,7 +512,7 @@ Site.setMethod(function startOnPort(port, callback) {
 	child_proc.monitor.on('stats', processStats);
 
 	// Listen for exit events
-	child_proc.on('exit', function(code, signal) {
+	child_proc.on('exit', function onChildExit(code, signal) {
 
 		// Clean up the process
 		that.processExit(child_proc, code, signal);
@@ -465,11 +534,9 @@ Site.setMethod(function startOnPort(port, callback) {
 		if (callback) {
 			callback();
 		}
-
-		return;
 	}
 
-	// Listen for the message that tells us the server is ready
+	// Listen for the message from the child process
 	child_proc.on('message', function listenForReady(message) {
 
 		var data;
@@ -478,9 +545,12 @@ Site.setMethod(function startOnPort(port, callback) {
 			return;
 		}
 
+		// Emit the child's message
+		that.emit('child_message', child_proc, message);
+
 		data = message.hohenheim || message.alchemy;
 
-		if (!data) {
+		if (!data || !that.settings.wait_for_ready) {
 			return;
 		}
 
@@ -511,7 +581,7 @@ Site.setMethod(function startOnPort(port, callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.2.1
  *
  * @param    {ChildProcess}   process
  * @param    {Number}         cpu       Cpu usage in percentage
@@ -531,8 +601,13 @@ Site.setMethod(function processStats(process, cpu, mem) {
 		} else if (now - process.startOverload > 15000) {
 			// The process is in overload for over 15 seconds, start a new one?
 			if (this.running < 5) {
-				log.warn('Starting new', this.name, 'process because others are too busy');
-				this.start();
+
+				if (this.settings.maximum_processes && this.settings.maximum_processes >= this.running) {
+					// Do nothing, maximum number of processes reached
+				} else {
+					log.warn('Starting new', this.name, 'process because others are too busy');
+					this.start();
+				}
 
 				// Reset the overload timer, so we don't start another one on the next stat
 				process.startOverload = 0;
@@ -543,10 +618,13 @@ Site.setMethod(function processStats(process, cpu, mem) {
 
 		if (cpu == 0) {
 			let now = Date.now();
+			let min_proc = this.settings.minimum_processes || 1;
 
 			if (!process.startIdle) {
 				process.startIdle = now;
-			} else if (now - process.startIdle > 180000 && this.process_list.length > 1) {
+			} else if (now - process.startIdle > 180000 && this.process_list.length > min_proc) {
+				// Kill this process, because we have at least 1
+				// (or more then the minimum_processes) process running
 				process.kill();
 			}
 		} else {
@@ -564,7 +642,7 @@ Site.setMethod(function processStats(process, cpu, mem) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.0
+ * @version  0.2.1
  *
  * @param    {ChildProcess}   process
  * @param    {Number}         code
@@ -606,6 +684,9 @@ Site.setMethod(function processExit(process, code, signal) {
 	}
 
 	log.warn('Process', process.pid, 'for site', this.name, 'has exited with code', code, 'and signal', signal);
+
+	// Make sure the required minimum servers are running
+	this.startMinimumServers();
 });
 
 /**
@@ -663,6 +744,35 @@ Site.setMethod(function getAddress(callback, attempt) {
 	} else {
 		fnc();
 	}
+});
+
+/**
+ * Start servers with minimum amount of processes
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.2.1
+ * @version  0.2.1
+ */
+Site.setMethod(function startMinimumServers() {
+
+	var that = this;
+
+	this.parent.queue.add(function startServersWhenReady() {
+		var key;
+
+		if (that.settings
+			&& that.settings.minimum_processes
+			&& that.settings.minimum_processes > that.total_proc_count
+		) {
+			let count = that.total_proc_count || 0;
+
+			log.info('Site', that.name, 'requires at least', that.settings.minimum_processes, 'running processes,', that.running, 'are already running');
+
+			for (; count < that.settings.minimum_processes; count++) {
+				that.start();
+			}
+		}
+	});
 });
 
 /**

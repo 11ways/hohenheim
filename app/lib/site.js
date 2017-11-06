@@ -247,7 +247,7 @@ Site.setMethod(function cleanParent() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.0
+ * @version  0.2.1
  *
  * @param    {Object}   record
  */
@@ -317,6 +317,9 @@ Site.setMethod(function update(record) {
 
 	// Re-add the instance by name
 	this.parent.names[this.name] = this;
+
+	// Emit the updat event
+	this.emit('updated');
 });
 
 /**
