@@ -12,6 +12,8 @@
  */
 var AlchemySite = Function.inherits('Develry.NodeSite', function AlchemySite(siteDispatcher, record) {
 	AlchemySite.super.call(this, siteDispatcher, record);
+
+	this.default_args = ['--stream-janeway'];
 });
 
 /**

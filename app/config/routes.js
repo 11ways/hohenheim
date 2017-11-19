@@ -41,6 +41,8 @@ Router.add({
 	handler    : 'Static#sitestat',
 });
 
+Router.linkup('Terminal::linkup', 'terminallink', 'Static#terminal');
+
 // Add the dashboard to the menu deck
 alchemy.plugins.chimera.menu.set('site', {
 	title: 'Sites',

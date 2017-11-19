@@ -9,7 +9,8 @@
  */
 var updateSite = function updateSite(siteId) {
 
-	var $this;
+	var $this,
+	    open_term;
 
 	if (!String(siteId).isObjectId()) {
 		return;
@@ -54,8 +55,8 @@ var updateSite = function updateSite(siteId) {
 			html += '<td>' + pid + '</td>';
 			html += '<td><a href="http://' + location.hostname + ':' + process.port + '">' + process.port + '</a></td>';
 
-			html += '<td><span class="timeago" title="';
-			html +=  (new Date(process.startTime)).toISOString() + '"></span></td>'
+			html += '<td><span class="timeago" datetime="';
+			html +=  (new Date(process.startTime)).format('Y-m-d H:i:s') + '"></span></td>'
 
 			// Cpu
 			html += '<td>' + cpu + '</td>';
@@ -68,6 +69,8 @@ var updateSite = function updateSite(siteId) {
 
 			html += '<button class="btn btn-danger" data-kill-pid="' + pid + '"><i class="fa fa-crosshairs"></i> Kill</button> ';
 
+			html += '<button class="btn btn-success" data-term-pid="' + pid + '"><i class="fa fa-crosshairs"></i> Terminal</button> ';
+
 			html += '</td>';
 
 			html += '</tr>';
@@ -78,6 +81,14 @@ var updateSite = function updateSite(siteId) {
 		// Set the generated table as the html
 		$this.html(html);
 
+		// Show the uptime
+		hawkejs.require(['timeago', 'timeago.locales'], function gotTimeago() {
+			var timeagoInstance = timeago(),
+			    nodes = $this.find('.timeago').get();
+
+			timeagoInstance.render(nodes, hawkejs.scene.exposed.active_prefix || 'en');
+		});
+
 		// Kill a process
 		$this.on('click', 'button[data-kill-pid]', function(e) {
 
@@ -85,15 +96,81 @@ var updateSite = function updateSite(siteId) {
 
 			e.preventDefault();
 
-			hawkejs.scene.helpers.Alchemy.getResource('sitestat-kill', {id: siteId, pid: $this.attr('data-kill-pid')}, function(data) {
+			hawkejs.scene.helpers.Alchemy.getResource('sitestat-kill', {id: siteId, pid: $this.attr('data-kill-pid')}, function killed(err, data) {
 
 				if (data.err) {
-					toastr.err(data.err);
+					chimeraFlash(data.err);
 				} else {
-					toastr.success('Process ' + $this.attr('data-kill-pid') + ' has been killed');
+					chimeraFlash('Process ' + $this.attr('data-kill-pid') + ' has been killed');
 					updateSite(siteId);
 				}
 			});
+		});
+
+		// Show a terminal
+		$this.on('click', 'button[data-term-pid]', function onShowTerm(e) {
+
+			var $this = $(this),
+			    data,
+			    term;
+
+			e.preventDefault();
+
+			if (open_term) {
+				open_term.destroy();
+			}
+
+			// Create a new terminal
+			term = new Terminal();
+			open_term = term;
+
+			// Default size
+			term.cols = 80
+			term.rows = 24
+			term.normalMouse = true;
+			term.mouseEvents = true;
+
+			term.open(document.getElementById('terminal'));
+
+			data = {
+				pid     : $this.attr('data-term-pid'),
+				width   : term.cols,
+				height  : term.rows,
+				site_id : siteId
+			};
+
+			var link = alchemy.linkup('terminallink', data, function ready() {
+
+				var input_stream = link.createStream();
+
+				link.submit('input_stream', {}, input_stream);
+
+				term.on('data', function onData(d) {
+					input_stream.write(d);
+				});
+			});
+
+			link.on('resize', function onResize(data) {
+				term.renderer.clear();
+				term.resize(data.cols, data.rows);
+			});
+
+			link.on('output_stream', function gotOutput(data, stream) {
+				stream.on('data', function onData(d) {
+					term.write(''+d);
+				});
+			});
+
+			term.on('resize', function resized() {
+				link.submit('redraw');
+			});
+
+			setTimeout(function getProposedSize() {
+				var geo = term.proposeGeometry();
+				term.renderer.clear();
+				term.resize(geo.cols, geo.rows);
+				link.submit('propose_geometry', geo);
+			}, 50);
 		});
 	});
 
@@ -149,7 +226,7 @@ var updateSite = function updateSite(siteId) {
 						html += '<span style="position:absolute;right:0;">' + (new Date(line.time)) + '</span>';
 					}
 
-					html += line.html.replace(/\n/g, '<br>\n');
+					html += line.html;
 					html += '</div>';
 
 					prevdate = newdate;
@@ -188,7 +265,6 @@ hawkejs.scene.on({type: 'set', template: 'chimera/fields/site_stat_edit'}, funct
 				throw err;
 			}
 
-			console.log('New process has been started');
 			updateSite(siteId);
 		});
 	});

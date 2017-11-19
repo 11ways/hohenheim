@@ -370,8 +370,9 @@ Site.setMethod(function onStdout(proc, data) {
 			return;
 		}
 
-		str = data.toString();
-		proc.procarray.push({time: Date.now(), html: ansiHTML(str)});
+		str = ansiHTML(data.toString());
+
+		proc.procarray.push({time: Date.now(), html: str});
 
 		that.Proclog.save({
 			_id: proc.proclog_id,
@@ -455,6 +456,14 @@ Site.setMethod(function startOnPort(port, callback) {
 		'--port=' + port,
 		'hohenchild'
 	];
+
+	if (this.default_args) {
+		let i;
+
+		for (i = 0; i < this.default_args.length; i++) {
+			args.push(this.default_args[i]);
+		}
+	}
 
 	config = {
 		cwd    : this.cwd,
@@ -769,7 +778,12 @@ Site.setMethod(function startMinimumServers() {
 			log.info('Site', that.name, 'requires at least', that.settings.minimum_processes, 'running processes,', that.running, 'are already running');
 
 			for (; count < that.settings.minimum_processes; count++) {
-				that.start();
+				if (count == 0) {
+					// Use `getAddress` to get the first server
+					that.getAddress(Function.thrower);
+				} else {
+					that.start();
+				}
 			}
 		}
 	});

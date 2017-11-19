@@ -118,5 +118,5 @@ module.exports = {
 	toobusy: 70,
 
 	// Enable websockets
-	websockets: false
+	websockets: true
 };

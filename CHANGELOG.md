@@ -6,6 +6,7 @@
 * Log access to file (instead of database) at `/var/log/hohenheim/access.log`
 * Log the URL when giving up on a request
 * Node sites now have a `minimum_processes` and `maximum_processes` field
+* Access Alchemy sites' Janeway interface thanks to xterm.js
 
 ## 0.2.0 (2017-09-01)
 

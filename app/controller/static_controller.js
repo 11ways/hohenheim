@@ -17,18 +17,11 @@ var Static = Function.inherits('Alchemy.AppController', function StaticControlle
  *
  * @author        Jelle De Loecker   <jelle@develry.be>
  * @since         0.1.0
- * @version       0.1.0
+ * @version       0.2.1
  *
  * @param   {Conduit}   conduit
  */
 Static.setMethod(function home(conduit) {
-
-	// Set information variables
-	Controller.get('AlchemyInfo').setInfoVariables.call(this);
-
-	// Set the `message` variable to be used inside the view file
-	this.set('message', 'This is a standard message set in the <b>home</b> method of the <b>Static</b> controller');
-
 	// Render a specific view
 	this.render('static/home');
 });
@@ -38,26 +31,32 @@ Static.setMethod(function home(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.1
- * @version  0.0.1
+ * @version  0.2.1
  */
 Static.setMethod(function sitestat(conduit) {
 
-	var data     = conduit.param(),
-	    siteId   = alchemy.castObjectId(data.id),
-	    result   = {},
-	    process,
-	    site,
-	    pid;
+	var user = conduit.session('UserData');
+
+	if (!user) {
+		return conduit.notAuthorized();
+	}
+
+	let data   = conduit.param(),
+	    siteId = alchemy.castObjectId(data.id);
 
 	if (!siteId) {
 		return conduit.error(new Error('No site_id given'));
 	}
 
-	site = alchemy.dispatcher.ids[siteId];
+	let site = alchemy.dispatcher.ids[siteId];
 
 	if (!site) {
 		return conduit.error(new Error('Site "' + siteId + '" does not exist'));
 	}
+
+	let result = {},
+	    proc,
+	    pid;
 
 	// Get the amount of processes running
 	result.running = site.running;
@@ -67,13 +66,13 @@ Static.setMethod(function sitestat(conduit) {
 	// Get the pids
 	for (pid in site.processes) {
 
-		process = site.processes[pid];
+		proc = site.processes[pid];
 
 		result.processes[pid] = {
-			startTime: process.startTime,
-			port: process.port,
-			cpu: process.cpu,
-			mem: process.mem
+			startTime : proc.startTime,
+			port      : proc.port,
+			cpu       : proc.cpu,
+			mem       : proc.mem
 		};
 	}
 
@@ -88,36 +87,38 @@ Static.setMethod(function sitestat(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.1
- * @version  0.2.0
+ * @version  0.2.1
  */
 Static.setMethod(function sitestatKill(conduit) {
 
-	var data     = conduit.param(),
-	    siteId   = alchemy.castObjectId(data.id),
-	    result   = {},
-	    process,
-	    site,
-	    pid;
+	var user = conduit.session('UserData');
 
-	log.info('Manual sitekill requested for pid', data.pid);
+	if (!user) {
+		return conduit.notAuthorized();
+	}
+
+	let data   = conduit.param(),
+	    siteId = alchemy.castObjectId(data.id);
 
 	if (!siteId) {
 		return conduit.error(new Error('No site_id given'));
 	}
 
-	site = alchemy.dispatcher.ids[siteId];
+	let site = alchemy.dispatcher.ids[siteId];
 
 	if (!site) {
-		return conduit.error(new Error('Site does not exist'));
+		return conduit.error(new Error('Site "' + siteId + '" does not exist'));
 	}
 
-	process = site.processes[data.pid];
+	log.info('Manual sitekill requested for pid', data.pid);
 
-	if (!process) {
+	let proc = site.processes[data.pid];
+
+	if (!proc) {
 		return conduit.error(new Error('pid does not exist'));
 	}
 
-	process.kill();
+	proc.kill();
 
 	conduit.end({success: 'process killed'});
 });
@@ -127,25 +128,27 @@ Static.setMethod(function sitestatKill(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.1
- * @version  0.0.1
+ * @version  0.2.1
  */
 Static.setMethod(function sitestatStart(conduit) {
 
-	var data     = conduit.param(),
-	    siteId   = alchemy.castObjectId(data.id),
-	    result   = {},
-	    process,
-	    site,
-	    pid;
+	var user = conduit.session('UserData');
+
+	if (!user) {
+		return conduit.notAuthorized();
+	}
+
+	let data   = conduit.param(),
+	    siteId = alchemy.castObjectId(data.id);
 
 	if (!siteId) {
 		return conduit.error(new Error('No site_id given'));
 	}
 
-	site = alchemy.dispatcher.ids[siteId];
+	let site = alchemy.dispatcher.ids[siteId];
 
 	if (!site) {
-		return conduit.error(new Error('Site does not exist'));
+		return conduit.error(new Error('Site "' + siteId + '" does not exist'));
 	}
 
 	site.start();
@@ -158,29 +161,41 @@ Static.setMethod(function sitestatStart(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.2
- * @version  0.0.2
+ * @version  0.2.1
  */
 Static.setMethod(function sitestatLogs(conduit) {
 
-	var data     = conduit.param(),
-	    siteId   = alchemy.castObjectId(data.id),
-	    result   = {},
-	    Proclog  = Model.get('Proclog'),
-	    process,
-	    site,
-	    pid;
+	var user = conduit.session('UserData');
+
+	if (!user) {
+		return conduit.notAuthorized();
+	}
+
+	let data   = conduit.param(),
+	    siteId = alchemy.castObjectId(data.id);
 
 	if (!siteId) {
 		return conduit.error(new Error('No site_id given'));
 	}
 
-	site = alchemy.dispatcher.ids[siteId];
+	let site = alchemy.dispatcher.ids[siteId];
 
 	if (!site) {
-		return conduit.error(new Error('Site does not exist'));
+		return conduit.error(new Error('Site "' + siteId + '" does not exist'));
 	}
 
-	Proclog.find('all', {document: false, conditions: {site_id: siteId}, fields: ['_id', 'created', 'updated']}, function(err, data) {
+	let Proclog = this.getModel('Proclog');
+	let options = {
+		document   : false,
+		conditions : {
+			site_id: siteId
+		},
+		fields     : ['_id', 'created', 'updated'],
+		limit      : 5,
+		sort       : {_id: -1}
+	};
+
+	Proclog.find('all', options, function gotProclogs(err, data) {
 
 		if (err) {
 			return conduit.error(err);
@@ -197,20 +212,111 @@ Static.setMethod(function sitestatLogs(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.2
- * @version  0.0.2
+ * @version  0.2.1
  */
 Static.setMethod(function sitestatLog(conduit) {
 
 	var data     = conduit.param(),
 	    logId    = alchemy.castObjectId(data.logid),
-	    Proclog  = Model.get('Proclog');
+	    Proclog  = Model.get('Proclog'),
+	    user     = conduit.session('UserData');
+
+	if (!user) {
+		return conduit.notAuthorized();
+	}
 
 	if (!logId) {
 		return conduit.error(new Error('No site_id given'));
 	}
 
-	Proclog.find('all', {document: false, conditions: {_id: logId}}, function(err, data) {
+	let options = {
+		document   : false,
+		conditions : {_id: logId}
+	};
+
+	Proclog.find('all', options, function gotProcLog(err, data) {
 		data = Object.extract(data, '$..Proclog');
 		conduit.end(data);
+	});
+});
+
+/**
+ * Show the terminal
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.2.1
+ * @version  0.2.1
+ */
+Static.setMethod(function terminal(conduit, linkup, config) {
+
+	var that = this,
+	    site = alchemy.dispatcher.ids[config.site_id],
+	    user = conduit.session('UserData');
+
+	if (!user) {
+		return conduit.notAuthorized();
+	}
+
+	if (!site) {
+		return conduit.error(new Error('Site does not exist'));
+	}
+
+	let proc = site.processes[config.pid];
+
+	if (!proc) {
+		return conduit.error(new Error('pid does not exist'));
+	}
+
+	// Create the output stream
+	let output_stream = conduit.createStream();
+
+	linkup.submit('output_stream', {}, output_stream);
+
+	linkup.on('propose_geometry', function onPropose(data) {
+		log.info('Sending', data);
+		proc.send({
+			type : 'janeway_propose_geometry',
+			data : data
+		});
+
+		setTimeout(function requestRedraw() {
+			proc.send('janeway_redraw');
+		}, 50);
+	});
+
+	linkup.on('resize', function onResized() {
+		proc.send('janeway_redraw');
+	});
+
+	linkup.on('input_stream', function gotInput(data, stream) {
+
+		stream.columns = config.width;
+		stream.rows = config.height;
+
+		output_stream.columns = config.width;
+		output_stream.rows = config.height;
+
+		stream.on('data', function onData(d) {
+			proc.stdin.write(d);
+		});
+
+		if (proc._janeway_redraw) {
+			proc.send('janeway_redraw');
+		} else {
+			proc._janeway_redraw = true;
+		}
+
+		proc.stdio[4].on('data', onData);
+
+		// Remove the data listener on disconnect
+		conduit.on('disconnect', function onDisconnect() {
+			proc.stdio[4].removeListener('data', onData);
+			output_stream = null;
+			stream = null;
+		});
+
+		function onData(d) {
+			output_stream.write(d);
+		}
 	});
 });
