@@ -1,9 +1,9 @@
 {
 	"name": "hohenheim",
 	"description": "The hohenheim dispatcher",
-	"version": "0.2.1-alpha",
+	"version": "0.3.0-alpha",
 	"dependencies": {
-		"alchemymvc"             : "~0.4.2",
+		"alchemymvc"             : "~1.0.0",
 		"alchemy-acl"            : "~0.4.0",
 		"alchemy-chimera"        : "~0.4.0",
 		"alchemy-i18n"           : "~0.4.0",
@@ -12,18 +12,18 @@
 		"alchemy-web-components" : "~0.4.0",
 		"alchemy-ajatar-theme"   : "~1.0.0",
 		"ansi-html"              : "~0.0.7",
-		"greenlock"              : "^2.1.15",
+		"greenlock"              : "^2.2.20",
 		"http-proxy"             : "~1.16.2",
-		"le-store-certbot"       : "^2.0.5",
+		"le-store-certbot"       : "^2.1.3",
 		"le-challenge-fs"        : "^2.0.8",
-		"le-sni-auto"            : "^2.1.1",
+		"le-sni-auto"            : "^2.1.5",
 		"parse-passwd"           : "^1.0.0",
-		"posix"                  : "^4.1.1",
+		"posix"                  : "^4.1.2",
 		"process-monitor"        : "skerit/process-monitor"
 	},
 	"license": "GPLv3",
 	"engines": {
-		"node": ">=6.6.0"
+		"node": ">=8.0.0"
 	},
 	"private": true
 }

@@ -8,8 +8,8 @@
  * @since         0.1.0
  * @version       0.1.0
  */
-var Static = Function.inherits('Alchemy.AppController', function StaticController(conduit, options) {
-	StaticController.super.call(this, conduit, options);
+var Static = Function.inherits('Alchemy.Controller.App', function Static(conduit, options) {
+	Static.super.call(this, conduit, options);
 });
 
 /**
@@ -17,11 +17,11 @@ var Static = Function.inherits('Alchemy.AppController', function StaticControlle
  *
  * @author        Jelle De Loecker   <jelle@develry.be>
  * @since         0.1.0
- * @version       0.2.1
+ * @version       0.3.0
  *
  * @param   {Conduit}   conduit
  */
-Static.setMethod(function home(conduit) {
+Static.setAction(function home(conduit) {
 	// Render a specific view
 	this.render('static/home');
 });
@@ -31,9 +31,9 @@ Static.setMethod(function home(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.1
- * @version  0.2.1
+ * @version  0.3.0
  */
-Static.setMethod(function sitestat(conduit) {
+Static.setAction(function sitestat(conduit) {
 
 	var user = conduit.session('UserData');
 
@@ -87,9 +87,9 @@ Static.setMethod(function sitestat(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.1
- * @version  0.2.1
+ * @version  0.3.0
  */
-Static.setMethod(function sitestatKill(conduit) {
+Static.setAction(function sitestatKill(conduit) {
 
 	var user = conduit.session('UserData');
 
@@ -128,9 +128,9 @@ Static.setMethod(function sitestatKill(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.1
- * @version  0.2.1
+ * @version  0.3.0
  */
-Static.setMethod(function sitestatStart(conduit) {
+Static.setAction(function sitestatStart(conduit) {
 
 	var user = conduit.session('UserData');
 
@@ -161,9 +161,9 @@ Static.setMethod(function sitestatStart(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.2
- * @version  0.2.1
+ * @version  0.3.0
  */
-Static.setMethod(function sitestatLogs(conduit) {
+Static.setAction(function sitestatLogs(conduit) {
 
 	var user = conduit.session('UserData');
 
@@ -212,9 +212,9 @@ Static.setMethod(function sitestatLogs(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.2
- * @version  0.2.1
+ * @version  0.3.0
  */
-Static.setMethod(function sitestatLog(conduit) {
+Static.setAction(function sitestatLog(conduit) {
 
 	var data     = conduit.param(),
 	    logId    = alchemy.castObjectId(data.logid),
@@ -244,10 +244,10 @@ Static.setMethod(function sitestatLog(conduit) {
  * Show the terminal
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.2.1
- * @version  0.2.1
+ * @since    0.3.0
+ * @version  0.3.0
  */
-Static.setMethod(function terminal(conduit, linkup, config) {
+Static.setAction(function terminal(conduit, linkup, config) {
 
 	var that = this,
 	    site = alchemy.dispatcher.ids[config.site_id],
@@ -273,7 +273,7 @@ Static.setMethod(function terminal(conduit, linkup, config) {
 	linkup.submit('output_stream', {}, output_stream);
 
 	linkup.on('propose_geometry', function onPropose(data) {
-		log.info('Sending', data);
+
 		proc.send({
 			type : 'janeway_propose_geometry',
 			data : data

@@ -7,6 +7,6 @@
  * @since    0.0.1
  * @version  0.1.0
  */
-var AppModel = Function.inherits('Alchemy.Model', function AppModel(conduit, options) {
-	AppModel.super.call(this, conduit, options);
+var AppModel = Function.inherits('Alchemy.Model', function App(conduit, options) {
+	App.super.call(this, conduit, options);
 });

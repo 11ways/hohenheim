@@ -9,8 +9,8 @@ var fs = alchemy.use('fs');
  * @since    0.0.2
  * @version  0.1.0
  */
-var Request = Function.inherits('Alchemy.AppModel', function RequestModel(conduit, options) {
-	RequestModel.super.call(this, conduit, options);
+var Request = Function.inherits('Alchemy.Model.App', function Request(conduit, options) {
+	Request.super.call(this, conduit, options);
 });
 
 /**
@@ -56,7 +56,7 @@ Request.constitute(function addFields() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.1
+ * @version  0.3.0
  *
  * @param    {Object}   data   The data to save
  */

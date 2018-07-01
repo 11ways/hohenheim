@@ -4,8 +4,8 @@
  * @constructor
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.2.1
- * @version  0.2.1
+ * @since    0.3.0
+ * @version  0.3.0
  *
  * @param    {Develry.SiteDispatcher}   siteDispatcher
  * @param    {Object}                   record
@@ -21,7 +21,7 @@ var AlchemySite = Function.inherits('Develry.NodeSite', function AlchemySite(sit
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.1.0
- * @version  0.2.1
+ * @version  0.3.0
  */
 AlchemySite.constitute(function addFields() {
 

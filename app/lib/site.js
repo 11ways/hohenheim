@@ -45,25 +45,14 @@ var Site = Function.inherits('Alchemy.Base', 'Develry', function Site(siteDispat
 });
 
 /**
- * This is an abstract class
- *
- * @type {Boolean}
+ * This is a wrapper class
  */
-Site.setProperty('is_abstract_class', true);
+Site.makeAbstractClass();
 
 /**
- * This class starts a new group
- *
- * @type {Boolean}
+ * This wrapper class starts a new group
  */
-Site.setProperty('starts_new_group', true);
-
-/**
- * The name of this group
- *
- * @type {String}
- */
-Site.setProperty('group_name', 'site_type');
+Site.startNewGroup('site_type');
 
 /**
  * Return the class-wide schema
@@ -247,7 +236,7 @@ Site.setMethod(function cleanParent() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.1
+ * @version  0.3.0
  *
  * @param    {Object}   record
  */
@@ -387,7 +376,7 @@ Site.setMethod(function checkBasicAuth(req, res, next) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.1
+ * @version  0.3.0
  * 
  * @param    {IncommingMessage}   req
  * @param    {ServerResponse}     res

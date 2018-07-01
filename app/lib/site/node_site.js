@@ -13,7 +13,7 @@ var sitesById = alchemy.shared('Sites.byId'),
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.1
+ * @version  0.3.0
  *
  * @param    {Develry.SiteDispatcher}   siteDispatcher
  * @param    {Object}                   record
@@ -42,7 +42,7 @@ var Site = Function.inherits('Develry.Site', function NodeSite(siteDispatcher, r
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.1.0
- * @version  0.2.1
+ * @version  0.3.0
  */
 Site.constitute(function addFields() {
 
@@ -263,8 +263,8 @@ Site.setStatic(function updateVersions(callback) {
  * The number of running + requested sites
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.2.1
- * @version  0.2.1
+ * @since    0.3.0
+ * @version  0.3.0
  *
  * @type     {Number}
  */
@@ -277,8 +277,8 @@ Site.setProperty(function total_proc_count() {
  * recreate the entries in the parent dispatcher
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.2.1
- * @version  0.2.1
+ * @since    0.3.0
+ * @version  0.3.0
  *
  * @param    {Object}   record
  */
@@ -330,8 +330,8 @@ Site.setMethod(function start(callback) {
  * Process stdout data
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.2.1
- * @version  0.2.1
+ * @since    0.3.0
+ * @version  0.3.0
  *
  * @param    {ChildProcess}   proc
  * @param    {Buffer}         data
@@ -386,7 +386,7 @@ Site.setMethod(function onStdout(proc, data) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.1
+ * @version  0.3.0
  *
  * @param    {Function}   callback
  */
@@ -590,7 +590,7 @@ Site.setMethod(function startOnPort(port, callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.1
+ * @version  0.3.0
  *
  * @param    {ChildProcess}   process
  * @param    {Number}         cpu       Cpu usage in percentage
@@ -651,7 +651,7 @@ Site.setMethod(function processStats(process, cpu, mem) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.1
+ * @version  0.3.0
  *
  * @param    {ChildProcess}   process
  * @param    {Number}         code
@@ -759,8 +759,8 @@ Site.setMethod(function getAddress(callback, attempt) {
  * Start servers with minimum amount of processes
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.2.1
- * @version  0.2.1
+ * @since    0.3.0
+ * @version  0.3.0
  */
 Site.setMethod(function startMinimumServers() {
 

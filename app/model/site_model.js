@@ -12,8 +12,8 @@ var sitesByName   = alchemy.shared('Sites.byName'),
  * @since    0.0.1
  * @version  0.1.0
  */
-var Site = Function.inherits('Alchemy.AppModel', function SiteModel(conduit, options) {
-	SiteModel.super.call(this, conduit, options);
+var Site = Function.inherits('Alchemy.Model.App', function Site(conduit, options) {
+	Site.super.call(this, conduit, options);
 
 	this.on('saved', function saved() {
 		console.log('Site', this._id+'', this.name, 'has been saved');

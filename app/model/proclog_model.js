@@ -7,8 +7,8 @@
  * @since    0.0.2
  * @version  0.1.0
  */
-var Proclog = Function.inherits('Alchemy.AppModel', function ProclogModel(conduit, options) {
-	ProclogModel.super.call(this, conduit, options);
+var Proclog = Function.inherits('Alchemy.Model.App', function Proclog(conduit, options) {
+	Proclog.super.call(this, conduit, options);
 });
 
 /**

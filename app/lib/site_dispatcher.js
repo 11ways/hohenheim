@@ -6,11 +6,12 @@ var site_types  = alchemy.getClassGroup('site_type'),
     GreenLock   = alchemy.use('greenlock'),
     local_ips   = alchemy.shared('local_ips'),
     local_users = alchemy.shared('local_users'),
-    httpProxy   = require('http-proxy'),
-    libpath     = require('path'),
-    http        = require('http'),
-    net         = require('net'),
-    os          = require('os');
+    httpProxy   = alchemy.use('http-proxy'),
+    libpath     = alchemy.use('path'),
+    http        = alchemy.use('http'),
+    net         = alchemy.use('net'),
+    os          = alchemy.use('os'),
+    fs          = alchemy.use('fs');
 
 /**
  * The Site Dispatcher class
@@ -19,7 +20,7 @@ var site_types  = alchemy.getClassGroup('site_type'),
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.1
+ * @version  0.3.0
  */
 var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispatcher(options) {
 
@@ -430,7 +431,7 @@ SiteDispatcher.setMethod(function initGreenlock() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.1
+ * @version  0.3.0
  * 
  * @param    {Error}              error
  * @param    {IncommingMessage}   req
