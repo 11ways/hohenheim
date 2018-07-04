@@ -179,14 +179,14 @@ SiteDispatcher.setMethod(function getLocalIps() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.0
+ * @version  0.3.0
  */
 SiteDispatcher.setMethod(function startProxy() {
 
 	var that = this,
 	    agent;
 
-	log.info('Proxy server is starting on port ' + this.proxyPort);
+	log.info('Proxy server is starting on port', this.proxyPort);
 
 	// Init greenlock (let's encrypt)
 	this.initGreenlock();
@@ -421,6 +421,8 @@ SiteDispatcher.setMethod(function initGreenlock() {
 	this.https_server.on('upgrade', function gotRequest(req, socket, head) {
 		that.websocketRequest(req, socket, head);
 	});
+
+	log.info('Secure HTTPS proxy server is starting on port', this.proxyPortHttps);
 
 	// Listen on the HTTPS port
 	this.https_server.listen(this.proxyPortHttps);
