@@ -13,6 +13,22 @@ var site_types  = alchemy.getClassGroup('site_type'),
     os          = alchemy.use('os'),
     fs          = alchemy.use('fs');
 
+// Bullshit fix for `greenlock` module
+var util = require('util');
+
+function promisifyAllSelf(obj) {
+	if (obj.__promisified) { return obj; }
+	Object.keys(obj).forEach(function (key) {
+	if ('function' === typeof obj[key]) {
+		obj[key + 'Async'] = util.promisify(obj[key]);
+	}
+	});
+	obj.__promisified = true;
+	return obj;
+}
+
+promisifyAllSelf(require('fs'));
+
 /**
  * The Site Dispatcher class
  *
@@ -253,12 +269,13 @@ SiteDispatcher.setMethod(function startProxy() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.2.0
+ * @version  0.3.0
  */
 SiteDispatcher.setMethod(function initGreenlock() {
 
 	var that = this,
-	    server_type,
+	    server_url,
+	    path_log,
 	    path_etc,
 	    path_var,
 	    debug,
@@ -295,14 +312,15 @@ SiteDispatcher.setMethod(function initGreenlock() {
 
 	if (alchemy.settings.environment != 'live' || alchemy.settings.debug || alchemy.settings.letsencrypt_debug) {
 		console.warn('Using letsencrypt staging servers');
-		server_type = GreenLock.stagingServerUrl;
+		server_url = 'https://acme-staging-v02.api.letsencrypt.org/directory';
 	} else {
-		server_type = GreenLock.productionServerUrl;
+		server_url = 'https://acme-v02.api.letsencrypt.org/directory';
 	}
 
 	// Construct the paths to where the certificates and challenges will be kept
 	path_etc = libpath.resolve(PATH_TEMP, 'letsencrypt', 'etc');
 	path_var = libpath.resolve(PATH_TEMP, 'letsencrypt', 'var');
+	path_log = libpath.resolve(PATH_TEMP, 'letsencrypt', 'log');
 
 	// Create a site model instance
 	Site = Model.get('Site');
@@ -311,6 +329,7 @@ SiteDispatcher.setMethod(function initGreenlock() {
 	this.le_store = LeCertbot.create({
 		configDir   : path_etc,
 		webrootPath : path_var,
+		logsDir     : path_log,
 		debug       : debug
 	});
 
@@ -370,7 +389,8 @@ SiteDispatcher.setMethod(function initGreenlock() {
 
 	// Create the greenlock instance
 	this.greenlock = GreenLock.create({
-		server          : server_type,
+		version         : 'v02',
+		server          : server_url,
 		store           : this.le_store,
 		challenges      : {
 			'http-01'   : this.le_handler,
@@ -382,10 +402,19 @@ SiteDispatcher.setMethod(function initGreenlock() {
 		debug           : debug,
 		approveDomains  : function approveDomains(opts, certs, callback) {
 
+			var site;
+
+			if (debug) {
+				log.info('Approving domains', opts, certs);
+			}
+
 			if (opts.domain.endsWith('.acme.invalid')) {
 				console.error('ACME.INVALID should not get this far?', opts, certs);
 				return;
 			}
+
+			// Opt-in to submit stats and get important updates
+			opts.communityMember = true;
 
 			if (certs) {
 				opts.domains = certs.altnames;
