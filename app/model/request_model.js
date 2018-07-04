@@ -83,7 +83,7 @@ Request.setMethod(function registerHit(data, req, res) {
 			version = 'HTTP/' + req.httpVersion;
 		}
 
-		let log = data.remote_address + ' - - ['
+		let log = data.host + ': ' + data.remote_address + ' - - ['
 		        + data.created.format('d/M/Y\\:H:i:s O') + '] '
 		        + '"' + req.method + ' ' + data.path + ' ' + version + '" '
 		        + data.status + ' ' + data.response_size + ' "' + referer + '" '

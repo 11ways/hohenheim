@@ -8,6 +8,7 @@
 * Node sites now have a `minimum_processes` and `maximum_processes` field
 * Access Alchemy sites' Janeway interface thanks to xterm.js
 * Upgrade alchemy to v1.0.0
+* Add vhost to access log
 
 ## 0.2.0 (2017-09-01)
 

@@ -10,13 +10,13 @@ var sitesByName   = alchemy.shared('Sites.byName'),
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.3.0
  */
 var Site = Function.inherits('Alchemy.Model.App', function Site(conduit, options) {
 	Site.super.call(this, conduit, options);
 
-	this.on('saved', function saved() {
-		console.log('Site', this._id+'', this.name, 'has been saved');
+	this.on('saved', function saved(data) {
+		console.log('Site', data._id+'', 'has been saved');
 		this.getSites();
 	});
 });
@@ -64,7 +64,7 @@ Site.constitute(function addFields() {
  *
  * @author   Jelle De Loecker <jelle@develry.be>
  * @since    0.1.0
- * @version  0.2.0
+ * @version  0.3.0
  */
 Site.constitute(function chimeraConfig() {
 
@@ -80,7 +80,6 @@ Site.constitute(function chimeraConfig() {
 
 	list.addField('site_type');
 	list.addField('name');
-	list.addField('domain');
 
 	// Get the edit group
 	edit = this.chimera.getActionFields('edit');
