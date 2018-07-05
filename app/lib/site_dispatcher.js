@@ -55,6 +55,9 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
 	// Get the site model
 	this.Site = Model.get('Site');
 
+	// Get the domain model
+	this.Domain = Model.get('Domain');
+
 	// Count the number of made hits
 	this.hitCounter = 0;
 
@@ -96,7 +99,20 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
 
 	// Start the queue by getting the sites first
 	this.queue.start(function gettingSites(done) {
-		that.Site.getSites(done);
+		Function.parallel(function getSites(next) {
+			that.Site.getSites(function done() {
+				next();
+			});
+		}, function getDomains(next) {
+			that.Domain.getDomains(next);
+		}, function _done(err) {
+
+			if (err) {
+				console.error('Error starting queue!', err);
+			}
+
+			done();
+		});
 	});
 
 	// Listen to the site update event

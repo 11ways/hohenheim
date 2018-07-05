@@ -43,13 +43,25 @@ Router.add({
 
 Router.linkup('Terminal::linkup', 'terminallink', 'Static#terminal');
 
-// Add the dashboard to the menu deck
+// Add "Sites" menu item
 alchemy.plugins.chimera.menu.set('site', {
 	title: 'Sites',
 	route: 'chimera@ModelAction',
 	parameters: {
 		controller: 'editor',
 		subject: 'site',
+		action: 'index'
+	},
+	icon: {svg: 'connection'}
+});
+
+// Add "Domains" menu item
+alchemy.plugins.chimera.menu.set('domain', {
+	title: 'Domains',
+	route: 'chimera@ModelAction',
+	parameters: {
+		controller: 'editor',
+		subject: 'domain',
 		action: 'index'
 	},
 	icon: {svg: 'connection'}
