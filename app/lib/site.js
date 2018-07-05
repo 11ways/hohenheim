@@ -389,6 +389,7 @@ Site.setMethod(function registerHit(req, res, callback) {
 	    remoteAddress,
 	    bytesRead,
 	    fullPath,
+	    finished,
 	    start,
 	    path,
 	    read;
@@ -414,11 +415,24 @@ Site.setMethod(function registerHit(req, res, callback) {
 	// Get the remote address
 	remoteAddress = req.socket.remoteAddress;
 
-	res.on('finish', function finalizeHitRegister() {
+	res.on('close', finalizeHitRegister);
+	res.on('finish', finalizeHitRegister);
 
-		var bytesPrevWritten = req.socket.prevWritten || 0,
-		    bytesWritten = req.socket.bytesWritten,
-		    sent = bytesWritten - bytesPrevWritten;
+	function finalizeHitRegister() {
+
+		var bytesPrevWritten,
+		    bytesWritten,
+		    sent;
+
+		if (finished) {
+			return;
+		}
+
+		finished = true;
+
+		bytesPrevWritten = req.socket.prevWritten || 0;
+		bytesWritten = req.socket.bytesWritten;
+		sent = bytesWritten - bytesPrevWritten;
 
 		that.incoming += read;
 		that.outgoing += sent;
@@ -453,5 +467,5 @@ Site.setMethod(function registerHit(req, res, callback) {
 		if (Blast.DEBUG) {
 			log.info(that.name, 'has now received', ~~(that.incoming/1024), 'KiBs and submitted', ~~(that.outgoing/1024), 'KiBs');
 		}
-	});
+	}
 });

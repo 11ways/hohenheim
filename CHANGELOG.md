@@ -12,6 +12,7 @@
 * Add http/2 support using the `spdy` module
 * Add websocket support for http-only proxies
 * Add `Domain` model, where you can enable wildcard support
+* `Site#registerHit` will now correctly see when a response ends, even with keep-alive enabled
 
 ## 0.2.0 (2017-09-01)
 
