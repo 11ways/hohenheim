@@ -1,0 +1,48 @@
+#statistics .x-hawkejs.chimeraField-container {
+
+	// Hide the "Id" label on the left
+	.col-sm-2.chimeraField-left {
+		display: none;
+	}
+
+	[data-name="entries"].col-sm-10 {
+		width: 100%;
+		padding-left: 3rem;
+		padding-right: 3rem;
+	}
+
+	.site-control [data-site-stats] {
+		margin-bottom: 3rem;
+	}
+
+	.form-group.terminal {
+		margin-bottom: 3rem;
+	}
+
+	// Move the button to start a new processthe left
+	[data-start-process] {
+		position: absolute;
+		left: -20rem;
+		top: 1rem;
+	}
+
+	#sitelogview:empty {
+		display: none;
+	}
+
+	.terminal-timestamp {
+		opacity: 0.5;
+	}
+
+	#sitelogview:hover {
+		.terminal-timestamp {
+			opacity: 1;
+			background: white;
+			color: black;
+
+			&:hover {
+				opacity: 0;
+			}
+		}
+	}
+}

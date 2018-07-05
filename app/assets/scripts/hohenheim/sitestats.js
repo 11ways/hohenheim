@@ -193,8 +193,8 @@ var updateSite = function updateSite(siteId) {
 
 		result.forEach(function eachResult(entry) {
 			html += '<tr><td><button class="btn" data-log-id="' + entry._id + '">View</button></td>';
-			html += '<td>' + entry.created + '</td>';
-			html += '<td>' + entry.updated + '</td>';
+			html += '<td>' + entry.created.format('D d M Y H:i:s') + '</td>';
+			html += '<td>' + entry.updated.format('D d M Y H:i:s') + '</td>';
 			html += '</tr>';
 		});
 
@@ -220,10 +220,10 @@ var updateSite = function updateSite(siteId) {
 					var newdate = ''+(new Date(line.time)),
 					    html;
 
-					html = '<div title="' + (new Date(line.time)) + '" style="position:relative;">';
+					html = '<div title="' + Date.create(line.time).format('D d M Y H:i:s') + '" style="position:relative;">';
 
 					if (newdate != prevdate) {
-						html += '<span style="position:absolute;right:0;">' + (new Date(line.time)) + '</span>';
+						html += '<span style="position:absolute;right:0;" class="terminal-timestamp">' + Date.create(line.time).format('D d M Y H:i:s') + '</span>';
 					}
 
 					html += line.html;
