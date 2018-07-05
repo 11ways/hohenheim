@@ -6,7 +6,7 @@ Hohenheim is a web server and reverse proxy, mainly for node.js sites.
 
 ### Node.js
 
-Hohenheim requires at least node.js version 6.6.0. Your sites can use lower versions if really needed, though.
+Hohenheim requires at least node.js version 8.9.0. Your sites can use lower versions if really needed, though.
 
 ### Mongodb
 
@@ -59,7 +59,7 @@ module.exports = {
     // The main port to listen on
     proxyPort: 80,
 
-    // The main port to listen on for HTTPS traffic
+    // The main port to listen on for HTTPS/http2 traffic
     proxyPortHttps: 443,
 
     // Your current environment. Can be dev, preview or live

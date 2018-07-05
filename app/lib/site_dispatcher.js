@@ -8,6 +8,7 @@ var site_types  = alchemy.getClassGroup('site_type'),
     local_users = alchemy.shared('local_users'),
     httpProxy   = alchemy.use('http-proxy'),
     libpath     = alchemy.use('path'),
+    spdy        = alchemy.use('spdy'),
     http        = alchemy.use('http'),
     net         = alchemy.use('net'),
     os          = alchemy.use('os'),
@@ -430,8 +431,8 @@ SiteDispatcher.setMethod(function initGreenlock() {
 	// Create the greenlock middleware
 	this.le_middleware = this.greenlock.middleware();
 
-	// Create the HTTPS server
-	this.https_server = require('https').createServer(this.greenlock.httpsOptions);
+	// Create the HTTPS/http2 server using the `spdy` module
+	this.https_server = spdy.createServer(this.greenlock.httpsOptions);
 
 	// Listen for HTTPS requests
 	this.https_server.on('request', function gotRequest(req, res) {
