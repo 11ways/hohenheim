@@ -22,6 +22,19 @@ var Site = Function.inherits('Alchemy.Model.App', function Site(conduit, options
 });
 
 /**
+ * Sort by name by default
+ *
+ * @author   Jelle De Loecker <jelle@develry.be>
+ * @since    0.3.0
+ * @version  0.3.0
+ *
+ * @type {Object}
+ */
+Site.prepareProperty('sort', function sort() {
+	return {name: 1};
+});
+
+/**
  * Constitute the class wide schema
  *
  * @author   Jelle De Loecker <jelle@develry.be>
