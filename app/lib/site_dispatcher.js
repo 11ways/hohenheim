@@ -10,24 +10,29 @@ var site_types  = alchemy.getClassGroup('site_type'),
     libpath     = alchemy.use('path'),
     spdy        = alchemy.use('spdy'),
     http        = alchemy.use('http'),
+    util        = alchemy.use('util'),
     net         = alchemy.use('net'),
     os          = alchemy.use('os'),
     fs          = alchemy.use('fs');
 
-// Bullshit fix for `greenlock` module
-var util = require('util');
-
 function promisifyAllSelf(obj) {
-	if (obj.__promisified) { return obj; }
-	Object.keys(obj).forEach(function (key) {
-	if ('function' === typeof obj[key]) {
-		obj[key + 'Async'] = util.promisify(obj[key]);
+	if (obj.__promisified) {
+		return obj;
 	}
+
+	Object.keys(obj).forEach(function eachKey(key) {
+		if ('function' === typeof obj[key]) {
+			obj[key + 'Async'] = util.promisify(obj[key]);
+		}
 	});
+
 	obj.__promisified = true;
+
 	return obj;
 }
 
+// Promisify all the methods of the `fs` module,
+// which fixes an issue in greenlock
 promisifyAllSelf(require('fs'));
 
 /**
