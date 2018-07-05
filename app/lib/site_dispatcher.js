@@ -644,7 +644,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.0
+ * @version  0.3.0
  * 
  * @param    {IncomingMessage}    req
  * @param    {ServerResponse}     res
@@ -711,7 +711,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 
 		// When using letsencrypt, redirect to HTTPS
 		// @TODO: disable for certain sites?
-		if (alchemy.settings.letsencrypt && !req.connection.encrypted && site.site.settings.letsencrypt_force !== false) {
+		if (alchemy.settings.letsencrypt && this.proxyPortHttps && !req.connection.encrypted && site.site.settings.letsencrypt_force !== false) {
 			host = req.headers.host;
 			new_location = 'https://' + host.replace(/:\d+/, ':' + 443) + req.url;
 
