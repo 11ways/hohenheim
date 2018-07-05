@@ -18,11 +18,11 @@ var Request = Function.inherits('Alchemy.Model.App', function Request(conduit, o
  *
  * @author   Jelle De Loecker <jelle@develry.be>
  * @since    0.1.0
- * @version  0.1.0
+ * @version  0.3.0
  */
 Request.setProperty(function access_log_file() {
 	if (!this._access_log_file) {
-		this._access_log_file = fs.createWriteStream(alchemy.settings.log_access_path);
+		this._access_log_file = fs.createWriteStream(alchemy.settings.log_access_path, {flags: 'a+'});
 	}
 
 	return this._access_log_file;
