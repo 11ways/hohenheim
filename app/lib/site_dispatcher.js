@@ -426,11 +426,6 @@ SiteDispatcher.setMethod(function initGreenlock() {
 				log.info('Approving domains', opts, certs);
 			}
 
-			if (opts.domain.endsWith('.acme.invalid')) {
-				console.error('ACME.INVALID should not get this far?', opts, certs);
-				return;
-			}
-
 			// Opt-in to submit stats and get important updates
 			opts.communityMember = true;
 
