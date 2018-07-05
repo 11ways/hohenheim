@@ -10,6 +10,7 @@
 * Upgrade alchemy to v1.0.0
 * Add vhost to access log
 * Add http/2 support using the `spdy` module
+* Add websocket support for http-only proxies
 
 ## 0.2.0 (2017-09-01)
 

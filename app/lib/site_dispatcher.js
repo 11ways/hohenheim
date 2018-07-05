@@ -246,6 +246,17 @@ SiteDispatcher.setMethod(function startProxy() {
 	// Create the server
 	this.server = http.createServer(this.request.bind(this));
 
+	// Listen for websocket upgrades
+	this.server.on('upgrade', function gotRequest(req, socket, head) {
+
+		// Ignore insecure websocket requests on servers with https
+		if (that.proxyPortHttps) {
+			return;
+		}
+
+		that.websocketRequest(req, socket, head);
+	});
+
 	// Make the proxy server listen on the given port
 	this.server.listen(this.proxyPort);
 
@@ -253,6 +264,7 @@ SiteDispatcher.setMethod(function startProxy() {
 	this.server.maxHeadersCount = 0;
 
 	// See if there is a specific ipv6 address defined
+	// (Default is to listen to all of them)
 	if (this.ipv6Address) {
 		this.server_ipv6 = http.createServer(this.request.bind(this));
 		this.server_ipv6.listen(this.proxyPort, this.ipv6Address);
