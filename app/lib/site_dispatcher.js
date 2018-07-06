@@ -447,11 +447,8 @@ SiteDispatcher.setMethod(function initGreenlock() {
 		// Let the site know it's being run behind HTTPS
 		req.headers['X-Forwarded-Proto'] = 'https';
 
-		// Do the letsencrypt middleware
-		that.le_middleware(req, res, function didMiddleware() {
-			// Letsencrypt didn't need to intercept, continuing
-			that.request(req, res, true);
-		});
+		// Handle the request, skip the LE middleware
+		that.request(req, res, true);
 	});
 
 	// Listen for HTTPS websocket upgrades
