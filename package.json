@@ -14,7 +14,7 @@
 		"ansi-html"              : "~0.0.7",
 		"greenlock"              : "~2.3.5",
 		"http-proxy"             : "~1.16.2",
-		"le-store-certbot"       : "~2.1.7",
+		"le-store-certbot"       : "~2.1.8",
 		"le-challenge-fs"        : "~2.0.8",
 		"le-sni-auto"            : "~2.1.5",
 		"parse-passwd"           : "~1.0.0",
