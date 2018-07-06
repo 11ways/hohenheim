@@ -354,8 +354,8 @@ SiteDispatcher.setMethod(function initGreenlock() {
 
 	// Create the auto sni creator
 	this.le_sni = LeSniAuto.create({
-		renewWithin : 10 * 24 * 60 * 60 * 1000,  // do not renew more than 10 days before expiration
-		renewBy     : 5 * 24 * 60 * 60 * 1000,   // do not wait more than 5 days before expiration
+		renewWithin : 15 * 24 * 60 * 60 * 1000,  // do not renew more than 15 days before expiration
+		renewBy     : 10 * 24 * 60 * 60 * 1000,   // do not wait more than 10 days before expiration
 		tlsOptions  : {
 			rejectUnauthorized : true,           // These options will be used with tls.createSecureContext()
 			requestCert        : false,          // in addition to key (privkey.pem) and cert (cert.pem + chain.pem),
