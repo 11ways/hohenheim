@@ -364,7 +364,10 @@ SiteDispatcher.setMethod(function initGreenlock() {
 		},
 		getCertificates : function getCertificates(domain, certs, cb) {
 
-			var hostnames,
+			var domains_to_register,
+			    domain_record,
+			    challenge,
+			    hostnames,
 			    settings,
 			    options,
 			    site;
@@ -384,12 +387,26 @@ SiteDispatcher.setMethod(function initGreenlock() {
 			// Get the site settings
 			settings = site.settings;
 
+			// See if we have a domain record
+			domain_record = that.Domain.getDomain(domain);
+
+			// Wildcards aren't enabled yet, as the dns-01 challenge type still needs a lot of work
+			if (false && domain_record) {
+				domains_to_register = ['*.' + domain_record.name, domain];
+				challenge = 'dns-01';
+				log.verbose('Going to register domain wildcard', domain_to_register, 'using challenge', challenge);
+			} else {
+				domains_to_register = [domain];
+				challenge = settings.letsencrypt_challenge || alchemy.settings.letsencrypt_challenge;
+				log.verbose('Going to register domain', domain_to_register, 'using challenge', challenge);
+			}
+
 			options = {
-				domains       : [domain],
+				domains       : domains_to_register,
 				email         : settings.letsencrypt_email || alchemy.settings.letsencrypt_email,
 				agreeTos      : true,
 				rsaKeySize    : 2048,
-				challengeType : settings.letsencrypt_challenge || alchemy.settings.letsencrypt_challenge
+				challengeType : challenge
 			};
 
 			that.greenlock.register(options).then(function onResult(result) {

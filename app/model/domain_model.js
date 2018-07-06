@@ -112,3 +112,60 @@ Domain.setMethod(function getDomains(callback) {
 		}
 	});
 });
+
+/**
+ * Find the domain record for the given hostname
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.3.0
+ * @version  0.3.0
+ *
+ * @param    {String}   hostname
+ */
+Domain.setMethod(function getDomain(hostname) {
+
+	var domain,
+	    key;
+
+	if (!hostname) {
+		return null;
+	}
+
+	// Make sure the hostname is lowercase
+	hostname = hostname.toLowerCase();
+
+	// Iterate over all the domain records
+	for (key in domains) {
+		domain = domains[key];
+
+		if (domain.matchesHostname(hostname)) {
+			return domain;
+		}
+	}
+
+	return null;
+});
+
+/**
+ * Does this domain match the hostname?
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.3.0
+ * @version  0.3.0
+ *
+ * @param    {String}   hostname
+ *
+ * @return   {Boolean}
+ */
+Domain.setDocumentMethod(function matchesHostname(hostname) {
+
+	if (!hostname || !this.name) {
+		return false;
+	}
+
+	if (hostname.endsWith(this.name)) {
+		return true;
+	}
+
+	return false;
+});
