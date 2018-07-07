@@ -232,7 +232,7 @@ SiteDispatcher.setMethod(function startProxy() {
 		if (req.connection && req.connection.remoteAddress) {
 
 			// See if there already is an x-forwarded-for
-			forwarded_for = req.getHeader('x-forwarded-for');
+			forwarded_for = req.headers['x-forwarded-for'];
 
 			// If there already was a forwarded header, append to it
 			if (forwarded_for) {
@@ -710,8 +710,8 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 SiteDispatcher.setMethod(function request(req, res, skip_le) {
 
 	var that = this,
-	    do_le_middleware,
 	    new_location,
+	    force_https,
 	    domain,
 	    read,
 	    site,
@@ -725,26 +725,12 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	// Use the letsencrypt middleware first
 	if (skip_le !== true && alchemy.settings.letsencrypt !== false && this.proxyPortHttps) {
 
-		// If https is not forced, see if it is forced in the site's config
-		if (!this.force_https) {
-			site = this.getSite(req);
+		this.le_middleware(req, res, function done() {
+			// Greenlock didn't do anything, we can continue
+			that.request(req, res, true);
+		});
 
-			if (site && site.settings && site.settings.letsencrypt_force) {
-				do_le_middleware = true;
-			}
-		} else {
-			do_le_middleware = true;
-		}
-
-		if (do_le_middleware) {
-
-			this.le_middleware(req, res, function done() {
-				// Greenlock didn't do anything, we can continue
-				that.request(req, res, true);
-			});
-
-			return;
-		}
+		return;
 	}
 
 	// Detect infinite loops
@@ -769,9 +755,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	req.headers.hitId = hit;
 	req.headers.connectionId = req.connectionId;
 
-	if (!site) {
-		site = this.getSite(req);
-	}
+	site = this.getSite(req);
 
 	if (!site) {
 
@@ -784,14 +768,28 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	} else {
 
 		// When using letsencrypt, redirect to HTTPS
-		// @TODO: disable for certain sites?
-		if (alchemy.settings.letsencrypt && this.proxyPortHttps && !req.connection.encrypted && site.site.settings.letsencrypt_force !== false) {
-			host = req.headers.host;
-			new_location = 'https://' + host.replace(/:\d+/, ':' + 443) + req.url;
+		if (alchemy.settings.letsencrypt && this.proxyPortHttps && !req.connection.encrypted) {
 
-			res.writeHead(302, {'Location': new_location});
-			res.end();
-			return;
+			// Is HTTPS forced for all sites?
+			force_https = this.force_https;
+
+			// If https is not forced, see if it is forced in the site's config
+			if (!force_https) {
+				site = this.getSite(req);
+
+				if (site && site.settings && site.settings.letsencrypt_force) {
+					force_https = true;
+				}
+			}
+
+			if (force_https) {
+				host = req.headers.host;
+				new_location = 'https://' + host.replace(/:\d+/, ':' + 443) + req.url;
+
+				res.writeHead(302, {'Location': new_location});
+				res.end();
+				return;
+			}
 		}
 
 		// Only register this hit if the error count has not been set

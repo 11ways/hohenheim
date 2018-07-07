@@ -80,7 +80,7 @@ Site.constitute(function setSchema() {
 	// If letsencrypt is enabled, allow the user to set certain parameters
 	if (alchemy.settings.letsencrypt) {
 		schema.addField('letsencrypt_email', 'String');
-		schema.addField('letsencrypt_force', 'Boolean');
+		schema.addField('letsencrypt_force', 'Boolean', {default: true});
 	}
 
 	// Add delay time in ms
