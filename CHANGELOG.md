@@ -1,4 +1,4 @@
-## 0.3.0 (WIP)
+## 0.3.0 (2018-07-07)
 
 * Also set the node.js port to use on the child process PORT env variable
 * Regular `Node` sites don't need to send a "ready" message anymore
