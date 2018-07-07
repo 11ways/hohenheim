@@ -14,6 +14,7 @@
 * Add `Domain` model, needed for future wildcard support
 * `Site#registerHit` will now correctly see when a response ends, even with keep-alive enabled
 * Append to the `x-forwarded-for` header in case it's already set
+* Allow sites to force https mode, if it's not forced for the entire server
 
 ## 0.2.0 (2017-09-01)
 

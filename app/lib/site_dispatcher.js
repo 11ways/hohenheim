@@ -774,12 +774,8 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 			force_https = this.force_https;
 
 			// If https is not forced, see if it is forced in the site's config
-			if (!force_https) {
-				site = this.getSite(req);
-
-				if (site && site.settings && site.settings.letsencrypt_force) {
-					force_https = true;
-				}
+			if (!force_https && site.site.settings && site.site.settings.letsencrypt_force) {
+				force_https = true;
 			}
 
 			if (force_https) {
