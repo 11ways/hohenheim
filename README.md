@@ -79,7 +79,7 @@ module.exports = {
     // This is the port the admin interface listens on
     port: 2999,
 
-    // Set to true to enable letsencrypt (only way to enable https for now)
+    // Set to true to enable letsencrypt
     letsencrypt: true,
 
     // The default e-mail address to use for letsencrypt registrations
@@ -108,6 +108,23 @@ Datasource.create('mongo', 'default', {
 Once you have everything configured and running, you can go to the admin interface at http://localhost:2999/chimera
 
 The default credentials are `admin:admin`
+
+### HTTPS & HTTP/2
+
+If you want https & http/2 support, you need to set `letsencrypt: true` in your local configuration.
+
+If you want to use your own certificates (and not letsencrypt), the `greenlock` module we use lets you do that.
+You just need to put your own certificate files into the correct directory.
+
+Eg: if you have your own certificates for the domain `example.com`, you can put them here:
+
+```
+~/hohenheim/temp/letsencrypt/etc/acme/live/example.com/privkey.pem
+~/hohenheim/temp/letsencrypt/etc/acme/live/example.com/cert.pem
+~/hohenheim/temp/letsencrypt/etc/acme/live/example.com/chain.pem
+~/hohenheim/temp/letsencrypt/etc/acme/live/example.com/fullchain.pem
+~/hohenheim/temp/letsencrypt/etc/acme/live/example.com/bundle.pem
+```
 
 ## Systemd
 
