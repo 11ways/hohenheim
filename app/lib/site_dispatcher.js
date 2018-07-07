@@ -73,6 +73,9 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
 	// The address to fallback to when no site is found (if enabled)
 	this.fallbackAddress = options.fallbackAddress || false;
 
+	// Force https (if it is enabled?)
+	this.force_https = options.force_https == null ? true : options.force_https;
+
 	// Create the queue
 	this.queue = Function.createQueue();
 
@@ -707,6 +710,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 SiteDispatcher.setMethod(function request(req, res, skip_le) {
 
 	var that = this,
+	    do_le_middleware,
 	    new_location,
 	    domain,
 	    read,
@@ -721,12 +725,26 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	// Use the letsencrypt middleware first
 	if (skip_le !== true && alchemy.settings.letsencrypt !== false && this.proxyPortHttps) {
 
-		this.le_middleware(req, res, function done() {
-			// Greenlock didn't do anything, we can continue
-			that.request(req, res, true);
-		});
+		// If https is not forced, see if it is forced in the site's config
+		if (!this.force_https) {
+			site = this.getSite(req);
 
-		return;
+			if (site && site.settings && site.settings.letsencrypt_force) {
+				do_le_middleware = true;
+			}
+		} else {
+			do_le_middleware = true;
+		}
+
+		if (do_le_middleware) {
+
+			this.le_middleware(req, res, function done() {
+				// Greenlock didn't do anything, we can continue
+				that.request(req, res, true);
+			});
+
+			return;
+		}
 	}
 
 	// Detect infinite loops
@@ -751,7 +769,9 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	req.headers.hitId = hit;
 	req.headers.connectionId = req.connectionId;
 
-	site = this.getSite(req);
+	if (!site) {
+		site = this.getSite(req);
+	}
 
 	if (!site) {
 

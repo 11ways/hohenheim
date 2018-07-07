@@ -69,7 +69,10 @@ alchemy.start(function onAlchemyReady() {
 		proxyPortHttps  : alchemy.settings.proxyPortHttps,
 
 		// The first port to use for child node instances
-		firstPort       : alchemy.settings.firstPort || 4748
+		firstPort       : alchemy.settings.firstPort || 4748,
+
+		// Force https?
+		force_https     : alchemy.settings.force_https == null ? true : alchemy.settings.force_https
 	});
 });
 
