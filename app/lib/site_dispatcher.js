@@ -220,14 +220,26 @@ SiteDispatcher.setMethod(function startProxy() {
 	// Modify proxy request headers
 	this.proxy.on('proxyReq', function onProxyReq(proxyReq, req, res, options) {
 
-		var site;
+		var forwarded_for,
+		    site;
 
 		// Let the target server know hohenheim is in front of it
 		proxyReq.setHeader('X-Proxied-By', 'hohenheim');
 
 		if (req.connection && req.connection.remoteAddress) {
+
+			// See if there already is an x-forwarded-for
+			forwarded_for = req.getHeader('x-forwarded-for');
+
+			// If there already was a forwarded header, append to it
+			if (forwarded_for) {
+				forwarded_for += ', ' + req.connection.remoteAddress;
+			} else {
+				forwarded_for = req.connection.remoteAddress;
+			}
+
 			// Set the original ip address
-			proxyReq.setHeader('X-Forwarded-For', req.connection.remoteAddress);
+			proxyReq.setHeader('X-Forwarded-For', forwarded_for);
 		}
 
 		// Get the target site

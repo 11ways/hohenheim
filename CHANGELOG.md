@@ -13,6 +13,7 @@
 * Add websocket support for http-only proxies
 * Add `Domain` model, needed for future wildcard support
 * `Site#registerHit` will now correctly see when a response ends, even with keep-alive enabled
+* Append to the `x-forwarded-for` header in case it's already set
 
 ## 0.2.0 (2017-09-01)
 
