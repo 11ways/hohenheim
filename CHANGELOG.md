@@ -1,3 +1,7 @@
+## 0.3.1 (WIP)
+
+* Dependency updates
+
 ## 0.3.0 (2018-07-07)
 
 * Also set the node.js port to use on the child process PORT env variable
