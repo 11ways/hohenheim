@@ -1,6 +1,8 @@
 ## 0.3.1 (WIP)
 
 * Dependency updates
+* The `Proclog` log array is limited to 500 lines
+* Throttle saving the `Proclog` record
 
 ## 0.3.0 (2018-07-07)
 

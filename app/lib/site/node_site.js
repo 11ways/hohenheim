@@ -331,7 +331,7 @@ Site.setMethod(function start(callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.3.0
- * @version  0.3.0
+ * @version  0.3.1
  *
  * @param    {ChildProcess}   proc
  * @param    {Buffer}         data
@@ -370,14 +370,42 @@ Site.setMethod(function onStdout(proc, data) {
 			return;
 		}
 
+		// Limit the log to 500 lines
+		if (proc.procarray.length > 500) {
+			proc.procarray.shift();
+		}
+
 		str = ansiHTML(data.toString());
 
 		proc.procarray.push({time: Date.now(), html: str});
 
-		that.Proclog.save({
-			_id: proc.proclog_id,
-			log: proc.procarray
-		});
+		that.saveProclog(proc);
+	});
+});
+
+/**
+ * Bounced save of proclog record:
+ * Only save once per 30 seconds
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.3.1
+ * @version  0.3.1
+ *
+ * @param    {ChildProcess}   proc
+ */
+Site.setMethod(function saveProclog(proc) {
+
+	// Dirty little hack: create a throttle function
+	// the first time this method is called on this instance
+	if (this.saveProclog === saveProclog) {
+		this.saveProclog = Function.throttle(saveProclog, 1000 * 30);
+		this.saveProclog(proc);
+		return;
+	}
+
+	this.Proclog.save({
+		_id: proc.proclog_id,
+		log: proc.procarray
 	});
 });
 
