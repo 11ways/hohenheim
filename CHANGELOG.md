@@ -1,5 +1,6 @@
-## 0.3.1 (WIP)
+## 0.3.1 (2018-10-18)
 
+* Upgrade to alchemy 1.0.5
 * Dependency updates
 * The `Proclog` log array is limited to 500 lines
 * Throttle saving the `Proclog` record
