@@ -52,7 +52,9 @@ alchemy.plugins.chimera.menu.set('site', {
 		subject: 'site',
 		action: 'index'
 	},
-	icon: {svg: 'connection'}
+	icon: {
+		fa: 'globe-africa'
+	}
 });
 
 // Add "Domains" menu item
@@ -64,5 +66,7 @@ alchemy.plugins.chimera.menu.set('domain', {
 		subject: 'domain',
 		action: 'index'
 	},
-	icon: {svg: 'connection'}
+	icon: {
+		fa: 'passport'
+	}
 });
