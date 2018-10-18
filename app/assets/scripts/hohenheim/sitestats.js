@@ -69,7 +69,7 @@ var updateSite = function updateSite(siteId) {
 
 			html += '<button class="btn btn-danger" data-kill-pid="' + pid + '"><i class="fa fa-crosshairs"></i> Kill</button> ';
 
-			html += '<button class="btn btn-success" data-term-pid="' + pid + '"><i class="fa fa-crosshairs"></i> Terminal</button> ';
+			html += '<button class="btn btn-success" data-term-pid="' + pid + '"><i class="fa fa-terminal"></i> Terminal</button> ';
 
 			html += '</td>';
 
