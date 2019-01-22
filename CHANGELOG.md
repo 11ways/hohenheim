@@ -1,3 +1,8 @@
+## 0.3.2 (WIP)
+
+* Add `X-Forwarded-Host` header
+* Rewrite `location` responses coming from proxied servers
+
 ## 0.3.1 (2018-10-18)
 
 * Upgrade to alchemy 1.0.5

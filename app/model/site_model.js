@@ -113,14 +113,14 @@ Site.constitute(function chimeraConfig() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.3.2
  *
  * @param    {Function}   callback
  */
 Site.setMethod(function getSites(callback) {
 	var that = this;
 
-	that.find('all', {document: true}, function gotRecords(err, results) {
+	that.find('all', {document: true, recursive: 0}, function gotRecords(err, results) {
 
 		var byName = {},
 		    byDomain = {},

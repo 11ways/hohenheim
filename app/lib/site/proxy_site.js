@@ -25,7 +25,6 @@ ProxySite.constitute(function addFields() {
 	this.schema.addField('url', 'String');
 });
 
-
 /**
  * Get an adress to proxy to
  *
@@ -37,4 +36,56 @@ ProxySite.constitute(function addFields() {
  */
 ProxySite.setMethod(function getAddress(callback) {
 	return callback(null, this.settings.url);
+});
+
+/**
+ * Modify the response sent by the proxied server
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.3.2
+ * @version  0.3.2
+ *
+ * @param    {ServerResponse}   res         The response being sent to the browser
+ * @param    {IncomingMessage}  req         The original request
+ * @param    {IncomingMessage}  proxy_res   The response comming from the proxy server
+ * @param    {Object}           domain      The original domain info that matched this record
+ */
+ProxySite.setMethod(function modifyResponse(res, req, proxy_res, domain) {
+
+	var location = proxy_res.headers['location'];
+
+	if (!location) {
+		return;
+	}
+
+	// Get the original request sent to the proxied server
+	let proxy_req = proxy_res.req,
+	    proxy_host = proxy_req.getHeader('host');
+
+	// If no proxy host was found, get the url instead
+	if (!proxy_host) {
+		proxy_host = this._site.settings.url;
+
+		if (proxy_host[proxy_host.length - 1] == '/') {
+			proxy_host = proxy_host.slice(0, -1);
+		}
+	}
+
+	if (!proxy_host) {
+		return;
+	}
+
+	// Is the proxy host or url part of the location?
+	// Then we need to remove it!
+	if (location.indexOf(proxy_host) == -1) {
+		return;
+	}
+
+	location = location.after(proxy_host);
+
+	if (location[0] == ':') {
+		location = '/' + location.after('/');
+	}
+
+	proxy_res.headers['location'] = location;
 });

@@ -199,7 +199,7 @@ SiteDispatcher.setMethod(function getLocalIps() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.3.0
+ * @version  0.3.2
  */
 SiteDispatcher.setMethod(function startProxy() {
 
@@ -245,16 +245,30 @@ SiteDispatcher.setMethod(function startProxy() {
 			proxyReq.setHeader('X-Forwarded-For', forwarded_for);
 		}
 
+		proxyReq.setHeader('X-Forwarded-Host', req.headers['host']);
+
 		// Get the target site
 		site = that.getSite(req);
 
-		// Set the custom header values
-		if (site && site.domain.headers && site.domain.headers.length) {
-			site.domain.headers.forEach(function eachHeader(header) {
-				if (header.name) {
-					proxyReq.setHeader(header.name, header.value);
-				}
-			});
+		if (site) {
+			req.hohenheim_site = site;
+
+			// Set the custom header values
+			if (site.domain && site.domain.headers && site.domain.headers.length) {
+				site.domain.headers.forEach(function eachHeader(header) {
+					if (header.name) {
+						proxyReq.setHeader(header.name, header.value);
+					}
+				});
+			}
+		}
+	});
+
+	// Modify proxy response headers
+	this.proxy.on('proxyRes', function onProxyRes(proxyRes, req, res) {
+		if (req.hohenheim_site && req.hohenheim_site.site.modifyResponse) {
+			// The body can't really be modified since we haven't set `selfHandleResponse` yet
+			req.hohenheim_site.site.modifyResponse(res, req, proxyRes, req.hohenheim_site.domain);
 		}
 	});
 
