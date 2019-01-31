@@ -13,7 +13,7 @@ var sitesById = alchemy.shared('Sites.byId'),
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.3.0
+ * @version  0.3.2
  *
  * @param    {Develry.SiteDispatcher}   siteDispatcher
  * @param    {Object}                   record
@@ -22,7 +22,10 @@ var Site = Function.inherits('Develry.Site', function NodeSite(siteDispatcher, r
 
 	// The running processes
 	this.processes = {};
-	this.process_list = []
+	this.process_list = [];
+
+	// The last exits
+	this.exit_log = [];
 
 	// The amount of processes that will start
 	this.requested = 0;
@@ -679,13 +682,23 @@ Site.setMethod(function processStats(process, cpu, mem) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.3.0
+ * @version  0.3.2
  *
  * @param    {ChildProcess}   process
  * @param    {Number}         code
  * @param    {String}         signal
  */
 Site.setMethod(function processExit(process, code, signal) {
+
+	var now = Date.now();
+
+	// Remove items from the exit log
+	if (this.exit_log.length > 20) {
+		this.exit_log.shift();
+	}
+
+	// Add the current timestamp to the exit log
+	this.exit_log.push(now);
 
 	// Tell the parent this port is free again
 	this.parent.freePort(process.port);
@@ -721,6 +734,23 @@ Site.setMethod(function processExit(process, code, signal) {
 	}
 
 	log.warn('Process', process.pid, 'for site', this.name, 'has exited with code', code, 'and signal', signal);
+
+	if (this.exit_log.length > 5) {
+		let mean = Math.floor(Math.mean(this.exit_log)),
+		    diff = now - mean;
+
+		if (diff < 2500 * this.exit_log.length) {
+			let that = this;
+
+			log.warn('Waiting 3 seconds before trying to start', that.name, 'again');
+
+			setTimeout(function tryAgain() {
+				that.startMinimumServers();
+			}, 3000);
+
+			return;
+		}
+	}
 
 	// Make sure the required minimum servers are running
 	this.startMinimumServers();

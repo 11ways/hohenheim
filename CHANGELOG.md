@@ -2,6 +2,7 @@
 
 * Add `X-Forwarded-Host` header
 * Rewrite `location` responses coming from proxied servers
+* Throttle restarting node sites when they crash too often
 
 ## 0.3.1 (2018-10-18)
 
