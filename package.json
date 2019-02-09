@@ -12,6 +12,7 @@
 		"alchemy-web-components" : "~0.5.0",
 		"alchemy-ajatar-theme"   : "~1.1.2",
 		"ansi-html"              : "~0.0.7",
+		"ecstatic"               : "~3.3.0",
 		"greenlock"              : "~2.4.2",
 		"http-proxy"             : "~1.17.0",
 		"le-store-certbot"       : "~2.2.0",

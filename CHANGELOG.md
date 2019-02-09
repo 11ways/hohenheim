@@ -3,6 +3,7 @@
 * Add `X-Forwarded-Host` header
 * Rewrite `location` responses coming from proxied servers
 * Throttle restarting node sites when they crash too often
+* Add `Static` site class, which uses `ecstatic` to serve static files
 
 ## 0.3.1 (2018-10-18)
 

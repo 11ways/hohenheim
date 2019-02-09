@@ -809,6 +809,11 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 		}
 
 		site.site.checkBasicAuth(req, res, function done() {
+
+			if (site.site.handle_internally === true) {
+				return site.site.handleRequest(req, res);
+			}
+
 			site.site.getAddress(function gotAddress(err, address) {
 
 				if (err) {
