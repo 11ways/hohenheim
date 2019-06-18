@@ -4,6 +4,8 @@
 * Rewrite `location` responses coming from proxied servers
 * Throttle restarting node sites when they crash too often
 * Add `Static` site class, which uses `ecstatic` to serve static files
+* Update node versions, users & ips every hour
+* Some small fixes
 
 ## 0.3.1 (2018-10-18)
 

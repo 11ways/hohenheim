@@ -31,7 +31,7 @@ Static.setAction(function home(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.1
- * @version  0.3.0
+ * @version  0.3.2
  */
 Static.setAction(function sitestat(conduit) {
 
@@ -46,6 +46,10 @@ Static.setAction(function sitestat(conduit) {
 
 	if (!siteId) {
 		return conduit.error(new Error('No site_id given'));
+	}
+
+	if (!alchemy.dispatcher) {
+		return conduit.end({});
 	}
 
 	let site = alchemy.dispatcher.ids[siteId];
@@ -104,6 +108,10 @@ Static.setAction(function sitestatKill(conduit) {
 		return conduit.error(new Error('No site_id given'));
 	}
 
+	if (!alchemy.dispatcher) {
+		return conduit.end({success: false});
+	}
+
 	let site = alchemy.dispatcher.ids[siteId];
 
 	if (!site) {
@@ -128,7 +136,7 @@ Static.setAction(function sitestatKill(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.1
- * @version  0.3.0
+ * @version  0.3.2
  */
 Static.setAction(function sitestatStart(conduit) {
 
@@ -161,7 +169,7 @@ Static.setAction(function sitestatStart(conduit) {
  *
  * @author   Jelle De Loecker   <jelle@kipdola.be>
  * @since    0.0.2
- * @version  0.3.0
+ * @version  0.3.2
  */
 Static.setAction(function sitestatLogs(conduit) {
 
@@ -176,6 +184,10 @@ Static.setAction(function sitestatLogs(conduit) {
 
 	if (!siteId) {
 		return conduit.error(new Error('No site_id given'));
+	}
+
+	if (!alchemy.dispatcher) {
+		return conduit.end([]);
 	}
 
 	let site = alchemy.dispatcher.ids[siteId];

@@ -124,48 +124,7 @@ Site.setStatic(function updateVersions(callback) {
 			next();
 		});
 	}, function getNVersions(next) {
-
-		var versions_path = '/usr/local/n/versions/node';
-
-		fs.readdir(versions_path, function gotNVersions(err, contents) {
-
-			// N is probably not used here
-			if (err) {
-				return next();
-			}
-
-			let tasks = [];
-
-			for (let i = 0; i < contents.length; i++) {
-				let bin_path,
-				    version;
-
-				version = contents[i];
-				bin_path = libpath.resolve(versions_path, version, 'bin/node');
-
-				tasks.push(function checkFile(next) {
-
-					fs.stat(bin_path, function gotStat(err, stats) {
-
-						if (err) {
-							return next();
-						}
-
-						versions[version] = {
-							title   : 'v' + version,
-							version : version,
-							bin     : bin_path
-						};
-
-						next();
-					});
-				});
-			}
-
-			Function.parallel(tasks, function gotVersions(err) {
-				next();
-			});
-		});
+		Site.loadInstalledVersions(next);
 	}, function getSystemVersion(next) {
 
 		child.exec('which node', function gotMainNode(err, stdout, stderr) {
@@ -259,6 +218,58 @@ Site.setStatic(function updateVersions(callback) {
 		}
 
 		callback(null, versions);
+	});
+});
+
+/**
+ * Look for available node.js versions
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.3.2
+ * @version  0.3.2
+ */
+Site.setStatic(function loadInstalledVersions(callback) {
+
+	var versions_path = '/usr/local/n/versions/node';
+
+	fs.readdir(versions_path, function gotNVersions(err, contents) {
+
+		// N is probably not used here
+		if (err) {
+			return callback();
+		}
+
+		let tasks = [];
+
+		for (let i = 0; i < contents.length; i++) {
+			let bin_path,
+			    version;
+
+			version = contents[i];
+			bin_path = libpath.resolve(versions_path, version, 'bin/node');
+
+			tasks.push(function checkFile(next) {
+
+				fs.stat(bin_path, function gotStat(err, stats) {
+
+					if (err) {
+						return next();
+					}
+
+					versions[version] = {
+						title   : 'v' + version,
+						version : version,
+						bin     : bin_path
+					};
+
+					next();
+				});
+			});
+		}
+
+		Function.parallel(tasks, function gotVersions(err) {
+			callback();
+		});
 	});
 });
 

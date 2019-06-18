@@ -10,9 +10,12 @@ var site_types  = alchemy.getClassGroup('site_type'),
     libpath     = alchemy.use('path'),
     spdy        = alchemy.use('spdy'),
     http        = alchemy.use('http'),
+    util        = alchemy.use('util'),
     net         = alchemy.use('net'),
     os          = alchemy.use('os'),
     fs          = alchemy.use('fs');
+
+const readFileAsync = util.promisify(fs.readFile);
 
 /**
  * The Site Dispatcher class
@@ -100,32 +103,58 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
 	// Listen to the site update event
 	alchemy.on('siteUpdate', this.update.bind(this));
 
+	this.init();
+});
+
+/**
+ * Initialize the dispatcher
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.3.2
+ * @version  0.3.2
+ */
+SiteDispatcher.setMethod(async function init() {
+
+	var that = this;
+
 	// Populate the available users
-	this.getLocalUsers();
+	await this.getLocalUsers();
 
 	// Get the local ip addresses
 	this.getLocalIps();
 
 	// Create the proxy server
 	this.startProxy();
+
+	// Update users & node versions every hour
+	setInterval(function doUpdate() {
+		Classes.Develry.NodeSite.updateVersions();
+		that.getLocalUsers();
+		that.getLocalIps();
+	}, 60 * 60 * 1000);
 });
 
 /**
- * Get the local ip addresses
+ * Update the local users
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.2.0
+ * @version  0.3.2
  */
-SiteDispatcher.setMethod(function getLocalUsers() {
+SiteDispatcher.setMethod(async function getLocalUsers() {
 
 	var fullname,
 	    result,
+	    passwd,
 	    title,
 	    user,
 	    i;
 
-	result = parsePasswd(fs.readFileSync('/etc/passwd', 'utf8'));
+	// Get the file
+	passwd = await readFileAsync('/etc/passwd', 'utf8');
+
+	// Parse it
+	result = parsePasswd(passwd);
 
 	result.sortByPath(1, 'username');
 

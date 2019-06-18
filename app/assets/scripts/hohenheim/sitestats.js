@@ -192,6 +192,11 @@ var updateSite = function updateSite(siteId) {
 		html += '<tr><th></th><th>Created</th><th>Updated</th></tr>';
 
 		result.forEach(function eachResult(entry) {
+
+			if (!entry) {
+				return;
+			}
+
 			html += '<tr><td><button class="btn" data-log-id="' + entry._id + '">View</button></td>';
 			html += '<td>' + entry.created.format('D d M Y H:i:s') + '</td>';
 			html += '<td>' + entry.updated.format('D d M Y H:i:s') + '</td>';

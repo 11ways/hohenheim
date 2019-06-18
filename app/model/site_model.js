@@ -118,6 +118,7 @@ Site.constitute(function chimeraConfig() {
  * @param    {Function}   callback
  */
 Site.setMethod(function getSites(callback) {
+
 	var that = this;
 
 	that.find('all', {document: true, recursive: 0}, function gotRecords(err, results) {
@@ -126,55 +127,61 @@ Site.setMethod(function getSites(callback) {
 		    byDomain = {},
 		    byId = {};
 
-		results.forEach(function eachSite(site) {
-
-			if (site.domain) {
-				// Store it by each domain name
-				site.domain.forEach(function eachDomain(domain) {
-
-					var length,
-					    config,
-					    temp,
-					    ip,
-					    i;
-
-					if (domain.listen_on && domain.listen_on.length) {
-						length = domain.listen_on.length;
-
-						for (i = 0; i < length; i++) {
-							ip = domain.listen_on[i];
-							config = local_ips[ip];
-
-							if (!config) {
-								local_ips[ip] = 'Old: ' + ip;
-							} else if (config.family == 'IPv4') {
-								// Add an IPv6-ified IPv4 address,
-								// because on IPv6 enabled interfaces
-								// these addresses get identified as such
-								if (ip[0] != ':') {
-									domain.listen_on.push('::ffff:' + ip);
-								}
-							}
-						}
-					}
-
-					if (domain.hostname) {
-
-						temp = {site, domain};
-
-						domain.hostname.forEach(function eachHostname(hostname) {
-							byDomain[hostname] = temp;
-						});
-					}
-				});
-			}
+		for (let site of Array.cast(results)) {
 
 			// Store it by site name
 			byName[site.name] = site;
 
 			// Store it by id
 			byId[site._id] = site;
-		});
+
+			if (!site.domain) {
+				continue;
+			}
+
+			for (let domain of site.domain) {
+				let length,
+				    config,
+				    temp,
+				    ip,
+				    i;
+
+				if (domain.listen_on && domain.listen_on.length) {
+					length = domain.listen_on.length;
+
+					for (i = 0; i < length; i++) {
+						ip = domain.listen_on[i];
+
+						// Skip "null" string, they're just a mistake
+						if (ip == 'null') {
+							continue;
+						}
+
+						config = local_ips[ip];
+
+						if (!config) {
+							local_ips[ip] = 'Old: ' + ip;
+						} else if (config.family == 'IPv4') {
+							// Add an IPv6-ified IPv4 address,
+							// because on IPv6 enabled interfaces
+							// these addresses get identified as such
+							if (ip[0] != ':') {
+								domain.listen_on.push('::ffff:' + ip);
+							}
+						}
+					}
+				}
+
+				if (domain.hostname) {
+
+					temp = {site, domain};
+
+					domain.hostname.forEach(function eachHostname(hostname) {
+						byDomain[hostname] = temp;
+					});
+				}
+			}
+		}
 
 		alchemy.overwrite(sitesByDomain, byDomain);
 		alchemy.overwrite(sitesByName, byName);
