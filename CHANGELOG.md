@@ -1,4 +1,4 @@
-## 0.3.2 (WIP)
+## 0.3.2 (2019-06-19)
 
 * Add `X-Forwarded-Host` header
 * Rewrite `location` responses coming from proxied servers
