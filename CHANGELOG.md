@@ -1,3 +1,7 @@
+## 0.3.3 (2019-06-19)
+
+* Greenlock requires "ursa" on node versions lower than 10.
+
 ## 0.3.2 (2019-06-19)
 
 * Add `X-Forwarded-Host` header
