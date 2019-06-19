@@ -7,6 +7,7 @@
 * Update node versions, users & ips every hour
 * Some small fixes
 * Dependency (security) updates
+* Attempt to work around `spdy`'s timeout issues
 
 ## 0.3.1 (2018-10-18)
 

@@ -471,6 +471,25 @@ SiteDispatcher.setMethod(function initGreenlock() {
 	// Create the HTTPS/http2 server using the `spdy` module
 	this.https_server = spdy.createServer(this.greenlock.httpsOptions);
 
+	// This listener attempts to fix an issue with SPDY where idle connections do
+	// not close. Too many idle connections to our server (>4000) cause our server
+	// to be sluggish or outright nonfunctional. See
+	// https://github.com/spdy-http2/node-spdy/issues/338 and
+	// https://github.com/nodejs/node/issues/4560.
+	this.https_server.on('connection', function onSocket(socket) {
+		// Set the socket's idle timeout in milliseconds. 2 minutes is the default
+		// for Node's HTTPS server. We are currently using SPDY:
+		// https://nodejs.org/api/https.html#https_server_settimeout_msecs_callback
+		socket.setTimeout(1000 * 60 * 2);
+
+		// Wait for the timeout event.
+		// The socket will emit it when the idle timeout elapses.
+		socket.on('timeout', function onTimeout() {
+			// Call destroy again.
+			socket.destroy();
+		});
+	});
+
 	// Listen for HTTPS requests
 	this.https_server.on('request', function gotRequest(req, res) {
 

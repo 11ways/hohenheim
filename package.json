@@ -21,7 +21,7 @@
 		"parse-passwd"           : "~1.0.0",
 		"posix"                  : "~4.1.2",
 		"process-monitor"        : "skerit/process-monitor",
-		"spdy"                   : "~4.0.0"
+		"spdy"                   : "~3.4.7"
 	},
 	"license": "GPLv3",
 	"engines": {
