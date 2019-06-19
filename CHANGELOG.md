@@ -6,6 +6,7 @@
 * Add `Static` site class, which uses `ecstatic` to serve static files
 * Update node versions, users & ips every hour
 * Some small fixes
+* Dependency (security) updates
 
 ## 0.3.1 (2018-10-18)
 
