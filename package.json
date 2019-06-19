@@ -24,8 +24,8 @@
 		"spdy"                   : "~3.4.7"
 	},
 	"license": "GPLv3",
+	"engineStrict": true,
 	"engines": {
-		"node": ">=8.9.0"
-	},
-	"private": true
+		"node": "~8.16.0"
+	}
 }

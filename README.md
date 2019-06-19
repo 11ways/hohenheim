@@ -7,6 +7,7 @@ Hohenheim is a web server and reverse proxy, mainly for node.js sites.
 ### Node.js
 
 Hohenheim requires at least node.js version 8.9.0. Your sites can use lower versions if really needed, though.
+This version does not yet run on node 10+ because of problems with the `spdy` package.
 
 ### Mongodb
 
