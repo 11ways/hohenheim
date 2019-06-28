@@ -236,7 +236,7 @@ Site.setMethod(function cleanParent() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.3.0
+ * @version  0.3.4
  *
  * @param    {Object}   record
  */
@@ -286,14 +286,16 @@ Site.setMethod(function update(record) {
 				// Check for regexes
 				if (hostname[0] == '/') {
 					regex = RegExp.interpret(hostname);
+				} else if (hostname.indexOf('*') > -1 || hostname.indexOf('?') > -1) {
+					regex = interpretWildcard(hostname, 'i');
+				}
 
-					if (regex) {
-						if (!domain.regexes) {
-							domain.regexes = [];
-						}
-
-						domain.regexes.push(regex);
+				if (regex) {
+					if (!domain.regexes) {
+						domain.regexes = [];
 					}
+
+					domain.regexes.push(regex);
 				}
 
 				// Ignore accidental 'null' (string) values
@@ -310,6 +312,25 @@ Site.setMethod(function update(record) {
 	// Emit the updat event
 	this.emit('updated');
 });
+
+/**
+ * Interpret wildcard strings
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.3.4
+ * @version  0.3.4
+ */
+function interpretWildcard(str, flags) {
+	var pattern = RegExp.escape(str).replace(/\\\*/g, '.*').replace(/\\\?/g, '.');
+
+	if (!flags) {
+		flags = 'g';
+	} else if (flags.indexOf('g') == -1) {
+		flags += 'g';
+	}
+
+	return RegExp.interpret(pattern, flags);
+}
 
 /**
  * Check for basic auth

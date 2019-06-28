@@ -1,6 +1,7 @@
 ## 0.3.4 (2019-06-28)
 
 * Add **Redirect** site class
+* Allow using wildcards (* or ?) in domains
 
 ## 0.3.3 (2019-06-19)
 
