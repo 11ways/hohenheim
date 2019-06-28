@@ -1,7 +1,7 @@
 {
 	"name": "hohenheim",
 	"description": "The hohenheim dispatcher",
-	"version": "0.3.4-alpha",
+	"version": "0.3.4",
 	"dependencies": {
 		"alchemymvc"             : "~1.0.8",
 		"alchemy-acl"            : "~0.5.2",
