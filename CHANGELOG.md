@@ -1,3 +1,7 @@
+## 0.3.4 (2019-06-28)
+
+* Add **Redirect** site class
+
 ## 0.3.3 (2019-06-19)
 
 * Greenlock requires "ursa" on node versions lower than 10.
