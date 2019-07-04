@@ -1,32 +1,38 @@
 {
-	"name": "hohenheim",
-	"description": "The hohenheim dispatcher",
-	"version": "0.3.4",
-	"dependencies": {
-		"alchemymvc"             : "~1.0.8",
-		"alchemy-acl"            : "~0.5.2",
-		"alchemy-chimera"        : "~0.5.4",
-		"alchemy-i18n"           : "~0.5.1",
-		"alchemy-menu"           : "~0.5.0",
-		"alchemy-styleboost"     : "~0.4.2",
-		"alchemy-web-components" : "~0.5.0",
-		"alchemy-ajatar-theme"   : "~1.1.4",
-		"ansi-html"              : "~0.0.7",
-		"ecstatic"               : "~3.3.0",
-		"greenlock"              : "~2.8.1",
-		"http-proxy"             : "~1.17.0",
-		"le-store-certbot"       : "~2.2.3",
-		"le-challenge-fs"        : "~2.0.9",
-		"le-sni-auto"            : "~2.1.9",
-		"parse-passwd"           : "~1.0.0",
-		"posix"                  : "~4.1.2",
-		"process-monitor"        : "skerit/process-monitor",
-		"spdy"                   : "~3.4.7",
-		"ursa"                   : "~0.9.4"
-	},
-	"license": "GPLv3",
-	"engineStrict": true,
-	"engines": {
-		"node": "~8.16.0"
-	}
+  "name": "hohenheim",
+  "description": "The hohenheim dispatcher",
+  "version": "0.3.4",
+  "dependencies": {
+    "alchemymvc": "~1.0.8",
+    "alchemy-acl": "~0.5.2",
+    "alchemy-chimera": "~0.5.4",
+    "alchemy-i18n": "~0.5.1",
+    "alchemy-menu": "~0.5.0",
+    "alchemy-styleboost": "~0.4.2",
+    "alchemy-web-components": "~0.5.0",
+    "alchemy-ajatar-theme": "~1.1.4",
+    "ansi-html": "~0.0.7",
+    "ecstatic": "~3.3.0",
+    "greenlock": "~2.8.1",
+    "http-proxy": "~1.17.0",
+    "le-store-certbot": "~2.2.3",
+    "le-challenge-fs": "~2.0.9",
+    "le-sni-auto": "~2.1.9",
+    "parse-passwd": "~1.0.0",
+    "posix": "~4.1.2",
+    "process-monitor": "skerit/process-monitor",
+    "spdy": "~3.4.7",
+    "ursa": "~0.9.4",
+    "snyk": "^1.190.0"
+  },
+  "license": "GPLv3",
+  "engineStrict": true,
+  "engines": {
+    "node": "~8.16.0"
+  },
+  "scripts": {
+    "snyk-protect": "snyk protect",
+    "prepublish": "npm run snyk-protect"
+  },
+  "snyk": true
 }
