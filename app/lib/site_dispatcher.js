@@ -271,6 +271,7 @@ SiteDispatcher.setMethod(function startProxy() {
 			}
 
 			// Set the original ip address
+			proxyReq.setHeader('X-Real-IP', forwarded_for);
 			proxyReq.setHeader('X-Forwarded-For', forwarded_for);
 		}
 
@@ -747,7 +748,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 		socket.end('There is no such domain here!');
 	} else {
 
-		site.site.getAddress(function gotAddress(err, address) {
+		site.site.getAddress(req, function gotAddress(err, address) {
 
 			if (err) {
 				return socket.end('Error: ' + err);
@@ -862,7 +863,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 				return site.site.handleRequest(req, res);
 			}
 
-			site.site.getAddress(function gotAddress(err, address) {
+			site.site.getAddress(req, function gotAddress(err, address) {
 
 				if (err) {
 					res.writeHead(500, {'Content-Type': 'text/plain'});
@@ -899,6 +900,27 @@ SiteDispatcher.setMethod(function getTestPort(start) {
 	}
 
 	return port;
+});
+
+/**
+ * Get a path to a socket file
+ * and immediately reserve it for the given site
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @param    {Develry.Site}   site      A site instance
+ * @param    {Function}       callback
+ */
+SiteDispatcher.setMethod(function getSocketfile(site, callback) {
+
+	const that = this;
+
+	let filename = site.id + '_' + Date.now() + Crypto.randomHex(8) + '.sock',
+	    path = libpath.resolve(PATH_TEMP, filename);
+
+	callback(null, path);
 });
 
 /**

@@ -30,11 +30,12 @@ ProxySite.constitute(function addFields() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.0
+ * @version  0.4.0
  *
- * @param    {Function}   callback
+ * @param    {IncomingMessage}   req
+ * @param    {Function}          callback
  */
-ProxySite.setMethod(function getAddress(callback) {
+ProxySite.setMethod(function getAddress(req, callback) {
 	return callback(null, this.settings.url);
 });
 

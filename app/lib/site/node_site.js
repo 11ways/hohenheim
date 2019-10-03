@@ -310,17 +310,66 @@ Site.setMethod(function update(record) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.0
+ * @version  0.4.0
  *
  * @param    {Function}   callback
  */
 Site.setMethod(function start(callback) {
 
-	var that = this;
-
 	if (!callback) {
 		callback = Function.thrower;
 	}
+
+	if (this.use_ports) {
+		this.startWithPorts(callback);
+	} else {
+		this.startWithSocket(callback);
+	}
+});
+
+/**
+ * Start on a port
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @param    {Function}   callback
+ */
+Site.setMethod(function startWithSocket(callback) {
+
+	const that = this;
+
+	// Increase the requested count
+	// (Because the `running` count won't be incremented until `startOnPort`)
+	this.requested++;
+
+	// Get the port
+	this.parent.getSocketfile(this, function gotFile(err, path_to_socket) {
+
+		// Decrease the requested count again
+		that.requested--;
+
+		if (err) {
+			return callback(err);
+		}
+
+		that.startOnSocket(path_to_socket, callback);
+	});
+});
+
+/**
+ * Start on a port
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @param    {Function}   callback
+ */
+Site.setMethod(function startWithPorts(callback) {
+
+	const that = this;
 
 	// Increase the requested count
 	// (Because the `running` count won't be incremented until `startOnPort`)
@@ -423,6 +472,21 @@ Site.setMethod(function saveProclog(proc) {
 	});
 });
 
+
+/**
+ * Start a new process on the specified socket file
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @param    {String}     path_to_socket
+ * @param    {Function}   callback
+ */
+Site.setMethod(function startOnSocket(path_to_socket, callback) {
+	this._startOnType('socket', path_to_socket, callback);
+});
+
 /**
  * Start a new process on the specified port
  *
@@ -430,11 +494,28 @@ Site.setMethod(function saveProclog(proc) {
  * @since    0.0.1
  * @version  0.3.0
  *
+ * @param    {Number}     port
  * @param    {Function}   callback
  */
 Site.setMethod(function startOnPort(port, callback) {
+	this._startOnType('port', port, callback);
+});
+
+/**
+ * Start a new process on the specified port
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.0.1
+ * @version  0.3.0
+ *
+ * @param    {String}            type
+ * @param    {Number|String}     value
+ * @param    {Function}          callback
+ */
+Site.setMethod(function _startOnType(type, value, callback) {
 
 	var that = this,
+	    path_to_socket,
 	    processStats,
 	    node_config,
 	    child_proc,
@@ -449,7 +530,13 @@ Site.setMethod(function startOnPort(port, callback) {
 		return callback(new Error('No script has been set'));
 	}
 
-	log.info('Starting node script', this.settings.script, 'on port', port);
+	if (type == 'port') {
+		port = value;
+		log.info('Starting node script', this.settings.script, 'on port', port);
+	} else {
+		path_to_socket = value;
+		log.info('Starting node script', this.settings.script, 'on socket', path_to_socket);
+	}
 
 	if (!this.cwd) {
 		return callback(new Error('Working directory is not set, can not start script!'));
@@ -472,6 +559,11 @@ Site.setMethod(function startOnPort(port, callback) {
 	// then we use the system-wide node version
 	if (!node_config) {
 		node_config = versions.system;
+
+		if (!node_config) {
+			return callback(new Error('Not a single node version was found'));
+		}
+
 		log.info(' -', 'Falling back to using system node instance v' + node_config.version);
 	}
 
@@ -491,13 +583,25 @@ Site.setMethod(function startOnPort(port, callback) {
 		}
 	}
 
-	env.PORT = port;
+	if (path_to_socket) {
 
-	args = [
-		this.settings.script,
-		'--port=' + port,
-		'hohenchild'
-	];
+		env.PORT = path_to_socket;
+		env.PATH_TO_SOCKET = path_to_socket;
+
+		args = [
+			this.settings.script,
+			'--port=' + path_to_socket,
+			'hohenchild'
+		];
+	} else {
+		env.PORT = port;
+
+		args = [
+			this.settings.script,
+			'--port=' + port,
+			'hohenchild'
+		];
+	}
 
 	if (this.default_args) {
 		let i;
@@ -531,14 +635,23 @@ Site.setMethod(function startOnPort(port, callback) {
 		that.onStdout(child_proc, data);
 	});
 
-	// Store the port it should be running on
-	child_proc.port = port;
+	if (path_to_socket) {
+		child_proc.path_to_socket = path_to_socket;
+	} else {
+		// Store the port it should be running on
+		child_proc.port = port;
+	}
 
 	// Store the time this was started
 	child_proc.startTime = Date.now();
 
 	// When overload started
 	child_proc.startOverload = 0;
+
+	// Add a cache instance for remembering fingerprints
+	child_proc.fingerprints = new Blast.Classes.Develry.Cache({
+		max_idle: '1 hour'
+	});
 
 	this.processes[child_proc.pid] = child_proc;
 
@@ -772,41 +885,94 @@ Site.setMethod(function processExit(process, code, signal) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.0
+ * @version  0.4.0
  *
- * @param    {Function}   callback
- * @param    {Number}     attempt
+ * @param    {IncomingMessage}  req
+ * @param    {Function}         callback
+ * @param    {Number}           attempt
  */
-Site.setMethod(function getAddress(callback, attempt) {
+Site.setMethod(function getAddress(req, callback, attempt) {
 
 	var that = this,
-	    fnc;
+	    fingerprint,
+	    fnc,
+	    ip;
+
+	if (req) {
+		if (req.headers) {
+			ip = req.headers['x-forwarded-for'] || req.headers['x-real-ip'];
+			fingerprint = (req.headers['user-agent'] || '') + (req.headers['accept-language'] || '');
+		}
+
+		if (!ip && req.connection) {
+			ip = req.connection.remoteAddress;
+		}
+
+		if (!ip) {
+			ip = '';
+		}
+
+		fingerprint = ip + fingerprint;
+	}
 
 	fnc = function addressCreator() {
 
-		var site_process,
-		    url,
+		var found_fingerprinted = false,
+		    site_process,
+		    address,
 		    i;
 
 		// Shuffle the process list
 		if (that.process_list.length > 1) {
-			that.process_list.shuffle();
 
-			for (i = 0; i < that.process_list.length; i++) {
-				site_process = that.process_list[i];
+			// If a fingerprint is given, look for it first
+			if (fingerprint) {
+				for (i = 0; i < that.process_list.length; i++) {
+					site_process = that.process_list[i];
 
-				if (site_process.cpu > 95) {
-					continue;
-				} else {
-					break;
+					if (site_process.fingerprints.get(fingerprint)) {
+						found_fingerprinted = true;
+						break;
+					}
+				}
+			}
+
+			if (!found_fingerprinted) {
+				that.process_list.shuffle();
+
+				for (i = 0; i < that.process_list.length; i++) {
+					site_process = that.process_list[i];
+
+					if (site_process.cpu > 92) {
+						continue;
+					} else {
+						break;
+					}
 				}
 			}
 		} else {
 			site_process = that.process_list[0];
 		}
 
-		url = 'http://' + that.redirectHost + ':' + site_process.port;
-		return callback(null, url);
+		if (!site_process) {
+			return callback(new Error('No running site process was found'));
+		}
+
+		// If a fingerprint was found, but no process matches,
+		// set the current process
+		if (fingerprint && !found_fingerprinted) {
+			site_process.fingerprints.set(fingerprint, true);
+		}
+
+		if (site_process.path_to_socket) {
+			address = {
+				socketPath: site_process.path_to_socket
+			};
+		} else {
+			address = 'http://' + that.redirectHost + ':' + site_process.port;
+		}
+
+		return callback(null, address);
 	};
 
 	if (!this.ready) {
@@ -849,7 +1015,7 @@ Site.setMethod(function startMinimumServers() {
 			for (; count < that.settings.minimum_processes; count++) {
 				if (count == 0) {
 					// Use `getAddress` to get the first server
-					that.getAddress(Function.thrower);
+					that.getAddress(null, Function.thrower);
 				} else {
 					that.start();
 				}
@@ -865,30 +1031,32 @@ Site.setMethod(function startMinimumServers() {
  * @since         0.2.0
  * @version       0.2.0
  */
-alchemy.sputnik.beforeSerial('startServer', function getNodeVersions(done) {
+alchemy.sputnik.before('start_server', function getNodeVersions(done) {
 
-	// We have to wait for blast & classes to have loaded
-	Blast.loaded(function hasLoaded() {
-		// Update all the node versions
-		Site.updateVersions(function gotVersions(err, versions) {
+	let pledge = new Pledge();
 
-			if (err) {
-				log.error('Error getting node versions:', err);
-				return done();
-			}
+	// Update all the node versions
+	Site.updateVersions(function gotVersions(err, versions) {
 
-			let entry,
-			    key;
+		if (err) {
+			log.error('Error getting node versions:', err);
+			pledge.resolve();
+			return;
+		}
 
-			log.info('Got', Object.size(versions), 'node versions');
+		let entry,
+		    key;
 
-			for (key in versions) {
-				entry = versions[key];
+		log.info('Got', Object.size(versions), 'node versions');
 
-				log.info(' -', entry.version, '(' + entry.title + ')', '@', entry.bin);
-			}
+		for (key in versions) {
+			entry = versions[key];
 
-			done();
-		});
+			log.info(' -', entry.version, '(' + entry.title + ')', '@', entry.bin);
+		}
+
+		pledge.resolve();
 	});
+
+	return pledge;
 });

@@ -1,3 +1,10 @@
+## 0.4.0 (WIP)
+
+* Begin upgrading to Alchemy v1.1.0
+* Use socketfiles for node.js sites by default
+* Add sticky routing (always route same client to the same instance)
+* TODO: Switch to http2-proxy?
+
 ## 0.3.4 (2019-06-28)
 
 * Add **Redirect** site class
