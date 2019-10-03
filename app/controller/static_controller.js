@@ -72,11 +72,18 @@ Static.setAction(function sitestat(conduit) {
 
 		proc = site.processes[pid];
 
+		// Prune the fingerprints cache
+		if (proc.fingerprints) {
+			proc.fingerprints.prune();
+		}
+
 		result.processes[pid] = {
-			startTime : proc.startTime,
-			port      : proc.port,
-			cpu       : proc.cpu,
-			mem       : proc.mem
+			startTime    : proc.startTime,
+			port         : proc.port,
+			cpu          : proc.cpu,
+			mem          : proc.mem,
+			isolate      : proc.isolate,
+			fingerprints : proc.fingerprints.length,
 		};
 	}
 
@@ -129,6 +136,52 @@ Static.setAction(function sitestatKill(conduit) {
 	proc.kill();
 
 	conduit.end({success: 'process killed'});
+});
+
+
+/**
+ * Kill the requested pid
+ *
+ * @author   Jelle De Loecker   <jelle@kipdola.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ */
+Static.setAction(function sitestatIsolate(conduit) {
+
+	var user = conduit.session('UserData');
+
+	if (!user) {
+		return conduit.notAuthorized();
+	}
+
+	let data   = conduit.param(),
+	    siteId = alchemy.castObjectId(data.id);
+
+	if (!siteId) {
+		return conduit.error(new Error('No site_id given'));
+	}
+
+	if (!alchemy.dispatcher) {
+		return conduit.end({success: false});
+	}
+
+	let site = alchemy.dispatcher.ids[siteId];
+
+	if (!site) {
+		return conduit.error(new Error('Site "' + siteId + '" does not exist'));
+	}
+
+	log.info('Manual isolation requested for pid', data.pid);
+
+	let proc = site.processes[data.pid];
+
+	if (!proc) {
+		return conduit.error(new Error('pid does not exist'));
+	}
+
+	proc.isolate = true;
+
+	conduit.end({success: 'process isolated'});
 });
 
 /**

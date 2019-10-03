@@ -21,6 +21,13 @@ Router.add({
 });
 
 Router.add({
+	name       : 'sitestat-isolate',
+	methods    : 'get',
+	paths      : '/api/sitestat/isolate',
+	handler    : 'Static#sitestatIsolate',
+});
+
+Router.add({
 	name       : 'sitestat-log',
 	methods    : 'get',
 	paths      : '/api/sitestat/log',

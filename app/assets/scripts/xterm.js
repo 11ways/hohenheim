@@ -7441,4 +7441,3 @@ module.exports = Terminal_1.Terminal;
 
 },{"./Terminal":16}]},{},[47])(47)
 });
-//# sourceMappingURL=xterm.js.map

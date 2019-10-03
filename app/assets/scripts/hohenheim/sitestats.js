@@ -7,7 +7,7 @@
  *
  * @param    {ObjectId}   siteId
  */
-var updateSite = function updateSite(siteId) {
+var updateSite = function updateSite(siteId, update_logs) {
 
 	var $this,
 	    open_term;
@@ -16,10 +16,14 @@ var updateSite = function updateSite(siteId) {
 		return;
 	}
 
+	if (update_logs == null) {
+		update_logs = true;
+	}
+
 	$this = $('div[data-site-stats][data-site-id="' + siteId + '"]');
 	$logs = $('div[data-site-logs][data-site-id="' + siteId + '"]');
 
-	hawkejs.scene.helpers.Alchemy.getResource('sitestat', {id: siteId}, function(err, result) {
+	hawkejs.scene.helpers.Alchemy.getResource('sitestat', {id: siteId}, function gotSitestats(err, result) {
 
 		var process,
 		    html,
@@ -33,7 +37,7 @@ var updateSite = function updateSite(siteId) {
 		}
 
 		html = '<table class="table table-striped">';
-		html += '<tr><th>Pid</th><th>Port</th><th>Uptime</th><th>Cpu</th><th>Memory</th><th>Actions</th></tr>';
+		html += '<tr><th>Pid</th><th>Port</th><th>Fingerprints</th><th>Uptime</th><th>Cpu</th><th>Memory</th><th>Actions</th></tr>';
 
 		for (pid in result.processes) {
 
@@ -53,7 +57,19 @@ var updateSite = function updateSite(siteId) {
 			html += '<tr>';
 
 			html += '<td>' + pid + '</td>';
-			html += '<td><a href="http://' + location.hostname + ':' + process.port + '">' + process.port + '</a></td>';
+			html += '<td>';
+
+			if (process.port) {
+				html += '<a href="http://' + location.hostname + ':' + process.port + '">' + process.port + '</a><br>';
+			}
+
+			if (process.isolate) {
+				html += 'ISOLATED';
+			}
+
+			html += '</td>';
+
+			html += '<td>' + (process.fingerprints || 0) + '</td>';
 
 			html += '<td><span class="timeago" datetime="';
 			html +=  (new Date(process.startTime)).format('Y-m-d H:i:s') + '"></span></td>'
@@ -68,6 +84,10 @@ var updateSite = function updateSite(siteId) {
 			html += '<td>';
 
 			html += '<button class="btn btn-danger" data-kill-pid="' + pid + '"><i class="fa fa-crosshairs"></i> Kill</button> ';
+
+			if (!process.isolate) {
+				html += '<button class="btn btn-warning" data-isolate-pid="' + pid + '"><i class="fa fa-crosshairs"></i> Isolate</button> ';
+			}
 
 			html += '<button class="btn btn-success" data-term-pid="' + pid + '"><i class="fa fa-terminal"></i> Terminal</button> ';
 
@@ -102,6 +122,24 @@ var updateSite = function updateSite(siteId) {
 					chimeraFlash(data.err);
 				} else {
 					chimeraFlash('Process ' + $this.attr('data-kill-pid') + ' has been killed');
+					updateSite(siteId);
+				}
+			});
+		});
+
+		// Isolate a process
+		$this.on('click', 'button[data-isolate-pid]', function(e) {
+
+			var $this = $(this);
+
+			e.preventDefault();
+
+			hawkejs.scene.helpers.Alchemy.getResource('sitestat-isolate', {id: siteId, pid: $this.attr('data-isolate-pid')}, function isolated(err, data) {
+
+				if (data.err) {
+					chimeraFlash(data.err);
+				} else {
+					chimeraFlash('Process ' + $this.attr('data-isolate-pid') + ' has been isolated');
 					updateSite(siteId);
 				}
 			});
@@ -172,7 +210,20 @@ var updateSite = function updateSite(siteId) {
 				link.submit('propose_geometry', geo);
 			}, 50);
 		});
+
+		setTimeout(function refresh() {
+			if ($this.is(':visible')) {
+				updateSite(siteId, false);
+			} else {
+				// @TODO; add a check to see if the element has actually been REMOVED
+				setTimeout(refresh, 30 * 1000);
+			}
+		}, 15 * 1000)
 	});
+
+	if (!update_logs) {
+		return;
+	}
 
 	// Show available logs
 	hawkejs.scene.helpers.Alchemy.getResource('sitestat-logs', {id: siteId}, function(err, result) {

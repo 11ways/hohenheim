@@ -3,6 +3,7 @@
 * Begin upgrading to Alchemy v1.1.0
 * Use socketfiles for node.js sites by default
 * Add sticky routing (always route same client to the same instance)
+* Node sites can now be "isolated", meaning they will only serve already seen clients
 * TODO: Switch to http2-proxy?
 
 ## 0.3.4 (2019-06-28)

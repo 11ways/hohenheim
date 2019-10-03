@@ -287,6 +287,60 @@ Site.setProperty(function total_proc_count() {
 });
 
 /**
+ * The number of active processes
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @type     {Number}
+ */
+Site.setProperty(function active_process_count() {
+
+	var result = 0,
+	    proc,
+	    i;
+
+	for (i = 0; i < this.process_list.length; i++) {
+		proc = this.process_list[i];
+
+		if (proc.isolate) {
+			continue;
+		}
+
+		result++;
+	}
+
+	return result;
+});
+
+/**
+ * The number of inactive (isolated) processes
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @type     {Number}
+ */
+Site.setProperty(function inactive_process_count() {
+
+	var result = 0,
+	    proc,
+	    i;
+
+	for (i = 0; i < this.process_list.length; i++) {
+		proc = this.process_list[i];
+
+		if (proc.isolate) {
+			result++;
+		}
+	}
+
+	return result;
+});
+
+/**
  * Update this site,
  * recreate the entries in the parent dispatcher
  *
@@ -648,6 +702,9 @@ Site.setMethod(function _startOnType(type, value, callback) {
 	// When overload started
 	child_proc.startOverload = 0;
 
+	// Processes can be "isolated", meaning they no longer get new clients
+	child_proc.isolated = false;
+
 	// Add a cache instance for remembering fingerprints
 	child_proc.fingerprints = new Blast.Classes.Develry.Cache({
 		max_idle: '1 hour'
@@ -745,7 +802,7 @@ Site.setMethod(function _startOnType(type, value, callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.3.0
+ * @version  0.4.0
  *
  * @param    {ChildProcess}   process
  * @param    {Number}         cpu       Cpu usage in percentage
@@ -755,6 +812,15 @@ Site.setMethod(function processStats(process, cpu, mem) {
 
 	process.cpu = ~~cpu;
 	process.mem = ~~(mem/1024);
+
+	if (process.isolate) {
+
+		if (process.fingerprints && process.fingerprints.length == 0) {
+			process.kill();
+		}
+
+		return;
+	}
 
 	if (cpu > 50) {
 		let now = Date.now();
@@ -786,7 +852,7 @@ Site.setMethod(function processStats(process, cpu, mem) {
 
 			if (!process.startIdle) {
 				process.startIdle = now;
-			} else if (now - process.startIdle > 180000 && this.process_list.length > min_proc) {
+			} else if (now - process.startIdle > 180000 && this.active_process_count > min_proc) {
 				// Kill this process, because we have at least 1
 				// (or more then the minimum_processes) process running
 				process.kill();
@@ -942,6 +1008,12 @@ Site.setMethod(function getAddress(req, callback, attempt) {
 
 				for (i = 0; i < that.process_list.length; i++) {
 					site_process = that.process_list[i];
+
+					// Isolated processes should no longer
+					// serve new clients
+					if (site_process.isolated) {
+						continue;
+					}
 
 					if (site_process.cpu > 92) {
 						continue;
