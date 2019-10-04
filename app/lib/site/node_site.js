@@ -45,7 +45,7 @@ var Site = Function.inherits('Develry.Site', function NodeSite(siteDispatcher, r
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.1.0
- * @version  0.3.0
+ * @version  0.4.0
  */
 Site.constitute(function addFields() {
 
@@ -66,6 +66,9 @@ Site.constitute(function addFields() {
 
 	// Maximum amount of processes?
 	this.schema.addField('maximum_processes', 'Number');
+
+	// API keys for Hohenheim actions
+	this.schema.addField('api_keys', 'String', {array: true});
 
 	// Create new subschema for environment variables
 	let env_schema = new Classes.Alchemy.Schema(this);
@@ -1092,6 +1095,103 @@ Site.setMethod(function startMinimumServers() {
 					that.start();
 				}
 			}
+		}
+	});
+});
+
+/**
+ * Handle an incoming request
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ * 
+ * @param    {IncomingMessage}    req
+ * @param    {ServerResponse}     res
+ */
+Site.setMethod(function handleRequest(req, res) {
+
+	if (req.headers['x-hohenheim-key'] && this.settings.api_keys && this.settings.api_keys.length) {
+		let result = this.handleApiRequest(req, res);
+
+		if (result) {
+			return;
+		}
+	}
+
+	return handleRequest.super.call(this, req, res);
+});
+
+/**
+ * Handle a Hohenheim api request
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ * 
+ * @param    {IncomingMessage}    req
+ * @param    {ServerResponse}     res
+ */
+Site.setMethod(function handleApiRequest(req, res) {
+
+	var actions = req.headers['x-hohenheim-action'],
+	    key     = req.headers['x-hohenheim-key'];
+
+	if (!key || !actions) {
+		return false;
+	}
+
+	if (this.settings.api_keys.indexOf(key) === -1) {
+		return false;
+	}
+
+	actions = actions.split(',');
+
+	let action;
+
+	for (action of actions) {
+		if (action == 'broadcast') {
+			this.handleApiBroadcast(req);
+		}
+	}
+
+	res.end();
+
+	return true;
+});
+
+/**
+ * Handle a Hohenheim api broadcast request
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ * 
+ * @param    {IncomingMessage}    req
+ */
+Site.setMethod(function handleApiBroadcast(req) {
+
+	const that = this;
+
+	// Make sure a server has been started
+	this.startMinimumServers();
+
+	alchemy.parseRequestBody(req, function gotBody(err, body) {
+
+		if (err) {
+			return;
+		}
+
+		let proc,
+		    key;
+
+		for (key in that.processes) {
+			proc = that.processes[key];
+
+			proc.send({
+				type: 'hohenheim_broadcast',
+				body: body
+			});
 		}
 	});
 });
