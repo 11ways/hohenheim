@@ -7,15 +7,15 @@ var libpath = require('path');
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.4.0
  *
  * @param    {Develry.SiteDispatcher}   siteDispatcher
  * @param    {Object}                   record
  */
 var Site = Function.inherits('Alchemy.Base', 'Develry', function Site(siteDispatcher, record) {
 
-	// The parent site dispatcher
-	this.parent = siteDispatcher;
+	// The site dispatcher
+	this.dispatcher = siteDispatcher;
 
 	// The id in the database
 	this.id = record._id;
@@ -43,6 +43,9 @@ var Site = Function.inherits('Alchemy.Base', 'Develry', function Site(siteDispat
 
 	this.update(record);
 });
+
+// Use "dispatcher" instead of "parent" property
+Site.setDeprecatedProperty('parent', 'dispatcher');
 
 /**
  * This is a wrapper class
@@ -213,19 +216,19 @@ Site.setMethod(function cleanParent() {
 	var domain,
 	    name;
 
-	delete this.parent.ids[this.id];
+	delete this.dispatcher.ids[this.id];
 
 	// Remove this instance from the parent's domains
-	for (domain in this.parent.domains) {
-		if (this.parent.domains[domain] == this) {
-			delete this.parent.domains[domain];
+	for (domain in this.dispatcher.domains) {
+		if (this.dispatcher.domains[domain] == this) {
+			delete this.dispatcher.domains[domain];
 		}
 	}
 
-	// Remove this instance from the parent's names
-	for (name in this.parent.names) {
-		if (this.parent.names[name] == this) {
-			delete this.parent.names[name];
+	// Remove this instance from the dispatcher's names
+	for (name in this.dispatcher.names) {
+		if (this.dispatcher.names[name] == this) {
+			delete this.dispatcher.names[name];
 		}
 	}
 });
@@ -260,7 +263,7 @@ Site.setMethod(function update(record) {
 	this.remove();
 
 	// Add by id
-	this.parent.ids[this.id] = this;
+	this.dispatcher.ids[this.id] = this;
 
 	// Store it by each domain name
 	this.domains.forEach(function eachDomain(domain) {
@@ -300,14 +303,14 @@ Site.setMethod(function update(record) {
 
 				// Ignore accidental 'null' (string) values
 				if (hostname && hostname != 'null') {
-					that.parent.domains[hostname] = temp;
+					that.dispatcher.domains[hostname] = temp;
 				}
 			});
 		}
 	});
 
 	// Re-add the instance by name
-	this.parent.names[this.name] = this;
+	this.dispatcher.names[this.name] = this;
 
 	// Emit the updat event
 	this.emit('updated');

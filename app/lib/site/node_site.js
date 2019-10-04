@@ -399,7 +399,7 @@ Site.setMethod(function startWithSocket(callback) {
 	this.requested++;
 
 	// Get the port
-	this.parent.getSocketfile(this, function gotFile(err, path_to_socket) {
+	this.dispatcher.getSocketfile(this, function gotFile(err, path_to_socket) {
 
 		// Decrease the requested count again
 		that.requested--;
@@ -430,7 +430,7 @@ Site.setMethod(function startWithPorts(callback) {
 	this.requested++;
 
 	// Get the port
-	this.parent.getPort(this, function gotPort(err, port) {
+	this.dispatcher.getPort(this, function gotPort(err, port) {
 
 		// Decrease the requested count again
 		that.requested--;
@@ -872,7 +872,7 @@ Site.setMethod(function processStats(process, cpu, mem) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.3.2
+ * @version  0.4.0
  *
  * @param    {ChildProcess}   process
  * @param    {Number}         code
@@ -891,7 +891,7 @@ Site.setMethod(function processExit(process, code, signal) {
 	this.exit_log.push(now);
 
 	// Tell the parent this port is free again
-	this.parent.freePort(process.port);
+	this.dispatcher.freePort(process.port);
 
 	// Decrease the running counter
 	this.running--;
@@ -1067,13 +1067,13 @@ Site.setMethod(function getAddress(req, callback, attempt) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.3.0
- * @version  0.3.0
+ * @version  0.4.0
  */
 Site.setMethod(function startMinimumServers() {
 
 	var that = this;
 
-	this.parent.queue.add(function startServersWhenReady() {
+	this.dispatcher.queue.add(function startServersWhenReady() {
 		var key;
 
 		if (that.settings
