@@ -67,6 +67,19 @@ Site.setProperty(function schema() {
 });
 
 /**
+ * Remote cache the instances can use
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @type     {Develry.Cache}
+ */
+Site.prepareProperty(function remcache() {
+	return new Classes.Develry.Cache();
+});
+
+/**
  * Set the site type schema
  *
  * @author   Jelle De Loecker   <jelle@develry.be>

@@ -760,8 +760,12 @@ Site.setMethod(function _startOnType(type, value, callback) {
 		}
 	}
 
-	// Listen for the message from the child process
-	child_proc.on('message', function listenForReady(message) {
+	let reciprocal = new Classes.Alchemy.Reciprocal(child_proc, 'hohenheim');
+
+	child_proc.reciprocal = reciprocal;
+
+	// Listen for messages from the child process
+	reciprocal.on('message', function onMessage(message) {
 
 		var data;
 
@@ -769,16 +773,18 @@ Site.setMethod(function _startOnType(type, value, callback) {
 			return;
 		}
 
-		// Emit the child's message
-		that.emit('child_message', child_proc, message);
-
 		data = message.hohenheim || message.alchemy;
 
-		if (!data || !that.settings.wait_for_ready) {
+		if (!data) {
 			return;
 		}
 
-		if (data.ready) {
+		if (data.ready && that.settings.wait_for_ready) {
+
+			// If it's already ready, just ignore it
+			if (child_proc.ready) {
+				return;
+			}
 
 			// Add this to the process object
 			child_proc.ready = true;
@@ -792,12 +798,31 @@ Site.setMethod(function _startOnType(type, value, callback) {
 			if (callback) callback();
 
 			// Remove the event listener
-			child_proc.removeListener('message', listenForReady);
+			child_proc.removeListener('message', onMessage);
 		} else if (!child_proc.ready && data.error && data.error.code == 'EADDRINUSE') {
 			// Try again if the port is already in use
 			that.start(callback);
 		}
 	});
+
+	// Listen for remcache requests
+	reciprocal.on('remcache_set', function onRemcacheSet(data) {
+		that.remcache.set(data.key, data.value, data.max_age);
+	});
+
+	reciprocal.on('remcache_get', function onRemcacheGet(data, callback) {
+		let value = that.remcache.get(data.key);
+		callback(null, value);
+	});
+
+	reciprocal.on('remcache_peek', function onRemcachePeek(data, callback) {
+		let value = that.remcache.peek(data.key);
+		callback(null, value);
+	});
+
+	reciprocal.on('remcache_remove', function onRemcacheRemove(data) {
+		that.remcache.remove(data.key);
+	})
 });
 
 /**
