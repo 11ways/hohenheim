@@ -373,7 +373,7 @@ SiteDispatcher.setMethod(function startProxy() {
 
 			// Make readable by everyone
 			if (alchemy.settings.socketfile_chmod) {
-				fs.chmodSync(address, settings.socketfile_chmod);
+				fs.chmodSync(address, alchemy.settings.socketfile_chmod);
 			}
 		}
 	});
