@@ -4,6 +4,7 @@
 * Use socketfiles for node.js sites by default
 * Add sticky routing (always route same client to the same instance)
 * Node sites can now be "isolated", meaning they will only serve already seen clients
+* Add a `handleRequest` method to the Site class
 * TODO: Switch to http2-proxy?
 
 ## 0.3.4 (2019-06-28)

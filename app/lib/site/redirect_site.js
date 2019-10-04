@@ -15,15 +15,6 @@ var RedirectSite = Function.inherits('Develry.Site', function RedirectSite(siteD
 });
 
 /**
- * Let the hohenheim handle this request
- *
- * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.3.4
- * @version  0.3.4
- */
-RedirectSite.setProperty('handle_internally', true);
-
-/**
  * Add the site type fields
  *
  * @author   Jelle De Loecker   <jelle@develry.be>

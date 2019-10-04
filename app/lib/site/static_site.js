@@ -17,15 +17,6 @@ var StaticSite = Function.inherits('Develry.Site', function StaticSite(siteDispa
 });
 
 /**
- * Let the hohenheim handle this request
- *
- * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.3.2
- * @version  0.3.2
- */
-StaticSite.setProperty('handle_internally', true);
-
-/**
  * Get the ecstatic instance
  *
  * @author   Jelle De Loecker   <jelle@develry.be>

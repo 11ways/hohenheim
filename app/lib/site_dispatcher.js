@@ -764,7 +764,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.3.0
+ * @version  0.4.0
  * 
  * @param    {IncomingMessage}    req
  * @param    {ServerResponse}     res
@@ -858,27 +858,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 		}
 
 		site.site.checkBasicAuth(req, res, function done() {
-
-			if (site.site.handle_internally === true) {
-				return site.site.handleRequest(req, res);
-			}
-
-			site.site.getAddress(req, function gotAddress(err, address) {
-
-				if (err) {
-					res.writeHead(500, {'Content-Type': 'text/plain'});
-					res.end('' + err);
-					return;
-				}
-
-				if (site.site.settings.delay) {
-					setTimeout(function doDelay() {
-						that.proxy.web(req, res, {target: address});
-					}, site.site.settings.delay);
-				} else {
-					that.proxy.web(req, res, {target: address});
-				}
-			});
+			site.site.handleRequest(req, res);
 		});
 	}
 });

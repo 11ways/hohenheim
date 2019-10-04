@@ -493,3 +493,35 @@ Site.setMethod(function registerHit(req, res, callback) {
 		}
 	}
 });
+
+/**
+ * Handle an incoming request
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ * 
+ * @param    {IncomingMessage}    req
+ * @param    {ServerResponse}     res
+ */
+Site.setMethod(function handleRequest(req, res) {
+
+	const that = this;
+
+	this.getAddress(req, function gotAddress(err, address) {
+
+		if (err) {
+			res.writeHead(500, {'Content-Type': 'text/plain'});
+			res.end('' + err);
+			return;
+		}
+
+		if (that.settings.delay) {
+			setTimeout(function doDelay() {
+				that.dispatcher.proxy.web(req, res, {target: address});
+			}, that.settings.delay);
+		} else {
+			that.dispatcher.proxy.web(req, res, {target: address});
+		}
+	});
+});
