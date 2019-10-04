@@ -111,7 +111,7 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.3.2
- * @version  0.3.2
+ * @version  0.4.0
  */
 SiteDispatcher.setMethod(async function init() {
 
@@ -132,6 +132,37 @@ SiteDispatcher.setMethod(async function init() {
 		that.getLocalUsers();
 		that.getLocalIps();
 	}, 60 * 60 * 1000);
+
+	process.on('exit', onExit);
+	process.on('SIGINT', onExit);
+	process.on('SIGUSR1', onExit);
+	process.on('SIGUSR2', onExit);
+
+	function onExit() {
+
+		var site,
+		    proc,
+		    id,
+		    i;
+
+		log.info('Hohenheim is exiting!');
+
+		for (id in that.ids) {
+			site = that.ids[id];
+
+			if (!site.processes) {
+				continue;
+			}
+
+			for (i = 0; i < site.processes.length; i++) {
+				proc = site.processes[i];
+
+				if (proc) {
+					proc.kill();
+				}
+			}
+		}
+	}
 });
 
 /**

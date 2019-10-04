@@ -942,6 +942,11 @@ Site.setMethod(function processExit(process, code, signal) {
 		this.initial_hinder = null;
 	}
 
+	// Remove socket files
+	if (process.path_to_socket) {
+		fs.unlink(process.path_to_socket, Function.dummy);
+	}
+
 	// Remove the process from the processes object
 	delete this.processes[process.pid];
 
