@@ -347,8 +347,36 @@ SiteDispatcher.setMethod(function startProxy() {
 		that.websocketRequest(req, socket, head);
 	});
 
+	// Are we using a socket file?
+	if (typeof this.proxyPort == 'string' && !parseInt(this.proxyPort)) {
+		let stat;
+
+		try {
+			stat = fs.statSync(this.proxyPort);
+		} catch (err) {
+			// File not found, so it's safe to use
+		}
+
+		if (stat) {
+			log.info('Found existing socketfile at', this.proxyPort, ', need to remove it');
+			fs.unlinkSync(this.proxyPort);
+		}
+	}
+
 	// Make the proxy server listen on the given port
-	this.server.listen(this.proxyPort);
+	this.server.listen(this.proxyPort, function areListening() {
+
+		var address = that.server.address();
+
+		if (typeof address == 'string') {
+			log.info('HTTP server listening on socket file', address);
+
+			// Make readable by everyone
+			if (alchemy.settings.socketfile_chmod) {
+				fs.chmodSync(address, settings.socketfile_chmod);
+			}
+		}
+	});
 
 	// Do not limit the incoming connections
 	this.server.maxHeadersCount = 0;
