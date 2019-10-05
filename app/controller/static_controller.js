@@ -179,7 +179,7 @@ Static.setAction(function sitestatIsolate(conduit) {
 		return conduit.error(new Error('pid does not exist'));
 	}
 
-	proc.isolate = true;
+	proc.isolated = true;
 
 	conduit.end({success: 'process isolated'});
 });

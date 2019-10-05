@@ -307,7 +307,7 @@ Site.setProperty(function active_process_count() {
 	for (i = 0; i < this.process_list.length; i++) {
 		proc = this.process_list[i];
 
-		if (proc.isolate) {
+		if (proc.isolated) {
 			continue;
 		}
 
@@ -335,7 +335,7 @@ Site.setProperty(function inactive_process_count() {
 	for (i = 0; i < this.process_list.length; i++) {
 		proc = this.process_list[i];
 
-		if (proc.isolate) {
+		if (proc.isolated) {
 			result++;
 		}
 	}
@@ -841,7 +841,7 @@ Site.setMethod(function processStats(process, cpu, mem) {
 	process.cpu = ~~cpu;
 	process.mem = ~~(mem/1024);
 
-	if (process.isolate) {
+	if (process.isolated) {
 
 		if (process.fingerprints && process.fingerprints.length == 0) {
 			process.kill();
