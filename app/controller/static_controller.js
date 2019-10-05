@@ -82,7 +82,7 @@ Static.setAction(function sitestat(conduit) {
 			port         : proc.port,
 			cpu          : proc.cpu,
 			mem          : proc.mem,
-			isolate      : proc.isolate,
+			isolated     : proc.isolated,
 			fingerprints : proc.fingerprints.length,
 		};
 	}

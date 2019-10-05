@@ -63,7 +63,7 @@ var updateSite = function updateSite(siteId, update_logs) {
 				html += '<a href="http://' + location.hostname + ':' + process.port + '">' + process.port + '</a><br>';
 			}
 
-			if (process.isolate) {
+			if (process.isolated) {
 				html += 'ISOLATED';
 			}
 
@@ -85,7 +85,7 @@ var updateSite = function updateSite(siteId, update_logs) {
 
 			html += '<button class="btn btn-danger" data-kill-pid="' + pid + '"><i class="fa fa-crosshairs"></i> Kill</button> ';
 
-			if (!process.isolate) {
+			if (!process.isolated) {
 				html += '<button class="btn btn-warning" data-isolate-pid="' + pid + '"><i class="fa fa-crosshairs"></i> Isolate</button> ';
 			}
 
