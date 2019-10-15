@@ -306,7 +306,9 @@ SiteDispatcher.setMethod(function startProxy() {
 			proxyReq.setHeader('X-Forwarded-For', forwarded_for);
 		}
 
-		proxyReq.setHeader('X-Forwarded-Host', req.headers['host']);
+		if (req.headers['host']) {
+			proxyReq.setHeader('X-Forwarded-Host', req.headers['host']);
+		}
 
 		// Get the target site
 		site = that.getSite(req);
