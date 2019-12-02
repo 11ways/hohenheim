@@ -531,10 +531,10 @@ Site.setMethod(function handleRequest(req, res) {
 
 		if (that.settings.delay) {
 			setTimeout(function doDelay() {
-				that.dispatcher.proxy.web(req, res, {target: address});
+				that.dispatcher.forwardRequest(req, res, address);
 			}, that.settings.delay);
 		} else {
-			that.dispatcher.proxy.web(req, res, {target: address});
+			that.dispatcher.forwardRequest(req, res, address);
 		}
 	});
 });

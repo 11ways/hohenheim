@@ -7,7 +7,8 @@
 * Add a `handleRequest` method to the Site class
 * Allow broadcasting messages to multiple node instances
 * Upgrade to the latest Greenlock version (big changes for the Letsencrypt API)
-* TODO: Switch to http2-proxy?
+* Remove spdy in favor of internal http2 module
+* Switch to http2-proxy, because http-proxy is not compatible with http2
 
 ## 0.3.4 (2019-06-28)
 

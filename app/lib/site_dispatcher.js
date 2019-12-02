@@ -3,9 +3,9 @@ var site_types  = alchemy.getClassGroup('site_type'),
     GreenLock   = alchemy.use('greenlock'),
     local_ips   = alchemy.shared('local_ips'),
     local_users = alchemy.shared('local_users'),
-    httpProxy   = alchemy.use('http-proxy'),
+    http2_proxy = alchemy.use('http2-proxy'),
     libpath     = alchemy.use('path'),
-    spdy        = alchemy.use('spdy'),
+    http2       = alchemy.use('http2'),
     http        = alchemy.use('http'),
     util        = alchemy.use('util'),
     net         = alchemy.use('net'),
@@ -284,62 +284,8 @@ SiteDispatcher.setMethod(function startProxy() {
 	});
 
 	// Create the proxy
-	this.proxy = httpProxy.createProxyServer({agent: agent});
-
-	// Modify proxy request headers
-	this.proxy.on('proxyReq', function onProxyReq(proxyReq, req, res, options) {
-
-		var forwarded_for,
-		    site;
-
-		// Let the target server know hohenheim is in front of it
-		proxyReq.setHeader('X-Proxied-By', 'hohenheim');
-
-		if (req.connection && req.connection.remoteAddress) {
-
-			// See if there already is an x-forwarded-for
-			forwarded_for = req.headers['x-forwarded-for'];
-
-			// If there already was a forwarded header, append to it
-			if (forwarded_for) {
-				forwarded_for += ', ' + req.connection.remoteAddress;
-			} else {
-				forwarded_for = req.connection.remoteAddress;
-			}
-
-			// Set the original ip address
-			proxyReq.setHeader('X-Real-IP', forwarded_for);
-			proxyReq.setHeader('X-Forwarded-For', forwarded_for);
-		}
-
-		if (req.headers['host']) {
-			proxyReq.setHeader('X-Forwarded-Host', req.headers['host']);
-		}
-
-		// Get the target site
-		site = that.getSite(req);
-
-		if (site) {
-			req.hohenheim_site = site;
-
-			// Set the custom header values
-			if (site.domain && site.domain.headers && site.domain.headers.length) {
-				site.domain.headers.forEach(function eachHeader(header) {
-					if (header.name) {
-						proxyReq.setHeader(header.name, header.value);
-					}
-				});
-			}
-		}
-	});
-
-	// Modify proxy response headers
-	this.proxy.on('proxyRes', function onProxyRes(proxyRes, req, res) {
-		if (req.hohenheim_site && req.hohenheim_site.site.modifyResponse) {
-			// The body can't really be modified since we haven't set `selfHandleResponse` yet
-			req.hohenheim_site.site.modifyResponse(res, req, proxyRes, req.hohenheim_site.domain);
-		}
-	});
+	//this.proxy = httpProxy.createProxyServer();
+	this.proxy = http2_proxy;
 
 	// Create the server
 	this.server = http.createServer(this.request.bind(this));
@@ -395,12 +341,6 @@ SiteDispatcher.setMethod(function startProxy() {
 		this.server_ipv6 = http.createServer(this.request.bind(this));
 		this.server_ipv6.listen(this.proxyPort, this.ipv6Address);
 	}
-
-	// Listen for error events
-	this.proxy.on('error', this.requestError.bind(this));
-
-	// Intercept proxy responses
-	//this.proxy.on('proxyRes', this.response.bind(this));
 });
 
 /**
@@ -490,8 +430,9 @@ SiteDispatcher.setMethod(function initGreenlock() {
 		}
 	});
 
-	// Create the HTTPS/http2 server using the `spdy` module
-	this.https_server = spdy.createServer({
+	// Create the HTTPS/http2 server
+	this.https_server = http2.createSecureServer({
+		allowHTTP1  : true,
 		SNICallback : function sniCallback(servername, next) {
 			return that.SNICallback(servername, next);
 		}
@@ -502,6 +443,7 @@ SiteDispatcher.setMethod(function initGreenlock() {
 	// to be sluggish or outright nonfunctional. See
 	// https://github.com/spdy-http2/node-spdy/issues/338 and
 	// https://github.com/nodejs/node/issues/4560.
+	// @TODO: is this still needed now we don't use spdy anymore?
 	this.https_server.on('connection', function onSocket(socket) {
 		// Set the socket's idle timeout in milliseconds. 2 minutes is the default
 		// for Node's HTTPS server. We are currently using SPDY:
@@ -909,7 +851,7 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.2.0
+ * @version  0.4.0
  * 
  * @param    {String|Object}   req_or_domain
  */
@@ -944,7 +886,7 @@ SiteDispatcher.setMethod(function getSite(req_or_domain) {
 	}
 
 	if (headers) {
-		domain = headers.host;
+		domain = headers[':authority'] || headers.host;
 	}
 
 	if (!domain) {
@@ -1032,7 +974,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 	if (!site) {
 
 		if (this.fallbackAddress) {
-			return this.proxy.ws(req, socket, {target: this.fallbackAddress});
+			return that.forwardRequest(req, socket, this.fallbackAddress, head);
 		}
 
 		socket.end('There is no such domain here!');
@@ -1044,7 +986,8 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 				return socket.end('Error: ' + err);
 			}
 
-			that.proxy.ws(req, socket, {target: address});
+			//that.proxy.ws(req, socket, {target: address});
+			that.forwardRequest(req, socket, address, head);			
 		});
 	}
 });
@@ -1069,13 +1012,15 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	    read,
 	    site,
 	    host,
-	    hit;
+	    hit,
+	    key;
 
 	if (skip_le == null) {
 		req.startTime = Date.now();
 	}
 
 	// Use the letsencrypt middleware first
+	// (This looks for the acme challenges)
 	if (skip_le !== true && alchemy.settings.letsencrypt !== false && this.proxyPortHttps) {
 
 		this.greenlockMiddleware(req, res, function done() {
@@ -1113,7 +1058,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	if (!site) {
 
 		if (this.fallbackAddress) {
-			return this.proxy.web(req, res, {target: this.fallbackAddress});
+			return this.forwardRequest(req, res, this.fallbackAddress);
 		}
 
 		res.writeHead(404, {'Content-Type': 'text/plain'});
@@ -1151,6 +1096,127 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 			site.site.handleRequest(req, res);
 		});
 	}
+});
+
+/**
+ * Proxy web request
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @param    {Buffer}   ws_head   The websocket head buffer
+ */
+SiteDispatcher.setMethod(function forwardRequest(req, res, forward_address, ws_head) {
+
+	var config = {};
+
+	// Original http-proxy forwarding
+	//this.proxy.web(req, res, {target: forward_address});
+
+	// @TODO: parse the forward address earlier?
+	if (typeof forward_address == 'string') {
+		let url = RURL.parse(forward_address);
+
+		config.hostname = url.hostname;
+		config.port = url.port || 80;
+		config.protocol = url.protocol.slice(0, -1);
+		
+		// @TODO: if a path is set, add the req.originalUrl || req.url to the forward address path?
+
+	} else if (typeof forward_address == 'object') {
+		Object.assign(config, forward_address);
+	}
+
+	// @TODO: bind this beforehand?
+	config.onReq = this.modifyIncomingRequest.bind(this);
+
+	if (ws_head) {
+		// In this case, res is actually a socket
+		console.log('Proxying WS to', config);
+		this.proxy.ws(req, res, ws_head, config);
+	} else {
+		config.onRes = this.modifyOutgoingResponse.bind(this);
+		this.proxy.web(req, res, config);
+	}
+});
+
+/**
+ * Modify incoming proxy request
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @param    {IncomingMessage}   req
+ * @param    {Object}            options   HTTP2-Proxy options object
+ */
+SiteDispatcher.setMethod(function modifyIncomingRequest(req, options) {
+
+	var forwarded_for,
+	    headers = options.headers,
+	    site;
+
+	headers['X-Proxied-By'] = 'hohenheim';
+
+	if (req.connection && req.connection.remoteAddress) {
+
+		// See if there already is an x-forwarded-for
+		forwarded_for = req.headers['x-forwarded-for'];
+
+		// If there already was a forwarded header, append to it
+		if (forwarded_for) {
+			forwarded_for += ', ' + req.connection.remoteAddress;
+		} else {
+			forwarded_for = req.connection.remoteAddress;
+		}
+
+		// Set the original ip address
+		headers['X-Real-IP'] = forwarded_for;
+		headers['X-Forwarded-For'] = forwarded_for;
+	}
+
+	if (req.headers['host']) {
+		headers['X-Forwarded-Host'] = req.headers['host'];
+	}
+
+	// Get the target site
+	site = this.getSite(req);
+
+	if (site) {
+		req.hohenheim_site = site;
+
+		// Set the custom header values
+		if (site.domain && site.domain.headers && site.domain.headers.length) {
+			site.domain.headers.forEach(function eachHeader(header) {
+				if (header.name) {
+					headers[header.name] = header.value;
+				}
+			});
+		}
+	}
+});
+
+/**
+ * Modify outgoing proxy response
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @param    {IncomingMessage|Http2ServerRequest}   req
+ * @param    {ServerResponse|Socket}                res
+ * @param    {ServerResponse}                       proxyRes
+ */
+SiteDispatcher.setMethod(function modifyOutgoingResponse(req, res, proxyRes) {
+
+	if (req.hohenheim_site && req.hohenheim_site.site.modifyResponse) {
+		// The body can't really be modified since we haven't set `selfHandleResponse` yet
+		req.hohenheim_site.site.modifyResponse(res, req, proxyRes, req.hohenheim_site.domain);
+	}
+
+	res.writeHead(proxyRes.statusCode, proxyRes.headers);
+	proxyRes.pipe(res);
 });
 
 /**
