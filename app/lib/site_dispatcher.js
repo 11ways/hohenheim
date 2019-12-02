@@ -1,8 +1,5 @@
 var site_types  = alchemy.getClassGroup('site_type'),
-    LeChallenge = alchemy.use('le-challenge-fs'),
     parsePasswd = alchemy.use('parse-passwd'),
-    LeCertbot   = alchemy.use('le-store-certbot'),
-    LeSniAuto   = alchemy.use('le-sni-auto'),
     GreenLock   = alchemy.use('greenlock'),
     local_ips   = alchemy.shared('local_ips'),
     local_users = alchemy.shared('local_users'),
@@ -12,10 +9,16 @@ var site_types  = alchemy.getClassGroup('site_type'),
     http        = alchemy.use('http'),
     util        = alchemy.use('util'),
     net         = alchemy.use('net'),
+    tls         = alchemy.use('tls'),
     os          = alchemy.use('os'),
     fs          = alchemy.use('fs');
 
-const readFileAsync = util.promisify(fs.readFile);
+const readFileAsync = util.promisify(fs.readFile),
+      challenge_prefix = '/.well-known/acme-challenge/',
+      refresh_stagger = Math.round(Math.PI * 5 * (60 * 1000)), // +/- 15 minutes
+      refresh_offset = Math.round(Math.PI * 2 * (60 * 60 * 1000)), // +/- 6.25 hours
+      small_stagger = Math.round(Math.PI * (30 * 1000)), // +/- 30 seconds
+      servername_re = /^[a-z0-9\.\-]+$/i;
 
 /**
  * The Site Dispatcher class
@@ -24,7 +27,7 @@ const readFileAsync = util.promisify(fs.readFile);
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.3.0
+ * @version  0.4.0
  */
 var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispatcher(options) {
 
@@ -78,6 +81,9 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
 
 	// Force https (if it is enabled?)
 	this.force_https = options.force_https == null ? true : options.force_https;
+
+	// Sni cache
+	this.sni_domain_cache = {};
 
 	// Create the queue
 	this.queue = Function.createQueue();
@@ -458,80 +464,26 @@ SiteDispatcher.setMethod(function initGreenlock() {
 	// Create a site model instance
 	Site = Model.get('Site');
 
-	// Create the certificate store
-	this.le_store = LeCertbot.create({
-		configDir   : path_etc,
-		webrootPath : path_var,
-		logsDir     : path_log,
-		debug       : debug
-	});
-
-	// Create the challenge handler
-	this.le_handler = LeChallenge.create({
-		webrootPath : path_var,
-		debug       : debug
-	});
-
-	// Create the auto sni creator
-	this.le_sni = LeSniAuto.create({
-		renewWithin : 15 * 24 * 60 * 60 * 1000,  // do not renew more than 15 days before expiration
-		renewBy     : 10 * 24 * 60 * 60 * 1000,   // do not wait more than 10 days before expiration
-		tlsOptions  : {
-			rejectUnauthorized : true,           // These options will be used with tls.createSecureContext()
-			requestCert        : false,          // in addition to key (privkey.pem) and cert (cert.pem + chain.pem),
-			ca                 : null,           // which are provided by letsencrypt
-			crl                : null
-		},
-		getCertificates : function getCertificates(domain, certs, callback) {
-			try {
-				that.getCertificates(domain, certs, callback);
-			} catch (err) {
-				log.error('Error getting domain certificate for', domain, ':', err);
-				callback(err);
-			}
-		}
-	});
-
 	// Create the greenlock instance
 	this.greenlock = GreenLock.create({
-		version         : 'v02',
-		server          : server_url,
-		store           : this.le_store,
-		challenges      : {
-			'http-01'   : this.le_handler,
-			'tls-sni-01': this.le_handler
-		},
-		challengeType   : alchemy.settings.letsencrypt_challenge,
-		agreeToTerms    : true,
-		sni             : this.le_sni,
-		debug           : debug,
-		approveDomains  : function approveDomains(opts, certs, callback) {
+		maintainerEmail: alchemy.settings.letsencrypt_email,
+		// for an RFC 8555 / RFC 7231 ACME client user agent
+		packageAgent: alchemy.package.name + '/' + alchemy.package.version,
+	});
 
-			var site;
-
-			if (debug) {
-				log.info('Approving domains', opts, certs);
-			}
-
-			// Opt-in to submit stats and get important updates
-			opts.communityMember = true;
-
-			if (certs) {
-				opts.domains = certs.altnames;
-			} else {
-				opts.email = alchemy.settings.letsencrypt_email;
-				opts.agreeTos = true;
-			}
-
-			return callback(null, {options: opts, certs: certs});
+	this.greenlock.manager.defaults({
+		store: {
+			module: 'greenlock-store-fs',
+			basePath: libpath.resolve(PATH_TEMP, 'letsencrypt', 'etc'),
 		}
 	});
 
-	// Create the greenlock middleware
-	this.le_middleware = this.greenlock.middleware();
-
 	// Create the HTTPS/http2 server using the `spdy` module
-	this.https_server = spdy.createServer(this.greenlock.httpsOptions);
+	this.https_server = spdy.createServer({
+		SNICallback : function sniCallback(servername, next) {
+			return that.SNICallback(servername, next);
+		}
+	});
 
 	// This listener attempts to fix an issue with SPDY where idle connections do
 	// not close. Too many idle connections to our server (>4000) cause our server
@@ -574,69 +526,329 @@ SiteDispatcher.setMethod(function initGreenlock() {
 });
 
 /**
- * Get domain certificates
+ * Get wildcard name
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.3.0
- * @version  0.3.0
- * 
- * @param    {String}     domain
- * @param    {Object}     certs
- * @param    {Function}   res
+ * @since    0.4.0
+ * @version  0.4.0
  */
-SiteDispatcher.setMethod(function getCertificates(domain, certs, callback) {
+function wildcardname(domainname) {
+	return '*.' + domainname.split('.').slice(1).join('.');
+}
 
-	var that = this,
-	    domains_to_register,
-	    domain_record,
-	    challenge,
-	    hostnames,
-	    settings,
-	    options,
-	    site;
+/**
+ * Get a valid domain name
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ */
+function validDomainname(domainname) {
+	// format and (lightly) sanitize sni so that users can be naive
+	// and not have to worry about SQL injection or fs discovery
 
-	site = that.getSite(domain);
+	domainname = (domainname || '').toLowerCase();
+
+	// hostname labels allow a-z, 0-9, -, and are separated by dots
+	// _ is sometimes allowed, but not as a "hostname", and not by Let's Encrypt ACME
+	// REGEX // https://www.codeproject.com/Questions/1063023/alphanumeric-validation-javascript-without-regex
+	return servername_re.test(domainname) && -1 === domainname.indexOf('..');
+}
+
+/**
+ * Get a random refresh offset
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @return   {Number}
+ */
+function randomRefreshOffset() {
+	var stagger = Math.round(refresh_stagger / 2) - Math.round(Math.random() * refresh_stagger);
+	return refresh_offset + stagger;
+}
+
+/**
+ * SNI Callback
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ */
+SiteDispatcher.setMethod(function SNICallback(domainname, callback) {
+
+	if (typeof domainname != 'string') {
+		return callback(new Error('SNI failure: invalid domainname'));
+	}
+
+	let site = this.getSite(domainname);
 
 	if (!site) {
-		return callback(new Error('Domain "' + domain + '" was not found on this server'));
+		return callback(new Error('Domain "' + domainname + '" was not found on this server'));
+	}
+
+	let secure_context = null,
+	    meta = this.getDomainMetaCache(domainname);
+
+	// If a meta is set, it's possible a context already exists
+	if (meta) {
+		secure_context = this.getCachedSecureContext(domainname, meta);
+	}
+
+	if (secure_context) {
+		return callback(null, secure_context);
+	}
+
+	return this.getFreshSecureContext(domainname, meta, callback);
+});
+
+/**
+ * Get the cache for a certain domain
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @param    {String}   domainname
+ *
+ * @return   {Object}
+ */
+SiteDispatcher.setMethod(function getDomainMetaCache(domainname, create) {
+	let cache = this.sni_domain_cache[domainname];
+
+	if (!cache && create) {
+		cache = {
+			secure_context: {
+				_valid : false
+			}
+		};
+
+		this.sni_domain_cache[domainname] = cache;
+	}
+
+	return cache;
+});
+
+/**
+ * Get a secure context
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @param    {String}   domainname
+ * @param    {Object}   meta          The cache for this domain
+ */
+SiteDispatcher.setMethod(function getCachedSecureContext(domainname, meta) {
+
+	// Renew in the background if needed
+	if (!meta.refresh_at || Date.now() >= meta.refresh_at) {
+		this.getFreshSecureContext(domainname, meta);
+	}
+
+	return meta.secure_context;
+});
+
+/**
+ * Get a fresh secure context
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @param    {String}   domainname
+ * @param    {Object}   meta          The cache for this domain
+ * @param    {Function} callback
+ */
+SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callback) {
+
+	if (!callback) {
+		callback = Function.thrower;
+	}
+
+	if (!meta && !validDomainname(domainname)) {
+		return callback(new Error('The domain name "' + domainname + '" is not valid for LetsEncrypt'));
+	}
+
+	if (meta) {
+		meta.refresh_at = Date.now() + randomRefreshOffset();
+	}
+
+	const that = this;
+
+	let site = this.getSite(domainname);
+
+	if (!site) {
+		return callback(new Error('Domain "' + domainname + '" was not found on this server'));
 	} else {
 		site = site.site._record;
 	}
 
-	// Get all the hostnames for this site
-	// We DON'T bundle domains anymore. If 1 breaks, all of them break!
-	//hostnames = site.getHostnames(domain);
+	// Need to add this to greenlock first
+	if (!meta) {
+		let all_hostnames = site.getHostnames(),
+		    main_domain = all_hostnames[0];
 
-	// Get the site settings
-	settings = site.settings;
+		// Handle regex domain names individually
+		if (!main_domain) {
+			all_hostnames = [domainname];
+			main_domain = domainname;
+		}
 
-	// See if we have a domain record
-	domain_record = that.Domain.getDomain(domain);
-
-	// Wildcards aren't enabled yet, as the dns-01 challenge type still needs a lot of work
-	if (false && domain_record) {
-		domains_to_register = ['*.' + domain_record.name, domain_record.name];
-		challenge = 'dns-01';
-		log.info('Going to register domain wildcard', domain_record.name, 'using challenge', challenge);
-	} else {
-		domains_to_register = [domain];
-		challenge = settings.letsencrypt_challenge || alchemy.settings.letsencrypt_challenge;
-		log.info('Going to register domain', domain, 'using challenge', challenge);
+		this.greenlock.add({
+			subject         : main_domain,
+			altnames        : all_hostnames,
+			subscriberEmail : site.settings.letsencrypt_email || alchemy.settings.letsencrypt_email,
+		});
 	}
 
-	options = {
-		domains       : domains_to_register,
-		email         : settings.letsencrypt_email || alchemy.settings.letsencrypt_email,
-		agreeTos      : true,
-		rsaKeySize    : 2048,
-		challengeType : challenge
-	};
+	this.greenlock.get({
+		servername: domainname
+	}).then(function gotResult(result) {
 
-	that.greenlock.register(options).then(function onResult(result) {
-		callback(null, result);
-	}, function onError(err) {
-		callback(err);
+		if (!meta) {
+			meta = that.getDomainMetaCache(domainname, true);
+		}
+
+		// prevent from being punked by bot trolls
+		// (We'll recreate the object later)
+		meta.refresh_at = Date.now() + small_stagger;
+
+		if (!result) {
+			return callback();
+		}
+
+		let pems = result.pems,
+		    site = result.site;
+
+		if (!pems || !pems.cert) {
+			return callback();
+		}
+
+		meta = {
+			refresh_at     : Date.now() + randomRefreshOffset(),
+			secure_context : tls.createSecureContext({
+				key  : pems.privkey,
+				cert : pems.cert + '\n' + pems.chain + '\n'
+			})
+		};
+
+		meta.secure_context._valid = true;
+
+		let names = [],
+		    name,
+		    i;
+
+		if (result.altnames) {
+			names.include(result.altnames);
+		}
+
+		if (site.altnames) {
+			names.include(site.altnames);
+		}
+
+		if (result.subject) {
+			names.include(result.subject);
+		}
+
+		if (site.subject) {
+			names.include(site.subject);
+		}
+
+		for (i = 0; i < names.length; i++) {
+			name = names[i];
+
+			that.sni_domain_cache[name] = meta;
+		}
+
+		callback(null, meta.secure_context);
+	}).catch(function onError(err) {
+		console.log('Greenlock error:', err);
+		return callback(err);
 	});
+});
+
+/**
+ * Greenlock middleware
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ */
+SiteDispatcher.setMethod(function greenlockMiddleware(req, res, next) {
+
+	var hostname = this.sanitizeHostname(req);
+
+	// Skip unless the path begins with /.well-known/acme-challenge/
+	if (!hostname || req.url.indexOf(challenge_prefix) !== 0) {
+		return next();
+	}
+
+	let token = req.url.slice(challenge_prefix.length);
+
+	this.greenlock.challenges.get({
+		type       : 'http-01',
+		servername : hostname,
+		token      : token
+	}).then(function gotResult(result) {
+
+		var key_auth = result && result.keyAuthorization;
+
+		if (key_auth && typeof key_auth == 'string') {
+			res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+			res.end(key_auth);
+			return;
+		}
+
+		res.statusCode = 404;
+		res.setHeader('Content-Type', 'application/json; charset=utf-8');
+
+		res.end(JSON.stringify({
+			error: {
+				message: "domain '" + hostname + "' has no token '" + token + "'."
+			}
+		}));
+	}).catch(function gotError(err) {
+		res.end('Internal Server Error [1003]: See logs for details.');
+	});
+});
+
+/**
+ * Sanitize the hostname
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ *
+ * @return   {String}
+ */
+SiteDispatcher.setMethod(function sanitizeHostname(req) {
+
+	var hostname = req.hostname || req.headers['x-forwarded-host'] || (req.headers.host || '');
+
+	// we can trust XFH because spoofing causes no harm in this
+	// limited use-case scenario
+	// (and only telebit would be legitimately setting XFH)
+	let servername = hostname.toLowerCase().replace(/:.*/, '');
+
+	try {
+		req.hostname = servername;
+	} catch (e) {
+		// read-only express property
+	}
+
+	if (req.headers['x-forwarded-host']) {
+		req.headers['x-forwarded-host'] = servername;
+	}
+
+	try {
+		req.headers.host = servername;
+	} catch (e) {
+		// TODO is this a possible error?
+	}
+
+	return (servername_re.test(servername) && -1 === servername.indexOf('..') && servername) || '';
 });
 
 /**
@@ -849,7 +1061,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	// Use the letsencrypt middleware first
 	if (skip_le !== true && alchemy.settings.letsencrypt !== false && this.proxyPortHttps) {
 
-		this.le_middleware(req, res, function done() {
+		this.greenlockMiddleware(req, res, function done() {
 			// Greenlock didn't do anything, we can continue
 			that.request(req, res, true);
 		});

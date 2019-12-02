@@ -228,5 +228,9 @@ Site.setDocumentMethod(function getHostnames(found_domain) {
 		result.push(found_domain);
 	}
 
+	result.sort(function sortByLength(a, b){
+		return b.length - a.length || a.localeCompare(b);
+	});
+
 	return result;
 });

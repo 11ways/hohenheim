@@ -6,6 +6,7 @@
 * Node sites can now be "isolated", meaning they will only serve already seen clients
 * Add a `handleRequest` method to the Site class
 * Allow broadcasting messages to multiple node instances
+* Upgrade to the latest Greenlock version (big changes for the Letsencrypt API)
 * TODO: Switch to http2-proxy?
 
 ## 0.3.4 (2019-06-28)

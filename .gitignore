@@ -28,3 +28,6 @@ v8.log
 
 # Ignore the local config
 app/config/local.js
+
+# Ignore greenlock file
+.greenlockrc
