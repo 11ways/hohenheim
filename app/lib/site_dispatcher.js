@@ -687,7 +687,7 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 
 	// Need to add this to greenlock first
 	if (!meta) {
-		let all_hostnames = site.getHostnames(),
+		let all_hostnames = site.getHostnames(true),
 		    main_domain = all_hostnames[0];
 
 		// Handle regex domain names individually

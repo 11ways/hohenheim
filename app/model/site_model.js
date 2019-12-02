@@ -39,7 +39,7 @@ Site.prepareProperty('sort', function sort() {
  *
  * @author   Jelle De Loecker <jelle@develry.be>
  * @since    0.1.0
- * @version  0.2.0
+ * @version  0.4.0
  */
 Site.constitute(function addFields() {
 
@@ -68,6 +68,9 @@ Site.constitute(function addFields() {
 
 	// Optional headers to forward
 	domain_schema.addField('headers', 'Schema', {array: true, schema: header_schema});
+
+	// Allow excluding domains from letsencrypt
+	domain_schema.addField('exclude_from_letsencrypt', 'Boolean');
 
 	this.addField('domain', 'Schema', {array: true, schema: domain_schema});
 });
@@ -201,18 +204,22 @@ Site.setMethod(function getSites(callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.2.0
+ * @version  0.4.0
  *
- * @param    {String}   found_domain
+ * @param    {Boolean}   for_letsencrypt
  *
  * @return   {Array}
  */
-Site.setDocumentMethod(function getHostnames(found_domain) {
+Site.setDocumentMethod(function getHostnames(for_letsencrypt) {
 
 	var result = [];
 
 	for (let i = 0; i < this.domain.length; i++) {
 		let domain = this.domain[i];
+
+		if (for_letsencrypt && domain.exclude_from_letsencrypt) {
+			continue;
+		}
 
 		for (let j = 0; j < domain.hostname.length; j++) {
 
