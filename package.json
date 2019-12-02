@@ -1,32 +1,38 @@
 {
-	"name": "hohenheim",
-	"description": "The hohenheim dispatcher",
-	"version": "0.4.0-alpha",
-	"dependencies": {
-		"alchemymvc"             : "skerit/alchemy",
-		"alchemy-acl"            : "skerit/alchemy-acl",
-		"alchemy-chimera"        : "skerit/alchemy-chimera",
-		"alchemy-media"          : "skerit/alchemy-media",
-		"alchemy-i18n"           : "skerit/alchemy-i18n",
-		"alchemy-menu"           : "skerit/alchemy-menu",
-		"alchemy-styleboost"     : "skerit/alchemy-styleboost",
-		"alchemy-web-components" : "~0.5.0",
-		"alchemy-ajatar-theme"   : "skerit/alchemy-ajatar-theme",
-		"ansi-html"              : "~0.0.7",
-		"ecstatic"               : "~4.1.2",
-		"@root/encoding"         : "~1.0.1",
-		"greenlock"              : "~3.1.5",
-		"greenlock-store-fs"     : "~3.2.2",
-		"http-proxy"             : "~1.18.0",
-		"parse-passwd"           : "~1.0.0",
-		"posix"                  : "~4.1.2",
-		"process-monitor"        : "skerit/process-monitor",
-		"spdy"                   : "~4.0.1"
-	},
-	"license": "GPLv3",
-	"engineStrict": true,
-	"engines": {
-		"node": "~8.16.0"
-	},
-	"private": true
+  "name": "hohenheim",
+  "description": "The hohenheim dispatcher",
+  "version": "0.4.0-alpha",
+  "dependencies": {
+    "alchemymvc": "skerit/alchemy",
+    "alchemy-acl": "skerit/alchemy-acl",
+    "alchemy-chimera": "skerit/alchemy-chimera",
+    "alchemy-media": "skerit/alchemy-media",
+    "alchemy-i18n": "skerit/alchemy-i18n",
+    "alchemy-menu": "skerit/alchemy-menu",
+    "alchemy-styleboost": "skerit/alchemy-styleboost",
+    "alchemy-web-components": "~0.5.0",
+    "alchemy-ajatar-theme": "skerit/alchemy-ajatar-theme",
+    "ansi-html": "~0.0.7",
+    "ecstatic": "~4.1.2",
+    "@root/encoding": "~1.0.1",
+    "greenlock": "~3.1.5",
+    "greenlock-store-fs": "~3.2.2",
+    "http-proxy": "~1.18.0",
+    "parse-passwd": "~1.0.0",
+    "posix": "~4.1.2",
+    "process-monitor": "skerit/process-monitor",
+    "spdy": "~4.0.1",
+    "snyk": "^1.254.0"
+  },
+  "license": "GPLv3",
+  "engineStrict": true,
+  "engines": {
+    "node": "~8.16.0"
+  },
+  "private": true,
+  "scripts": {
+    "snyk-protect": "snyk protect",
+    "prepublish": "npm run snyk-protect"
+  },
+  "snyk": true
 }

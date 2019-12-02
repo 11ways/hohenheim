@@ -1,0 +1,11 @@
+# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
+version: v1.14.0
+ignore: {}
+# patches apply the minimum changes required to fix a vulnerability
+patch:
+  'npm:debug:20170905':
+    - alchemy > socket.io-stream > debug:
+        patched: '2019-12-02T13:31:01.657Z'
+  'npm:ms:20170412':
+    - alchemy > socket.io-stream > debug > ms:
+        patched: '2019-12-02T13:31:01.657Z'
