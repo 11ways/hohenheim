@@ -469,9 +469,21 @@ SiteDispatcher.setMethod(function initGreenlock() {
 		maintainerEmail: alchemy.settings.letsencrypt_email,
 		// for an RFC 8555 / RFC 7231 ACME client user agent
 		packageAgent: alchemy.package.name + '/' + alchemy.package.version,
+		notify: function notify(event, details) {
+
+			if (debug) {
+				console.log('Greenlock notification:', event, details);
+			}
+
+			if (event == 'error') {
+				console.error('Greenlock error:', details);
+			}
+		}
 	});
 
 	this.greenlock.manager.defaults({
+		agreeToTerms: true,
+		subscriberEmail: alchemy.settings.letsencrypt_email,
 		store: {
 			module: 'greenlock-store-fs',
 			basePath: libpath.resolve(PATH_TEMP, 'letsencrypt', 'etc'),
@@ -695,6 +707,11 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 			all_hostnames = [domainname];
 			main_domain = domainname;
 		}
+
+		// Ignore other domains, each domain will get its own certificate
+		// because it's a real pain to handle this otherwise
+		main_domain = domainname;
+		all_hostnames = [main_domain];
 
 		this.greenlock.add({
 			subject         : main_domain,

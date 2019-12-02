@@ -232,7 +232,7 @@ Site.setDocumentMethod(function getHostnames(for_letsencrypt) {
 	}
 
 	result.sort(function sortByLength(a, b){
-		return b.length - a.length || a.localeCompare(b);
+		return a.length - b.length || a.localeCompare(b);
 	});
 
 	return result;
