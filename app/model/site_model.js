@@ -231,10 +231,6 @@ Site.setDocumentMethod(function getHostnames(for_letsencrypt) {
 		}
 	}
 
-	if (found_domain && result.indexOf(found_domain) == -1) {
-		result.push(found_domain);
-	}
-
 	result.sort(function sortByLength(a, b){
 		return b.length - a.length || a.localeCompare(b);
 	});
