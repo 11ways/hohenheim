@@ -169,6 +169,12 @@ SiteDispatcher.setMethod(async function init() {
 			}
 		}
 	}
+
+	// Bind some methods already
+	this.boundModifyIncomingRequest = this.modifyIncomingRequest.bind(this);
+	this.boundModifyOutgoingResponse = this.modifyOutgoingResponse.bind(this);
+	this.boundDefaultWebHandler = this.defaultWebHandler.bind(this);
+	this.boundDefaultWSHandler = this.defaultWSHandler.bind(this);
 });
 
 /**
@@ -436,26 +442,6 @@ SiteDispatcher.setMethod(function initGreenlock() {
 		SNICallback : function sniCallback(servername, next) {
 			return that.SNICallback(servername, next);
 		}
-	});
-
-	// This listener attempts to fix an issue with SPDY where idle connections do
-	// not close. Too many idle connections to our server (>4000) cause our server
-	// to be sluggish or outright nonfunctional. See
-	// https://github.com/spdy-http2/node-spdy/issues/338 and
-	// https://github.com/nodejs/node/issues/4560.
-	// @TODO: is this still needed now we don't use spdy anymore?
-	this.https_server.on('connection', function onSocket(socket) {
-		// Set the socket's idle timeout in milliseconds. 2 minutes is the default
-		// for Node's HTTPS server. We are currently using SPDY:
-		// https://nodejs.org/api/https.html#https_server_settimeout_msecs_callback
-		socket.setTimeout(1000 * 60 * 2);
-
-		// Wait for the timeout event.
-		// The socket will emit it when the idle timeout elapses.
-		socket.on('timeout', function onTimeout() {
-			// Call destroy again.
-			socket.destroy();
-		});
 	});
 
 	// Listen for HTTPS requests
@@ -815,7 +801,7 @@ SiteDispatcher.setMethod(function sanitizeHostname(req) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.3.0
+ * @version  0.4.0
  * 
  * @param    {Error}              error
  * @param    {IncommingMessage}   req
@@ -841,8 +827,12 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
 		res.writeHead(502, {'Content-Type': 'text/plain'});
 		res.end('Failed to reach server!');
 	} else {
-		// Make the request again
-		this.request(req, res);
+		let that = this;
+
+		// Try the request again after 100ms
+		setTimeout(function retry() {
+			that.request(req, res);
+		}, 100);
 	}
 });
 
@@ -1099,6 +1089,32 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 });
 
 /**
+ * Default web handler
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ */
+SiteDispatcher.setMethod(function defaultWebHandler(err, req, res) {
+	if (err) {
+		return this.requestError(err, req, res);
+	}
+});
+
+/**
+ * Default websocket handler
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ */
+SiteDispatcher.setMethod(function defaultWSHandler(err, req, socket, head) {
+	if (err) {
+		socket.destroy();
+	}
+});
+
+/**
  * Proxy web request
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
@@ -1129,14 +1145,14 @@ SiteDispatcher.setMethod(function forwardRequest(req, res, forward_address, ws_h
 	}
 
 	// @TODO: bind this beforehand?
-	config.onReq = this.modifyIncomingRequest.bind(this);
+	config.onReq = this.boundModifyIncomingRequest;
 
 	if (ws_head) {
 		// In this case, res is actually a socket
-		this.proxy.ws(req, res, ws_head, config);
+		this.proxy.ws(req, res, ws_head, config, this.boundDefaultWSHandler);
 	} else {
-		config.onRes = this.modifyOutgoingResponse.bind(this);
-		this.proxy.web(req, res, config);
+		config.onRes = this.boundModifyOutgoingResponse;
+		this.proxy.web(req, res, config, this.boundDefaultWebHandler);
 	}
 });
 
