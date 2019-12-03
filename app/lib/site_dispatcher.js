@@ -987,7 +987,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 			}
 
 			//that.proxy.ws(req, socket, {target: address});
-			that.forwardRequest(req, socket, address, head);			
+			that.forwardRequest(req, socket, address, head);
 		});
 	}
 });
@@ -1133,7 +1133,6 @@ SiteDispatcher.setMethod(function forwardRequest(req, res, forward_address, ws_h
 
 	if (ws_head) {
 		// In this case, res is actually a socket
-		console.log('Proxying WS to', config);
 		this.proxy.ws(req, res, ws_head, config);
 	} else {
 		config.onRes = this.modifyOutgoingResponse.bind(this);
@@ -1178,6 +1177,7 @@ SiteDispatcher.setMethod(function modifyIncomingRequest(req, options) {
 
 	if (req.headers['host']) {
 		headers['X-Forwarded-Host'] = req.headers['host'];
+		headers['Host'] = req.headers['host'];
 	}
 
 	// Get the target site
