@@ -823,7 +823,7 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
 	// @TODO: This is PER SOCKET,
 	// so shared keep-alive requests in total will only be tried 4 times
 	if (req.errorCount > 4) {
-		log.error('Retried connection', req.connectionId, 'four times, giving up on:', req.url);
+		//log.error('Retried connection', req.connectionId, 'four times, giving up on:', req.url);
 		res.writeHead(502, {'Content-Type': 'text/plain'});
 		res.end('Failed to reach server!');
 	} else {
@@ -1170,6 +1170,7 @@ SiteDispatcher.setMethod(function modifyIncomingRequest(req, options) {
 
 	var forwarded_for,
 	    headers = options.headers,
+	    host = req.headers.host || req.headers[':authority'],
 	    site;
 
 	headers['X-Proxied-By'] = 'hohenheim';
@@ -1191,9 +1192,9 @@ SiteDispatcher.setMethod(function modifyIncomingRequest(req, options) {
 		headers['X-Forwarded-For'] = forwarded_for;
 	}
 
-	if (req.headers['host']) {
-		headers['X-Forwarded-Host'] = req.headers['host'];
-		headers['Host'] = req.headers['host'];
+	if (host) {
+		headers['X-Forwarded-Host'] = host;
+		headers['Host'] = host;
 	}
 
 	// Get the target site
