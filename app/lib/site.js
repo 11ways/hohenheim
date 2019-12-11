@@ -198,11 +198,12 @@ Site.setMethod(function start(callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.4.0
  *
- * @param    {Function}   callback
+ * @param    {IncomingMessage}  req
+ * @param    {Function}         callback
  */
-Site.setMethod(function getAddress(callback) {
+Site.setMethod(function getAddress(req, callback) {
 	callback(new Error('GetAddress method has not been implemented'));
 });
 
