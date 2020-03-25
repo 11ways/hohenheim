@@ -413,6 +413,7 @@ SiteDispatcher.setMethod(function initGreenlock() {
 	// Create the greenlock instance
 	this.greenlock = GreenLock.create({
 		maintainerEmail: alchemy.settings.letsencrypt_email,
+		subscriberEmail: alchemy.settings.letsencrypt_email,
 		// for an RFC 8555 / RFC 7231 ACME client user agent
 		packageAgent: alchemy.package.name + '/' + alchemy.package.version,
 		notify: function notify(event, details) {
