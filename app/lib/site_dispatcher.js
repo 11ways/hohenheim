@@ -526,6 +526,7 @@ SiteDispatcher.setMethod(function SNICallback(domainname, callback) {
 	let site = this.getSite(domainname);
 
 	if (!site) {
+		log.error('Failed to find "' + domainname + '", ignoring SNI request');
 		return callback(new Error('Domain "' + domainname + '" was not found on this server'));
 	}
 
