@@ -139,19 +139,37 @@ SiteDispatcher.setMethod(async function init() {
 		that.getLocalIps();
 	}, 60 * 60 * 1000);
 
-	process.on('exit', onExit);
-	process.on('SIGINT', onExit);
-	process.on('SIGUSR1', onExit);
-	process.on('SIGUSR2', onExit);
+	process.on('exit', this.createExitHandler('exit'));
+	process.on('SIGINT', this.createExitHandler('SIGINT'));
+	process.on('SIGUSR1', this.createExitHandler('SIGUSR1'));
+	process.on('SIGUSR2', this.createExitHandler('SIGUSR2'));
 
-	function onExit() {
+	// Bind some methods already
+	this.boundModifyIncomingRequest = this.modifyIncomingRequest.bind(this);
+	this.boundModifyOutgoingResponse = this.modifyOutgoingResponse.bind(this);
+	this.boundDefaultWebHandler = this.defaultWebHandler.bind(this);
+	this.boundDefaultWSHandler = this.defaultWSHandler.bind(this);
+});
+
+/**
+ * Create an exit handler
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ */
+SiteDispatcher.setMethod(function createExitHandler(type) {
+
+	const that = this;
+
+	return function onExit() {
 
 		var site,
 		    proc,
 		    id,
 		    i;
 
-		log.info('Hohenheim is exiting!');
+		log.warning('Hohenheim is exiting: ' + type);
 
 		for (id in that.ids) {
 			site = that.ids[id];
@@ -168,13 +186,8 @@ SiteDispatcher.setMethod(async function init() {
 				}
 			}
 		}
-	}
+	};
 
-	// Bind some methods already
-	this.boundModifyIncomingRequest = this.modifyIncomingRequest.bind(this);
-	this.boundModifyOutgoingResponse = this.modifyOutgoingResponse.bind(this);
-	this.boundDefaultWebHandler = this.defaultWebHandler.bind(this);
-	this.boundDefaultWSHandler = this.defaultWSHandler.bind(this);
 });
 
 /**
