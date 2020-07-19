@@ -71,7 +71,7 @@ Site.constitute(function addFields() {
 	this.schema.addField('api_keys', 'String', {array: true});
 
 	// Create new subschema for environment variables
-	let env_schema = new Classes.Alchemy.Schema(this);
+	let env_schema = new Classes.Alchemy.Schema();
 
 	// Set the env name
 	env_schema.addField('name', 'String');
