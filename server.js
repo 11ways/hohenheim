@@ -13,6 +13,7 @@
  * @link          
  * @license       MIT License (http://www.opensource.org/licenses/mit-license.php)
  */
+const libpath = require('path');
 require('alchemymvc');
 
 /**
@@ -75,6 +76,27 @@ alchemy.start(function onAlchemyReady() {
 		force_https     : alchemy.settings.force_https == null ? true : alchemy.settings.force_https
 	});
 });
+
+// Get the path to xterm
+let xterm_dir = libpath.dirname(alchemy.findModule('xterm', {require: false}).module_path),
+    xterm_path = libpath.resolve(xterm_dir, 'xterm.js');
+
+// Serve the main xterm.js file
+Router.use('/scripts/xterm.js', function getXterm(req, res, next) {
+	req.conduit.serveFile(xterm_path);
+});
+
+// Get the path to the xterm-fit addon
+let fit_dir = libpath.dirname(alchemy.findModule('xterm-addon-fit', {require: false}).module_path),
+    fit_path = libpath.resolve(fit_dir, 'xterm-addon-fit.js');
+
+console.log(fit_path)
+
+// Serve the xterm.js fit addon
+Router.use('/scripts/xterm.fit.js', function getXtermFit(req, res, next) {
+	req.conduit.serveFile(fit_path);
+});
+
 
 // Get the posix package
 var posix = require('posix');

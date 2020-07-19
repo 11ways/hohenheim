@@ -155,12 +155,18 @@ var updateSite = function updateSite(siteId, update_logs) {
 			e.preventDefault();
 
 			if (open_term) {
-				open_term.destroy();
+				open_term.dispose();
 			}
 
 			// Create a new terminal
 			term = new Terminal();
 			open_term = term;
+
+			console.log('TERM:', term)
+
+			// Create the Fit addon instance
+			const fitAddon = new FitAddon.FitAddon();
+			term.loadAddon(fitAddon);
 
 			// Default size
 			term.cols = 80
@@ -183,7 +189,11 @@ var updateSite = function updateSite(siteId, update_logs) {
 
 				link.submit('input_stream', {}, input_stream);
 
-				term.on('data', function onData(d) {
+				term.onData(function onData(d) {
+					input_stream.write(d);
+				});
+
+				term.onBinary(function onBinary(d) {
 					input_stream.write(d);
 				});
 			});
@@ -199,13 +209,13 @@ var updateSite = function updateSite(siteId, update_logs) {
 				});
 			});
 
-			term.on('resize', function resized() {
+			term.onResize(function resized() {
 				link.submit('redraw');
 			});
 
 			setTimeout(function getProposedSize() {
-				var geo = term.proposeGeometry();
-				term.renderer.clear();
+				var geo = fitAddon.proposeDimensions();
+				term.clear();
 				term.resize(geo.cols, geo.rows);
 				link.submit('propose_geometry', geo);
 			}, 50);

@@ -20,7 +20,9 @@
 		"http2-proxy"            : "~5.0.45",
 		"parse-passwd"           : "~1.0.0",
 		"posix"                  : "~4.2.0",
-		"process-monitor"        : "skerit/process-monitor"
+		"process-monitor"        : "skerit/process-monitor",
+		"xterm"                  : "~4.7.0",
+		"xterm-addon-fit"        : "~0.4.0"
 	},
 	"license": "GPLv3",
 	"engineStrict": true,
