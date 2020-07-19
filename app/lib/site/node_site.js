@@ -88,7 +88,7 @@ Site.constitute(function addFields() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.2.0
+ * @version  0.4.0
  */
 Site.setStatic(function updateVersions(callback) {
 
@@ -208,6 +208,31 @@ Site.setStatic(function updateVersions(callback) {
 
 			versions.local_bin = {
 				title   : bin_path + ' [currently v' + version + ']',
+				version : version,
+				bin     : bin_path
+			};
+
+			next();
+		});
+	}, function getHohenheimNode(next) {
+
+		let bin_path = process.execPath;
+
+		child.exec(bin_path + ' --version', function gotVersion(err, stdout) {
+
+			// No main bin version
+			if (err) {
+				return next();
+			}
+
+			let version = stdout.trim();
+
+			if (version[0] == 'v') {
+				version = version.slice(1);
+			}
+
+			versions.hohenheim_bin = {
+				title   : bin_path + ' - Hohenheim [currently v' + version + ']',
 				version : version,
 				bin     : bin_path
 			};
