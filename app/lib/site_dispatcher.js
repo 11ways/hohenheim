@@ -85,6 +85,9 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
 	// Sni cache
 	this.sni_domain_cache = {};
 
+	// The rendered not-found template
+	this.not_found_message = null;
+
 	// Create the queue
 	this.queue = Function.createQueue();
 
@@ -843,8 +846,7 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
 	// so shared keep-alive requests in total will only be tried 4 times
 	if (req.errorCount > 4) {
 		//log.error('Retried connection', req.connectionId, 'four times, giving up on:', req.url);
-		res.writeHead(502, {'Content-Type': 'text/plain'});
-		res.end('Failed to reach server!');
+		this.respondWithError(res, 'unreachable');
 	} else {
 		let that = this;
 
@@ -1002,6 +1004,65 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 });
 
 /**
+ * Respond with an error
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.4.0
+ * @version  0.4.0
+ * 
+ * @param    {ServerResponse}    res
+ * @param    {String}            type
+ */
+SiteDispatcher.setMethod(function respondWithError(res, type) {
+
+	let fallback,
+	    status,
+	    prop;
+
+	if (type == 'not_found') {
+		status = 404;
+		fallback = 'There is no such domain here!';
+		prop = 'not_found_message';
+	} else if (type == 'unreachable') {
+		status = 502;
+		prop = 'unreachable_message';
+		fallback = 'Failed to reach server!';
+	}
+
+	let cached = this[prop];
+
+	if (cached === false) {
+		res.writeHead(status, {'Content-Type': 'text/plain'});
+		return res.end(alchemy.settings[prop] || fallback);
+	}
+
+	if (cached) {
+		res.writeHead(404, {'Content-Type': 'text/html'});
+		return res.end(cached);
+	}
+
+	let that = this;
+
+	let variables = {
+		base_url : alchemy.settings.base_url_for_template,
+		message  : alchemy.settings[prop] || fallback
+	};
+
+	console.log(prop, type, variables)
+
+	alchemy.hawkejs.render('static/error', variables, function gotHtml(err, result) {
+
+		if (err || !result) {
+			that[prop] = false;
+		} else {
+			that[prop] = result;
+		}
+
+		that.respondWithError(res, type);
+	});
+});
+
+/**
  * Handle a new proxy request
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
@@ -1070,8 +1131,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 			return this.forwardRequest(req, res, this.fallbackAddress);
 		}
 
-		res.writeHead(404, {'Content-Type': 'text/plain'});
-		res.end('There is no such domain here!');
+		this.respondWithError(res, 'not_found');
 	} else {
 
 		// When using letsencrypt, redirect to HTTPS

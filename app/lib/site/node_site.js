@@ -96,8 +96,6 @@ Site.setStatic(function updateVersions(callback) {
 		callback = Function.thrower;
 	}
 
-	log.info('Updating node.js version info');
-
 	Function.parallel(function getOldVersions(next) {
 
 		var conditions = {

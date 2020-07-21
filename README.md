@@ -1,6 +1,15 @@
-# Hohenheim
-
-Hohenheim is a web server and reverse proxy, mainly for node.js sites.
+<h1 align="center">
+  <img src="https://raw.githubusercontent.com/11ways/hohenheim/master/app/assets/images/startup.svg" width=30 alt="Hohenheim logo"/>
+  <b>Hohenheim</b>
+</h1>
+<div align="center">
+  Hohenheim is a web server and reverse proxy for node.js
+</div>
+<div align="center">
+  <sub>
+    Coded with ❤️ by <a href="#authors">Eleven Ways</a>.
+  </sub>
+</div>
 
 ## Requirements
 
