@@ -1,17 +1,16 @@
 {
 	"name": "hohenheim",
 	"description": "The hohenheim dispatcher",
-	"version": "0.4.0-alpha",
+	"version": "0.4.0",
 	"dependencies": {
-		"alchemymvc"             : "skerit/alchemy",
-		"alchemy-acl"            : "skerit/alchemy-acl",
-		"alchemy-chimera"        : "skerit/alchemy-chimera",
-		"alchemy-media"          : "skerit/alchemy-media",
-		"alchemy-i18n"           : "skerit/alchemy-i18n",
-		"alchemy-menu"           : "skerit/alchemy-menu",
-		"alchemy-styleboost"     : "skerit/alchemy-styleboost",
-		"alchemy-web-components" : "~0.5.0",
-		"alchemy-ajatar-theme"   : "skerit/alchemy-ajatar-theme",
+		"alchemymvc"             : "~1.1.0",
+		"alchemy-acl"            : "~0.6.0",
+		"alchemy-chimera"        : "~0.6.0",
+		"alchemy-media"          : "~0.5.0",
+		"alchemy-i18n"           : "~0.6.0",
+		"alchemy-menu"           : "~0.6.0",
+		"alchemy-styleboost"     : "~0.4.3",
+		"alchemy-ajatar-theme"   : "~1.2.0",
 		"ansi-html"              : "~0.0.7",
 		"ecstatic"               : "~4.1.4",
 		"@root/encoding"         : "~1.0.1",
@@ -25,7 +24,6 @@
 	"license": "GPLv3",
 	"engineStrict": true,
 	"engines": {
-		"node": ">=10.17.0"
-	},
-	"private": true
+		"node": ">=10.21.0"
+	}
 }

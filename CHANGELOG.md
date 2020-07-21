@@ -1,6 +1,6 @@
-## 0.4.0 (WIP)
+## 0.4.0 (2020-07-21)
 
-* Begin upgrading to Alchemy v1.1.0
+* Upgrade to Alchemy v1.1.0
 * Use socketfiles for node.js sites by default
 * Add sticky routing (always route same client to the same instance)
 * Node sites can now be "isolated", meaning they will only serve already seen clients

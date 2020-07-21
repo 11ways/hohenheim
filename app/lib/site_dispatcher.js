@@ -1048,8 +1048,6 @@ SiteDispatcher.setMethod(function respondWithError(res, type) {
 		message  : alchemy.settings[prop] || fallback
 	};
 
-	console.log(prop, type, variables)
-
 	alchemy.hawkejs.render('static/error', variables, function gotHtml(err, result) {
 
 		if (err || !result) {
