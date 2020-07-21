@@ -9,6 +9,7 @@
 * Upgrade to the latest Greenlock version (big changes for the Letsencrypt API)
 * Remove spdy in favor of internal http2 module
 * Switch to http2-proxy, because http-proxy is not compatible with http2
+* Upgrade to Greenlock v4
 
 ## 0.3.4 (2019-06-28)
 

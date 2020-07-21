@@ -367,7 +367,7 @@ SiteDispatcher.setMethod(function startProxy() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.3.0
+ * @version  0.4.0
  */
 SiteDispatcher.setMethod(function initGreenlock() {
 
@@ -425,19 +425,23 @@ SiteDispatcher.setMethod(function initGreenlock() {
 
 	// Create the greenlock instance
 	this.greenlock = GreenLock.create({
-		maintainerEmail: alchemy.settings.letsencrypt_email,
-		subscriberEmail: alchemy.settings.letsencrypt_email,
 		// for an RFC 8555 / RFC 7231 ACME client user agent
-		packageAgent: alchemy.package.name + '/' + alchemy.package.version,
-		notify: function notify(event, details) {
+		packageAgent    : alchemy.package.name + '/' + alchemy.package.version,
+		packageRoot     : PATH_TEMP,
+		configDir       : libpath.resolve(PATH_TEMP, 'greenlock.d'),
+		manager         : '@greenlock/manager',
+		maintainerEmail : alchemy.settings.letsencrypt_email,
+		subscriberEmail : alchemy.settings.letsencrypt_email,
+		staging         : !!alchemy.settings.letsencrypt_staging,
 
-			if (debug) {
-				console.log('Greenlock notification:', event, details);
-			}
+		notify: function notify(event, details) {
 
 			if (event == 'error') {
 				console.error('Greenlock error:', details);
+			} else if (debug) {
+				console.log('Greenlock notification:', event, details);
 			}
+
 		}
 	});
 
