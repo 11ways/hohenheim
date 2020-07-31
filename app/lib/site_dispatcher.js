@@ -1238,7 +1238,7 @@ SiteDispatcher.setMethod(function forwardRequest(req, res, forward_address, ws_h
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.4.0
- * @version  0.4.0
+ * @version  0.4.1
  *
  * @param    {IncomingMessage}   req
  * @param    {Object}            options   HTTP2-Proxy options object
@@ -1284,7 +1284,14 @@ SiteDispatcher.setMethod(function modifyIncomingRequest(req, options) {
 		if (site.domain && site.domain.headers && site.domain.headers.length) {
 			site.domain.headers.forEach(function eachHeader(header) {
 				if (header.name) {
-					headers[header.name] = header.value;
+					// Unset the header if it is an empty value
+					if (!header.value) {
+						if (headers[header.name]) {
+							delete headers[header.name];
+						}
+					} else {
+						headers[header.name] = header.value;
+					}
 				}
 			});
 		}
