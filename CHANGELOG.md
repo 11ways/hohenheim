@@ -1,3 +1,7 @@
+## 0.4.1 (WIP)
+
+* Change the umask to 2 to child processes will leave created files & sockets readable by others in their group
+
 ## 0.4.0 (2020-07-21)
 
 * Upgrade to Alchemy v1.1.0

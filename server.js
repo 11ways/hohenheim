@@ -15,6 +15,10 @@
  */
 require('alchemymvc');
 
+// Change the umask so child process will leave created files & sockets
+// readable by others in their group
+process.umask(2);
+
 /**
  * Overwrite an existing object without breaking references
  *

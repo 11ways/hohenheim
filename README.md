@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="https://raw.githubusercontent.com/11ways/hohenheim/master/app/assets/images/startup.svg" width=30 alt="Hohenheim logo"/>
+  <img src="https://raw.githubusercontent.com/11ways/hohenheim/master/app/root/startup.svg" width=30 alt="Hohenheim logo"/>
   <b>Hohenheim</b>
 </h1>
 <div align="center">
@@ -15,8 +15,7 @@
 
 ### Node.js
 
-Hohenheim requires at least node.js version 8.9.0. Your sites can use lower versions if really needed, though.
-This version does not yet run on node 10+ because of problems with the `spdy` package.
+Hohenheim requires at least node.js version 10.21.0
 
 ### Mongodb
 
