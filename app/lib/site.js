@@ -113,16 +113,17 @@ Site.constitute(function setSchema() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.2.0
+ * @version  0.4.1
  *
  * @param    {String}    hostname   The hostname
  * @param    {String}    [ip]       The optional ip to match
  *
- * @return   {Boolean}   Returns true if the hostname matches
+ * @return   {Boolean|Object}   Returns true if the hostname matches
  */
 Site.setMethod(function matches(hostname, ip) {
 
-	var domain,
+	var matched,
+	    domain,
 	    found,
 	    ip2,
 	    i,
@@ -170,7 +171,13 @@ Site.setMethod(function matches(hostname, ip) {
 
 		if (domain.regexes) {
 			for (j = 0; j < domain.regexes.length; j++) {
-				if (domain.regexes[j].exec(hostname) !== null) {
+				matched = domain.regexes[j].exec(hostname);
+
+				if (matched !== null) {
+					if (matched.groups) {
+						return matched.groups;
+					}
+
 					return true;
 				}
 			}

@@ -2,6 +2,8 @@
 
 * Change the umask to 2 to child processes will leave created files & sockets readable by others in their group
 * Allow unsetting headers
+* Add support for socket files to the `Proxy` site type
+* Domain names can now contain named capture groups, which can be used in the socket file
 
 ## 0.4.0 (2020-07-21)
 

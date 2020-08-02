@@ -19,10 +19,17 @@ var ProxySite = Function.inherits('Develry.Site', function ProxySite(siteDispatc
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.1.0
- * @version  0.1.0
+ * @version  0.4.1
  */
 ProxySite.constitute(function addFields() {
-	this.schema.addField('url', 'String');
+
+	this.schema.addField('socket', 'String', {
+		description: 'The path to the socket file to send the requests to (can contain {placeholders})'
+	});
+
+	this.schema.addField('url', 'String', {
+		description: 'The URL to send the requests to (when no proxy is entered)'
+	});
 });
 
 /**
@@ -30,12 +37,24 @@ ProxySite.constitute(function addFields() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.4.0
+ * @version  0.4.1
  *
  * @param    {IncomingMessage}   req
  * @param    {Function}          callback
  */
 ProxySite.setMethod(function getAddress(req, callback) {
+
+	if (this.settings.socket) {
+
+		let socket_path = this.settings.socket;
+
+		if (req[MATCHED_GROUPS] && socket_path.indexOf('{') > -1) {
+			socket_path = socket_path.assign(req[MATCHED_GROUPS]);
+		}
+
+		return callback(null, {socketPath: socket_path});
+	}
+
 	return callback(null, this.settings.url);
 });
 

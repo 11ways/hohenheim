@@ -20,6 +20,8 @@ const readFileAsync = util.promisify(fs.readFile),
       small_stagger = Math.round(Math.PI * (30 * 1000)), // +/- 30 seconds
       servername_re = /^[a-z0-9\.\-]+$/i;
 
+global.MATCHED_GROUPS = Symbol('matched_groups');
+
 /**
  * The Site Dispatcher class
  *
@@ -862,7 +864,7 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.4.0
+ * @version  0.4.1
  * 
  * @param    {String|Object}   req_or_domain
  */
@@ -920,7 +922,12 @@ SiteDispatcher.setMethod(function getSite(req_or_domain) {
 		}
 
 		// We do have an ip address to match
-		if (entry.site.matches(domain, ip)) {
+		if (matches = entry.site.matches(domain, ip)) {
+
+			if (req && typeof matches == 'object') {
+				req[MATCHED_GROUPS] = matches;
+			}
+
 			return entry;
 		}
 	}
@@ -928,7 +935,12 @@ SiteDispatcher.setMethod(function getSite(req_or_domain) {
 	for (key in this.domains) {
 		entry = this.domains[key];
 
-		if (entry.site.matches(domain, ip)) {
+		if (matches = entry.site.matches(domain, ip)) {
+
+			if (req && typeof matches == 'object') {
+				req[MATCHED_GROUPS] = matches;
+			}
+
 			return entry;
 		}
 	}
