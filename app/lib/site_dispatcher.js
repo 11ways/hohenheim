@@ -823,9 +823,9 @@ SiteDispatcher.setMethod(function sanitizeHostname(req) {
 /**
  * Handle request errors
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.4.0
+ * @version  0.4.1
  * 
  * @param    {Error}              error
  * @param    {IncommingMessage}   req
@@ -848,7 +848,7 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
 	// so shared keep-alive requests in total will only be tried 4 times
 	if (req.errorCount > 4) {
 		//log.error('Retried connection', req.connectionId, 'four times, giving up on:', req.url);
-		this.respondWithError(res, 'unreachable');
+		this.respondWithError(res, 'unreachable', error);
 	} else {
 		let that = this;
 
@@ -1020,12 +1020,13 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.4.0
- * @version  0.4.0
+ * @version  0.4.1
  * 
  * @param    {ServerResponse}    res
  * @param    {String}            type
+ * @param    {Error}             error   The original error
  */
-SiteDispatcher.setMethod(function respondWithError(res, type) {
+SiteDispatcher.setMethod(function respondWithError(res, type, error) {
 
 	let fallback,
 	    status,
@@ -1039,6 +1040,10 @@ SiteDispatcher.setMethod(function respondWithError(res, type) {
 		status = 502;
 		prop = 'unreachable_message';
 		fallback = 'Failed to reach server!';
+
+		if (error) {
+			console.error('Failed to reach site:', error);
+		}
 	}
 
 	let cached = this[prop];
