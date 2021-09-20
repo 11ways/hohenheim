@@ -702,6 +702,11 @@ Site.setMethod(function _startOnType(type, value, callback) {
 
 		config.uid = Number(this.settings.user);
 		config.gid = Number(this.settings.user);
+
+		if (config.uid) {
+			// Unset HOME, or else os.homedir() will use the wrong path
+			env.HOME = undefined;
+		}
 	}
 
 	// Start the server
@@ -845,7 +850,7 @@ Site.setMethod(function _startOnType(type, value, callback) {
 
 	reciprocal.on('remcache_remove', function onRemcacheRemove(data) {
 		that.remcache.remove(data.key);
-	})
+	});
 });
 
 /**

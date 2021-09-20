@@ -4,6 +4,7 @@
 * Allow unsetting headers
 * Add support for socket files to the `Proxy` site type
 * Domain names can now contain named capture groups, which can be used in the socket file
+* The `HOME` environment variable will be unset if a node site runs as a different UID
 
 ## 0.4.0 (2020-07-21)
 
