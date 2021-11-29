@@ -223,6 +223,10 @@ Site.setDocumentMethod(function getHostnames(for_letsencrypt) {
 
 		for (let j = 0; j < domain.hostname.length; j++) {
 
+			if (!domain.hostname[j]) {
+				continue;
+			}
+
 			if (domain.hostname[j][0] == '/') {
 				continue;
 			}

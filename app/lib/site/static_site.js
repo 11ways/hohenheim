@@ -21,7 +21,7 @@ var StaticSite = Function.inherits('Develry.Site', function StaticSite(siteDispa
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.3.2
- * @version  0.3.2
+ * @version  0.4.1
  */
 StaticSite.setProperty(function ecstatic_instance() {
 
@@ -33,13 +33,21 @@ StaticSite.setProperty(function ecstatic_instance() {
 		return null;
 	}
 
-	let settings = this.settings;
+	let settings = this.settings,
+	    handle_error;
+
+	if (settings.fallback_file) {
+		handle_error = false;
+	} else {
+		handle_error = true;
+	}
 
 	this._einstance = ecstatic({
 		root         : settings.path,
 		showDir      : settings.autoindex,
 		autoIndex    : settings.autoindex,
 		showDotfiles : settings.show_hidden_files,
+		handleError  : handle_error,
 	});
 
 	return this._einstance;
@@ -50,7 +58,7 @@ StaticSite.setProperty(function ecstatic_instance() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.3.2
- * @version  0.3.2
+ * @version  0.4.1
  */
 StaticSite.constitute(function addFields() {
 	this.schema.addField('path', 'String');
@@ -63,6 +71,9 @@ StaticSite.constitute(function addFields() {
 
 	// Show hidden files?
 	this.schema.addField('show_hidden_files', 'Boolean', {default: false});
+
+	// Use a specific fallback file?
+	this.schema.addField('fallback_file', 'String');
 });
 
 /**
@@ -70,7 +81,7 @@ StaticSite.constitute(function addFields() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.3.2
- * @version  0.3.2
+ * @version  0.4.1
  */
 StaticSite.setMethod(function handleRequest(req, res) {
 
@@ -80,9 +91,29 @@ StaticSite.setMethod(function handleRequest(req, res) {
 		return res.end();
 	}
 
-	instance(req, res);
-});
+	if (this.settings && this.settings.fallback_file) {
+		instance(req, res, () => {
+			let conduit = new Classes.Alchemy.Conduit.Conduit(req, res);
 
+			// Pre Alchemy-v1.2.0 conduit fix
+			if (!conduit.request) {
+				conduit.request = req;
+				conduit.response = res;
+				conduit.headers = req.headers;
+			}
+
+			conduit.serveFile(this.settings.fallback_file, {
+				disposition: false,
+				onError : (err) => {
+					res.statusCode = 404;
+					res.end('File not found');
+				}
+			});
+		});
+	} else {
+		instance(req, res);
+	}
+});
 
 /**
  * Update this site,
