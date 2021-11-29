@@ -93,7 +93,7 @@ StaticSite.setMethod(function handleRequest(req, res) {
 
 	if (this.settings && this.settings.fallback_file) {
 		instance(req, res, () => {
-			let conduit = new Classes.Alchemy.Conduit.Conduit(req, res);
+			let conduit = new Classes.Alchemy.Conduit(req, res);
 
 			// Pre Alchemy-v1.2.0 conduit fix
 			if (!conduit.request) {
