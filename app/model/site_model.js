@@ -108,7 +108,7 @@ Site.constitute(function chimeraConfig() {
 	edit.addField('domains', 'domain');
 
 	// Add statistics & control field in a new tab
-	edit.addField('statistics', '_id', {type: 'SiteStat'});
+	edit.addField('control', '_id', {type: 'SiteStat'});
 });
 
 /**

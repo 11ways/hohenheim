@@ -23,7 +23,9 @@ var updateSite = function updateSite(siteId, update_logs) {
 	$this = $('div[data-site-stats][data-site-id="' + siteId + '"]');
 	$logs = $('div[data-site-logs][data-site-id="' + siteId + '"]');
 
-	hawkejs.scene.helpers.Alchemy.getResource('sitestat', {id: siteId}, function gotSitestats(err, result) {
+	let time = Date.now();
+
+	hawkejs.scene.helpers.Alchemy.getResource('sitestat', {id: siteId, time}, function gotSitestats(err, result) {
 
 		var process,
 		    html,
@@ -112,6 +114,12 @@ var updateSite = function updateSite(siteId, update_logs) {
 		// Kill a process
 		$this.on('click', 'button[data-kill-pid]', function(e) {
 
+			if (e.handled_click) {
+				return;
+			}
+
+			e.handled_click = true;
+
 			var $this = $(this);
 
 			e.preventDefault();
@@ -130,6 +138,12 @@ var updateSite = function updateSite(siteId, update_logs) {
 		// Isolate a process
 		$this.on('click', 'button[data-isolate-pid]', function(e) {
 
+			if (e.handled_click) {
+				return;
+			}
+
+			e.handled_click = true;
+
 			var $this = $(this);
 
 			e.preventDefault();
@@ -147,6 +161,14 @@ var updateSite = function updateSite(siteId, update_logs) {
 
 		// Show a terminal
 		$this.on('click', 'button[data-term-pid]', function onShowTerm(e) {
+
+			// No idea why, but the click event seems to fire twice for new lines
+			// So keep track of them
+			if (e.handled_click) {
+				return;
+			}
+
+			e.handled_click = true;
 
 			var $this = $(this),
 			    data,
@@ -199,9 +221,9 @@ var updateSite = function updateSite(siteId, update_logs) {
 				});
 			});
 
-			term.on('resize', function resized() {
+			term.on('resize', Function.throttle(function resized() {
 				link.submit('redraw');
-			});
+			}, 100, false, true));
 
 			setTimeout(function getProposedSize() {
 				var geo = term.proposeGeometry();
@@ -303,7 +325,9 @@ hawkejs.scene.on({type: 'set', template: 'chimera/fields/site_stat_edit'}, funct
 		var $this  = $(this),
 		    siteId = $this.attr('data-site-id');
 
-		updateSite(siteId);
+		setTimeout(() => {
+			updateSite(siteId);
+		}, 500)
 	});
 
 	$('[data-start-process]', $elements).click(function(e) {
@@ -321,7 +345,9 @@ hawkejs.scene.on({type: 'set', template: 'chimera/fields/site_stat_edit'}, funct
 				throw err;
 			}
 
-			updateSite(siteId);
+			setTimeout(() => {
+				updateSite(siteId);
+			}, 500)
 		});
 	});
 

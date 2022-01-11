@@ -6,6 +6,7 @@
 * Domain names can now contain named capture groups, which can be used in the socket file
 * The `HOME` environment variable will be unset if a node site runs as a different UID
 * Add `fallback_file` option to static site settings
+* Fix issues with the Sitestat element in Chimera
 
 ## 0.4.0 (2020-07-21)
 
