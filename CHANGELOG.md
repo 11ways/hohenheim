@@ -1,4 +1,4 @@
-## 0.4.1 (WIP)
+## 0.4.1 (2022-01-11)
 
 * Change the umask to 2 to child processes will leave created files & sockets readable by others in their group
 * Allow unsetting headers

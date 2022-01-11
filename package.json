@@ -3,7 +3,7 @@
 	"description": "The hohenheim dispatcher",
 	"version": "0.4.1",
 	"dependencies": {
-		"alchemymvc"             : "~1.1.8",
+		"alchemymvc"             : "~1.1.10",
 		"alchemy-acl"            : "~0.7.1",
 		"alchemy-chimera"        : "~0.6.0",
 		"alchemy-media"          : "~0.5.2",
