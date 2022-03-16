@@ -63,7 +63,7 @@ ProxySite.setMethod(function getAddress(req, callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.3.2
- * @version  0.3.2
+ * @version  0.4.2
  *
  * @param    {ServerResponse}   res         The response being sent to the browser
  * @param    {IncomingMessage}  req         The original request
@@ -101,10 +101,12 @@ ProxySite.setMethod(function modifyResponse(res, req, proxy_res, domain) {
 		return;
 	}
 
-	location = location.after(proxy_host);
+	let url = RURL.parse(location);
 
-	if (location[0] == ':') {
-		location = '/' + location.after('/');
+	if (url.host == proxy_host) {
+		location = url.path;
+	} else {
+		return;
 	}
 
 	proxy_res.headers['location'] = location;
