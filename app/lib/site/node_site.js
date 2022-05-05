@@ -45,7 +45,7 @@ var Site = Function.inherits('Develry.Site', function NodeSite(siteDispatcher, r
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.1.0
- * @version  0.4.0
+ * @version  0.4.2
  */
 Site.constitute(function addFields() {
 
@@ -69,6 +69,9 @@ Site.constitute(function addFields() {
 
 	// API keys for Hohenheim actions
 	this.schema.addField('api_keys', 'String', {array: true});
+
+	// Use a port instead of a socket?
+	this.schema.addField('use_ports', 'Boolean');
 
 	// Create new subschema for environment variables
 	let env_schema = new Classes.Alchemy.Schema();
