@@ -4,7 +4,7 @@
 	"version": "0.4.2-alpha",
 	"dependencies": {
 		"alchemymvc"             : "~1.1.10",
-		"alchemy-acl"            : "~0.7.1",
+		"alchemy-acl"            : "0.7.1",
 		"alchemy-chimera"        : "~0.6.0",
 		"alchemy-media"          : "~0.5.2",
 		"alchemy-i18n"           : "~0.6.2",

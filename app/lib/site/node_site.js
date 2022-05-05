@@ -370,6 +370,17 @@ Site.setProperty(function inactive_process_count() {
 });
 
 /**
+ * Should we use port numbers to start this node site?
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.4.2
+ * @version  0.4.2
+ */
+Site.setProperty(function use_ports() {
+	return this.settings.use_ports;
+});
+
+/**
  * Update this site,
  * recreate the entries in the parent dispatcher
  *
