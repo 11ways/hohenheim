@@ -20,7 +20,7 @@
 		"http2-proxy"            : "~5.0.53",
 		"parse-passwd"           : "~1.0.0",
 		"posix"                  : "~4.2.0",
-		"process-monitor"        : "skerit/process-monitor"
+		"@11ways/process-monitor": "~0.3.1"
 	},
 	"license": "GPLv3",
 	"engineStrict": true,
