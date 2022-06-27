@@ -1082,7 +1082,7 @@ SiteDispatcher.setMethod(function respondWithError(res, type, error) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.4.0
+ * @version  0.4.2
  * 
  * @param    {IncomingMessage}    req
  * @param    {ServerResponse}     res
@@ -1129,7 +1129,10 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 
 	if (!req.socket.connectionId) {
 		req.socket.connectionId = ++this.connectionCounter;
-		res.socket.connectionId = req.socket.connectionId;
+
+		if (res && res.socket) {
+			res.socket.connectionId = req.socket.connectionId;
+		}
 	}
 
 	req.connectionId = req.socket.connectionId;
