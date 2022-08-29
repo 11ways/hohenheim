@@ -250,7 +250,7 @@ SiteDispatcher.setMethod(async function getLocalUsers() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.2.0
+ * @version  0.4.2
  */
 SiteDispatcher.setMethod(function getLocalIps() {
 
@@ -271,16 +271,35 @@ SiteDispatcher.setMethod(function getLocalIps() {
 				title    : config.family + ' ' + config.address,
 				family   : config.family,
 				internal : config.internal,
-				address  : config.address
+				address  : config.address,
+				old      : false,
 			});
 		}
 	}
 
 	temp.sortByPath(1, 'title');
 
+	local_ips['any'] = {
+		title   : 'Any IP',
+		any     : true,
+		old     : false,
+	};
+
+	let seen = {};
+
 	for (i = 0; i < temp.length; i++) {
 		config = temp[i];
+		seen[config.address] = true;
 		local_ips[config.address] = config;
+	}
+
+	for (let ip in local_ips) {
+		let entry = local_ips[ip];
+
+		if (!seen[ip] && !entry.old && !entry.any) {
+			entry.old = true;
+			entry.title = 'Old: ' + entry.title;
+		}
 	}
 });
 

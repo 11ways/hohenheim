@@ -113,7 +113,7 @@ Site.constitute(function setSchema() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.4.1
+ * @version  0.4.2
  *
  * @param    {String}    hostname   The hostname
  * @param    {String}    [ip]       The optional ip to match
@@ -150,7 +150,9 @@ Site.setMethod(function matches(hostname, ip) {
 			}
 
 			for (j = 0; j < domain.listen_on.length; j++) {
-				if (domain.listen_on[j] == ip || domain.listen_on[j] == ip2) {
+				let entry = domain.listen_on[j];
+
+				if (entry == 'any' || entry == ip || entry == ip2) {
 					found = true;
 					break;
 				}

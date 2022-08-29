@@ -2,6 +2,7 @@
 
 * Fix `Proxy` sites breaking certain `location` response headers
 * Add `use_ports` field to Node sites
+* Add the `any` ip option to listen-on
 
 ## 0.4.1 (2022-01-11)
 
