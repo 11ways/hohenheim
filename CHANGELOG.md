@@ -1,4 +1,4 @@
-## 0.4.2 (WIP)
+## 0.4.2 (2022-10-10)
 
 * Fix `Proxy` sites breaking certain `location` response headers
 * Add `use_ports` field to Node sites
