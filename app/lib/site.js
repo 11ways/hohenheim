@@ -113,7 +113,7 @@ Site.constitute(function setSchema() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.4.2
+ * @version  0.5.0
  *
  * @param    {String}    hostname   The hostname
  * @param    {String}    [ip]       The optional ip to match
@@ -172,6 +172,12 @@ Site.setMethod(function matches(hostname, ip) {
 		}
 
 		if (domain.regexes) {
+
+			// Do not allow git subdomains in regexes (temporary workaround for brute force protection)
+			if (domain.indexOf('git.') > -1 || domain.indexOf('gitlab.') > -1) {
+				continue;
+			}
+
 			for (j = 0; j < domain.regexes.length; j++) {
 				matched = domain.regexes[j].exec(hostname);
 
