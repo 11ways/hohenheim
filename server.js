@@ -19,6 +19,19 @@ require('alchemymvc');
 // readable by others in their group
 process.umask(2);
 
+Router.serveDependencyFile('xterm', {
+	file  : 'lib/xterm.js',
+	alias : '/scripts/xterm.js',
+});
+Router.serveDependencyFile('xterm', {
+	file  : 'css/xterm.css',
+	alias : '/stylesheets/xterm.css',
+});
+Router.serveDependencyFile('xterm-addon-fit', {
+	file  : 'lib/xterm-addon-fit.js',
+	alias : '/scripts/xterm-addon-fit.js',
+});
+
 /**
  * Overwrite an existing object without breaking references
  *
