@@ -11,10 +11,14 @@
  * @license     MIT License (http://www.opensource.org/licenses/mit-license.php)
  */
 alchemy.usePlugin('styleboost');
-alchemy.usePlugin('i18n');
+alchemy.usePlugin('i18n', alchemy.settings.i18n_settings);
+
+alchemy.usePlugin('widget');
+alchemy.usePlugin('form');
 alchemy.usePlugin('acl', {baselayout: 'layouts/base', bodylayout: 'layouts/body', mainlayout: ['acl_main', 'admin_main', 'main'], mainblock: 'main', contentblock: 'content'});
 alchemy.usePlugin('menu');
-alchemy.usePlugin('web-components');
+
+alchemy.usePlugin('media', alchemy.settings.media_settings);
 alchemy.usePlugin('chimera', {title: 'Hohenheim'});
 
 /**

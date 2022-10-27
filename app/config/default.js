@@ -23,6 +23,9 @@ module.exports = {
 	// Use cookies
 	cookies: 'cookie_key_or_false_to_disable',
 
+	// Enable SASS support
+	css_sass: true,
+
 	// Disable debugging
 	debug: false,
 

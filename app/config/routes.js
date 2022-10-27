@@ -3,14 +3,15 @@ Router.add({
 	methods    : 'get',
 	paths      : '/',
 	handler    : 'Static#home',
-	breadcrumb : 'static.home'
+	breadcrumb : 'static.home',
 });
 
 Router.add({
 	name       : 'sitestat-start',
-	methods    : 'get',
+	methods    : 'post',
 	paths      : '/api/sitestat/start',
 	handler    : 'Static#sitestatStart',
+	permission : 'hohenheim.site.start',
 });
 
 Router.add({
@@ -18,6 +19,7 @@ Router.add({
 	methods    : 'get',
 	paths      : '/api/sitestat/kill',
 	handler    : 'Static#sitestatKill',
+	permission : 'hohenheim.site.kill',
 });
 
 Router.add({
@@ -25,6 +27,7 @@ Router.add({
 	methods    : 'get',
 	paths      : '/api/sitestat/isolate',
 	handler    : 'Static#sitestatIsolate',
+	permission : 'hohenheim.site.isolate',
 });
 
 Router.add({
@@ -32,6 +35,7 @@ Router.add({
 	methods    : 'get',
 	paths      : '/api/sitestat/log',
 	handler    : 'Static#sitestatLog',
+	permission : 'hohenheim.site.log',
 });
 
 Router.add({
@@ -39,6 +43,7 @@ Router.add({
 	methods    : 'get',
 	paths      : '/api/sitestat/logs',
 	handler    : 'Static#sitestatLogs',
+	permission : 'hohenheim.site.log',
 });
 
 Router.add({
@@ -46,34 +51,26 @@ Router.add({
 	methods    : 'get',
 	paths      : '/api/sitestat',
 	handler    : 'Static#sitestat',
+	permission : 'hohenheim.site.stats',
 });
 
 Router.linkup('Terminal::linkup', 'terminallink', 'Static#terminal');
 
-// Add "Sites" menu item
-alchemy.plugins.chimera.menu.set('site', {
-	title: 'Sites',
-	route: 'chimera@ModelAction',
-	parameters: {
-		controller: 'editor',
-		subject: 'site',
-		action: 'index'
+alchemy.plugins.chimera.sidebar_menu = [
+	{
+		model : 'Site',
+		title : 'Sites'
 	},
-	icon: {
-		fa: 'globe-africa'
-	}
-});
-
-// Add "Domains" menu item
-alchemy.plugins.chimera.menu.set('domain', {
-	title: 'Domains',
-	route: 'chimera@ModelAction',
-	parameters: {
-		controller: 'editor',
-		subject: 'domain',
-		action: 'index'
+	{
+		model : 'Microcopy',
+		title : 'Microcopy'
 	},
-	icon: {
-		fa: 'passport'
-	}
-});
+	{
+		model : 'PermissionGroup',
+		title : 'Permission Groups',
+	},
+	{
+		model : 'User',
+		title : 'Users'
+	},
+];

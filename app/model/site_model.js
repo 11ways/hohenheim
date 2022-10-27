@@ -116,7 +116,7 @@ Site.constitute(function chimeraConfig() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.3.2
+ * @version  0.5.0
  *
  * @param    {Function}   callback
  */
@@ -163,7 +163,10 @@ Site.setMethod(function getSites(callback) {
 						config = local_ips[ip];
 
 						if (!config) {
-							local_ips[ip] = 'Old: ' + ip;
+							local_ips[ip] = {
+								old   : true,
+								title : 'Old: ' + ip,
+							};
 						} else if (config.family == 'IPv4') {
 							// Add an IPv6-ified IPv4 address,
 							// because on IPv6 enabled interfaces
