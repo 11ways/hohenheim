@@ -174,7 +174,7 @@ Site.setMethod(function matches(hostname, ip) {
 		if (domain.regexes) {
 
 			// Do not allow git subdomains in regexes (temporary workaround for brute force protection)
-			if (domain.indexOf('git.') > -1 || domain.indexOf('gitlab.') > -1) {
+			if (hostname.indexOf('git.') > -1 || hostname.indexOf('gitlab.') > -1) {
 				continue;
 			}
 
