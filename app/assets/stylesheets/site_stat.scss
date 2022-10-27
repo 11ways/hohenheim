@@ -1,0 +1,24 @@
+al-field[field-view="site_stat"] {
+	border: none !important;
+
+	.site-stat-wrapper > .field {
+		padding: 1rem 0.5rem 0.5rem;
+	}
+}
+
+site-control {
+	display: block;
+
+	.js-start-process {
+		margin-bottom: 1rem;
+	}
+
+	.xterminal {
+		margin-top: 1rem;
+	}
+
+	.aft-actions {
+		display: flex;
+		justify-content: space-around;
+	}
+}

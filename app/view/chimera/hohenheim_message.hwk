@@ -1,0 +1,3 @@
+{% if message %}
+	{% block "page-notification" %}<span class="notification">{{ message }}</span>{% /block %}
+{% /if %}

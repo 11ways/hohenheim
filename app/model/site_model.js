@@ -80,7 +80,7 @@ Site.constitute(function addFields() {
  *
  * @author   Jelle De Loecker <jelle@develry.be>
  * @since    0.1.0
- * @version  0.3.0
+ * @version  0.5.0
  */
 Site.constitute(function chimeraConfig() {
 
@@ -105,10 +105,17 @@ Site.constitute(function chimeraConfig() {
 	edit.addField('settings');
 
 	// Add domains in a new tab
-	edit.addField('domains', 'domain');
+	edit.addField('domain', {
+		group: 'domains',
+	});
 
 	// Add statistics & control field in a new tab
-	edit.addField('control', '_id', {type: 'SiteStat'});
+	edit.addField('_id', {
+		group   : 'control',
+		view    : 'site_stat',
+		wrapper : 'site_stat',
+		title   : 'Control',
+	});
 });
 
 /**

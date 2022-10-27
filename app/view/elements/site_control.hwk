@@ -1,0 +1,33 @@
+<% style('xterm') %>
+<% script(['xterm.js', 'xterm-addon-fit.js']) %>
+
+<al-button class="js-start-process" state="idle">
+
+	<al-state state-name="idle">
+		<al-icon icon-name="square-plus"></al-icon>
+		<span>Start new process</span>
+	</al-state>
+
+	<al-state state-name="busy">
+		<al-icon icon-name="compass" icon-flags="spin"></al-icon>
+		<span>Starting new process...</span>
+	</al-state>
+
+	<al-state state-name="invalid-site-id">
+		<al-icon icon-name="skull-crossbones"></al-icon>
+		<span>Site info not set!</span>
+	</al-state>
+
+	<al-state state-name="start-error">
+		<al-icon icon-name="skull-crossbones"></al-icon>
+		<span>Error starting new process</span>
+	</al-state>
+</al-button>
+
+<al-table
+	#dataprovider={% self %}
+	has-actions="true"
+	update-existing-rows
+></al-table>
+
+<div class="xterminal"></div>

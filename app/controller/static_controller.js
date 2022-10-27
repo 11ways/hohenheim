@@ -29,9 +29,9 @@ Static.setAction(function home(conduit) {
 /**
  * Make basic field information about a model available
  *
- * @author   Jelle De Loecker   <jelle@kipdola.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.3.2
+ * @version  0.5.0
  */
 Static.setAction(function sitestat(conduit) {
 
@@ -42,9 +42,9 @@ Static.setAction(function sitestat(conduit) {
 	}
 
 	let data   = conduit.param(),
-	    siteId = alchemy.castObjectId(data.id);
+	    site_id = alchemy.castObjectId(data.site_id);
 
-	if (!siteId) {
+	if (!site_id) {
 		return conduit.error(new Error('No site_id given'));
 	}
 
@@ -52,10 +52,10 @@ Static.setAction(function sitestat(conduit) {
 		return conduit.end({});
 	}
 
-	let site = alchemy.dispatcher.ids[siteId];
+	let site = alchemy.dispatcher.ids[site_id];
 
 	if (!site) {
-		return conduit.error(new Error('Site "' + siteId + '" does not exist'));
+		return conduit.error(new Error('Site "' + site_id + '" does not exist'));
 	}
 
 	let result = {},
@@ -77,13 +77,25 @@ Static.setAction(function sitestat(conduit) {
 			proc.fingerprints.prune();
 		}
 
+		let status;
+
+		if (proc.isolated) {
+			status = 'isolated';
+		} else if (!proc.ready) {
+			status = 'starting';
+		} else {
+			status = 'ready';
+		}
+
 		result.processes[pid] = {
-			startTime    : proc.startTime,
+			id           : pid,
+			start_time   : proc.startTime,
 			port         : proc.port,
-			cpu          : proc.cpu,
-			mem          : proc.mem,
+			cpu          : proc.cpu || 0,
+			memory       : proc.mem || 0,
 			isolated     : proc.isolated,
 			fingerprints : proc.fingerprints.length,
+			status,
 		};
 	}
 
@@ -96,9 +108,9 @@ Static.setAction(function sitestat(conduit) {
 /**
  * Kill the requested pid
  *
- * @author   Jelle De Loecker   <jelle@kipdola.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.3.0
+ * @version  0.5.0
  */
 Static.setAction(function sitestatKill(conduit) {
 
@@ -135,16 +147,18 @@ Static.setAction(function sitestatKill(conduit) {
 
 	proc.kill();
 
-	conduit.end({success: 'process killed'});
+	this.renderer.history = false;
+	this.set('message', 'Killed process ' + data.pid);
+	this.render('chimera/hohenheim_message');
 });
 
 
 /**
  * Kill the requested pid
  *
- * @author   Jelle De Loecker   <jelle@kipdola.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.4.0
- * @version  0.4.0
+ * @version  0.5.0
  */
 Static.setAction(function sitestatIsolate(conduit) {
 
@@ -181,7 +195,11 @@ Static.setAction(function sitestatIsolate(conduit) {
 
 	proc.isolated = true;
 
-	conduit.end({success: 'process isolated'});
+	console.log('Renderer:', this.renderer);
+
+	this.renderer.history = false;
+	this.set('message', 'Isolated process ' + data.pid);
+	this.render('chimera/hohenheim_message');
 });
 
 /**
@@ -211,6 +229,8 @@ Static.setAction(function sitestatStart(conduit) {
 	if (!site) {
 		return conduit.error(new Error('Site "' + siteId + '" does not exist'));
 	}
+
+	console.log('Starting site:', site)
 
 	site.start();
 

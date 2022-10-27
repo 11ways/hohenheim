@@ -1,0 +1,3 @@
+<site-control
+	site-id={% value %}
+></site-control>
