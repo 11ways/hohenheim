@@ -62,8 +62,6 @@ SiteControl.setMethod(function loadData(config, element) {
 		return;
 	}
 
-	console.log('Loading data:', config, element);
-
 	const pledge = new Pledge();
 
 	this.getResource({name: 'sitestat', cache: false}, {site_id: this.site_id}, (err, res) => {
@@ -114,8 +112,6 @@ SiteControl.setMethod(function loadData(config, element) {
 
 			rows.push(entry);
 		}
-
-		console.log('Got info:', err, res);
 
 		pledge.resolve(rows);
 	});
@@ -212,8 +208,6 @@ SiteControl.setMethod(function openTerminal(pid) {
 	const fit_addon = new FitAddon.FitAddon();
 	term.loadAddon(fit_addon);
 
-	console.log('Creating terminal:', term);
-
 	// Default size
 	term.cols = 80
 	term.rows = 24
@@ -251,8 +245,6 @@ SiteControl.setMethod(function openTerminal(pid) {
 	});
 
 	open_link = link;
-
-	console.log('Creating linkup:', open_link);
 
 	link.on('resize', function onResize(data) {
 		//term.renderer.clear();
@@ -304,8 +296,6 @@ SiteControl.setMethod(function introduced() {
 	let start_button = this.querySelector('.js-start-process');
 
 	start_button.addEventListener('activate', function onActivation(e) {
-
-		console.log('Activated start button', e);
 
 		if (!that.site_id) {
 			start_button.setState('invalid-site-id', 2500, 'idle');

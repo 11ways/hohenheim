@@ -1,4 +1,4 @@
-## 0.5.0 (WIP)
+## 0.5.0 (2022-11-02)
 
 * Upgrade to new Chimera version
 * Make sure terminal streams are not buffered
