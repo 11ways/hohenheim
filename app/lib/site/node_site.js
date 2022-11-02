@@ -881,7 +881,7 @@ Site.setMethod(function _startOnType(type, value, callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.4.0
+ * @version  0.5.0
  *
  * @param    {ChildProcess}   process
  * @param    {Number}         cpu       Cpu usage in percentage
@@ -911,7 +911,7 @@ Site.setMethod(function processStats(process, cpu, mem) {
 			// The process is in overload for over 15 seconds, start a new one?
 			if (this.running < 5) {
 
-				if (this.settings.maximum_processes && this.settings.maximum_processes >= this.running) {
+				if (this.settings.maximum_processes && this.settings.maximum_processes >= this.active_process_count) {
 					// Do nothing, maximum number of processes reached
 				} else {
 					log.warn('Starting new', this.name, 'process because others are too busy');
@@ -1151,7 +1151,7 @@ Site.setMethod(function getAddress(req, callback, attempt) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.3.0
- * @version  0.4.0
+ * @version  0.5.0
  */
 Site.setMethod(function startMinimumServers() {
 
@@ -1162,7 +1162,7 @@ Site.setMethod(function startMinimumServers() {
 
 		if (that.settings
 			&& that.settings.minimum_processes
-			&& that.settings.minimum_processes > that.total_proc_count
+			&& that.settings.minimum_processes > that.active_process_count
 		) {
 			let count = that.total_proc_count || 0;
 

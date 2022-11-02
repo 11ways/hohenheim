@@ -154,7 +154,7 @@ Static.setAction(function sitestatKill(conduit) {
 
 
 /**
- * Kill the requested pid
+ * Isolate the requested pid
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.4.0
@@ -194,8 +194,6 @@ Static.setAction(function sitestatIsolate(conduit) {
 	}
 
 	proc.isolated = true;
-
-	console.log('Renderer:', this.renderer);
 
 	this.renderer.history = false;
 	this.set('message', 'Isolated process ' + data.pid);
