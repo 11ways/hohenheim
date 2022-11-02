@@ -600,7 +600,7 @@ Site.setMethod(function startOnPort(port, callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.3.0
+ * @version  0.5.0
  *
  * @param    {String}            type
  * @param    {Number|String}     value
@@ -725,6 +725,15 @@ Site.setMethod(function _startOnType(type, value, callback) {
 
 	// Start the server
 	child_proc = child.spawn(node_config.bin, args, config);
+
+	try {
+		// Make sure any terminal stream doesn't get buffered
+		if (child_proc.stdio[4]) {
+			child_proc.stdio[4].resume();
+		}
+	} catch (e) {
+		// Ignore
+	}
 
 	child_proc.proclog_id = null;
 	child_proc.procarray = [];

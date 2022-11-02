@@ -1,3 +1,8 @@
+## 0.5.0 (WIP)
+
+* Upgrade to new Chimera version
+* Make sure terminal streams are not buffered
+
 ## 0.4.2 (2022-10-10)
 
 * Fix `Proxy` sites breaking certain `location` response headers
