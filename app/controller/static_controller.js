@@ -228,7 +228,7 @@ Static.setAction(function sitestatStart(conduit) {
 		return conduit.error(new Error('Site "' + siteId + '" does not exist'));
 	}
 
-	console.log('Starting site:', site)
+	log.info('Starting site:', site);
 
 	site.start();
 

@@ -391,7 +391,7 @@ SiteDispatcher.setMethod(function startProxy() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.4.0
+ * @version  0.5.1
  */
 SiteDispatcher.setMethod(function initGreenlock() {
 
@@ -414,11 +414,11 @@ SiteDispatcher.setMethod(function initGreenlock() {
 	this._inited_greenlock = true;
 
 	if (alchemy.settings.letsencrypt === false) {
-		return console.warn('Letsencrypt support is disabled');
+		return log.warn('Letsencrypt support is disabled');
 	}
 
 	if (!alchemy.settings.letsencrypt_email) {
-		return console.error('Can\'t enable letsencrypt: no letsencrypt_email is set');
+		return log.error('Can\'t enable letsencrypt: no letsencrypt_email is set');
 	}
 
 	if (!alchemy.settings.letsencrypt_challenge) {
@@ -556,7 +556,7 @@ function randomRefreshOffset() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.4.0
- * @version  0.4.0
+ * @version  0.5.1
  */
 SiteDispatcher.setMethod(function SNICallback(domainname, callback) {
 
@@ -567,7 +567,12 @@ SiteDispatcher.setMethod(function SNICallback(domainname, callback) {
 	let site = this.getSite(domainname);
 
 	if (!site) {
-		log.error('Failed to find "' + domainname + '", ignoring SNI request');
+
+		alchemy.distinctProblem('sni-unknown-domain-' + domainname, 'Failed to find "' + domainname + '", ignoring SNI request', {
+			// Allow the warning to repeat every 15 minutes
+			repeat_after: 15 * 60 * 1000,
+		});
+
 		return callback(new Error('Domain "' + domainname + '" was not found on this server'));
 	}
 
@@ -1039,7 +1044,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.4.0
- * @version  0.4.1
+ * @version  0.5.1
  * 
  * @param    {ServerResponse}    res
  * @param    {String}            type
@@ -1049,21 +1054,34 @@ SiteDispatcher.setMethod(function respondWithError(res, type, error) {
 
 	let fallback,
 	    status,
-	    prop;
+	    prop,
+	    problem_id;
 
 	if (type == 'not_found') {
 		status = 404;
 		fallback = 'There is no such domain here!';
 		prop = 'not_found_message';
+		problem_id = 'not-found-domain';
 	} else if (type == 'unreachable') {
 		status = 502;
 		prop = 'unreachable_message';
+		problem_id = 'unreachable-site';
 		fallback = 'Failed to reach server!';
+	} else {
+		problem_id = 'unknown-problem';
+	}
 
-		if (error) {
-			console.error('Failed to reach site:', error);
+	if (error && error.address) {
+		if (error.address) {
+			problem_id += '-' + error.address;
 		}
 	}
+
+	alchemy.distinctProblem(problem_id, fallback || problem_id, {
+		error,
+		// Allow the warning to repeat every 15 minutes
+		repeat_after: 15 * 60 * 1000,
+	});
 
 	let cached = this[prop];
 

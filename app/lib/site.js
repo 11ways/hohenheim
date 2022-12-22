@@ -268,7 +268,7 @@ Site.setMethod(function cleanParent() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.3.4
+ * @version  0.5.1
  *
  * @param    {Object}   record
  */
@@ -311,7 +311,7 @@ Site.setMethod(function update(record) {
 				var regex;
 
 				if (!hostname) {
-					console.warn('No hostname in', domain);
+					log.warn('Site', record.name, 'has no hostname in entry', domain);
 					return;
 				}
 

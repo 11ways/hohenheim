@@ -1,3 +1,8 @@
+## 0.5.1 (WIP)
+
+* Move database login to the local.js file
+* Use distinct problem logger
+
 ## 0.5.0 (2022-11-02)
 
 * Upgrade to new Chimera version
