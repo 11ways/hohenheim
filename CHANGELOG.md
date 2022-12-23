@@ -1,4 +1,4 @@
-## 0.5.1 (WIP)
+## 0.5.1 (2022-12-23)
 
 * Move database login to the local.js file
 * Use distinct problem logger
