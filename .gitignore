@@ -1,32 +1,54 @@
-# Ignore certain public folders
-app/public/views/*
-!app/public/views/empty
-
 # Ignore the contents of the temp folder
 temp/*
 
 # Except for the empty file
-!temp/empty
+!temp/.gitkeep
 
-# Ignore IDE specific files
+## IDE files
 *.komodo*
 *.sublime*
 .idea/
 
-# Ignore special files
+## OS specific files
 .DS_Store
+.DS_Store?
 .fuse*
 ._*
-*.bin
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# Ignore log files
+# Log files
 npm-debug.log
 v8.log
+*.cpuprofile
+callgrind*
+*.wtf-trace
 
-# Ignore node modules
+# Dependencies
 /node_modules/
 
-# Ignore the local config
+# Uploaded files
+files/
+
+# Ignore test files
+scratch*
+
+# Coverage directories
+.nyc_output/
+coverage/
+plato/
+
+# Coveralls contains private info
+.coveralls.yml
+
+# Locks
+package-lock.json
+npm-shrinkwrap.json
+yarn.lock
+
+# Ignore the local settings file
 app/config/local.js
 
 # Ignore greenlock file
