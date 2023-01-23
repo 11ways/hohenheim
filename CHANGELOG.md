@@ -1,6 +1,7 @@
-## 0.5.2 (WIP)
+## 0.5.2 (2023-01-23)
 
 * Add the `n_locations` setting, so more custom node versions can be used
+* Upgrade to alchemy v1.3.1
 
 ## 0.5.1 (2022-12-23)
 
