@@ -1,3 +1,7 @@
+## 0.5.2 (WIP)
+
+* Add the `n_locations` setting, so more custom node versions can be used
+
 ## 0.5.1 (2022-12-23)
 
 * Move database login to the local.js file

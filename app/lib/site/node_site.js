@@ -253,13 +253,41 @@ Site.setStatic(function updateVersions(callback) {
 /**
  * Look for available node.js versions
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.3.2
- * @version  0.3.2
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.5.2
+ * @version  0.5.2
  */
 Site.setStatic(function loadInstalledVersions(callback) {
 
-	var versions_path = '/usr/local/n/versions/node';
+	let locations = alchemy.settings.n_locations;
+
+	if (!locations) {
+		locations = [];
+	}
+
+	if (locations.indexOf('/usr/local/n/versions/node') == -1) {
+		locations.push('/usr/local/n/versions/node');
+	}
+
+	let tasks = [];
+
+	for (let location of locations) {
+		tasks.push((next) => {
+			this._loadInstalledVersions(location, next);
+		});
+	}
+
+	Function.parallel(tasks, callback);
+});
+
+/**
+ * Look for available node.js versions
+ *
+ * @author   Jelle De Loecker   <jelle@develry.be>
+ * @since    0.3.2
+ * @version  0.5.2
+ */
+ Site.setStatic(function _loadInstalledVersions(versions_path, callback) {
 
 	fs.readdir(versions_path, function gotNVersions(err, contents) {
 

@@ -1,7 +1,7 @@
 {
 	"name": "hohenheim",
 	"description": "The hohenheim dispatcher",
-	"version": "0.5.1",
+	"version": "0.5.2-alpha",
 	"dependencies": {
 		"alchemy-acl"            : "~0.8.3",
 		"alchemy-chimera"        : "~1.2.1",

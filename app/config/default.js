@@ -101,6 +101,9 @@ module.exports = {
 	// Minify javascript files
 	minify_js: true,
 
+	// Extra n locations
+	n_locations: [],
+
 	// The port to run the server on
 	port: 3001,
 
