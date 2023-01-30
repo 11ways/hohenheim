@@ -15,9 +15,9 @@ const ProxySite = Function.inherits('Develry.Site', 'ProxySite');
 /**
  * Add the site type fields
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.1.0
- * @version  0.4.1
+ * @version  0.5.3
  */
 ProxySite.constitute(function addFields() {
 
@@ -27,6 +27,11 @@ ProxySite.constitute(function addFields() {
 
 	this.schema.addField('url', 'String', {
 		description: 'The URL to send the requests to (when no proxy is entered)'
+	});
+
+	this.schema.addField('ignore_certificates', 'Boolean', {
+		description: 'Ignore certificate errors in case you\'re proxying to an HTTPS target',
+		default    : false,
 	});
 });
 
@@ -56,7 +61,10 @@ ProxySite.setMethod(function update(record) {
 				socket_path = socket_path.assign(req[MATCHED_GROUPS]);
 			}
 
-			return callback(null, {socketPath: socket_path});
+			return callback(null, {
+				socketPath         : socket_path,
+				rejectUnauthorized : !this.settings.ignore_certificates,
+			});
 		};
 
 		return;
@@ -66,9 +74,10 @@ ProxySite.setMethod(function update(record) {
 		let url = RURL.parse(this.settings.url);
 
 		this.proxy_url = {
-			hostname : url.hostname,
-			port     : url.port || 80,
-			protocol : url.protocol.slice(0, -1),
+			hostname           : url.hostname,
+			port               : url.port || 80,
+			protocol           : url.protocol.slice(0, -1),
+			rejectUnauthorized : !this.settings.ignore_certificates,
 		};
 
 		this.getAddress = (req, callback) => {
@@ -80,7 +89,7 @@ ProxySite.setMethod(function update(record) {
 
 	this.getAddress = (req, callback) => {
 		return callback(new Error('Failed to find proxy address'));
-	}
+	};
 });
 
 /**
