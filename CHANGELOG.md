@@ -1,3 +1,7 @@
+## 0.5.3 (WIP)
+
+* Optimize the `SiteDispatcher#forwardRequest()` and `ProxySite#getAddress()` methods
+
 ## 0.5.2 (2023-01-23)
 
 * Add the `n_locations` setting, so more custom node versions can be used

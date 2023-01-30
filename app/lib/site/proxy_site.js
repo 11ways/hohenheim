@@ -10,9 +10,7 @@
  * @param    {Develry.SiteDispatcher}   siteDispatcher
  * @param    {Object}                   record
  */
-var ProxySite = Function.inherits('Develry.Site', function ProxySite(siteDispatcher, record) {
-	ProxySite.super.call(this, siteDispatcher, record);
-});
+const ProxySite = Function.inherits('Develry.Site', 'ProxySite');
 
 /**
  * Add the site type fields
@@ -33,29 +31,71 @@ ProxySite.constitute(function addFields() {
 });
 
 /**
- * Get an adress to proxy to
+ * Update this site,
+ * recreate the entries in the parent dispatcher
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.5.3
+ * @version  0.5.3
+ *
+ * @param    {Object}   record
+ */
+ProxySite.setMethod(function update(record) {
+	update.super.call(this, record);
+
+	this.proxy_url = null;
+
+	if (this.settings.socket) {
+		let record_socket_path = this.settings.socket,
+		    has_assignments = record_socket_path.indexOf('{') > -1;
+
+		this.getAddress = (req, callback) => {
+			let socket_path = record_socket_path;
+
+			if (has_assignments && req[MATCHED_GROUPS]) {
+				socket_path = socket_path.assign(req[MATCHED_GROUPS]);
+			}
+
+			return callback(null, {socketPath: socket_path});
+		};
+
+		return;
+	}
+
+	if (this.settings.url) {
+		let url = RURL.parse(this.settings.url);
+
+		this.proxy_url = {
+			hostname : url.hostname,
+			port     : url.port || 80,
+			protocol : url.protocol.slice(0, -1),
+		};
+
+		this.getAddress = (req, callback) => {
+			callback(null, this.proxy_url);
+		};
+
+		return;
+	}
+
+	this.getAddress = (req, callback) => {
+		return callback(new Error('Failed to find proxy address'));
+	}
+});
+
+/**
+ * Get an adress to proxy to.
+ * This methods get overridden in the `update()` method
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.4.1
+ * @version  0.5.3
  *
  * @param    {IncomingMessage}   req
  * @param    {Function}          callback
  */
 ProxySite.setMethod(function getAddress(req, callback) {
-
-	if (this.settings.socket) {
-
-		let socket_path = this.settings.socket;
-
-		if (req[MATCHED_GROUPS] && socket_path.indexOf('{') > -1) {
-			socket_path = socket_path.assign(req[MATCHED_GROUPS]);
-		}
-
-		return callback(null, {socketPath: socket_path});
-	}
-
-	return callback(null, this.settings.url);
+	return callback(null, this.proxy_url);
 });
 
 /**

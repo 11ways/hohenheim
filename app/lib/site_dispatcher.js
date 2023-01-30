@@ -1253,39 +1253,33 @@ SiteDispatcher.setMethod(function defaultWSHandler(err, req, socket, head) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.4.0
- * @version  0.4.0
+ * @version  0.5.3
  *
  * @param    {Buffer}   ws_head   The websocket head buffer
  */
 SiteDispatcher.setMethod(function forwardRequest(req, res, forward_address, ws_head) {
 
-	var config = {};
-
-	// Original http-proxy forwarding
-	//this.proxy.web(req, res, {target: forward_address});
-
 	// @TODO: parse the forward address earlier?
 	if (typeof forward_address == 'string') {
 		let url = RURL.parse(forward_address);
 
-		config.hostname = url.hostname;
-		config.port = url.port || 80;
-		config.protocol = url.protocol.slice(0, -1);
-		
-		// @TODO: if a path is set, add the req.originalUrl || req.url to the forward address path?
-
-	} else if (typeof forward_address == 'object') {
-		Object.assign(config, forward_address);
+		forward_address = {
+			hostname : url.hostname,
+			port     : url.port || 80,
+			protocol : url.protocol.slice(0, -1),
+		};
 	}
 
-	// @TODO: bind this beforehand?
-	config.onReq = this.boundModifyIncomingRequest;
+	let config = {
+		...forward_address,
+		onReq : this.boundModifyIncomingRequest,
+		onRes : ws_head ? null : this.boundModifyOutgoingResponse,
+	};
 
 	if (ws_head) {
 		// In this case, res is actually a socket
 		this.proxy.ws(req, res, ws_head, config, this.boundDefaultWSHandler);
 	} else {
-		config.onRes = this.boundModifyOutgoingResponse;
 		this.proxy.web(req, res, config, this.boundDefaultWebHandler);
 	}
 });
