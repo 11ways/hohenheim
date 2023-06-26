@@ -113,7 +113,7 @@ Site.constitute(function setSchema() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.5.0
+ * @version  0.5.3
  *
  * @param    {String}    hostname   The hostname
  * @param    {String}    [ip]       The optional ip to match
@@ -122,16 +122,14 @@ Site.constitute(function setSchema() {
  */
 Site.setMethod(function matches(hostname, ip) {
 
-	var matched,
-	    domain,
-	    found,
-	    ip2,
-	    i,
-	    j;
-
 	if (!hostname) {
 		return false;
 	}
+
+	let domain,
+	    ip2,
+	    i,
+	    j;
 
 	if (ip) {
 		ip2 = '::ffff:' + ip;
@@ -142,7 +140,7 @@ Site.setMethod(function matches(hostname, ip) {
 
 		// If an ip is given, it has to match
 		if (ip) {
-			found = false;
+			let found = false;
 
 			// If no ips are configured here, continue
 			if (!domain.listen_on) {
@@ -178,11 +176,22 @@ Site.setMethod(function matches(hostname, ip) {
 				continue;
 			}
 
+			let matched;
+
 			for (j = 0; j < domain.regexes.length; j++) {
 				matched = domain.regexes[j].exec(hostname);
 
 				if (matched !== null) {
+
 					if (matched.groups) {
+						let groups = matched.groups;
+
+						// Brute force protection:
+						// Checks the "project" match in domains using a Regex matcher
+						if (groups.project && groups.project.indexOf('.') > -1) {
+							return false;
+						}
+
 						return matched.groups;
 					}
 

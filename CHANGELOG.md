@@ -2,6 +2,7 @@
 
 * Optimize the `SiteDispatcher#forwardRequest()` and `ProxySite#getAddress()` methods
 * Add the `ignore_certificates` option to `ProxySite`
+* Don't allow subdomains inside the `project` url regex match
 
 ## 0.5.2 (2023-01-23)
 

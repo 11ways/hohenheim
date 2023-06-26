@@ -459,7 +459,6 @@ SiteDispatcher.setMethod(function initGreenlock() {
 		staging         : !!alchemy.settings.letsencrypt_staging,
 
 		notify: function notify(event, details) {
-
 			if (event == 'error') {
 				console.error('Greenlock error:', details);
 			} else if (debug) {
@@ -895,11 +894,10 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
 SiteDispatcher.setMethod(function getSite(req_or_domain) {
 
 	// Get the host (including port)
-	var matches,
+	let matches,
 	    headers,
 	    domain,
 	    entry,
-	    site,
 	    key,
 	    req,
 	    ip;
