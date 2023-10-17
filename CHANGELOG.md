@@ -4,6 +4,7 @@
 * Add the `ignore_certificates` option to `ProxySite`
 * Don't allow subdomains inside the `project` url regex match
 * Make the updating of node.js versions, users & ip addresses available as a task
+* Add support for Proteus-based authentication per site, instead of basic-auth
 
 ## 0.5.2 (2023-01-23)
 

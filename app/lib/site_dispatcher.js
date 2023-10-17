@@ -1211,9 +1211,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 			site.site.registerHit(req, res);
 		}
 
-		site.site.checkBasicAuth(req, res, function done() {
-			site.site.handleRequest(req, res);
-		});
+		site.site.checkAuthenticationAndHandleRequest(req, res);
 	}
 });
 

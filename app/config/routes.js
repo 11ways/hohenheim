@@ -70,6 +70,14 @@ alchemy.plugins.chimera.sidebar_menu = [
 		title : 'Permission Groups',
 	},
 	{
+		model : 'ProteusRealm',
+		title : 'Proteus Realms',
+	},
+	{
+		model : 'ProteusSiteUser',
+		title : 'Proteus Site Users',
+	},
+	{
 		model : 'User',
 		title : 'Users'
 	},

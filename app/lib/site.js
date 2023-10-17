@@ -84,7 +84,7 @@ Site.prepareProperty(function remcache() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.1.0
- * @version  0.2.0
+ * @version  0.5.3
  */
 Site.constitute(function setSchema() {
 
@@ -101,6 +101,9 @@ Site.constitute(function setSchema() {
 
 	// Add delay time in ms
 	schema.addField('delay', 'Number');
+
+	// Add Proteus auth settings
+	schema.belongsTo('ProteusRealm');
 
 	// Add basic auth settings
 	schema.addField('basic_auth', 'String', {array: true});
@@ -372,6 +375,94 @@ function interpretWildcard(str, flags) {
 
 	return RegExp.interpret(pattern, flags);
 }
+
+/**
+ * Check any authentication & handle the request
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.5.3
+ * @version  0.5.3
+ */
+Site.setMethod(function checkAuthenticationAndHandleRequest(req, res) {
+
+	if (this.settings.proteus_realm_id) {
+		return this.handleProteusAuth(req, res);
+	}
+
+	if (this.settings.basic_auth?.length) {
+		return this.checkBasicAuth(req, res, () => {
+			this.handleRequest(req, res);
+		});
+	}
+
+	// No authentication needed (by Hohenheim at least)
+	// so let it continue
+	return this.handleRequest(req, res);
+});
+
+/**
+ * Handle Proteus authentication & handle the request when done
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.5.3
+ * @version  0.5.3
+ */
+Site.setMethod(async function handleProteusAuth(req, res) {
+
+	const realm = await Model.get('ProteusRealm').findByPk(this.settings.proteus_realm_id);
+
+	if (!realm) {
+		throw new Error('Authentication error: Proteus realm not found');
+	}
+
+	let conduit = new Classes.Alchemy.Conduit.Proxied(req, res);
+	let proteus_identity = conduit.session('proteus_identity');
+
+	// If the identity if already set, everything is good!
+	if (proteus_identity) {
+		this.handleRequest(req, res);
+		return true;
+	}
+
+	// See if there is a persistent cookie
+	let acpl = conduit.cookie('acpl');
+
+	if (acpl) {
+		try {
+			let Persistent = conduit.getModel('ProteusPersistentCookie');
+			let user = await Persistent.getUserFromCookieForLogin(conduit, acpl);
+
+			if (user) {
+				conduit.session('proteus_identity', user);
+				this.handleRequest(req, res);
+				return true;
+			}
+
+		} catch (err) {
+			alchemy.registerError(err);
+		}
+	}
+
+	let proteus_client = realm.getClientInstance();
+
+	if (!proteus_client) {
+		return false;
+	}
+
+	let type = conduit.param('proteus');
+
+	if (type == 'verify') {
+		let controller = Controller.get('ProxiedAclStatic', conduit);
+		controller.proteus = proteus_client;
+		controller.doAction('proteusVerifyLogin', [conduit]);
+	} else {
+		conduit.session('afterLogin', {
+			url : '' + conduit.url,
+		});
+
+		proteus_client.startLogin(conduit, realm, this);
+	}
+});
 
 /**
  * Check for basic auth
