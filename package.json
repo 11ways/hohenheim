@@ -7,7 +7,7 @@
 		"alchemy-chimera"        : "~1.2.6",
 		"alchemy-form"           : "~0.2.8",
 		"alchemy-i18n"           : "~0.6.7",
-		"alchemy-media"          : "~0.7.6",
+		"alchemy-media"          : "~0.8.0",
 		"alchemy-menu"           : "~0.6.4",
 		"alchemy-sentry"         : "~0.1.0",
 		"alchemy-styleboost"     : "~0.4.6",
