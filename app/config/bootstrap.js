@@ -15,6 +15,16 @@ alchemy.usePlugin('i18n', alchemy.settings.i18n_settings);
 
 alchemy.usePlugin('form');
 alchemy.usePlugin('widget');
+
+let sentry = alchemy.settings?.sentry;
+
+if (sentry?.endpoint) {
+	alchemy.usePlugin('sentry', {
+		endpoint : sentry.endpoint,
+		serve_browser_script_locally: sentry.serve_browser_script_locally ?? true,
+	});
+}
+
 alchemy.usePlugin('acl', {baselayout: 'layouts/base', bodylayout: 'layouts/body', mainlayout: ['acl_main', 'admin_main', 'main'], mainblock: 'main', contentblock: 'content'});
 alchemy.usePlugin('menu');
 
