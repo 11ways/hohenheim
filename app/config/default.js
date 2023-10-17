@@ -11,6 +11,17 @@
  */
 module.exports = {
 
+	// Should fallback translations be allowed?
+	// (False by default: can cause a mix of different languages per page)
+	allow_fallback_translations: false,
+
+	// Force alchemy to assume it's using https
+	// (when using a reverse proxy that doesn't tell us this, for example)
+	assume_https: false,
+
+	// Use babel for compiling client-side scripts
+	babel: false,
+
 	// Enable caching
 	cache: true,
 
@@ -23,14 +34,53 @@ module.exports = {
 	// Use cookies
 	cookies: 'cookie_key_or_false_to_disable',
 
+	// The domain for which the cookies should be set
+	cookie_domain: false,
+
+	// Use LESS
+	css_less: true,
+
 	// Enable SASS support
 	css_sass: true,
+
+	// Use PostCSS
+	css_post: true,
 
 	// Disable debugging
 	debug: false,
 
 	// Decode json, multipart, urlencode in body
 	decoding: true,
+
+	// The default file hash method
+	file_hash_algorithm: 'sha1',
+
+	// Should uncaught errors be handled (instead of crashing the server)
+	handle_uncaught: true,
+
+	// Enable hawkejs on the client side
+	hawkejs_client: true,
+
+	// Don't allow access to the info page
+	info_page: false,
+
+	// Show a list of all tasks in Janeway
+	janeway_task_menu: true,
+
+	// Allow use of JSON-dry in non-hawkejs responses
+	json_dry_response: true,
+
+	// Kill the process when a file changes
+	kill_on_file_change: false,
+
+	// Override kill extensions
+	// kill_extensions: ['js'],
+
+	// Show the lag menu entry
+	lag_menu : true,
+
+	// Extra import paths
+	less_import_paths: false,
 
 	// Enable Hohenheim's letsencrypt/greenlock support
 	letsencrypt: true,
@@ -44,24 +94,6 @@ module.exports = {
 	// Enable letsencrypt debugging
 	// Also switches to staging server.
 	letsencrypt_debug: false,
-
-	// Enable hawkejs on the client side
-	hawkejs_client: true,
-
-	// Don't allow access to the info page
-	info_page: false,
-
-	// Allow use of JSON-dry in non-hawkejs responses
-	json_dry_response: true,
-
-	// Kill the process when a file changes
-	kill_on_file_change: false,
-
-	// Override kill extensions
-	// kill_extensions: ['js'],
-
-	// Extra import paths
-	less_import_paths: false,
 
 	// Log access to database?
 	log_access_to_database: false,
@@ -118,6 +150,9 @@ module.exports = {
 
 	// The length of the session
 	session_length: '20 minutes',
+
+	// Show a list of all sessions in Janeway
+	session_menu: false,
 
 	// Detect when this node server is too busy
 	// 70ms is the default, and would result in a 200ms latency lag

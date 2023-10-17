@@ -91,15 +91,11 @@ Site.constitute(function addFields() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.4.0
+ * @version  0.5.3
  */
 Site.setStatic(function updateVersions(callback) {
 
-	if (!callback) {
-		callback = Function.thrower;
-	}
-
-	Function.parallel(function getOldVersions(next) {
+	let pledge = Function.parallel(function getOldVersions(next) {
 
 		var conditions = {
 			site_type : 'node_site'
@@ -243,11 +239,15 @@ Site.setStatic(function updateVersions(callback) {
 	}, function done(err) {
 
 		if (err) {
-			return callback(err);
+			return;
 		}
 
-		callback(null, versions);
+		return versions;
 	});
+
+	pledge.done(callback);
+
+	return pledge;
 });
 
 /**

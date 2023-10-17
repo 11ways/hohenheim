@@ -3,6 +3,7 @@
 * Optimize the `SiteDispatcher#forwardRequest()` and `ProxySite#getAddress()` methods
 * Add the `ignore_certificates` option to `ProxySite`
 * Don't allow subdomains inside the `project` url regex match
+* Make the updating of node.js versions, users & ip addresses available as a task
 
 ## 0.5.2 (2023-01-23)
 

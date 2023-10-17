@@ -122,7 +122,7 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.3.2
- * @version  0.4.0
+ * @version  0.5.3
  */
 SiteDispatcher.setMethod(async function init() {
 
@@ -136,13 +136,6 @@ SiteDispatcher.setMethod(async function init() {
 
 	// Create the proxy server
 	this.startProxy();
-
-	// Update users & node versions every hour
-	setInterval(function doUpdate() {
-		Classes.Develry.NodeSite.updateVersions();
-		that.getLocalUsers();
-		that.getLocalIps();
-	}, 60 * 60 * 1000);
 
 	process.on('exit', this.createExitHandler('exit'));
 	process.on('SIGINT', this.createExitHandler('SIGINT'));
@@ -200,7 +193,7 @@ SiteDispatcher.setMethod(function createExitHandler(type) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.3.2
+ * @version  0.5.3
  */
 SiteDispatcher.setMethod(async function getLocalUsers() {
 
@@ -243,6 +236,8 @@ SiteDispatcher.setMethod(async function getLocalUsers() {
 			home  : user.homedir
 		};
 	}
+
+	return local_users;
 });
 
 /**
@@ -250,7 +245,7 @@ SiteDispatcher.setMethod(async function getLocalUsers() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.4.2
+ * @version  0.5.3
  */
 SiteDispatcher.setMethod(function getLocalIps() {
 
@@ -301,6 +296,8 @@ SiteDispatcher.setMethod(function getLocalIps() {
 			entry.title = 'Old: ' + entry.title;
 		}
 	}
+
+	return local_ips;
 });
 
 /**
