@@ -21,6 +21,10 @@ ProxiedProteus.setMethod(function createReturnUrl(conduit) {
 	let url = conduit.url.clone();
 	url.param('proteus', 'verify');
 
+	if (!url.host) {
+		throw new Error('Failed to create return url: no host found');
+	}
+
 	return '' + url;
 });
 
