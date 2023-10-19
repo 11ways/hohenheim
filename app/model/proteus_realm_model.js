@@ -1,3 +1,5 @@
+const REALM_CACHE = alchemy.getCache('proteus_realm_cache');
+
 /**
  * The ProteusRealm model:
  * ProteusRealm are specific authenticators that can be used
@@ -65,6 +67,64 @@ ProteusRealm.constitute(function chimeraConfig() {
 	edit.addField('endpoint');
 	edit.addField('realm_client');
 	edit.addField('access_key');
+});
+
+/**
+ * Get a realm by its id, cached if possible
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.5.3
+ * @version  0.5.3
+ *
+ * @param    {ObjectId|String}   proteus_realm_id
+ *
+ * @return   {Document.ProteusRealm|Promise<Document.ProteusRealm>}
+ */
+ProteusRealm.setMethod(function getCachedRealm(proteus_realm_id) {
+
+	if (typeof proteus_realm_id != 'string') {
+		proteus_realm_id = ''+proteus_realm_id;
+	}
+
+	let result = REALM_CACHE.get(proteus_realm_id);
+
+	if (!result) {
+		let promise = this.findByPk(proteus_realm_id);
+		REALM_CACHE.set(proteus_realm_id, promise);
+		result = promise;
+
+		Pledge.done(promise, (err, doc) => {
+
+			if (err) {
+				doc = null;
+				alchemy.registerError(err);
+			}
+
+			REALM_CACHE.set(proteus_realm_id, doc);
+		});
+	}
+
+	return result;
+});
+
+/**
+ * Update the cache after saving a realm
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.5.3
+ * @version  0.5.3
+ */
+ProteusRealm.setMethod(async function afterSave(main, options) {
+
+	const id = ''+main._id;
+
+	// Remove the old data from the cache
+	REALM_CACHE.set(id, null);
+
+	// Make sure we have a new copy of the data, as a document
+	let doc = await this.findByPk(main._id);
+
+	REALM_CACHE.set(id, doc);
 });
 
 /**

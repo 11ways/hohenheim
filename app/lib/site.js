@@ -1,4 +1,5 @@
-var libpath = require('path');
+const libpath = require('path');
+let ProteusRealm;
 
 /**
  * The Site class
@@ -400,6 +401,31 @@ Site.setMethod(function checkAuthenticationAndHandleRequest(req, res) {
 	return this.handleRequest(req, res);
 });
 
+
+/**
+ * Get a local proteus realm document by its id.
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.5.3
+ * @version  0.5.3
+ *
+ * @param    {ObjectId|String}   proteus_realm_id
+ *
+ * @return   {Document.ProteusRealm|Promise<Document.ProteusRealm>}
+ */
+Site.setMethod(function getProteusRealm(proteus_realm_id) {
+
+	if (!proteus_realm_id) {
+		return;
+	}
+
+	if (ProteusRealm == null) {
+		ProteusRealm = Model.get('ProteusRealm');
+	}
+
+	return ProteusRealm.getCachedRealm(proteus_realm_id);
+});
+
 /**
  * Handle Proteus authentication & handle the request when done
  *
@@ -409,7 +435,11 @@ Site.setMethod(function checkAuthenticationAndHandleRequest(req, res) {
  */
 Site.setMethod(async function handleProteusAuth(req, res) {
 
-	const realm = await Model.get('ProteusRealm').findByPk(this.settings.proteus_realm_id);
+	let realm = this.getProteusRealm(this.settings.proteus_realm_id);
+
+	if (Pledge.isThenable(realm)) {
+		realm = await realm;
+	}
 
 	if (!realm) {
 		throw new Error('Authentication error: Proteus realm not found');
