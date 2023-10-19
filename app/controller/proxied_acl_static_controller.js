@@ -37,11 +37,12 @@ ProxiedAclStatic.setMethod(function showVerificationError(type) {
 });
 
 /**
- * The user has succesfully authenticated
+ * The user has succesfully authenticated against the Proteus server.
+ * (The user's permission will still be checked in the `site` class later)
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.5.3
- * @version  0.5.3
+ * @version  0.6.0
  *
  * @param    {ProteusSiteUser}   UserData
  * @param    {Boolean}           remember
@@ -63,7 +64,11 @@ ProxiedAclStatic.setMethod(function allow(UserData, remember) {
 
 	if (remember) {
 		UserData.createPersistentCookie(function gotCookie(err, result) {
-			that.cookie('acpl', {i: result.identifier, t: result.token}, {expires: 'never'});
+
+			if (!err) {
+				that.cookie('acpl', {i: result.identifier, t: result.token}, {expires: 'never'});
+			}
+
 			that.conduit.redirect(afterLogin);
 		});
 	} else {

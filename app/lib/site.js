@@ -6,14 +6,14 @@ let ProteusRealm;
  *
  * @constructor
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.4.0
+ * @version  0.6.0
  *
  * @param    {Develry.SiteDispatcher}   siteDispatcher
  * @param    {Object}                   record
  */
-var Site = Function.inherits('Alchemy.Base', 'Develry', function Site(siteDispatcher, record) {
+const Site = Function.inherits('Alchemy.Base', 'Develry', function Site(siteDispatcher, record) {
 
 	// The site dispatcher
 	this.dispatcher = siteDispatcher;
@@ -41,6 +41,15 @@ var Site = Function.inherits('Alchemy.Base', 'Develry', function Site(siteDispat
 
 	// The site settings
 	this.settings = record.settings || {};
+
+	// The optional proteus realm id
+	this.proteus_realm_id = null;
+
+	// The optional proteus realm permission to check
+	this.proteus_realm_permission = null;
+
+	// The optional basic auth credentials
+	this.basic_auth = null;
 
 	this.update(record);
 });
@@ -102,16 +111,6 @@ Site.constitute(function setSchema() {
 
 	schema.addField('delay', 'Number', {
 		description: 'Delay in ms before forwarding the request',
-	});
-
-	schema.belongsTo('ProteusRealm', {
-		description: 'The Proteus realm to use for authentication',
-	});
-
-	// Add basic auth settings
-	schema.addField('basic_auth', 'String', {
-		description: 'Basic authentication credentials (Not used if Proteus is enabled)',
-		array: true,
 	});
 
 	this.schema = schema;
@@ -284,9 +283,9 @@ Site.setMethod(function cleanParent() {
  * Update this site,
  * recreate the entries in the parent dispatcher
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.5.1
+ * @version  0.6.0
  *
  * @param    {Object}   record
  */
@@ -298,9 +297,19 @@ Site.setMethod(function update(record) {
 	this._record = record;
 
 	this.name = record.name;
+	this.slug = record.slug || record.name?.slug();
 	this.domains = record.domain || [];
 	this.settings = record.settings || {};
 	this.script = this.settings.script;
+
+	this.proteus_realm_id = record.proteus_realm_id;
+	this.proteus_realm_permission = record.proteus_realm_permission;
+	this.basic_auth = record.basic_auth;
+
+	// Another permission fallback check
+	if (this.proteus_realm_id && !this.proteus_realm_permission) {
+		this.proteus_realm_permission = 'hohenheim.site.' + this.slug;
+	}
 
 	if (this.script) {
 		this.cwd = libpath.dirname(this.script);
@@ -387,15 +396,15 @@ function interpretWildcard(str, flags) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.5.3
- * @version  0.5.3
+ * @version  0.6.0
  */
 Site.setMethod(function checkAuthenticationAndHandleRequest(req, res) {
 
-	if (this.settings.proteus_realm_id) {
+	if (this.proteus_realm_id) {
 		return this.handleProteusAuth(req, res);
 	}
 
-	if (this.settings.basic_auth?.length) {
+	if (this.basic_auth?.length) {
 		return this.checkBasicAuth(req, res, () => {
 			this.handleRequest(req, res);
 		});
@@ -436,11 +445,11 @@ Site.setMethod(function getProteusRealm(proteus_realm_id) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.5.3
- * @version  0.5.3
+ * @version  0.6.0
  */
 Site.setMethod(async function handleProteusAuth(req, res) {
 
-	let realm = this.getProteusRealm(this.settings.proteus_realm_id);
+	let realm = this.getProteusRealm(this.proteus_realm_id);
 
 	if (Pledge.isThenable(realm)) {
 		realm = await realm;
@@ -455,7 +464,7 @@ Site.setMethod(async function handleProteusAuth(req, res) {
 
 	// If the identity if already set, everything is good!
 	if (proteus_identity) {
-		this.handleRequest(req, res);
+		this.handleRequestWithProteusIdentity(req, res, proteus_identity);
 		return true;
 	}
 
@@ -469,7 +478,7 @@ Site.setMethod(async function handleProteusAuth(req, res) {
 
 			if (user) {
 				conduit.session('proteus_identity', user);
-				this.handleRequest(req, res);
+				this.handleRequestWithProteusIdentity(req, res, user);
 				return true;
 			}
 
@@ -500,6 +509,35 @@ Site.setMethod(async function handleProteusAuth(req, res) {
 });
 
 /**
+ * Handle a request with the given Proteus identity
+ * (This checks for the correct permissions)
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.6.0
+ * @version  0.6.0
+ *
+ * @param    {IncomingMessage}    req
+ * @param    {ServerResponse}     res
+ * @param    {Object}             identity
+ */
+Site.setMethod(function handleRequestWithProteusIdentity(req, res, identity) {
+
+	console.log('Checking identity?', identity, 'for', req, res, this.proteus_realm_permission);
+
+	if (this.proteus_realm_permission) {
+		const permissions = identity.permissions;
+
+		if (!permissions || !permissions.hasPermission(this.proteus_realm_permission)) {
+			res.writeHead(403);
+			res.end('Forbidden');
+			return;
+		}
+	}
+
+	this.handleRequest(req, res);
+});
+
+/**
  * Check for basic auth
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
@@ -511,10 +549,10 @@ Site.setMethod(function checkBasicAuth(req, res, next) {
 	var b64auth,
 	    truthy;
 
-	if (this.settings.basic_auth && this.settings.basic_auth.length) {
+	if (this.basic_auth && this.basic_auth.length) {
 
-		for (let i = 0; i < this.settings.basic_auth.length; i++) {
-			let val = this.settings.basic_auth[i];
+		for (let i = 0; i < this.basic_auth.length; i++) {
+			let val = this.basic_auth[i];
 
 			if (!val || val == 'null') {
 				continue;
@@ -538,8 +576,8 @@ Site.setMethod(function checkBasicAuth(req, res, next) {
 		let credentials = new Buffer(b64auth, 'base64').toString().trim();
 
 		if (credentials) {
-			for (let i = 0; i < this.settings.basic_auth.length; i++) {
-				if (this.settings.basic_auth[i] == credentials) {
+			for (let i = 0; i < this.basic_auth.length; i++) {
+				if (this.basic_auth[i] == credentials) {
 					deny = false;
 					break;
 				}

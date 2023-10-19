@@ -1,3 +1,8 @@
+## 0.6.0 (WIP)
+
+* Move authentication/security settings to the main site model
+* Add proteus permission string check
+
 ## 0.5.4 (WIP)
 
 * Set a `timeout` and `proxyTimeout` in `SiteDispatcher#forwardRequest()`

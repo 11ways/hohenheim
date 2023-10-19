@@ -37,9 +37,9 @@ Site.prepareProperty('sort', function sort() {
 /**
  * Constitute the class wide schema
  *
- * @author   Jelle De Loecker <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.1.0
- * @version  0.4.0
+ * @version  0.6.0
  */
 Site.constitute(function addFields() {
 
@@ -73,6 +73,22 @@ Site.constitute(function addFields() {
 	domain_schema.addField('exclude_from_letsencrypt', 'Boolean');
 
 	this.addField('domain', 'Schema', {array: true, schema: domain_schema});
+
+	this.belongsTo('ProteusRealm', {
+		description: 'The Proteus realm to use for authentication',
+	});
+
+	this.addField('proteus_realm_permission', 'String', {
+		description: 'The permissions needed to access this site (defaults to hohenheim.site.{slug})',
+	});
+
+	// Add basic auth settings
+	this.addField('basic_auth', 'String', {
+		description: 'Basic authentication credentials (Not used if Proteus is enabled)',
+		array: true,
+	});
+
+	this.addBehaviour('Sluggable');
 });
 
 /**
@@ -80,7 +96,7 @@ Site.constitute(function addFields() {
  *
  * @author   Jelle De Loecker <jelle@develry.be>
  * @since    0.1.0
- * @version  0.5.0
+ * @version  0.6.0
  */
 Site.constitute(function chimeraConfig() {
 
@@ -96,11 +112,13 @@ Site.constitute(function chimeraConfig() {
 
 	list.addField('site_type');
 	list.addField('name');
+	list.addField('slug');
 
 	// Get the edit group
 	edit = this.chimera.getActionFields('edit');
 
 	edit.addField('name');
+	edit.addField('slug');
 	edit.addField('site_type');
 	edit.addField('settings');
 
@@ -109,6 +127,11 @@ Site.constitute(function chimeraConfig() {
 		group: 'domains',
 	});
 
+	// Add authentication settings in a new security tab
+	edit.addField('proteus_realm_id', {group: 'security'})
+	edit.addField('proteus_realm_permission', {group: 'security'})
+	edit.addField('basic_auth', {group: 'security'})
+
 	// Add statistics & control field in a new tab
 	edit.addField('_id', {
 		group   : 'control',
@@ -116,6 +139,20 @@ Site.constitute(function chimeraConfig() {
 		wrapper : 'site_stat',
 		title   : 'Control',
 	});
+});
+
+/**
+ * Do something before the document is sent to the database
+ * (And after the validation has passed)
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.6.0
+ * @version  0.6.0
+ */
+Site.setMethod(function beforeCommit(doc) {
+	if (!doc.proteus_realm_permission) {
+		doc.proteus_realm_permission = 'hohenheim.site.' + doc.slug;
+	}
 });
 
 /**
