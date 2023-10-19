@@ -100,14 +100,19 @@ Site.constitute(function setSchema() {
 		schema.addField('letsencrypt_force', 'Boolean', {default: true});
 	}
 
-	// Add delay time in ms
-	schema.addField('delay', 'Number');
+	schema.addField('delay', 'Number', {
+		description: 'Delay in ms before forwarding the request',
+	});
 
-	// Add Proteus auth settings
-	schema.belongsTo('ProteusRealm');
+	schema.belongsTo('ProteusRealm', {
+		description: 'The Proteus realm to use for authentication',
+	});
 
 	// Add basic auth settings
-	schema.addField('basic_auth', 'String', {array: true});
+	schema.addField('basic_auth', 'String', {
+		description: 'Basic authentication credentials (Not used if Proteus is enabled)',
+		array: true,
+	});
 
 	this.schema = schema;
 });
