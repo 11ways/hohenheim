@@ -1,4 +1,4 @@
-## 0.5.3 (WIP)
+## 0.5.3 (2023-10-19)
 
 * Optimize the `SiteDispatcher#forwardRequest()` and `ProxySite#getAddress()` methods
 * Add the `ignore_certificates` option to `ProxySite`
