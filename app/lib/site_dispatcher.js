@@ -1246,7 +1246,7 @@ SiteDispatcher.setMethod(function defaultWSHandler(err, req, socket, head) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.4.0
- * @version  0.5.3
+ * @version  0.5.4
  *
  * @param    {Buffer}   ws_head   The websocket head buffer
  */
@@ -1267,6 +1267,8 @@ SiteDispatcher.setMethod(function forwardRequest(req, res, forward_address, ws_h
 		...forward_address,
 		onReq : this.boundModifyIncomingRequest,
 		onRes : ws_head ? null : this.boundModifyOutgoingResponse,
+		timeout      : 10 * 60 * 1000,
+		proxyTimeout : 10 * 60 * 1000,
 	};
 
 	if (ws_head) {
