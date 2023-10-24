@@ -845,7 +845,7 @@ SiteDispatcher.setMethod(function sanitizeHostname(req) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.4.1
+ * @version  0.5.4
  * 
  * @param    {Error}              error
  * @param    {IncommingMessage}   req
@@ -857,26 +857,12 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
 		throw new Error('Request error without request? ' + error);
 	}
 
-	if (!req.errorCount) {
-		req.errorCount = 1;
-	} else {
-		req.errorCount++;
+	if (req.code === 'ECONNREFUSED') {
+		this.respondWithError(res, 'refused', error);
+		return;
 	}
 
-	// Retry 4 times
-	// @TODO: This is PER SOCKET,
-	// so shared keep-alive requests in total will only be tried 4 times
-	if (req.errorCount > 4) {
-		//log.error('Retried connection', req.connectionId, 'four times, giving up on:', req.url);
-		this.respondWithError(res, 'unreachable', error);
-	} else {
-		let that = this;
-
-		// Try the request again after 100ms
-		setTimeout(function retry() {
-			that.request(req, res);
-		}, 100);
-	}
+	this.respondWithError(res, 'unreachable', error);
 });
 
 /**
@@ -1039,7 +1025,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.4.0
- * @version  0.5.1
+ * @version  0.5.4
  * 
  * @param    {ServerResponse}    res
  * @param    {String}            type
@@ -1062,6 +1048,11 @@ SiteDispatcher.setMethod(function respondWithError(res, type, error) {
 		prop = 'unreachable_message';
 		problem_id = 'unreachable-site';
 		fallback = 'Failed to reach server!';
+	} else if (type == 'refused') {
+		status = 502;
+		prop = 'refused_message';
+		problem_id = 'refused-site';
+		fallback = 'Connection refused!';
 	} else {
 		problem_id = 'unknown-problem';
 	}
