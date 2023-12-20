@@ -5,6 +5,7 @@
 * Set a `timeout` and `proxyTimeout` in `SiteDispatcher#forwardRequest()`
 * Do not retry connection on error
 * Allow other Hohenheim proxies to be used as upstream
+* Refactor the way sites are stored in memory
 
 ## 0.5.3 (2023-10-19)
 

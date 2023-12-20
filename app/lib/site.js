@@ -291,8 +291,6 @@ Site.setMethod(function cleanParent() {
  */
 Site.setMethod(function update(record) {
 
-	var that = this;
-
 	// The db record itself
 	this._record = record;
 
@@ -322,48 +320,42 @@ Site.setMethod(function update(record) {
 	this.dispatcher.ids[this.id] = this;
 
 	// Store it by each domain name
-	this.domains.forEach(function eachDomain(domain) {
+	for (let domain of this.domains) {
 
-		var temp;
-
-		if (domain.hostname) {
-
-			temp = {
-				site   : that,
-				domain : domain
-			};
-
-			domain.hostname.forEach(function eachHostname(hostname) {
-
-				var regex;
-
-				if (!hostname) {
-					log.warn('Site', record.name, 'has no hostname in entry', domain);
-					return;
-				}
-
-				// Check for regexes
-				if (hostname[0] == '/') {
-					regex = RegExp.interpret(hostname);
-				} else if (hostname.indexOf('*') > -1 || hostname.indexOf('?') > -1) {
-					regex = interpretWildcard(hostname, 'i');
-				}
-
-				if (regex) {
-					if (!domain.regexes) {
-						domain.regexes = [];
-					}
-
-					domain.regexes.push(regex);
-				}
-
-				// Ignore accidental 'null' (string) values
-				if (hostname && hostname != 'null') {
-					that.dispatcher.domains[hostname] = temp;
-				}
-			});
+		if (!domain.hostname?.length) {
+			continue;
 		}
-	});
+
+		for (let hostname of domain.hostname) {
+
+			if (!hostname) {
+				log.warn('Site', record.name, 'has no hostname in entry', domain);
+				continue;
+			}
+
+			let regex;
+
+			// Check for regexes
+			if (hostname[0] == '/') {
+				regex = RegExp.interpret(hostname);
+			} else if (hostname.indexOf('*') > -1 || hostname.indexOf('?') > -1) {
+				regex = interpretWildcard(hostname, 'i');
+			}
+
+			if (regex) {
+				if (!domain.regexes) {
+					domain.regexes = [];
+				}
+
+				domain.regexes.push(regex);
+			}
+
+			// Ignore accidental 'null' (string) values
+			if (hostname && hostname != 'null') {
+				this.dispatcher.registerSiteByHostname(hostname, this);
+			}
+		};
+	};
 
 	// Re-add the instance by name
 	this.dispatcher.names[this.name] = this;

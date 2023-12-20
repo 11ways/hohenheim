@@ -27,9 +27,9 @@ global.MATCHED_GROUPS = Symbol('matched_groups');
  *
  * @constructor
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.4.0
+ * @version  0.6.0
  */
 var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispatcher(options) {
 
@@ -96,9 +96,7 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
 	// Start the queue by getting the sites first
 	this.queue.start(function gettingSites(done) {
 		Function.parallel(function getSites(next) {
-			that.Site.getSites(function done() {
-				next();
-			});
+			Pledge.done(that.Site.updateSites(), next);
 		}, function getDomains(next) {
 			that.Domain.getDomains(next);
 		}, function _done(err) {
@@ -112,7 +110,7 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
 	});
 
 	// Listen to the site update event
-	alchemy.on('siteUpdate', this.update.bind(this));
+	alchemy.on('site_update', this.update.bind(this));
 
 	this.init();
 });
@@ -637,9 +635,9 @@ SiteDispatcher.setMethod(function getCachedSecureContext(domainname, meta) {
 /**
  * Get a fresh secure context
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.4.0
- * @version  0.4.0
+ * @version  0.6.0
  *
  * @param    {String}   domainname
  * @param    {Object}   meta          The cache for this domain
@@ -665,13 +663,13 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 
 	if (!site) {
 		return callback(new Error('Domain "' + domainname + '" was not found on this server'));
-	} else {
-		site = site.site._record;
 	}
+
+	let site_record = site._record;
 
 	// Need to add this to greenlock first
 	if (!meta) {
-		let all_hostnames = site.getHostnames(true),
+		let all_hostnames = site_record.getHostnames(true),
 		    main_domain = all_hostnames[0];
 
 		// Handle regex domain names individually
@@ -688,7 +686,7 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 		this.greenlock.add({
 			subject         : main_domain,
 			altnames        : all_hostnames,
-			subscriberEmail : site.settings.letsencrypt_email || alchemy.settings.letsencrypt_email,
+			subscriberEmail : site_record.settings.letsencrypt_email || alchemy.settings.letsencrypt_email,
 		});
 	}
 
@@ -868,15 +866,31 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
 /**
  * Get the site object based on the headers
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.4.1
+ * @version  0.6.0
+ * 
+ * @param    {string|Object}   req_or_domain
+ *
+ * @return   {Develry.Site}
+ */
+SiteDispatcher.setMethod(function getSite(req_or_domain) {
+	let pair = this.getSiteDomainPair(req_or_domain);
+	return pair?.site;
+});
+
+/**
+ * Get the site object based on the headers
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.0.1
+ * @version  0.6.0
  * 
  * @param    {string|Object}   req_or_domain
  *
  * @return   {Object<string, Develry.Site>}
  */
-SiteDispatcher.setMethod(function getSite(req_or_domain) {
+SiteDispatcher.setMethod(function getSiteDomainPair(req_or_domain) {
 
 	// Get the host (including port)
 	let headers,
@@ -959,9 +973,9 @@ SiteDispatcher.setMethod(function getSite(req_or_domain) {
 /**
  * Handle a new proxy request
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.2.0
- * @version  0.2.0
+ * @version  0.6.0
  * 
  * @param    {IncommingMessage}   req
  * @param    {Socket}             socket
@@ -969,13 +983,7 @@ SiteDispatcher.setMethod(function getSite(req_or_domain) {
  */
 SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 
-	var that = this,
-	    new_location,
-	    domain,
-	    read,
-	    site,
-	    host,
-	    hit;
+	const that = this;
 
 	// Detect infinite loops
 	// @TODO: this will break after the first loop,
@@ -985,7 +993,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 	}
 
 	// Get the hit id
-	hit = ++this.hitCounter;
+	let hit = ++this.hitCounter;
 
 	// This will set the connectionId only ONCE per socket,
 	// so multiple keep-alive requests will share this connectionId
@@ -1000,7 +1008,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 	req.headers.hitId = hit;
 	req.headers.connectionId = req.connectionId;
 
-	site = this.getSite(req);
+	let site = this.getSite(req);
 
 	if (!site) {
 
@@ -1011,7 +1019,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 		socket.end('There is no such domain here!');
 	} else {
 
-		site.site.getAddress(req, function gotAddress(err, address) {
+		site.getAddress(req, function gotAddress(err, address) {
 
 			if (err) {
 				return socket.end('Error: ' + err);
@@ -1175,7 +1183,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 			let force_https = this.force_https;
 
 			// If https is not forced, see if it is forced in the site's config
-			if (!force_https && site.site.settings && site.site.settings.letsencrypt_force) {
+			if (!force_https && site.settings && site.settings.letsencrypt_force) {
 				force_https = true;
 			}
 
@@ -1192,10 +1200,10 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 		// Only register this hit if the error count has not been set
 		// meaning it's the first time this request has passed through here
 		if (!req.errorCount) {
-			site.site.registerHit(req, res);
+			site.registerHit(req, res);
 		}
 
-		site.site.checkAuthenticationAndHandleRequest(req, res);
+		site.checkAuthenticationAndHandleRequest(req, res);
 	}
 });
 
@@ -1336,14 +1344,14 @@ SiteDispatcher.setMethod(function modifyIncomingRequest(req, options) {
 	}
 
 	// Get the target site
-	let site = this.getSite(req);
+	let site_domain_pair = this.getSiteDomainPair(req);
 
-	if (site) {
-		req.hohenheim_site = site;
+	if (site_domain_pair) {
+		req.hohenheim_site = site_domain_pair;
 
 		// Set the custom header values
-		if (site.domain?.headers?.length) {
-			for (let header of site.domain.headers) {
+		if (site_domain_pair.domain?.headers?.length) {
+			for (let header of site_domain_pair.domain.headers) {
 				if (header.name) {
 					// Unset the header if it is an empty value
 					if (!header.value) {
@@ -1491,38 +1499,53 @@ SiteDispatcher.setMethod(function freePort(portNumber) {
 });
 
 /**
+ * Register a site by a domain
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.0.1
+ * @version  0.6.0
+ *
+ * @param    {string}         hostname
+ * @param    {Develry.Site}   site
+ */
+SiteDispatcher.setMethod(function registerSiteByHostname(hostname, site) {
+	this.domains[hostname] = {
+		site   : site,
+		domain : hostname,
+	};
+});
+
+/**
  * Update the sites
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.2.0
+ * @version  0.6.0
  *
- * @param    {Object}   sitesById   An object of site records by their id
+ * @param    {Map}   sites_by_id   A map of site records by their id
  */
-SiteDispatcher.setMethod(function update(sitesById) {
+SiteDispatcher.setMethod(function update(sites_by_id) {
 
-	var SiteConstructor,
-	    removed,
-	    created,
-	    shared,
+	let SiteConstructor,
 	    site,
 	    name,
 	    key,
 	    id;
 
-	// Pause the dispatcher queue
+	// Pause the dispatcher queue while we update
 	this.queue.pause();
 
 	log.info('Updating sites ...');
 
-	removed = alchemy.getDifference(this.ids, sitesById);
+	// An object of all the removed sites
+	let removed = alchemy.getDifference(this.ids, sites_by_id);
 
 	// Destroy all the removed id sites
 	for (id in removed) {
 		this.ids[id].remove();
 	}
 
-	created = alchemy.getDifference(sitesById, this.ids);
+	let created = alchemy.getDifference(sites_by_id, this.ids);
 
 	// Create all the new sites
 	for (id in created) {
@@ -1539,7 +1562,7 @@ SiteDispatcher.setMethod(function update(sitesById) {
 		new SiteConstructor(this, site);
 	}
 
-	shared = alchemy.getShared(this.ids, sitesById);
+	let shared = alchemy.getShared(this.ids, sites_by_id);
 
 	// Update all the existing sites
 	for (id in shared) {

@@ -1,7 +1,5 @@
-var sitesByName   = alchemy.shared('Sites.byName'),
-    sitesByDomain = alchemy.shared('Sites.byDomain'),
-    sitesById     = alchemy.shared('Sites.byId'),
-    local_ips     = alchemy.shared('local_ips');
+let sites_by_id = new Map(),
+    local_ips = alchemy.shared('local_ips');
 
 /**
  * The Site Model class
@@ -12,14 +10,7 @@ var sitesByName   = alchemy.shared('Sites.byName'),
  * @since    0.0.1
  * @version  0.3.0
  */
-var Site = Function.inherits('Alchemy.Model.App', function Site(conduit, options) {
-	Site.super.call(this, conduit, options);
-
-	this.on('saved', function saved(data) {
-		log.info('Site', data._id+'', 'has been saved');
-		this.getSites();
-	});
-});
+const Site = Function.inherits('Alchemy.Model.App', 'Site');
 
 /**
  * Sort by name by default
@@ -43,7 +34,7 @@ Site.prepareProperty('sort', function sort() {
  */
 Site.constitute(function addFields() {
 
-	var site_types = alchemy.getClassGroup('site_type'),
+	let site_types = alchemy.getClassGroup('site_type'),
 	    domain_schema = new Classes.Alchemy.Schema(),
 	    header_schema = new Classes.Alchemy.Schema();
 
@@ -142,6 +133,21 @@ Site.constitute(function chimeraConfig() {
 });
 
 /**
+ * Do something after this has been saved
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.6.0
+ * @version  0.6.0
+ *
+ * @param    {Object}   data      The data object that was saved
+ * @param    {Object}   options   Save options
+ */
+Site.setMethod(function afterSave(data, options) {
+	log.info('Site', data._id+'', 'has been saved');
+	this.updateSites();
+});
+
+/**
  * Do something before the document is sent to the database
  * (And after the validation has passed)
  *
@@ -156,94 +162,81 @@ Site.setMethod(function beforeCommit(doc) {
 });
 
 /**
+ * Update all the sites
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.6.0
+ * @version  0.6.0
+ */
+Site.setMethod(async function updateSites() {
+
+	let sites_by_id = await this.getSites();
+
+	// Emit the siteUpdate event
+	alchemy.emit('site_update', sites_by_id);
+});
+
+/**
  * Get all the sites in the database
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.5.0
- *
- * @param    {Function}   callback
+ * @version  0.6.0
  */
-Site.setMethod(function getSites(callback) {
+Site.setMethod(async function getSites() {
 
-	var that = this;
+	let results = await this.find('all');
 
-	that.find('all', {document: true, recursive: 0}, function gotRecords(err, results) {
+	// Clear the old map
+	sites_by_id.clear();
 
-		var byName = {},
-		    byDomain = {},
-		    byId = {};
+	for (let site of results) {
 
-		for (let site of Array.cast(results)) {
+		let site_id = site._id + '';
+		sites_by_id.set(site_id, site);
 
-			// Store it by site name
-			byName[site.name] = site;
+		if (!site.domain) {
+			continue;
+		}
 
-			// Store it by id
-			byId[site._id] = site;
+		for (let domain of site.domain) {
 
-			if (!site.domain) {
-				continue;
-			}
-
-			for (let domain of site.domain) {
-				let length,
+			if (domain.listen_on?.length) {
+				let length = domain.listen_on.length,
 				    config,
-				    temp,
 				    ip,
 				    i;
 
-				if (domain.listen_on && domain.listen_on.length) {
-					length = domain.listen_on.length;
+				for (i = 0; i < length; i++) {
 
-					for (i = 0; i < length; i++) {
-						ip = domain.listen_on[i];
+					ip = domain.listen_on[i];
 
-						// Skip "null" string, they're just a mistake
-						if (ip == 'null') {
-							continue;
-						}
+					// Skip "null" string, they're just a mistake
+					if (ip == 'null') {
+						continue;
+					}
 
-						config = local_ips[ip];
+					config = local_ips[ip];
 
-						if (!config) {
-							local_ips[ip] = {
-								old   : true,
-								title : 'Old: ' + ip,
-							};
-						} else if (config.family == 'IPv4') {
-							// Add an IPv6-ified IPv4 address,
-							// because on IPv6 enabled interfaces
-							// these addresses get identified as such
-							if (ip[0] != ':') {
-								domain.listen_on.push('::ffff:' + ip);
-							}
+					if (!config) {
+						local_ips[ip] = {
+							old   : true,
+							title : 'Old: ' + ip,
+						};
+					} else if (config.family == 'IPv4') {
+						// Add an IPv6-ified IPv4 address,
+						// because on IPv6 enabled interfaces
+						// these addresses get identified as such
+						if (ip[0] != ':') {
+							domain.listen_on.push('::ffff:' + ip);
 						}
 					}
 				}
-
-				if (domain.hostname) {
-
-					temp = {site, domain};
-
-					domain.hostname.forEach(function eachHostname(hostname) {
-						byDomain[hostname] = temp;
-					});
-				}
 			}
 		}
+	}
 
-		alchemy.overwrite(sitesByDomain, byDomain);
-		alchemy.overwrite(sitesByName, byName);
-		alchemy.overwrite(sitesById, byId);
-
-		// Emit the siteUpdate event
-		alchemy.emit('siteUpdate', sitesById, sitesByDomain, sitesByName);
-
-		if (callback) {
-			callback(sitesById, sitesByDomain, sitesByName);
-		}
-	});
+	return sites_by_id;
 });
 
 /**
