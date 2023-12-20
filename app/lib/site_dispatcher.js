@@ -872,16 +872,15 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
  * @since    0.0.1
  * @version  0.4.1
  * 
- * @param    {String|Object}   req_or_domain
+ * @param    {string|Object}   req_or_domain
+ *
+ * @return   {Object<string, Develry.Site>}
  */
 SiteDispatcher.setMethod(function getSite(req_or_domain) {
 
 	// Get the host (including port)
-	let matches,
-	    headers,
+	let headers,
 	    domain,
-	    entry,
-	    key,
 	    req,
 	    ip;
 
@@ -910,6 +909,10 @@ SiteDispatcher.setMethod(function getSite(req_or_domain) {
 	if (!domain) {
 		return null;
 	}
+
+	let matches,
+	    entry,
+	    key;
 
 	// Split it by colons
 	domain = domain.split(':');
@@ -1103,25 +1106,15 @@ SiteDispatcher.setMethod(function respondWithError(res, type, error) {
 /**
  * Handle a new proxy request
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.4.2
+ * @version  0.6.0
  * 
  * @param    {IncomingMessage}    req
  * @param    {ServerResponse}     res
  * @param    {Boolean}            skip_le   Skips letsconnect middleware if true
  */
 SiteDispatcher.setMethod(function request(req, res, skip_le) {
-
-	var that = this,
-	    new_location,
-	    force_https,
-	    domain,
-	    read,
-	    site,
-	    host,
-	    hit,
-	    key;
 
 	if (skip_le == null) {
 		req.startTime = Date.now();
@@ -1131,9 +1124,9 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	// (This looks for the acme challenges)
 	if (skip_le !== true && alchemy.settings.letsencrypt !== false && this.proxyPortHttps) {
 
-		this.greenlockMiddleware(req, res, function done() {
+		this.greenlockMiddleware(req, res, () => {
 			// Greenlock didn't do anything, we can continue
-			that.request(req, res, true);
+			this.request(req, res, true);
 		});
 
 		return;
@@ -1142,13 +1135,13 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	// Detect infinite loops
 	// @TODO: this will break after the first loop,
 	// maybe add a counter to allow more loops in case it's wanted functionality?
-	if (req.headers['x-proxied-by'] == 'hohenheim') {
+	if (req.headers['x-proxied-by'] == 'hohenheim' && req.headers['x-hohenheim-id'] == alchemy.discovery_id) {
 		res.writeHead(508, {'Content-Type': 'text/plain'});
 		return res.end('Loop detected!');
 	}
 
 	// Get the hit id
-	hit = ++this.hitCounter;
+	let hit = ++this.hitCounter;
 
 	if (!req.socket.connectionId) {
 		req.socket.connectionId = ++this.connectionCounter;
@@ -1164,7 +1157,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	req.headers.hitId = hit;
 	req.headers.connectionId = req.connectionId;
 
-	site = this.getSite(req);
+	let site = this.getSite(req);
 
 	if (!site) {
 
@@ -1179,7 +1172,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 		if (alchemy.settings.letsencrypt && this.proxyPortHttps && !req.connection.encrypted) {
 
 			// Is HTTPS forced for all sites?
-			force_https = this.force_https;
+			let force_https = this.force_https;
 
 			// If https is not forced, see if it is forced in the site's config
 			if (!force_https && site.site.settings && site.site.settings.letsencrypt_force) {
@@ -1187,8 +1180,8 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 			}
 
 			if (force_https) {
-				host = req.headers.host;
-				new_location = 'https://' + host.replace(/:\d+/, ':' + 443) + req.url;
+				let host = req.headers.host;
+				let new_location = 'https://' + host.replace(/:\d+/, ':' + 443) + req.url;
 
 				res.writeHead(302, {'Location': new_location});
 				res.end();
@@ -1275,35 +1268,66 @@ SiteDispatcher.setMethod(function forwardRequest(req, res, forward_address, ws_h
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.4.0
- * @version  0.4.1
+ * @version  0.6.0
  *
  * @param    {IncomingMessage}   req
  * @param    {Object}            options   HTTP2-Proxy options object
  */
 SiteDispatcher.setMethod(function modifyIncomingRequest(req, options) {
 
-	var forwarded_for,
-	    headers = options.headers,
-	    host = req.headers.host || req.headers[':authority'],
-	    site;
+	let headers = options.headers,
+	    host = req.headers.host || req.headers[':authority'];
 
 	headers['X-Proxied-By'] = 'hohenheim';
+	headers['X-Hohenheim-Id'] = alchemy.discovery_id;
 
 	if (req.connection && req.connection.remoteAddress) {
 
-		// See if there already is an x-forwarded-for
-		forwarded_for = req.headers['x-forwarded-for'];
+		const hohenheim_key = req.headers['x-hohenheim-key'];
 
-		// If there already was a forwarded header, append to it
-		if (forwarded_for) {
-			forwarded_for += ', ' + req.connection.remoteAddress;
-		} else {
-			forwarded_for = req.connection.remoteAddress;
+		let x_forwarded_for,
+		    x_real_ip;
+
+		// If there is a hohenheim key, and it is correct,
+		// we can use the original header information
+		if (hohenheim_key && alchemy.settings.remote_proxy_keys?.length && alchemy.settings.remote_proxy_keys.includes(hohenheim_key)) {
+			// See if there already is an x-forwarded-for
+			let forwarded_for = req.headers['x-forwarded-for'],
+			    real_ip = req.headers['x-real-ip'];
+			
+			if (!forwarded_for && real_ip) {
+				forwarded_for = real_ip;
+			}
+
+			if (forwarded_for && !real_ip) {
+				real_ip = forwarded_for.split(',')[0].trim();
+			}
+
+			if (forwarded_for) {
+				forwarded_for += ', ' + req.connection.remoteAddress;
+			} else {
+				forwarded_for = req.connection.remoteAddress;
+			}
+
+			if (!real_ip) {
+				real_ip = req.connection.remoteAddress;
+			}
+
+			x_forwarded_for = forwarded_for;
+			x_real_ip = real_ip;
+		}
+
+		if (!x_forwarded_for) {
+			x_forwarded_for = req.connection.remoteAddress;
+		}
+
+		if (!x_real_ip) {
+			x_real_ip = req.connection.remoteAddress;
 		}
 
 		// Set the original ip address
-		headers['X-Real-IP'] = forwarded_for;
-		headers['X-Forwarded-For'] = forwarded_for;
+		headers['X-Real-IP'] = x_real_ip;
+		headers['X-Forwarded-For'] = x_forwarded_for;
 	}
 
 	if (host) {
@@ -1312,14 +1336,14 @@ SiteDispatcher.setMethod(function modifyIncomingRequest(req, options) {
 	}
 
 	// Get the target site
-	site = this.getSite(req);
+	let site = this.getSite(req);
 
 	if (site) {
 		req.hohenheim_site = site;
 
 		// Set the custom header values
-		if (site.domain && site.domain.headers && site.domain.headers.length) {
-			site.domain.headers.forEach(function eachHeader(header) {
+		if (site.domain?.headers?.length) {
+			for (let header of site.domain.headers) {
 				if (header.name) {
 					// Unset the header if it is an empty value
 					if (!header.value) {
@@ -1330,7 +1354,7 @@ SiteDispatcher.setMethod(function modifyIncomingRequest(req, options) {
 						headers[header.name] = header.value;
 					}
 				}
-			});
+			}
 		}
 	}
 });

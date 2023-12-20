@@ -2,11 +2,9 @@
 
 * Move authentication/security settings to the main site model
 * Add proteus permission string check
-
-## 0.5.4 (WIP)
-
 * Set a `timeout` and `proxyTimeout` in `SiteDispatcher#forwardRequest()`
 * Do not retry connection on error
+* Allow other Hohenheim proxies to be used as upstream
 
 ## 0.5.3 (2023-10-19)
 

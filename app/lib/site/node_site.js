@@ -1,5 +1,4 @@
-var sitesById = alchemy.shared('Sites.byId'),
-    child     = require('child_process'),
+let child     = require('child_process'),
     libpath   = require('path'),
     procmon   = require('@11ways/process-monitor'),
     ansiHTML  = require('ansi-html'),
