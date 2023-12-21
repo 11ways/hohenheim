@@ -384,9 +384,9 @@ SiteDispatcher.setMethod(function startProxy() {
 /**
  * Create the LetsEncrypt
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.2.0
- * @version  0.5.1
+ * @version  0.6.0
  */
 SiteDispatcher.setMethod(function initGreenlock() {
 
@@ -456,6 +456,15 @@ SiteDispatcher.setMethod(function initGreenlock() {
 		notify: function notify(event, details) {
 			if (event == 'error') {
 				console.error('Greenlock error:', details);
+
+				if (details?.code == 'E_ACME') {
+					if (details.context == 'cert_issue' && details.subject) {
+						// Just remove the troublesome domain from Greenlock
+						// @TODO: This doesn't actually do anything...
+						that.greenlock.manager.remove({subject: details.subject});
+					}
+				}
+
 			} else if (debug) {
 				console.log('Greenlock notification:', event, details);
 			}
