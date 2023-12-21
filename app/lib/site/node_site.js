@@ -449,11 +449,11 @@ Site.setMethod(function start(callback) {
 });
 
 /**
- * Start on a port
+ * Start on a socket
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.4.0
- * @version  0.4.0
+ * @version  0.6.0
  *
  * @param    {Function}   callback
  */
@@ -471,6 +471,10 @@ Site.setMethod(function startWithSocket(callback) {
 		// Decrease the requested count again
 		that.requested--;
 
+		if (that.requested < 0) {
+			that.requested = 0;
+		}
+
 		if (err) {
 			return callback(err);
 		}
@@ -484,7 +488,7 @@ Site.setMethod(function startWithSocket(callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.4.0
- * @version  0.4.0
+ * @version  0.6.0
  *
  * @param    {Function}   callback
  */
@@ -501,6 +505,10 @@ Site.setMethod(function startWithPorts(callback) {
 
 		// Decrease the requested count again
 		that.requested--;
+
+		if (that.requested < 0) {
+			that.requested = 0;
+		}
 
 		if (err) {
 			return callback(err);
@@ -1176,9 +1184,9 @@ Site.setMethod(function getAddress(req, callback, attempt) {
 /**
  * Start servers with minimum amount of processes
  *
- * @author   Jelle De Loecker   <jelle@develry.be>
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.3.0
- * @version  0.5.0
+ * @version  0.6.0
  */
 Site.setMethod(function startMinimumServers() {
 
@@ -1191,7 +1199,9 @@ Site.setMethod(function startMinimumServers() {
 			&& that.settings.minimum_processes
 			&& that.settings.minimum_processes > that.active_process_count
 		) {
-			let count = that.total_proc_count || 0;
+
+			// Get the amount of active & starting processes
+			let count = (that.active_process_count || 0) + that.requested;
 
 			log.info('Site', that.name, 'requires at least', that.settings.minimum_processes, 'running processes,', that.running, 'are already running');
 

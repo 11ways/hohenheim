@@ -6,6 +6,7 @@
 * Do not retry connection on error
 * Allow other Hohenheim proxies to be used as upstream
 * Refactor the way sites are stored in memory
+* Use `active_process_count` to start the minimum amount of processes instead of `total_proc_count`
 
 ## 0.5.3 (2023-10-19)
 
