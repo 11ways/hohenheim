@@ -112,7 +112,7 @@ ProxySite.setMethod(function getAddress(req, callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.3.2
- * @version  0.4.2
+ * @version  0.6.0
  *
  * @param    {ServerResponse}   res         The response being sent to the browser
  * @param    {IncomingMessage}  req         The original request
@@ -129,7 +129,7 @@ ProxySite.setMethod(function modifyResponse(res, req, proxy_res, domain) {
 
 	// Get the original request sent to the proxied server
 	let proxy_req = proxy_res.req,
-	    proxy_host = proxy_req.getHeader('host');
+	    proxy_host = proxy_req.getHeader('host') || proxy_req.getHeader(':authority');
 
 	// If no proxy host was found, get the url instead
 	if (!proxy_host) {

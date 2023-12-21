@@ -594,7 +594,7 @@ Site.setMethod(function checkBasicAuth(req, res, next) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.3.0
+ * @version  0.6.0
  * 
  * @param    {IncommingMessage}   req
  * @param    {ServerResponse}     res
@@ -649,8 +649,12 @@ Site.setMethod(function registerHit(req, res, callback) {
 		finished = true;
 
 		bytesPrevWritten = req.socket.prevWritten || 0;
-		bytesWritten = req.socket.bytesWritten;
+		bytesWritten = req.socket.bytesWritten || 0;
 		sent = bytesWritten - bytesPrevWritten;
+
+		if (isNaN(sent)) {
+			sent = '-';
+		}
 
 		that.incoming += read;
 		that.outgoing += sent;
@@ -671,7 +675,7 @@ Site.setMethod(function registerHit(req, res, callback) {
 		that.Log.registerHit({
 			created        : start,
 			site_id        : that.id,
-			host           : req.headers.host,
+			host           : req.headers.host || req.headers[':authority'],
 			path           : fullPath,
 			status         : res.statusCode,
 			request_size   : read,

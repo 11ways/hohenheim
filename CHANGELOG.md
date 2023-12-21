@@ -7,6 +7,7 @@
 * Allow other Hohenheim proxies to be used as upstream
 * Refactor the way sites are stored in memory
 * Use `active_process_count` to start the minimum amount of processes instead of `total_proc_count`
+* Fix using `host` header instead of `:authority`
 
 ## 0.5.3 (2023-10-19)
 
