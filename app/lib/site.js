@@ -121,7 +121,7 @@ Site.constitute(function setSchema() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.5.3
+ * @version  0.6.0
  *
  * @param    {String}    hostname   The hostname
  * @param    {String}    [ip]       The optional ip to match
@@ -184,12 +184,26 @@ Site.setMethod(function matches(hostname, ip) {
 				continue;
 			}
 
+			// Skip hostnames that contain double www subdomains
+			if (hostname.indexOf('www.www.') > -1) {
+				continue;
+			}
+
 			let matched;
 
 			for (j = 0; j < domain.regexes.length; j++) {
 				matched = domain.regexes[j].exec(hostname);
 
 				if (matched !== null) {
+
+					let count_allowed_dots = (''+domain.regexes[j]).count('\\.'),
+					    count_found_dots = hostname.count('.');
+
+					// If the amount of dots in the regex is less than the amount of dots in the hostname,
+					// the regex is probably too broad
+					if ((count_allowed_dots+1) < count_found_dots) {
+						continue;
+					}
 
 					if (matched.groups) {
 						let groups = matched.groups;
@@ -514,8 +528,6 @@ Site.setMethod(async function handleProteusAuth(req, res) {
  */
 Site.setMethod(function handleRequestWithProteusIdentity(req, res, identity) {
 
-	console.log('Checking identity?', identity, 'for', req, res, this.proteus_realm_permission);
-
 	if (this.proteus_realm_permission) {
 		const permissions = identity.permissions;
 
@@ -602,8 +614,11 @@ Site.setMethod(function checkBasicAuth(req, res, next) {
  */
 Site.setMethod(function registerHit(req, res, callback) {
 
-	var that = this,
-	    bytesPrevRead,
+	const that = this;
+
+	let written_http2 = 0;
+
+	let bytesPrevRead,
 	    remoteAddress,
 	    bytesRead,
 	    fullPath,
@@ -633,24 +648,36 @@ Site.setMethod(function registerHit(req, res, callback) {
 	// Get the remote address
 	remoteAddress = req.socket.remoteAddress;
 
+	if (req.httpVersionMajor == 2) {
+		const write = res.write;
+		res.write = function writeHook(chunk, encoding, callback) {
+			written_http2 += chunk.length;
+			return write.call(res, chunk, encoding, callback);
+		};
+	}
+
 	res.on('close', finalizeHitRegister);
 	res.on('finish', finalizeHitRegister);
 
 	function finalizeHitRegister() {
 
-		var bytesPrevWritten,
-		    bytesWritten,
-		    sent;
-
 		if (finished) {
 			return;
 		}
 
+		let bytes_written,
+		    sent;
+
 		finished = true;
 
-		bytesPrevWritten = req.socket.prevWritten || 0;
-		bytesWritten = req.socket.bytesWritten || 0;
-		sent = bytesWritten - bytesPrevWritten;
+		if (req.httpVersionMajor == 2) {
+			sent = written_http2;
+		} else {
+			let bytes_prev_written = req.socket.prevWritten || 0;
+			bytes_written = req.socket.bytesWritten || 0;
+
+			sent = bytes_written - bytes_prev_written;
+		}
 
 		if (isNaN(sent)) {
 			sent = '-';
@@ -670,7 +697,7 @@ Site.setMethod(function registerHit(req, res, callback) {
 		that.pathCounters[path].outgoing += sent;
 
 		// Set the new written amount
-		req.socket.prevWritten = bytesWritten;
+		req.socket.prevWritten = bytes_written;
 
 		that.Log.registerHit({
 			created        : start,

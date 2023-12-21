@@ -8,6 +8,7 @@
 * Refactor the way sites are stored in memory
 * Use `active_process_count` to start the minimum amount of processes instead of `total_proc_count`
 * Fix using `host` header instead of `:authority`
+* Make domain regex matches even more strict: limit amount of subdomains
 
 ## 0.5.3 (2023-10-19)
 
