@@ -189,6 +189,18 @@ Site.setMethod(function matches(hostname, ip) {
 				continue;
 			}
 
+			if (hostname.includes('notexist')) {
+				continue;
+			}
+
+			if (hostname.includes('.www')) {
+				continue;
+			}
+
+			if (hostname.includes('wwww')) {
+				continue;
+			}
+
 			let matched;
 
 			for (j = 0; j < domain.regexes.length; j++) {
