@@ -485,7 +485,17 @@ SiteDispatcher.setMethod(function initGreenlock() {
 	this.https_server = http2.createSecureServer({
 		allowHTTP1  : true,
 		SNICallback : function sniCallback(servername, next) {
-			return that.SNICallback(servername, next);
+			return that.SNICallback(servername, this, next);
+		}
+	});
+
+	// Listen for incoming connections
+	this.https_server.on('connection', socket => {
+		let reputation = Classes.Hohenheim.Reputation.get(socket);
+
+		if (reputation.isNegative()) {
+			socket.destroy();
+			return;
 		}
 	});
 
@@ -559,17 +569,25 @@ function randomRefreshOffset() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.4.0
- * @version  0.5.1
+ * @version  0.6.0
+ *
+ * @param    {string}     domainname
+ * @param    {TLSSocket}  socket
+ * @param    {function}   callback
  */
-SiteDispatcher.setMethod(function SNICallback(domainname, callback) {
+SiteDispatcher.setMethod(function SNICallback(domainname, socket, callback) {
 
 	if (typeof domainname != 'string') {
 		return callback(new Error('SNI failure: invalid domainname'));
 	}
 
+	let reputation = Classes.Hohenheim.Reputation.get(socket);
+	reputation.registerDomainRequest(domainname);
+
 	let site = this.getSite(domainname);
 
 	if (!site) {
+		reputation.registerDomainMiss();
 
 		alchemy.distinctProblem('sni-unknown-domain-' + domainname, 'Failed to find "' + domainname + '", ignoring SNI request', {
 			// Allow the warning to repeat every 15 minutes
@@ -578,6 +596,8 @@ SiteDispatcher.setMethod(function SNICallback(domainname, callback) {
 
 		return callback(new Error('Domain "' + domainname + '" was not found on this server'));
 	}
+
+	reputation.registerDomainHit();
 
 	let secure_context = null,
 	    meta = this.getDomainMetaCache(domainname);
