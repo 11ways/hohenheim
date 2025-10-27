@@ -177,7 +177,9 @@ Site.setMethod(function matches(hostname, ip) {
 			}
 		}
 
-		if (domain.regexes) {
+		let regex_count = domain.regexes?.length || 0;
+
+		if (regex_count > 0) {
 
 			// Do not allow git subdomains in regexes (temporary workaround for brute force protection)
 			if (hostname.indexOf('git.') > -1 || hostname.indexOf('gitlab.') > -1) {
@@ -203,7 +205,7 @@ Site.setMethod(function matches(hostname, ip) {
 
 			let matched;
 
-			for (j = 0; j < domain.regexes.length; j++) {
+			for (j = 0; j < regex_count; j++) {
 				matched = domain.regexes[j].exec(hostname);
 
 				if (matched !== null) {
@@ -348,6 +350,9 @@ Site.setMethod(function update(record) {
 	// Store it by each domain name
 	for (let domain of this.domains) {
 
+		// Clear old regexes before rebuilding to prevent accumulation
+		domain.regexes = [];
+
 		if (!domain.hostname?.length) {
 			continue;
 		}
@@ -369,10 +374,6 @@ Site.setMethod(function update(record) {
 			}
 
 			if (regex) {
-				if (!domain.regexes) {
-					domain.regexes = [];
-				}
-
 				domain.regexes.push(regex);
 			}
 
