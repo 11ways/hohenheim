@@ -12,6 +12,7 @@
 * Automatically remove problematic domains from Greenlock (though it does not work)
 * Keep track of IP reputations
 * Correctly remove site instances from the `dispatcher.domains` object
+* Make sure `SiteDispatcher#getTestPort()` does not get stuck in an infinite loop
 
 ## 0.5.3 (2023-10-19)
 

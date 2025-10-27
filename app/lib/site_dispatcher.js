@@ -1424,13 +1424,13 @@ SiteDispatcher.setMethod(function modifyOutgoingResponse(req, res, proxyRes) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.2.0
- * @version  0.2.0
+ * @version  0.6.0
  */
 SiteDispatcher.setMethod(function getTestPort(start) {
 
-	var port = start || this.firstPort;
+	let port = start || this.firstPort;
 
-	while (port !== this.proxyPort && typeof this.ports[port] !== 'undefined') {
+	while (port < 65535 && port !== this.proxyPort && typeof this.ports[port] !== 'undefined') {
 		port++;
 	}
 
