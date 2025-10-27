@@ -886,6 +886,10 @@ Site.setMethod(function _startOnType(type, value, callback) {
 			// Remove the event listener
 			child_proc.removeListener('message', onMessage);
 		} else if (!child_proc.ready && data.error && data.error.code == 'EADDRINUSE') {
+			try {
+				child_proc.kill();
+			} catch (ignored) {}
+
 			// Try again if the port is already in use (after a small delay)
 			setTimeout(() => that.start(callback), 100);
 		}
