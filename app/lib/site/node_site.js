@@ -886,8 +886,8 @@ Site.setMethod(function _startOnType(type, value, callback) {
 			// Remove the event listener
 			child_proc.removeListener('message', onMessage);
 		} else if (!child_proc.ready && data.error && data.error.code == 'EADDRINUSE') {
-			// Try again if the port is already in use
-			that.start(callback);
+			// Try again if the port is already in use (after a small delay)
+			setTimeout(() => that.start(callback), 100);
 		}
 	});
 

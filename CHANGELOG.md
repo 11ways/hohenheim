@@ -14,6 +14,7 @@
 * Correctly remove site instances from the `dispatcher.domains` object
 * Make sure `SiteDispatcher#getTestPort()` does not get stuck in an infinite loop
 * Make sure regexes do not accumulate after updating a site
+* Add a Node-Site retry delay after getting `EADDRINUSE`
 
 ## 0.5.3 (2023-10-19)
 
