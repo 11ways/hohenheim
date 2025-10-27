@@ -292,18 +292,30 @@ Site.setMethod(function cleanParent() {
 	// Delete the entry by ID
 	delete dispatcher.ids[this.id];
 
-	// Remove this instance from the parent's domains
+	// Collect domain keys to delete (don't delete while iterating)
+	const domainsToDelete = [];
 	for (let domain in dispatcher.domains) {
 		if (dispatcher.domains[domain]?.site == this) {
-			delete dispatcher.domains[domain];
+			domainsToDelete.push(domain);
 		}
 	}
 
-	// Remove this instance from the dispatcher's names
+	// Now delete the collected domains
+	for (let domain of domainsToDelete) {
+		delete dispatcher.domains[domain];
+	}
+
+	// Collect name keys to delete (don't delete while iterating)
+	const namesToDelete = [];
 	for (let name in dispatcher.names) {
 		if (dispatcher.names[name] == this) {
-			delete dispatcher.names[name];
+			namesToDelete.push(name);
 		}
+	}
+
+	// Now delete the collected names
+	for (let name of namesToDelete) {
+		delete dispatcher.names[name];
 	}
 });
 

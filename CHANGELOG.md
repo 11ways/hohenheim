@@ -15,6 +15,7 @@
 * Make sure `SiteDispatcher#getTestPort()` does not get stuck in an infinite loop
 * Make sure regexes do not accumulate after updating a site
 * Add a Node-Site retry delay after getting `EADDRINUSE`
+* Fix deleting entries in an object during iteration
 
 ## 0.5.3 (2023-10-19)
 
