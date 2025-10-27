@@ -16,6 +16,7 @@
 * Make sure regexes do not accumulate after updating a site
 * Add a Node-Site retry delay after getting `EADDRINUSE`
 * Fix deleting entries in an object during iteration
+* Fix the `SiteDispatcher#createExitHandler()` implementation
 
 ## 0.5.3 (2023-10-19)
 

@@ -152,7 +152,7 @@ SiteDispatcher.setMethod(async function init() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.4.0
- * @version  0.4.0
+ * @version  0.6.0
  */
 SiteDispatcher.setMethod(function createExitHandler(type) {
 
@@ -160,22 +160,18 @@ SiteDispatcher.setMethod(function createExitHandler(type) {
 
 	return function onExit() {
 
-		var site,
-		    proc,
-		    id,
-		    i;
-
 		log.warning('Hohenheim is exiting: ' + type);
 
-		for (id in that.ids) {
-			site = that.ids[id];
+		for (let id in that.ids) {
+			let site = that.ids[id];
+			let process_count = site.process_list?.length || 0;
 
-			if (!site.processes) {
+			if (!process_count) {
 				continue;
 			}
 
-			for (i = 0; i < site.processes.length; i++) {
-				proc = site.processes[i];
+			for (let i = 0; i < process_count; i++) {
+				let proc = site.process_list[i];
 
 				if (proc) {
 					proc.kill();
