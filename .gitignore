@@ -53,3 +53,6 @@ app/config/local.js
 
 # Ignore greenlock file
 .greenlockrc
+
+# AI
+.serena/

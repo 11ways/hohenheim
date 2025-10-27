@@ -281,26 +281,26 @@ Site.setMethod(function remove() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.1.0
+ * @version  0.6.0
  */
 Site.setMethod(function cleanParent() {
 
-	var domain,
-	    name;
+	const dispatcher = this.dispatcher;
 
-	delete this.dispatcher.ids[this.id];
+	// Delete the entry by ID
+	delete dispatcher.ids[this.id];
 
 	// Remove this instance from the parent's domains
-	for (domain in this.dispatcher.domains) {
-		if (this.dispatcher.domains[domain] == this) {
-			delete this.dispatcher.domains[domain];
+	for (let domain in dispatcher.domains) {
+		if (dispatcher.domains[domain]?.site == this) {
+			delete dispatcher.domains[domain];
 		}
 	}
 
 	// Remove this instance from the dispatcher's names
-	for (name in this.dispatcher.names) {
-		if (this.dispatcher.names[name] == this) {
-			delete this.dispatcher.names[name];
+	for (let name in dispatcher.names) {
+		if (dispatcher.names[name] == this) {
+			delete dispatcher.names[name];
 		}
 	}
 });
