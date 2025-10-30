@@ -1150,6 +1150,14 @@ Site.setMethod(function getAddress(req, callback, attempt) {
 		}
 
 		if (!site_process) {
+			// All processes are either isolated or overloaded
+			// Try to start new processes if we haven't already
+			if (!attempt || attempt < 2) {
+				that.startMinimumServers();
+				// Retry after a short delay to allow processes to start
+				return setTimeout(() => that.getAddress(req, callback, (attempt || 0) + 1), 100);
+			}
+
 			return callback(new Error('No running site process was found'));
 		}
 
