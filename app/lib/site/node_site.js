@@ -920,7 +920,7 @@ Site.setMethod(function _startOnType(type, value, callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.5.0
+ * @version  0.6.0
  *
  * @param    {ChildProcess}   process
  * @param    {Number}         cpu       Cpu usage in percentage
@@ -950,7 +950,7 @@ Site.setMethod(function processStats(process, cpu, mem) {
 			// The process is in overload for over 15 seconds, start a new one?
 			if (this.running < 5) {
 
-				if (this.settings.maximum_processes && this.settings.maximum_processes >= this.active_process_count) {
+				if (this.settings.maximum_processes && this.active_process_count >= this.settings.maximum_processes) {
 					// Do nothing, maximum number of processes reached
 				} else {
 					log.warn('Starting new', this.name, 'process because others are too busy');
