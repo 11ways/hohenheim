@@ -1,4 +1,4 @@
-## 0.6.0 (WIP)
+## 0.6.0 (2026-01-15)
 
 * Move authentication/security settings to the main site model
 * Add proteus permission string check
