@@ -7,7 +7,7 @@
  * @since    0.5.3
  * @version  0.5.3
  */
-const Persistent = Function.inherits('Alchemy.Model', 'ProteusPersistentCookie');
+const Persistent = Function.inherits('Alchemy.Model.App', 'ProteusPersistentCookie');
 
 /**
  * Constitute the class wide schema

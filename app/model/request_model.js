@@ -22,7 +22,7 @@ var Request = Function.inherits('Alchemy.Model.App', function Request(conduit, o
  */
 Request.setProperty(function access_log_file() {
 	if (!this._access_log_file) {
-		this._access_log_file = fs.createWriteStream(alchemy.settings.log_access_path, {flags: 'a+'});
+		this._access_log_file = fs.createWriteStream(LOG_ACCESS_PATH, {flags: 'a+'});
 	}
 
 	return this._access_log_file;
@@ -62,11 +62,11 @@ Request.constitute(function addFields() {
  */
 Request.setMethod(function registerHit(data, req, res) {
 
-	if (alchemy.settings.log_access_to_database) {
+	if (LOG_ACCESS_TO_DATABASE) {
 		this.save(data);
 	}
 
-	if (alchemy.settings.log_access_to_file && this.access_log_file) {
+	if (LOG_ACCESS_TO_FILE && this.access_log_file) {
 
 		let referer,
 		    version;

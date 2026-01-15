@@ -258,13 +258,11 @@ Site.setStatic(function updateVersions(callback) {
  */
 Site.setStatic(function loadInstalledVersions(callback) {
 
-	let locations = alchemy.settings.n_locations;
+	// Get n_locations from global (set by settings system)
+	let locations = N_LOCATIONS.slice();
 
-	if (!locations) {
-		locations = [];
-	}
-
-	if (locations.indexOf('/usr/local/n/versions/node') == -1) {
+	// Always include the default location
+	if (!locations.includes('/usr/local/n/versions/node')) {
 		locations.push('/usr/local/n/versions/node');
 	}
 
@@ -558,7 +556,7 @@ Site.setMethod(function onStdout(proc, data) {
 		var str;
 
 		if (err) {
-			log.error('Error saving proclog', {err: err});
+			alchemy.registerError(err, {context: 'Error saving proclog'});
 			return;
 		}
 
@@ -1331,34 +1329,21 @@ Site.setMethod(function handleApiBroadcast(req) {
  *
  * @author        Jelle De Loecker   <jelle@develry.be>
  * @since         0.2.0
- * @version       0.2.0
+ * @version       0.6.0
  */
-alchemy.sputnik.before('start_server', function getNodeVersions(done) {
+STAGES.getStage('server').addPreTask(async function getNodeVersions() {
 
-	let pledge = new Pledge();
-
-	// Update all the node versions
-	Site.updateVersions(function gotVersions(err, versions) {
-
-		if (err) {
-			log.error('Error getting node versions:', err);
-			pledge.resolve();
-			return;
-		}
-
-		let entry,
-		    key;
+	try {
+		// Update all the node versions
+		let versions = await Site.updateVersions();
 
 		log.info('Got', Object.size(versions), 'node versions');
 
-		for (key in versions) {
-			entry = versions[key];
-
+		for (let key in versions) {
+			let entry = versions[key];
 			log.info(' -', entry.version, '(' + entry.title + ')', '@', entry.bin);
 		}
-
-		pledge.resolve();
-	});
-
-	return pledge;
+	} catch (err) {
+		alchemy.registerError(err, {context: 'Error getting node versions'});
+	}
 });

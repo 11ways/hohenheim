@@ -1,3 +1,7 @@
+## 0.7.0 (WIP)
+
+* Upgrade to alchemy v1.4.0
+
 ## 0.6.0 (2026-01-15)
 
 * Move authentication/security settings to the main site model

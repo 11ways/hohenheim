@@ -10,6 +10,80 @@
  * @since       0.0.1
  * @license     MIT License (http://www.opensource.org/licenses/mit-license.php)
  */
+
+// Register Hohenheim's custom settings group
+const HOHENHEIM = Classes.Alchemy.Setting.SYSTEM.createGroup('hohenheim');
+
+HOHENHEIM.addSetting('letsencrypt', {
+	type            : 'boolean',
+	default         : true,
+	description     : 'Enable Letsencrypt/Greenlock SSL support',
+	global_variable : 'LETSENCRYPT_ENABLED',
+});
+
+HOHENHEIM.addSetting('letsencrypt_email', {
+	type            : 'string',
+	default         : '',
+	description     : 'Email address for Letsencrypt TOS',
+	global_variable : 'LETSENCRYPT_EMAIL',
+});
+
+HOHENHEIM.addSetting('letsencrypt_challenge', {
+	type            : 'string',
+	default         : 'http-01',
+	description     : 'Letsencrypt challenge type',
+	global_variable : 'LETSENCRYPT_CHALLENGE',
+});
+
+HOHENHEIM.addSetting('letsencrypt_debug', {
+	type            : 'boolean',
+	default         : false,
+	description     : 'Enable Letsencrypt debugging (uses staging server)',
+	global_variable : 'LETSENCRYPT_DEBUG',
+});
+
+HOHENHEIM.addSetting('letsencrypt_staging', {
+	type            : 'boolean',
+	default         : false,
+	description     : 'Use Letsencrypt staging server',
+	global_variable : 'LETSENCRYPT_STAGING',
+});
+
+HOHENHEIM.addSetting('log_access_to_database', {
+	type            : 'boolean',
+	default         : false,
+	description     : 'Log access requests to the database',
+	global_variable : 'LOG_ACCESS_TO_DATABASE',
+});
+
+HOHENHEIM.addSetting('log_access_to_file', {
+	type            : 'boolean',
+	default         : true,
+	description     : 'Log access requests to a file',
+	global_variable : 'LOG_ACCESS_TO_FILE',
+});
+
+HOHENHEIM.addSetting('log_access_path', {
+	type            : 'string',
+	default         : '/var/log/hohenheim/access.log',
+	description     : 'Path to the access log file',
+	global_variable : 'LOG_ACCESS_PATH',
+});
+
+HOHENHEIM.addSetting('n_locations', {
+	type            : 'array',
+	default         : [],
+	description     : 'Extra N locations for node.js version management',
+	global_variable : 'N_LOCATIONS',
+});
+
+HOHENHEIM.addSetting('remote_proxy_keys', {
+	type            : 'array',
+	default         : [],
+	description     : 'Remote proxy keys for trusted upstream proxies',
+	global_variable : 'REMOTE_PROXY_KEYS',
+});
+
 alchemy.usePlugin('styleboost');
 alchemy.usePlugin('i18n', alchemy.settings.i18n_settings);
 
@@ -25,7 +99,7 @@ if (sentry?.endpoint) {
 	});
 }
 
-alchemy.usePlugin('acl', {baselayout: 'layouts/base', bodylayout: 'layouts/body', mainlayout: ['acl_main', 'admin_main', 'main'], mainblock: 'main', contentblock: 'content'});
+alchemy.usePlugin('acl');
 alchemy.usePlugin('menu');
 
 alchemy.usePlugin('media', alchemy.settings.media_settings);
@@ -33,25 +107,24 @@ alchemy.usePlugin('chimera', {title: 'Hohenheim'});
 
 /**
  * Ensure the access log path can be reached
- * @TODO: make 'done()' work
  */
-alchemy.sputnik.before('startServer', function beforeStartServer(done) {
+STAGES.getStage('server').addPreTask(async function beforeStartServer() {
 
-	if (!alchemy.settings.log_access_to_file) {
+	if (!LOG_ACCESS_TO_FILE) {
 		return;
 	}
 
 	let libpath = alchemy.use('path'),
 	    fs = alchemy.use('fs');
 
-	let path = libpath.dirname(alchemy.settings.log_access_path);
+	let path = libpath.dirname(LOG_ACCESS_PATH);
 
 	try {
 		fs.mkdirSync(path);
 	} catch (err) {
 		if (err.code !== 'EEXIST') {
 			log.warn('Disabling access.log file:', err);
-			alchemy.settings.log_access_to_file = false;
+			alchemy.setSetting('hohenheim.log_access_to_file', false);
 		}
 	}
 });

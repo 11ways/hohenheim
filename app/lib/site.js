@@ -103,11 +103,9 @@ Site.constitute(function setSchema() {
 	// Create a new schema
 	schema = new Classes.Alchemy.Schema(this);
 
-	// If letsencrypt is enabled, allow the user to set certain parameters
-	if (alchemy.settings.letsencrypt) {
-		schema.addField('letsencrypt_email', 'String');
-		schema.addField('letsencrypt_force', 'Boolean', {default: true});
-	}
+	// Letsencrypt settings (always available in schema, used when letsencrypt is enabled)
+	schema.addField('letsencrypt_email', 'String');
+	schema.addField('letsencrypt_force', 'Boolean', {default: true});
 
 	schema.addField('delay', 'Number', {
 		description: 'Delay in ms before forwarding the request',
@@ -575,8 +573,7 @@ Site.setMethod(function handleRequestWithProteusIdentity(req, res, identity) {
  */
 Site.setMethod(function checkBasicAuth(req, res, next) {
 
-	var b64auth,
-	    truthy;
+	var truthy;
 
 	if (this.basic_auth && this.basic_auth.length) {
 
@@ -602,7 +599,7 @@ Site.setMethod(function checkBasicAuth(req, res, next) {
 		let b64auth = (req.headers.authorization || '').split(' ')[1] || '';
 
 		// Decode them
-		let credentials = new Buffer(b64auth, 'base64').toString().trim();
+		let credentials = Buffer.from(b64auth, 'base64').toString().trim();
 
 		if (credentials) {
 			for (let i = 0; i < this.basic_auth.length; i++) {

@@ -9,7 +9,7 @@
  * @since    0.5.3
  * @version  0.5.3
  */
-const ProteusSiteUser = Function.inherits('Alchemy.Model', 'ProteusSiteUser');
+const ProteusSiteUser = Function.inherits('Alchemy.Model.App', 'ProteusSiteUser');
 
 /**
  * Constitute the class wide schema

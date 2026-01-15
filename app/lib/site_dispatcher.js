@@ -388,9 +388,6 @@ SiteDispatcher.setMethod(function initGreenlock() {
 
 	var that = this,
 	    server_url,
-	    path_log,
-	    path_etc,
-	    path_var,
 	    debug,
 	    Site;
 
@@ -404,36 +401,27 @@ SiteDispatcher.setMethod(function initGreenlock() {
 
 	this._inited_greenlock = true;
 
-	if (alchemy.settings.letsencrypt === false) {
+	if (LETSENCRYPT_ENABLED === false) {
 		return log.warn('Letsencrypt support is disabled');
 	}
 
-	if (!alchemy.settings.letsencrypt_email) {
+	if (!LETSENCRYPT_EMAIL) {
 		return log.error('Can\'t enable letsencrypt: no letsencrypt_email is set');
 	}
 
-	if (!alchemy.settings.letsencrypt_challenge) {
-		alchemy.settings.letsencrypt_challenge = 'http-01';
-	}
-
-	if (alchemy.settings.debug && alchemy.settings.letsencrypt_debug) {
+	if (alchemy.settings.debug && LETSENCRYPT_DEBUG) {
 		console.warn('Enabling letsencrypt debugging');
 		debug = true;
 	} else {
 		debug = false;
 	}
 
-	if (alchemy.settings.environment != 'live' || alchemy.settings.debug || alchemy.settings.letsencrypt_debug) {
+	if (alchemy.settings.environment != 'live' || alchemy.settings.debug || LETSENCRYPT_DEBUG) {
 		console.warn('Using letsencrypt staging servers');
 		server_url = 'https://acme-staging-v02.api.letsencrypt.org/directory';
 	} else {
 		server_url = 'https://acme-v02.api.letsencrypt.org/directory';
 	}
-
-	// Construct the paths to where the certificates and challenges will be kept
-	path_etc = libpath.resolve(PATH_TEMP, 'letsencrypt', 'etc');
-	path_var = libpath.resolve(PATH_TEMP, 'letsencrypt', 'var');
-	path_log = libpath.resolve(PATH_TEMP, 'letsencrypt', 'log');
 
 	// Create a site model instance
 	Site = Model.get('Site');
@@ -445,9 +433,9 @@ SiteDispatcher.setMethod(function initGreenlock() {
 		packageRoot     : PATH_TEMP,
 		configDir       : libpath.resolve(PATH_TEMP, 'greenlock.d'),
 		manager         : '@greenlock/manager',
-		maintainerEmail : alchemy.settings.letsencrypt_email,
-		subscriberEmail : alchemy.settings.letsencrypt_email,
-		staging         : !!alchemy.settings.letsencrypt_staging,
+		maintainerEmail : LETSENCRYPT_EMAIL,
+		subscriberEmail : LETSENCRYPT_EMAIL,
+		staging         : !!LETSENCRYPT_STAGING,
 
 		notify: function notify(event, details) {
 			if (event == 'error') {
@@ -470,7 +458,7 @@ SiteDispatcher.setMethod(function initGreenlock() {
 
 	this.greenlock.manager.defaults({
 		agreeToTerms: true,
-		subscriberEmail: alchemy.settings.letsencrypt_email,
+		subscriberEmail: LETSENCRYPT_EMAIL,
 		store: {
 			module: 'greenlock-store-fs',
 			basePath: libpath.resolve(PATH_TEMP, 'letsencrypt', 'etc'),
@@ -515,17 +503,6 @@ SiteDispatcher.setMethod(function initGreenlock() {
 	// Listen on the HTTPS port
 	this.https_server.listen(this.proxyPortHttps);
 });
-
-/**
- * Get wildcard name
- *
- * @author   Jelle De Loecker   <jelle@develry.be>
- * @since    0.4.0
- * @version  0.4.0
- */
-function wildcardname(domainname) {
-	return '*.' + domainname.split('.').slice(1).join('.');
-}
 
 /**
  * Get a valid domain name
@@ -711,7 +688,7 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 		this.greenlock.add({
 			subject         : main_domain,
 			altnames        : all_hostnames,
-			subscriberEmail : site_record.settings.letsencrypt_email || alchemy.settings.letsencrypt_email,
+			subscriberEmail : site_record.settings.letsencrypt_email || LETSENCRYPT_EMAIL,
 		});
 	}
 
@@ -776,7 +753,7 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 
 		callback(null, meta.secure_context);
 	}).catch(function onError(err) {
-		console.log('Greenlock error:', err);
+		alchemy.registerError(err, {context: 'Greenlock SNI error'});
 		return callback(err);
 	});
 });
@@ -822,6 +799,7 @@ SiteDispatcher.setMethod(function greenlockMiddleware(req, res, next) {
 			}
 		}));
 	}).catch(function gotError(err) {
+		alchemy.registerError(err, {context: 'Greenlock challenge error'});
 		res.end('Internal Server Error [1003]: See logs for details.');
 	});
 });
@@ -1155,7 +1133,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 
 	// Use the letsencrypt middleware first
 	// (This looks for the acme challenges)
-	if (skip_le !== true && alchemy.settings.letsencrypt !== false && this.proxyPortHttps) {
+	if (skip_le !== true && LETSENCRYPT_ENABLED !== false && this.proxyPortHttps) {
 
 		this.greenlockMiddleware(req, res, () => {
 			// Greenlock didn't do anything, we can continue
@@ -1202,7 +1180,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	} else {
 
 		// When using letsencrypt, redirect to HTTPS
-		if (alchemy.settings.letsencrypt && this.proxyPortHttps && !req.connection.encrypted) {
+		if (LETSENCRYPT_ENABLED && this.proxyPortHttps && !req.connection.encrypted) {
 
 			// Is HTTPS forced for all sites?
 			let force_https = this.force_https;
@@ -1214,7 +1192,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 
 			if (force_https) {
 				let host = req.headers.host;
-				let new_location = 'https://' + host.replace(/:\d+/, ':' + 443) + req.url;
+				let new_location = 'https://' + host.replace(/:\d+/, ':' + this.proxyPortHttps) + req.url;
 
 				res.writeHead(302, {'Location': new_location});
 				res.end();
@@ -1314,7 +1292,7 @@ SiteDispatcher.setMethod(function modifyIncomingRequest(req, options) {
 	headers['X-Proxied-By'] = 'hohenheim';
 	headers['X-Hohenheim-Id'] = alchemy.discovery_id;
 
-	if (req.connection && req.connection.remoteAddress) {
+	if (req.connection?.remoteAddress) {
 
 		const hohenheim_key = req.headers['x-hohenheim-key'];
 
@@ -1323,7 +1301,7 @@ SiteDispatcher.setMethod(function modifyIncomingRequest(req, options) {
 
 		// If there is a hohenheim key, and it is correct,
 		// we can use the original header information
-		if (hohenheim_key && alchemy.settings.remote_proxy_keys?.length && alchemy.settings.remote_proxy_keys.includes(hohenheim_key)) {
+		if (hohenheim_key && REMOTE_PROXY_KEYS?.length && REMOTE_PROXY_KEYS.includes(hohenheim_key)) {
 			// See if there already is an x-forwarded-for
 			let forwarded_for = req.headers['x-forwarded-for'],
 			    real_ip = req.headers['x-real-ip'];

@@ -6,8 +6,6 @@
  *
  * @author       Jelle De Loecker   <jelle@develry.be>
  * @since        0.0.1
- * @version      0.3.0
+ * @version      0.6.0
  */
-var AppController = Function.inherits('Alchemy.Controller', function App(conduit, options) {
-	App.super.call(this, conduit, options);
-});
+const App = Classes.Alchemy.Controller.App;
