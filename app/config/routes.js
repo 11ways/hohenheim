@@ -66,7 +66,7 @@ alchemy.plugins.chimera.sidebar_menu = [
 		title : 'Microcopy'
 	},
 	{
-		model : 'PermissionGroup',
+		model : 'Acl.PermissionGroup',
 		title : 'Permission Groups',
 	},
 	{
