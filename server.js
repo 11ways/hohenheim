@@ -84,24 +84,28 @@ ROOT_STAGE.getStage('load_core').addPostTask(async () => {
 	alchemy.dispatcher = new Classes.Develry.SiteDispatcher({
 
 		// Set to false to disable fallback
-		fallbackAddress : alchemy.settings.fallbackAddress || null,
+		fallbackAddress : FALLBACK_ADDRESS || null,
 
 		// localhost is the default value
-		redirectHost    : alchemy.settings.redirectHost || 'localhost',
+		redirectHost    : REDIRECT_HOST,
 
 		// Listen to this ipv6 address, too
-		ipv6Address     : alchemy.settings.ipv6Address || '',
+		ipv6Address     : IPV6_ADDRESS || '',
 
 		// The port on which the proxy will listen (probably 80)
-		proxyPort       : alchemy.settings.proxyPort || 80,
+		proxyPort       : PROXY_PORT,
 
 		// The https proxy port
-		proxyPortHttps  : alchemy.settings.proxyPortHttps,
+		proxyPortHttps  : PROXY_PORT_HTTPS,
 
 		// The first port to use for child node instances
-		firstPort       : alchemy.settings.firstPort || 4748,
+		firstPort       : FIRST_PORT,
 
 		// Force https?
-		force_https     : alchemy.settings.force_https == null ? true : alchemy.settings.force_https
+		force_https     : FORCE_HTTPS,
+
+		// Messages for error pages
+		not_found_message    : NOT_FOUND_MESSAGE,
+		unreachable_message  : UNREACHABLE_MESSAGE,
 	});
 });

@@ -1039,7 +1039,7 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.4.0
- * @version  0.5.4
+ * @version  0.7.0
  * 
  * @param    {ServerResponse}    res
  * @param    {String}            type
@@ -1085,9 +1085,19 @@ SiteDispatcher.setMethod(function respondWithError(res, type, error) {
 
 	let cached = this[prop];
 
+	// Get the message from the global variable or use fallback
+	let message;
+	if (prop == 'not_found_message') {
+		message = NOT_FOUND_MESSAGE || fallback;
+	} else if (prop == 'unreachable_message') {
+		message = UNREACHABLE_MESSAGE || fallback;
+	} else {
+		message = fallback;
+	}
+
 	if (cached === false) {
 		res.writeHead(status, {'Content-Type': 'text/plain'});
-		return res.end(alchemy.settings[prop] || fallback);
+		return res.end(message);
 	}
 
 	if (cached) {
@@ -1098,8 +1108,8 @@ SiteDispatcher.setMethod(function respondWithError(res, type, error) {
 	let that = this;
 
 	let variables = {
-		base_url : alchemy.settings.base_url_for_template,
-		message  : alchemy.settings[prop] || fallback
+		base_url : BASE_URL_FOR_TEMPLATE,
+		message  : message
 	};
 
 	alchemy.hawkejs.render('static/error', variables, function gotHtml(err, result) {

@@ -14,6 +14,77 @@
 // Register Hohenheim's custom settings group
 const HOHENHEIM = Classes.Alchemy.Setting.SYSTEM.createGroup('hohenheim');
 
+// Proxy server ports
+HOHENHEIM.addSetting('proxy_port', {
+	type            : 'integer',
+	default         : 80,
+	description     : 'Port for the HTTP proxy server',
+	global_variable : 'PROXY_PORT',
+});
+
+HOHENHEIM.addSetting('proxy_port_https', {
+	type            : 'integer',
+	default         : 443,
+	description     : 'Port for the HTTPS proxy server',
+	global_variable : 'PROXY_PORT_HTTPS',
+});
+
+HOHENHEIM.addSetting('ipv6_address', {
+	type            : 'string',
+	default         : '',
+	description     : 'IPv6 address to bind to (empty to disable)',
+	global_variable : 'IPV6_ADDRESS',
+});
+
+HOHENHEIM.addSetting('fallback_address', {
+	type            : 'string',
+	default         : '',
+	description     : 'Fallback address for unmatched requests (e.g., http://localhost:8080)',
+	global_variable : 'FALLBACK_ADDRESS',
+});
+
+HOHENHEIM.addSetting('force_https', {
+	type            : 'boolean',
+	default         : true,
+	description     : 'Force HTTPS redirects for all sites',
+	global_variable : 'FORCE_HTTPS',
+});
+
+HOHENHEIM.addSetting('base_url_for_template', {
+	type            : 'string',
+	default         : '',
+	description     : 'Base URL used in error page templates',
+	global_variable : 'BASE_URL_FOR_TEMPLATE',
+});
+
+HOHENHEIM.addSetting('not_found_message', {
+	type            : 'string',
+	default         : "We couldn't find this domain 😿. Are you sure it should be here?",
+	description     : 'Message shown when a domain is not found',
+	global_variable : 'NOT_FOUND_MESSAGE',
+});
+
+HOHENHEIM.addSetting('unreachable_message', {
+	type            : 'string',
+	default         : "We couldn't reach this server 😿. If this is unexpected, let us know at support@elevenways.be",
+	description     : 'Message shown when a server is unreachable',
+	global_variable : 'UNREACHABLE_MESSAGE',
+});
+
+HOHENHEIM.addSetting('first_port', {
+	type            : 'integer',
+	default         : 4748,
+	description     : 'First port to use for child node instances',
+	global_variable : 'FIRST_PORT',
+});
+
+HOHENHEIM.addSetting('redirect_host', {
+	type            : 'string',
+	default         : 'localhost',
+	description     : 'Host to use for internal redirects',
+	global_variable : 'REDIRECT_HOST',
+});
+
 HOHENHEIM.addSetting('letsencrypt', {
 	type            : 'boolean',
 	default         : true,
