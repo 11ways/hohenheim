@@ -8,6 +8,7 @@
 * Add max 10 retries with exponential backoff to EADDRINUSE retry. Fails with error after 10 attempts.
 * NodeSite's process list shuffle: Replaced Array.shuffle() with random starting index + modulo iteration.
 * NodeSite: Added 500ms debounce to startMinimumServers using _lastStartMinimumServers timestamp
+* SiteDispatcher: Added regex_match_cache (5000 entries, 5min TTL). Caches successful regex matches with their groups.
 
 ## 0.6.0 (2026-01-15)
 

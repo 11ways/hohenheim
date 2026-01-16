@@ -90,6 +90,9 @@ const SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDis
 	// Cache for domains that don't match any site (prevents repeated regex matching)
 	this.negative_domain_cache = alchemy.getCache('negative_domain_cache', {max_length: 5000, max_age: 5 * 60 * 1000});
 
+	// Cache for domains that matched via regex (prevents repeated regex matching)
+	this.regex_match_cache = alchemy.getCache('regex_match_cache', {max_length: 5000, max_age: 5 * 60 * 1000});
+
 	// The rendered not-found template
 	this.not_found_message = null;
 
@@ -947,6 +950,17 @@ SiteDispatcher.setMethod(function getSiteDomainPair(req_or_domain) {
 		return null;
 	}
 
+	// Check positive regex match cache
+	let cached_match = this.regex_match_cache.get(cache_key);
+
+	if (cached_match) {
+		if (req && cached_match.groups) {
+			req[MATCHED_GROUPS] = cached_match.groups;
+		}
+
+		return cached_match.entry;
+	}
+
 	if (this.domains[domain] != null) {
 		entry = this.domains[domain];
 
@@ -975,6 +989,12 @@ SiteDispatcher.setMethod(function getSiteDomainPair(req_or_domain) {
 			if (req && typeof matches == 'object') {
 				req[MATCHED_GROUPS] = matches;
 			}
+
+			// Cache this positive regex match to avoid repeated regex matching
+			this.regex_match_cache.set(cache_key, {
+				entry  : entry,
+				groups : typeof matches == 'object' ? matches : null,
+			});
 
 			return entry;
 		}
@@ -1557,9 +1577,10 @@ SiteDispatcher.setMethod(function registerSiteByHostname(hostname, site) {
 		domain : hostname,
 	};
 
-	// Clear negative cache when a new hostname is registered
-	// (it might have been cached as non-existent before)
+	// Clear domain caches when a new hostname is registered
+	// (it might have been cached differently before)
 	this.negative_domain_cache.clear();
+	this.regex_match_cache.clear();
 });
 
 /**
