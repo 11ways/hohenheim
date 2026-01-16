@@ -87,6 +87,9 @@ const SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDis
 	// Sni cache (max 1000 entries, 24h TTL)
 	this.sni_domain_cache = alchemy.getCache('sni_domain_cache', {max_length: 1000, max_age: 24 * 60 * 60 * 1000});
 
+	// Cache for domains that don't match any site (prevents repeated regex matching)
+	this.negative_domain_cache = alchemy.getCache('negative_domain_cache', {max_length: 5000, max_age: 5 * 60 * 1000});
+
 	// The rendered not-found template
 	this.not_found_message = null;
 
@@ -887,7 +890,7 @@ SiteDispatcher.setMethod(function getSite(req_or_domain) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.6.0
+ * @version  0.7.0
  * 
  * @param    {string|Object}   req_or_domain
  *
@@ -937,6 +940,13 @@ SiteDispatcher.setMethod(function getSiteDomainPair(req_or_domain) {
 	// The first part is the domain
 	domain = domain[0];
 
+	// Check negative cache first to avoid repeated regex matching for unknown domains
+	let cache_key = domain + (ip ? ':' + ip : '');
+
+	if (this.negative_domain_cache.get(cache_key)) {
+		return null;
+	}
+
 	if (this.domains[domain] != null) {
 		entry = this.domains[domain];
 
@@ -969,6 +979,9 @@ SiteDispatcher.setMethod(function getSiteDomainPair(req_or_domain) {
 			return entry;
 		}
 	}
+
+	// Cache this negative result to avoid repeated regex matching
+	this.negative_domain_cache.set(cache_key, true);
 
 	return null;
 });
@@ -1516,7 +1529,7 @@ SiteDispatcher.setMethod(function freePort(portNumber) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.6.0
+ * @version  0.7.0
  *
  * @param    {string}         hostname
  * @param    {Develry.Site}   site
@@ -1526,6 +1539,10 @@ SiteDispatcher.setMethod(function registerSiteByHostname(hostname, site) {
 		site   : site,
 		domain : hostname,
 	};
+
+	// Clear negative cache when a new hostname is registered
+	// (it might have been cached as non-existent before)
+	this.negative_domain_cache.clear();
 });
 
 /**

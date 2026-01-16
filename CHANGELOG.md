@@ -3,6 +3,7 @@
 * Upgrade to alchemy v1.4.0
 * Improve cache usage
 * Only track unique missed domains in Reputation
+* Add `negative_domain_cache` to SiteDispatcher to prevent constant regex matching
 
 ## 0.6.0 (2026-01-15)
 
