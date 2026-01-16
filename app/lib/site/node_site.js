@@ -1072,7 +1072,7 @@ Site.setMethod(function processExit(process, code, signal) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.4.0
+ * @version  0.7.0
  *
  * @param    {IncomingMessage}  req
  * @param    {Function}         callback
@@ -1181,7 +1181,25 @@ Site.setMethod(function getAddress(req, callback, attempt) {
 			this.initial_hinder.push(fnc);
 		} else {
 			this.initial_hinder = Function.hinder(function startFirstProcess(done) {
-				that.start(done);
+
+				// Timeout after 60 seconds to prevent infinite queue growth
+				// if the process never starts
+				let timed_out = false;
+				let timeout = setTimeout(() => {
+					timed_out = true;
+					done(new Error('Process failed to start within 60 seconds'));
+				}, 60 * 1000);
+
+				that.start((err) => {
+					clearTimeout(timeout);
+
+					if (timed_out) {
+						// Already timed out, don't call done again
+						return;
+					}
+
+					done(err);
+				});
 			});
 
 			this.initial_hinder.push(fnc);
