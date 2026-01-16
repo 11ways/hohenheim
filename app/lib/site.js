@@ -8,7 +8,7 @@ let ProteusRealm;
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.6.0
+ * @version  0.7.0
  *
  * @param    {Develry.SiteDispatcher}   siteDispatcher
  * @param    {Object}                   record
@@ -26,9 +26,6 @@ const Site = Function.inherits('Alchemy.Base', 'Develry', function Site(siteDisp
 
 	// The outgoing bytes
 	this.outgoing = 0;
-
-	// Counters per path
-	this.pathCounters = {};
 
 	// The redirecthost
 	this.redirectHost = siteDispatcher.redirectHost;
@@ -628,7 +625,7 @@ Site.setMethod(function checkBasicAuth(req, res, next) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.6.0
+ * @version  0.7.0
  * 
  * @param    {IncommingMessage}   req
  * @param    {ServerResponse}     res
@@ -707,16 +704,6 @@ Site.setMethod(function registerHit(req, res, callback) {
 
 		that.incoming += read;
 		that.outgoing += sent;
-
-		if (typeof that.pathCounters[path] === 'undefined') {
-			that.pathCounters[path] = {
-				incoming: 0,
-				outgoing: 0
-			};
-		}
-
-		that.pathCounters[path].incoming += read;
-		that.pathCounters[path].outgoing += sent;
 
 		// Set the new written amount
 		req.socket.prevWritten = bytes_written;
