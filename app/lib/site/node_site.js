@@ -1118,7 +1118,7 @@ Site.setMethod(function getAddress(req, callback, attempt) {
 		    address,
 		    i;
 
-		// Shuffle the process list
+		// Select a process from the list
 		if (that.process_list.length > 1) {
 
 			// If a fingerprint is given, look for it first
@@ -1134,10 +1134,13 @@ Site.setMethod(function getAddress(req, callback, attempt) {
 			}
 
 			if (!found_fingerprinted) {
-				that.process_list.shuffle();
+				// Use random starting index instead of shuffling the entire array.
+				// This achieves the same load distribution with O(1) instead of O(n).
+				let start = Math.floor(Math.random() * that.process_list.length);
+				let len = that.process_list.length;
 
-				for (i = 0; i < that.process_list.length; i++) {
-					site_process = that.process_list[i];
+				for (i = 0; i < len; i++) {
+					site_process = that.process_list[(start + i) % len];
 
 					// Isolated processes should no longer
 					// serve new clients
