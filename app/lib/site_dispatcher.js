@@ -1472,9 +1472,20 @@ SiteDispatcher.setMethod(function getPort(site, callback) {
 	    first_port = this.firstPort,
 	    last_port = first_port + 5000,
 	    test_port = this.getTestPort(),
+	    timed_out = false,
 	    port;
 
+	// Timeout after 30 seconds to prevent hanging if ports are exhausted
+	let timeout = setTimeout(() => {
+		timed_out = true;
+		callback(new Error('Timeout finding free port after 30 seconds'));
+	}, 30 * 1000);
+
 	Function.while(function test() {
+		if (timed_out) {
+			return false;
+		}
+
 		if (!port && test_port < last_port) {
 			return true;
 		}
@@ -1497,6 +1508,12 @@ SiteDispatcher.setMethod(function getPort(site, callback) {
 			next();
 		});
 	}, function done(err) {
+
+		if (timed_out) {
+			return;
+		}
+
+		clearTimeout(timeout);
 
 		if (err) {
 			return callback(err);
