@@ -785,6 +785,51 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 });
 
 /**
+ * Remove a domain from Greenlock so it stops trying to renew certificates.
+ * 
+ * Note: Greenlock's manager.remove() is broken (missing return statement),
+ * so we manually get the site, set deletedAt, and save it back.
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.7.0
+ * @version  0.7.0
+ *
+ * @param    {string}   domain
+ */
+SiteDispatcher.setMethod(async function removeFromGreenlock(domain) {
+
+	if (!LETSENCRYPT_ENABLED || !this.greenlock) {
+		return;
+	}
+
+	// Skip wildcard and regex patterns - they're not real Greenlock subjects
+	if (domain.includes('*') || domain.includes('(')) {
+		return;
+	}
+
+	try {
+		// Get the site from Greenlock's manager
+		let site = await this.greenlock.manager.get({servername: domain});
+
+		if (!site) {
+			return;
+		}
+
+		// Mark as deleted and save back
+		site.deletedAt = Date.now();
+		await this.greenlock.manager.set(site);
+
+	} catch (err) {
+		log.warn('Error removing domain from Greenlock:', domain, err.message);
+	}
+
+	// Also clear from our SNI cache
+	if (this.sni_domain_cache) {
+		this.sni_domain_cache.remove(domain);
+	}
+});
+
+/**
  * Greenlock middleware
  *
  * @author   Jelle De Loecker   <jelle@develry.be>

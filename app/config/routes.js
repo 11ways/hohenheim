@@ -71,6 +71,10 @@ alchemy.plugins.chimera.sidebar_menu = [
 		title : 'Sites'
 	},
 	{
+		model : 'System.Task',
+		title : 'Tasks'
+	},
+	{
 		model : 'Microcopy',
 		title : 'Microcopy'
 	},
