@@ -698,9 +698,23 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 		});
 	}
 
+	// Add timeout to prevent greenlock from hanging indefinitely
+	// (e.g., network issues, Let's Encrypt rate limits, etc.)
+	let timed_out = false;
+	let timeout = setTimeout(() => {
+		timed_out = true;
+		callback(new Error('Greenlock timeout after 30 seconds'));
+	}, 30 * 1000);
+
 	this.greenlock.get({
 		servername: domainname
 	}).then(function gotResult(result) {
+
+		if (timed_out) {
+			return;
+		}
+
+		clearTimeout(timeout);
 
 		if (!meta) {
 			meta = that.getDomainMetaCache(domainname, true);
@@ -759,6 +773,12 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 
 		callback(null, meta.secure_context);
 	}).catch(function onError(err) {
+
+		if (timed_out) {
+			return;
+		}
+
+		clearTimeout(timeout);
 		alchemy.registerError(err, {context: 'Greenlock SNI error'});
 		return callback(err);
 	});
