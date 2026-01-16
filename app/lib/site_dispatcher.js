@@ -560,7 +560,7 @@ SiteDispatcher.setMethod(function SNICallback(domainname, socket, callback) {
 	let site = this.getSite(domainname);
 
 	if (!site) {
-		reputation.registerDomainMiss();
+		reputation.registerDomainMiss(domainname);
 
 		alchemy.distinctProblem('sni-unknown-domain-' + domainname, 'Failed to find "' + domainname + '", ignoring SNI request', {
 			// Allow the warning to repeat every 15 minutes

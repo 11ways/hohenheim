@@ -7,7 +7,7 @@ let reputations = alchemy.getCache('ip_reputations');
  *
  * @author   Jelle De Loecker <jelle@elevenways.be>
  * @since    0.6.0
- * @version  0.6.0
+ * @version  0.7.0
  */
 const Reputation = Function.inherits('Alchemy.Base', 'Hohenheim', function Reputation(remote_address) {
 
@@ -25,6 +25,9 @@ const Reputation = Function.inherits('Alchemy.Base', 'Hohenheim', function Reput
 
 	// All domains requested
 	this.all_requested_domain_names = new Set();
+
+	// Domains that were missed (subset of all_requested)
+	this.missed_domain_names = new Set();
 });
 
 /**
@@ -92,10 +95,17 @@ Reputation.setMethod(function registerDomainRequest(domain) {
  *
  * @author   Jelle De Loecker <jelle@elevenways.be>
  * @since    0.6.0
- * @version  0.6.0
+ * @version  0.7.0
+ *
+ * @param    {string}   domain
  */
-Reputation.setMethod(function registerDomainMiss() {
-	this.total_domain_name_misses++;
+Reputation.setMethod(function registerDomainMiss(domain) {
+	// Only count unique domain misses - someone refreshing a typo'd URL
+	// shouldn't be penalized as heavily as someone probing many subdomains
+	if (!this.missed_domain_names.has(domain)) {
+		this.missed_domain_names.add(domain);
+		this.total_domain_name_misses++;
+	}
 });
 
 /**

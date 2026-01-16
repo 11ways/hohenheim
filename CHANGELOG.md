@@ -1,6 +1,8 @@
 ## 0.7.0 (WIP)
 
 * Upgrade to alchemy v1.4.0
+* Improve cache usage
+* Only track unique missed domains in Reputation
 
 ## 0.6.0 (2026-01-15)
 
