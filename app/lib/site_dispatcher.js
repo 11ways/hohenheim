@@ -29,11 +29,11 @@ global.MATCHED_GROUPS = Symbol('matched_groups');
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.6.0
+ * @version  0.7.0
  */
-var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispatcher(options) {
+const SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispatcher(options) {
 
-	var that = this;
+	let that = this;
 
 	if (!options) {
 		options = {};
@@ -84,8 +84,8 @@ var SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispa
 	// Force https (if it is enabled?)
 	this.force_https = options.force_https == null ? true : options.force_https;
 
-	// Sni cache
-	this.sni_domain_cache = {};
+	// Sni cache (max 1000 entries, 24h TTL)
+	this.sni_domain_cache = alchemy.getCache('sni_domain_cache', {max_length: 1000, max_age: 24 * 60 * 60 * 1000});
 
 	// The rendered not-found template
 	this.not_found_message = null;
@@ -592,14 +592,14 @@ SiteDispatcher.setMethod(function SNICallback(domainname, socket, callback) {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.4.0
- * @version  0.4.0
+ * @version  0.7.0
  *
  * @param    {String}   domainname
  *
  * @return   {Object}
  */
 SiteDispatcher.setMethod(function getDomainMetaCache(domainname, create) {
-	let cache = this.sni_domain_cache[domainname];
+	let cache = this.sni_domain_cache.get(domainname);
 
 	if (!cache && create) {
 		cache = {
@@ -608,7 +608,7 @@ SiteDispatcher.setMethod(function getDomainMetaCache(domainname, create) {
 			}
 		};
 
-		this.sni_domain_cache[domainname] = cache;
+		this.sni_domain_cache.set(domainname, cache);
 	}
 
 	return cache;
@@ -639,7 +639,7 @@ SiteDispatcher.setMethod(function getCachedSecureContext(domainname, meta) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.4.0
- * @version  0.6.0
+ * @version  0.7.0
  *
  * @param    {String}   domainname
  * @param    {Object}   meta          The cache for this domain
@@ -748,7 +748,7 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 		for (i = 0; i < names.length; i++) {
 			name = names[i];
 
-			that.sni_domain_cache[name] = meta;
+			that.sni_domain_cache.set(name, meta);
 		}
 
 		callback(null, meta.secure_context);
