@@ -6,6 +6,15 @@ Router.add({
 	breadcrumb : 'static.home',
 });
 
+// DEV ONLY: Auto-login route
+if (alchemy.environment == 'dev') {
+	Router.add({
+		name    : 'Static#devLogin',
+		methods : 'get',
+		paths   : '/dev/login',
+	});
+}
+
 Router.add({
 	name       : 'sitestat-start',
 	methods    : 'post',

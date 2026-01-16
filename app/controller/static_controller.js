@@ -27,6 +27,41 @@ Static.setAction(function home(conduit) {
 });
 
 /**
+ * DEV ONLY: Auto-login for testing
+ *
+ * @author   Claude
+ * @since    0.6.0
+ * @version  0.6.0
+ *
+ * @param    {Alchemy.Conduit}   conduit
+ */
+Static.setAction(async function devLogin(conduit) {
+
+	// Only allow this in development environment
+	if (alchemy.environment != 'dev') {
+		return conduit.notFound();
+	}
+
+	let user_id = conduit.param('user_id');
+
+	if (!user_id) {
+		return conduit.error(new Error('user_id required'));
+	}
+
+	const User = Model.get('User');
+	let user = await User.findByPk(user_id);
+
+	if (!user) {
+		return conduit.error(new Error('User not found'));
+	}
+
+	// Log in the user
+	alchemy.plugins.acl.addUserDataToSession(conduit, user);
+
+	conduit.redirect('/chimera');
+});
+
+/**
  * Make basic field information about a model available
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
