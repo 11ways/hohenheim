@@ -889,7 +889,16 @@ Site.setMethod(function _startOnType(type, value, callback) {
 			} catch (ignored) {}
 
 			// Try again if the port is already in use (after a small delay)
-			setTimeout(() => that.start(callback), 100);
+			// Limit retries to prevent infinite loop if ports are exhausted
+			let retries = callback._eaddrinuse_retries || 0;
+
+			if (retries < 10) {
+				callback._eaddrinuse_retries = retries + 1;
+				// Exponential backoff: 100ms, 200ms, 400ms, ...
+				setTimeout(() => that.start(callback), 100 * Math.pow(2, retries));
+			} else {
+				callback(new Error('Failed to start site after 10 EADDRINUSE retries'));
+			}
 		}
 	});
 

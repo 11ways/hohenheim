@@ -5,6 +5,7 @@
 * Only track unique missed domains in Reputation
 * Add `negative_domain_cache` to SiteDispatcher to prevent constant regex matching
 * Add 30 second timeout to getPort() to prevent hanging if all 5000 ports are exhausted
+* Add max 10 retries with exponential backoff to EADDRINUSE retry. Fails with error after 10 attempts.
 
 ## 0.6.0 (2026-01-15)
 
