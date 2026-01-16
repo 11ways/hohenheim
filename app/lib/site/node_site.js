@@ -1226,14 +1226,23 @@ Site.setMethod(function getAddress(req, callback, attempt) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.3.0
- * @version  0.6.0
+ * @version  0.7.0
  */
 Site.setMethod(function startMinimumServers() {
 
 	var that = this;
 
+	// Debounce: skip if called within the last 500ms to prevent thundering herd
+	// when many requests simultaneously find all processes overloaded
+	let now = Date.now();
+
+	if (this._lastStartMinimumServers && (now - this._lastStartMinimumServers) < 500) {
+		return;
+	}
+
+	this._lastStartMinimumServers = now;
+
 	this.dispatcher.queue.add(function startServersWhenReady() {
-		var key;
 
 		if (that.settings
 			&& that.settings.minimum_processes
