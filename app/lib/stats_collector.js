@@ -29,7 +29,7 @@ const StatsCollector = Function.inherits('Informer', 'Develry', function StatsCo
 	this.maxSamples = options.maxSamples || 150;
 
 	// RingBuffer for global statistics
-	this.globalSamples = new Classes.Develry.RingBuffer(this.maxSamples);
+	this.globalSamples = new Blast.Classes.Develry.RingBuffer(this.maxSamples);
 
 	// Map of siteId -> {ring: RingBuffer, prev: sample}
 	this.siteSamples = new Map();
@@ -41,7 +41,7 @@ const StatsCollector = Function.inherits('Informer', 'Develry', function StatsCo
 	this.maxActivities = options.maxActivities || 50;
 
 	// RingBuffer for recent activities
-	this.activities = new Classes.Develry.RingBuffer(this.maxActivities);
+	this.activities = new Blast.Classes.Develry.RingBuffer(this.maxActivities);
 
 	// The sampling interval timer
 	this._intervalId = null;
@@ -324,7 +324,7 @@ StatsCollector.setMethod(function collectSites(timestamp) {
 
 		if (!siteData) {
 			siteData = {
-				ring : new Classes.Develry.RingBuffer(this.maxSamples),
+				ring : new Blast.Classes.Develry.RingBuffer(this.maxSamples),
 				prev : null,
 			};
 
@@ -443,36 +443,35 @@ StatsCollector.setMethod(function collectSiteSample(site, timestamp, prevSample)
  * @since    0.7.0
  * @version  0.7.0
  *
- * @param    {Array}    samples     Array of samples with timestamp and value
- * @param    {String}   valueKey    The key to get the cumulative value from
- * @param    {Number}   windowMs    The time window in milliseconds
+ * @param    {Develry.RingBuffer}   ringBuffer   The ring buffer containing samples
+ * @param    {String}               valueKey     The key to get the cumulative value from
+ * @param    {Number}               windowMs     The time window in milliseconds
  *
  * @return   {Number}   The calculated rate per second
  */
-StatsCollector.setMethod(function calculateRate(samples, valueKey, windowMs) {
+StatsCollector.setMethod(function calculateRate(ringBuffer, valueKey, windowMs) {
 
-	if (!samples || samples.length < 2) {
+	if (!ringBuffer || ringBuffer.length < 2) {
 		return 0;
 	}
 
 	let now = Date.now();
 	let windowStart = now - windowMs;
 
-	// Find the first sample within the window
-	let startSample = null;
-	let endSample = samples[samples.length - 1];
+	// Get samples in the time range efficiently
+	let samples = ringBuffer.getInTimeRange(windowStart, now);
 
-	for (let i = 0; i < samples.length; i++) {
-		if (samples[i].timestamp >= windowStart) {
-			// Use the sample just before the window if available
-			startSample = i > 0 ? samples[i - 1] : samples[i];
-			break;
+	if (samples.length < 2) {
+		// Try to get one sample before the window for delta calculation
+		let allSamples = ringBuffer.getInTimeRange(windowStart - windowMs, now);
+		if (allSamples.length < 2) {
+			return 0;
 		}
+		samples = allSamples;
 	}
 
-	if (!startSample || startSample === endSample) {
-		return 0;
-	}
+	let startSample = samples[0];
+	let endSample = samples[samples.length - 1];
 
 	let timeDelta = (endSample.timestamp - startSample.timestamp) / 1000;
 
@@ -517,11 +516,9 @@ StatsCollector.setMethod(function getGlobalStats() {
 		};
 	}
 
-	let samples = this.globalSamples.toArray();
-
 	// Calculate rolling rates
-	let requestsPerMin1 = this.calculateRate(samples, 'hitCounter', 60 * 1000);
-	let requestsPerMin5 = this.calculateRate(samples, 'hitCounter', 5 * 60 * 1000);
+	let requestsPerMin1 = this.calculateRate(this.globalSamples, 'hitCounter', 60 * 1000);
+	let requestsPerMin5 = this.calculateRate(this.globalSamples, 'hitCounter', 5 * 60 * 1000);
 
 	return {
 		...latest,
@@ -555,17 +552,15 @@ StatsCollector.setMethod(function getSiteStats(siteId) {
 		return null;
 	}
 
-	let samples = siteData.ring.toArray();
-
 	// Calculate rolling byte rates
-	let incomingPerMin1 = this.calculateRate(samples, 'incoming', 60 * 1000);
-	let incomingPerMin5 = this.calculateRate(samples, 'incoming', 5 * 60 * 1000);
-	let outgoingPerMin1 = this.calculateRate(samples, 'outgoing', 60 * 1000);
-	let outgoingPerMin5 = this.calculateRate(samples, 'outgoing', 5 * 60 * 1000);
+	let incomingPerMin1 = this.calculateRate(siteData.ring, 'incoming', 60 * 1000);
+	let incomingPerMin5 = this.calculateRate(siteData.ring, 'incoming', 5 * 60 * 1000);
+	let outgoingPerMin1 = this.calculateRate(siteData.ring, 'outgoing', 60 * 1000);
+	let outgoingPerMin5 = this.calculateRate(siteData.ring, 'outgoing', 5 * 60 * 1000);
 
 	// Calculate rolling request rates
-	let requestsPerMin1 = this.calculateRate(samples, 'hitCounter', 60 * 1000);
-	let requestsPerMin5 = this.calculateRate(samples, 'hitCounter', 5 * 60 * 1000);
+	let requestsPerMin1 = this.calculateRate(siteData.ring, 'hitCounter', 60 * 1000);
+	let requestsPerMin5 = this.calculateRate(siteData.ring, 'hitCounter', 5 * 60 * 1000);
 
 	// Get the site instance for additional info
 	let site = this.dispatcher.ids[siteId];

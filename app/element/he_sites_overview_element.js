@@ -24,6 +24,21 @@ HeSitesOverview.setAttribute('max-sites', {type: 'number', default: 12});
 HeSitesOverview.setAssignedProperty('sites', null);
 
 /**
+ * Cached sorted sites (to reduce jitter)
+ */
+HeSitesOverview.setAssignedProperty('sortedSites', null);
+
+/**
+ * Last time we sorted the sites
+ */
+HeSitesOverview.setAssignedProperty('lastSortTime', 0);
+
+/**
+ * How often to re-sort (in milliseconds)
+ */
+HeSitesOverview.SORT_INTERVAL = 20000; // 20 seconds
+
+/**
  * Build the initial HTML structure when connected to DOM
  */
 HeSitesOverview.setMethod(function connected() {
@@ -130,20 +145,31 @@ HeSitesOverview.setMethod(function renderSites() {
 		maxSites = 12;
 	}
 
-	// Sort by activity (processes first, then by bandwidth)
-	sites = sites.slice().sort((a, b) => {
-		// Sites with processes come first
-		if (a.processCount !== b.processCount) {
-			return b.processCount - a.processCount;
+	// Only re-sort periodically to reduce jitter
+	let now = Date.now();
+	let shouldSort = !this.sortedSites || (now - this.lastSortTime) > HeSitesOverview.SORT_INTERVAL;
+
+	if (shouldSort) {
+		// Sort by total request count (most stable metric)
+		this.sortedSites = sites.slice().sort((a, b) => {
+			return (b.hitCounter || 0) - (a.hitCounter || 0);
+		});
+		this.lastSortTime = now;
+	} else {
+		// Update the data in existing sort order
+		let siteMap = new Map(sites.map(s => [s.siteId, s]));
+		this.sortedSites = this.sortedSites.map(s => siteMap.get(s.siteId) || s).filter(s => siteMap.has(s.siteId));
+		
+		// Add any new sites at the end
+		for (let site of sites) {
+			if (!this.sortedSites.find(s => s.siteId === site.siteId)) {
+				this.sortedSites.push(site);
+			}
 		}
-		// Then sort by total bandwidth
-		let aBw = (a.incomingBytesPerSec || 0) + (a.outgoingBytesPerSec || 0);
-		let bBw = (b.incomingBytesPerSec || 0) + (b.outgoingBytesPerSec || 0);
-		return bBw - aBw;
-	});
+	}
 
 	// Limit
-	sites = sites.slice(0, maxSites);
+	sites = this.sortedSites.slice(0, maxSites);
 
 	// Clear existing content
 	Hawkejs.removeChildren(container);
@@ -233,13 +259,6 @@ HeSitesOverview.setMethod(function createSiteCard(site) {
 	let stats = document.createElement('div');
 	stats.className = 'site-stats';
 
-	// Processes stat
-	let procStat = this.createStatBlock(
-		site.processCount || 0,
-		'Procs'
-	);
-	stats.appendChild(procStat);
-
 	// Request count
 	let requestStat = this.createStatBlock(
 		this.formatNumber(site.hitCounter || 0),
@@ -247,13 +266,20 @@ HeSitesOverview.setMethod(function createSiteCard(site) {
 	);
 	stats.appendChild(requestStat);
 
-	// Requests per second (rate)
-	let reqPerSec = site.requestsPerSec || 0;
+	// Request rate (adaptive: /h, /m, or /s based on volume)
 	let rateStat = this.createStatBlock(
-		reqPerSec > 0 ? reqPerSec.toFixed(1) + '/s' : '0/s',
+		this.formatRate(site.requestsPerSec || 0),
 		'Rate'
 	);
 	stats.appendChild(rateStat);
+
+	// Bandwidth (total in + out)
+	let totalBandwidth = (site.incoming || 0) + (site.outgoing || 0);
+	let bandwidthStat = this.createStatBlock(
+		this.formatBytes(totalBandwidth),
+		'Traffic'
+	);
+	stats.appendChild(bandwidthStat);
 
 	card.appendChild(stats);
 
@@ -303,4 +329,67 @@ HeSitesOverview.setMethod(function formatNumber(num) {
 	}
 
 	return (num / 1000000000).toFixed(1) + 'B';
+});
+
+/**
+ * Format a rate adaptively as /h, /m, or /s based on volume
+ * - Less than 1 per minute (0.017/s): show as X/h
+ * - Less than 1 per second: show as X/m
+ * - Otherwise: show as X/s
+ */
+HeSitesOverview.setMethod(function formatRate(perSecond) {
+
+	if (perSecond == null || perSecond === 0) {
+		return '0/h';
+	}
+
+	// If less than 1 per minute, show per hour
+	if (perSecond < 1/60) {
+		let perHour = perSecond * 3600;
+		if (perHour < 10) {
+			return perHour.toFixed(1) + '/h';
+		}
+		return Math.round(perHour) + '/h';
+	}
+
+	// If less than 1 per second, show per minute
+	if (perSecond < 1) {
+		let perMinute = perSecond * 60;
+		if (perMinute < 10) {
+			return perMinute.toFixed(1) + '/m';
+		}
+		return Math.round(perMinute) + '/m';
+	}
+
+	// Otherwise show per second
+	if (perSecond < 10) {
+		return perSecond.toFixed(1) + '/s';
+	}
+
+	return Math.round(perSecond) + '/s';
+});
+
+/**
+ * Format bytes with appropriate unit (B, KB, MB, GB, TB)
+ */
+HeSitesOverview.setMethod(function formatBytes(bytes) {
+
+	if (bytes == null || bytes === 0) {
+		return '0 B';
+	}
+
+	const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+	let unitIndex = 0;
+	let value = bytes;
+
+	while (value >= 1024 && unitIndex < units.length - 1) {
+		value /= 1024;
+		unitIndex++;
+	}
+
+	if (value < 10) {
+		return value.toFixed(1) + ' ' + units[unitIndex];
+	}
+
+	return Math.round(value) + ' ' + units[unitIndex];
 });
