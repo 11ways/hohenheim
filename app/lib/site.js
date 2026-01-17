@@ -204,16 +204,16 @@ Site.setMethod(function matches(hostname, ip) {
 			let matched;
 
 			for (j = 0; j < regex_count; j++) {
-				matched = domain.regexes[j].exec(hostname);
+				let regexEntry = domain.regexes[j];
+				matched = regexEntry.regex.exec(hostname);
 
 				if (matched !== null) {
 
-					let count_allowed_dots = (''+domain.regexes[j]).count('\\.'),
-					    count_found_dots = hostname.count('.');
+					let count_found_dots = hostname.count('.');
 
 					// If the amount of dots in the regex is less than the amount of dots in the hostname,
 					// the regex is probably too broad
-					if ((count_allowed_dots+1) < count_found_dots) {
+					if ((regexEntry.dotCount + 1) < count_found_dots) {
 						continue;
 					}
 
@@ -384,7 +384,11 @@ Site.setMethod(function update(record) {
 			}
 
 			if (regex) {
-				domain.regexes.push(regex);
+				// Store regex with pre-computed dot count for performance
+				domain.regexes.push({
+					regex: regex,
+					dotCount: (''+regex).count('\\.'),
+				});
 			}
 
 			// Ignore accidental 'null' (string) values
