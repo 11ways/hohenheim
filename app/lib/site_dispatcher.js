@@ -1120,6 +1120,9 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 		socket.end('There is no such domain here!');
 	} else {
 
+		// Track WebSocket bytes for this site
+		that.trackWebSocketBytes(socket, site);
+
 		site.getAddress(req, function gotAddress(err, address) {
 
 			if (err) {
@@ -1130,6 +1133,44 @@ SiteDispatcher.setMethod(function websocketRequest(req, socket, head) {
 			that.forwardRequest(req, socket, address, head);
 		});
 	}
+});
+
+/**
+ * Track bytes transferred over a WebSocket connection for a site.
+ * This wraps the socket's write method and listens to data events
+ * to track incoming and outgoing bytes.
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.7.0
+ * @version  0.7.0
+ *
+ * @param    {Socket}         socket   The WebSocket socket
+ * @param    {Develry.Site}   site     The site instance
+ */
+SiteDispatcher.setMethod(function trackWebSocketBytes(socket, site) {
+
+	// Prevent double-tracking if called multiple times for the same socket
+	if (socket._hohenheimTracked) {
+		return;
+	}
+	socket._hohenheimTracked = true;
+
+	// Track bytes read (incoming from client)
+	let bytesReadStart = socket.bytesRead || 0;
+
+	// Track bytes written (outgoing to client)
+	let bytesWrittenStart = socket.bytesWritten || 0;
+
+	// When the socket closes, calculate the total bytes transferred
+	socket.once('close', function onClose() {
+		let bytesRead = (socket.bytesRead || 0) - bytesReadStart;
+		let bytesWritten = (socket.bytesWritten || 0) - bytesWrittenStart;
+
+		// Add to site's totals
+		site.incoming += bytesRead;
+		site.outgoing += bytesWritten;
+		site.hitCounter++;
+	});
 });
 
 /**
