@@ -812,7 +812,7 @@ Site.setMethod(function _startOnType(type, value, callback) {
 	// Attach process monitor
 	child_proc.monitor = procmon.monitor({
 		pid       : child_proc.pid,
-		interval  : 4000,
+		interval  : 10000,
 		technique : 'proc'
 	}).start();
 
@@ -988,7 +988,7 @@ Site.setMethod(function processStats(process, cpu, mem) {
 	}
 
 	if (cpu > 50) {
-		log.warn('Site', JSON.stringify(this.name), 'process id', process.pid, 'is using', process.cpu, '% cpu and', process.mem, 'MiB memory');
+		log.warn('Site', this.name, 'process id', process.pid, 'is using', process.cpu, '% cpu and', process.mem, 'MiB memory');
 	}
 });
 
