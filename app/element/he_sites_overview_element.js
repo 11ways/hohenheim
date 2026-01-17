@@ -206,7 +206,10 @@ HeSitesOverview.setMethod(function getSiteStatus(site) {
 	}
 
 	// No processes - could be static site or idle
-	if ((site.incomingBytesPerSec || 0) > 0 || (site.outgoingBytesPerSec || 0) > 0) {
+	// Use 1-minute averaged rates for stability (falls back to instant rate)
+	let incomingRate = site.incomingPerMin1 || site.incomingBytesPerSec || 0;
+	let outgoingRate = site.outgoingPerMin1 || site.outgoingBytesPerSec || 0;
+	if (incomingRate > 0 || outgoingRate > 0) {
 		return 'running';
 	}
 
@@ -267,8 +270,10 @@ HeSitesOverview.setMethod(function createSiteCard(site) {
 	stats.appendChild(requestStat);
 
 	// Request rate (adaptive: /h, /m, or /s based on volume)
+	// Use 1-minute averaged rate for stability, fall back to instant rate for recent bursts
+	let rate = site.requestsPerMin1 || site.requestsPerSec || 0;
 	let rateStat = this.createStatBlock(
-		this.formatRate(site.requestsPerSec || 0),
+		this.formatRate(rate),
 		'Rate'
 	);
 	stats.appendChild(rateStat);
@@ -334,8 +339,8 @@ HeSitesOverview.setMethod(function formatNumber(num) {
 /**
  * Format a rate adaptively as /h, /m, or /s based on volume
  * - Less than 1 per minute (0.017/s): show as X/h
- * - Less than 1 per second: show as X/m
- * - Otherwise: show as X/s
+ * - Less than 0.5 per second (30/min): show as X/m
+ * - 0.5/s or higher: show as X/s
  */
 HeSitesOverview.setMethod(function formatRate(perSecond) {
 
@@ -343,7 +348,7 @@ HeSitesOverview.setMethod(function formatRate(perSecond) {
 		return '0/h';
 	}
 
-	// If less than 1 per minute, show per hour
+	// If less than 1 per minute (~0.017/s), show per hour
 	if (perSecond < 1/60) {
 		let perHour = perSecond * 3600;
 		if (perHour < 10) {
@@ -352,8 +357,8 @@ HeSitesOverview.setMethod(function formatRate(perSecond) {
 		return Math.round(perHour) + '/h';
 	}
 
-	// If less than 1 per second, show per minute
-	if (perSecond < 1) {
+	// If less than 2 per second, show per minute
+	if (perSecond < 2) {
 		let perMinute = perSecond * 60;
 		if (perMinute < 10) {
 			return perMinute.toFixed(1) + '/m';
