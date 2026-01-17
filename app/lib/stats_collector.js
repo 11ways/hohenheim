@@ -22,8 +22,8 @@ const StatsCollector = Function.inherits('Informer', 'Develry', function StatsCo
 	// Reference to the SiteDispatcher
 	this.dispatcher = dispatcher;
 
-	// Sample interval in milliseconds (default: 2 seconds)
-	this.sampleInterval = options.sampleInterval || 2000;
+	// Sample interval in milliseconds (default: 5 seconds)
+	this.sampleInterval = options.sampleInterval || 5000;
 
 	// Maximum number of samples to keep (default: 150 = 5 minutes at 2s intervals)
 	this.maxSamples = options.maxSamples || 150;

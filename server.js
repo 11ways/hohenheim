@@ -111,8 +111,8 @@ ROOT_STAGE.getStage('load_core').addPostTask(async () => {
 
 	// Create stats collector for dashboard
 	alchemy.statsCollector = new Classes.Develry.StatsCollector(alchemy.dispatcher, {
-		sampleInterval: 2000,  // 2 seconds
-		maxSamples: 450,       // 15 minutes of data
+		sampleInterval: 5000,  // 5 seconds
+		maxSamples: 180,       // 15 minutes of data at 5s intervals
 	});
 
 	// Start collecting stats

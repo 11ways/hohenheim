@@ -162,7 +162,7 @@ HeStatsOverview.setMethod(function updateDisplay() {
 		loading.hidden = true;
 	}
 
-	this.updateStatCard('requests', this.stats.requestsPerSec);
+	this.updateStatCard('requests', this.stats.requestsPerMin1 || this.stats.requestsPerSec);
 	this.updateStatCard('hits', this.stats.hitCounter);
 	this.updateStatCard('connections', this.stats.connectionCounter);
 	this.updateStatCard('sites', this.stats.activeSites);
