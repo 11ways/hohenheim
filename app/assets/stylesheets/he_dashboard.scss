@@ -1,0 +1,478 @@
+// Dashboard widget element styles
+// Hohenheim Admin Dashboard
+
+// Color palette
+$color-bg-primary: #0f172a;
+$color-bg-secondary: #1e293b;
+$color-bg-tertiary: #334155;
+$color-border: #475569;
+$color-text-primary: #f1f5f9;
+$color-text-secondary: #94a3b8;
+$color-text-muted: #64748b;
+
+$color-accent-blue: #3b82f6;
+$color-accent-green: #22c55e;
+$color-accent-yellow: #eab308;
+$color-accent-red: #ef4444;
+$color-accent-purple: #a855f7;
+$color-accent-cyan: #06b6d4;
+
+// Shared dashboard widget styles
+he-stats-overview,
+he-sites-overview,
+he-traffic-chart,
+he-activity-feed {
+	display: block;
+	margin-bottom: 2.5rem;
+
+	&:last-child {
+		margin-bottom: 0;
+	}
+}
+
+// Dashboard widget section wrapper
+.dashboard-widget {
+	background: $color-bg-secondary;
+	border-radius: 1rem;
+	padding: 1.5rem;
+	border: 1px solid $color-border;
+	margin-bottom: 1.5rem;
+}
+
+// Common widget header styling
+.widget-header {
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: $color-text-secondary;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	margin: 0 0 1rem 0;
+	padding: 0;
+	border: none;
+}
+
+// Loading state
+.widget-loading {
+	padding: 2rem;
+	text-align: center;
+	color: $color-text-muted;
+	font-size: 0.875rem;
+
+	&[hidden] {
+		display: none;
+	}
+}
+
+// ============================================
+// Stats Overview
+// ============================================
+he-stats-overview {
+	.dashboard-widget {
+		background: transparent;
+		border: none;
+		padding: 0;
+	}
+
+	.widget-header {
+		display: none; // Stats speak for themselves
+	}
+
+	.stats-overview {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+		gap: 1rem;
+
+		@media (max-width: 500px) {
+			grid-template-columns: repeat(2, 1fr);
+		}
+
+		@media (min-width: 1200px) {
+			grid-template-columns: repeat(5, 1fr);
+		}
+	}
+
+	.stat-card {
+		background: $color-bg-secondary;
+		border-radius: 1rem;
+		padding: 1.25rem;
+		border: 1px solid $color-border;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		transition: border-color 0.2s, transform 0.2s;
+
+		&:hover {
+			border-color: $color-accent-blue;
+			transform: translateY(-2px);
+		}
+
+		.stat-icon {
+			width: 44px;
+			height: 44px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			border-radius: 0.75rem;
+			font-size: 1.25rem;
+		}
+
+		// Different colors for different stats
+		&[data-stat="requests"] .stat-icon {
+			background: rgba($color-accent-blue, 0.15);
+			color: $color-accent-blue;
+		}
+
+		&[data-stat="hits"] .stat-icon {
+			background: rgba($color-accent-purple, 0.15);
+			color: $color-accent-purple;
+		}
+
+		&[data-stat="connections"] .stat-icon {
+			background: rgba($color-accent-cyan, 0.15);
+			color: $color-accent-cyan;
+		}
+
+		&[data-stat="sites"] .stat-icon {
+			background: rgba($color-accent-green, 0.15);
+			color: $color-accent-green;
+		}
+
+		&[data-stat="processes"] .stat-icon {
+			background: rgba($color-accent-yellow, 0.15);
+			color: $color-accent-yellow;
+		}
+
+		.stat-content {
+			.stat-value {
+				font-size: 2rem;
+				font-weight: 700;
+				line-height: 1;
+				color: $color-text-primary;
+				font-variant-numeric: tabular-nums;
+			}
+
+			.stat-label {
+				font-size: 0.75rem;
+				color: $color-text-secondary;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+				margin-top: 0.25rem;
+			}
+		}
+	}
+}
+
+// ============================================
+// Sites Overview
+// ============================================
+he-sites-overview {
+	.sites-overview {
+		.sites-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+			gap: 1rem;
+
+			@media (max-width: 600px) {
+				grid-template-columns: 1fr;
+			}
+
+			@media (min-width: 1400px) {
+				grid-template-columns: repeat(3, 1fr);
+			}
+		}
+
+		.sites-empty {
+			grid-column: 1 / -1;
+			padding: 2rem;
+			text-align: center;
+			color: $color-text-muted;
+			font-size: 0.875rem;
+		}
+	}
+
+	.site-card {
+		background: $color-bg-tertiary;
+		border-radius: 0.75rem;
+		padding: 1rem 1.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		transition: background-color 0.2s;
+
+		&:hover {
+			background: lighten($color-bg-tertiary, 3%);
+		}
+
+		// Status indicator via top border
+		border-top: 3px solid $color-text-muted;
+
+		&.status-healthy {
+			border-top-color: $color-accent-green;
+		}
+
+		&.status-running {
+			border-top-color: $color-accent-blue;
+		}
+
+		&.status-idle {
+			border-top-color: $color-text-muted;
+		}
+
+		&.status-degraded {
+			border-top-color: $color-accent-yellow;
+		}
+
+		&.status-down {
+			border-top-color: $color-accent-red;
+		}
+
+		.site-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.5rem;
+
+			.site-name {
+				font-weight: 600;
+				font-size: 1rem;
+				color: $color-text-primary;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			.site-status {
+				font-size: 0.7rem;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+				padding: 0.25rem 0.5rem;
+				border-radius: 0.25rem;
+				font-weight: 600;
+				flex-shrink: 0;
+
+				&.status-healthy {
+					background: rgba($color-accent-green, 0.15);
+					color: $color-accent-green;
+				}
+
+				&.status-running {
+					background: rgba($color-accent-blue, 0.15);
+					color: $color-accent-blue;
+				}
+
+			&.status-idle {
+				background: rgba($color-text-muted, 0.15);
+				color: $color-text-muted;
+			}
+
+			&.status-degraded {
+				background: rgba($color-accent-yellow, 0.15);
+				color: $color-accent-yellow;
+			}
+
+			&.status-down {
+					background: rgba($color-accent-red, 0.15);
+					color: $color-accent-red;
+				}
+			}
+		}
+
+		.site-stats {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 0.5rem;
+
+			.site-stat {
+				text-align: center;
+				padding: 0.5rem;
+				background: rgba(0, 0, 0, 0.2);
+				border-radius: 0.5rem;
+
+				.site-stat-value {
+					font-size: 1.125rem;
+					font-weight: 600;
+					color: $color-text-primary;
+					font-variant-numeric: tabular-nums;
+				}
+
+				.site-stat-label {
+					font-size: 0.625rem;
+					color: $color-text-muted;
+					text-transform: uppercase;
+					letter-spacing: 0.05em;
+				}
+			}
+		}
+
+		.site-bandwidth {
+			display: flex;
+			gap: 1rem;
+			font-size: 0.75rem;
+			color: $color-text-secondary;
+
+			.bandwidth-in,
+			.bandwidth-out {
+				display: flex;
+				align-items: center;
+				gap: 0.35rem;
+
+				al-icon {
+					font-size: 0.625rem;
+				}
+			}
+
+			.bandwidth-in {
+				color: $color-accent-green;
+			}
+
+			.bandwidth-out {
+				color: $color-accent-blue;
+			}
+		}
+	}
+}
+
+// ============================================
+// Traffic Chart
+// ============================================
+he-traffic-chart {
+	min-height: 250px;
+
+	.traffic-chart {
+		height: 100%;
+
+		.chart-container {
+			width: 100%;
+			min-height: 220px;
+			position: relative;
+			background: $color-bg-tertiary;
+			border-radius: 0.75rem;
+			padding: 1rem;
+
+			.chart-empty {
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				color: $color-text-muted;
+				font-size: 0.875rem;
+			}
+		}
+	}
+
+	// uPlot overrides
+	.u-wrap {
+		width: 100% !important;
+	}
+
+	.u-legend {
+		display: none;
+	}
+}
+
+// ============================================
+// Activity Feed
+// ============================================
+he-activity-feed {
+	.activity-feed {
+		.activity-list {
+			background: $color-bg-tertiary;
+			border-radius: 0.75rem;
+			overflow: hidden;
+			max-height: 350px;
+			overflow-y: auto;
+
+			// Custom scrollbar
+			&::-webkit-scrollbar {
+				width: 6px;
+			}
+
+			&::-webkit-scrollbar-track {
+				background: transparent;
+			}
+
+			&::-webkit-scrollbar-thumb {
+				background: $color-border;
+				border-radius: 3px;
+			}
+		}
+
+		.activity-empty {
+			padding: 2.5rem;
+			text-align: center;
+			color: $color-text-muted;
+			font-size: 0.875rem;
+		}
+
+		.activity-item {
+			display: flex;
+			align-items: flex-start;
+			gap: 0.75rem;
+			padding: 0.875rem 1rem;
+			border-bottom: 1px solid rgba($color-border, 0.5);
+			transition: background-color 0.15s;
+
+			&:hover {
+				background: rgba(0, 0, 0, 0.1);
+			}
+
+			&:last-child {
+				border-bottom: none;
+			}
+
+			.activity-icon {
+				flex-shrink: 0;
+				width: 32px;
+				height: 32px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				border-radius: 50%;
+				font-size: 0.875rem;
+			}
+
+			&.activity-error .activity-icon {
+				background: rgba($color-accent-red, 0.15);
+				color: $color-accent-red;
+			}
+
+			&.activity-warning .activity-icon {
+				background: rgba($color-accent-yellow, 0.15);
+				color: $color-accent-yellow;
+			}
+
+			&.activity-success .activity-icon {
+				background: rgba($color-accent-green, 0.15);
+				color: $color-accent-green;
+			}
+
+			&.activity-info .activity-icon {
+				background: rgba($color-accent-blue, 0.15);
+				color: $color-accent-blue;
+			}
+
+			.activity-content {
+				flex: 1;
+				min-width: 0;
+
+				.activity-message {
+					font-size: 0.875rem;
+					line-height: 1.4;
+					color: $color-text-primary;
+				}
+
+				.activity-site {
+					font-size: 0.75rem;
+					color: $color-text-muted;
+					margin-top: 0.125rem;
+				}
+			}
+
+			.activity-time {
+				flex-shrink: 0;
+				font-size: 0.75rem;
+				color: $color-text-muted;
+			}
+		}
+	}
+}

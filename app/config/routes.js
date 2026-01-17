@@ -63,7 +63,14 @@ Router.add({
 	permission : 'hohenheim.site.stats',
 });
 
-Router.linkup('Terminal::linkup', 'terminallink', 'Static#terminal');
+Router.linkup('Terminal::linkup', 'terminallink', 'Static#terminal', {
+	permission: 'chimera',
+});
+
+// Dashboard linkup for live stats
+Router.linkup('Dashboard::live', 'dashboardlive', 'Dashboard#live', {
+	permission: 'chimera',
+});
 
 alchemy.plugins.chimera.sidebar_menu = [
 	{

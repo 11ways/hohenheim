@@ -27,6 +27,9 @@ const Site = Function.inherits('Alchemy.Base', 'Develry', function Site(siteDisp
 	// The outgoing bytes
 	this.outgoing = 0;
 
+	// The request hit counter (number of requests handled)
+	this.hitCounter = 0;
+
 	// The redirecthost
 	this.redirectHost = siteDispatcher.redirectHost;
 
@@ -704,6 +707,7 @@ Site.setMethod(function registerHit(req, res, callback) {
 
 		that.incoming += read;
 		that.outgoing += sent;
+		that.hitCounter++;
 
 		// Set the new written amount
 		req.socket.prevWritten = bytes_written;

@@ -108,4 +108,13 @@ ROOT_STAGE.getStage('load_core').addPostTask(async () => {
 		not_found_message    : NOT_FOUND_MESSAGE,
 		unreachable_message  : UNREACHABLE_MESSAGE,
 	});
+
+	// Create stats collector for dashboard
+	alchemy.statsCollector = new Classes.Develry.StatsCollector(alchemy.dispatcher, {
+		sampleInterval: 2000,  // 2 seconds
+		maxSamples: 150,       // 5 minutes of data
+	});
+
+	// Start collecting stats
+	alchemy.statsCollector.start();
 });
