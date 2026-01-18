@@ -67,6 +67,13 @@ HeTrafficChart.setMethod(function connected() {
 	let container = this.createElement('div');
 	container.className = 'chart-container';
 
+	// Create empty state overlay
+	let emptyOverlay = this.createElement('div');
+	emptyOverlay.className = 'chart-empty-overlay';
+	emptyOverlay.innerHTML = '<al-icon icon-name="chart-line"></al-icon><span>No proxy traffic yet</span><small>Traffic is measured on ports 80/443</small>';
+	emptyOverlay.hidden = true;
+	container.appendChild(emptyOverlay);
+
 	section.appendChild(container);
 	this.appendChild(section);
 });
@@ -194,6 +201,13 @@ HeTrafficChart.setMethod(function updateChart() {
 
 	if (!this.chart || !this.data) {
 		return;
+	}
+
+	// Check if we have any actual traffic
+	let hasTraffic = this.data && this.data.some(point => point.value > 0);
+	let overlay = this.querySelector('.chart-empty-overlay');
+	if (overlay) {
+		overlay.hidden = hasTraffic;
 	}
 
 	let timestamps = [];

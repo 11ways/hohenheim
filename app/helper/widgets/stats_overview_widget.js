@@ -8,10 +8,10 @@
  */
 const StatsOverview = Function.inherits('Hohenheim.Widget', function StatsOverview() {});
 
-/**
- * Set the title
- */
-StatsOverview.setProperty('title', 'Stats Overview');
+// Widget metadata
+StatsOverview.setCategory('monitoring');
+StatsOverview.setIcon('gauge-high');
+StatsOverview.setTitle('Stats Overview');
 
 /**
  * Populate the widget

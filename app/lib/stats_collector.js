@@ -90,6 +90,22 @@ StatsCollector.setMethod(function start() {
 	// Subscribe to site lifecycle events
 	this.subscribeSiteEvents();
 
+	// Log startup activity so the feed is never empty
+	let site_count = Object.keys(this.dispatcher.ids || {}).length;
+	let process_count = 0;
+
+	for (let id in this.dispatcher.ids) {
+		let site = this.dispatcher.ids[id];
+		if (site.process_list) {
+			process_count += site.process_list.length;
+		}
+	}
+
+	this.registerActivity('info', 'Monitoring started', {
+		sites: site_count,
+		processes: process_count,
+	});
+
 	// Then collect at regular intervals
 	this._intervalId = setInterval(function doCollect() {
 		that.collect();

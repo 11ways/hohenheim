@@ -161,6 +161,17 @@ alchemy.usePlugin('i18n', alchemy.settings.i18n_settings);
 alchemy.usePlugin('form');
 alchemy.usePlugin('widget');
 
+// Register Hohenheim's custom widget category for monitoring widgets
+STAGES.getStage('load_app').addPostTask(function registerMonitoringCategory() {
+	const Widget = Classes.Alchemy.Widget.Widget;
+
+	Widget.registerCategory('MONITORING', {
+		name  : 'monitoring',
+		icon  : 'chart-line',
+		order : 70,
+	});
+});
+
 let sentry = alchemy.settings?.sentry;
 
 if (sentry?.endpoint) {

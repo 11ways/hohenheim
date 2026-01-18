@@ -8,10 +8,10 @@
  */
 const TrafficChart = Function.inherits('Hohenheim.Widget', function TrafficChart() {});
 
-/**
- * Set the title
- */
-TrafficChart.setProperty('title', 'Traffic Chart');
+// Widget metadata
+TrafficChart.setCategory('monitoring');
+TrafficChart.setIcon('chart-line');
+TrafficChart.setTitle('Traffic Chart');
 
 /**
  * Configure the schema

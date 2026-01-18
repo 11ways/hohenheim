@@ -8,10 +8,10 @@
  */
 const ActivityFeed = Function.inherits('Hohenheim.Widget', function ActivityFeed() {});
 
-/**
- * Set the title
- */
-ActivityFeed.setProperty('title', 'Activity Feed');
+// Widget metadata
+ActivityFeed.setCategory('monitoring');
+ActivityFeed.setIcon('list-timeline');
+ActivityFeed.setTitle('Activity Feed');
 
 /**
  * Configure the schema

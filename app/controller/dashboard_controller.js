@@ -35,11 +35,12 @@ Dashboard.setAction(function live(conduit, linkup, data) {
 
 	// Send initial state with history
 	let init_data = {
-		state   : collector.getDashboardState(),
-		history : {
+		state      : collector.getDashboardState(),
+		history    : {
 			requests  : collector.getGlobalTimeSeries('requestsPerSec', 150),
 			bandwidth : collector.getGlobalTimeSeries('incomingBytesPerSec', 150),
-		}
+		},
+		activities : collector.activities?.toArray() || [],
 	};
 
 	linkup.submit('init', init_data);

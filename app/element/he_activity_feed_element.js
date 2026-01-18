@@ -69,6 +69,7 @@ HeActivityFeed.setMethod(function introduced() {
 	this._onActivitiesUpdate = (activities) => {
 		let max = parseInt(this.getAttribute('max-items')) || 20;
 		this.activities = activities.slice(0, max);
+		this.renderActivities();
 	};
 
 	this.provider.on('activities_update', this._onActivitiesUpdate);
@@ -115,7 +116,15 @@ HeActivityFeed.setMethod(function renderActivities() {
 	if (!activities || activities.length === 0) {
 		let empty = document.createElement('div');
 		empty.className = 'activity-empty';
-		empty.textContent = 'No recent activity';
+
+		let icon = document.createElement('al-icon');
+		icon.setAttribute('icon-name', 'check-circle');
+		empty.appendChild(icon);
+
+		let text = document.createElement('span');
+		text.textContent = ' System stable - no process changes';
+		empty.appendChild(text);
+
 		container.appendChild(empty);
 		return;
 	}

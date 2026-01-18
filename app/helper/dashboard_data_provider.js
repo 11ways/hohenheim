@@ -229,16 +229,24 @@ DashboardDataProvider.setMethod(function handleInit(data) {
 		this.sites = data.state.sites;
 	}
 
-	if (data.history) {
-		this.history = data.history;
-	}
+	// Always initialize history, even if empty
+	this.history = data.history || {
+		requests: [],
+		bandwidth: [],
+	};
 
-	this.activities = this.activities || [];
+	// Handle initial activities
+	if (data.activities) {
+		this.activities = data.activities;
+	} else {
+		this.activities = this.activities || [];
+	}
 
 	this.emit('connection_change', true);
 	this.emit('stats_update', this.stats);
 	this.emit('sites_update', this.sites);
 	this.emit('history_update', this.history);
+	this.emit('activities_update', this.activities);
 });
 
 /**
@@ -260,18 +268,33 @@ DashboardDataProvider.setMethod(function handleStats(data) {
 		this.emit('sites_update', this.sites);
 	}
 
-	// Update history
-	if (data.timestamp && this.history) {
-		this.history.requests = this.history.requests || [];
+	// Update history - use data.global.timestamp
+	let timestamp = data.global?.timestamp || data.timestamp;
 
+	if (timestamp) {
+		// Initialize history if it doesn't exist
+		if (!this.history) {
+			this.history = { requests: [], bandwidth: [] };
+		}
+
+		// Update requests history
+		this.history.requests = this.history.requests || [];
 		this.history.requests.push({
-			timestamp: data.timestamp,
+			timestamp: timestamp,
 			value: data.global?.requestsPerSec || 0,
 		});
-
-		// Keep last 150 points
 		if (this.history.requests.length > 150) {
 			this.history.requests.shift();
+		}
+
+		// Update bandwidth history
+		this.history.bandwidth = this.history.bandwidth || [];
+		this.history.bandwidth.push({
+			timestamp: timestamp,
+			value: data.global?.incomingBytesPerSec || 0,
+		});
+		if (this.history.bandwidth.length > 150) {
+			this.history.bandwidth.shift();
 		}
 
 		this.emit('history_update', this.history);

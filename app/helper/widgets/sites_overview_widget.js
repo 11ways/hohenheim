@@ -8,10 +8,10 @@
  */
 const SitesOverview = Function.inherits('Hohenheim.Widget', function SitesOverview() {});
 
-/**
- * Set the title
- */
-SitesOverview.setProperty('title', 'Sites Overview');
+// Widget metadata
+SitesOverview.setCategory('monitoring');
+SitesOverview.setIcon('server');
+SitesOverview.setTitle('Sites Overview');
 
 /**
  * Configure the schema for widget settings
