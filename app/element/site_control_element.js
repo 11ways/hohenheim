@@ -295,95 +295,99 @@ SiteControl.setMethod(function introduced() {
 
 	let start_button = this.querySelector('.js-start-process');
 
-	start_button.addEventListener('activate', function onActivation(e) {
+	if (start_button) {
+		start_button.addEventListener('activate', function onActivation(e) {
 
-		if (!that.site_id) {
-			start_button.setState('invalid-site-id', 2500, 'idle');
-			return;
-		}
+			if (!that.site_id) {
+				start_button.setState('invalid-site-id', 2500, 'idle');
+				return;
+			}
 
-		hawkejs.scene.helpers.Alchemy.getResource('sitestat-start', {id: that.site_id, cache: false}, function(err, data) {
+			hawkejs.scene.helpers.Alchemy.getResource('sitestat-start', {id: that.site_id, cache: false}, function(err, data) {
 
-			if (err) {
-				start_button.setState('start-error');
-				console.error(err);
+				if (err) {
+					start_button.setState('start-error');
+					console.error(err);
+					return;
+				}
+
+				that.queueRefresh(1000);
+			});
+
+			start_button.setState('busy', 2000, 'idle');
+		});
+	}
+
+	let table = this.control_table;
+
+	if (table) {
+		table.addEventListener('click', e => {
+
+			// Ignore clicks outside of the actions column
+			if (!e.target.queryUp('.aft-actions')) {
 				return;
 			}
 
 			that.queueRefresh(1000);
 		});
 
-		start_button.setState('busy', 2000, 'idle');
-	});
-
-	let table = this.control_table;
-
-	table.addEventListener('click', e => {
-
-		// Ignore clicks outside of the actions column
-		if (!e.target.queryUp('.aft-actions')) {
-			return;
-		}
-
-		that.queueRefresh(1000);
-	});
-
-	table.fieldset = [
-		{
-			name : 'pid',
-			options : {
-				type : 'number',
-				purpose : 'view',
-			}
-		},
-		{
-			name : 'port',
-			options : {
-				type : 'number',
-				purpose : 'view',
-			}
-		},
-		{
-			name : 'fingerprints',
-			options : {
-				type : 'number',
-				purpose : 'view',
-				suffix  : 'clients',
-			}
-		},
-		{
-			name : 'start_time',
-			options : {
-				type     : 'datetime',
-				purpose  : 'view',
-				title    : 'Uptime',
-				time_ago : true,
-			}
-		},
-		{
-			name : 'cpu',
-			options : {
-				type : 'number',
-				purpose : 'view',
-				suffix  : '%',
-			}
-		},
-		{
-			name : 'memory',
-			options : {
-				type : 'number',
-				purpose : 'view',
-				suffix  : 'MiB',
-			}
-		},
-		{
-			name : 'status',
-			options : {
-				type : 'string',
-				purpose : 'view',
-			}
-		},
-	];
+		table.fieldset = [
+			{
+				name : 'pid',
+				options : {
+					type : 'number',
+					purpose : 'view',
+				}
+			},
+			{
+				name : 'port',
+				options : {
+					type : 'number',
+					purpose : 'view',
+				}
+			},
+			{
+				name : 'fingerprints',
+				options : {
+					type : 'number',
+					purpose : 'view',
+					suffix  : 'clients',
+				}
+			},
+			{
+				name : 'start_time',
+				options : {
+					type     : 'datetime',
+					purpose  : 'view',
+					title    : 'Uptime',
+					time_ago : true,
+				}
+			},
+			{
+				name : 'cpu',
+				options : {
+					type : 'number',
+					purpose : 'view',
+					suffix  : '%',
+				}
+			},
+			{
+				name : 'memory',
+				options : {
+					type : 'number',
+					purpose : 'view',
+					suffix  : 'MiB',
+				}
+			},
+			{
+				name : 'status',
+				options : {
+					type : 'string',
+					purpose : 'view',
+				}
+			},
+		];
+	}
 
 	this.queueRefresh(500);
 

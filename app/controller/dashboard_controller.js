@@ -69,7 +69,7 @@ Dashboard.setAction(function live(conduit, linkup, data) {
 
 	// Cleanup on disconnect
 	conduit.on('disconnect', () => {
-		collector.off('sample', onSample);
-		collector.off('activity', onActivity);
+		collector.removeListener('sample', onSample);
+		collector.removeListener('activity', onActivity);
 	});
 });
