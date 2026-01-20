@@ -20,7 +20,6 @@
 		"greenlock-store-fs"     : "~3.2.2",
 		"http2-proxy"            : "~5.0.53",
 		"parse-passwd"           : "~1.0.0",
-		"posix"                  : "~4.2.0",
 		"@11ways/process-monitor": "~0.3.1",
 		"xterm"                  : "~5.3.0",
 		"xterm-addon-fit"        : "~0.8.0"

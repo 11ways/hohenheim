@@ -38,6 +38,27 @@ Hohenheim requires that your node.js binary has some extra capabilities. These a
 
 It's best to give hohenheim its own node executable, otherwise all scripts running would have these capabilities.
 
+### File Descriptor Limits
+
+As a reverse proxy handling many concurrent connections, Hohenheim may need more file descriptors than the default limit (typically 1024). You should increase this limit to avoid `EMFILE: too many open files` errors under load.
+
+**For systemd services**, add this to your service file (see Systemd section below):
+```
+LimitNOFILE=60000
+```
+
+**For manual runs**, set the limit before starting:
+```bash
+ulimit -n 60000
+```
+
+**System-wide configuration** via `/etc/security/limits.conf`:
+```
+www-data soft nofile 60000
+www-data hard nofile 60000
+```
+(Replace `www-data` with the user running Hohenheim)
+
 Here's an easy example on how to create a new node binary (your locations may differ)
 
 ```bash
@@ -160,6 +181,7 @@ SyslogIdentifier=hohenheim
 User=www-data
 Group=www-data
 Environment=NODE_ENV=production
+LimitNOFILE=60000
 
 [Install]
 WantedBy=multi-user.target

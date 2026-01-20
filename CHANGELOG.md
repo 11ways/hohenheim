@@ -11,6 +11,7 @@
 * SiteDispatcher: Added regex_match_cache (5000 entries, 5min TTL). Caches successful regex matches with their groups.
 * Automatically remove domains from Greenlock when they are no longer used
 * Show live statistics on the Chimera dashboard
+* Remove `posix` dependency
 
 ## 0.6.0 (2026-01-15)
 

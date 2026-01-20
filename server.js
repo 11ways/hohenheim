@@ -19,15 +19,6 @@ const ROOT_STAGE = require('alchemymvc');
 // readable by others in their group
 process.umask(2);
 
-// Get the posix package and increase the file limit
-try {
-	var posix = require('posix');
-	posix.setrlimit('nofile', {soft: 60000});
-} catch (err) {
-	// posix module may need recompilation for current Node.js version
-	console.warn('Could not load posix module:', err.message);
-}
-
 // Register dependency files after routes stage is ready
 ROOT_STAGE.getStage('routes').addPreTask(function serveDependencies() {
 	Router.serveDependencyFile('xterm', {
