@@ -983,6 +983,11 @@ SiteDispatcher.setMethod(function getSiteDomainPair(req_or_domain) {
 	}
 
 	if (req) {
+		// Return cached result if we've already looked this up for this request
+		if (req.hohenheim_site !== undefined) {
+			return req.hohenheim_site;
+		}
+
 		headers = req.headers;
 
 		if (req.socket) {
@@ -995,8 +1000,19 @@ SiteDispatcher.setMethod(function getSiteDomainPair(req_or_domain) {
 	}
 
 	if (!domain) {
+		if (req) {
+			req.hohenheim_site = null;
+		}
 		return null;
 	}
+
+	// Helper to cache result on request object before returning
+	const cacheAndReturn = (result) => {
+		if (req) {
+			req.hohenheim_site = result;
+		}
+		return result;
+	};
 
 	let matches,
 	    entry,
@@ -1012,7 +1028,7 @@ SiteDispatcher.setMethod(function getSiteDomainPair(req_or_domain) {
 	let cache_key = domain + (ip ? ':' + ip : '');
 
 	if (this.negative_domain_cache.get(cache_key)) {
-		return null;
+		return cacheAndReturn(null);
 	}
 
 	// Check positive regex match cache
@@ -1023,7 +1039,7 @@ SiteDispatcher.setMethod(function getSiteDomainPair(req_or_domain) {
 			req[MATCHED_GROUPS] = cached_match.groups;
 		}
 
-		return cached_match.entry;
+		return cacheAndReturn(cached_match.entry);
 	}
 
 	if (this.domains[domain] != null) {
@@ -1032,7 +1048,7 @@ SiteDispatcher.setMethod(function getSiteDomainPair(req_or_domain) {
 		// When we don't have to match an ip address,
 		// just return the entry
 		if (!ip) {
-			return entry;
+			return cacheAndReturn(entry);
 		}
 
 		// We do have an ip address to match
@@ -1042,7 +1058,7 @@ SiteDispatcher.setMethod(function getSiteDomainPair(req_or_domain) {
 				req[MATCHED_GROUPS] = matches;
 			}
 
-			return entry;
+			return cacheAndReturn(entry);
 		}
 	}
 
@@ -1061,14 +1077,14 @@ SiteDispatcher.setMethod(function getSiteDomainPair(req_or_domain) {
 				groups : typeof matches == 'object' ? matches : null,
 			});
 
-			return entry;
+			return cacheAndReturn(entry);
 		}
 	}
 
 	// Cache this negative result to avoid repeated regex matching
 	this.negative_domain_cache.set(cache_key, true);
 
-	return null;
+	return cacheAndReturn(null);
 });
 
 /**
@@ -1495,12 +1511,10 @@ SiteDispatcher.setMethod(function modifyIncomingRequest(req, options) {
 		headers['Host'] = host;
 	}
 
-	// Get the target site
+	// Get the target site (cached on req.hohenheim_site by getSiteDomainPair)
 	let site_domain_pair = this.getSiteDomainPair(req);
 
 	if (site_domain_pair) {
-		req.hohenheim_site = site_domain_pair;
-
 		// Set the custom header values
 		if (site_domain_pair.domain?.headers?.length) {
 			for (let header of site_domain_pair.domain.headers) {

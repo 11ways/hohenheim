@@ -52,7 +52,7 @@ SiteStats.constitute(function addFields() {
 	// Number of samples aggregated into this record
 	this.addField('sample_count', 'Number', {default: 0});
 
-	// Add indexes for efficient querying
+	// Add compound unique index for efficient querying
 	this.addIndex('site_period', {
 		fields: ['site_id', 'period_type', 'period_start'],
 		unique: true,

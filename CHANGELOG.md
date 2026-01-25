@@ -12,6 +12,7 @@
 * Automatically remove domains from Greenlock when they are no longer used
 * Show live statistics on the Chimera dashboard
 * Remove `posix` dependency
+* Properly cache the `getSiteDomainPair` results
 
 ## 0.6.0 (2026-01-15)
 
