@@ -93,6 +93,10 @@ const SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDis
 	// Cache for domains that matched via regex (prevents repeated regex matching)
 	this.regex_match_cache = alchemy.getCache('regex_match_cache', {max_length: 5000, max_age: 5 * 60 * 1000});
 
+	// Registry for site-specific caches (remcache instances)
+	// These are pruned periodically to clean up expired entries
+	this.site_caches = new Map();
+
 	// The rendered not-found template
 	this.not_found_message = null;
 
@@ -151,6 +155,141 @@ SiteDispatcher.setMethod(async function init() {
 	this.boundModifyOutgoingResponse = this.modifyOutgoingResponse.bind(this);
 	this.boundDefaultWebHandler = this.defaultWebHandler.bind(this);
 	this.boundDefaultWSHandler = this.defaultWSHandler.bind(this);
+
+	// Start periodic pruning of site caches (every 20 minutes)
+	this.startSiteCachePruning();
+});
+
+/**
+ * Register a site's cache for periodic pruning
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.7.0
+ * @version  0.7.0
+ *
+ * @param    {string}         site_id   The site's ID
+ * @param    {Develry.Cache}  cache     The cache instance to register
+ */
+SiteDispatcher.setMethod(function registerSiteCache(site_id, cache) {
+	if (site_id && cache) {
+		this.site_caches.set(site_id, cache);
+	}
+});
+
+/**
+ * Unregister a site's cache
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.7.0
+ * @version  0.7.0
+ *
+ * @param    {string}   site_id   The site's ID
+ */
+SiteDispatcher.setMethod(function unregisterSiteCache(site_id) {
+	this.site_caches.delete(site_id);
+
+	// Reset the iterator since the map changed
+	this.site_cache_prune_iterator = null;
+});
+
+/**
+ * Start the periodic site cache pruning (staggered)
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.7.0
+ * @version  0.7.0
+ */
+SiteDispatcher.setMethod(function startSiteCachePruning() {
+
+	const that = this;
+
+	// Target: complete a full cycle through all caches in ~20 minutes
+	const FULL_CYCLE_MS = 20 * 60 * 1000;
+
+	// Fixed interval between prune ticks (30 seconds)
+	const PRUNE_INTERVAL = 30 * 1000;
+
+	// How many ticks we have per full cycle (40 ticks in 20 minutes)
+	const TICKS_PER_CYCLE = Math.floor(FULL_CYCLE_MS / PRUNE_INTERVAL);
+
+	// Iterator for cycling through caches
+	this.site_cache_prune_iterator = null;
+
+	const pruneNext = () => {
+
+		// Calculate how many caches to prune this tick
+		// to ensure a full cycle completes in ~20 minutes
+		let site_count = that.site_caches.size;
+
+		if (site_count > 0) {
+			let caches_per_tick = Math.ceil(site_count / TICKS_PER_CYCLE);
+			that.pruneNextSiteCaches(caches_per_tick);
+		}
+
+		// Schedule next prune at fixed interval
+		that.site_cache_prune_timeout = setTimeout(pruneNext, PRUNE_INTERVAL);
+
+		if (that.site_cache_prune_timeout.unref) {
+			that.site_cache_prune_timeout.unref();
+		}
+	};
+
+	// Start the first prune after a short delay
+	this.site_cache_prune_timeout = setTimeout(pruneNext, PRUNE_INTERVAL);
+
+	if (this.site_cache_prune_timeout.unref) {
+		this.site_cache_prune_timeout.unref();
+	}
+});
+
+/**
+ * Prune the next N site caches in the rotation
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.7.0
+ * @version  0.7.0
+ *
+ * @param    {number}   count   Number of caches to prune (default: 1)
+ */
+SiteDispatcher.setMethod(function pruneNextSiteCaches(count) {
+
+	if (this.site_caches.size === 0) {
+		return;
+	}
+
+	if (!count || count < 1) {
+		count = 1;
+	}
+
+	for (let i = 0; i < count; i++) {
+		// Get or create iterator
+		if (!this.site_cache_prune_iterator) {
+			this.site_cache_prune_iterator = this.site_caches.entries();
+		}
+
+		// Get next cache
+		let next = this.site_cache_prune_iterator.next();
+
+		// If we've reached the end, start over
+		if (next.done) {
+			this.site_cache_prune_iterator = this.site_caches.entries();
+			next = this.site_cache_prune_iterator.next();
+
+			// Still nothing? Map must be empty now
+			if (next.done) {
+				return;
+			}
+		}
+
+		let [site_id, cache] = next.value;
+		let length_before = cache.length;
+
+		cache.prune();
+
+		if (cache.length < length_before && alchemy.settings.debugging?.debug) {
+			log.info('Pruned site cache for', site_id, ':', length_before - cache.length, 'entries removed');
+		}
+	}
 });
 
 /**

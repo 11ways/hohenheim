@@ -281,11 +281,14 @@ Site.setMethod(function remove() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.0.1
- * @version  0.6.0
+ * @version  0.7.0
  */
 Site.setMethod(function cleanParent() {
 
 	const dispatcher = this.dispatcher;
+
+	// Unregister our remcache from periodic pruning
+	dispatcher.unregisterSiteCache(this.id);
 
 	// Delete the entry by ID
 	delete dispatcher.ids[this.id];
@@ -323,7 +326,7 @@ Site.setMethod(function cleanParent() {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.6.0
+ * @version  0.7.0
  *
  * @param    {Object}   record
  */
@@ -400,6 +403,9 @@ Site.setMethod(function update(record) {
 
 	// Re-add the instance by name
 	this.dispatcher.names[this.name] = this;
+
+	// Register our remcache for periodic pruning
+	this.dispatcher.registerSiteCache(this.id, this.remcache);
 
 	// Emit the updat event
 	this.emit('updated');

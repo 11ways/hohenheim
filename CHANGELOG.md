@@ -13,6 +13,7 @@
 * Show live statistics on the Chimera dashboard
 * Remove `posix` dependency
 * Properly cache the `getSiteDomainPair` results
+* Prune Site remcaches periodically
 
 ## 0.6.0 (2026-01-15)
 
