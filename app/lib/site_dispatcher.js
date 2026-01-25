@@ -1847,7 +1847,7 @@ SiteDispatcher.setMethod(function registerSiteByHostname(hostname, site) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.6.0
+ * @version  0.7.0
  *
  * @param    {Map}   sites_by_id   A map of site records by their id
  */
@@ -1886,7 +1886,10 @@ SiteDispatcher.setMethod(function update(sites_by_id) {
 			SiteConstructor = Classes.Develry.Site;
 		}
 
-		new SiteConstructor(this, site);
+		let new_site = new SiteConstructor(this, site);
+
+		// Emit event so StatsCollector and other listeners can subscribe
+		this.emit('site_added', new_site);
 	}
 
 	let shared = alchemy.getShared(this.ids, sites_by_id);
