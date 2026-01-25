@@ -14,6 +14,7 @@
 * Remove `posix` dependency
 * Properly cache the `getSiteDomainPair` results
 * Prune Site remcaches periodically
+* Add fail2ban integration for domain miss logging with time-windowed reputation filtering
 
 ## 0.6.0 (2026-01-15)
 

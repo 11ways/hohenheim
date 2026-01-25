@@ -18,7 +18,8 @@ const readFileAsync = util.promisify(fs.readFile),
       refresh_stagger = Math.round(Math.PI * 5 * (60 * 1000)), // +/- 15 minutes
       refresh_offset = Math.round(Math.PI * 2 * (60 * 60 * 1000)), // +/- 6.25 hours
       small_stagger = Math.round(Math.PI * (30 * 1000)), // +/- 30 seconds
-      servername_re = /^[a-z0-9\.\-]+$/i;
+      servername_re = /^[a-z0-9\.\-]+$/i,
+      NEWLINE_RE = /[\r\n]/g;
 
 global.MATCHED_GROUPS = Symbol('matched_groups');
 
@@ -32,6 +33,10 @@ global.MATCHED_GROUPS = Symbol('matched_groups');
  * @version  0.7.0
  */
 const SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispatcher(options) {
+
+	// Initialize domain miss log stream as null (lazy initialization)
+	this._domain_miss_log_stream = null;
+	this._domain_miss_log_stream_initialized = false;
 
 	let that = this;
 
@@ -325,6 +330,114 @@ SiteDispatcher.setMethod(function createExitHandler(type) {
 		}
 	};
 
+});
+
+/**
+ * Get or create the domain miss log stream (lazy initialization)
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.7.0
+ * @version  0.7.0
+ *
+ * @return   {WriteStream|null}
+ */
+SiteDispatcher.setMethod(function getDomainMissLogStream() {
+
+	// Return cached stream if already initialized
+	if (this._domain_miss_log_stream_initialized) {
+		return this._domain_miss_log_stream;
+	}
+
+	this._domain_miss_log_stream_initialized = true;
+
+	// Check if logging is enabled
+	if (typeof LOG_DOMAIN_MISSES !== 'undefined' && !LOG_DOMAIN_MISSES) {
+		return null;
+	}
+
+	// Get the log path
+	let log_path = typeof DOMAIN_MISSES_LOG_PATH !== 'undefined' ? DOMAIN_MISSES_LOG_PATH : null;
+
+	if (!log_path) {
+		return null;
+	}
+
+	// Ensure directory exists
+	let dir = libpath.dirname(log_path);
+
+	try {
+		fs.mkdirSync(dir, {recursive: true});
+	} catch (err) {
+		// Directory might already exist or we can't create it
+		if (err.code !== 'EEXIST') {
+			log.warn('Could not create domain miss log directory:', err);
+		}
+	}
+
+	try {
+		this._domain_miss_log_stream = fs.createWriteStream(log_path, {flags: 'a'});
+		return this._domain_miss_log_stream;
+	} catch (err) {
+		log.warn('Could not open domain miss log file:', err);
+		return null;
+	}
+});
+
+/**
+ * Log a domain miss for fail2ban integration
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.7.0
+ * @version  0.7.0
+ *
+ * @param    {string}            ip        The client IP address
+ * @param    {string}            domain    The requested domain
+ * @param    {IncomingMessage}   req       The HTTP request (optional, may be null for SNI callbacks)
+ */
+SiteDispatcher.setMethod(function logDomainMiss(ip, domain, req) {
+
+	let stream = this.getDomainMissLogStream();
+
+	if (!stream) {
+		return;
+	}
+
+	// Only log IPs that have shown suspicious behavior recently
+	// This filters out legitimate mistakes (typos, old bookmarks, etc.)
+	// while catching bots that probe multiple domains quickly
+	let threshold = DOMAIN_MISSES_LOG_THRESHOLD;
+
+	if (threshold > 0) {
+		let reputation = Classes.Hohenheim.Reputation.get(ip);
+
+		if (!reputation) {
+			return;
+		}
+
+		// Calculate window in milliseconds (default 10 minutes)
+		let window_ms = (DOMAIN_MISSES_WINDOW_MINUTES || 10) * 60 * 1000;
+
+		// Check recent miss count (uses lazy cleanup internally)
+		let recent_count = reputation.getRecentMissCount(window_ms, threshold);
+
+		if (recent_count < threshold) {
+			return; // Not enough recent misses, don't log
+		}
+	}
+
+	let timestamp = new Date().toISOString();
+	let path = req?.url || '-';
+	let user_agent = req?.headers?.['user-agent'] || '-';
+
+	// Sanitize values to prevent log injection
+	domain = String(domain || '-').replace(NEWLINE_RE, '');
+	path = String(path).replace(NEWLINE_RE, '');
+	user_agent = String(user_agent).replace(NEWLINE_RE, '');
+	ip = String(ip || '-').replace(NEWLINE_RE, '');
+
+	let log_line = `${timestamp} DOMAIN_MISS ip=${ip} domain=${domain} path=${path} user_agent=${JSON.stringify(user_agent)}\n`;
+
+	stream.write(log_line);
 });
 
 /**
@@ -706,6 +819,9 @@ SiteDispatcher.setMethod(function SNICallback(domainname, socket, callback) {
 
 	if (!site) {
 		reputation.registerDomainMiss(domainname);
+
+		// Log domain miss for fail2ban (SNI stage - no HTTP request yet)
+		this.logDomainMiss(socket.remoteAddress, domainname, null);
 
 		alchemy.distinctProblem('sni-unknown-domain-' + domainname, 'Failed to find "' + domainname + '", ignoring SNI request', {
 			// Allow the warning to repeat every 15 minutes
@@ -1475,6 +1591,9 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 	let site = this.getSite(req);
 
 	if (!site) {
+		// Log domain miss for fail2ban (HTTP request stage)
+		let client_ip = req.socket?.remoteAddress || req.connection?.remoteAddress;
+		this.logDomainMiss(client_ip, req.headers?.host, req);
 
 		if (this.fallbackAddress) {
 			return this.forwardRequest(req, res, this.fallbackAddress);

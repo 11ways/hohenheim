@@ -155,6 +155,34 @@ HOHENHEIM.addSetting('remote_proxy_keys', {
 	global_variable : 'REMOTE_PROXY_KEYS',
 });
 
+HOHENHEIM.addSetting('log_domain_misses', {
+	type            : 'boolean',
+	default         : true,
+	description     : 'Log domain lookup failures to a separate file for fail2ban integration',
+	global_variable : 'LOG_DOMAIN_MISSES',
+});
+
+HOHENHEIM.addSetting('domain_misses_log_path', {
+	type            : 'string',
+	default         : '/var/log/hohenheim/domain-misses.log',
+	description     : 'Path to the domain misses log file',
+	global_variable : 'DOMAIN_MISSES_LOG_PATH',
+});
+
+HOHENHEIM.addSetting('domain_misses_log_threshold', {
+	type            : 'integer',
+	default         : 5,
+	description     : 'Only log domain misses to fail2ban log after this many unique domain misses (filters out legitimate mistakes, 0 to disable)',
+	global_variable : 'DOMAIN_MISSES_LOG_THRESHOLD',
+});
+
+HOHENHEIM.addSetting('domain_misses_window_minutes', {
+	type            : 'integer',
+	default         : 10,
+	description     : 'Time window in minutes for counting domain misses (only misses within this window count toward threshold)',
+	global_variable : 'DOMAIN_MISSES_WINDOW_MINUTES',
+});
+
 alchemy.usePlugin('styleboost');
 alchemy.usePlugin('i18n', alchemy.settings.i18n_settings);
 
