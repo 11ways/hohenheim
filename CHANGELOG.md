@@ -1,4 +1,4 @@
-## 0.7.0 (WIP)
+## 0.7.0 (2026-01-25)
 
 * Upgrade to alchemy v1.4.0
 * Improve cache usage
