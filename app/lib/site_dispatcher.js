@@ -1018,11 +1018,11 @@ SiteDispatcher.setMethod(function getSiteDomainPair(req_or_domain) {
 	    entry,
 	    key;
 
-	// Split it by colons
-	domain = domain.split(':');
-
-	// The first part is the domain
-	domain = domain[0];
+	// Strip port from domain if present
+	let colonIndex = domain.indexOf(':');
+	if (colonIndex > -1) {
+		domain = domain.substring(0, colonIndex);
+	}
 
 	// Check negative cache first to avoid repeated regex matching for unknown domains
 	let cache_key = domain + (ip ? ':' + ip : '');
