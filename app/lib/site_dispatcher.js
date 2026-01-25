@@ -1184,12 +1184,14 @@ SiteDispatcher.setMethod(function requestError(error, req, res) {
 		throw new Error('Request error without request? ' + error);
 	}
 
+	let site = req.hohenheim_site?.site;
+
 	if (req.code === 'ECONNREFUSED') {
-		this.respondWithError(res, 'refused', error);
+		this.respondWithError(res, 'refused', error, req, site);
 		return;
 	}
 
-	this.respondWithError(res, 'unreachable', error);
+	this.respondWithError(res, 'unreachable', error, req, site);
 });
 
 /**
@@ -1455,7 +1457,7 @@ SiteDispatcher.setMethod(function trackWebSocketBytes(socket, site) {
  * @param    {String}            type
  * @param    {Error}             error   The original error
  */
-SiteDispatcher.setMethod(function respondWithError(res, type, error) {
+SiteDispatcher.setMethod(function respondWithError(res, type, error, req, site) {
 
 	let fallback,
 	    status,
@@ -1487,7 +1489,27 @@ SiteDispatcher.setMethod(function respondWithError(res, type, error) {
 		}
 	}
 
-	alchemy.distinctProblem(problem_id, fallback || problem_id, {
+	// Include the requested domain in the problem ID for better debugging
+	let domain = req?.headers?.host;
+	if (domain) {
+		problem_id += '-' + domain.replace(NEWLINE_RE, '');
+	}
+
+	// Include the site slug for better debugging
+	let site_slug = site?.slug;
+	if (site_slug) {
+		problem_id += '-site-' + site_slug;
+	}
+
+	let log_message = fallback || problem_id;
+	if (domain || site_slug) {
+		let details = [];
+		if (domain) details.push(`domain: ${domain}`);
+		if (site_slug) details.push(`site: ${site_slug}`);
+		log_message = `${fallback} (${details.join(', ')})`;
+	}
+
+	alchemy.distinctProblem(problem_id, log_message, {
 		error,
 		// Allow the warning to repeat every 15 minutes
 		repeat_after: 15 * 60 * 1000,
@@ -1530,7 +1552,7 @@ SiteDispatcher.setMethod(function respondWithError(res, type, error) {
 			that[prop] = result;
 		}
 
-		that.respondWithError(res, type);
+		that.respondWithError(res, type, null, req, site);
 	});
 });
 
@@ -1539,7 +1561,7 @@ SiteDispatcher.setMethod(function respondWithError(res, type, error) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.6.0
+ * @version  0.7.0
  * 
  * @param    {IncomingMessage}    req
  * @param    {ServerResponse}     res
@@ -1599,7 +1621,7 @@ SiteDispatcher.setMethod(function request(req, res, skip_le) {
 			return this.forwardRequest(req, res, this.fallbackAddress);
 		}
 
-		this.respondWithError(res, 'not_found');
+		this.respondWithError(res, 'not_found', null, req, null);
 	} else {
 
 		// When using letsencrypt, redirect to HTTPS
