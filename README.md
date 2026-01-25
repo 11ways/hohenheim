@@ -227,6 +227,90 @@ Now, if you want to access the hohenheim shell, you can do:
 screen -r hohenheim
 ```
 
+## Fail2ban Integration
+
+Hohenheim can log suspicious domain lookups for fail2ban to block IPs that scan for non-existent subdomains (a common bot/attack pattern).
+
+### How It Works
+
+1. Hohenheim tracks unique domain misses per IP using a time-windowed reputation system
+2. Only IPs that hit multiple non-existent domains within a short time window are logged
+3. Fail2ban monitors the log file and bans repeat offenders at the firewall level
+
+This approach catches bots scanning for `admin.`, `test.`, `dev.`, `staging.`, etc. while ignoring legitimate users who occasionally mistype a URL.
+
+### Configuration Settings
+
+Add these to your `app/config/local.js` to customize the behavior:
+
+```javascript
+module.exports = {
+    // ... other settings ...
+
+    hohenheim: {
+        // Enable/disable fail2ban logging (default: true)
+        log_domain_misses: true,
+
+        // Log file path (default: /var/log/hohenheim/domain-misses.log)
+        domain_misses_log_path: '/var/log/hohenheim/domain-misses.log',
+
+        // Only log after this many unique domain misses (default: 5)
+        domain_misses_log_threshold: 5,
+
+        // Time window in minutes for counting misses (default: 10)
+        domain_misses_window_minutes: 10,
+    },
+};
+```
+
+### Fail2ban Filter
+
+Create `/etc/fail2ban/filter.d/hohenheim.conf`:
+
+```ini
+[Definition]
+failregex = ^.*DOMAIN_MISS ip=<HOST> domain=.* path=.* user_agent=.*$
+ignoreregex =
+```
+
+### Fail2ban Jail
+
+Create `/etc/fail2ban/jail.d/hohenheim.conf`:
+
+```ini
+[hohenheim]
+enabled = true
+filter = hohenheim
+logpath = /var/log/hohenheim/domain-misses.log
+maxretry = 10
+findtime = 600
+bantime = 3600
+```
+
+This configuration bans an IP for 1 hour if it triggers 10+ log entries within 10 minutes. Since Hohenheim already filters for suspicious behavior (5+ unique domains in 10 minutes), these are confirmed scanners.
+
+### Logrotate
+
+Create `/etc/logrotate.d/hohenheim`:
+
+```
+/var/log/hohenheim/domain-misses.log {
+    daily
+    rotate 7
+    compress
+    missingok
+    notifempty
+    copytruncate
+}
+```
+
+### Log Format
+
+Each log entry follows this format:
+```
+2026-01-25T14:30:45.123Z DOMAIN_MISS ip=192.168.1.100 domain=unknown.example.com path=/some/path user_agent="Mozilla/5.0 ..."
+```
+
 ## Node versions
 
 You can configure your websites to use a specific node.js version, these versions are available:
