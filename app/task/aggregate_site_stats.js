@@ -28,9 +28,33 @@ AggregateSiteStats.addFallbackCronSchedule('5 * * * *');
  */
 AggregateSiteStats.setMethod(async function executor() {
 
+	this.todo = 0;
+	this.done = 0;
+
 	const SiteStats = Model.get('SiteStats');
 
 	this.log('Starting site stats aggregation...');
+
+	// First, let's see what data exists
+	let minuteRecordCount = await SiteStats.find('count', SiteStats.find().where('period_type').equals('minute'));
+	let hourRecordCount = await SiteStats.find('count', SiteStats.find().where('period_type').equals('hour'));
+	let dayRecordCount = await SiteStats.find('count', SiteStats.find().where('period_type').equals('day'));
+
+	this.log('Current stats: minute=' + minuteRecordCount + ', hour=' + hourRecordCount + ', day=' + dayRecordCount);
+
+	// Count total work to do
+	let minuteCount = await this.countPendingMinuteHours(SiteStats);
+	let hourCount = await this.countPendingHourDays(SiteStats);
+
+	this.todo = minuteCount + hourCount;
+
+	if (this.todo === 0) {
+		this.log('No data to aggregate (no pending time periods)');
+		this.report(1);
+		return;
+	}
+
+	this.log('Total work:', this.todo, 'time periods to process (' + minuteCount + ' hours, ' + hourCount + ' days)');
 
 	// Aggregate any minute data that's ready (complete hours)
 	await this.aggregateMinuteToHour(SiteStats);
@@ -38,8 +62,74 @@ AggregateSiteStats.setMethod(async function executor() {
 	// Aggregate any hourly data that's ready (complete days)
 	await this.aggregateHourToDay(SiteStats);
 
-	this.log('Aggregation complete');
+	this.log('Aggregation complete. Processed', this.done, 'of', this.todo, 'time periods');
 	this.report(1);
+});
+
+/**
+ * Count how many hours of minute data need aggregating
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.7.1
+ * @version  0.7.1
+ */
+AggregateSiteStats.setMethod(async function countPendingMinuteHours(SiteStats) {
+
+	// Find the oldest minute record
+	let oldestCrit = SiteStats.find();
+	oldestCrit.where('period_type').equals('minute');
+	oldestCrit.sort(['period_start', 'asc']);
+	oldestCrit.limit(1);
+
+	let oldestRecord = await SiteStats.find('first', oldestCrit);
+
+	if (!oldestRecord) {
+		return 0;
+	}
+
+	let startHour = new Date(oldestRecord.period_start);
+	startHour.setMinutes(0, 0, 0);
+
+	let endHour = new Date();
+	endHour.setMinutes(0, 0, 0);
+
+	// Count hours between start and end
+	let hoursDiff = Math.floor((endHour - startHour) / (60 * 60 * 1000));
+
+	return Math.max(0, hoursDiff);
+});
+
+/**
+ * Count how many days of hourly data need aggregating
+ *
+ * @author   Jelle De Loecker   <jelle@elevenways.be>
+ * @since    0.7.1
+ * @version  0.7.1
+ */
+AggregateSiteStats.setMethod(async function countPendingHourDays(SiteStats) {
+
+	// Find the oldest hourly record
+	let oldestCrit = SiteStats.find();
+	oldestCrit.where('period_type').equals('hour');
+	oldestCrit.sort(['period_start', 'asc']);
+	oldestCrit.limit(1);
+
+	let oldestRecord = await SiteStats.find('first', oldestCrit);
+
+	if (!oldestRecord) {
+		return 0;
+	}
+
+	let startDay = new Date(oldestRecord.period_start);
+	startDay.setHours(0, 0, 0, 0);
+
+	let endDay = new Date();
+	endDay.setHours(0, 0, 0, 0);
+
+	// Count days between start and end
+	let daysDiff = Math.floor((endDay - startDay) / (24 * 60 * 60 * 1000));
+
+	return Math.max(0, daysDiff);
 });
 
 /**
@@ -75,10 +165,11 @@ AggregateSiteStats.setMethod(async function aggregateMinuteToHour(SiteStats) {
 	let endHour = new Date();
 	endHour.setMinutes(0, 0, 0);
 
-	this.log('Aggregating minute data from', currentHour.toISOString(), 'to', endHour.toISOString());
+	this.log('Aggregating minute→hour from', currentHour.toISOString(), 'to', endHour.toISOString());
 
 	let totalAggregated = 0;
 	let totalSkipped = 0;
+	let hoursProcessed = 0;
 
 	// Process one hour at a time
 	while (currentHour < endHour) {
@@ -95,7 +186,7 @@ AggregateSiteStats.setMethod(async function aggregateMinuteToHour(SiteStats) {
 		crit.where('period_start').gte(currentHour);
 		crit.where('period_start').lt(nextHour);
 
-		// Group by site_id
+		// Group by site_id using async iteration
 		let siteGroups = new Map();
 
 		for await (let record of crit) {
@@ -109,7 +200,7 @@ AggregateSiteStats.setMethod(async function aggregateMinuteToHour(SiteStats) {
 		}
 
 		// Process each site's data for this hour
-		for (let [siteId, records] of siteGroups) {
+		for (let [siteId, siteRecords] of siteGroups) {
 			// Check if hourly record already exists
 			let existsCrit = SiteStats.find();
 			existsCrit.where('site_id').equals(siteId);
@@ -125,9 +216,9 @@ AggregateSiteStats.setMethod(async function aggregateMinuteToHour(SiteStats) {
 
 			// Aggregate and store
 			try {
-				let aggregatedData = this.aggregateRecords(records);
+				let aggregatedData = this.aggregateRecords(siteRecords);
 
-				await SiteStats.storeAggregatedStats({
+				await SiteStats.save({
 					site_id           : siteId,
 					period_type       : 'hour',
 					period_start      : currentHour,
@@ -150,10 +241,19 @@ AggregateSiteStats.setMethod(async function aggregateMinuteToHour(SiteStats) {
 			}
 		}
 
+		hoursProcessed++;
+		this.done++;
+
+		// Report progress every 10 hours
+		if (hoursProcessed % 10 === 0) {
+			this.log('Processed', hoursProcessed, 'hours, created', totalAggregated, 'records');
+			this.report(this.done / this.todo);
+		}
+
 		currentHour = nextHour;
 	}
 
-	this.log('Created', totalAggregated, 'hourly records, skipped', totalSkipped, 'existing');
+	this.log('Minute→Hour: Created', totalAggregated, 'hourly records, skipped', totalSkipped, 'existing, processed', hoursProcessed, 'hours');
 });
 
 /**
@@ -189,10 +289,11 @@ AggregateSiteStats.setMethod(async function aggregateHourToDay(SiteStats) {
 	let endDay = new Date();
 	endDay.setHours(0, 0, 0, 0);
 
-	this.log('Aggregating hourly data from', currentDay.toISOString(), 'to', endDay.toISOString());
+	this.log('Aggregating hour→day from', currentDay.toISOString(), 'to', endDay.toISOString());
 
 	let totalAggregated = 0;
 	let totalSkipped = 0;
+	let daysProcessed = 0;
 
 	// Process one day at a time
 	while (currentDay < endDay) {
@@ -209,7 +310,7 @@ AggregateSiteStats.setMethod(async function aggregateHourToDay(SiteStats) {
 		crit.where('period_start').gte(currentDay);
 		crit.where('period_start').lt(nextDay);
 
-		// Group by site_id
+		// Group by site_id using async iteration
 		let siteGroups = new Map();
 
 		for await (let record of crit) {
@@ -223,7 +324,7 @@ AggregateSiteStats.setMethod(async function aggregateHourToDay(SiteStats) {
 		}
 
 		// Process each site's data for this day
-		for (let [siteId, records] of siteGroups) {
+		for (let [siteId, siteRecords] of siteGroups) {
 			// Check if daily record already exists
 			let existsCrit = SiteStats.find();
 			existsCrit.where('site_id').equals(siteId);
@@ -239,9 +340,9 @@ AggregateSiteStats.setMethod(async function aggregateHourToDay(SiteStats) {
 
 			// Aggregate and store
 			try {
-				let aggregatedData = this.aggregateRecords(records);
+				let aggregatedData = this.aggregateRecords(siteRecords);
 
-				await SiteStats.storeAggregatedStats({
+				await SiteStats.save({
 					site_id           : siteId,
 					period_type       : 'day',
 					period_start      : currentDay,
@@ -264,10 +365,14 @@ AggregateSiteStats.setMethod(async function aggregateHourToDay(SiteStats) {
 			}
 		}
 
+		daysProcessed++;
+		this.done++;
+		this.report(this.done / this.todo);
+
 		currentDay = nextDay;
 	}
 
-	this.log('Created', totalAggregated, 'daily records, skipped', totalSkipped, 'existing');
+	this.log('Hour→Day: Created', totalAggregated, 'daily records, skipped', totalSkipped, 'existing, processed', daysProcessed, 'days');
 });
 
 /**

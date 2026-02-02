@@ -27,6 +27,9 @@ CleanupSiteStats.addFallbackCronSchedule('17 * * * *');
  */
 CleanupSiteStats.setMethod(async function executor() {
 
+	this.todo = 3; // 3 period types to process
+	this.done = 0;
+
 	const SiteStats = Model.get('SiteStats');
 
 	this.log('Starting site stats cleanup...');
@@ -72,6 +75,9 @@ CleanupSiteStats.setMethod(async function executor() {
 			this.log('Error cleaning up', period_type, 'stats:', err.message);
 			alchemy.registerError(err, {context: 'Failed to cleanup ' + period_type + ' site stats'});
 		}
+
+		this.done++;
+		this.report(this.done / this.todo);
 	}
 
 	this.log('Cleanup complete, removed', total_removed, 'total records');
