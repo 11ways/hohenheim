@@ -101,4 +101,8 @@ alchemy.plugins.chimera.sidebar_menu = [
 		model : 'User',
 		title : 'Users'
 	},
+	{
+		href  : '/chimera/tools/database',
+		title : 'Database Tools',
+	},
 ];

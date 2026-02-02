@@ -862,10 +862,11 @@ StatsCollector.setMethod(async function persistStats() {
 
 /**
  * Flush the minute aggregates to the database.
+ * Runs all site saves in parallel for better performance.
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.7.0
- * @version  0.7.0
+ * @version  0.7.1
  */
 StatsCollector.setMethod(async function flushMinuteAggregates() {
 
@@ -875,7 +876,15 @@ StatsCollector.setMethod(async function flushMinuteAggregates() {
 		return;
 	}
 
-	for (let [siteId, aggregate] of this._minuteAggregates) {
+	// Snapshot the current aggregates and clear the map immediately.
+	// This prevents race conditions where new data arrives during save.
+	let aggregatesToFlush = new Map(this._minuteAggregates);
+	this._minuteAggregates.clear();
+
+	// Build array of save promises to run in parallel
+	let savePromises = [];
+
+	for (let [siteId, aggregate] of aggregatesToFlush) {
 		if (aggregate.sample_count === 0) {
 			continue;
 		}
@@ -904,13 +913,16 @@ StatsCollector.setMethod(async function flushMinuteAggregates() {
 			sample_count      : aggregate.sample_count,
 		};
 
-		try {
-			await SiteStats.storeAggregatedStats(data);
-		} catch (err) {
+		// Create promise that catches its own errors
+		let savePromise = SiteStats.storeAggregatedStats(data).catch(err => {
 			alchemy.registerError(err, {context: 'Failed to persist site stats for site ' + siteId});
-		}
+		});
+
+		savePromises.push(savePromise);
 	}
 
-	// Clear aggregates
-	this._minuteAggregates.clear();
+	// Run all saves in parallel
+	if (savePromises.length > 0) {
+		await Promise.all(savePromises);
+	}
 });

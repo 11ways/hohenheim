@@ -1,3 +1,11 @@
+## 0.7.1 (WIP)
+
+* Fix SiteStats persistence: run saves in parallel instead of sequentially
+* Add `CleanupSiteStats` task to delete old statistics (hourly, respects retention policy)
+* Add `AggregateSiteStats` task to roll up minute→hour→day data (hourly, self-healing)
+
+
+
 ## 0.7.0 (2026-01-25)
 
 * Upgrade to alchemy v1.4.0
