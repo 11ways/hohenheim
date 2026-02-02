@@ -32,10 +32,10 @@ AggregateSiteStats.setMethod(async function executor() {
 
 	this.log('Starting site stats aggregation...');
 
-	// Aggregate any minute data that's ready (older than 1 hour)
+	// Aggregate any minute data that's ready (complete hours)
 	await this.aggregateMinuteToHour(SiteStats);
 
-	// Aggregate any hourly data that's ready (older than 1 day)
+	// Aggregate any hourly data that's ready (complete days)
 	await this.aggregateHourToDay(SiteStats);
 
 	this.log('Aggregation complete');
@@ -44,7 +44,7 @@ AggregateSiteStats.setMethod(async function executor() {
 
 /**
  * Aggregate minute data into hourly data.
- * Finds all complete hours that have minute data but no hourly record yet.
+ * Processes one hour at a time to limit memory usage.
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.7.1
@@ -54,107 +54,111 @@ AggregateSiteStats.setMethod(async function executor() {
  */
 AggregateSiteStats.setMethod(async function aggregateMinuteToHour(SiteStats) {
 
-	// Only aggregate complete hours (at least 1 hour old)
-	let cutoff = new Date();
-	cutoff.setMinutes(0, 0, 0);
+	// Find the oldest minute record to know where to start
+	let oldestCrit = SiteStats.find();
+	oldestCrit.where('period_type').equals('minute');
+	oldestCrit.sort(['period_start', 'asc']);
+	oldestCrit.limit(1);
 
-	// Don't go back further than the retention period (1 day for minute data)
-	let oldest = new Date(Date.now() - (24 * 60 * 60 * 1000));
+	let oldestRecord = await SiteStats.find('first', oldestCrit);
 
-	this.log('Looking for minute data to aggregate (between', oldest.toISOString(), 'and', cutoff.toISOString() + ')');
-
-	// Find all minute records in the window
-	let crit = SiteStats.find();
-	crit.where('period_type').equals('minute');
-	crit.where('period_start').gte(oldest);
-	crit.where('period_start').lt(cutoff);
-
-	let minuteRecords = await SiteStats.find('all', crit);
-
-	if (!minuteRecords || minuteRecords.length === 0) {
+	if (!oldestRecord) {
 		this.log('No minute data to aggregate');
 		return;
 	}
 
-	this.log('Found', minuteRecords.length, 'minute records to check');
+	// Start from the oldest record's hour
+	let currentHour = new Date(oldestRecord.period_start);
+	currentHour.setMinutes(0, 0, 0);
 
-	// Group by site_id and hour
-	let hourGroups = new Map();
+	// End before the current hour (only aggregate complete hours)
+	let endHour = new Date();
+	endHour.setMinutes(0, 0, 0);
 
-	for (let record of minuteRecords) {
-		let siteId = String(record.site_id);
-		let hourStart = new Date(record.period_start);
-		hourStart.setMinutes(0, 0, 0);
-		let hourKey = siteId + '_' + hourStart.getTime();
+	this.log('Aggregating minute data from', currentHour.toISOString(), 'to', endHour.toISOString());
 
-		if (!hourGroups.has(hourKey)) {
-			hourGroups.set(hourKey, {
-				site_id: siteId,
-				hour_start: hourStart,
-				records: [],
-			});
-		}
+	let totalAggregated = 0;
+	let totalSkipped = 0;
 
-		hourGroups.get(hourKey).records.push(record);
-	}
-
-	this.log('Grouped into', hourGroups.size, 'site-hour combinations');
-
-	// Check which hours already have hourly records and aggregate missing ones
-	let aggregated = 0;
-
-	for (let [hourKey, group] of hourGroups) {
+	// Process one hour at a time
+	while (currentHour < endHour) {
 		if (this.has_stopped) {
 			this.log('Task stopped, aborting aggregation');
 			return;
 		}
 
-		// Check if hourly record already exists
-		let existsCrit = SiteStats.find();
-		existsCrit.where('site_id').equals(group.site_id);
-		existsCrit.where('period_type').equals('hour');
-		existsCrit.where('period_start').equals(group.hour_start);
+		let nextHour = new Date(currentHour.getTime() + (60 * 60 * 1000));
 
-		let existing = await SiteStats.find('first', existsCrit);
+		// Find all minute records for this specific hour
+		let crit = SiteStats.find();
+		crit.where('period_type').equals('minute');
+		crit.where('period_start').gte(currentHour);
+		crit.where('period_start').lt(nextHour);
 
-		if (existing) {
-			// Already aggregated, skip
-			continue;
+		// Group by site_id
+		let siteGroups = new Map();
+
+		for await (let record of crit) {
+			let siteId = String(record.site_id);
+
+			if (!siteGroups.has(siteId)) {
+				siteGroups.set(siteId, []);
+			}
+
+			siteGroups.get(siteId).push(record);
 		}
 
-		// Aggregate and store
-		try {
-			let aggregatedData = this.aggregateRecords(group.records);
+		// Process each site's data for this hour
+		for (let [siteId, records] of siteGroups) {
+			// Check if hourly record already exists
+			let existsCrit = SiteStats.find();
+			existsCrit.where('site_id').equals(siteId);
+			existsCrit.where('period_type').equals('hour');
+			existsCrit.where('period_start').equals(currentHour);
 
-			await SiteStats.storeAggregatedStats({
-				site_id           : group.site_id,
-				period_type       : 'hour',
-				period_start      : group.hour_start,
-				incoming_bytes    : aggregatedData.incoming_bytes,
-				outgoing_bytes    : aggregatedData.outgoing_bytes,
-				request_count     : aggregatedData.request_count,
-				avg_process_count : aggregatedData.avg_process_count,
-				max_process_count : aggregatedData.max_process_count,
-				avg_cpu           : aggregatedData.avg_cpu,
-				max_cpu           : aggregatedData.max_cpu,
-				avg_mem           : aggregatedData.avg_mem,
-				max_mem           : aggregatedData.max_mem,
-				sample_count      : aggregatedData.sample_count,
-			});
+			let existing = await SiteStats.find('first', existsCrit);
 
-			aggregated++;
-		} catch (err) {
-			this.log('Error aggregating hour data for site', group.site_id + ':', err.message);
-			alchemy.registerError(err, {context: 'Failed to aggregate hourly stats for site ' + group.site_id});
+			if (existing) {
+				totalSkipped++;
+				continue;
+			}
+
+			// Aggregate and store
+			try {
+				let aggregatedData = this.aggregateRecords(records);
+
+				await SiteStats.storeAggregatedStats({
+					site_id           : siteId,
+					period_type       : 'hour',
+					period_start      : currentHour,
+					incoming_bytes    : aggregatedData.incoming_bytes,
+					outgoing_bytes    : aggregatedData.outgoing_bytes,
+					request_count     : aggregatedData.request_count,
+					avg_process_count : aggregatedData.avg_process_count,
+					max_process_count : aggregatedData.max_process_count,
+					avg_cpu           : aggregatedData.avg_cpu,
+					max_cpu           : aggregatedData.max_cpu,
+					avg_mem           : aggregatedData.avg_mem,
+					max_mem           : aggregatedData.max_mem,
+					sample_count      : aggregatedData.sample_count,
+				});
+
+				totalAggregated++;
+			} catch (err) {
+				this.log('Error aggregating hour data for site', siteId + ':', err.message);
+				alchemy.registerError(err, {context: 'Failed to aggregate hourly stats for site ' + siteId});
+			}
 		}
+
+		currentHour = nextHour;
 	}
 
-	this.log('Created', aggregated, 'new hourly records');
+	this.log('Created', totalAggregated, 'hourly records, skipped', totalSkipped, 'existing');
 });
 
 /**
  * Aggregate hourly data into daily data.
- * Finds all complete days that have hourly data but no daily record yet.
+ * Processes one day at a time to limit memory usage.
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.7.1
@@ -164,102 +168,106 @@ AggregateSiteStats.setMethod(async function aggregateMinuteToHour(SiteStats) {
  */
 AggregateSiteStats.setMethod(async function aggregateHourToDay(SiteStats) {
 
-	// Only aggregate complete days (at least 1 day old)
-	let cutoff = new Date();
-	cutoff.setHours(0, 0, 0, 0);
+	// Find the oldest hourly record to know where to start
+	let oldestCrit = SiteStats.find();
+	oldestCrit.where('period_type').equals('hour');
+	oldestCrit.sort(['period_start', 'asc']);
+	oldestCrit.limit(1);
 
-	// Don't go back further than the retention period (30 days for hourly data)
-	let oldest = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000));
+	let oldestRecord = await SiteStats.find('first', oldestCrit);
 
-	this.log('Looking for hourly data to aggregate (between', oldest.toISOString(), 'and', cutoff.toISOString() + ')');
-
-	// Find all hourly records in the window
-	let crit = SiteStats.find();
-	crit.where('period_type').equals('hour');
-	crit.where('period_start').gte(oldest);
-	crit.where('period_start').lt(cutoff);
-
-	let hourlyRecords = await SiteStats.find('all', crit);
-
-	if (!hourlyRecords || hourlyRecords.length === 0) {
+	if (!oldestRecord) {
 		this.log('No hourly data to aggregate');
 		return;
 	}
 
-	this.log('Found', hourlyRecords.length, 'hourly records to check');
+	// Start from the oldest record's day
+	let currentDay = new Date(oldestRecord.period_start);
+	currentDay.setHours(0, 0, 0, 0);
 
-	// Group by site_id and day
-	let dayGroups = new Map();
+	// End before the current day (only aggregate complete days)
+	let endDay = new Date();
+	endDay.setHours(0, 0, 0, 0);
 
-	for (let record of hourlyRecords) {
-		let siteId = String(record.site_id);
-		let dayStart = new Date(record.period_start);
-		dayStart.setHours(0, 0, 0, 0);
-		let dayKey = siteId + '_' + dayStart.getTime();
+	this.log('Aggregating hourly data from', currentDay.toISOString(), 'to', endDay.toISOString());
 
-		if (!dayGroups.has(dayKey)) {
-			dayGroups.set(dayKey, {
-				site_id: siteId,
-				day_start: dayStart,
-				records: [],
-			});
-		}
+	let totalAggregated = 0;
+	let totalSkipped = 0;
 
-		dayGroups.get(dayKey).records.push(record);
-	}
-
-	this.log('Grouped into', dayGroups.size, 'site-day combinations');
-
-	// Check which days already have daily records and aggregate missing ones
-	let aggregated = 0;
-
-	for (let [dayKey, group] of dayGroups) {
+	// Process one day at a time
+	while (currentDay < endDay) {
 		if (this.has_stopped) {
 			this.log('Task stopped, aborting aggregation');
 			return;
 		}
 
-		// Check if daily record already exists
-		let existsCrit = SiteStats.find();
-		existsCrit.where('site_id').equals(group.site_id);
-		existsCrit.where('period_type').equals('day');
-		existsCrit.where('period_start').equals(group.day_start);
+		let nextDay = new Date(currentDay.getTime() + (24 * 60 * 60 * 1000));
 
-		let existing = await SiteStats.find('first', existsCrit);
+		// Find all hourly records for this specific day
+		let crit = SiteStats.find();
+		crit.where('period_type').equals('hour');
+		crit.where('period_start').gte(currentDay);
+		crit.where('period_start').lt(nextDay);
 
-		if (existing) {
-			// Already aggregated, skip
-			continue;
+		// Group by site_id
+		let siteGroups = new Map();
+
+		for await (let record of crit) {
+			let siteId = String(record.site_id);
+
+			if (!siteGroups.has(siteId)) {
+				siteGroups.set(siteId, []);
+			}
+
+			siteGroups.get(siteId).push(record);
 		}
 
-		// Aggregate and store
-		try {
-			let aggregatedData = this.aggregateRecords(group.records);
+		// Process each site's data for this day
+		for (let [siteId, records] of siteGroups) {
+			// Check if daily record already exists
+			let existsCrit = SiteStats.find();
+			existsCrit.where('site_id').equals(siteId);
+			existsCrit.where('period_type').equals('day');
+			existsCrit.where('period_start').equals(currentDay);
 
-			await SiteStats.storeAggregatedStats({
-				site_id           : group.site_id,
-				period_type       : 'day',
-				period_start      : group.day_start,
-				incoming_bytes    : aggregatedData.incoming_bytes,
-				outgoing_bytes    : aggregatedData.outgoing_bytes,
-				request_count     : aggregatedData.request_count,
-				avg_process_count : aggregatedData.avg_process_count,
-				max_process_count : aggregatedData.max_process_count,
-				avg_cpu           : aggregatedData.avg_cpu,
-				max_cpu           : aggregatedData.max_cpu,
-				avg_mem           : aggregatedData.avg_mem,
-				max_mem           : aggregatedData.max_mem,
-				sample_count      : aggregatedData.sample_count,
-			});
+			let existing = await SiteStats.find('first', existsCrit);
 
-			aggregated++;
-		} catch (err) {
-			this.log('Error aggregating daily data for site', group.site_id + ':', err.message);
-			alchemy.registerError(err, {context: 'Failed to aggregate daily stats for site ' + group.site_id});
+			if (existing) {
+				totalSkipped++;
+				continue;
+			}
+
+			// Aggregate and store
+			try {
+				let aggregatedData = this.aggregateRecords(records);
+
+				await SiteStats.storeAggregatedStats({
+					site_id           : siteId,
+					period_type       : 'day',
+					period_start      : currentDay,
+					incoming_bytes    : aggregatedData.incoming_bytes,
+					outgoing_bytes    : aggregatedData.outgoing_bytes,
+					request_count     : aggregatedData.request_count,
+					avg_process_count : aggregatedData.avg_process_count,
+					max_process_count : aggregatedData.max_process_count,
+					avg_cpu           : aggregatedData.avg_cpu,
+					max_cpu           : aggregatedData.max_cpu,
+					avg_mem           : aggregatedData.avg_mem,
+					max_mem           : aggregatedData.max_mem,
+					sample_count      : aggregatedData.sample_count,
+				});
+
+				totalAggregated++;
+			} catch (err) {
+				this.log('Error aggregating daily data for site', siteId + ':', err.message);
+				alchemy.registerError(err, {context: 'Failed to aggregate daily stats for site ' + siteId});
+			}
 		}
+
+		currentDay = nextDay;
 	}
 
-	this.log('Created', aggregated, 'new daily records');
+	this.log('Created', totalAggregated, 'daily records, skipped', totalSkipped, 'existing');
 });
 
 /**
