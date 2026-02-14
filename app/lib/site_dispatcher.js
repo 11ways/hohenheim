@@ -21,6 +21,15 @@ const readFileAsync = util.promisify(fs.readFile),
       servername_re = /^[a-z0-9\.\-]+$/i,
       NEWLINE_RE = /[\r\n]/g;
 
+// Exponential backoff steps for certificate fetch errors:
+// 5 min → 30 min → 1 hour → 2 hours (then stays at 2 hours)
+const CERT_ERROR_BACKOFF_STEPS = [
+	5 * 60 * 1000,        // 5 minutes
+	30 * 60 * 1000,       // 30 minutes
+	1 * 60 * 60 * 1000,   // 1 hour
+	2 * 60 * 60 * 1000,   // 2 hour
+];
+
 global.MATCHED_GROUPS = Symbol('matched_groups');
 
 /**
@@ -30,7 +39,7 @@ global.MATCHED_GROUPS = Symbol('matched_groups');
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.0.1
- * @version  0.7.0
+ * @version  0.7.1
  */
 const SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDispatcher(options) {
 
@@ -91,6 +100,10 @@ const SiteDispatcher = Function.inherits('Informer', 'Develry', function SiteDis
 
 	// Sni cache (max 1000 entries, 24h TTL)
 	this.sni_domain_cache = alchemy.getCache('sni_domain_cache', {max_length: 1000, max_age: 24 * 60 * 60 * 1000});
+
+	// Track in-flight certificate fetches to prevent thundering herd.
+	// Maps domainname → Array of pending callbacks
+	this.inflight_cert_fetches = new Map();
 
 	// Cache for domains that don't match any site (prevents repeated regex matching)
 	this.negative_domain_cache = alchemy.getCache('negative_domain_cache', {max_length: 5000, max_age: 5 * 60 * 1000});
@@ -800,7 +813,7 @@ function randomRefreshOffset() {
  *
  * @author   Jelle De Loecker   <jelle@develry.be>
  * @since    0.4.0
- * @version  0.6.0
+ * @version  0.7.1
  *
  * @param    {string}     domainname
  * @param    {TLSSocket}  socket
@@ -841,8 +854,15 @@ SiteDispatcher.setMethod(function SNICallback(domainname, socket, callback) {
 		secure_context = this.getCachedSecureContext(domainname, meta);
 	}
 
-	if (secure_context) {
+	if (secure_context && secure_context._valid) {
 		return callback(null, secure_context);
+	}
+
+	// If meta exists but context is invalid (e.g., previous cert fetch failed),
+	// only retry when the refresh_at time has passed.
+	// This prevents hammering Greenlock on every TLS connection.
+	if (meta && meta.refresh_at && Date.now() < meta.refresh_at) {
+		return callback(new Error('Certificate for "' + domainname + '" is temporarily unavailable (backoff)'));
 	}
 
 	return this.getFreshSecureContext(domainname, meta, callback);
@@ -900,7 +920,7 @@ SiteDispatcher.setMethod(function getCachedSecureContext(domainname, meta) {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.4.0
- * @version  0.7.0
+ * @version  0.7.1
  *
  * @param    {String}   domainname
  * @param    {Object}   meta          The cache for this domain
@@ -916,16 +936,41 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 		return callback(new Error('The domain name "' + domainname + '" is not valid for LetsEncrypt'));
 	}
 
+	// If a cert fetch is already in flight for this domain,
+	// queue this callback instead of starting another Greenlock request
+	let inflight = this.inflight_cert_fetches.get(domainname);
+
+	if (inflight) {
+		inflight.push(callback);
+		return;
+	}
+
+	// Mark this domain as having an in-flight cert fetch
+	inflight = [callback];
+	this.inflight_cert_fetches.set(domainname, inflight);
+
 	if (meta) {
 		meta.refresh_at = Date.now() + randomRefreshOffset();
 	}
 
 	const that = this;
 
+	// Resolve all queued callbacks and clean up in-flight tracking
+	const resolveAll = function resolveAll(err, secure_context) {
+		let callbacks = that.inflight_cert_fetches.get(domainname);
+		that.inflight_cert_fetches.delete(domainname);
+
+		if (callbacks) {
+			for (let i = 0; i < callbacks.length; i++) {
+				callbacks[i](err, secure_context);
+			}
+		}
+	};
+
 	let site = this.getSite(domainname);
 
 	if (!site) {
-		return callback(new Error('Domain "' + domainname + '" was not found on this server'));
+		return resolveAll(new Error('Domain "' + domainname + '" was not found on this server'));
 	}
 
 	let site_record = site._record;
@@ -953,12 +998,33 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 		});
 	}
 
+	// Helper to apply exponential backoff on error.
+	// Tracks error_count on the meta cache and indexes into CERT_ERROR_BACKOFF_STEPS.
+	const applyErrorBackoff = function applyErrorBackoff() {
+		if (!meta) {
+			meta = that.getDomainMetaCache(domainname, true);
+		}
+
+		if (!meta.error_count) {
+			meta.error_count = 0;
+		}
+
+		meta.error_count++;
+
+		let step_index = Math.min(meta.error_count - 1, CERT_ERROR_BACKOFF_STEPS.length - 1);
+		meta.refresh_at = Date.now() + CERT_ERROR_BACKOFF_STEPS[step_index];
+	};
+
 	// Add timeout to prevent greenlock from hanging indefinitely
 	// (e.g., network issues, Let's Encrypt rate limits, etc.)
 	let timed_out = false;
 	let timeout = setTimeout(() => {
 		timed_out = true;
-		callback(new Error('Greenlock timeout after 30 seconds'));
+
+		// Apply exponential backoff so we don't retry on every connection
+		applyErrorBackoff();
+
+		resolveAll(new Error('Greenlock timeout after 30 seconds'));
 	}, 30 * 1000);
 
 	this.greenlock.get({
@@ -975,23 +1041,27 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 			meta = that.getDomainMetaCache(domainname, true);
 		}
 
+		// Reset error count on success
+		meta.error_count = 0;
+
 		// prevent from being punked by bot trolls
 		// (We'll recreate the object later)
 		meta.refresh_at = Date.now() + small_stagger;
 
 		if (!result) {
-			return callback();
+			return resolveAll();
 		}
 
 		let pems = result.pems,
 		    site = result.site;
 
 		if (!pems || !pems.cert) {
-			return callback();
+			return resolveAll();
 		}
 
 		meta = {
 			refresh_at     : Date.now() + randomRefreshOffset(),
+			error_count    : 0,
 			secure_context : tls.createSecureContext({
 				key  : pems.privkey,
 				cert : pems.cert + '\n' + pems.chain + '\n'
@@ -1026,7 +1096,7 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 			that.sni_domain_cache.set(name, meta);
 		}
 
-		callback(null, meta.secure_context);
+		resolveAll(null, meta.secure_context);
 	}).catch(function onError(err) {
 
 		if (timed_out) {
@@ -1034,8 +1104,15 @@ SiteDispatcher.setMethod(function getFreshSecureContext(domainname, meta, callba
 		}
 
 		clearTimeout(timeout);
-		alchemy.registerError(err, {context: 'Greenlock SNI error'});
-		return callback(err);
+
+		// Apply exponential backoff so we don't retry on every connection
+		applyErrorBackoff();
+
+		alchemy.distinctProblem('greenlock-error-' + domainname, 'Greenlock error for "' + domainname + '": ' + err.message, {
+			repeat_after: 15 * 60 * 1000,
+		});
+
+		return resolveAll(err);
 	});
 });
 

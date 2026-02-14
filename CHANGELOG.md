@@ -3,8 +3,7 @@
 * Fix SiteStats persistence: run saves in parallel instead of sequentially
 * Add `CleanupSiteStats` task to delete old statistics (hourly, respects retention policy)
 * Add `AggregateSiteStats` task to roll up minute→hour→day data (hourly, self-healing)
-
-
+* Fix Greenlock certificate fetch flooding: add in-flight deduplication, exponential backoff, and rate-limited logging for failed ACME requests
 
 ## 0.7.0 (2026-01-25)
 
