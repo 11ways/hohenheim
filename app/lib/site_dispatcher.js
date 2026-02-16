@@ -710,13 +710,20 @@ SiteDispatcher.setMethod(function initGreenlock() {
 
 		notify: function notify(event, details) {
 			if (event == 'error') {
-				console.error('Greenlock error:', details);
+				let subject = details?.subject || 'unknown';
 
-				if (details?.code == 'E_ACME') {
-					if (details.context == 'cert_issue' && details.subject) {
-						// Just remove the troublesome domain from Greenlock
-						// @TODO: This doesn't actually do anything...
-						that.greenlock.manager.remove({subject: details.subject});
+				alchemy.distinctProblem('greenlock-notify-' + subject, 'Greenlock error for "' + subject + '": ' + (details?.message || details), {
+					repeat_after: 15 * 60 * 1000,
+				});
+
+				if (details?.subject) {
+					// Network errors (ETIMEDOUT, etc.) won't have E_ACME code,
+					// but are still worth removing if the domain keeps failing.
+					// Check if this domain is still actually configured.
+					let site = that.getSite(details.subject);
+
+					if (!site) {
+						that.removeFromGreenlock(details.subject);
 					}
 				}
 
