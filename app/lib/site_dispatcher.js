@@ -717,13 +717,17 @@ SiteDispatcher.setMethod(function initGreenlock() {
 				});
 
 				if (details?.subject) {
-					// Network errors (ETIMEDOUT, etc.) won't have E_ACME code,
-					// but are still worth removing if the domain keeps failing.
-					// Check if this domain is still actually configured.
 					let site = that.getSite(details.subject);
 
 					if (!site) {
-						that.removeFromGreenlock(details.subject);
+						// Domain is no longer configured in Hohenheim.
+						// Don't call removeFromGreenlock() here: it uses manager.set(),
+						// which triggers greenlock.renew({}) for ALL domains,
+						// which can cause a recursive notify loop and OOM.
+						// The CleanupGreenlockDomains task will handle removal safely.
+						alchemy.distinctProblem('greenlock-stale-' + details.subject, 'Greenlock is trying to renew "' + details.subject + '" which is no longer configured. It will be cleaned up by the scheduled task.', {
+							repeat_after: 60 * 60 * 1000,
+						});
 					}
 				}
 
