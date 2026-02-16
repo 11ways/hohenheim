@@ -770,9 +770,13 @@ StatsCollector.setMethod(function getCurrentMinutePeriod() {
  *
  * @author   Jelle De Loecker   <jelle@elevenways.be>
  * @since    0.7.0
- * @version  0.7.0
+ * @version  0.7.1
  */
 StatsCollector.setMethod(async function persistStats() {
+
+	if (!COLLECT_SITE_STATS) {
+		return;
+	}
 
 	let SiteStats = Model.get('SiteStats');
 

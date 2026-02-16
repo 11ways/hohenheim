@@ -120,6 +120,13 @@ HOHENHEIM.addSetting('letsencrypt_staging', {
 	global_variable : 'LETSENCRYPT_STAGING',
 });
 
+HOHENHEIM.addSetting('collect_site_stats', {
+	type            : 'boolean',
+	default         : true,
+	description     : 'Collect and persist site statistics to the database (disable for lightweight setups like NeDB)',
+	global_variable : 'COLLECT_SITE_STATS',
+});
+
 HOHENHEIM.addSetting('log_access_to_database', {
 	type            : 'boolean',
 	default         : false,

@@ -28,6 +28,11 @@ AggregateSiteStats.addFallbackCronSchedule('5 * * * *');
  */
 AggregateSiteStats.setMethod(async function executor() {
 
+	if (!COLLECT_SITE_STATS) {
+		this.report('Site stats collection is disabled, skipping aggregation');
+		return;
+	}
+
 	this.todo = 0;
 	this.done = 0;
 

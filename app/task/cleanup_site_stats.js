@@ -27,6 +27,11 @@ CleanupSiteStats.addFallbackCronSchedule('17 * * * *');
  */
 CleanupSiteStats.setMethod(async function executor() {
 
+	if (!COLLECT_SITE_STATS) {
+		this.report('Site stats collection is disabled, skipping cleanup');
+		return;
+	}
+
 	this.todo = 3; // 3 period types to process
 	this.done = 0;
 
