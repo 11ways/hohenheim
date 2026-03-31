@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head><meta charset="UTF-8"><title>Hohenheim - Create Site</title></head>
+<body onload="main()">
+<hh-layout pageTitle={% "Create Site" %}>
+
+    {% declare error: String %}
+
+    {% if error != "" %}
+        <pl-alert variant="destructive" style="margin-bottom: var(--pl-space-lg);">
+            <pl-alert-title>Error</pl-alert-title>
+            <pl-alert-description>{{ error }}</pl-alert-description>
+        </pl-alert>
+    {% /if %}
+
+    <pl-card style="max-width: 600px;">
+        <pl-card-header>
+            <pl-card-title>New Site</pl-card-title>
+            <pl-card-description>Configure a new proxy site.</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <form method="POST" action="/sites/create">
+                <div style="display: flex; flex-direction: column; gap: var(--pl-space-md);">
+                    <div style="display: flex; flex-direction: column; gap: var(--pl-space-xs);">
+                        <pl-label target="site-name">Site Name</pl-label>
+                        <pl-input id="site-name" type={% "text" %} name={% "name" %} placeholder={% "My Website" %} required={% true %}></pl-input>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: var(--pl-space-xs);">
+                        <pl-label target="site-type">Site Type</pl-label>
+                        <select id="site-type" name="site_type"
+                                style="padding: var(--pl-space-sm) var(--pl-space-md); border: 1px solid var(--pl-color-border); border-radius: var(--pl-radius-md); background: var(--pl-color-surface); color: var(--pl-color-text); font-size: var(--pl-font-size-sm);">
+                            <option value="proxy">Proxy</option>
+                            <option value="static">Static</option>
+                            <option value="redirect">Redirect</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; gap: var(--pl-space-sm); margin-top: var(--pl-space-xl);">
+                    <pl-button variant={% "primary" %} type={% "submit" %}>Create Site</pl-button>
+                    <a href="/sites" style="text-decoration: none;"><pl-button variant={% "outline" %} type={% "button" %}>Cancel</pl-button></a>
+                </div>
+            </form>
+        </pl-card-content>
+    </pl-card>
+
+</hh-layout>
+</body>
+</html>

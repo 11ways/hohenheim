@@ -1,0 +1,31 @@
+{% tag HhLayout {
+
+    public pageTitle: String = ""
+
+    template {
+        {% style(href: "/plumage.css") %}
+        {% style(href: "/hohenheim.css") %}
+        {% script(src: "/hohenheim.js") %}
+
+        <nav class="hh-sidebar">
+            <div class="hh-sidebar__logo">Hohenheim</div>
+            <ul class="hh-sidebar__nav">
+                <li><a class="hh-sidebar__link" href="/">Dashboard</a></li>
+                <li><a class="hh-sidebar__link" href="/sites">Sites</a></li>
+                <li><a class="hh-sidebar__link" href="/certificates">Certificates</a></li>
+            </ul>
+        </nav>
+        <div class="hh-main">
+            <he-block block-name="main">
+            {% block "main" %}
+                <header class="hh-header">
+                    <h1 class="hh-header__title">{{ pageTitle{:} }}</h1>
+                </header>
+                <main class="hh-content">
+                    <slot></slot>
+                </main>
+            {% /block %}
+            </he-block>
+        </div>
+    }
+} %}

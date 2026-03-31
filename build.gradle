@@ -1,0 +1,295 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import org.teavm.gradle.api.OptimizationLevel
+import org.teavm.gradle.api.SourceFilePolicy
+import org.teavm.gradle.tasks.GenerateJavaScriptTask
+
+plugins {
+    id 'java-library'
+    id 'org.teavm' version '0.13.1'
+    id 'com.gradleup.shadow' version '8.3.0'
+    id 'org.checkerframework' version '0.6.40'
+    id 'be.elevenways.hawkeye' version '0.1.0-SNAPSHOT'
+}
+
+apply plugin: 'org.checkerframework'
+
+group = 'be.elevenways'
+version = '0.1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_22
+    targetCompatibility = JavaVersion.VERSION_22
+}
+
+// --- Source Sets ---
+sourceSets {
+    common {
+        java { srcDirs = ['src/common/java'] }
+        resources { srcDirs = ['src/common/resources'] }
+    }
+
+    client {
+        java {
+            srcDirs = ['src/client/java']
+            compileClasspath += sourceSets.common.output
+            runtimeClasspath += sourceSets.common.output
+        }
+        resources { srcDirs = ['src/client/resources'] }
+    }
+
+    server {
+        java {
+            srcDirs = ['src/server/java']
+            compileClasspath += sourceSets.common.output
+            runtimeClasspath += sourceSets.common.output
+        }
+        resources { srcDirs = ['src/server/resources'] }
+    }
+}
+
+sourceSets {
+    componentTemplates {
+        java { srcDirs = ['src/componentTemplates/java'] }
+        resources { srcDirs = ['src/componentTemplates/resources'] }
+        compileClasspath += sourceSets.common.output
+        runtimeClasspath += sourceSets.common.output
+    }
+
+    browserTest {
+        java { srcDirs = ['src/browserTest/java'] }
+        resources { srcDirs = ['src/browserTest/resources'] }
+        compileClasspath += sourceSets.common.output + sourceSets.client.output + sourceSets.server.output + sourceSets.componentTemplates.output
+        runtimeClasspath += sourceSets.common.output + sourceSets.client.output + sourceSets.server.output + sourceSets.componentTemplates.output
+    }
+}
+
+// --- Hawkeye Template Compilation ---
+hawkeye {
+    namespace = 'hohenheim'
+    templateDirs = ['src/componentTemplates/resources/templates']
+}
+
+// --- Configurations ---
+configurations {
+    all {
+        resolutionStrategy {
+            cacheChangingModulesFor 0, 'seconds'
+        }
+    }
+
+    teavmLibs {
+        canBeConsumed = false
+        canBeResolved = true
+    }
+
+    browserTestImplementation.extendsFrom testImplementation
+    browserTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+// --- Compile Tasks ---
+tasks.named('compileCommonJava') {
+    options.annotationProcessorPath = configurations.annotationProcessor
+}
+tasks.named('compileServerJava') {
+    options.annotationProcessorPath = configurations.annotationProcessor
+}
+tasks.named('compileClientJava') {
+    options.annotationProcessorPath = configurations.annotationProcessor
+}
+
+// --- Dependencies ---
+dependencies {
+    // Common (compile-only since client/server each pull their own variant)
+    commonCompileOnly teavm.libs.jsoApis
+    commonCompileOnly ('be.elevenways:protoblast:0.1.0-SNAPSHOT:client') { changing = true }
+    commonCompileOnly ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:common') { changing = true }
+    commonCompileOnly ('be.elevenways:zenit:0.1.0-SNAPSHOT:common') { changing = true }
+    commonCompileOnly ('be.elevenways:plumage:0.1.0-SNAPSHOT:common') { changing = true }
+
+    // Client (TeaVM-compiled browser code)
+    clientImplementation sourceSets.common.output
+    clientImplementation teavm.libs.jsoApis
+    clientImplementation ('be.elevenways:protoblast:0.1.0-SNAPSHOT:client') { changing = true }
+    clientImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:browser') { changing = true }
+    clientImplementation ('be.elevenways:zenit:0.1.0-SNAPSHOT:client') { changing = true }
+    clientImplementation ('be.elevenways:plumage:0.1.0-SNAPSHOT:client') { changing = true }
+
+    // Server
+    serverImplementation sourceSets.common.output
+    serverImplementation ('be.elevenways:protoblast:0.1.0-SNAPSHOT:server') { changing = true }
+    serverImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:server') { changing = true }
+    serverImplementation ('be.elevenways:zenit:0.1.0-SNAPSHOT:server') { changing = true }
+    serverImplementation ('be.elevenways:plumage:0.1.0-SNAPSHOT:server') { changing = true }
+
+    commonImplementation 'org.checkerframework:checker-qual:3.42.0'
+    clientImplementation 'org.checkerframework:checker-qual:3.42.0'
+    serverImplementation 'org.checkerframework:checker-qual:3.42.0'
+
+    // Component templates
+    componentTemplatesCompileOnly teavm.libs.jsoApis
+    componentTemplatesImplementation sourceSets.common.output
+    componentTemplatesImplementation ('be.elevenways:protoblast:0.1.0-SNAPSHOT:client') { changing = true }
+    componentTemplatesImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:browser') { changing = true }
+    componentTemplatesImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:common') { changing = true }
+    componentTemplatesImplementation ('be.elevenways:plumage:0.1.0-SNAPSHOT:common') { changing = true }
+    componentTemplatesImplementation 'org.checkerframework:checker-qual:3.42.0'
+
+    // Hawkeye compiler classpath
+    hawkeyeCompilerClasspath sourceSets.common.output
+
+    // Database
+    serverImplementation 'org.xerial:sqlite-jdbc:3.45.1.0'
+
+    // Browser tests
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    browserTestImplementation platform('org.junit:junit-bom:5.10.0')
+    browserTestImplementation 'org.junit.jupiter:junit-jupiter'
+    browserTestImplementation 'com.microsoft.playwright:playwright:1.48.0'
+    browserTestImplementation 'org.assertj:assertj-core:3.25.3'
+    browserTestImplementation sourceSets.common.output
+    browserTestImplementation sourceSets.client.output
+    browserTestImplementation sourceSets.server.output
+    browserTestImplementation sourceSets.componentTemplates.output
+    browserTestImplementation ('be.elevenways:protoblast:0.1.0-SNAPSHOT:server') { changing = true }
+    browserTestImplementation ('be.elevenways:zenit:0.1.0-SNAPSHOT:server') { changing = true }
+    browserTestImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:server') { changing = true }
+    browserTestImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:test-support') { changing = true }
+    browserTestImplementation ('be.elevenways:plumage:0.1.0-SNAPSHOT:server') { changing = true }
+    browserTestImplementation 'org.xerial:sqlite-jdbc:3.45.1.0'
+
+    // TeaVM libraries
+    teavmLibs 'org.teavm:teavm-classlib:0.13.1'
+    teavmLibs 'org.teavm:teavm-jso-apis:0.13.1'
+    teavmLibs 'org.teavm:teavm-jso-impl:0.13.1'
+    teavmLibs 'org.teavm:teavm-platform:0.13.1'
+    teavmLibs 'org.teavm:teavm-metaprogramming-impl:0.13.1'
+}
+
+// --- JAR Tasks ---
+task serverJar(type: ShadowJar) {
+    archiveClassifier = 'server'
+    configurations = [project.configurations.serverRuntimeClasspath]
+    from sourceSets.server.output
+    from sourceSets.common.output
+    from sourceSets.componentTemplates.output
+    mergeServiceFiles()
+
+    manifest {
+        attributes(
+            'Main-Class': 'be.elevenways.hohenheim.server.ServerMain',
+            'Implementation-Title': project.name,
+            'Implementation-Version': project.version
+        )
+    }
+}
+
+// --- TeaVM ---
+task browserJar(type: ShadowJar) {
+    description = 'Fat JAR for TeaVM compilation'
+    archiveClassifier = 'browser'
+    configurations = [project.configurations.clientRuntimeClasspath]
+    from(sourceSets.client.output)
+    from(sourceSets.common.output)
+    from(sourceSets.componentTemplates.output)
+    mergeServiceFiles()
+}
+
+tasks.withType(GenerateJavaScriptTask).configureEach {
+    dependsOn browserJar
+    classpath.setFrom(files(browserJar.archiveFile) + configurations.teavmLibs)
+}
+
+teavm {
+    js {
+        obfuscated = false
+        addedToWebApp = true
+        sourceMap = true
+        strict = false
+        sourceFilePolicy = SourceFilePolicy.LINK_LOCAL_FILES
+        optimization = OptimizationLevel.NONE
+        mainClass = "be.elevenways.hohenheim.ClientMain"
+        targetFileName = "hohenheim.js"
+    }
+}
+
+task copyClientJs(type: Copy) {
+    description = 'Copies TeaVM-generated JS to public directory'
+    dependsOn 'generateJavaScript'
+    from "${buildDir}/generated/teavm/js"
+    into 'public'
+    include 'hohenheim.js'
+}
+
+serverJar.dependsOn copyClientJs
+
+// --- Browser Test Task ---
+task browserTest(type: Test) {
+    description = 'Run browser tests using Playwright'
+    group = 'verification'
+    dependsOn copyClientJs
+
+    testClassesDirs = sourceSets.browserTest.output.classesDirs
+    classpath = sourceSets.browserTest.runtimeClasspath
+
+    useJUnitPlatform()
+    maxParallelForks = 1
+    forkEvery = 1  // New JVM per test class to isolate browser state
+    timeout = java.time.Duration.ofMinutes(5)
+
+    systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')
+
+    testLogging {
+        showStandardStreams = true
+        exceptionFormat = 'full'
+        events "passed", "skipped", "failed"
+    }
+}
+
+// --- Task Dependencies ---
+afterEvaluate {
+    def hasHawkeyeTemplates = tasks.names.contains('compileComponentTemplatesHawkeyeTemplates')
+
+    if (hasHawkeyeTemplates) {
+        tasks.named('compileComponentTemplatesHawkeyeTemplates') {
+            dependsOn 'compileCommonJava', 'compileClientJava'
+        }
+        tasks.named('compileComponentTemplatesJava') {
+            dependsOn 'compileComponentTemplatesHawkeyeTemplates', 'compileCommonJava'
+        }
+    }
+
+    tasks.named('compileServerJava') {
+        dependsOn 'compileCommonJava'
+        if (hasHawkeyeTemplates) {
+            dependsOn 'compileComponentTemplatesJava'
+        }
+    }
+    tasks.named('generateJavaScript') {
+        dependsOn 'compileClientJava', 'compileCommonJava'
+        if (hasHawkeyeTemplates) {
+            dependsOn 'compileComponentTemplatesJava'
+        }
+    }
+
+    tasks.named('compileBrowserTestJava') {
+        dependsOn 'compileCommonJava', 'compileServerJava', 'compileClientJava'
+        if (hasHawkeyeTemplates) {
+            dependsOn 'compileComponentTemplatesJava'
+        }
+    }
+}
+
+// --- Clean ---
+tasks.named('clean') {
+    doFirst {
+        delete(layout.buildDirectory.dir('generated-sources/hawkeye'))
+        delete(layout.buildDirectory.dir('generated/teavm'))
+        delete('public/hohenheim.js')
+    }
+}

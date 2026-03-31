@@ -1,0 +1,64 @@
+package be.elevenways.hohenheim.model;
+
+import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.*;
+import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.query.SortOrder;
+
+import java.util.List;
+
+public class CertificateModel extends Model {
+
+    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "certificate");
+    public static final Schema SCHEMA = new Schema();
+
+    public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
+    public static final StringField ORGANIZATION_ID = SCHEMA.addField(StringField.builder().name("organization_id").build());
+    public static final StringField NICE_NAME = SCHEMA.addField(StringField.builder().name("nice_name").build());
+    public static final SchemaField DOMAIN_NAMES = SCHEMA.addField(SchemaField.builder("domain_names").build());
+    public static final StringField PROVIDER = SCHEMA.addField(StringField.builder().name("provider").build());
+    public static final StringField CERTIFICATE_PEM = SCHEMA.addField(StringField.builder().name("certificate_pem").build());
+    public static final StringField PRIVATE_KEY_PEM = SCHEMA.addField(StringField.builder().name("private_key_pem").build());
+    public static final DateTimeField EXPIRES_ON = SCHEMA.addField(DateTimeField.builder().name("expires_on").build());
+    public static final BooleanField AUTO_RENEW = SCHEMA.addField(BooleanField.builder("auto_renew").defaultValue(true).build());
+    public static final StringField DNS_PROVIDER = SCHEMA.addField(StringField.builder().name("dns_provider").build());
+    public static final StringField DNS_CREDENTIALS = SCHEMA.addField(StringField.builder().name("dns_credentials").build());
+    public static final StringField ACME_SERVER = SCHEMA.addField(StringField.builder().name("acme_server").build());
+    public static final SchemaField META = SCHEMA.addField(SchemaField.builder("meta").build());
+    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
+    public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
+
+    private final Datasource datasource;
+
+    public CertificateModel(Datasource datasource) {
+        this.datasource = datasource;
+    }
+
+    public List<Row> findExpiringSoon(int days) {
+        return find()
+            .where(AUTO_RENEW.eq(true))
+            .orderBy(EXPIRES_ON, SortOrder.ASC)
+            .all();
+    }
+
+    @Override
+    public Identifier getModelId() { return MODEL_ID; }
+
+    @Override
+    public Field<?, ?> getPrimaryKeyField() { return ID; }
+
+    @Override
+    public String getModelName() { return "Certificate"; }
+
+    @Override
+    public String getTableName() { return "certificates"; }
+
+    @Override
+    public Schema getSchema() { return SCHEMA; }
+
+    @Override
+    protected Datasource getDatasource() { return this.datasource; }
+}

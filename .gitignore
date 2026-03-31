@@ -1,0 +1,22 @@
+# Build
+.gradle/
+build/
+bin/
+
+# Generated artifacts
+public/hohenheim.js
+public/hohenheim.js.map
+
+# Database
+*.db
+
+# IDE
+.classpath
+.project
+.settings/
+.factorypath
+*.iml
+.idea/
+
+# OS
+.DS_Store

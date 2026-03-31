@@ -1,0 +1,99 @@
+/* Hohenheim Admin Layout */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    font-family: var(--pl-font-family);
+    background: var(--pl-color-background);
+    color: var(--pl-color-text);
+    margin: 0;
+    display: flex;
+    min-height: 100vh;
+}
+
+/* Sidebar */
+.hh-sidebar {
+    width: 240px;
+    background: var(--pl-color-surface);
+    border-right: 1px solid var(--pl-color-border);
+    padding: var(--pl-space-lg) 0;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.hh-sidebar__logo {
+    padding: 0 var(--pl-space-lg);
+    margin-bottom: var(--pl-space-xl);
+    font-size: var(--pl-font-size-lg);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.hh-sidebar__nav {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.hh-sidebar__link {
+    display: flex;
+    align-items: center;
+    gap: var(--pl-space-sm);
+    padding: var(--pl-space-sm) var(--pl-space-lg);
+    color: var(--pl-color-text-muted);
+    text-decoration: none;
+    font-size: var(--pl-font-size-sm);
+    transition: background var(--pl-transition-fast), color var(--pl-transition-fast);
+}
+
+.hh-sidebar__link:hover,
+.hh-sidebar__link--active {
+    background: var(--pl-color-background);
+    color: var(--pl-color-text);
+}
+
+/* Main content area */
+.hh-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+.hh-header {
+    padding: var(--pl-space-md) var(--pl-space-xl);
+    border-bottom: 1px solid var(--pl-color-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.hh-header__title {
+    font-size: var(--pl-font-size-xl);
+    font-weight: 600;
+    margin: 0;
+}
+
+.hh-content {
+    padding: var(--pl-space-xl);
+    flex: 1;
+}
+
+/* Page-level utilities */
+.hh-page-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--pl-space-lg);
+}
+
+.hh-page-actions__description {
+    color: var(--pl-color-text-muted);
+    margin: 0;
+}
+
+.hh-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: var(--pl-space-lg);
+}
