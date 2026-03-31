@@ -28,7 +28,7 @@
                         <div style="display: flex; flex-direction: column; gap: var(--pl-space-xs);">
                             <pl-label target="site-type">Site Type</pl-label>
                             <select id="site-type" name="site_type"
-                                    bind:value={% selectedType %}
+                                    bind:value={% selectedType{:} %}
                                     style="padding: var(--pl-space-sm) var(--pl-space-md); border: 1px solid var(--pl-color-border); border-radius: var(--pl-radius-md); background: var(--pl-color-surface); color: var(--pl-color-text); font-size: var(--pl-font-size-sm);">
                                 <option value="hohenheim:proxy">Proxy - Forward to upstream server</option>
                                 <option value="hohenheim:static">Static - Serve files from directory</option>

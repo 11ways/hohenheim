@@ -3,9 +3,6 @@ package be.elevenways.hohenheim.test;
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
-/**
- * Tests the site creation form's type-specific fields and site type system.
- */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SiteTypeTest extends HohenheimTestBase {
 
@@ -36,30 +33,53 @@ class SiteTypeTest extends HohenheimTestBase {
 
     @Test
     @Order(3)
-    void formHasNameField() {
+    void switchingToStaticShowsStaticFields() {
         navigateToApp("/sites/create");
         waitForHydration();
 
-        assertThat(page.locator("pl-input").count()).isGreaterThanOrEqualTo(1);
-        assertThat(page.content()).contains("Site Name");
+        page.locator("select[name='site_type']").selectOption("hohenheim:static");
+        page.waitForCondition(() -> page.content().contains("Root Directory"));
+
+        assertThat(page.content()).contains("Root Directory");
+        assertThat(page.content()).contains("SPA Fallback");
+        assertThat(page.content()).doesNotContain("Upstream Host");
     }
 
     @Test
     @Order(4)
-    void formHasDomainField() {
+    void switchingToRedirectShowsRedirectFields() {
         navigateToApp("/sites/create");
         waitForHydration();
 
-        assertThat(page.content()).contains("Domain (optional)");
+        page.locator("select[name='site_type']").selectOption("hohenheim:redirect");
+        page.waitForCondition(() -> page.content().contains("Target URL"));
+
+        assertThat(page.content()).contains("Target URL");
+        assertThat(page.content()).contains("Status Code");
+        assertThat(page.content()).doesNotContain("Upstream Host");
     }
 
     @Test
     @Order(5)
-    void formHasSubmitAndCancelButtons() {
+    void switchingBackToProxyRestoresProxyFields() {
         navigateToApp("/sites/create");
         waitForHydration();
 
-        assertThat(page.content()).contains("Create Site");
-        assertThat(page.content()).contains("Cancel");
+        page.locator("select[name='site_type']").selectOption("hohenheim:redirect");
+        page.waitForCondition(() -> page.content().contains("Target URL"));
+
+        page.locator("select[name='site_type']").selectOption("hohenheim:proxy");
+        page.waitForCondition(() -> page.content().contains("Upstream Host"));
+
+        assertThat(page.content()).contains("Upstream Host");
+        assertThat(page.content()).doesNotContain("Target URL");
+    }
+
+    @Test
+    @Order(6)
+    void formHasDomainField() {
+        navigateToApp("/sites/create");
+        waitForHydration();
+        assertThat(page.content()).contains("Domain (optional)");
     }
 }
