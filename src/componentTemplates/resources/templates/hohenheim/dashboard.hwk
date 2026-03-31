@@ -6,6 +6,8 @@
 
     {% declare siteCount: Integer %}
     {% declare certCount: Integer %}
+    {% declare proxyStatus: String %}
+    {% declare routeCount: Integer %}
 
     <div class="hh-stat-grid">
         <pl-card>
@@ -17,8 +19,8 @@
             <pl-card-content><p style="font-size: var(--pl-font-size-3xl); font-weight: 700;">{{ certCount }}</p></pl-card-content>
         </pl-card>
         <pl-card>
-            <pl-card-header><pl-card-title>Proxy</pl-card-title><pl-card-description>Reverse proxy status</pl-card-description></pl-card-header>
-            <pl-card-content><pl-badge variant="secondary">Not running</pl-badge></pl-card-content>
+            <pl-card-header><pl-card-title>Proxy</pl-card-title><pl-card-description>{{ routeCount }} active routes</pl-card-description></pl-card-header>
+            <pl-card-content><pl-badge variant={% "default" %}>{{ proxyStatus }}</pl-badge></pl-card-content>
         </pl-card>
     </div>
 

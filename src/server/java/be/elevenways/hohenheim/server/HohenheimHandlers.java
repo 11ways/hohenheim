@@ -41,9 +41,16 @@ public class HohenheimHandlers {
             int siteCount = (int) siteModel.find().where(SiteModel.DELETED_AT.isNull()).count();
             int certCount = (int) certModel.find().count();
 
+            var proxy = ServerMain.getProxyServer();
+            int routeCount = proxy != null
+                ? proxy.getDispatcher().getExactRouteCount() + proxy.getDispatcher().getWildcardRouteCount()
+                : 0;
+            String proxyStatus = proxy != null ? "Running" : "Stopped";
+
             return render(
                 Identifier.of("hohenheim", "hohenheim/dashboard"),
-                Map.of("siteCount", siteCount, "certCount", certCount)
+                Map.of("siteCount", siteCount, "certCount", certCount,
+                       "proxyStatus", proxyStatus, "routeCount", routeCount)
             );
         });
 
@@ -98,6 +105,10 @@ public class HohenheimHandlers {
             row.set(SiteModel.SLUG, slug);
             row.set(SiteModel.SITE_TYPE, siteType);
             siteModel.save(row);
+
+            // Reload proxy routes
+            var proxy = ServerMain.getProxyServer();
+            if (proxy != null) proxy.reload();
 
             return redirect("/sites");
         });
