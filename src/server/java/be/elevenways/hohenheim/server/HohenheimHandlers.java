@@ -89,7 +89,7 @@ public class HohenheimHandlers {
             Map<String, String> form = http.getFormData().toStringMap();
 
             String name = form.getOrDefault("name", "").trim();
-            String siteType = form.getOrDefault("site_type", "proxy");
+            String siteType = form.getOrDefault("site_type", "hohenheim:proxy");
 
             if (name.isEmpty()) {
                 return render(
@@ -100,11 +100,42 @@ public class HohenheimHandlers {
 
             String slug = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
 
+            // Build type-specific settings from form data
+            Map<String, Object> settings = new HashMap<>();
+            if ("hohenheim:proxy".equals(siteType)) {
+                settings.put("forward_scheme", form.getOrDefault("forward_scheme", "http"));
+                settings.put("forward_host", form.getOrDefault("forward_host", ""));
+                String portStr = form.getOrDefault("forward_port", "80");
+                try { settings.put("forward_port", Integer.parseInt(portStr)); }
+                catch (NumberFormatException e) { settings.put("forward_port", 80); }
+            } else if ("hohenheim:redirect".equals(siteType)) {
+                settings.put("target_url", form.getOrDefault("target_url", ""));
+                settings.put("http_status", form.getOrDefault("http_status", "302"));
+                settings.put("preserve_path", "on".equals(form.get("preserve_path")));
+            } else if ("hohenheim:static".equals(siteType)) {
+                settings.put("root_path", form.getOrDefault("root_path", ""));
+                settings.put("fallback_file", form.getOrDefault("fallback_file", ""));
+            }
+
+            // Add domain if hostname provided
+            String hostname = form.getOrDefault("hostname", "").trim();
+
             Row row = siteModel.createEmptyRow();
             row.set(SiteModel.NAME, name);
             row.set(SiteModel.SLUG, slug);
             row.set(SiteModel.SITE_TYPE, siteType);
+            row.set(SiteModel.SETTINGS, settings);
             siteModel.save(row);
+
+            // Create domain entry if hostname was provided
+            if (!hostname.isEmpty()) {
+                Object siteId = row.get(SiteModel.ID);
+                Row domainRow = domainModel.createEmptyRow();
+                domainRow.set(SiteDomainModel.SITE_ID, String.valueOf(siteId));
+                domainRow.set(SiteDomainModel.HOSTNAME, hostname);
+                domainRow.set(SiteDomainModel.MATCH_TYPE, "exact");
+                domainModel.save(domainRow);
+            }
 
             // Reload proxy routes
             var proxy = ServerMain.getProxyServer();

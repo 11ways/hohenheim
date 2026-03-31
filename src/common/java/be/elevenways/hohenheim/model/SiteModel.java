@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.sitetype.SiteTypeRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.orm.model.relation.HasMany;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 
 import java.util.List;
@@ -19,10 +19,22 @@ public class SiteModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
     public static final StringField SLUG = SCHEMA.addField(StringField.builder().name("slug").build());
-    public static final StringField SITE_TYPE = SCHEMA.addField(StringField.builder().name("site_type").build());
+
+    // RegistryEnumField: values come from SiteTypeRegistry at runtime
+    public static final EnumField SITE_TYPE = SCHEMA.addField(
+        RegistryEnumField.builder("site_type")
+            .registry(SiteTypeRegistry.REGISTRY)
+            .build());
+
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true).build());
     public static final StringField ORGANIZATION_ID = SCHEMA.addField(StringField.builder().name("organization_id").build());
-    public static final SchemaField SETTINGS = SCHEMA.addField(SchemaField.builder("settings").build());
+
+    // Polymorphic settings: schema resolved dynamically from site_type
+    public static final SchemaField SETTINGS = SCHEMA.addField(
+        SchemaField.builder("settings")
+            .schemaFrom("site_type")
+            .build());
+
     public static final StringField DESCRIPTION = SCHEMA.addField(StringField.builder().name("description").build());
     public static final StringField STATUS = SCHEMA.addField(StringField.builder().name("status").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
@@ -43,11 +55,10 @@ public class SiteModel extends Model {
             .all();
     }
 
-    public List<Row> findByType(String siteType) {
+    public List<Row> findActive() {
         return find()
-            .where(SITE_TYPE.eq(siteType))
             .where(DELETED_AT.isNull())
-            .orderBy(NAME, SortOrder.ASC)
+            .orderBy(CREATED_AT, SortOrder.DESC)
             .all();
     }
 

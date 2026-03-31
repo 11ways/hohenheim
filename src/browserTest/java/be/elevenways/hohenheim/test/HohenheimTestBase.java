@@ -21,6 +21,7 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
             return port;
         }
 
+        be.elevenways.hohenheim.server.sitetype.SiteTypes.register();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
         be.elevenways.hohenheim.server.HohenheimHandlers.init();

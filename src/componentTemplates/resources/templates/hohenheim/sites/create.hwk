@@ -1,48 +1,115 @@
+{% tag HhSiteCreate {
+
+    public error: String = ""
+    public selectedType: String = "hohenheim:proxy"
+
+    template {
+        {% if error{:} != "" %}
+            <pl-alert variant={% "destructive" %} style="margin-bottom: var(--pl-space-lg);">
+                <pl-alert-title>Error</pl-alert-title>
+                <pl-alert-description>{{ error{:} }}</pl-alert-description>
+            </pl-alert>
+        {% /if %}
+
+        <pl-card style="max-width: 640px;">
+            <pl-card-header>
+                <pl-card-title>New Site</pl-card-title>
+                <pl-card-description>Configure a new site for the reverse proxy.</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <form method="POST" action="/sites/create">
+                    <div style="display: flex; flex-direction: column; gap: var(--pl-space-lg);">
+
+                        <div style="display: flex; flex-direction: column; gap: var(--pl-space-xs);">
+                            <pl-label target="site-name">Site Name</pl-label>
+                            <pl-input id="site-name" type={% "text" %} name={% "name" %} placeholder={% "My Website" %} required={% true %}></pl-input>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: var(--pl-space-xs);">
+                            <pl-label target="site-type">Site Type</pl-label>
+                            <select id="site-type" name="site_type"
+                                    bind:value={% selectedType %}
+                                    style="padding: var(--pl-space-sm) var(--pl-space-md); border: 1px solid var(--pl-color-border); border-radius: var(--pl-radius-md); background: var(--pl-color-surface); color: var(--pl-color-text); font-size: var(--pl-font-size-sm);">
+                                <option value="hohenheim:proxy">Proxy - Forward to upstream server</option>
+                                <option value="hohenheim:static">Static - Serve files from directory</option>
+                                <option value="hohenheim:redirect">Redirect - HTTP redirect</option>
+                            </select>
+                        </div>
+
+                        <pl-separator></pl-separator>
+
+                        {% if selectedType{:} == "hohenheim:proxy" %}
+                        <div style="display: flex; flex-direction: column; gap: var(--pl-space-md);">
+                            <div style="display: flex; gap: var(--pl-space-md);">
+                                <div style="flex: 1; display: flex; flex-direction: column; gap: var(--pl-space-xs);">
+                                    <pl-label target="forward-host">Upstream Host</pl-label>
+                                    <pl-input id="forward-host" type={% "text" %} name={% "forward_host" %} placeholder={% "127.0.0.1" %}></pl-input>
+                                </div>
+                                <div style="width: 100px; display: flex; flex-direction: column; gap: var(--pl-space-xs);">
+                                    <pl-label target="forward-port">Port</pl-label>
+                                    <pl-input id="forward-port" type={% "number" %} name={% "forward_port" %} placeholder={% "3000" %}></pl-input>
+                                </div>
+                            </div>
+                        </div>
+                        {% /if %}
+
+                        {% if selectedType{:} == "hohenheim:static" %}
+                        <div style="display: flex; flex-direction: column; gap: var(--pl-space-md);">
+                            <div style="display: flex; flex-direction: column; gap: var(--pl-space-xs);">
+                                <pl-label target="root-path">Root Directory</pl-label>
+                                <pl-input id="root-path" type={% "text" %} name={% "root_path" %} placeholder={% "/var/www/html" %}></pl-input>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: var(--pl-space-xs);">
+                                <pl-label target="fallback-file">SPA Fallback File</pl-label>
+                                <pl-input id="fallback-file" type={% "text" %} name={% "fallback_file" %} placeholder={% "index.html" %}></pl-input>
+                            </div>
+                        </div>
+                        {% /if %}
+
+                        {% if selectedType{:} == "hohenheim:redirect" %}
+                        <div style="display: flex; flex-direction: column; gap: var(--pl-space-md);">
+                            <div style="display: flex; flex-direction: column; gap: var(--pl-space-xs);">
+                                <pl-label target="target-url">Target URL</pl-label>
+                                <pl-input id="target-url" type={% "text" %} name={% "target_url" %} placeholder={% "https://example.com" %}></pl-input>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: var(--pl-space-xs);">
+                                <pl-label target="http-status">Status Code</pl-label>
+                                <select id="http-status" name="http_status"
+                                        style="padding: var(--pl-space-sm) var(--pl-space-md); border: 1px solid var(--pl-color-border); border-radius: var(--pl-radius-md); background: var(--pl-color-surface); color: var(--pl-color-text); font-size: var(--pl-font-size-sm);">
+                                    <option value="302">302 Found (temporary)</option>
+                                    <option value="301">301 Permanent</option>
+                                    <option value="307">307 Temporary Redirect</option>
+                                    <option value="308">308 Permanent Redirect</option>
+                                </select>
+                            </div>
+                        </div>
+                        {% /if %}
+
+                        <pl-separator></pl-separator>
+
+                        <div style="display: flex; flex-direction: column; gap: var(--pl-space-xs);">
+                            <pl-label target="hostname">Domain (optional)</pl-label>
+                            <pl-input id="hostname" type={% "text" %} name={% "hostname" %} placeholder={% "example.com" %}></pl-input>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: var(--pl-space-sm); margin-top: var(--pl-space-xl);">
+                        <pl-button variant={% "primary" %} type={% "submit" %}>Create Site</pl-button>
+                        <a href="/sites" style="text-decoration: none;"><pl-button variant={% "outline" %} type={% "button" %}>Cancel</pl-button></a>
+                    </div>
+                </form>
+            </pl-card-content>
+        </pl-card>
+    }
+} %}
+
 <!DOCTYPE html>
 <html data-theme="dark">
 <head><meta charset="UTF-8"><title>Hohenheim - Create Site</title></head>
 <body onload="main()">
 <hh-layout pageTitle={% "Create Site" %}>
-
     {% declare error: String %}
-
-    {% if error != "" %}
-        <pl-alert variant="destructive" style="margin-bottom: var(--pl-space-lg);">
-            <pl-alert-title>Error</pl-alert-title>
-            <pl-alert-description>{{ error }}</pl-alert-description>
-        </pl-alert>
-    {% /if %}
-
-    <pl-card style="max-width: 600px;">
-        <pl-card-header>
-            <pl-card-title>New Site</pl-card-title>
-            <pl-card-description>Configure a new proxy site.</pl-card-description>
-        </pl-card-header>
-        <pl-card-content>
-            <form method="POST" action="/sites/create">
-                <div style="display: flex; flex-direction: column; gap: var(--pl-space-md);">
-                    <div style="display: flex; flex-direction: column; gap: var(--pl-space-xs);">
-                        <pl-label target="site-name">Site Name</pl-label>
-                        <pl-input id="site-name" type={% "text" %} name={% "name" %} placeholder={% "My Website" %} required={% true %}></pl-input>
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: var(--pl-space-xs);">
-                        <pl-label target="site-type">Site Type</pl-label>
-                        <select id="site-type" name="site_type"
-                                style="padding: var(--pl-space-sm) var(--pl-space-md); border: 1px solid var(--pl-color-border); border-radius: var(--pl-radius-md); background: var(--pl-color-surface); color: var(--pl-color-text); font-size: var(--pl-font-size-sm);">
-                            <option value="proxy">Proxy</option>
-                            <option value="static">Static</option>
-                            <option value="redirect">Redirect</option>
-                        </select>
-                    </div>
-                </div>
-                <div style="display: flex; gap: var(--pl-space-sm); margin-top: var(--pl-space-xl);">
-                    <pl-button variant={% "primary" %} type={% "submit" %}>Create Site</pl-button>
-                    <a href="/sites" style="text-decoration: none;"><pl-button variant={% "outline" %} type={% "button" %}>Cancel</pl-button></a>
-                </div>
-            </form>
-        </pl-card-content>
-    </pl-card>
-
+    <hh-site-create error={% error{:} %}></hh-site-create>
 </hh-layout>
 </body>
 </html>
