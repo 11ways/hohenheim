@@ -316,6 +316,32 @@ body {
     color: var(--pl-color-text-muted);
 }
 
+/* Header subtitle */
+.hh-header__subtitle {
+    color: var(--pl-color-text-muted);
+    font-size: var(--pl-font-size-sm);
+    margin: var(--pl-space-xs) 0 0;
+}
+
+/* Advanced collapsible section */
+.hh-advanced-section {
+    max-width: 640px;
+    margin-top: var(--pl-space-lg);
+}
+
+.hh-advanced-trigger {
+    font-size: var(--pl-font-size-sm);
+    color: var(--pl-color-text-muted);
+    cursor: pointer;
+    padding: var(--pl-space-sm) 0;
+}
+
+/* Table action buttons (inline) */
+.hh-table-actions {
+    display: flex;
+    gap: var(--pl-space-xs);
+}
+
 /* Auth pages (login/setup) */
 .hh-auth-body {
     display: flex;

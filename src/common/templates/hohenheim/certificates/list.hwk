@@ -56,8 +56,14 @@
                                 {% /if %}
                             </pl-table-cell>
                             <pl-table-cell>
-                                {% if cert.get("expiresOn") != null %}
-                                    {{ cert.get("expiresOn") }}
+                                {% if cert.get("expiryStatus") == "expired" %}
+                                    <pl-badge variant={% "destructive" %}>Expired</pl-badge>
+                                {% elseif cert.get("expiryStatus") == "critical" %}
+                                    <pl-badge variant={% "destructive" %}>{{ cert.get("daysLeft") }}d left</pl-badge>
+                                {% elseif cert.get("expiryStatus") == "warning" %}
+                                    <pl-badge variant={% "outline" %}>{{ cert.get("daysLeft") }}d left</pl-badge>
+                                {% elseif cert.get("expiresOn") != null %}
+                                    <pl-badge variant={% "secondary" %}>{{ cert.get("daysLeft") }}d left</pl-badge>
                                 {% else %}
                                     <span class="hh-text-muted">N/A</span>
                                 {% /if %}

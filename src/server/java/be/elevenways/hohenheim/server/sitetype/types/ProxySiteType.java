@@ -6,6 +6,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
+import io.undertow.util.Headers;
 
 import java.net.URI;
 import java.util.Map;
@@ -32,6 +33,9 @@ public class ProxySiteType implements SiteTypeHandler {
 
     public static final BooleanField WEBSOCKET_UPGRADE = SETTINGS_SCHEMA.addField(
         BooleanField.builder("websocket_upgrade").defaultValue(true).build());
+
+    public static final BooleanField IGNORE_CERTIFICATES = SETTINGS_SCHEMA.addField(
+        BooleanField.builder("ignore_certificates").defaultValue(false).build());
 
     @Override
     public String getDisplayName() { return "Proxy"; }
@@ -69,6 +73,17 @@ public class ProxySiteType implements SiteTypeHandler {
             };
         }
 
-        return (exchange, forwarder) -> forwarder.forwardTo(upstream);
+        boolean websocketEnabled = Boolean.TRUE.equals(settings.get("websocket_upgrade"));
+
+        return (exchange, forwarder) -> {
+            if (!websocketEnabled
+                    && "websocket".equalsIgnoreCase(
+                        exchange.getRequestHeaders().getFirst(Headers.UPGRADE))) {
+                exchange.setStatusCode(403);
+                exchange.getResponseSender().send("WebSocket upgrades disabled for this site");
+                return;
+            }
+            forwarder.forwardTo(upstream);
+        };
     }
 }

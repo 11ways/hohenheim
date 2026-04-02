@@ -1,0 +1,140 @@
+package be.elevenways.hohenheim.server.process;
+
+import java.time.Instant;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+
+/**
+ * A single managed child process with monitoring state.
+ * Thread-safe -- accessed from the monitoring thread and request threads.
+ */
+public class ManagedProcess {
+
+    private final Process process;
+    private final int port;
+    private final int siteId;
+    private final Instant startTime;
+
+    // Monitoring state (updated by ProcessMonitor)
+    private volatile int cpuPercent;
+    private volatile long memoryKb;
+
+    // Scaling state
+    private final AtomicLong startOverload = new AtomicLong(0);
+    private final AtomicLong startIdle = new AtomicLong(0);
+
+    // Isolation
+    private volatile boolean isolated;
+
+    // Ready state
+    private volatile boolean ready;
+
+    // Fingerprint cache: fingerprint string -> true (with idle expiry managed externally)
+    private final ConcurrentHashMap<String, Long> fingerprints = new ConcurrentHashMap<>();
+
+    // Stdout capture (rolling buffer, HTML-escaped)
+    private final StringBuilder logBuffer = new StringBuilder();
+    private int logLineCount;
+    private static final int MAX_LOG_LINES = 500;
+
+    public ManagedProcess(Process process, int port, int siteId) {
+        this.process = process;
+        this.port = port;
+        this.siteId = siteId;
+        this.startTime = Instant.now();
+        this.isolated = false;
+        this.ready = false;
+    }
+
+    public long pid() { return process.pid(); }
+    public int port() { return port; }
+    public int siteId() { return siteId; }
+    public Process process() { return process; }
+    public Instant startTime() { return startTime; }
+    public boolean isAlive() { return process.isAlive(); }
+
+    public int cpuPercent() { return cpuPercent; }
+    public long memoryKb() { return memoryKb; }
+
+    public boolean isIsolated() { return isolated; }
+    public void setIsolated(boolean isolated) { this.isolated = isolated; }
+
+    public boolean isReady() { return ready; }
+    public void setReady(boolean ready) { this.ready = ready; }
+
+    public ConcurrentHashMap<String, Long> fingerprints() { return fingerprints; }
+
+    public AtomicLong startOverload() { return startOverload; }
+    public AtomicLong startIdle() { return startIdle; }
+
+    /**
+     * Package-private: called by ProcessMonitor to update stats.
+     */
+    void setCpuAndMem(int cpu, long mem) {
+        this.cpuPercent = cpu;
+        this.memoryKb = mem;
+    }
+
+    /**
+     * Append a line of stdout to the log buffer.
+     */
+    public void appendLog(String htmlLine) {
+        synchronized (logBuffer) {
+            if (logLineCount >= MAX_LOG_LINES) {
+                int idx = logBuffer.indexOf("\n");
+                if (idx >= 0) {
+                    logBuffer.delete(0, idx + 1);
+                    logLineCount--;
+                }
+            }
+            logBuffer.append(htmlLine).append("\n");
+            logLineCount++;
+        }
+    }
+
+    /**
+     * Get the current log content as HTML.
+     */
+    public String getLogHtml() {
+        synchronized (logBuffer) {
+            return logBuffer.toString();
+        }
+    }
+
+    /**
+     * Kill the process.
+     */
+    public void kill() {
+        process.destroyForcibly();
+    }
+
+    /**
+     * Check if a fingerprint is pinned to this process.
+     */
+    public boolean hasFingerprint(String fingerprint) {
+        Long timestamp = fingerprints.get(fingerprint);
+        if (timestamp == null) return false;
+        // 1 hour idle TTL
+        if (System.currentTimeMillis() - timestamp > 3600_000) {
+            fingerprints.remove(fingerprint);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Pin a fingerprint to this process.
+     */
+    public void pinFingerprint(String fingerprint) {
+        fingerprints.put(fingerprint, System.currentTimeMillis());
+    }
+
+    /**
+     * Count active (non-expired) fingerprints.
+     */
+    public int activeFingerprintCount() {
+        long cutoff = System.currentTimeMillis() - 3600_000;
+        fingerprints.entrySet().removeIf(e -> e.getValue() < cutoff);
+        return fingerprints.size();
+    }
+}

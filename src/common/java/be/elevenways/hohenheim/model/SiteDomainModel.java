@@ -28,6 +28,7 @@ public class SiteDomainModel extends Model {
     public static final BooleanField HSTS_SUBDOMAINS = SCHEMA.addField(BooleanField.builder("hsts_subdomains").defaultValue(false).build());
     public static final BooleanField HTTP2_SUPPORT = SCHEMA.addField(BooleanField.builder("http2_support").defaultValue(true).build());
     public static final SchemaField CUSTOM_HEADERS = SCHEMA.addField(SchemaField.builder("custom_headers").build());
+    public static final BooleanField EXCLUDE_FROM_LETSENCRYPT = SCHEMA.addField(BooleanField.builder("exclude_from_letsencrypt").defaultValue(false).build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

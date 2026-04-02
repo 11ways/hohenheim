@@ -8,6 +8,11 @@
 
     public forwardHost: String = ""
     public forwardPort: String = ""
+    public websocketUpgrade: Boolean = true
+    public script: String = ""
+    public nodePath: String = ""
+    public minimumProcesses: String = "1"
+    public maximumProcesses: String = "5"
     public rootPath: String = ""
     public fallbackFile: String = ""
     public targetUrl: String = ""
@@ -41,6 +46,8 @@
                                     bind:value={% siteType{:} %}
                                     class="hh-select">
                                 <option value="hohenheim:proxy">Proxy - Forward to upstream server</option>
+                                <option value="hohenheim:node">Node.js - Managed Node.js process</option>
+                                <option value="hohenheim:alchemy">Alchemy - Managed Alchemy application</option>
                                 <option value="hohenheim:static">Static - Serve files from directory</option>
                                 <option value="hohenheim:redirect">Redirect - HTTP redirect</option>
                                 <option value="hohenheim:dead">Dead - Return 404 (park domain)</option>
@@ -60,6 +67,11 @@
                             selectedType={% siteType{:} %}
                             forwardHost={% forwardHost %}
                             forwardPort={% forwardPort %}
+                            websocketUpgrade={% websocketUpgrade %}
+                            script={% script %}
+                            nodePath={% nodePath %}
+                            minimumProcesses={% minimumProcesses %}
+                            maximumProcesses={% maximumProcesses %}
                             rootPath={% rootPath %}
                             fallbackFile={% fallbackFile %}
                             targetUrl={% targetUrl %}
@@ -99,6 +111,11 @@
             error={% error %}
             forwardHost={% settings != null && settings.get("forward_host") != null ? settings.get("forward_host") + "" : "" %}
             forwardPort={% settings != null && settings.get("forward_port") != null ? settings.get("forward_port") + "" : "" %}
+            websocketUpgrade={% settings != null && settings.get("websocket_upgrade") != null ? settings.get("websocket_upgrade") : true %}
+            script={% settings != null && settings.get("script") != null ? settings.get("script") + "" : "" %}
+            nodePath={% settings != null && settings.get("node_path") != null ? settings.get("node_path") + "" : "" %}
+            minimumProcesses={% settings != null && settings.get("minimum_processes") != null ? settings.get("minimum_processes") + "" : "1" %}
+            maximumProcesses={% settings != null && settings.get("maximum_processes") != null ? settings.get("maximum_processes") + "" : "5" %}
             rootPath={% settings != null && settings.get("root_path") != null ? settings.get("root_path") + "" : "" %}
             fallbackFile={% settings != null && settings.get("fallback_file") != null ? settings.get("fallback_file") + "" : "" %}
             targetUrl={% settings != null && settings.get("target_url") != null ? settings.get("target_url") + "" : "" %}
@@ -121,7 +138,7 @@
                     <pl-table-body>
                         {% each domains as index, domain %}
                         <pl-table-row>
-                            <pl-table-cell>{{ domain.get("hostname") }}</pl-table-cell>
+                            <pl-table-cell><a href={% "/sites/" + site.get("id") + "/domains/" + domain.get("id") %}>{{ domain.get("hostname") }}</a></pl-table-cell>
                             <pl-table-cell>
                                 <pl-badge variant={% "secondary" %}>{{ domain.get("matchType") }}</pl-badge>
                             </pl-table-cell>

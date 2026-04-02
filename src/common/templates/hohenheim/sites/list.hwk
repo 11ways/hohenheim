@@ -47,9 +47,18 @@
                             </pl-table-cell>
                             <pl-table-cell>{{ site.get("domainCount") }}</pl-table-cell>
                             <pl-table-cell>
-                                <a href={% "/sites/" + site.get("id") %} class="hh-button-link">
-                                    <pl-button variant={% "ghost" %} size={% "sm" %}>Edit</pl-button>
-                                </a>
+                                <div class="hh-table-actions">
+                                    <form method="POST" action={% "/sites/" + site.get("id") + "/toggle" %}>
+                                        {% if site.get("enabled") == true %}
+                                            <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Disable</pl-button>
+                                        {% else %}
+                                            <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Enable</pl-button>
+                                        {% /if %}
+                                    </form>
+                                    <a href={% "/sites/" + site.get("id") %} class="hh-button-link">
+                                        <pl-button variant={% "ghost" %} size={% "sm" %}>Edit</pl-button>
+                                    </a>
+                                </div>
                             </pl-table-cell>
                         </pl-table-row>
                         {% /each %}

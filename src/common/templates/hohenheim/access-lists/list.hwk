@@ -1,0 +1,73 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    <header class="hh-header">
+        <h1 class="hh-header__title">Access Lists</h1>
+    </header>
+    <main class="hh-content">
+
+        {% declare accessLists: List %}
+        {% declare listCount: Integer %}
+
+        <div class="hh-page-actions">
+            <p class="hh-page-actions__description">IP allow/deny rules and basic auth for your sites.</p>
+            <a href="/access-lists/create" class="hh-button-link"><pl-button variant="primary">Create Access List</pl-button></a>
+        </div>
+
+        <pl-card>
+            <pl-card-content>
+                <pl-table>
+                    <pl-table-header><pl-table-row>
+                        <pl-table-head>Name</pl-table-head>
+                        <pl-table-head>Mode</pl-table-head>
+                        <pl-table-head>Auth</pl-table-head>
+                        <pl-table-head>IP Rules</pl-table-head>
+                        <pl-table-head></pl-table-head>
+                    </pl-table-row></pl-table-header>
+                    <pl-table-body>
+                        {% if listCount == 0 %}
+                        <pl-table-row>
+                            <pl-table-cell colspan="5" class="hh-empty-state">No access lists yet.</pl-table-cell>
+                        </pl-table-row>
+                        {% /if %}
+                        {% each accessLists as index, item %}
+                        <pl-table-row>
+                            <pl-table-cell>
+                                <a href={% "/access-lists/" + item.get("id") %} class="hh-site-link">{{ item.get("name") }}</a>
+                            </pl-table-cell>
+                            <pl-table-cell>
+                                <pl-badge variant={% "secondary" %}>{{ item.get("satisfy") }}</pl-badge>
+                            </pl-table-cell>
+                            <pl-table-cell>
+                                {% if item.get("hasAuth") == true %}
+                                    <pl-badge variant={% "default" %}>Yes</pl-badge>
+                                {% else %}
+                                    <pl-badge variant={% "outline" %}>No</pl-badge>
+                                {% /if %}
+                            </pl-table-cell>
+                            <pl-table-cell>
+                                {% if item.get("hasIpRules") == true %}
+                                    <pl-badge variant={% "default" %}>Yes</pl-badge>
+                                {% else %}
+                                    <pl-badge variant={% "outline" %}>No</pl-badge>
+                                {% /if %}
+                            </pl-table-cell>
+                            <pl-table-cell>
+                                <div class="hh-table-actions">
+                                    <a href={% "/access-lists/" + item.get("id") %} class="hh-button-link">
+                                        <pl-button variant={% "ghost" %} size={% "sm" %}>Edit</pl-button>
+                                    </a>
+                                    <form method="POST" action={% "/access-lists/" + item.get("id") + "/delete" %}>
+                                        <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Delete</pl-button>
+                                    </form>
+                                </div>
+                            </pl-table-cell>
+                        </pl-table-row>
+                        {% /each %}
+                    </pl-table-body>
+                </pl-table>
+            </pl-card-content>
+        </pl-card>
+
+    </main>
+{% /block %}

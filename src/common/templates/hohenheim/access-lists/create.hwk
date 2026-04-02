@@ -1,0 +1,76 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    {% declare error: String %}
+
+    <header class="hh-header">
+        <h1 class="hh-header__title">Create Access List</h1>
+    </header>
+    <main class="hh-content">
+
+        {% if error != "" %}
+            <pl-alert variant={% "destructive" %} class="hh-form-error">
+                <pl-alert-title>Error</pl-alert-title>
+                <pl-alert-description>{{ error }}</pl-alert-description>
+            </pl-alert>
+        {% /if %}
+
+        <form method="POST" action="/access-lists/create">
+            <pl-card class="hh-form-card">
+                <pl-card-header>
+                    <pl-card-title>Access List</pl-card-title>
+                    <pl-card-description>IP filtering and basic authentication.</pl-card-description>
+                </pl-card-header>
+                <pl-card-content>
+                    <div class="hh-form-stack">
+                        <div class="hh-form-group">
+                            <pl-label target="name">Name</pl-label>
+                            <pl-input id="name" type={% "text" %} name={% "name" %} placeholder={% "Staging Access" %} required={% true %}></pl-input>
+                        </div>
+
+                        <div class="hh-form-group">
+                            <pl-label target="satisfy">Satisfy</pl-label>
+                            <select id="satisfy" name="satisfy" class="hh-select">
+                                <option value="any">Any (IP or Auth)</option>
+                                <option value="all">All (IP and Auth)</option>
+                            </select>
+                            <p class="hh-form-hint">Any: pass if IP matches OR auth succeeds. All: both must pass.</p>
+                        </div>
+
+                        <pl-separator></pl-separator>
+
+                        <div class="hh-form-group">
+                            <pl-label target="basic-auth-user">Basic Auth Username</pl-label>
+                            <pl-input id="basic-auth-user" type={% "text" %} name={% "basic_auth_user" %} placeholder={% "Leave empty for no auth" %}></pl-input>
+                        </div>
+
+                        <div class="hh-form-group">
+                            <pl-label target="basic-auth-pass">Basic Auth Password</pl-label>
+                            <pl-input id="basic-auth-pass" type={% "password" %} name={% "basic_auth_pass" %}></pl-input>
+                        </div>
+
+                        <pl-separator></pl-separator>
+
+                        <div class="hh-form-group">
+                            <pl-label target="allowed-ips">Allowed IPs</pl-label>
+                            <pl-textarea id="allowed-ips" name={% "allowed_ips" %} placeholder={% "One per line, e.g.\n192.168.1.0/24\n10.0.0.1" %}></pl-textarea>
+                            <p class="hh-form-hint">One IP or CIDR per line. Leave empty to allow all.</p>
+                        </div>
+
+                        <div class="hh-form-group">
+                            <pl-label target="denied-ips">Denied IPs</pl-label>
+                            <pl-textarea id="denied-ips" name={% "denied_ips" %} placeholder={% "One per line" %}></pl-textarea>
+                            <p class="hh-form-hint">One IP or CIDR per line. Deny takes priority over allow.</p>
+                        </div>
+                    </div>
+                </pl-card-content>
+            </pl-card>
+
+            <div class="hh-form-actions">
+                <pl-button variant={% "primary" %} type={% "submit" %}>Create Access List</pl-button>
+                <a href="/access-lists" class="hh-button-link"><pl-button variant={% "outline" %} type={% "button" %}>Cancel</pl-button></a>
+            </div>
+        </form>
+
+    </main>
+{% /block %}

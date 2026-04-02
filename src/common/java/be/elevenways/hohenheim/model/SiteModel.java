@@ -37,6 +37,7 @@ public class SiteModel extends Model {
 
     public static final StringField DESCRIPTION = SCHEMA.addField(StringField.builder().name("description").build());
     public static final StringField STATUS = SCHEMA.addField(StringField.builder().name("status").build());
+    public static final IntegerField ACCESS_LIST_ID = SCHEMA.addField(IntegerField.builder().name("access_list_id").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());

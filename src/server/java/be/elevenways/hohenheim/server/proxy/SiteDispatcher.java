@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -27,8 +28,11 @@ import io.undertow.util.HttpString;
 import org.xnio.IoUtils;
 import org.xnio.OptionMap;
 
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.URI;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -46,6 +50,7 @@ public class SiteDispatcher implements HttpHandler {
 
     private static final HttpString X_PROXIED_BY = new HttpString("X-Proxied-By");
     private static final HttpString X_FORWARDED_FOR = new HttpString("X-Forwarded-For");
+    private static final HttpString X_FORWARDED_HOST = new HttpString("X-Forwarded-Host");
     private static final HttpString X_FORWARDED_PROTO = new HttpString("X-Forwarded-Proto");
     private static final HttpString X_REAL_IP = new HttpString("X-Real-IP");
     private static final HttpString STRICT_TRANSPORT_SECURITY = new HttpString("Strict-Transport-Security");
@@ -88,7 +93,14 @@ public class SiteDispatcher implements HttpHandler {
         @SuppressWarnings("unchecked")
         final Map<String, Object> customHeaders;
 
-        RouteEntry(SiteRequestHandler handler, String siteName, Row domain) {
+        // Access list enforcement
+        final String[] allowedIps;
+        final String[] deniedIps;
+        final String basicAuthUser;
+        final String basicAuthPass;
+        final String accessListSatisfy;
+
+        RouteEntry(SiteRequestHandler handler, String siteName, Row domain, Row accessList) {
             this.handler = handler;
             this.siteName = siteName;
 
@@ -101,6 +113,26 @@ public class SiteDispatcher implements HttpHandler {
 
             Object ch = domain != null ? domain.get(SiteDomainModel.CUSTOM_HEADERS) : null;
             this.customHeaders = (ch instanceof Map) ? (Map<String, Object>) ch : null;
+
+            if (accessList != null) {
+                this.accessListSatisfy = accessList.get(AccessListModel.SATISFY);
+                this.basicAuthUser = accessList.get(AccessListModel.BASIC_AUTH_USER);
+                this.basicAuthPass = accessList.get(AccessListModel.BASIC_AUTH_PASS);
+                String allowed = accessList.get(AccessListModel.ALLOWED_IPS);
+                this.allowedIps = allowed != null ? allowed.split("\\s+") : null;
+                String denied = accessList.get(AccessListModel.DENIED_IPS);
+                this.deniedIps = denied != null ? denied.split("\\s+") : null;
+            } else {
+                this.accessListSatisfy = null;
+                this.basicAuthUser = null;
+                this.basicAuthPass = null;
+                this.allowedIps = null;
+                this.deniedIps = null;
+            }
+        }
+
+        boolean hasAccessList() {
+            return accessListSatisfy != null;
         }
     }
 
@@ -129,6 +161,7 @@ public class SiteDispatcher implements HttpHandler {
         var ds = HohenheimDatabase.datasource();
         var siteModel = new SiteModel(ds);
         var domainModel = new SiteDomainModel(ds);
+        var accessListModel = new AccessListModel(ds);
 
         // Destroy existing handlers
         for (RouteEntry entry : exactRoutes.values()) entry.handler.destroy();
@@ -155,6 +188,10 @@ public class SiteDispatcher implements HttpHandler {
             Map<String, Object> settings = (Map<String, Object>) site.get(SiteModel.SETTINGS);
             if (settings == null) settings = Map.of();
 
+            // Load access list if assigned
+            Integer accessListId = site.get(SiteModel.ACCESS_LIST_ID);
+            Row accessList = accessListId != null ? accessListModel.findById(accessListId) : null;
+
             SiteRequestHandler requestHandler = typeHandler.createHandler(site, settings);
             List<Row> domains = domainModel.findBySiteId(siteId);
 
@@ -163,7 +200,7 @@ public class SiteDispatcher implements HttpHandler {
                 String matchType = domain.get(SiteDomainModel.MATCH_TYPE);
                 if (hostname == null || hostname.isEmpty()) continue;
 
-                RouteEntry entry = new RouteEntry(requestHandler, siteName, domain);
+                RouteEntry entry = new RouteEntry(requestHandler, siteName, domain, accessList);
 
                 if ("wildcard".equals(matchType) || hostname.startsWith("*.")) {
                     wildcardRoutes.put(hostname.toLowerCase(), entry);
@@ -220,9 +257,7 @@ public class SiteDispatcher implements HttpHandler {
                 exchange.getResponseHeaders().put(Headers.LOCATION, fallback);
                 exchange.endExchange();
             } else {
-                exchange.setStatusCode(404);
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html; charset=UTF-8");
-                exchange.getResponseSender().send("<!DOCTYPE html><html><body><h1>404</h1><p>No site configured for this domain.</p></body></html>");
+                ErrorPages.send404(exchange, hostname);
             }
             return;
         }
@@ -235,6 +270,11 @@ public class SiteDispatcher implements HttpHandler {
             exchange.setStatusCode(301);
             exchange.getResponseHeaders().put(Headers.LOCATION, redirectUrl);
             exchange.endExchange();
+            return;
+        }
+
+        // --- Access list enforcement ---
+        if (entry.hasAccessList() && !checkAccessList(exchange, entry, clientIp)) {
             return;
         }
 
@@ -270,11 +310,15 @@ public class SiteDispatcher implements HttpHandler {
         if (!requestHeaders.contains(X_REAL_IP)) {
             requestHeaders.put(X_REAL_IP, clientIp);
         }
+        if (!requestHeaders.contains(X_FORWARDED_HOST)) {
+            requestHeaders.put(X_FORWARDED_HOST, hostname);
+        }
 
-        // --- Custom headers ---
+        // --- Custom response headers ---
         if (entry.customHeaders != null) {
+            HeaderMap responseHeaders = exchange.getResponseHeaders();
             for (Map.Entry<String, Object> h : entry.customHeaders.entrySet()) {
-                requestHeaders.put(new HttpString(h.getKey()), String.valueOf(h.getValue()));
+                responseHeaders.put(new HttpString(h.getKey()), String.valueOf(h.getValue()));
             }
         }
 
@@ -291,8 +335,7 @@ public class SiteDispatcher implements HttpHandler {
             try {
                 proxyHandler.handleRequest(exchange);
             } catch (Exception e) {
-                exchange.setStatusCode(502);
-                exchange.getResponseSender().send("Bad Gateway: " + e.getMessage());
+                ErrorPages.send502(exchange, e.getMessage());
             }
         });
     }
@@ -341,6 +384,121 @@ public class SiteDispatcher implements HttpHandler {
         return null;
     }
 
+    /**
+     * Check the access list. Returns true if the request is allowed, false if blocked.
+     * When blocked, the response (401 or 403) is already sent.
+     */
+    private boolean checkAccessList(HttpServerExchange exchange, RouteEntry entry, String clientIp) {
+        boolean ipAllowed = checkIpAccess(entry, clientIp);
+        boolean authPassed = checkBasicAuth(exchange, entry);
+
+        boolean hasIpRules = entry.allowedIps != null || entry.deniedIps != null;
+        boolean hasAuth = entry.basicAuthUser != null;
+
+        if ("all".equals(entry.accessListSatisfy)) {
+            // Both must pass (if configured)
+            if (hasIpRules && !ipAllowed) {
+                exchange.setStatusCode(403);
+                exchange.getResponseSender().send("Forbidden");
+                return false;
+            }
+            if (hasAuth && !authPassed) {
+                sendAuthChallenge(exchange);
+                return false;
+            }
+        } else {
+            // "any": pass if either passes (or if only one is configured)
+            if (hasIpRules && hasAuth) {
+                if (!ipAllowed && !authPassed) {
+                    sendAuthChallenge(exchange);
+                    return false;
+                }
+            } else if (hasIpRules && !ipAllowed) {
+                exchange.setStatusCode(403);
+                exchange.getResponseSender().send("Forbidden");
+                return false;
+            } else if (hasAuth && !authPassed) {
+                sendAuthChallenge(exchange);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean checkIpAccess(RouteEntry entry, String clientIp) {
+        // Deny takes priority
+        if (entry.deniedIps != null) {
+            for (String denied : entry.deniedIps) {
+                if (matchesIp(clientIp, denied)) return false;
+            }
+        }
+        // If allow list exists, IP must be in it
+        if (entry.allowedIps != null) {
+            for (String allowed : entry.allowedIps) {
+                if (matchesIp(clientIp, allowed)) return true;
+            }
+            return false; // Not in allow list
+        }
+        return true; // No allow list = allow all
+    }
+
+    private boolean matchesIp(String clientIp, String rule) {
+        if (rule == null || rule.isEmpty()) return false;
+
+        if (rule.contains("/")) {
+            // CIDR notation
+            try {
+                String[] parts = rule.split("/");
+                byte[] ruleAddr = java.net.InetAddress.getByName(parts[0]).getAddress();
+                byte[] clientAddr = java.net.InetAddress.getByName(clientIp).getAddress();
+                int prefixLen = Integer.parseInt(parts[1]);
+
+                if (ruleAddr.length != clientAddr.length) return false;
+
+                int fullBytes = prefixLen / 8;
+                int remainBits = prefixLen % 8;
+
+                for (int i = 0; i < fullBytes; i++) {
+                    if (ruleAddr[i] != clientAddr[i]) return false;
+                }
+                if (remainBits > 0) {
+                    int mask = 0xFF << (8 - remainBits);
+                    if ((ruleAddr[fullBytes] & mask) != (clientAddr[fullBytes] & mask)) return false;
+                }
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        return clientIp.equals(rule);
+    }
+
+    private boolean checkBasicAuth(HttpServerExchange exchange, RouteEntry entry) {
+        if (entry.basicAuthUser == null) return true;
+
+        String authHeader = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
+        if (authHeader == null || !authHeader.startsWith("Basic ")) return false;
+
+        try {
+            String decoded = new String(java.util.Base64.getDecoder().decode(authHeader.substring(6)));
+            int colon = decoded.indexOf(':');
+            if (colon < 0) return false;
+            String user = decoded.substring(0, colon);
+            String pass = decoded.substring(colon + 1);
+            return entry.basicAuthUser.equals(user) && entry.basicAuthPass.equals(pass);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void sendAuthChallenge(HttpServerExchange exchange) {
+        exchange.setStatusCode(401);
+        exchange.getResponseHeaders().put(new HttpString("WWW-Authenticate"), "Basic realm=\"Restricted\"");
+        exchange.getResponseSender().send("Unauthorized");
+    }
+
     private boolean matchesWildcard(String hostname, String pattern) {
         if (!pattern.startsWith("*.")) return false;
         String suffix = pattern.substring(1);
@@ -368,13 +526,35 @@ public class SiteDispatcher implements HttpHandler {
         int threshold = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD);
 
         if (logEnabled && misses >= threshold) {
-            Blast.log("DOMAIN_MISS ip=" + ip + " hostname=" + hostname + " misses=" + misses);
+            // Strip newlines to prevent log injection
+            String safeHost = hostname.replace("\n", "").replace("\r", "");
+            String safeIp = ip.replace("\n", "").replace("\r", "");
+            String line = Instant.now() + " DOMAIN_MISS ip=" + safeIp
+                + " domain=" + safeHost + " misses=" + misses;
+            Blast.log(line);
+            logDomainMissToFile(line);
         }
 
         // Evict old entries if the map grows too large
         if (ipReputation.size() > 50000) {
             long cutoff = System.currentTimeMillis() - 3600_000;
             ipReputation.entrySet().removeIf(e -> e.getValue().lastMissTime.get() < cutoff);
+        }
+    }
+
+    private void logDomainMissToFile(String line) {
+        String logPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISSES_LOG_PATH);
+        if (logPath == null || logPath.isEmpty()) return;
+        try {
+            java.io.File logFile = new java.io.File(logPath);
+            java.io.File parent = logFile.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+
+            try (var writer = new FileWriter(logFile, true)) {
+                writer.write(line + "\n");
+            }
+        } catch (IOException e) {
+            // Don't let log writing failures break request handling
         }
     }
 

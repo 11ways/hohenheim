@@ -56,6 +56,13 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("sites").addDelimiter().addParameter(SITE_ID).build())
         .build();
 
+    public static final Endpoint<Object> SITES_TOGGLE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_toggle"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("toggle").build())
+        .build();
+
     public static final Endpoint<Object> SITES_DELETE = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "sites_delete"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("sites").addDelimiter().addParameter(SITE_ID).addDelimiter().addStatic("delete").build())
@@ -67,6 +74,22 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
             .addDelimiter().addStatic("domains").build())
+        .build();
+
+    public static final Endpoint<Object> SITES_EDIT_DOMAIN = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_edit_domain"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("domains").addDelimiter().addParameter(DOMAIN_ID)
+            .build())
+        .build();
+
+    public static final Endpoint<Object> SITES_UPDATE_DOMAIN = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_update_domain"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("domains").addDelimiter().addParameter(DOMAIN_ID)
+            .build())
         .build();
 
     public static final Endpoint<Object> SITES_DELETE_DOMAIN = Endpoint.<Object>builder()
@@ -146,6 +169,48 @@ public class HohenheimEndpoints {
     public static final Endpoint<Object> SETUP_POST = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "setup_post"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("setup").build())
+        .build();
+
+    // --- Access Lists ---
+    public static final ParameterDefinition<Integer> ACCESS_LIST_ID = ParameterDefinition.builder(Integer.class)
+        .name("accessListId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
+    public static final PageEndpoint ACCESS_LISTS = Endpoint.pageBuilder()
+        .identifier(Identifier.of("hohenheim", "access_lists"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("access-lists").build())
+        .build();
+
+    public static final PageEndpoint ACCESS_LISTS_CREATE_FORM = Endpoint.pageBuilder()
+        .identifier(Identifier.of("hohenheim", "access_lists_create_form"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("access-lists").addDelimiter().addStatic("create").build())
+        .build();
+
+    public static final Endpoint<Object> ACCESS_LISTS_CREATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "access_lists_create"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("access-lists").addDelimiter().addStatic("create").build())
+        .build();
+
+    public static final Endpoint<Object> ACCESS_LISTS_EDIT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "access_lists_edit"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("access-lists").addDelimiter().addParameter(ACCESS_LIST_ID).build())
+        .build();
+
+    public static final Endpoint<Object> ACCESS_LISTS_UPDATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "access_lists_update"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("access-lists").addDelimiter().addParameter(ACCESS_LIST_ID).build())
+        .build();
+
+    public static final Endpoint<Object> ACCESS_LISTS_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "access_lists_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("access-lists").addDelimiter().addParameter(ACCESS_LIST_ID)
+            .addDelimiter().addStatic("delete").build())
         .build();
 
     // --- Certificate Let's Encrypt request ---

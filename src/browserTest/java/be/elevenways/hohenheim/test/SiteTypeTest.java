@@ -33,11 +33,13 @@ class SiteTypeTest extends HohenheimTestBase {
         waitForHydration();
 
         var options = page.locator("select[name='site_type'] option");
-        assertThat(options.count()).isEqualTo(4);
+        assertThat(options.count()).isEqualTo(6);
         assertThat(options.nth(0).textContent()).contains("Proxy");
-        assertThat(options.nth(1).textContent()).contains("Static");
-        assertThat(options.nth(2).textContent()).contains("Redirect");
-        assertThat(options.nth(3).textContent()).contains("Dead");
+        assertThat(options.nth(1).textContent()).contains("Node.js");
+        assertThat(options.nth(2).textContent()).contains("Alchemy");
+        assertThat(options.nth(3).textContent()).contains("Static");
+        assertThat(options.nth(4).textContent()).contains("Redirect");
+        assertThat(options.nth(5).textContent()).contains("Dead");
     }
 
     @Test

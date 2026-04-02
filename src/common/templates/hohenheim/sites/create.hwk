@@ -31,6 +31,8 @@
                                     bind:value={% selectedType{:} %}
                                     class="hh-select">
                                 <option value="hohenheim:proxy">Proxy - Forward to upstream server</option>
+                                <option value="hohenheim:node">Node.js - Managed Node.js process</option>
+                                <option value="hohenheim:alchemy">Alchemy - Managed Alchemy application</option>
                                 <option value="hohenheim:static">Static - Serve files from directory</option>
                                 <option value="hohenheim:redirect">Redirect - HTTP redirect</option>
                                 <option value="hohenheim:dead">Dead - Return 404 (park domain)</option>

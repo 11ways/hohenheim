@@ -1,0 +1,162 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    {% declare siteId: Integer %}
+    {% declare siteName: String %}
+    {% declare domainId: Integer %}
+    {% declare hostname: String %}
+    {% declare matchType: String %}
+    {% declare forceSsl: Boolean %}
+    {% declare hstsEnabled: Boolean %}
+    {% declare hstsSubdomains: Boolean %}
+    {% declare path: String %}
+    {% declare stripPath: Boolean %}
+    {% declare listenOn: String %}
+    {% declare port: String %}
+    {% declare http2Support: Boolean %}
+    {% declare excludeFromLetsencrypt: Boolean %}
+    {% declare certificateId: String %}
+    {% declare certificates: List %}
+    {% declare error: String %}
+
+    <header class="hh-header">
+        <div>
+            <h1 class="hh-header__title">Edit Domain</h1>
+            <p class="hh-header__subtitle">{{ hostname }} on {{ siteName }}</p>
+        </div>
+    </header>
+    <main class="hh-content">
+
+        {% if error != "" %}
+            <pl-alert variant={% "destructive" %} class="hh-form-error">
+                <pl-alert-title>Error</pl-alert-title>
+                <pl-alert-description>{{ error }}</pl-alert-description>
+            </pl-alert>
+        {% /if %}
+
+        <form method="POST" action={% "/sites/" + siteId + "/domains/" + domainId %}>
+
+            <pl-card class="hh-form-card">
+                <pl-card-header>
+                    <pl-card-title>Domain Settings</pl-card-title>
+                </pl-card-header>
+                <pl-card-content>
+                    <div class="hh-form-stack">
+                        <div class="hh-form-group">
+                            <pl-label target="hostname">Hostname</pl-label>
+                            <pl-input id="hostname" type={% "text" %} name={% "hostname" %} value={% hostname %} required={% true %}></pl-input>
+                        </div>
+
+                        <div class="hh-form-group">
+                            <pl-label target="match-type">Match Type</pl-label>
+                            <select id="match-type" name="match_type" class="hh-select">
+                                <option value="exact" selected={% matchType == "exact" %}>Exact</option>
+                                <option value="wildcard" selected={% matchType == "wildcard" %}>Wildcard</option>
+                            </select>
+                        </div>
+
+                        <pl-separator></pl-separator>
+
+                        <div class="hh-form-group">
+                            <label class="hh-checkbox-label">
+                                <input type="checkbox" name="force_ssl" checked={% forceSsl %}>
+                                <span>Force SSL</span>
+                            </label>
+                            <p class="hh-form-hint">Redirect HTTP requests to HTTPS.</p>
+                        </div>
+
+                        <div class="hh-form-group">
+                            <label class="hh-checkbox-label">
+                                <input type="checkbox" name="hsts_enabled" checked={% hstsEnabled %}>
+                                <span>HSTS</span>
+                            </label>
+                            <p class="hh-form-hint">Send Strict-Transport-Security header.</p>
+                        </div>
+
+                        <div class="hh-form-group">
+                            <label class="hh-checkbox-label">
+                                <input type="checkbox" name="hsts_subdomains" checked={% hstsSubdomains %}>
+                                <span>HSTS Include Subdomains</span>
+                            </label>
+                            <p class="hh-form-hint">Apply HSTS to all subdomains.</p>
+                        </div>
+
+                        <pl-separator></pl-separator>
+
+                        <div class="hh-form-group">
+                            <pl-label target="certificate-id">TLS Certificate</pl-label>
+                            <select id="certificate-id" name="certificate_id" class="hh-select">
+                                <option value="">Auto / None</option>
+                                {% each certificates as index, cert %}
+                                    <option value={% cert.get("id") %} selected={% cert.get("id") == certificateId %}>{{ cert.get("name") }}</option>
+                                {% /each %}
+                            </select>
+                            <p class="hh-form-hint">Specific certificate for this domain. Leave on Auto to use SNI matching.</p>
+                        </div>
+
+                        <div class="hh-form-group">
+                            <label class="hh-checkbox-label">
+                                <input type="checkbox" name="http2_support" checked={% http2Support %}>
+                                <span>HTTP/2</span>
+                            </label>
+                            <p class="hh-form-hint">Enable HTTP/2 protocol support.</p>
+                        </div>
+
+                        <div class="hh-form-group">
+                            <label class="hh-checkbox-label">
+                                <input type="checkbox" name="exclude_from_letsencrypt" checked={% excludeFromLetsencrypt %}>
+                                <span>Exclude from Let's Encrypt</span>
+                            </label>
+                            <p class="hh-form-hint">Do not automatically issue a certificate for this domain.</p>
+                        </div>
+                    </div>
+                </pl-card-content>
+            </pl-card>
+
+            <pl-collapsible class="hh-advanced-section">
+                <pl-collapsible-trigger class="hh-advanced-trigger">Advanced Settings</pl-collapsible-trigger>
+                <pl-collapsible-content>
+                    <pl-card class="hh-form-card">
+                        <pl-card-content>
+                            <div class="hh-form-stack">
+                                <div class="hh-form-group">
+                                    <pl-label target="path">Path Prefix</pl-label>
+                                    <pl-input id="path" type={% "text" %} name={% "path" %} value={% path %} placeholder={% "/api" %}></pl-input>
+                                    <p class="hh-form-hint">Only route requests matching this path prefix.</p>
+                                </div>
+
+                                <div class="hh-form-group">
+                                    <label class="hh-checkbox-label">
+                                        <input type="checkbox" name="strip_path" checked={% stripPath %}>
+                                        <span>Strip Path Prefix</span>
+                                    </label>
+                                    <p class="hh-form-hint">Remove the path prefix before forwarding to upstream.</p>
+                                </div>
+
+                                <pl-separator></pl-separator>
+
+                                <div class="hh-form-group">
+                                    <pl-label target="listen-on">Listen Address</pl-label>
+                                    <pl-input id="listen-on" type={% "text" %} name={% "listen_on" %} value={% listenOn %} placeholder={% "0.0.0.0" %}></pl-input>
+                                    <p class="hh-form-hint">Bind address override. Leave empty for default.</p>
+                                </div>
+
+                                <div class="hh-form-group">
+                                    <pl-label target="port">Port</pl-label>
+                                    <pl-input id="port" type={% "text" %} name={% "port" %} value={% port %} placeholder={% "Default" %}></pl-input>
+                                    <p class="hh-form-hint">Port override. Leave empty for default.</p>
+                                </div>
+                            </div>
+                        </pl-card-content>
+                    </pl-card>
+                </pl-collapsible-content>
+            </pl-collapsible>
+
+            <div class="hh-form-actions">
+                <pl-button variant={% "primary" %} type={% "submit" %}>Save Domain</pl-button>
+                <a href={% "/sites/" + siteId %} class="hh-button-link"><pl-button variant={% "outline" %} type={% "button" %}>Cancel</pl-button></a>
+            </div>
+        </form>
+
+    </main>
+{% /block %}

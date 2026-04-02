@@ -6,6 +6,11 @@ import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
 import io.undertow.Undertow;
+import io.undertow.server.HttpHandler;
+import io.undertow.server.handlers.encoding.ContentEncodingRepository;
+import io.undertow.server.handlers.encoding.EncodingHandler;
+import io.undertow.server.handlers.encoding.GzipEncodingProvider;
+import io.undertow.server.handlers.encoding.DeflateEncodingProvider;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
@@ -27,6 +32,7 @@ public class ProxyServer {
     }
 
     private final SiteDispatcher dispatcher;
+    private final HttpHandler handler;
     private final CertificateStore certificateStore;
     private final AcmeService acmeService;
 
@@ -42,6 +48,12 @@ public class ProxyServer {
         this.certificateStore = new CertificateStore();
         this.acmeService = new AcmeService(certificateStore);
         this.dispatcher = new SiteDispatcher(acmeService);
+
+        // Wrap dispatcher with gzip/deflate compression
+        this.handler = new EncodingHandler(dispatcher,
+            new ContentEncodingRepository()
+                .addEncodingHandler("gzip", new GzipEncodingProvider(), 100)
+                .addEncodingHandler("deflate", new DeflateEncodingProvider(), 50));
     }
 
     public SiteDispatcher getDispatcher() {
@@ -102,7 +114,7 @@ public class ProxyServer {
             httpServer = Undertow.builder()
                 .addHttpListener(httpPort, "0.0.0.0")
                 .setIoThreads(Math.max(2, Runtime.getRuntime().availableProcessors()))
-                .setHandler(dispatcher)
+                .setHandler(handler)
                 .build();
 
             httpServer.start();
@@ -137,7 +149,7 @@ public class ProxyServer {
             httpsServer = Undertow.builder()
                 .addHttpsListener(httpsPort, "0.0.0.0", sslContext)
                 .setIoThreads(Math.max(2, Runtime.getRuntime().availableProcessors()))
-                .setHandler(dispatcher)
+                .setHandler(handler)
                 .build();
 
             httpsServer.start();

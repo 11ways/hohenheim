@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -43,6 +44,7 @@ public class HohenheimHandlers {
         var domainModel = new SiteDomainModel(ds);
         var certModel = new CertificateModel(ds);
         var auditModel = new AuditLogModel(ds);
+        var accessListModel = new AccessListModel(ds);
 
         initAuth();
         initTestEndpoints();
@@ -52,6 +54,7 @@ public class HohenheimHandlers {
         initCertificates(certModel);
         initSettings();
         initAuditLog(auditModel);
+        initAccessLists(accessListModel, auditModel);
     }
 
     // -----------------------------------------------------------------------
@@ -407,6 +410,23 @@ public class HohenheimHandlers {
             return redirectUntyped("/sites/" + siteId);
         });
 
+        // Site toggle enabled (POST /sites/:id/toggle)
+        HohenheimEndpoints.SITES_TOGGLE.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            Row site = siteModel.find().where(SiteModel.ID.eq(siteId)).first();
+
+            if (site != null) {
+                boolean current = Boolean.TRUE.equals(site.get(SiteModel.ENABLED));
+                site.set(SiteModel.ENABLED, !current);
+                siteModel.save(site);
+                audit(auditModel, conduit, current ? "disabled" : "enabled", "site",
+                      siteId, site.get(SiteModel.NAME));
+                reloadProxy();
+            }
+
+            return redirectUntyped("/sites");
+        });
+
         // Site delete (POST /sites/:id/delete)
         HohenheimEndpoints.SITES_DELETE.setHandler(conduit -> {
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
@@ -455,12 +475,91 @@ public class HohenheimHandlers {
             return redirectUntyped("/sites/" + siteId);
         });
 
+        // Edit domain form (GET /sites/:id/domains/:domainId)
+        HohenheimEndpoints.SITES_EDIT_DOMAIN.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            Integer domainId = conduit.getParameter(HohenheimEndpoints.DOMAIN_ID);
+
+            Row site = siteModel.find().where(SiteModel.ID.eq(siteId)).first();
+            Row domain = domainModel.find()
+                .where(SiteDomainModel.ID.eq(domainId))
+                .where(SiteDomainModel.SITE_ID.eq(siteId))
+                .first();
+            if (site == null || domain == null) return redirectUntyped("/sites");
+
+            return renderUntyped(
+                Identifier.of("hohenheim", "hohenheim/sites/domain-edit"),
+                buildDomainEditVars(site, domain, "")
+            );
+        });
+
+        // Update domain (POST /sites/:id/domains/:domainId)
+        HohenheimEndpoints.SITES_UPDATE_DOMAIN.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            Integer domainId = conduit.getParameter(HohenheimEndpoints.DOMAIN_ID);
+            HttpConduit http = (HttpConduit) conduit;
+            Map<String, String> form = http.getFormData().toStringMap();
+
+            Row site = siteModel.find().where(SiteModel.ID.eq(siteId)).first();
+            Row domain = domainModel.find()
+                .where(SiteDomainModel.ID.eq(domainId))
+                .where(SiteDomainModel.SITE_ID.eq(siteId))
+                .first();
+            if (site == null || domain == null) return redirectUntyped("/sites");
+
+            String hostname = form.getOrDefault("hostname", "").trim();
+            if (hostname.isEmpty()) {
+                return renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/sites/domain-edit"),
+                    buildDomainEditVars(site, domain, "Hostname is required")
+                );
+            }
+
+            domain.set(SiteDomainModel.HOSTNAME, hostname);
+            domain.set(SiteDomainModel.MATCH_TYPE, form.getOrDefault("match_type", "exact"));
+            domain.set(SiteDomainModel.FORCE_SSL, form.containsKey("force_ssl"));
+            domain.set(SiteDomainModel.HSTS_ENABLED, form.containsKey("hsts_enabled"));
+            domain.set(SiteDomainModel.HSTS_SUBDOMAINS, form.containsKey("hsts_subdomains"));
+            domain.set(SiteDomainModel.HTTP2_SUPPORT, form.containsKey("http2_support"));
+            domain.set(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, form.containsKey("exclude_from_letsencrypt"));
+
+            String certIdStr = form.getOrDefault("certificate_id", "").trim();
+            domain.set(SiteDomainModel.CERTIFICATE_ID, certIdStr.isEmpty() ? null : certIdStr);
+
+            String path = form.getOrDefault("path", "").trim();
+            domain.set(SiteDomainModel.PATH, path.isEmpty() ? null : path);
+            domain.set(SiteDomainModel.STRIP_PATH, form.containsKey("strip_path"));
+
+            String listenOn = form.getOrDefault("listen_on", "").trim();
+            domain.set(SiteDomainModel.LISTEN_ON, listenOn.isEmpty() ? null : listenOn);
+
+            String portStr = form.getOrDefault("port", "").trim();
+            if (!portStr.isEmpty()) {
+                try {
+                    int port = Integer.parseInt(portStr);
+                    if (port >= 1 && port <= 65535) {
+                        domain.set(SiteDomainModel.PORT, port);
+                    }
+                } catch (NumberFormatException ignored) {}
+            } else {
+                domain.set(SiteDomainModel.PORT, null);
+            }
+
+            domainModel.save(domain);
+            audit(auditModel, conduit, "updated", "domain", domainId, hostname);
+            reloadProxy();
+            return redirectUntyped("/sites/" + siteId);
+        });
+
         // Delete domain (POST /sites/:id/domains/:domainId/delete)
         HohenheimEndpoints.SITES_DELETE_DOMAIN.setHandler(conduit -> {
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
             Integer domainId = conduit.getParameter(HohenheimEndpoints.DOMAIN_ID);
 
-            Row domain = domainModel.find().where(SiteDomainModel.ID.eq(domainId)).first();
+            Row domain = domainModel.find()
+                .where(SiteDomainModel.ID.eq(domainId))
+                .where(SiteDomainModel.SITE_ID.eq(siteId))
+                .first();
             if (domain != null) {
                 String hostname = domain.get(SiteDomainModel.HOSTNAME);
                 domainModel.find().where(SiteDomainModel.ID.eq(domainId)).delete();
@@ -485,19 +584,38 @@ public class HohenheimHandlers {
             // Filter out the internal ACME account key row
             rows.removeIf(r -> "acme_account".equals(r.get(CertificateModel.PROVIDER)));
 
+            Instant now = Instant.now();
             List<Map<String, Object>> certs = new ArrayList<>();
             for (Row row : rows) {
                 Map<String, Object> cert = new HashMap<>();
                 cert.put("id", row.get(CertificateModel.ID));
                 cert.put("niceName", row.get(CertificateModel.NICE_NAME));
                 cert.put("provider", row.get(CertificateModel.PROVIDER));
-                cert.put("expiresOn", row.get(CertificateModel.EXPIRES_ON));
+
+                Object expiresOnObj = row.get(CertificateModel.EXPIRES_ON);
+                cert.put("expiresOn", expiresOnObj);
                 cert.put("autoRenew", row.get(CertificateModel.AUTO_RENEW));
 
                 String status = row.get(CertificateModel.STATUS);
                 cert.put("status", status != null ? status : "active");
                 cert.put("renewalError", row.get(CertificateModel.RENEWAL_ERROR));
                 cert.put("domains", row.get(CertificateModel.DOMAIN_NAMES_TEXT));
+
+                // Compute expiry warning level
+                if (expiresOnObj instanceof Instant expiresAt && "active".equals(status)) {
+                    long daysLeft = java.time.Duration.between(now, expiresAt).toDays();
+                    if (daysLeft < 0) {
+                        cert.put("expiryStatus", "expired");
+                    } else if (daysLeft <= 7) {
+                        cert.put("expiryStatus", "critical");
+                    } else if (daysLeft <= 30) {
+                        cert.put("expiryStatus", "warning");
+                    } else {
+                        cert.put("expiryStatus", "ok");
+                    }
+                    cert.put("daysLeft", daysLeft);
+                }
+
                 certs.add(cert);
             }
 
@@ -657,6 +775,9 @@ public class HohenheimHandlers {
             vars.put("logCollectStats", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.COLLECT_STATS));
             vars.put("secLogDomainMisses", HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.LOG_DOMAIN_MISSES));
             vars.put("secDomainMissThreshold", HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD));
+            vars.put("sslLeEnabled", HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED));
+            vars.put("sslLeEmail", valueOrEmpty(HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL)));
+            vars.put("sslLeStaging", HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_STAGING));
 
             return new RenderTemplateResult(
                 Identifier.of("hohenheim", "hohenheim/settings"),
@@ -703,6 +824,14 @@ public class HohenheimHandlers {
                 catch (NumberFormatException ignored) {}
             }
 
+            // SSL settings
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED,
+                form.containsKey("ssl_le_enabled"));
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL,
+                form.getOrDefault("ssl_le_email", ""));
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_STAGING,
+                form.containsKey("ssl_le_staging"));
+
             return redirectUntyped("/settings?saved=true");
         });
     }
@@ -746,13 +875,14 @@ public class HohenheimHandlers {
                 Field<?, ?> field = entry.getValue();
                 String formValue = form.get(fieldName);
 
-                if (formValue == null) continue;
-
-                if (field instanceof IntegerField) {
+                if (field instanceof BooleanField) {
+                    // Unchecked checkboxes don't submit a value
+                    settings.put(fieldName, "on".equals(formValue) || "true".equals(formValue));
+                } else if (formValue == null) {
+                    continue;
+                } else if (field instanceof IntegerField) {
                     try { settings.put(fieldName, Integer.parseInt(formValue)); }
                     catch (NumberFormatException e) { /* skip invalid */ }
-                } else if (field instanceof BooleanField) {
-                    settings.put(fieldName, "on".equals(formValue) || "true".equals(formValue));
                 } else {
                     settings.put(fieldName, formValue);
                 }
@@ -794,6 +924,190 @@ public class HohenheimHandlers {
         vars.put("error", error);
         return vars;
     }
+
+    private static Map<String, Object> buildDomainEditVars(Row site, Row domain, String error) {
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("siteId", site.get(SiteModel.ID));
+        vars.put("siteName", site.get(SiteModel.NAME));
+        vars.put("domainId", domain.get(SiteDomainModel.ID));
+        vars.put("hostname", domain.get(SiteDomainModel.HOSTNAME));
+        vars.put("matchType", domain.get(SiteDomainModel.MATCH_TYPE));
+        vars.put("forceSsl", domain.get(SiteDomainModel.FORCE_SSL));
+        vars.put("hstsEnabled", domain.get(SiteDomainModel.HSTS_ENABLED));
+        vars.put("hstsSubdomains", domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
+        vars.put("http2Support", domain.get(SiteDomainModel.HTTP2_SUPPORT));
+        vars.put("excludeFromLetsencrypt", domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT));
+
+        String path = domain.get(SiteDomainModel.PATH);
+        vars.put("path", path != null ? path : "");
+        vars.put("stripPath", domain.get(SiteDomainModel.STRIP_PATH));
+
+        String listenOn = domain.get(SiteDomainModel.LISTEN_ON);
+        vars.put("listenOn", listenOn != null ? listenOn : "");
+
+        Integer port = domain.get(SiteDomainModel.PORT);
+        vars.put("port", port != null ? String.valueOf(port) : "");
+
+        String certId = domain.get(SiteDomainModel.CERTIFICATE_ID);
+        vars.put("certificateId", certId != null ? certId : "");
+
+        // Build certificate list for dropdown
+        var ds = HohenheimDatabase.datasource();
+        var certModel = new CertificateModel(ds);
+        List<Row> certRows = certModel.find().all();
+        certRows.removeIf(r -> "acme_account".equals(r.get(CertificateModel.PROVIDER)));
+        List<Map<String, Object>> certs = new ArrayList<>();
+        for (Row cr : certRows) {
+            Map<String, Object> c = new HashMap<>();
+            c.put("id", String.valueOf(cr.get(CertificateModel.ID)));
+            c.put("name", cr.get(CertificateModel.NICE_NAME));
+            certs.add(c);
+        }
+        vars.put("certificates", certs);
+
+        vars.put("error", error);
+        return vars;
+    }
+
+    // -----------------------------------------------------------------------
+    // Access Lists
+    // -----------------------------------------------------------------------
+
+    private static void initAccessLists(AccessListModel accessListModel, AuditLogModel auditModel) {
+
+        // List
+        HohenheimEndpoints.ACCESS_LISTS.setHandler(conduit -> {
+            List<Row> rows = accessListModel.find().all();
+            List<Map<String, Object>> lists = new ArrayList<>();
+            for (Row row : rows) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("id", row.get(AccessListModel.ID));
+                item.put("name", row.get(AccessListModel.NAME));
+                item.put("satisfy", row.get(AccessListModel.SATISFY));
+                item.put("hasAuth", row.get(AccessListModel.BASIC_AUTH_USER) != null);
+                item.put("hasIpRules",
+                    row.get(AccessListModel.ALLOWED_IPS) != null
+                    || row.get(AccessListModel.DENIED_IPS) != null);
+                lists.add(item);
+            }
+            return new RenderTemplateResult(
+                Identifier.of("hohenheim", "hohenheim/access-lists/list"),
+                Map.of("accessLists", lists, "listCount", lists.size())
+            );
+        });
+
+        // Create form
+        HohenheimEndpoints.ACCESS_LISTS_CREATE_FORM.setHandler(conduit ->
+            new RenderTemplateResult(
+                Identifier.of("hohenheim", "hohenheim/access-lists/create"),
+                Map.of("error", "")
+            )
+        );
+
+        // Create (POST)
+        HohenheimEndpoints.ACCESS_LISTS_CREATE.setHandler(conduit -> {
+            HttpConduit http = (HttpConduit) conduit;
+            Map<String, String> form = http.getFormData().toStringMap();
+
+            String name = form.getOrDefault("name", "").trim();
+            if (name.isEmpty()) {
+                return renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/access-lists/create"),
+                    Map.of("error", "Name is required")
+                );
+            }
+
+            Row row = accessListModel.createEmptyRow();
+            row.set(AccessListModel.NAME, name);
+            row.set(AccessListModel.SATISFY, form.getOrDefault("satisfy", "any"));
+            setAccessListFields(row, form);
+            accessListModel.save(row);
+
+            audit(auditModel, conduit, "created", "access_list", row.get(AccessListModel.ID), name);
+            return redirectUntyped("/access-lists");
+        });
+
+        // Edit form
+        HohenheimEndpoints.ACCESS_LISTS_EDIT.setHandler(conduit -> {
+            Integer id = conduit.getParameter(HohenheimEndpoints.ACCESS_LIST_ID);
+            Row row = accessListModel.findById(id);
+            if (row == null) return redirectUntyped("/access-lists");
+
+            return renderUntyped(
+                Identifier.of("hohenheim", "hohenheim/access-lists/edit"),
+                buildAccessListEditVars(row, "")
+            );
+        });
+
+        // Update (POST)
+        HohenheimEndpoints.ACCESS_LISTS_UPDATE.setHandler(conduit -> {
+            Integer id = conduit.getParameter(HohenheimEndpoints.ACCESS_LIST_ID);
+            HttpConduit http = (HttpConduit) conduit;
+            Map<String, String> form = http.getFormData().toStringMap();
+
+            Row row = accessListModel.findById(id);
+            if (row == null) return redirectUntyped("/access-lists");
+
+            String name = form.getOrDefault("name", "").trim();
+            if (name.isEmpty()) {
+                return renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/access-lists/edit"),
+                    buildAccessListEditVars(row, "Name is required")
+                );
+            }
+
+            row.set(AccessListModel.NAME, name);
+            row.set(AccessListModel.SATISFY, form.getOrDefault("satisfy", "any"));
+            setAccessListFields(row, form);
+            accessListModel.save(row);
+
+            audit(auditModel, conduit, "updated", "access_list", id, name);
+            reloadProxy();
+            return redirectUntyped("/access-lists");
+        });
+
+        // Delete (POST)
+        HohenheimEndpoints.ACCESS_LISTS_DELETE.setHandler(conduit -> {
+            Integer id = conduit.getParameter(HohenheimEndpoints.ACCESS_LIST_ID);
+            Row row = accessListModel.findById(id);
+            if (row != null) {
+                String name = row.get(AccessListModel.NAME);
+                accessListModel.find().where(AccessListModel.ID.eq(id)).delete();
+                audit(auditModel, conduit, "deleted", "access_list", id, name);
+                reloadProxy();
+            }
+            return redirectUntyped("/access-lists");
+        });
+    }
+
+    private static void setAccessListFields(Row row, Map<String, String> form) {
+        String user = form.getOrDefault("basic_auth_user", "").trim();
+        String pass = form.getOrDefault("basic_auth_pass", "").trim();
+        row.set(AccessListModel.BASIC_AUTH_USER, user.isEmpty() ? null : user);
+        row.set(AccessListModel.BASIC_AUTH_PASS, pass.isEmpty() ? null : pass);
+
+        String allowed = form.getOrDefault("allowed_ips", "").trim();
+        String denied = form.getOrDefault("denied_ips", "").trim();
+        row.set(AccessListModel.ALLOWED_IPS, allowed.isEmpty() ? null : allowed);
+        row.set(AccessListModel.DENIED_IPS, denied.isEmpty() ? null : denied);
+    }
+
+    private static Map<String, Object> buildAccessListEditVars(Row row, String error) {
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("id", row.get(AccessListModel.ID));
+        vars.put("name", row.get(AccessListModel.NAME));
+        vars.put("satisfy", row.get(AccessListModel.SATISFY));
+        vars.put("basicAuthUser", valueOrEmpty(row.get(AccessListModel.BASIC_AUTH_USER)));
+        vars.put("basicAuthPass", valueOrEmpty(row.get(AccessListModel.BASIC_AUTH_PASS)));
+        vars.put("allowedIps", valueOrEmpty(row.get(AccessListModel.ALLOWED_IPS)));
+        vars.put("deniedIps", valueOrEmpty(row.get(AccessListModel.DENIED_IPS)));
+        vars.put("error", error);
+        return vars;
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
 
     private static void audit(AuditLogModel model, be.elevenways.zenit.common.conduit.Conduit conduit,
                               String action, String resourceType, Object resourceId, String resourceName) {

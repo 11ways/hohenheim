@@ -13,6 +13,7 @@
                 <li><a class="hh-sidebar__link" href="/">Dashboard</a></li>
                 <li><a class="hh-sidebar__link" href="/sites">Sites</a></li>
                 <li><a class="hh-sidebar__link" href="/certificates">Certificates</a></li>
+                <li><a class="hh-sidebar__link" href="/access-lists">Access Lists</a></li>
                 <li><a class="hh-sidebar__link" href="/settings">Settings</a></li>
                 <li><a class="hh-sidebar__link" href="/audit">Audit Log</a></li>
             </ul>

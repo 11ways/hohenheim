@@ -9,6 +9,9 @@ import be.elevenways.hohenheim.migration.M005_CreateCertificates;
 import be.elevenways.hohenheim.migration.M006_CreateAuditLog;
 import be.elevenways.hohenheim.migration.M007_CreateSessions;
 import be.elevenways.hohenheim.migration.M008_AddCertificateLifecycleFields;
+import be.elevenways.hohenheim.migration.M009_CreateAccessLists;
+import be.elevenways.hohenheim.migration.M010_AddDomainLeExclude;
+import be.elevenways.hohenheim.migration.M011_CreateProclogs;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
 import be.elevenways.zenit.common.orm.migration.MigrationRunner;
@@ -36,7 +39,10 @@ public class HohenheimDatabase {
                 M005_CreateCertificates::new,
                 M006_CreateAuditLog::new,
                 M007_CreateSessions::new,
-                M008_AddCertificateLifecycleFields::new
+                M008_AddCertificateLifecycleFields::new,
+                M009_CreateAccessLists::new,
+                M010_AddDomainLeExclude::new,
+                M011_CreateProclogs::new
             )
         );
         runner.migrate();

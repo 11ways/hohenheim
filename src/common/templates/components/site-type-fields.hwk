@@ -3,6 +3,12 @@
     public selectedType: String = "hohenheim:proxy"
     public forwardHost: String = ""
     public forwardPort: String = ""
+    public websocketUpgrade: Boolean = true
+    public ignoreCertificates: Boolean = false
+    public script: String = ""
+    public nodePath: String = ""
+    public minimumProcesses: String = "1"
+    public maximumProcesses: String = "5"
     public rootPath: String = ""
     public fallbackFile: String = ""
     public targetUrl: String = ""
@@ -19,6 +25,45 @@
                 <div class="hh-form-group hh-form-group--port">
                     <pl-label target="forward-port">Port</pl-label>
                     <pl-input id="forward-port" type={% "number" %} name={% "forward_port" %} value={% forwardPort %} placeholder={% "3000" %}></pl-input>
+                </div>
+            </div>
+            <div class="hh-form-group">
+                <label class="hh-checkbox-label">
+                    <input type="checkbox" name="websocket_upgrade" checked={% websocketUpgrade %}>
+                    <span>WebSocket Proxying</span>
+                </label>
+                <p class="hh-form-hint">Proxy WebSocket upgrade requests to upstream.</p>
+            </div>
+            <div class="hh-form-group">
+                <label class="hh-checkbox-label">
+                    <input type="checkbox" name="ignore_certificates" checked={% ignoreCertificates %}>
+                    <span>Ignore upstream TLS errors</span>
+                </label>
+                <p class="hh-form-hint">Skip certificate verification when proxying to HTTPS upstreams.</p>
+            </div>
+        </div>
+        {% /if %}
+
+        {% if selectedType{:} == "hohenheim:node" || selectedType{:} == "hohenheim:alchemy" %}
+        <div class="hh-form-section">
+            <div class="hh-form-group">
+                <pl-label target="script">Script Path</pl-label>
+                <pl-input id="script" type={% "text" %} name={% "script" %} value={% script %} placeholder={% "/path/to/app.js" %}></pl-input>
+                <p class="hh-form-hint">Absolute path to the entry script.</p>
+            </div>
+            <div class="hh-form-group">
+                <pl-label target="node-path">Node Binary</pl-label>
+                <pl-input id="node-path" type={% "text" %} name={% "node_path" %} value={% nodePath %} placeholder={% "node" %}></pl-input>
+                <p class="hh-form-hint">Path to the Node.js binary. Leave empty for system default.</p>
+            </div>
+            <div class="hh-form-row">
+                <div class="hh-form-group hh-form-group--grow">
+                    <pl-label target="min-processes">Min Processes</pl-label>
+                    <pl-input id="min-processes" type={% "number" %} name={% "minimum_processes" %} value={% minimumProcesses %} placeholder={% "1" %}></pl-input>
+                </div>
+                <div class="hh-form-group hh-form-group--grow">
+                    <pl-label target="max-processes">Max Processes</pl-label>
+                    <pl-input id="max-processes" type={% "number" %} name={% "maximum_processes" %} value={% maximumProcesses %} placeholder={% "5" %}></pl-input>
                 </div>
             </div>
         </div>

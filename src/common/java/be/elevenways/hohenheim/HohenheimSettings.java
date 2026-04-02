@@ -34,6 +34,16 @@ public class HohenheimSettings {
             .defaultValue(true)
             .description("Redirect HTTP to HTTPS globally")
             .build();
+
+        public static final SettingDefinition<String> NOT_FOUND_MESSAGE = GROUP.buildSetting("not_found_message", String.class)
+            .defaultValue("There is no site configured for this domain.")
+            .description("Error message for unmatched domains")
+            .build();
+
+        public static final SettingDefinition<String> UNREACHABLE_MESSAGE = GROUP.buildSetting("unreachable_message", String.class)
+            .defaultValue("The upstream server is not responding.")
+            .description("Error message for unreachable upstreams")
+            .build();
     }
 
     // --- SSL/TLS ---
@@ -112,6 +122,11 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> DOMAIN_MISS_THRESHOLD = GROUP.buildSetting("domain_miss_threshold", Integer.class)
             .defaultValue(5)
             .description("Domain misses before logging for fail2ban")
+            .build();
+
+        public static final SettingDefinition<String> DOMAIN_MISSES_LOG_PATH = GROUP.buildSetting("domain_misses_log_path", String.class)
+            .defaultValue("/var/log/hohenheim/domain-misses.log")
+            .description("Path for domain miss log file (fail2ban)")
             .build();
     }
 }

@@ -18,6 +18,9 @@
         {% declare logCollectStats: Boolean %}
         {% declare secLogDomainMisses: Boolean %}
         {% declare secDomainMissThreshold: Integer %}
+        {% declare sslLeEnabled: Boolean %}
+        {% declare sslLeEmail: String %}
+        {% declare sslLeStaging: Boolean %}
         {% declare saved: String = "" %}
 
         {% if saved == "true" %}
@@ -55,6 +58,36 @@
                                     <input type="checkbox" name="proxy_force_https" checked={% proxyForceHttps %}>
                                     <span>Force HTTPS globally</span>
                                 </label>
+                            </div>
+                        </div>
+                    </pl-card-content>
+                </pl-card>
+
+                <pl-card>
+                    <pl-card-header>
+                        <pl-card-title>SSL / TLS</pl-card-title>
+                        <pl-card-description>Let's Encrypt and certificate settings.</pl-card-description>
+                    </pl-card-header>
+                    <pl-card-content>
+                        <div class="hh-form-stack">
+                            <div class="hh-form-group">
+                                <label class="hh-checkbox-label">
+                                    <input type="checkbox" name="ssl_le_enabled" checked={% sslLeEnabled %}>
+                                    <span>Enable Let's Encrypt</span>
+                                </label>
+                                <p class="hh-form-hint">Automatic certificate issuance and renewal.</p>
+                            </div>
+                            <div class="hh-form-group">
+                                <pl-label target="ssl-le-email">Account Email</pl-label>
+                                <pl-input id="ssl-le-email" type={% "email" %} name={% "ssl_le_email" %} value={% sslLeEmail %} placeholder={% "admin@example.com" %}></pl-input>
+                                <p class="hh-form-hint">Required for Let's Encrypt registration.</p>
+                            </div>
+                            <div class="hh-form-group">
+                                <label class="hh-checkbox-label">
+                                    <input type="checkbox" name="ssl_le_staging" checked={% sslLeStaging %}>
+                                    <span>Use staging server</span>
+                                </label>
+                                <p class="hh-form-hint">Test with fake certificates to avoid rate limits.</p>
                             </div>
                         </div>
                     </pl-card-content>
