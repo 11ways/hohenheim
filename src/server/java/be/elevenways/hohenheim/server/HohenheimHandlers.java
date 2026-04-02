@@ -533,6 +533,26 @@ public class HohenheimHandlers {
                 );
             }
 
+            // Validate PEM format before saving
+            try {
+                java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory.getInstance("X.509");
+                cf.generateCertificates(new java.io.ByteArrayInputStream(certPem.getBytes()));
+            } catch (Exception e) {
+                return renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/certificates/upload"),
+                    Map.of("error", "Invalid certificate PEM: " + e.getMessage())
+                );
+            }
+
+            try {
+                new org.bouncycastle.openssl.PEMParser(new java.io.StringReader(keyPem)).readObject();
+            } catch (Exception e) {
+                return renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/certificates/upload"),
+                    Map.of("error", "Invalid private key PEM: " + e.getMessage())
+                );
+            }
+
             Row cert = certModel.createEmptyRow();
             cert.set(CertificateModel.NICE_NAME, niceName);
             cert.set(CertificateModel.CERTIFICATE_PEM, certPem);
@@ -589,7 +609,12 @@ public class HohenheimHandlers {
             int certId = proxy.getAcmeService().requestCertificate(hostnames, niceName);
 
             if (certId < 0) {
-                Row failed = certModel.find()
+                // Lookup the specific cert row to get the error message
+                var ds2 = HohenheimDatabase.datasource();
+                var certModel2 = new CertificateModel(ds2);
+                // requestCertificate creates a row even on failure -- find it by provider+status
+                Row failed = certModel2.find()
+                    .where(CertificateModel.STATUS.eq("error"))
                     .orderBy(CertificateModel.CREATED_AT, SortOrder.DESC)
                     .first();
                 String error = failed != null ? (String) failed.get(CertificateModel.RENEWAL_ERROR) : "Unknown error";

@@ -130,7 +130,7 @@ public class ProxyServer {
         int httpsPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT);
 
         try {
-            SSLContext sslContext = SSLContext.getInstance("TLS");
+            SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
             SniKeyManager sniKeyManager = new SniKeyManager(certificateStore);
             sslContext.init(new KeyManager[]{sniKeyManager}, null, null);
 
@@ -154,6 +154,7 @@ public class ProxyServer {
     }
 
     public void stop() {
+        acmeService.stop();
         if (httpServer != null) {
             httpServer.stop();
             httpServer = null;

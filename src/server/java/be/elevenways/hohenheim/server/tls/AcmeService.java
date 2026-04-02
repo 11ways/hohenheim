@@ -36,12 +36,20 @@ public class AcmeService {
     private final CertificateStore certificateStore;
     private final ScheduledExecutorService scheduler;
 
-    // Pending HTTP-01 challenges: token -> authorization content
-    private final ConcurrentHashMap<String, String> pendingChallenges = new ConcurrentHashMap<>();
+    /**
+     * Pending HTTP-01 challenges: token -> challenge entry with authorization and valid hostnames.
+     */
+    private final ConcurrentHashMap<String, ChallengeEntry> pendingChallenges = new ConcurrentHashMap<>();
 
-    // ACME account (lazily created)
     private Account account;
     private KeyPair accountKeyPair;
+
+    private record ChallengeEntry(String authorization, Set<String> validHostnames) {}
+
+    /**
+     * Result of an ACME certificate order.
+     */
+    private record OrderResult(String certPem, String keyPem, Instant expiresAt) {}
 
     public AcmeService(CertificateStore certificateStore) {
         this.certificateStore = certificateStore;
@@ -52,21 +60,30 @@ public class AcmeService {
         });
     }
 
-    /**
-     * Start the renewal scheduler.
-     */
     public void start() {
         scheduler.scheduleAtFixedRate(this::checkRenewals, RENEWAL_CHECK_HOURS,
             RENEWAL_CHECK_HOURS, TimeUnit.HOURS);
         Blast.log("ACME renewal scheduler started (every", RENEWAL_CHECK_HOURS, "hours)");
     }
 
+    public void stop() {
+        scheduler.shutdownNow();
+    }
+
     /**
-     * Lookup a pending HTTP-01 challenge response by token.
-     * Called by SiteDispatcher when it intercepts /.well-known/acme-challenge/ requests.
+     * Lookup a pending HTTP-01 challenge response by token, validating the hostname.
+     * Returns null if the token is not pending or the hostname is not authorized.
      */
-    public String getChallengeResponse(String token) {
-        return pendingChallenges.get(token);
+    public String getChallengeResponse(String token, String hostname) {
+        ChallengeEntry entry = pendingChallenges.get(token);
+        if (entry == null) return null;
+
+        // Validate that the requesting hostname is one we're issuing a cert for
+        if (hostname != null && !entry.validHostnames.contains(hostname.toLowerCase())) {
+            return null;
+        }
+
+        return entry.authorization;
     }
 
     /**
@@ -79,77 +96,26 @@ public class AcmeService {
         var ds = HohenheimDatabase.datasource();
         var certModel = new CertificateModel(ds);
 
-        // Create a pending certificate row
         Row certRow = certModel.createEmptyRow();
         certRow.set(CertificateModel.NICE_NAME, niceName);
         certRow.set(CertificateModel.PROVIDER, "letsencrypt");
         certRow.set(CertificateModel.STATUS, "pending");
+        certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
         certModel.save(certRow);
         int certId = ((Number) certRow.get(CertificateModel.ID)).intValue();
 
         try {
-            ensureAccount();
+            OrderResult result = performAcmeOrder(hostnames);
 
-            // Create domain key pair
-            KeyPair domainKeyPair = KeyPairUtils.createKeyPair(2048);
-
-            // Order certificate
-            OrderBuilder orderBuilder = account.newOrder();
-            for (String hostname : hostnames) {
-                orderBuilder.domain(hostname);
-            }
-            Order order = orderBuilder.create();
-
-            // Complete challenges
-            for (Authorization auth : order.getAuthorizations()) {
-                if (auth.getStatus() == Status.VALID) continue;
-                completeHttpChallenge(auth);
-            }
-
-            // Generate CSR and finalize
-            CSRBuilder csrBuilder = new CSRBuilder();
-            for (String hostname : hostnames) {
-                csrBuilder.addDomain(hostname);
-            }
-            csrBuilder.sign(domainKeyPair);
-            order.execute(csrBuilder.getEncoded());
-
-            // Poll for completion
-            for (int i = 0; i < MAX_POLL_ATTEMPTS && order.getStatus() != Status.VALID; i++) {
-                Thread.sleep(POLL_INTERVAL_MS);
-                order.update();
-                if (order.getStatus() == Status.INVALID) {
-                    throw new RuntimeException("Order rejected by CA");
-                }
-            }
-
-            if (order.getStatus() != Status.VALID) {
-                throw new RuntimeException("Order did not complete in time");
-            }
-
-            // Download certificate
-            Certificate acmeCert = order.getCertificate();
-            List<X509Certificate> chain = acmeCert.getCertificateChain();
-            X509Certificate leaf = chain.get(0);
-
-            // Serialize to PEM
-            String certPem = certificateChainToPem(chain);
-            String keyPem = privateKeyToPem(domainKeyPair);
-
-            // Update the database row
-            certRow.set(CertificateModel.CERTIFICATE_PEM, certPem);
-            certRow.set(CertificateModel.PRIVATE_KEY_PEM, keyPem);
+            certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
+            certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem);
             certRow.set(CertificateModel.STATUS, "active");
-            certRow.set(CertificateModel.EXPIRES_ON, leaf.getNotAfter().toInstant());
+            certRow.set(CertificateModel.EXPIRES_ON, result.expiresAt);
             certRow.set(CertificateModel.ISSUED_ON, Instant.now());
-
-            // Store domain names as comma-separated
-            certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
+            certRow.set(CertificateModel.RENEWAL_ERROR, null);
             certModel.save(certRow);
 
-            // Load into the live certificate store
-            certificateStore.addCertificateFromRow(certRow);
-
+            certificateStore.loadFromDatabase();
             Blast.log("ACME: certificate issued for", String.join(", ", hostnames));
             return certId;
 
@@ -157,7 +123,6 @@ public class AcmeService {
             Blast.log("ACME: certificate request failed for", String.join(", ", hostnames), "-", e.getMessage());
             e.printStackTrace();
 
-            // Update the row with error status
             certRow.set(CertificateModel.STATUS, "error");
             certRow.set(CertificateModel.RENEWAL_ERROR, e.getMessage());
             certModel.save(certRow);
@@ -177,8 +142,9 @@ public class AcmeService {
             Instant cutoff = Instant.now().plus(RENEWAL_THRESHOLD_DAYS, ChronoUnit.DAYS);
             List<Row> expiring = certModel.find()
                 .where(CertificateModel.PROVIDER.eq("letsencrypt"))
-                .and(CertificateModel.STATUS.eq("active"))
-                .and(CertificateModel.EXPIRES_ON.lte(cutoff))
+                .where(CertificateModel.STATUS.eq("active"))
+                .where(CertificateModel.AUTO_RENEW.eq(true))
+                .where(CertificateModel.EXPIRES_ON.lte(cutoff))
                 .all();
 
             if (expiring.isEmpty()) return;
@@ -186,29 +152,47 @@ public class AcmeService {
             Blast.log("ACME: found", expiring.size(), "certificates due for renewal");
 
             for (Row cert : expiring) {
-                String domainsText = (String) cert.get(CertificateModel.DOMAIN_NAMES_TEXT);
-                String niceName = (String) cert.get(CertificateModel.NICE_NAME);
-                if (domainsText == null || domainsText.isEmpty()) continue;
-
-                List<String> hostnames = Arrays.asList(domainsText.split(","));
-                try {
-                    renewCertificate(cert, hostnames);
-                } catch (Exception e) {
-                    Blast.log("ACME: renewal failed for", niceName, "-", e.getMessage());
-                    cert.set(CertificateModel.STATUS, "error");
-                    cert.set(CertificateModel.RENEWAL_ERROR, e.getMessage());
-                    certModel.save(cert);
-                }
+                renewCertificate(cert, certModel);
             }
         } catch (Exception e) {
             Blast.log("ACME: renewal check failed:", e.getMessage());
         }
     }
 
-    private void renewCertificate(Row certRow, List<String> hostnames) throws Exception {
-        var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
+    private void renewCertificate(Row certRow, CertificateModel certModel) {
+        String domainsText = (String) certRow.get(CertificateModel.DOMAIN_NAMES_TEXT);
+        String niceName = (String) certRow.get(CertificateModel.NICE_NAME);
+        if (domainsText == null || domainsText.isEmpty()) return;
 
+        List<String> hostnames = Arrays.asList(domainsText.split(","));
+
+        try {
+            OrderResult result = performAcmeOrder(hostnames);
+
+            certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
+            certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem);
+            certRow.set(CertificateModel.STATUS, "active");
+            certRow.set(CertificateModel.EXPIRES_ON, result.expiresAt);
+            certRow.set(CertificateModel.ISSUED_ON, Instant.now());
+            certRow.set(CertificateModel.RENEWAL_ERROR, null);
+            certModel.save(certRow);
+
+            certificateStore.loadFromDatabase();
+            Blast.log("ACME: renewed certificate", niceName);
+
+        } catch (Exception e) {
+            Blast.log("ACME: renewal failed for", niceName, "-", e.getMessage());
+            certRow.set(CertificateModel.STATUS, "error");
+            certRow.set(CertificateModel.RENEWAL_ERROR, e.getMessage());
+            certModel.save(certRow);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Core ACME order flow (shared by request and renewal)
+    // -----------------------------------------------------------------------
+
+    private OrderResult performAcmeOrder(List<String> hostnames) throws Exception {
         ensureAccount();
 
         KeyPair domainKeyPair = KeyPairUtils.createKeyPair(2048);
@@ -219,9 +203,12 @@ public class AcmeService {
         }
         Order order = orderBuilder.create();
 
+        Set<String> hostnameSet = new HashSet<>();
+        for (String h : hostnames) hostnameSet.add(h.toLowerCase());
+
         for (Authorization auth : order.getAuthorizations()) {
             if (auth.getStatus() == Status.VALID) continue;
-            completeHttpChallenge(auth);
+            completeHttpChallenge(auth, hostnameSet);
         }
 
         CSRBuilder csrBuilder = new CSRBuilder();
@@ -235,43 +222,36 @@ public class AcmeService {
             Thread.sleep(POLL_INTERVAL_MS);
             order.update();
             if (order.getStatus() == Status.INVALID) {
-                throw new RuntimeException("Renewal order rejected by CA");
+                throw new RuntimeException("Order rejected by CA");
             }
         }
 
         if (order.getStatus() != Status.VALID) {
-            throw new RuntimeException("Renewal order did not complete in time");
+            throw new RuntimeException("Order did not complete in time");
         }
 
         Certificate acmeCert = order.getCertificate();
         List<X509Certificate> chain = acmeCert.getCertificateChain();
         X509Certificate leaf = chain.get(0);
 
-        certRow.set(CertificateModel.CERTIFICATE_PEM, certificateChainToPem(chain));
-        certRow.set(CertificateModel.PRIVATE_KEY_PEM, privateKeyToPem(domainKeyPair));
-        certRow.set(CertificateModel.STATUS, "active");
-        certRow.set(CertificateModel.EXPIRES_ON, leaf.getNotAfter().toInstant());
-        certRow.set(CertificateModel.ISSUED_ON, Instant.now());
-        certRow.set(CertificateModel.RENEWAL_ERROR, null);
-        certModel.save(certRow);
-
-        certificateStore.loadFromDatabase();
-
-        String niceName = (String) certRow.get(CertificateModel.NICE_NAME);
-        Blast.log("ACME: renewed certificate", niceName);
+        return new OrderResult(
+            certificateChainToPem(chain),
+            privateKeyToPem(domainKeyPair),
+            leaf.getNotAfter().toInstant()
+        );
     }
 
     // -----------------------------------------------------------------------
     // HTTP-01 challenge handling
     // -----------------------------------------------------------------------
 
-    private void completeHttpChallenge(Authorization auth) throws Exception {
+    private void completeHttpChallenge(Authorization auth, Set<String> validHostnames) throws Exception {
         Http01Challenge challenge = auth.findChallenge(Http01Challenge.class)
             .orElseThrow(() -> new RuntimeException(
                 "No HTTP-01 challenge available for " + auth.getIdentifier().getDomain()));
 
-        // Provision the challenge response
-        pendingChallenges.put(challenge.getToken(), challenge.getAuthorization());
+        pendingChallenges.put(challenge.getToken(),
+            new ChallengeEntry(challenge.getAuthorization(), validHostnames));
 
         try {
             challenge.trigger();
@@ -306,7 +286,6 @@ public class AcmeService {
             ? "acme://letsencrypt.org/staging"
             : "acme://letsencrypt.org";
 
-        // Load or create account key pair
         accountKeyPair = loadOrCreateAccountKeyPair();
 
         Session session = new Session(serverUri);
@@ -326,7 +305,6 @@ public class AcmeService {
         var ds = HohenheimDatabase.datasource();
         var certModel = new CertificateModel(ds);
 
-        // Look for existing account key in a special row
         Row accountRow = certModel.find()
             .where(CertificateModel.PROVIDER.eq("acme_account"))
             .first();
@@ -340,7 +318,6 @@ public class AcmeService {
             }
         }
 
-        // Generate new key pair and store it
         KeyPair keyPair = KeyPairUtils.createKeyPair(2048);
         StringWriter sw = new StringWriter();
         KeyPairUtils.writeKeyPair(keyPair, sw);

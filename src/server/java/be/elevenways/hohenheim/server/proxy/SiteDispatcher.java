@@ -192,7 +192,8 @@ public class SiteDispatcher implements HttpHandler {
         String acmePath = exchange.getRelativePath();
         if (acmePath.startsWith(ACME_CHALLENGE_PREFIX) && acmeService != null) {
             String token = acmePath.substring(ACME_CHALLENGE_PREFIX.length());
-            String response = acmeService.getChallengeResponse(token);
+            String challengeHost = extractHostname(exchange);
+            String response = acmeService.getChallengeResponse(token, challengeHost);
             if (response != null) {
                 exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
                 exchange.getResponseSender().send(response);
@@ -231,6 +232,17 @@ public class SiteDispatcher implements HttpHandler {
                 exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html; charset=UTF-8");
                 exchange.getResponseSender().send("<!DOCTYPE html><html><body><h1>404</h1><p>No site configured for this domain.</p></body></html>");
             }
+            return;
+        }
+
+        // --- Force SSL redirect ---
+        if (entry.forceSsl && "http".equals(exchange.getRequestScheme())) {
+            String redirectUrl = "https://" + hostname + exchange.getRelativePath();
+            String query = exchange.getQueryString();
+            if (query != null && !query.isEmpty()) redirectUrl += "?" + query;
+            exchange.setStatusCode(301);
+            exchange.getResponseHeaders().put(Headers.LOCATION, redirectUrl);
+            exchange.endExchange();
             return;
         }
 

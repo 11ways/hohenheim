@@ -10,7 +10,6 @@ import java.security.*;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.openssl.PEMKeyPair;
@@ -20,29 +19,40 @@ import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 /**
  * Manages an in-memory KeyStore for TLS certificate lookup.
  * Loads certificates from the database and supports runtime updates.
- * Used by SniKeyManager for SNI-based certificate selection during TLS handshake.
+ * Uses copy-on-write: mutations build a new snapshot that is atomically
+ * swapped in, so TLS handshakes never see a partially-loaded state.
  */
 public class CertificateStore {
 
-    private static final char[] KEYSTORE_PASSWORD = "hohenheim".toCharArray();
+    private static final char[] KEYSTORE_PASSWORD =
+        UUID.randomUUID().toString().toCharArray();
 
-    private final KeyStore keyStore;
-    private final ConcurrentHashMap<String, String> hostnameToAlias = new ConcurrentHashMap<>();
-    private volatile javax.net.ssl.X509ExtendedKeyManager delegateKeyManager;
+    /**
+     * Immutable snapshot of loaded certificates.
+     * Swapped atomically via volatile reference.
+     */
+    private static final class Snapshot {
+        final javax.net.ssl.X509ExtendedKeyManager keyManager;
+        final Map<String, String> hostnameToAlias;
+        final int count;
+
+        Snapshot(javax.net.ssl.X509ExtendedKeyManager keyManager,
+                 Map<String, String> hostnameToAlias, int count) {
+            this.keyManager = keyManager;
+            this.hostnameToAlias = hostnameToAlias;
+            this.count = count;
+        }
+    }
+
+    private volatile Snapshot snapshot;
 
     public CertificateStore() {
-        try {
-            keyStore = KeyStore.getInstance("PKCS12");
-            keyStore.load(null, null);
-            rebuildDelegateKeyManager();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to initialize certificate store", e);
-        }
+        this.snapshot = new Snapshot(null, Map.of(), 0);
     }
 
     /**
      * Load all active certificates from the database.
-     * Called on startup and after certificate changes.
+     * Builds a complete new snapshot and swaps it in atomically.
      */
     public void loadFromDatabase() {
         var ds = HohenheimDatabase.datasource();
@@ -50,38 +60,96 @@ public class CertificateStore {
 
         List<Row> certs = certModel.find()
             .where(CertificateModel.CERTIFICATE_PEM.isNotNull())
+            .where(CertificateModel.STATUS.eq("active"))
             .all();
 
-        // Clear existing entries
         try {
-            for (String alias : Collections.list(keyStore.aliases())) {
-                keyStore.deleteEntry(alias);
-            }
-            hostnameToAlias.clear();
-        } catch (KeyStoreException e) {
-            Blast.log("Failed to clear certificate store:", e.getMessage());
+            Snapshot newSnapshot = buildSnapshot(certs);
+            this.snapshot = newSnapshot;
+            Blast.log("CertificateStore: loaded", newSnapshot.count, "certificates,",
+                      newSnapshot.hostnameToAlias.size(), "hostname mappings");
+        } catch (Exception e) {
+            Blast.log("CertificateStore: failed to build snapshot:", e.getMessage());
         }
+    }
+
+    /**
+     * Add a single certificate and rebuild the snapshot.
+     */
+    public void addCertificateFromRow(Row cert) throws Exception {
+        // Load all certs from DB to rebuild the full snapshot
+        // (avoids incremental mutation of shared state)
+        loadFromDatabase();
+    }
+
+    /**
+     * Remove a certificate by ID and rebuild the snapshot.
+     */
+    public void removeCertificate(int certId) {
+        loadFromDatabase();
+    }
+
+    /**
+     * Resolve a hostname to a KeyStore alias for SNI selection.
+     * Reads from the current snapshot -- always consistent, never blocks.
+     */
+    public String resolveAlias(String hostname) {
+        if (hostname == null) return null;
+        hostname = hostname.toLowerCase();
+        Snapshot s = this.snapshot;
+
+        // Exact match
+        String alias = s.hostnameToAlias.get(hostname);
+        if (alias != null) return alias;
+
+        // Wildcard match: *.example.com matches sub.example.com
+        int dot = hostname.indexOf('.');
+        if (dot > 0) {
+            alias = s.hostnameToAlias.get("*" + hostname.substring(dot));
+            if (alias != null) return alias;
+        }
+
+        return null;
+    }
+
+    public javax.net.ssl.X509ExtendedKeyManager getDelegateKeyManager() {
+        return snapshot.keyManager;
+    }
+
+    public boolean isEmpty() {
+        return snapshot.count == 0;
+    }
+
+    public int getCertificateCount() {
+        return snapshot.count;
+    }
+
+    // -----------------------------------------------------------------------
+    // Snapshot construction (all private, no shared mutable state)
+    // -----------------------------------------------------------------------
+
+    private static Snapshot buildSnapshot(List<Row> certs) throws Exception {
+        KeyStore keyStore = KeyStore.getInstance("PKCS12");
+        keyStore.load(null, null);
+        Map<String, String> hostnameToAlias = new HashMap<>();
 
         int loaded = 0;
         for (Row cert : certs) {
             try {
-                addCertificateFromRow(cert);
+                addCertToKeyStore(cert, keyStore, hostnameToAlias);
                 loaded++;
             } catch (Exception e) {
                 String name = (String) cert.get(CertificateModel.NICE_NAME);
-                Blast.log("Failed to load certificate:", name, "-", e.getMessage());
+                Blast.log("CertificateStore: failed to load cert:", name, "-", e.getMessage());
             }
         }
 
-        rebuildDelegateKeyManager();
-        Blast.log("CertificateStore: loaded", loaded, "certificates,",
-                  hostnameToAlias.size(), "hostname mappings");
+        javax.net.ssl.X509ExtendedKeyManager keyManager = buildKeyManager(keyStore);
+        return new Snapshot(keyManager, Map.copyOf(hostnameToAlias), loaded);
     }
 
-    /**
-     * Add a certificate from a database row to the in-memory store.
-     */
-    public void addCertificateFromRow(Row cert) throws Exception {
+    private static void addCertToKeyStore(Row cert, KeyStore keyStore,
+                                           Map<String, String> hostnameToAlias) throws Exception {
         String certPem = (String) cert.get(CertificateModel.CERTIFICATE_PEM);
         String keyPem = (String) cert.get(CertificateModel.PRIVATE_KEY_PEM);
         Object idRaw = cert.get(CertificateModel.ID);
@@ -98,72 +166,24 @@ public class CertificateStore {
 
         keyStore.setKeyEntry(alias, privateKey, KEYSTORE_PASSWORD, chain);
 
-        // Map each SAN and the CN to this alias
         Set<String> hostnames = extractHostnames(chain[0]);
         for (String hostname : hostnames) {
             hostnameToAlias.put(hostname.toLowerCase(), alias);
         }
-
-        rebuildDelegateKeyManager();
     }
 
-    /**
-     * Remove a certificate by its database ID.
-     */
-    public void removeCertificate(int certId) {
-        String alias = "cert-" + certId;
-        try {
-            if (keyStore.containsAlias(alias)) {
-                keyStore.deleteEntry(alias);
+    private static javax.net.ssl.X509ExtendedKeyManager buildKeyManager(KeyStore keyStore)
+            throws Exception {
+        javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory.getInstance(
+            javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(keyStore, KEYSTORE_PASSWORD);
+
+        for (javax.net.ssl.KeyManager km : kmf.getKeyManagers()) {
+            if (km instanceof javax.net.ssl.X509ExtendedKeyManager xkm) {
+                return xkm;
             }
-        } catch (KeyStoreException e) {
-            Blast.log("Failed to remove certificate:", alias, "-", e.getMessage());
         }
-
-        hostnameToAlias.values().removeIf(v -> v.equals(alias));
-        rebuildDelegateKeyManager();
-    }
-
-    /**
-     * Resolve a hostname to a KeyStore alias for SNI selection.
-     * Tries exact match first, then wildcard match.
-     */
-    public String resolveAlias(String hostname) {
-        if (hostname == null) return null;
-        hostname = hostname.toLowerCase();
-
-        // Exact match
-        String alias = hostnameToAlias.get(hostname);
-        if (alias != null) return alias;
-
-        // Wildcard match: *.example.com matches sub.example.com
-        int dot = hostname.indexOf('.');
-        if (dot > 0) {
-            alias = hostnameToAlias.get("*" + hostname.substring(dot));
-            if (alias != null) return alias;
-        }
-
         return null;
-    }
-
-    public javax.net.ssl.X509ExtendedKeyManager getDelegateKeyManager() {
-        return delegateKeyManager;
-    }
-
-    public boolean isEmpty() {
-        try {
-            return !keyStore.aliases().hasMoreElements();
-        } catch (KeyStoreException e) {
-            return true;
-        }
-    }
-
-    public int getCertificateCount() {
-        try {
-            return keyStore.size();
-        } catch (KeyStoreException e) {
-            return 0;
-        }
     }
 
     // -----------------------------------------------------------------------
@@ -223,25 +243,10 @@ public class CertificateStore {
                     }
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            Blast.log("CertificateStore: failed to parse SANs:", e.getMessage());
+        }
 
         return hostnames;
-    }
-
-    private void rebuildDelegateKeyManager() {
-        try {
-            javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory.getInstance(
-                javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
-            kmf.init(keyStore, KEYSTORE_PASSWORD);
-
-            for (javax.net.ssl.KeyManager km : kmf.getKeyManagers()) {
-                if (km instanceof javax.net.ssl.X509ExtendedKeyManager xkm) {
-                    this.delegateKeyManager = xkm;
-                    return;
-                }
-            }
-        } catch (Exception e) {
-            Blast.log("Failed to rebuild delegate key manager:", e.getMessage());
-        }
     }
 }
