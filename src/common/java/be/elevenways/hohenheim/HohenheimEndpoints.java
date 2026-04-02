@@ -224,6 +224,29 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("certificates").addDelimiter().addStatic("request").build())
         .build();
 
+    // --- Health check ---
+    public static final Endpoint<Object> HEALTH = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "health"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("health").build())
+        .build();
+
+    // --- Site clone ---
+    public static final Endpoint<Object> SITES_CLONE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_clone"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("clone").build())
+        .build();
+
+    // --- Certificate download ---
+    public static final Endpoint<Object> CERTIFICATES_DOWNLOAD = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "certificates_download"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("certificates").addDelimiter().addParameter(CERT_ID)
+            .addDelimiter().addStatic("download").build())
+        .build();
+
     // --- Test-only endpoint (throws to verify error handling) ---
     public static final PageEndpoint TEST_ERROR = Endpoint.pageBuilder()
         .identifier(Identifier.of("hohenheim", "test_error"))

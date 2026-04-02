@@ -329,6 +329,9 @@ public class SiteDispatcher implements HttpHandler {
             exchange.getResponseHeaders().put(STRICT_TRANSPORT_SECURITY, hstsValue);
         }
 
+        // --- Access logging ---
+        logAccess(exchange, hostname, clientIp);
+
         // --- Dispatch to handler ---
         entry.handler.handleRequest(exchange, uri -> {
             exchange.putAttachment(UPSTREAM_URI, uri);
@@ -540,6 +543,46 @@ public class SiteDispatcher implements HttpHandler {
             long cutoff = System.currentTimeMillis() - 3600_000;
             ipReputation.entrySet().removeIf(e -> e.getValue().lastMissTime.get() < cutoff);
         }
+    }
+
+    private void logAccess(HttpServerExchange exchange, String hostname, String clientIp) {
+        boolean logToFile = Boolean.TRUE.equals(
+            HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_TO_FILE));
+
+        if (!logToFile) return;
+
+        // Register a completion listener to log after the response
+        exchange.addExchangeCompleteListener((ex, next) -> {
+            try {
+                String logPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_PATH);
+                if (logPath == null || logPath.isEmpty()) { next.proceed(); return; }
+
+                int status = ex.getStatusCode();
+                String method = ex.getRequestMethod().toString();
+                String path = ex.getRelativePath();
+                String query = ex.getQueryString();
+                String ua = ex.getRequestHeaders().getFirst(Headers.USER_AGENT);
+                long size = ex.getResponseBytesSent();
+
+                // Combined log format
+                String line = clientIp + " - - [" + Instant.now() + "] \""
+                    + method + " " + path + (query != null && !query.isEmpty() ? "?" + query : "")
+                    + " " + ex.getProtocol() + "\" " + status + " " + size
+                    + " \"" + (hostname != null ? hostname : "-") + "\""
+                    + " \"" + (ua != null ? ua : "-") + "\"";
+
+                java.io.File logFile = new java.io.File(logPath);
+                java.io.File parent = logFile.getParentFile();
+                if (parent != null && !parent.exists()) parent.mkdirs();
+
+                try (var writer = new FileWriter(logFile, true)) {
+                    writer.write(line + "\n");
+                }
+            } catch (Exception ignored) {
+                // Don't let logging break request handling
+            }
+            next.proceed();
+        });
     }
 
     private void logDomainMissToFile(String line) {

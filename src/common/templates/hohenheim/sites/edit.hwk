@@ -181,6 +181,23 @@
             </pl-card-content>
         </pl-card>
 
+        <pl-card class="hh-domains-card">
+            <pl-card-header>
+                <pl-card-title>Actions</pl-card-title>
+            </pl-card-header>
+            <pl-card-content>
+                <div class="hh-danger-action">
+                    <div>
+                        <strong>Clone this site</strong>
+                        <p class="hh-danger-description">Create a copy with the same settings and domains (disabled by default).</p>
+                    </div>
+                    <form method="POST" action={% "/sites/" + site.get("id") + "/clone" %}>
+                        <pl-button variant={% "outline" %} type={% "submit" %}>Clone Site</pl-button>
+                    </form>
+                </div>
+            </pl-card-content>
+        </pl-card>
+
         <div class="hh-danger-zone">
             <pl-card>
                 <pl-card-header>

@@ -69,9 +69,14 @@
                                 {% /if %}
                             </pl-table-cell>
                             <pl-table-cell>
-                                <form method="POST" action={% "/certificates/" + cert.get("id") + "/delete" %}>
-                                    <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Delete</pl-button>
-                                </form>
+                                <div class="hh-table-actions">
+                                    <a href={% "/certificates/" + cert.get("id") + "/download" %} class="hh-button-link">
+                                        <pl-button variant={% "ghost" %} size={% "sm" %}>Download</pl-button>
+                                    </a>
+                                    <form method="POST" action={% "/certificates/" + cert.get("id") + "/delete" %}>
+                                        <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Delete</pl-button>
+                                    </form>
+                                </div>
                             </pl-table-cell>
                         </pl-table-row>
                         {% if cert.get("renewalError") != null %}

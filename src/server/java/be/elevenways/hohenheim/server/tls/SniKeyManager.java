@@ -25,11 +25,17 @@ public class SniKeyManager extends X509ExtendedKeyManager {
 
         SSLSession session = engine.getHandshakeSession();
         if (session instanceof ExtendedSSLSession extSession) {
-            for (SNIServerName name : extSession.getRequestedServerNames()) {
-                if (name instanceof SNIHostName hostName) {
-                    String alias = store.resolveAlias(hostName.getAsciiName());
-                    if (alias != null) return alias;
+            var serverNames = extSession.getRequestedServerNames();
+            if (serverNames != null && !serverNames.isEmpty()) {
+                for (SNIServerName name : serverNames) {
+                    if (name instanceof SNIHostName hostName) {
+                        String alias = store.resolveAlias(hostName.getAsciiName());
+                        if (alias != null) return alias;
+                    }
                 }
+                // SNI was provided but no certificate matched: reject the handshake
+                // by returning null (no suitable alias), which causes a TLS alert
+                return null;
             }
         }
 

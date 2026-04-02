@@ -15,6 +15,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.result.ActionResult;
+import be.elevenways.zenit.common.result.JsonResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.server.http.HttpConduit;
 import be.elevenways.zenit.server.http.Middleware;
@@ -65,6 +66,16 @@ public class HohenheimHandlers {
         HohenheimEndpoints.TEST_ERROR.setHandler(conduit -> {
             throw new RuntimeException("Deliberate test error for error handling verification");
         });
+
+        // Health check endpoint (no auth required -- handled in middleware)
+        HohenheimEndpoints.HEALTH.setHandler(conduit -> {
+            var proxy = ServerMain.getProxyServer();
+            Map<String, Object> status = new HashMap<>();
+            status.put("status", "ok");
+            status.put("httpState", proxy != null ? proxy.getHttpState().name() : "UNKNOWN");
+            status.put("httpsState", proxy != null ? proxy.getHttpsState().name() : "UNKNOWN");
+            return new JsonResult<>(status);
+        });
     }
 
     // -----------------------------------------------------------------------
@@ -81,6 +92,7 @@ public class HohenheimHandlers {
 
                 // Allow login, setup, and asset paths through
                 if (path.equals("/login") || path.equals("/setup")
+                    || path.startsWith("/api/health")
                     || path.endsWith(".js") || path.endsWith(".css")
                     || path.endsWith(".ico")) {
                     return null;
@@ -427,6 +439,44 @@ public class HohenheimHandlers {
             return redirectUntyped("/sites");
         });
 
+        // Site clone (POST /sites/:id/clone)
+        HohenheimEndpoints.SITES_CLONE.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            Row site = siteModel.find().where(SiteModel.ID.eq(siteId)).first();
+            if (site == null) return redirectUntyped("/sites");
+
+            String name = site.get(SiteModel.NAME) + " (copy)";
+            String slug = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+
+            Row clone = siteModel.createEmptyRow();
+            clone.set(SiteModel.NAME, name);
+            clone.set(SiteModel.SLUG, slug);
+            clone.set(SiteModel.SITE_TYPE, site.get(SiteModel.SITE_TYPE));
+            clone.set(SiteModel.SETTINGS, site.get(SiteModel.SETTINGS));
+            clone.set(SiteModel.STATUS, "active");
+            clone.set(SiteModel.ENABLED, false); // Clones start disabled
+            siteModel.save(clone);
+
+            // Clone domains too
+            int newSiteId = clone.get(SiteModel.ID);
+            List<Row> domains = domainModel.findBySiteId(siteId);
+            for (Row domain : domains) {
+                Row domainClone = domainModel.createEmptyRow();
+                domainClone.set(SiteDomainModel.SITE_ID, newSiteId);
+                domainClone.set(SiteDomainModel.HOSTNAME, domain.get(SiteDomainModel.HOSTNAME) + ".clone");
+                domainClone.set(SiteDomainModel.MATCH_TYPE, domain.get(SiteDomainModel.MATCH_TYPE));
+                domainClone.set(SiteDomainModel.FORCE_SSL, domain.get(SiteDomainModel.FORCE_SSL));
+                domainClone.set(SiteDomainModel.HSTS_ENABLED, domain.get(SiteDomainModel.HSTS_ENABLED));
+                domainClone.set(SiteDomainModel.HSTS_SUBDOMAINS, domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
+                domainClone.set(SiteDomainModel.PATH, domain.get(SiteDomainModel.PATH));
+                domainClone.set(SiteDomainModel.STRIP_PATH, domain.get(SiteDomainModel.STRIP_PATH));
+                domainModel.save(domainClone);
+            }
+
+            audit(auditModel, conduit, "cloned", "site", newSiteId, name);
+            return redirectUntyped("/sites/" + newSiteId);
+        });
+
         // Site delete (POST /sites/:id/delete)
         HohenheimEndpoints.SITES_DELETE.setHandler(conduit -> {
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
@@ -742,6 +792,32 @@ public class HohenheimHandlers {
 
             reloadProxy();
             return redirectUntyped("/certificates");
+        });
+
+        // Download (GET /certificates/:id/download)
+        HohenheimEndpoints.CERTIFICATES_DOWNLOAD.setHandler(conduit -> {
+            Integer certId = conduit.getParameter(HohenheimEndpoints.CERT_ID);
+            Row cert = certModel.findById(certId);
+            if (cert == null) return redirectUntyped("/certificates");
+
+            String certPem = cert.get(CertificateModel.CERTIFICATE_PEM);
+            String keyPem = cert.get(CertificateModel.PRIVATE_KEY_PEM);
+            String niceName = cert.get(CertificateModel.NICE_NAME);
+            if (certPem == null) certPem = "";
+            if (keyPem == null) keyPem = "";
+
+            // Build a simple concatenated PEM bundle
+            String bundle = "# Certificate: " + niceName + "\n\n" + certPem + "\n" + keyPem;
+
+            if (conduit instanceof HttpConduit http) {
+                String safeName = (niceName != null ? niceName : "certificate")
+                    .replaceAll("[^a-zA-Z0-9._-]", "_");
+                http.setResponseHeader("Content-Type", "application/x-pem-file");
+                http.setResponseHeader("Content-Disposition",
+                    "attachment; filename=\"" + safeName + ".pem\"");
+            }
+            conduit.endWithContentType("application/x-pem-file", bundle);
+            return null;
         });
 
         // Delete (POST)
