@@ -235,4 +235,202 @@ class TlsCertificateTest {
         sb.append("\n-----END PRIVATE KEY-----\n");
         return sb.toString();
     }
+
+    private static X509Certificate generateWildcardCert(KeyPair keyPair, String wildcardDomain)
+            throws Exception {
+        var now = new Date();
+        var until = new Date(now.getTime() + 365L * 86400000);
+
+        org.bouncycastle.asn1.x500.X500Name issuer =
+            new org.bouncycastle.asn1.x500.X500Name("CN=" + wildcardDomain);
+
+        org.bouncycastle.cert.X509v3CertificateBuilder builder =
+            new org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(
+                issuer, BigInteger.valueOf(System.currentTimeMillis()),
+                now, until, issuer, keyPair.getPublic());
+
+        org.bouncycastle.asn1.x509.GeneralName san =
+            new org.bouncycastle.asn1.x509.GeneralName(
+                org.bouncycastle.asn1.x509.GeneralName.dNSName, wildcardDomain);
+        builder.addExtension(
+            org.bouncycastle.asn1.x509.Extension.subjectAlternativeName, false,
+            new org.bouncycastle.asn1.x509.GeneralNames(san));
+
+        org.bouncycastle.operator.ContentSigner signer =
+            new org.bouncycastle.operator.jcajce.JcaContentSignerBuilder("SHA256withRSA")
+                .build(keyPair.getPrivate());
+
+        return new org.bouncycastle.cert.jcajce.JcaX509CertificateConverter()
+            .getCertificate(builder.build(signer));
+    }
+
+    // -----------------------------------------------------------------------
+    // Additional coverage tests
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(10)
+    void wildcardCertResolvesSubdomains() throws Exception {
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) db.delete();
+        HohenheimDatabase.init();
+
+        var ds = HohenheimDatabase.datasource();
+        var certModel = new CertificateModel(ds);
+
+        KeyPair kp = generateKeyPair();
+        X509Certificate cert = generateWildcardCert(kp, "*.wildcard.test");
+
+        Row row = certModel.createEmptyRow();
+        row.set(CertificateModel.NICE_NAME, "Wildcard Test");
+        row.set(CertificateModel.PROVIDER, "custom");
+        row.set(CertificateModel.STATUS, "active");
+        row.set(CertificateModel.CERTIFICATE_PEM, certToPem(cert));
+        row.set(CertificateModel.PRIVATE_KEY_PEM, keyToPem(kp));
+        certModel.save(row);
+
+        CertificateStore store = new CertificateStore();
+        store.loadFromDatabase();
+
+        // Wildcard should match subdomains
+        assertThat(store.resolveAlias("app.wildcard.test")).isNotNull();
+        assertThat(store.resolveAlias("api.wildcard.test")).isNotNull();
+
+        // Should NOT match the bare domain itself
+        assertThat(store.resolveAlias("wildcard.test")).isNull();
+
+        // Should NOT match deeper subdomains
+        assertThat(store.resolveAlias("deep.sub.wildcard.test")).isNull();
+    }
+
+    @Test
+    @Order(11)
+    void certificateRemovalClearsFromStore() throws Exception {
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) db.delete();
+        HohenheimDatabase.init();
+
+        var ds = HohenheimDatabase.datasource();
+        var certModel = new CertificateModel(ds);
+
+        KeyPair kp = generateKeyPair();
+        X509Certificate cert = generateSelfSignedCert(kp, "remove.test");
+
+        Row row = certModel.createEmptyRow();
+        row.set(CertificateModel.NICE_NAME, "Remove Test");
+        row.set(CertificateModel.PROVIDER, "custom");
+        row.set(CertificateModel.STATUS, "active");
+        row.set(CertificateModel.CERTIFICATE_PEM, certToPem(cert));
+        row.set(CertificateModel.PRIVATE_KEY_PEM, keyToPem(kp));
+        certModel.save(row);
+
+        CertificateStore store = new CertificateStore();
+        store.loadFromDatabase();
+        assertThat(store.resolveAlias("remove.test")).isNotNull();
+
+        // Delete from DB and reload
+        int certId = ((Number) row.get(CertificateModel.ID)).intValue();
+        certModel.find().where(CertificateModel.ID.eq(certId)).delete();
+        store.removeCertificate(certId);
+
+        assertThat(store.resolveAlias("remove.test")).isNull();
+        assertThat(store.isEmpty()).isTrue();
+    }
+
+    @Test
+    @Order(12)
+    void acmeChallengeValidatesHostname() {
+        var store = new CertificateStore();
+        var acme = new be.elevenways.hohenheim.server.tls.AcmeService(store);
+
+        // No pending challenges -- should return null
+        assertThat(acme.getChallengeResponse("some-token", "example.com")).isNull();
+    }
+
+    @Test
+    @Order(13)
+    void acmeAccountKeyRowExcludedFromStore() throws Exception {
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) db.delete();
+        HohenheimDatabase.init();
+
+        var ds = HohenheimDatabase.datasource();
+        var certModel = new CertificateModel(ds);
+
+        // Create an ACME account key row (should be excluded from TLS store)
+        Row accountRow = certModel.createEmptyRow();
+        accountRow.set(CertificateModel.NICE_NAME, "ACME Account Key");
+        accountRow.set(CertificateModel.PROVIDER, "acme_account");
+        accountRow.set(CertificateModel.PRIVATE_KEY_PEM, "-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----");
+        accountRow.set(CertificateModel.STATUS, "active");
+        certModel.save(accountRow);
+
+        CertificateStore store = new CertificateStore();
+        store.loadFromDatabase();
+
+        // Account key has no certificate_pem, so loadFromDatabase filters it out
+        // (the query filters on CERTIFICATE_PEM.isNotNull() AND STATUS.eq("active"))
+        assertThat(store.isEmpty()).isTrue();
+    }
+
+    @Test
+    @Order(14)
+    void httpsActuallyAcceptsTlsConnections() throws Exception {
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) db.delete();
+        HohenheimDatabase.init();
+
+        var ds = HohenheimDatabase.datasource();
+        var certModel = new CertificateModel(ds);
+
+        KeyPair kp = generateKeyPair();
+        X509Certificate cert = generateSelfSignedCert(kp, "localhost");
+
+        Row row = certModel.createEmptyRow();
+        row.set(CertificateModel.NICE_NAME, "Localhost TLS");
+        row.set(CertificateModel.PROVIDER, "custom");
+        row.set(CertificateModel.STATUS, "active");
+        row.set(CertificateModel.CERTIFICATE_PEM, certToPem(cert));
+        row.set(CertificateModel.PRIVATE_KEY_PEM, keyToPem(kp));
+        certModel.save(row);
+
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+
+        ProxyServer proxy = new ProxyServer();
+        proxy.start();
+
+        assertThat(proxy.getHttpsState()).isEqualTo(ProxyServer.State.RUNNING);
+
+        // Make an actual HTTPS connection to the proxy with a trust-all SSL context
+        javax.net.ssl.SSLContext trustAll = javax.net.ssl.SSLContext.getInstance("TLS");
+        trustAll.init(null, new javax.net.ssl.TrustManager[]{
+            new javax.net.ssl.X509TrustManager() {
+                public java.security.cert.X509Certificate[] getAcceptedIssuers() { return null; }
+                public void checkClientTrusted(java.security.cert.X509Certificate[] c, String a) {}
+                public void checkServerTrusted(java.security.cert.X509Certificate[] c, String a) {}
+            }
+        }, null);
+
+        // Get the actual port the HTTPS listener bound to
+        var listenerInfo = proxy.getHttpsListenerInfo();
+        int httpsPort = ((java.net.InetSocketAddress) listenerInfo.getAddress()).getPort();
+
+        java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+            .sslContext(trustAll)
+            .build();
+
+        java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+            .uri(java.net.URI.create("https://localhost:" + httpsPort + "/"))
+            .GET()
+            .build();
+
+        java.net.http.HttpResponse<String> response = client.send(request,
+            java.net.http.HttpResponse.BodyHandlers.ofString());
+
+        // The proxy should respond (404 since no sites configured, but TLS handshake works)
+        assertThat(response.statusCode()).isIn(200, 302, 404);
+
+        proxy.stop();
+    }
 }

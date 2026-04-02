@@ -198,6 +198,15 @@ public class ProxyServer {
         }
     }
 
+    /**
+     * Get the HTTPS listener info (for discovering the actual bound port in tests).
+     */
+    public io.undertow.Undertow.ListenerInfo getHttpsListenerInfo() {
+        if (httpsServer == null) return null;
+        var listeners = httpsServer.getListenerInfo();
+        return listeners.isEmpty() ? null : listeners.get(0);
+    }
+
     // Backwards-compatible accessors for dashboard
     public State getState() {
         if (httpState == State.RUNNING) return State.RUNNING;
