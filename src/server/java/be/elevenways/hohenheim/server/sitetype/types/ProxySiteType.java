@@ -50,7 +50,7 @@ public class ProxySiteType implements SiteTypeHandler {
         String scheme = (String) settings.getOrDefault("forward_scheme", "http");
         String host = (String) settings.get("forward_host");
         Object portObj = settings.get("forward_port");
-        int port = portObj instanceof Number ? ((Number) portObj).intValue() : 80;
+        int port = portObj instanceof Integer i ? i : 80;
 
         if (host == null || host.isEmpty()) {
             return (exchange, forwarder) -> {

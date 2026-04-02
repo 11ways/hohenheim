@@ -91,9 +91,8 @@ public class AuthHelper {
             return null;
         }
 
-        Object userIdRaw = session.get(SessionModel.USER_ID);
-        if (userIdRaw == null) return null;
-        int userId = ((Number) userIdRaw).intValue();
+        Integer userId = session.get(SessionModel.USER_ID);
+        if (userId == null) return null;
         return userModel.findById(userId);
     }
 

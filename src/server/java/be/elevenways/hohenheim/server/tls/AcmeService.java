@@ -102,7 +102,7 @@ public class AcmeService {
         certRow.set(CertificateModel.STATUS, "pending");
         certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
         certModel.save(certRow);
-        int certId = ((Number) certRow.get(CertificateModel.ID)).intValue();
+        int certId = certRow.get(CertificateModel.ID);
 
         try {
             OrderResult result = performAcmeOrder(hostnames);
@@ -160,8 +160,8 @@ public class AcmeService {
     }
 
     private void renewCertificate(Row certRow, CertificateModel certModel) {
-        String domainsText = (String) certRow.get(CertificateModel.DOMAIN_NAMES_TEXT);
-        String niceName = (String) certRow.get(CertificateModel.NICE_NAME);
+        String domainsText = certRow.get(CertificateModel.DOMAIN_NAMES_TEXT);
+        String niceName = certRow.get(CertificateModel.NICE_NAME);
         if (domainsText == null || domainsText.isEmpty()) return;
 
         List<String> hostnames = Arrays.asList(domainsText.split(","));
@@ -310,7 +310,7 @@ public class AcmeService {
             .first();
 
         if (accountRow != null) {
-            String keyPem = (String) accountRow.get(CertificateModel.PRIVATE_KEY_PEM);
+            String keyPem = accountRow.get(CertificateModel.PRIVATE_KEY_PEM);
             if (keyPem != null) {
                 try (var reader = new java.io.StringReader(keyPem)) {
                     return KeyPairUtils.readKeyPair(reader);

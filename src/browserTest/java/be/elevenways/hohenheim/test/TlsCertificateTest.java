@@ -329,7 +329,7 @@ class TlsCertificateTest {
         assertThat(store.resolveAlias("remove.test")).isNotNull();
 
         // Delete from DB and reload
-        int certId = ((Number) row.get(CertificateModel.ID)).intValue();
+        int certId = row.get(CertificateModel.ID);
         certModel.find().where(CertificateModel.ID.eq(certId)).delete();
         store.removeCertificate(certId);
 
@@ -392,7 +392,7 @@ class TlsCertificateTest {
         site.set(be.elevenways.hohenheim.model.SiteModel.STATUS, "active");
         siteModel.save(site);
 
-        int siteId = ((Number) site.get(be.elevenways.hohenheim.model.SiteModel.ID)).intValue();
+        int siteId = site.get(be.elevenways.hohenheim.model.SiteModel.ID);
 
         Row domain = domainModel.createEmptyRow();
         domain.set(be.elevenways.hohenheim.model.SiteDomainModel.SITE_ID, siteId);

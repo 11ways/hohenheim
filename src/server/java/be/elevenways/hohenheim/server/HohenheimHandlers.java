@@ -133,7 +133,7 @@ public class HohenheimHandlers {
             var userModel = new UserModel(ds);
             Row user = userModel.find().where(UserModel.EMAIL.eq(email)).first();
 
-            if (user == null || !AuthHelper.verifyPassword(password, (String) user.get(UserModel.PASSWORD_HASH))) {
+            if (user == null || !AuthHelper.verifyPassword(password, user.get(UserModel.PASSWORD_HASH))) {
                 return renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/login"),
                     Map.of("error", "Invalid email or password")
@@ -148,7 +148,7 @@ public class HohenheimHandlers {
                 );
             }
 
-            int userId = ((Number) user.get(UserModel.ID)).intValue();
+            int userId = user.get(UserModel.ID);
             String token = AuthHelper.createSession(userId);
             AuthHelper.setSessionCookie(conduit, token);
 
@@ -211,7 +211,7 @@ public class HohenheimHandlers {
             }
 
             Row user = AuthHelper.createUser(email, name, password);
-            int userId = ((Number) user.get(UserModel.ID)).intValue();
+            int userId = user.get(UserModel.ID);
             String token = AuthHelper.createSession(userId);
             AuthHelper.setSessionCookie(conduit, token);
 
@@ -291,11 +291,11 @@ public class HohenheimHandlers {
 
             List<Map<String, Object>> sites = new ArrayList<>();
             for (Row row : rows) {
-                List<Row> domains = domainModel.findBySiteId(((Number) row.get(SiteModel.ID)).intValue());
+                List<Row> domains = domainModel.findBySiteId(row.get(SiteModel.ID));
                 Map<String, Object> site = new HashMap<>();
                 site.put("id", row.get(SiteModel.ID));
                 site.put("name", row.get(SiteModel.NAME));
-                site.put("siteType", siteTypeDisplayName((String) row.get(SiteModel.SITE_TYPE)));
+                site.put("siteType", siteTypeDisplayName(row.get(SiteModel.SITE_TYPE)));
                 site.put("status", row.get(SiteModel.STATUS));
                 site.put("enabled", row.get(SiteModel.ENABLED));
                 site.put("domainCount", domains.size());
@@ -344,7 +344,7 @@ public class HohenheimHandlers {
             siteModel.save(row);
 
             if (!hostname.isEmpty()) {
-                int siteId = ((Number) row.get(SiteModel.ID)).intValue();
+                int siteId = row.get(SiteModel.ID);
                 Row domainRow = domainModel.createEmptyRow();
                 domainRow.set(SiteDomainModel.SITE_ID, siteId);
                 domainRow.set(SiteDomainModel.HOSTNAME, hostname);
@@ -392,7 +392,7 @@ public class HohenheimHandlers {
                 );
             }
 
-            String siteType = form.getOrDefault("site_type", (String) site.get(SiteModel.SITE_TYPE));
+            String siteType = form.getOrDefault("site_type", site.get(SiteModel.SITE_TYPE));
             Map<String, Object> settings = extractTypeSettings(form, siteType);
             boolean enabled = "on".equals(form.get("enabled")) || "true".equals(form.get("enabled"));
 
@@ -415,7 +415,7 @@ public class HohenheimHandlers {
             if (site != null) {
                 site.set(SiteModel.DELETED_AT, Instant.now());
                 siteModel.save(site);
-                audit(auditModel, conduit, "deleted", "site", siteId, (String) site.get(SiteModel.NAME));
+                audit(auditModel, conduit, "deleted", "site", siteId, site.get(SiteModel.NAME));
                 reloadProxy();
             }
 
@@ -462,7 +462,7 @@ public class HohenheimHandlers {
 
             Row domain = domainModel.find().where(SiteDomainModel.ID.eq(domainId)).first();
             if (domain != null) {
-                String hostname = (String) domain.get(SiteDomainModel.HOSTNAME);
+                String hostname = domain.get(SiteDomainModel.HOSTNAME);
                 domainModel.find().where(SiteDomainModel.ID.eq(domainId)).delete();
                 audit(auditModel, conduit, "deleted", "domain", domainId, hostname);
                 reloadProxy();
@@ -494,7 +494,7 @@ public class HohenheimHandlers {
                 cert.put("expiresOn", row.get(CertificateModel.EXPIRES_ON));
                 cert.put("autoRenew", row.get(CertificateModel.AUTO_RENEW));
 
-                String status = (String) row.get(CertificateModel.STATUS);
+                String status = row.get(CertificateModel.STATUS);
                 cert.put("status", status != null ? status : "active");
                 cert.put("renewalError", row.get(CertificateModel.RENEWAL_ERROR));
                 cert.put("domains", row.get(CertificateModel.DOMAIN_NAMES_TEXT));
@@ -615,7 +615,7 @@ public class HohenheimHandlers {
                     .where(CertificateModel.STATUS.eq("error"))
                     .orderBy(CertificateModel.CREATED_AT, SortOrder.DESC)
                     .first();
-                String error = failed != null ? (String) failed.get(CertificateModel.RENEWAL_ERROR) : "Unknown error";
+                String error = failed != null ? failed.get(CertificateModel.RENEWAL_ERROR) : "Unknown error";
                 return renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/certificates/request"),
                     Map.of("error", "Certificate request failed: " + (error != null ? error : "Unknown"))
@@ -776,7 +776,7 @@ public class HohenheimHandlers {
     }
 
     private static Map<String, Object> buildEditVars(Row site, SiteDomainModel domainModel, String error) {
-        int siteId = ((Number) site.get(SiteModel.ID)).intValue();
+        Integer siteId = site.get(SiteModel.ID);
         List<Row> domainRows = domainModel.findBySiteId(siteId);
         List<Map<String, Object>> domains = new ArrayList<>();
         for (Row dr : domainRows) {
@@ -801,7 +801,7 @@ public class HohenheimHandlers {
         Row row = model.createEmptyRow();
         if (user != null) {
             row.set(AuditLogModel.USER_ID, String.valueOf(user.get(UserModel.ID)));
-            row.set(AuditLogModel.USER_EMAIL, (String) user.get(UserModel.EMAIL));
+            row.set(AuditLogModel.USER_EMAIL, user.get(UserModel.EMAIL));
         }
         row.set(AuditLogModel.ACTION, action);
         row.set(AuditLogModel.RESOURCE_TYPE, resourceType);

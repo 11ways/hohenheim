@@ -139,7 +139,7 @@ public class CertificateStore {
                 addCertToKeyStore(cert, keyStore, hostnameToAlias);
                 loaded++;
             } catch (Exception e) {
-                String name = (String) cert.get(CertificateModel.NICE_NAME);
+                String name = cert.get(CertificateModel.NICE_NAME);
                 Blast.log("CertificateStore: failed to load cert:", name, "-", e.getMessage());
             }
         }
@@ -150,8 +150,8 @@ public class CertificateStore {
 
     private static void addCertToKeyStore(Row cert, KeyStore keyStore,
                                            Map<String, String> hostnameToAlias) throws Exception {
-        String certPem = (String) cert.get(CertificateModel.CERTIFICATE_PEM);
-        String keyPem = (String) cert.get(CertificateModel.PRIVATE_KEY_PEM);
+        String certPem = cert.get(CertificateModel.CERTIFICATE_PEM);
+        String keyPem = cert.get(CertificateModel.PRIVATE_KEY_PEM);
         Object idRaw = cert.get(CertificateModel.ID);
         String alias = "cert-" + idRaw;
 

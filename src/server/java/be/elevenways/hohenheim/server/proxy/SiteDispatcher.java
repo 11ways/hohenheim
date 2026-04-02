@@ -92,7 +92,7 @@ public class SiteDispatcher implements HttpHandler {
             this.handler = handler;
             this.siteName = siteName;
 
-            String p = domain != null ? (String) domain.get(SiteDomainModel.PATH) : null;
+            String p = domain != null ? domain.get(SiteDomainModel.PATH) : null;
             this.path = (p != null && !p.isEmpty()) ? p : null;
             this.stripPath = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.STRIP_PATH));
             this.forceSsl = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL));
@@ -141,9 +141,9 @@ public class SiteDispatcher implements HttpHandler {
         List<Row> sites = siteModel.findEnabled();
 
         for (Row site : sites) {
-            String siteTypeStr = (String) site.get(SiteModel.SITE_TYPE);
-            Object siteId = site.get(SiteModel.ID);
-            String siteName = (String) site.get(SiteModel.NAME);
+            String siteTypeStr = site.get(SiteModel.SITE_TYPE);
+            Integer siteId = site.get(SiteModel.ID);
+            String siteName = site.get(SiteModel.NAME);
 
             SiteTypeHandler typeHandler = SiteTypes.getHandler(siteTypeStr);
             if (typeHandler == null) {
@@ -156,11 +156,11 @@ public class SiteDispatcher implements HttpHandler {
             if (settings == null) settings = Map.of();
 
             SiteRequestHandler requestHandler = typeHandler.createHandler(site, settings);
-            List<Row> domains = domainModel.findBySiteId(((Number) siteId).intValue());
+            List<Row> domains = domainModel.findBySiteId(siteId);
 
             for (Row domain : domains) {
-                String hostname = (String) domain.get(SiteDomainModel.HOSTNAME);
-                String matchType = (String) domain.get(SiteDomainModel.MATCH_TYPE);
+                String hostname = domain.get(SiteDomainModel.HOSTNAME);
+                String matchType = domain.get(SiteDomainModel.MATCH_TYPE);
                 if (hostname == null || hostname.isEmpty()) continue;
 
                 RouteEntry entry = new RouteEntry(requestHandler, siteName, domain);
