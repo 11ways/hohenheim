@@ -8,6 +8,8 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 public class CertificateModel extends Model {
@@ -38,8 +40,10 @@ public class CertificateModel extends Model {
     }
 
     public List<Row> findExpiringSoon(int days) {
+        Instant cutoff = Instant.now().plus(days, ChronoUnit.DAYS);
         return find()
             .where(AUTO_RENEW.eq(true))
+            .and(EXPIRES_ON.lte(cutoff))
             .orderBy(EXPIRES_ON, SortOrder.ASC)
             .all();
     }

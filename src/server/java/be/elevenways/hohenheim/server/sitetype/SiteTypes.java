@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype;
 
+import be.elevenways.hohenheim.server.sitetype.types.DeadSiteType;
 import be.elevenways.hohenheim.server.sitetype.types.ProxySiteType;
 import be.elevenways.hohenheim.server.sitetype.types.RedirectSiteType;
 import be.elevenways.hohenheim.server.sitetype.types.StaticSiteType;
@@ -20,6 +21,7 @@ public class SiteTypes {
         registerType(ProxySiteType.ID, new ProxySiteType());
         registerType(StaticSiteType.ID, new StaticSiteType());
         registerType(RedirectSiteType.ID, new RedirectSiteType());
+        registerType(DeadSiteType.ID, new DeadSiteType());
     }
 
     private static void registerType(Identifier id, SiteTypeHandler handler) {

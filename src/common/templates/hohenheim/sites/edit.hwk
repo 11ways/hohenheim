@@ -1,0 +1,187 @@
+{% tag HhSiteEdit {
+
+    public siteId: Integer = 0
+    public siteName: String = ""
+    public siteType: String = "hohenheim:proxy"
+    public siteEnabled: Boolean = true
+    public error: String = ""
+
+    public forwardHost: String = ""
+    public forwardPort: String = ""
+    public rootPath: String = ""
+    public fallbackFile: String = ""
+    public targetUrl: String = ""
+    public httpStatus: String = "302"
+
+    template {
+        {% if error{:} != "" %}
+            <pl-alert variant={% "destructive" %} class="hh-form-error">
+                <pl-alert-title>Error</pl-alert-title>
+                <pl-alert-description>{{ error{:} }}</pl-alert-description>
+            </pl-alert>
+        {% /if %}
+
+        <pl-card class="hh-form-card">
+            <pl-card-header>
+                <pl-card-title>Site Settings</pl-card-title>
+                <pl-card-description>Update the configuration for this site.</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <form method="POST" action={% "/sites/" + siteId %}>
+                    <div class="hh-form-stack">
+
+                        <div class="hh-form-group">
+                            <pl-label target="site-name">Site Name</pl-label>
+                            <pl-input id="site-name" type={% "text" %} name={% "name" %} value={% siteName %} required={% true %}></pl-input>
+                        </div>
+
+                        <div class="hh-form-group">
+                            <pl-label target="site-type">Site Type</pl-label>
+                            <select id="site-type" name="site_type"
+                                    bind:value={% siteType{:} %}
+                                    class="hh-select">
+                                <option value="hohenheim:proxy">Proxy - Forward to upstream server</option>
+                                <option value="hohenheim:static">Static - Serve files from directory</option>
+                                <option value="hohenheim:redirect">Redirect - HTTP redirect</option>
+                                <option value="hohenheim:dead">Dead - Return 404 (park domain)</option>
+                            </select>
+                        </div>
+
+                        <div class="hh-form-group">
+                            <label class="hh-checkbox-label">
+                                <input type="checkbox" name="enabled" checked={% siteEnabled %}>
+                                <span>Enabled</span>
+                            </label>
+                        </div>
+
+                        <pl-separator></pl-separator>
+
+                        <hh-site-type-fields
+                            selectedType={% siteType{:} %}
+                            forwardHost={% forwardHost %}
+                            forwardPort={% forwardPort %}
+                            rootPath={% rootPath %}
+                            fallbackFile={% fallbackFile %}
+                            targetUrl={% targetUrl %}
+                            httpStatus={% httpStatus %}
+                        ></hh-site-type-fields>
+                    </div>
+
+                    <div class="hh-form-actions">
+                        <pl-button variant={% "primary" %} type={% "submit" %}>Save Changes</pl-button>
+                        <a href="/sites" class="hh-button-link"><pl-button variant={% "outline" %} type={% "button" %}>Cancel</pl-button></a>
+                    </div>
+                </form>
+            </pl-card-content>
+        </pl-card>
+    }
+} %}
+
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    {% declare site: Map %}
+    {% declare domains: List %}
+    {% declare error: String %}
+
+    <header class="hh-header">
+        <h1 class="hh-header__title">{{ site.get("name") }}</h1>
+    </header>
+    <main class="hh-content">
+
+        {% let settings = site.get("settings") %}
+
+        <hh-site-edit
+            siteId={% site.get("id") %}
+            siteName={% site.get("name") %}
+            siteType={% site.get("siteType") != null ? site.get("siteType") : "hohenheim:proxy" %}
+            siteEnabled={% site.get("enabled") != null ? site.get("enabled") : true %}
+            error={% error %}
+            forwardHost={% settings != null && settings.get("forward_host") != null ? settings.get("forward_host") + "" : "" %}
+            forwardPort={% settings != null && settings.get("forward_port") != null ? settings.get("forward_port") + "" : "" %}
+            rootPath={% settings != null && settings.get("root_path") != null ? settings.get("root_path") + "" : "" %}
+            fallbackFile={% settings != null && settings.get("fallback_file") != null ? settings.get("fallback_file") + "" : "" %}
+            targetUrl={% settings != null && settings.get("target_url") != null ? settings.get("target_url") + "" : "" %}
+            httpStatus={% settings != null && settings.get("http_status") != null ? settings.get("http_status") + "" : "302" %}
+        ></hh-site-edit>
+
+        <pl-card class="hh-domains-card">
+            <pl-card-header>
+                <pl-card-title>Domains</pl-card-title>
+                <pl-card-description>Hostnames that route to this site.</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <pl-table>
+                    <pl-table-header><pl-table-row>
+                        <pl-table-head>Hostname</pl-table-head>
+                        <pl-table-head>Match Type</pl-table-head>
+                        <pl-table-head>SSL</pl-table-head>
+                        <pl-table-head></pl-table-head>
+                    </pl-table-row></pl-table-header>
+                    <pl-table-body>
+                        {% each domains as index, domain %}
+                        <pl-table-row>
+                            <pl-table-cell>{{ domain.get("hostname") }}</pl-table-cell>
+                            <pl-table-cell>
+                                <pl-badge variant={% "secondary" %}>{{ domain.get("matchType") }}</pl-badge>
+                            </pl-table-cell>
+                            <pl-table-cell>
+                                {% if domain.get("forceSsl") == true %}
+                                    <pl-badge variant={% "default" %}>Forced</pl-badge>
+                                {% else %}
+                                    <pl-badge variant={% "outline" %}>Off</pl-badge>
+                                {% /if %}
+                            </pl-table-cell>
+                            <pl-table-cell>
+                                <form method="POST" action={% "/sites/" + site.get("id") + "/domains/" + domain.get("id") + "/delete" %}>
+                                    <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Remove</pl-button>
+                                </form>
+                            </pl-table-cell>
+                        </pl-table-row>
+                        {% /each %}
+                        {% if domains |> Array.length == 0 %}
+                        <pl-table-row>
+                            <pl-table-cell colspan="4" class="hh-empty-state">No domains configured.</pl-table-cell>
+                        </pl-table-row>
+                        {% /if %}
+                    </pl-table-body>
+                </pl-table>
+
+                <form method="POST" action={% "/sites/" + site.get("id") + "/domains" %} class="hh-add-domain-form">
+                    <div class="hh-form-row">
+                        <div class="hh-form-group hh-form-group--grow">
+                            <pl-input type={% "text" %} name={% "hostname" %} placeholder={% "example.com" %} required={% true %}></pl-input>
+                        </div>
+                        <div class="hh-form-group">
+                            <select name="match_type" class="hh-select">
+                                <option value="exact">Exact</option>
+                                <option value="wildcard">Wildcard</option>
+                            </select>
+                        </div>
+                        <pl-button variant={% "outline" %} type={% "submit" %}>Add Domain</pl-button>
+                    </div>
+                </form>
+            </pl-card-content>
+        </pl-card>
+
+        <div class="hh-danger-zone">
+            <pl-card>
+                <pl-card-header>
+                    <pl-card-title>Danger Zone</pl-card-title>
+                </pl-card-header>
+                <pl-card-content>
+                    <div class="hh-danger-action">
+                        <div>
+                            <strong>Delete this site</strong>
+                            <p class="hh-danger-description">This will soft-delete the site and remove it from the proxy.</p>
+                        </div>
+                        <form method="POST" action={% "/sites/" + site.get("id") + "/delete" %}>
+                            <pl-button variant={% "destructive" %} type={% "submit" %}>Delete Site</pl-button>
+                        </form>
+                    </div>
+                </pl-card-content>
+            </pl-card>
+        </div>
+
+    </main>
+{% /block %}

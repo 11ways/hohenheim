@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hawkeye.testSupport.HawkeyeBrowserTestBase;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.server.AuthHelper;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.ServerZenitRuntime;
@@ -14,6 +15,7 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
 
     private static ZenitHttpServer zenitServer;
     private static int port;
+    protected static String sessionToken;
 
     @Override
     protected int startServer() throws Exception {
@@ -21,13 +23,24 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
             return port;
         }
 
+        // Delete stale db from previous test class forks
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) {
+            db.delete();
+        }
+
         be.elevenways.hohenheim.server.sitetype.SiteTypes.register();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
-        be.elevenways.hohenheim.server.HohenheimHandlers.init();
 
         ServerZenitRuntime.init();
         Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
+
+        be.elevenways.hohenheim.server.HohenheimHandlers.init();
+
+        // Create a test user so the auth middleware doesn't block
+        AuthHelper.createUser("test@hohenheim.local", "Test Admin", "testpassword123");
+        sessionToken = AuthHelper.createSession(1);
 
         zenitServer = ServerZenitRuntime.createServer(0);
         zenitServer.start();
@@ -48,5 +61,16 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
     @Override
     protected int getServerPort() {
         return port;
+    }
+
+    @Override
+    protected void navigateToApp(String path) {
+        // Set session cookie before navigation so auth middleware allows access
+        page.context().addCookies(java.util.List.of(
+            new com.microsoft.playwright.options.Cookie("hh_session", sessionToken)
+                .setDomain("localhost")
+                .setPath("/")
+        ));
+        super.navigateToApp(path);
     }
 }

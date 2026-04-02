@@ -44,11 +44,6 @@ public class StaticSiteType implements SiteTypeHandler {
     public Schema getSchema() { return SETTINGS_SCHEMA; }
 
     @Override
-    public Map<String, Object> getProperties() {
-        return Map.of("description", getDescription(), "icon", getIcon());
-    }
-
-    @Override
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
         String rootPathStr = (String) settings.get("root_path");
         String fallbackFile = (String) settings.get("fallback_file");

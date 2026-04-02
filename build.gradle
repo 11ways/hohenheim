@@ -50,28 +50,19 @@ sourceSets {
         }
         resources { srcDirs = ['src/server/resources'] }
     }
-}
-
-sourceSets {
-    componentTemplates {
-        java { srcDirs = ['src/componentTemplates/java'] }
-        resources { srcDirs = ['src/componentTemplates/resources'] }
-        compileClasspath += sourceSets.common.output
-        runtimeClasspath += sourceSets.common.output
-    }
 
     browserTest {
         java { srcDirs = ['src/browserTest/java'] }
         resources { srcDirs = ['src/browserTest/resources'] }
-        compileClasspath += sourceSets.common.output + sourceSets.client.output + sourceSets.server.output + sourceSets.componentTemplates.output
-        runtimeClasspath += sourceSets.common.output + sourceSets.client.output + sourceSets.server.output + sourceSets.componentTemplates.output
+        compileClasspath += sourceSets.common.output + sourceSets.client.output + sourceSets.server.output
+        runtimeClasspath += sourceSets.common.output + sourceSets.client.output + sourceSets.server.output
     }
 }
 
 // --- Hawkeye Template Compilation ---
 hawkeye {
     namespace = 'hohenheim'
-    templateDirs = ['src/componentTemplates/resources/templates']
+    templateDirs = ['src/common/templates']
 }
 
 // --- Configurations ---
@@ -108,6 +99,7 @@ dependencies {
     commonCompileOnly teavm.libs.jsoApis
     commonCompileOnly ('be.elevenways:protoblast:0.1.0-SNAPSHOT:client') { changing = true }
     commonCompileOnly ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:common') { changing = true }
+    commonCompileOnly ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:browser') { changing = true }
     commonCompileOnly ('be.elevenways:zenit:0.1.0-SNAPSHOT:common') { changing = true }
     commonCompileOnly ('be.elevenways:plumage:0.1.0-SNAPSHOT:common') { changing = true }
 
@@ -130,18 +122,6 @@ dependencies {
     clientImplementation 'org.checkerframework:checker-qual:3.42.0'
     serverImplementation 'org.checkerframework:checker-qual:3.42.0'
 
-    // Component templates
-    componentTemplatesCompileOnly teavm.libs.jsoApis
-    componentTemplatesImplementation sourceSets.common.output
-    componentTemplatesImplementation ('be.elevenways:protoblast:0.1.0-SNAPSHOT:client') { changing = true }
-    componentTemplatesImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:browser') { changing = true }
-    componentTemplatesImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:common') { changing = true }
-    componentTemplatesImplementation ('be.elevenways:plumage:0.1.0-SNAPSHOT:common') { changing = true }
-    componentTemplatesImplementation 'org.checkerframework:checker-qual:3.42.0'
-
-    // Hawkeye compiler classpath
-    hawkeyeCompilerClasspath sourceSets.common.output
-
     // Database
     serverImplementation 'org.xerial:sqlite-jdbc:3.45.1.0'
 
@@ -155,7 +135,6 @@ dependencies {
     browserTestImplementation sourceSets.common.output
     browserTestImplementation sourceSets.client.output
     browserTestImplementation sourceSets.server.output
-    browserTestImplementation sourceSets.componentTemplates.output
     browserTestImplementation ('be.elevenways:protoblast:0.1.0-SNAPSHOT:server') { changing = true }
     browserTestImplementation ('be.elevenways:zenit:0.1.0-SNAPSHOT:server') { changing = true }
     browserTestImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:server') { changing = true }
@@ -177,7 +156,6 @@ task serverJar(type: ShadowJar) {
     configurations = [project.configurations.serverRuntimeClasspath]
     from sourceSets.server.output
     from sourceSets.common.output
-    from sourceSets.componentTemplates.output
     mergeServiceFiles()
 
     manifest {
@@ -196,7 +174,6 @@ task browserJar(type: ShadowJar) {
     configurations = [project.configurations.clientRuntimeClasspath]
     from(sourceSets.client.output)
     from(sourceSets.common.output)
-    from(sourceSets.componentTemplates.output)
     mergeServiceFiles()
 }
 
@@ -239,7 +216,7 @@ task browserTest(type: Test) {
 
     useJUnitPlatform()
     maxParallelForks = 1
-    forkEvery = 1  // New JVM per test class to isolate browser state
+    forkEvery = 1
     timeout = java.time.Duration.ofMinutes(5)
 
     systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')
@@ -253,35 +230,14 @@ task browserTest(type: Test) {
 
 // --- Task Dependencies ---
 afterEvaluate {
-    def hasHawkeyeTemplates = tasks.names.contains('compileComponentTemplatesHawkeyeTemplates')
-
-    if (hasHawkeyeTemplates) {
-        tasks.named('compileComponentTemplatesHawkeyeTemplates') {
-            dependsOn 'compileCommonJava', 'compileClientJava'
-        }
-        tasks.named('compileComponentTemplatesJava') {
-            dependsOn 'compileComponentTemplatesHawkeyeTemplates', 'compileCommonJava'
-        }
-    }
-
     tasks.named('compileServerJava') {
         dependsOn 'compileCommonJava'
-        if (hasHawkeyeTemplates) {
-            dependsOn 'compileComponentTemplatesJava'
-        }
     }
     tasks.named('generateJavaScript') {
         dependsOn 'compileClientJava', 'compileCommonJava'
-        if (hasHawkeyeTemplates) {
-            dependsOn 'compileComponentTemplatesJava'
-        }
     }
-
     tasks.named('compileBrowserTestJava') {
         dependsOn 'compileCommonJava', 'compileServerJava', 'compileClientJava'
-        if (hasHawkeyeTemplates) {
-            dependsOn 'compileComponentTemplatesJava'
-        }
     }
 }
 

@@ -17,12 +17,16 @@ public class ServerMain {
         // Register site types first (before SiteModel's RegistryEnumField is used)
         SiteTypes.register();
 
+        // Load endpoint definitions and database before the runtime starts
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
-        HohenheimHandlers.init();
 
+        // Initialize the Zenit runtime and configure the client script
         ServerZenitRuntime.main(args);
         Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
+
+        // Register handlers after the runtime is ready
+        HohenheimHandlers.init();
 
         proxyServer = new ProxyServer();
         proxyServer.start();

@@ -90,6 +90,16 @@ public class HohenheimSettings {
             .build();
     }
 
+    // --- Database ---
+    public abstract class Database {
+        public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("database");
+
+        public static final SettingDefinition<String> PATH = GROUP.buildSetting("path", String.class)
+            .defaultValue("hohenheim.db")
+            .description("SQLite database file path")
+            .build();
+    }
+
     // --- Security ---
     public abstract class Security {
         public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("security");

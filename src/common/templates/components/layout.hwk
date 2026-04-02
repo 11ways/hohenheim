@@ -13,19 +13,17 @@
                 <li><a class="hh-sidebar__link" href="/">Dashboard</a></li>
                 <li><a class="hh-sidebar__link" href="/sites">Sites</a></li>
                 <li><a class="hh-sidebar__link" href="/certificates">Certificates</a></li>
+                <li><a class="hh-sidebar__link" href="/settings">Settings</a></li>
+                <li><a class="hh-sidebar__link" href="/audit">Audit Log</a></li>
             </ul>
+            <div class="hh-sidebar__footer">
+                <form method="POST" action="/logout">
+                    <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Sign Out</pl-button>
+                </form>
+            </div>
         </nav>
         <div class="hh-main">
-            <he-block block-name="main">
-            {% block "main" %}
-                <header class="hh-header">
-                    <h1 class="hh-header__title">{{ pageTitle{:} }}</h1>
-                </header>
-                <main class="hh-content">
-                    <slot></slot>
-                </main>
-            {% /block %}
-            </he-block>
+            <he-block block-name="main"></he-block>
         </div>
     }
 } %}

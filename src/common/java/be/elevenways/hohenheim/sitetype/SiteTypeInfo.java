@@ -17,4 +17,11 @@ public interface SiteTypeInfo extends TypeDefinition {
      * Icon identifier for the admin UI.
      */
     String getIcon();
+
+    /**
+     * Standard properties map containing description and icon.
+     */
+    default java.util.Map<String, Object> getProperties() {
+        return java.util.Map.of("description", getDescription(), "icon", getIcon());
+    }
 }

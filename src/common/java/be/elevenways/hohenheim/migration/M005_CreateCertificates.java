@@ -14,18 +14,18 @@ public class M005_CreateCertificates extends Migration {
     public void up(MigrationBuilder schema) {
         schema.createTable("certificates", table -> {
             table.id();
-            table.foreignId("organization_id", "organizations");
+            table.addColumn("organization_id", ColumnType.INTEGER, col -> col.nullable(true));
             table.string("nice_name", 255);
-            table.json("domain_names");
+            table.addColumn("domain_names", ColumnType.JSON, col -> col.nullable(true));
             table.addColumn("provider", ColumnType.STRING, col -> col.maxLength(50).defaultValue("letsencrypt"));
-            table.text("certificate_pem");
-            table.text("private_key_pem");
-            table.datetime("expires_on");
+            table.addColumn("certificate_pem", ColumnType.TEXT, col -> col.nullable(true));
+            table.addColumn("private_key_pem", ColumnType.TEXT, col -> col.nullable(true));
+            table.addColumn("expires_on", ColumnType.DATETIME, col -> col.nullable(true));
             table.addColumn("auto_renew", ColumnType.BOOLEAN, col -> col.defaultValue(true));
-            table.string("dns_provider", 100);
-            table.text("dns_credentials");
-            table.string("acme_server", 255);
-            table.json("meta");
+            table.addColumn("dns_provider", ColumnType.STRING, col -> col.maxLength(100).nullable(true));
+            table.addColumn("dns_credentials", ColumnType.TEXT, col -> col.nullable(true));
+            table.addColumn("acme_server", ColumnType.STRING, col -> col.maxLength(255).nullable(true));
+            table.addColumn("meta", ColumnType.JSON, col -> col.nullable(true));
             table.timestamps();
             table.addIndex("organization_id");
         });

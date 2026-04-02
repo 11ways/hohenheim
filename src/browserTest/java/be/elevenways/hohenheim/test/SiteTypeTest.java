@@ -6,16 +6,24 @@ import static org.assertj.core.api.Assertions.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SiteTypeTest extends HohenheimTestBase {
 
+    /**
+     * Get the visible text content of the form, excluding hydration script data.
+     */
+    private String getFormText() {
+        return page.locator("form[action='/sites/create']").textContent();
+    }
+
     @Test
     @Order(1)
     void createFormShowsProxyFieldsByDefault() {
         navigateToApp("/sites/create");
         waitForHydration();
 
-        assertThat(page.content()).contains("Upstream Host");
-        assertThat(page.content()).contains("Port");
-        assertThat(page.content()).doesNotContain("Root Directory");
-        assertThat(page.content()).doesNotContain("Target URL");
+        String formText = getFormText();
+        assertThat(formText).contains("Upstream Host");
+        assertThat(formText).contains("Port");
+        assertThat(formText).doesNotContain("Root Directory");
+        assertThat(formText).doesNotContain("Target URL");
     }
 
     @Test
@@ -25,10 +33,11 @@ class SiteTypeTest extends HohenheimTestBase {
         waitForHydration();
 
         var options = page.locator("select[name='site_type'] option");
-        assertThat(options.count()).isEqualTo(3);
+        assertThat(options.count()).isEqualTo(4);
         assertThat(options.nth(0).textContent()).contains("Proxy");
         assertThat(options.nth(1).textContent()).contains("Static");
         assertThat(options.nth(2).textContent()).contains("Redirect");
+        assertThat(options.nth(3).textContent()).contains("Dead");
     }
 
     @Test
@@ -38,11 +47,12 @@ class SiteTypeTest extends HohenheimTestBase {
         waitForHydration();
 
         page.locator("select[name='site_type']").selectOption("hohenheim:static");
-        page.waitForCondition(() -> page.content().contains("Root Directory"));
+        page.waitForCondition(() -> getFormText().contains("Root Directory"));
 
-        assertThat(page.content()).contains("Root Directory");
-        assertThat(page.content()).contains("SPA Fallback");
-        assertThat(page.content()).doesNotContain("Upstream Host");
+        String formText = getFormText();
+        assertThat(formText).contains("Root Directory");
+        assertThat(formText).contains("SPA Fallback");
+        assertThat(formText).doesNotContain("Upstream Host");
     }
 
     @Test
@@ -52,11 +62,12 @@ class SiteTypeTest extends HohenheimTestBase {
         waitForHydration();
 
         page.locator("select[name='site_type']").selectOption("hohenheim:redirect");
-        page.waitForCondition(() -> page.content().contains("Target URL"));
+        page.waitForCondition(() -> getFormText().contains("Target URL"));
 
-        assertThat(page.content()).contains("Target URL");
-        assertThat(page.content()).contains("Status Code");
-        assertThat(page.content()).doesNotContain("Upstream Host");
+        String formText = getFormText();
+        assertThat(formText).contains("Target URL");
+        assertThat(formText).contains("Status Code");
+        assertThat(formText).doesNotContain("Upstream Host");
     }
 
     @Test
@@ -66,13 +77,14 @@ class SiteTypeTest extends HohenheimTestBase {
         waitForHydration();
 
         page.locator("select[name='site_type']").selectOption("hohenheim:redirect");
-        page.waitForCondition(() -> page.content().contains("Target URL"));
+        page.waitForCondition(() -> getFormText().contains("Target URL"));
 
         page.locator("select[name='site_type']").selectOption("hohenheim:proxy");
-        page.waitForCondition(() -> page.content().contains("Upstream Host"));
+        page.waitForCondition(() -> getFormText().contains("Upstream Host"));
 
-        assertThat(page.content()).contains("Upstream Host");
-        assertThat(page.content()).doesNotContain("Target URL");
+        String formText = getFormText();
+        assertThat(formText).contains("Upstream Host");
+        assertThat(formText).doesNotContain("Target URL");
     }
 
     @Test
@@ -80,6 +92,6 @@ class SiteTypeTest extends HohenheimTestBase {
     void formHasDomainField() {
         navigateToApp("/sites/create");
         waitForHydration();
-        assertThat(page.content()).contains("Domain (optional)");
+        assertThat(getFormText()).contains("Domain (optional)");
     }
 }

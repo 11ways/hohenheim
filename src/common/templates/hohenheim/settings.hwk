@@ -1,0 +1,144 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    <header class="hh-header">
+        <h1 class="hh-header__title">Settings</h1>
+    </header>
+    <main class="hh-content">
+
+        {% declare proxyHttpPort: Integer %}
+        {% declare proxyHttpsPort: Integer %}
+        {% declare proxyFallback: String %}
+        {% declare proxyForceHttps: Boolean %}
+        {% declare adminPort: Integer %}
+        {% declare dbPath: String %}
+        {% declare logAccessToDb: Boolean %}
+        {% declare logAccessToFile: Boolean %}
+        {% declare logAccessPath: String %}
+        {% declare logCollectStats: Boolean %}
+        {% declare secLogDomainMisses: Boolean %}
+        {% declare secDomainMissThreshold: Integer %}
+        {% declare saved: String = "" %}
+
+        {% if saved == "true" %}
+            <pl-alert variant={% "default" %} class="hh-form-error">
+                <pl-alert-description>Settings saved. Some changes require a restart to take effect.</pl-alert-description>
+            </pl-alert>
+        {% /if %}
+
+        <form method="POST" action="/settings">
+            <div class="hh-settings-grid">
+
+                <pl-card>
+                    <pl-card-header>
+                        <pl-card-title>Proxy</pl-card-title>
+                        <pl-card-description>Reverse proxy listener configuration.</pl-card-description>
+                    </pl-card-header>
+                    <pl-card-content>
+                        <div class="hh-form-stack">
+                            <div class="hh-form-row">
+                                <div class="hh-form-group hh-form-group--grow">
+                                    <pl-label target="proxy-http-port">HTTP Port</pl-label>
+                                    <pl-input id="proxy-http-port" type={% "number" %} name={% "proxy_http_port" %} value={% proxyHttpPort + "" %}></pl-input>
+                                </div>
+                                <div class="hh-form-group hh-form-group--grow">
+                                    <pl-label target="proxy-https-port">HTTPS Port</pl-label>
+                                    <pl-input id="proxy-https-port" type={% "number" %} name={% "proxy_https_port" %} value={% proxyHttpsPort + "" %}></pl-input>
+                                </div>
+                            </div>
+                            <div class="hh-form-group">
+                                <pl-label target="proxy-fallback">Fallback Address</pl-label>
+                                <pl-input id="proxy-fallback" type={% "text" %} name={% "proxy_fallback" %} value={% proxyFallback %} placeholder={% "https://example.com" %}></pl-input>
+                            </div>
+                            <div class="hh-form-group">
+                                <label class="hh-checkbox-label">
+                                    <input type="checkbox" name="proxy_force_https" checked={% proxyForceHttps %}>
+                                    <span>Force HTTPS globally</span>
+                                </label>
+                            </div>
+                        </div>
+                    </pl-card-content>
+                </pl-card>
+
+                <pl-card>
+                    <pl-card-header>
+                        <pl-card-title>Logging</pl-card-title>
+                        <pl-card-description>Access logging and statistics.</pl-card-description>
+                    </pl-card-header>
+                    <pl-card-content>
+                        <div class="hh-form-stack">
+                            <div class="hh-form-group">
+                                <label class="hh-checkbox-label">
+                                    <input type="checkbox" name="log_access_to_db" checked={% logAccessToDb %}>
+                                    <span>Log to database</span>
+                                </label>
+                            </div>
+                            <div class="hh-form-group">
+                                <label class="hh-checkbox-label">
+                                    <input type="checkbox" name="log_access_to_file" checked={% logAccessToFile %}>
+                                    <span>Log to file</span>
+                                </label>
+                            </div>
+                            <div class="hh-form-group">
+                                <pl-label target="log-path">Log File Path</pl-label>
+                                <pl-input id="log-path" type={% "text" %} name={% "log_access_path" %} value={% logAccessPath %}></pl-input>
+                            </div>
+                            <div class="hh-form-group">
+                                <label class="hh-checkbox-label">
+                                    <input type="checkbox" name="log_collect_stats" checked={% logCollectStats %}>
+                                    <span>Collect statistics</span>
+                                </label>
+                            </div>
+                        </div>
+                    </pl-card-content>
+                </pl-card>
+
+                <pl-card>
+                    <pl-card-header>
+                        <pl-card-title>Security</pl-card-title>
+                        <pl-card-description>Domain miss logging and IP reputation.</pl-card-description>
+                    </pl-card-header>
+                    <pl-card-content>
+                        <div class="hh-form-stack">
+                            <div class="hh-form-group">
+                                <label class="hh-checkbox-label">
+                                    <input type="checkbox" name="sec_log_domain_misses" checked={% secLogDomainMisses %}>
+                                    <span>Log domain misses</span>
+                                </label>
+                            </div>
+                            <div class="hh-form-group">
+                                <pl-label target="sec-threshold">Miss Threshold</pl-label>
+                                <pl-input id="sec-threshold" type={% "number" %} name={% "sec_domain_miss_threshold" %} value={% secDomainMissThreshold + "" %}></pl-input>
+                            </div>
+                        </div>
+                    </pl-card-content>
+                </pl-card>
+
+                <pl-card>
+                    <pl-card-header>
+                        <pl-card-title>Admin</pl-card-title>
+                        <pl-card-description>Admin interface and database.</pl-card-description>
+                    </pl-card-header>
+                    <pl-card-content>
+                        <div class="hh-settings-list">
+                            <div class="hh-settings-item">
+                                <div class="hh-settings-label">Admin Port</div>
+                                <div class="hh-settings-value">{{ adminPort }}</div>
+                            </div>
+                            <div class="hh-settings-item">
+                                <div class="hh-settings-label">Database Path</div>
+                                <div class="hh-settings-value">{{ dbPath }}</div>
+                            </div>
+                        </div>
+                    </pl-card-content>
+                </pl-card>
+
+            </div>
+
+            <div class="hh-form-actions hh-settings-actions">
+                <pl-button variant={% "primary" %} type={% "submit" %}>Save Settings</pl-button>
+            </div>
+        </form>
+
+    </main>
+{% /block %}

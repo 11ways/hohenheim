@@ -1,0 +1,66 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    <header class="hh-header">
+        <h1 class="hh-header__title">Certificates</h1>
+    </header>
+    <main class="hh-content">
+
+        {% declare certificates: List %}
+        {% declare certCount: Integer %}
+
+        <div class="hh-page-actions">
+            <p class="hh-page-actions__description">SSL/TLS certificates for your sites.</p>
+            <a href="/certificates/upload" class="hh-button-link"><pl-button variant="primary">Upload Certificate</pl-button></a>
+        </div>
+
+        <pl-card>
+            <pl-card-content>
+                <pl-table>
+                    <pl-table-header><pl-table-row>
+                        <pl-table-head>Name</pl-table-head>
+                        <pl-table-head>Provider</pl-table-head>
+                        <pl-table-head>Expires</pl-table-head>
+                        <pl-table-head>Auto-Renew</pl-table-head>
+                        <pl-table-head></pl-table-head>
+                    </pl-table-row></pl-table-header>
+                    <pl-table-body>
+                        {% each certificates as index, cert %}
+                        <pl-table-row>
+                            <pl-table-cell>{{ cert.get("niceName") }}</pl-table-cell>
+                            <pl-table-cell>
+                                <pl-badge variant={% "secondary" %}>{{ cert.get("provider") }}</pl-badge>
+                            </pl-table-cell>
+                            <pl-table-cell>
+                                {% if cert.get("expiresOn") != null %}
+                                    {{ cert.get("expiresOn") }}
+                                {% else %}
+                                    <span class="hh-text-muted">Not set</span>
+                                {% /if %}
+                            </pl-table-cell>
+                            <pl-table-cell>
+                                {% if cert.get("autoRenew") == true %}
+                                    <pl-badge variant={% "default" %}>Yes</pl-badge>
+                                {% else %}
+                                    <pl-badge variant={% "outline" %}>No</pl-badge>
+                                {% /if %}
+                            </pl-table-cell>
+                            <pl-table-cell>
+                                <form method="POST" action={% "/certificates/" + cert.get("id") + "/delete" %}>
+                                    <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Delete</pl-button>
+                                </form>
+                            </pl-table-cell>
+                        </pl-table-row>
+                        {% /each %}
+                        {% if certCount == 0 %}
+                        <pl-table-row>
+                            <pl-table-cell colspan="5" class="hh-empty-state">No certificates yet.</pl-table-cell>
+                        </pl-table-row>
+                        {% /if %}
+                    </pl-table-body>
+                </pl-table>
+            </pl-card-content>
+        </pl-card>
+
+    </main>
+{% /block %}

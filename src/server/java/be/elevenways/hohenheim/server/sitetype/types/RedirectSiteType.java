@@ -45,11 +45,6 @@ public class RedirectSiteType implements SiteTypeHandler {
     public Schema getSchema() { return SETTINGS_SCHEMA; }
 
     @Override
-    public Map<String, Object> getProperties() {
-        return Map.of("description", getDescription(), "icon", getIcon());
-    }
-
-    @Override
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
         String targetUrl = (String) settings.get("target_url");
         String statusStr = (String) settings.getOrDefault("http_status", "302");

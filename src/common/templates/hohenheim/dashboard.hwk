@@ -1,0 +1,64 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    <header class="hh-header">
+        <h1 class="hh-header__title">Dashboard</h1>
+    </header>
+    <main class="hh-content">
+
+        {% declare siteCount: Integer %}
+        {% declare certCount: Integer %}
+        {% declare proxyStatus: String %}
+        {% declare routeCount: Integer %}
+        {% declare activity: List %}
+
+        <div class="hh-stat-grid">
+            <pl-card>
+                <pl-card-header><pl-card-title>Sites</pl-card-title><pl-card-description>Managed proxy sites</pl-card-description></pl-card-header>
+                <pl-card-content><p class="hh-stat-value">{{ siteCount }}</p></pl-card-content>
+            </pl-card>
+            <pl-card>
+                <pl-card-header><pl-card-title>Certificates</pl-card-title><pl-card-description>SSL/TLS certificates</pl-card-description></pl-card-header>
+                <pl-card-content><p class="hh-stat-value">{{ certCount }}</p></pl-card-content>
+            </pl-card>
+            <pl-card>
+                <pl-card-header><pl-card-title>Proxy</pl-card-title><pl-card-description>{{ routeCount }} active routes</pl-card-description></pl-card-header>
+                <pl-card-content>
+                    {% if proxyStatus |> String.startsWith("Failed") %}
+                        <pl-badge variant={% "destructive" %}>{{ proxyStatus }}</pl-badge>
+                    {% elseif proxyStatus == "Running" %}
+                        <pl-badge variant={% "default" %}>{{ proxyStatus }}</pl-badge>
+                    {% else %}
+                        <pl-badge variant={% "outline" %}>{{ proxyStatus }}</pl-badge>
+                    {% /if %}
+                </pl-card-content>
+            </pl-card>
+        </div>
+
+        <div class="hh-dashboard-actions">
+            <a href="/sites/create" class="hh-button-link"><pl-button variant={% "outline" %}>Create Site</pl-button></a>
+            <a href="/settings" class="hh-button-link"><pl-button variant={% "outline" %}>Settings</pl-button></a>
+        </div>
+
+        <pl-card class="hh-activity-card">
+            <pl-card-header>
+                <pl-card-title>Recent Activity</pl-card-title>
+                <pl-card-description>
+                    <a href="/audit" class="hh-site-link">View all</a>
+                </pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                {% if activity |> Array.length == 0 %}
+                    <p class="hh-empty-state">No recent activity.</p>
+                {% /if %}
+                {% each activity as index, entry %}
+                    <div class="hh-activity-item">
+                        <pl-badge variant={% entry.get("action") == "created" ? "default" : entry.get("action") == "deleted" ? "destructive" : "secondary" %}>{{ entry.get("action") }}</pl-badge>
+                        <span class="hh-activity-text">{{ entry.get("resourceType") }}: {{ entry.get("resourceName") }}</span>
+                    </div>
+                {% /each %}
+            </pl-card-content>
+        </pl-card>
+
+    </main>
+{% /block %}

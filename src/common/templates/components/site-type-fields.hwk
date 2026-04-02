@@ -1,0 +1,58 @@
+{% tag HhSiteTypeFields {
+
+    public selectedType: String = "hohenheim:proxy"
+    public forwardHost: String = ""
+    public forwardPort: String = ""
+    public rootPath: String = ""
+    public fallbackFile: String = ""
+    public targetUrl: String = ""
+    public httpStatus: String = "302"
+
+    template {
+        {% if selectedType{:} == "hohenheim:proxy" %}
+        <div class="hh-form-section">
+            <div class="hh-form-row">
+                <div class="hh-form-group hh-form-group--grow">
+                    <pl-label target="forward-host">Upstream Host</pl-label>
+                    <pl-input id="forward-host" type={% "text" %} name={% "forward_host" %} value={% forwardHost %} placeholder={% "127.0.0.1" %}></pl-input>
+                </div>
+                <div class="hh-form-group hh-form-group--port">
+                    <pl-label target="forward-port">Port</pl-label>
+                    <pl-input id="forward-port" type={% "number" %} name={% "forward_port" %} value={% forwardPort %} placeholder={% "3000" %}></pl-input>
+                </div>
+            </div>
+        </div>
+        {% /if %}
+
+        {% if selectedType{:} == "hohenheim:static" %}
+        <div class="hh-form-section">
+            <div class="hh-form-group">
+                <pl-label target="root-path">Root Directory</pl-label>
+                <pl-input id="root-path" type={% "text" %} name={% "root_path" %} value={% rootPath %} placeholder={% "/var/www/html" %}></pl-input>
+            </div>
+            <div class="hh-form-group">
+                <pl-label target="fallback-file">SPA Fallback File</pl-label>
+                <pl-input id="fallback-file" type={% "text" %} name={% "fallback_file" %} value={% fallbackFile %} placeholder={% "index.html" %}></pl-input>
+            </div>
+        </div>
+        {% /if %}
+
+        {% if selectedType{:} == "hohenheim:redirect" %}
+        <div class="hh-form-section">
+            <div class="hh-form-group">
+                <pl-label target="target-url">Target URL</pl-label>
+                <pl-input id="target-url" type={% "text" %} name={% "target_url" %} value={% targetUrl %} placeholder={% "https://example.com" %}></pl-input>
+            </div>
+            <div class="hh-form-group">
+                <pl-label target="http-status">Status Code</pl-label>
+                <select id="http-status" name="http_status" class="hh-select">
+                    <option value="302">302 Found (temporary)</option>
+                    <option value="301">301 Permanent</option>
+                    <option value="307">307 Temporary Redirect</option>
+                    <option value="308">308 Permanent Redirect</option>
+                </select>
+            </div>
+        </div>
+        {% /if %}
+    }
+} %}

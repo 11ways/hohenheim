@@ -1,0 +1,72 @@
+{% tag HhSiteCreate {
+
+    public error: String = ""
+    public selectedType: String = "hohenheim:proxy"
+
+    template {
+        {% if error{:} != "" %}
+            <pl-alert variant={% "destructive" %} class="hh-form-error">
+                <pl-alert-title>Error</pl-alert-title>
+                <pl-alert-description>{{ error{:} }}</pl-alert-description>
+            </pl-alert>
+        {% /if %}
+
+        <pl-card class="hh-form-card">
+            <pl-card-header>
+                <pl-card-title>New Site</pl-card-title>
+                <pl-card-description>Configure a new site for the reverse proxy.</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <form method="POST" action="/sites/create">
+                    <div class="hh-form-stack">
+
+                        <div class="hh-form-group">
+                            <pl-label target="site-name">Site Name</pl-label>
+                            <pl-input id="site-name" type={% "text" %} name={% "name" %} placeholder={% "My Website" %} required={% true %}></pl-input>
+                        </div>
+
+                        <div class="hh-form-group">
+                            <pl-label target="site-type">Site Type</pl-label>
+                            <select id="site-type" name="site_type"
+                                    bind:value={% selectedType{:} %}
+                                    class="hh-select">
+                                <option value="hohenheim:proxy">Proxy - Forward to upstream server</option>
+                                <option value="hohenheim:static">Static - Serve files from directory</option>
+                                <option value="hohenheim:redirect">Redirect - HTTP redirect</option>
+                                <option value="hohenheim:dead">Dead - Return 404 (park domain)</option>
+                            </select>
+                        </div>
+
+                        <pl-separator></pl-separator>
+
+                        <hh-site-type-fields selectedType={% selectedType{:} %}></hh-site-type-fields>
+
+                        <pl-separator></pl-separator>
+
+                        <div class="hh-form-group">
+                            <pl-label target="hostname">Domain (optional)</pl-label>
+                            <pl-input id="hostname" type={% "text" %} name={% "hostname" %} placeholder={% "example.com" %}></pl-input>
+                        </div>
+                    </div>
+
+                    <div class="hh-form-actions">
+                        <pl-button variant={% "primary" %} type={% "submit" %}>Create Site</pl-button>
+                        <a href="/sites" class="hh-button-link"><pl-button variant={% "outline" %} type={% "button" %}>Cancel</pl-button></a>
+                    </div>
+                </form>
+            </pl-card-content>
+        </pl-card>
+    }
+} %}
+
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    <header class="hh-header">
+        <h1 class="hh-header__title">Create Site</h1>
+    </header>
+    <main class="hh-content">
+        {% declare error: String %}
+        <hh-site-create error={% error{:} %}></hh-site-create>
+    </main>
+{% /block %}

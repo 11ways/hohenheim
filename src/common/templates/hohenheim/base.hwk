@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <title>Hohenheim</title>
+</head>
+<body onload="main()">
+<hh-layout></hh-layout>
+</body>
+</html>

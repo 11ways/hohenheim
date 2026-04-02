@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <title>Setup - Hohenheim</title>
+    {% style(href: "/plumage.css") %}
+    {% style(href: "/hohenheim.css") %}
+</head>
+<body onload="main()" class="hh-auth-body">
+    {% script(src: "/hohenheim.js") %}
+
+    {% declare error: String %}
+
+    <div class="hh-auth-container">
+        <div class="hh-auth-logo">Hohenheim</div>
+
+        {% if error != "" %}
+            <pl-alert variant={% "destructive" %} class="hh-form-error">
+                <pl-alert-description>{{ error }}</pl-alert-description>
+            </pl-alert>
+        {% /if %}
+
+        <pl-card>
+            <pl-card-header>
+                <pl-card-title>Initial Setup</pl-card-title>
+                <pl-card-description>Create the first administrator account.</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <form method="POST" action="/setup">
+                    <div class="hh-form-stack">
+                        <div class="hh-form-group">
+                            <pl-label target="name">Name</pl-label>
+                            <pl-input id="name" type={% "text" %} name={% "name" %} placeholder={% "Admin" %} required={% true %}></pl-input>
+                        </div>
+                        <div class="hh-form-group">
+                            <pl-label target="email">Email</pl-label>
+                            <pl-input id="email" type={% "email" %} name={% "email" %} placeholder={% "admin@example.com" %} required={% true %}></pl-input>
+                        </div>
+                        <div class="hh-form-group">
+                            <pl-label target="password">Password</pl-label>
+                            <pl-input id="password" type={% "password" %} name={% "password" %} required={% true %}></pl-input>
+                        </div>
+                        <div class="hh-form-group">
+                            <pl-label target="confirm">Confirm Password</pl-label>
+                            <pl-input id="confirm" type={% "password" %} name={% "confirm_password" %} required={% true %}></pl-input>
+                        </div>
+                    </div>
+                    <div class="hh-form-actions">
+                        <pl-button variant={% "primary" %} type={% "submit" %}>Create Account</pl-button>
+                    </div>
+                </form>
+            </pl-card-content>
+        </pl-card>
+    </div>
+</body>
+</html>

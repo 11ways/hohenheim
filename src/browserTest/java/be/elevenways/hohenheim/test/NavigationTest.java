@@ -88,11 +88,21 @@ class NavigationTest extends HohenheimTestBase {
         waitForTitle("Sites");
 
         assertThat(page.locator(".hh-sidebar__logo").textContent()).isEqualTo("Hohenheim");
-        assertThat(page.locator(".hh-sidebar__link").count()).isEqualTo(3);
+        assertThat(page.locator(".hh-sidebar__link").count()).isEqualTo(5);
     }
 
     @Test
     @Order(8)
+    void settingsPageLoads() {
+        navigateToApp("/settings");
+        waitForHydration();
+        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Settings");
+        assertThat(page.content()).contains("Proxy");
+        assertThat(page.content()).contains("Security");
+    }
+
+    @Test
+    @Order(9)
     void browserBackButtonWorks() {
         navigateToApp("/");
         waitForHydration();

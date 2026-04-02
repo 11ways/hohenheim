@@ -6,8 +6,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
-
 import java.util.List;
 
 public class SiteDomainModel extends Model {
@@ -16,7 +14,7 @@ public class SiteDomainModel extends Model {
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final StringField SITE_ID = SCHEMA.addField(StringField.builder().name("site_id").build());
+    public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());
     public static final StringField HOSTNAME = SCHEMA.addField(StringField.builder().name("hostname").build());
     public static final StringField MATCH_TYPE = SCHEMA.addField(StringField.builder().name("match_type").build());
     public static final StringField LISTEN_ON = SCHEMA.addField(StringField.builder().name("listen_on").build());
@@ -39,7 +37,7 @@ public class SiteDomainModel extends Model {
         this.datasource = datasource;
     }
 
-    public List<Row> findBySiteId(String siteId) {
+    public List<Row> findBySiteId(int siteId) {
         return find()
             .where(SITE_ID.eq(siteId))
             .all();
