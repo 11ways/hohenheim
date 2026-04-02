@@ -374,6 +374,71 @@ class TlsCertificateTest {
     }
 
     @Test
+    @Order(13)
+    void forceSslRedirectsHttpToHttps() throws Exception {
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) db.delete();
+        HohenheimDatabase.init();
+
+        var ds = HohenheimDatabase.datasource();
+        var siteModel = new be.elevenways.hohenheim.model.SiteModel(ds);
+        var domainModel = new be.elevenways.hohenheim.model.SiteDomainModel(ds);
+
+        Row site = siteModel.createEmptyRow();
+        site.set(be.elevenways.hohenheim.model.SiteModel.NAME, "Force SSL Site");
+        site.set(be.elevenways.hohenheim.model.SiteModel.SLUG, "force-ssl");
+        site.set(be.elevenways.hohenheim.model.SiteModel.SITE_TYPE, "hohenheim:dead");
+        site.set(be.elevenways.hohenheim.model.SiteModel.ENABLED, true);
+        site.set(be.elevenways.hohenheim.model.SiteModel.STATUS, "active");
+        siteModel.save(site);
+
+        int siteId = ((Number) site.get(be.elevenways.hohenheim.model.SiteModel.ID)).intValue();
+
+        Row domain = domainModel.createEmptyRow();
+        domain.set(be.elevenways.hohenheim.model.SiteDomainModel.SITE_ID, siteId);
+        domain.set(be.elevenways.hohenheim.model.SiteDomainModel.HOSTNAME, "force-ssl.test");
+        domain.set(be.elevenways.hohenheim.model.SiteDomainModel.MATCH_TYPE, "exact");
+        domain.set(be.elevenways.hohenheim.model.SiteDomainModel.FORCE_SSL, true);
+        domainModel.save(domain);
+
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+
+        ProxyServer proxy = new ProxyServer();
+        proxy.start();
+
+        int httpPort = ((java.net.InetSocketAddress)
+            proxy.getHttpListenerInfo().getAddress()).getPort();
+
+        // Send HTTP request with Host header matching the force-ssl domain
+        // Java's HttpClient restricts the Host header, so use a raw socket
+        try (java.net.Socket socket = new java.net.Socket("localhost", httpPort)) {
+            var out = socket.getOutputStream();
+            out.write(("GET /some/path?q=1 HTTP/1.1\r\n"
+                     + "Host: force-ssl.test\r\n"
+                     + "Connection: close\r\n"
+                     + "\r\n").getBytes());
+            out.flush();
+
+            var in = new java.io.BufferedReader(new java.io.InputStreamReader(socket.getInputStream()));
+            String statusLine = in.readLine();
+            assertThat(statusLine).contains("301");
+
+            // Read headers to find Location
+            String location = null;
+            String line;
+            while ((line = in.readLine()) != null && !line.isEmpty()) {
+                if (line.toLowerCase().startsWith("location:")) {
+                    location = line.substring("location:".length()).trim();
+                }
+            }
+
+            assertThat(location).isEqualTo("https://force-ssl.test/some/path?q=1");
+        }
+
+        proxy.stop();
+    }
+
+    @Test
     @Order(14)
     void httpsActuallyAcceptsTlsConnections() throws Exception {
         java.io.File db = new java.io.File("hohenheim.db");

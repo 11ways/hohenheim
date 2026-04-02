@@ -94,21 +94,19 @@ public class SiteDispatcher implements HttpHandler {
 
             String p = domain != null ? (String) domain.get(SiteDomainModel.PATH) : null;
             this.path = (p != null && !p.isEmpty()) ? p : null;
-
-            Boolean sp = domain != null ? (Boolean) domain.get(SiteDomainModel.STRIP_PATH) : null;
-            this.stripPath = Boolean.TRUE.equals(sp);
-
-            Boolean fs = domain != null ? (Boolean) domain.get(SiteDomainModel.FORCE_SSL) : null;
-            this.forceSsl = Boolean.TRUE.equals(fs);
-
-            Boolean he = domain != null ? (Boolean) domain.get(SiteDomainModel.HSTS_ENABLED) : null;
-            this.hstsEnabled = Boolean.TRUE.equals(he);
-
-            Boolean hs = domain != null ? (Boolean) domain.get(SiteDomainModel.HSTS_SUBDOMAINS) : null;
-            this.hstsSubdomains = Boolean.TRUE.equals(hs);
+            this.stripPath = domain != null && toBool(domain.get(SiteDomainModel.STRIP_PATH));
+            this.forceSsl = domain != null && toBool(domain.get(SiteDomainModel.FORCE_SSL));
+            this.hstsEnabled = domain != null && toBool(domain.get(SiteDomainModel.HSTS_ENABLED));
+            this.hstsSubdomains = domain != null && toBool(domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
 
             Object ch = domain != null ? domain.get(SiteDomainModel.CUSTOM_HEADERS) : null;
             this.customHeaders = (ch instanceof Map) ? (Map<String, Object>) ch : null;
+        }
+
+        private static boolean toBool(Object val) {
+            if (val instanceof Boolean b) return b;
+            if (val instanceof Number n) return n.intValue() == 1;
+            return false;
         }
     }
 

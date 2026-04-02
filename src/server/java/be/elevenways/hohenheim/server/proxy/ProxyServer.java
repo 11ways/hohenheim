@@ -199,8 +199,14 @@ public class ProxyServer {
     }
 
     /**
-     * Get the HTTPS listener info (for discovering the actual bound port in tests).
+     * Get listener info for discovering bound ports (useful in tests with port 0).
      */
+    public io.undertow.Undertow.ListenerInfo getHttpListenerInfo() {
+        if (httpServer == null) return null;
+        var listeners = httpServer.getListenerInfo();
+        return listeners.isEmpty() ? null : listeners.get(0);
+    }
+
     public io.undertow.Undertow.ListenerInfo getHttpsListenerInfo() {
         if (httpsServer == null) return null;
         var listeners = httpsServer.getListenerInfo();

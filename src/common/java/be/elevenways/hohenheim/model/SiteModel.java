@@ -48,11 +48,21 @@ public class SiteModel extends Model {
     }
 
     public List<Row> findEnabled() {
-        return find()
-            .where(ENABLED.eq(true))
+        // Note: SQLite stores booleans as integers, so we filter in Java
+        // to avoid BooleanField.eq(true) generating a type-mismatch query.
+        List<Row> all = find()
             .where(DELETED_AT.isNull())
             .orderBy(NAME, SortOrder.ASC)
             .all();
+
+        all.removeIf(row -> {
+            Object val = row.get(ENABLED);
+            if (val instanceof Boolean b) return !b;
+            if (val instanceof Number n) return n.intValue() != 1;
+            return true;
+        });
+
+        return all;
     }
 
     public List<Row> findActive() {
