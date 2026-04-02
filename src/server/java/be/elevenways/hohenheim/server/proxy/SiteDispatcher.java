@@ -94,19 +94,13 @@ public class SiteDispatcher implements HttpHandler {
 
             String p = domain != null ? (String) domain.get(SiteDomainModel.PATH) : null;
             this.path = (p != null && !p.isEmpty()) ? p : null;
-            this.stripPath = domain != null && toBool(domain.get(SiteDomainModel.STRIP_PATH));
-            this.forceSsl = domain != null && toBool(domain.get(SiteDomainModel.FORCE_SSL));
-            this.hstsEnabled = domain != null && toBool(domain.get(SiteDomainModel.HSTS_ENABLED));
-            this.hstsSubdomains = domain != null && toBool(domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
+            this.stripPath = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.STRIP_PATH));
+            this.forceSsl = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL));
+            this.hstsEnabled = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_ENABLED));
+            this.hstsSubdomains = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
 
             Object ch = domain != null ? domain.get(SiteDomainModel.CUSTOM_HEADERS) : null;
             this.customHeaders = (ch instanceof Map) ? (Map<String, Object>) ch : null;
-        }
-
-        private static boolean toBool(Object val) {
-            if (val instanceof Boolean b) return b;
-            if (val instanceof Number n) return n.intValue() == 1;
-            return false;
         }
     }
 

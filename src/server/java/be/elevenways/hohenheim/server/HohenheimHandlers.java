@@ -140,9 +140,7 @@ public class HohenheimHandlers {
                 );
             }
 
-            Object isDisabledRaw = user.get(UserModel.IS_DISABLED);
-            boolean isDisabled = Boolean.TRUE.equals(isDisabledRaw)
-                || (isDisabledRaw instanceof Number && ((Number) isDisabledRaw).intValue() == 1);
+            boolean isDisabled = Boolean.TRUE.equals(user.get(UserModel.IS_DISABLED));
             if (isDisabled) {
                 return renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/login"),
