@@ -1,0 +1,238 @@
+package be.elevenways.hohenheim.test;
+
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.tls.CertificateStore;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.server.ServerZenitRuntime;
+import org.junit.jupiter.api.*;
+import static org.assertj.core.api.Assertions.*;
+
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.cert.X509Certificate;
+import java.math.BigInteger;
+import java.util.Date;
+
+/**
+ * Tests the TLS certificate infrastructure: CertificateStore, SNI lookup,
+ * ProxyServer HTTPS lifecycle, and certificate model lifecycle fields.
+ */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+class TlsCertificateTest {
+
+    private static boolean initialized = false;
+
+    @BeforeAll
+    static void initRuntime() {
+        if (initialized) return;
+        initialized = true;
+
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) db.delete();
+
+        be.elevenways.hohenheim.server.sitetype.SiteTypes.register();
+        HohenheimEndpoints.init();
+        HohenheimDatabase.init();
+        ServerZenitRuntime.init();
+        Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
+    }
+
+    @Test
+    @Order(1)
+    void emptyCertificateStoreReportsEmpty() {
+        CertificateStore store = new CertificateStore();
+        assertThat(store.isEmpty()).isTrue();
+        assertThat(store.getCertificateCount()).isEqualTo(0);
+        assertThat(store.resolveAlias("example.com")).isNull();
+    }
+
+    @Test
+    @Order(2)
+    void certificateStoreLoadsFromDatabase() throws Exception {
+        // Insert a self-signed cert into the database
+        var ds = HohenheimDatabase.datasource();
+        var certModel = new CertificateModel(ds);
+
+        KeyPair keyPair = generateKeyPair();
+        X509Certificate cert = generateSelfSignedCert(keyPair, "test.example.com");
+
+        Row row = certModel.createEmptyRow();
+        row.set(CertificateModel.NICE_NAME, "Test Cert");
+        row.set(CertificateModel.PROVIDER, "custom");
+        row.set(CertificateModel.STATUS, "active");
+        row.set(CertificateModel.CERTIFICATE_PEM, certToPem(cert));
+        row.set(CertificateModel.PRIVATE_KEY_PEM, keyToPem(keyPair));
+        certModel.save(row);
+
+        // Load into store
+        CertificateStore store = new CertificateStore();
+        store.loadFromDatabase();
+
+        assertThat(store.isEmpty()).isFalse();
+        assertThat(store.getCertificateCount()).isEqualTo(1);
+    }
+
+    @Test
+    @Order(3)
+    void sniResolvesExactHostname() throws Exception {
+        var ds = HohenheimDatabase.datasource();
+        var certModel = new CertificateModel(ds);
+
+        // The cert from the previous test should still be in DB
+        CertificateStore store = new CertificateStore();
+        store.loadFromDatabase();
+
+        // Should resolve the hostname from the cert's CN/SAN
+        String alias = store.resolveAlias("test.example.com");
+        assertThat(alias).isNotNull();
+    }
+
+    @Test
+    @Order(4)
+    void sniReturnsNullForUnknownHostname() throws Exception {
+        CertificateStore store = new CertificateStore();
+        store.loadFromDatabase();
+
+        assertThat(store.resolveAlias("unknown.example.com")).isNull();
+    }
+
+    @Test
+    @Order(5)
+    void httpsNotStartedWithoutCertificates() {
+        // Use a fresh DB with no certs
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) db.delete();
+        HohenheimDatabase.init();
+
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        ProxyServer proxy = new ProxyServer();
+        proxy.start();
+
+        assertThat(proxy.getHttpState()).isEqualTo(ProxyServer.State.RUNNING);
+        assertThat(proxy.getHttpsState()).isEqualTo(ProxyServer.State.STOPPED);
+        assertThat(proxy.getHttpsFailureReason()).contains("No certificates");
+
+        proxy.stop();
+    }
+
+    @Test
+    @Order(6)
+    void httpsStartsWhenCertificatesAvailable() throws Exception {
+        // Re-init DB and insert a cert
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) db.delete();
+        HohenheimDatabase.init();
+
+        var ds = HohenheimDatabase.datasource();
+        var certModel = new CertificateModel(ds);
+
+        KeyPair keyPair = generateKeyPair();
+        X509Certificate cert = generateSelfSignedCert(keyPair, "ssl.example.com");
+
+        Row row = certModel.createEmptyRow();
+        row.set(CertificateModel.NICE_NAME, "SSL Test");
+        row.set(CertificateModel.PROVIDER, "custom");
+        row.set(CertificateModel.STATUS, "active");
+        row.set(CertificateModel.CERTIFICATE_PEM, certToPem(cert));
+        row.set(CertificateModel.PRIVATE_KEY_PEM, keyToPem(keyPair));
+        certModel.save(row);
+
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+
+        ProxyServer proxy = new ProxyServer();
+        proxy.start();
+
+        assertThat(proxy.getHttpState()).isEqualTo(ProxyServer.State.RUNNING);
+        assertThat(proxy.getHttpsState()).isEqualTo(ProxyServer.State.RUNNING);
+
+        proxy.stop();
+    }
+
+    @Test
+    @Order(7)
+    void certificateModelHasLifecycleFields() {
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) db.delete();
+        HohenheimDatabase.init();
+
+        var ds = HohenheimDatabase.datasource();
+        var certModel = new CertificateModel(ds);
+
+        Row row = certModel.createEmptyRow();
+        row.set(CertificateModel.NICE_NAME, "Lifecycle Test");
+        row.set(CertificateModel.PROVIDER, "letsencrypt");
+        row.set(CertificateModel.STATUS, "pending");
+        row.set(CertificateModel.RENEWAL_ERROR, "Test error message");
+        row.set(CertificateModel.DOMAIN_NAMES_TEXT, "a.example.com,b.example.com");
+        certModel.save(row);
+
+        Row loaded = certModel.find().where(CertificateModel.NICE_NAME.eq("Lifecycle Test")).first();
+        assertThat(loaded).isNotNull();
+        assertThat(loaded.get(CertificateModel.STATUS)).isEqualTo("pending");
+        assertThat(loaded.get(CertificateModel.RENEWAL_ERROR)).isEqualTo("Test error message");
+        assertThat(loaded.get(CertificateModel.DOMAIN_NAMES_TEXT)).isEqualTo("a.example.com,b.example.com");
+    }
+
+    // -----------------------------------------------------------------------
+    // Self-signed cert generation for testing
+    // -----------------------------------------------------------------------
+
+    private static KeyPair generateKeyPair() throws Exception {
+        KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+        gen.initialize(2048);
+        return gen.generateKeyPair();
+    }
+
+    private static X509Certificate generateSelfSignedCert(KeyPair keyPair, String cn) throws Exception {
+        // Use BouncyCastle to generate a self-signed cert
+        var now = new Date();
+        var until = new Date(now.getTime() + 365L * 86400000);
+
+        org.bouncycastle.asn1.x500.X500Name issuer =
+            new org.bouncycastle.asn1.x500.X500Name("CN=" + cn);
+
+        org.bouncycastle.cert.X509v3CertificateBuilder builder =
+            new org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(
+                issuer, BigInteger.valueOf(System.currentTimeMillis()),
+                now, until, issuer, keyPair.getPublic());
+
+        // Add SAN
+        org.bouncycastle.asn1.x509.GeneralName san =
+            new org.bouncycastle.asn1.x509.GeneralName(
+                org.bouncycastle.asn1.x509.GeneralName.dNSName, cn);
+        builder.addExtension(
+            org.bouncycastle.asn1.x509.Extension.subjectAlternativeName, false,
+            new org.bouncycastle.asn1.x509.GeneralNames(san));
+
+        org.bouncycastle.operator.ContentSigner signer =
+            new org.bouncycastle.operator.jcajce.JcaContentSignerBuilder("SHA256withRSA")
+                .build(keyPair.getPrivate());
+
+        return new org.bouncycastle.cert.jcajce.JcaX509CertificateConverter()
+            .getCertificate(builder.build(signer));
+    }
+
+    private static String certToPem(X509Certificate cert) throws Exception {
+        StringBuilder sb = new StringBuilder();
+        sb.append("-----BEGIN CERTIFICATE-----\n");
+        sb.append(java.util.Base64.getMimeEncoder(64, "\n".getBytes())
+            .encodeToString(cert.getEncoded()));
+        sb.append("\n-----END CERTIFICATE-----\n");
+        return sb.toString();
+    }
+
+    private static String keyToPem(KeyPair keyPair) throws Exception {
+        StringBuilder sb = new StringBuilder();
+        sb.append("-----BEGIN PRIVATE KEY-----\n");
+        sb.append(java.util.Base64.getMimeEncoder(64, "\n".getBytes())
+            .encodeToString(keyPair.getPrivate().getEncoded()));
+        sb.append("\n-----END PRIVATE KEY-----\n");
+        return sb.toString();
+    }
+}

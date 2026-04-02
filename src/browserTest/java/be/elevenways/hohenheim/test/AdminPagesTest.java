@@ -142,6 +142,17 @@ class AdminPagesTest extends HohenheimTestBase {
     // -----------------------------------------------------------------------
 
     @Test
+    @Order(19)
+    void certificateRequestFormLoads() {
+        navigateToApp("/certificates/request");
+        waitForHydration();
+
+        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Request Certificate");
+        assertThat(page.locator("pl-textarea").count()).isGreaterThanOrEqualTo(1);
+        assertThat(page.content()).contains("Let's Encrypt");
+    }
+
+    @Test
     @Order(20)
     void certificateUploadFormRendersPlumageComponents() {
         navigateToApp("/certificates/upload");

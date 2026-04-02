@@ -1,63 +1,104 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.hohenheim.server.tls.CertificateStore;
+import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
 import io.undertow.Undertow;
+
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.SSLContext;
 
 /**
  * The reverse proxy server that listens on the proxy ports (80/443)
  * and forwards traffic to upstream backends based on hostname.
  *
- * Has an explicit lifecycle: STOPPED -> RUNNING or FAILED.
- * A failed proxy does not bring down the admin UI -- the admin UI
- * is how you diagnose and fix the configuration. But the failure
- * is never silent: the state is always queryable and always logged.
+ * Manages two Undertow instances: HTTP and HTTPS.
+ * HTTP always starts. HTTPS starts only when certificates are available.
+ * Each listener has its own state that is independently queryable.
  */
 public class ProxyServer {
 
     public enum State {
-        /** Not yet started. */
         STOPPED,
-        /** Listening and routing traffic. */
         RUNNING,
-        /** Start was attempted but failed. The reason is in {@link #getFailureReason()}. */
         FAILED
     }
 
     private final SiteDispatcher dispatcher;
+    private final CertificateStore certificateStore;
+    private final AcmeService acmeService;
+
     private Undertow httpServer;
-    private volatile State state = State.STOPPED;
-    private volatile String failureReason;
+    private Undertow httpsServer;
+
+    private volatile State httpState = State.STOPPED;
+    private volatile State httpsState = State.STOPPED;
+    private volatile String httpFailureReason;
+    private volatile String httpsFailureReason;
 
     public ProxyServer() {
-        this.dispatcher = new SiteDispatcher();
+        this.certificateStore = new CertificateStore();
+        this.acmeService = new AcmeService(certificateStore);
+        this.dispatcher = new SiteDispatcher(acmeService);
     }
 
     public SiteDispatcher getDispatcher() {
         return dispatcher;
     }
 
-    public State getState() {
-        return state;
+    public CertificateStore getCertificateStore() {
+        return certificateStore;
     }
 
-    public String getFailureReason() {
-        return failureReason;
+    public AcmeService getAcmeService() {
+        return acmeService;
+    }
+
+    public State getHttpState() {
+        return httpState;
+    }
+
+    public State getHttpsState() {
+        return httpsState;
+    }
+
+    public String getHttpFailureReason() {
+        return httpFailureReason;
+    }
+
+    public String getHttpsFailureReason() {
+        return httpsFailureReason;
     }
 
     /**
-     * Load routes from database and start the proxy listener.
-     *
-     * On success, transitions to RUNNING.
-     * On failure, transitions to FAILED with the reason stored.
-     * Never throws -- the admin UI must remain operational regardless.
+     * Load certificates and routes, then start both listeners.
+     * HTTP always starts. HTTPS starts only if certificates are loaded.
+     * Never throws -- the admin UI must remain operational.
      */
     public void start() {
         try {
+            certificateStore.loadFromDatabase();
             dispatcher.reloadRoutes();
+        } catch (Exception e) {
+            Blast.log("PROXY: failed to load routes/certificates:", e.getMessage());
+        }
 
-            int httpPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
+        startHttpListener();
+        startHttpsListener();
 
+        boolean acmeEnabled = Boolean.TRUE.equals(
+            HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED));
+        if (acmeEnabled) {
+            acmeService.start();
+        }
+    }
+
+    private void startHttpListener() {
+        int httpPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
+
+        try {
             httpServer = Undertow.builder()
                 .addHttpListener(httpPort, "0.0.0.0")
                 .setIoThreads(Math.max(2, Runtime.getRuntime().availableProcessors()))
@@ -65,41 +106,106 @@ public class ProxyServer {
                 .build();
 
             httpServer.start();
-            state = State.RUNNING;
-            failureReason = null;
-            Blast.log("Proxy server listening on port", httpPort,
+            httpState = State.RUNNING;
+            httpFailureReason = null;
+            Blast.log("Proxy HTTP listening on port", httpPort,
                       "(" + dispatcher.getExactRouteCount() + " exact,",
                       dispatcher.getWildcardRouteCount() + " wildcard routes)");
         } catch (Exception e) {
-            state = State.FAILED;
-            failureReason = e.getMessage();
+            httpState = State.FAILED;
+            httpFailureReason = e.getMessage();
             httpServer = null;
-            Blast.log("PROXY STARTUP FAILED:", e.getMessage());
+            Blast.log("PROXY HTTP STARTUP FAILED on port", httpPort + ":", e.getMessage());
         }
     }
 
-    /**
-     * Stop the proxy server. Transitions to STOPPED.
-     */
+    private void startHttpsListener() {
+        if (certificateStore.isEmpty()) {
+            httpsState = State.STOPPED;
+            httpsFailureReason = "No certificates loaded";
+            Blast.log("Proxy HTTPS not started: no certificates available");
+            return;
+        }
+
+        int httpsPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT);
+
+        try {
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            SniKeyManager sniKeyManager = new SniKeyManager(certificateStore);
+            sslContext.init(new KeyManager[]{sniKeyManager}, null, null);
+
+            httpsServer = Undertow.builder()
+                .addHttpsListener(httpsPort, "0.0.0.0", sslContext)
+                .setIoThreads(Math.max(2, Runtime.getRuntime().availableProcessors()))
+                .setHandler(dispatcher)
+                .build();
+
+            httpsServer.start();
+            httpsState = State.RUNNING;
+            httpsFailureReason = null;
+            Blast.log("Proxy HTTPS listening on port", httpsPort,
+                      "(" + certificateStore.getCertificateCount() + " certificates)");
+        } catch (Exception e) {
+            httpsState = State.FAILED;
+            httpsFailureReason = e.getMessage();
+            httpsServer = null;
+            Blast.log("PROXY HTTPS STARTUP FAILED on port", httpsPort + ":", e.getMessage());
+        }
+    }
+
     public void stop() {
         if (httpServer != null) {
             httpServer.stop();
             httpServer = null;
-            Blast.log("Proxy server stopped");
         }
-        state = State.STOPPED;
-        failureReason = null;
+        if (httpsServer != null) {
+            httpsServer.stop();
+            httpsServer = null;
+        }
+        httpState = State.STOPPED;
+        httpsState = State.STOPPED;
+        httpFailureReason = null;
+        httpsFailureReason = null;
+        Blast.log("Proxy server stopped");
     }
 
     /**
-     * Reload routes from the database. If the proxy is FAILED, attempts to start it again.
+     * Reload routes and certificates. Restarts failed listeners.
      */
     public void reload() {
-        if (state == State.FAILED) {
-            Blast.log("Proxy was in FAILED state -- attempting restart after route reload");
-            start();
-        } else {
+        try {
+            certificateStore.loadFromDatabase();
             dispatcher.reloadRoutes();
+        } catch (Exception e) {
+            Blast.log("PROXY: reload failed:", e.getMessage());
         }
+
+        // Restart HTTP if it was failed
+        if (httpState == State.FAILED) {
+            Blast.log("Proxy HTTP was FAILED -- attempting restart");
+            startHttpListener();
+        }
+
+        // Start HTTPS if it wasn't running and we now have certs
+        if (httpsState != State.RUNNING && !certificateStore.isEmpty()) {
+            Blast.log("Proxy HTTPS starting after certificate reload");
+            if (httpsServer != null) {
+                httpsServer.stop();
+                httpsServer = null;
+            }
+            startHttpsListener();
+        }
+    }
+
+    // Backwards-compatible accessors for dashboard
+    public State getState() {
+        if (httpState == State.RUNNING) return State.RUNNING;
+        if (httpState == State.FAILED) return State.FAILED;
+        return State.STOPPED;
+    }
+
+    public String getFailureReason() {
+        if (httpState == State.FAILED) return httpFailureReason;
+        return null;
     }
 }

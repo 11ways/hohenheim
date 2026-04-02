@@ -232,17 +232,24 @@ public class HohenheimHandlers {
 
             var proxy = ServerMain.getProxyServer();
             int routeCount = 0;
-            String proxyStatus = "Not initialized";
+            String httpStatus = "Not initialized";
+            String httpsStatus = "Not initialized";
 
             if (proxy != null) {
                 routeCount = proxy.getDispatcher().getExactRouteCount()
                            + proxy.getDispatcher().getWildcardRouteCount();
 
-                switch (proxy.getState()) {
-                    case RUNNING -> proxyStatus = "Running";
-                    case FAILED -> proxyStatus = "Failed: " + proxy.getFailureReason();
-                    case STOPPED -> proxyStatus = "Stopped";
-                }
+                httpStatus = switch (proxy.getHttpState()) {
+                    case RUNNING -> "Running";
+                    case FAILED -> "Failed: " + proxy.getHttpFailureReason();
+                    case STOPPED -> "Stopped";
+                };
+                httpsStatus = switch (proxy.getHttpsState()) {
+                    case RUNNING -> "Running (" + proxy.getCertificateStore().getCertificateCount() + " certs)";
+                    case FAILED -> "Failed: " + proxy.getHttpsFailureReason();
+                    case STOPPED -> proxy.getHttpsFailureReason() != null
+                        ? proxy.getHttpsFailureReason() : "Stopped";
+                };
             }
 
             List<Row> recentAudit = auditModel.findRecent(10);
@@ -259,7 +266,8 @@ public class HohenheimHandlers {
             Map<String, Object> vars = new HashMap<>();
             vars.put("siteCount", siteCount);
             vars.put("certCount", certCount);
-            vars.put("proxyStatus", proxyStatus);
+            vars.put("httpStatus", httpStatus);
+            vars.put("httpsStatus", httpsStatus);
             vars.put("routeCount", routeCount);
             vars.put("activity", activity);
 
@@ -476,6 +484,9 @@ public class HohenheimHandlers {
                 .orderBy(CertificateModel.CREATED_AT, SortOrder.DESC)
                 .all();
 
+            // Filter out the internal ACME account key row
+            rows.removeIf(r -> "acme_account".equals(r.get(CertificateModel.PROVIDER)));
+
             List<Map<String, Object>> certs = new ArrayList<>();
             for (Row row : rows) {
                 Map<String, Object> cert = new HashMap<>();
@@ -484,6 +495,11 @@ public class HohenheimHandlers {
                 cert.put("provider", row.get(CertificateModel.PROVIDER));
                 cert.put("expiresOn", row.get(CertificateModel.EXPIRES_ON));
                 cert.put("autoRenew", row.get(CertificateModel.AUTO_RENEW));
+
+                String status = (String) row.get(CertificateModel.STATUS);
+                cert.put("status", status != null ? status : "active");
+                cert.put("renewalError", row.get(CertificateModel.RENEWAL_ERROR));
+                cert.put("domains", row.get(CertificateModel.DOMAIN_NAMES_TEXT));
                 certs.add(cert);
             }
 
@@ -522,8 +538,68 @@ public class HohenheimHandlers {
             cert.set(CertificateModel.CERTIFICATE_PEM, certPem);
             cert.set(CertificateModel.PRIVATE_KEY_PEM, keyPem);
             cert.set(CertificateModel.PROVIDER, "custom");
+            cert.set(CertificateModel.STATUS, "active");
             certModel.save(cert);
 
+            reloadProxy();
+            return redirectUntyped("/certificates");
+        });
+
+        // Let's Encrypt request form (GET)
+        HohenheimEndpoints.CERTIFICATES_REQUEST_FORM.setHandler(conduit ->
+            new RenderTemplateResult(
+                Identifier.of("hohenheim", "hohenheim/certificates/request"),
+                Map.of("error", "")
+            )
+        );
+
+        // Let's Encrypt request (POST)
+        HohenheimEndpoints.CERTIFICATES_REQUEST.setHandler(conduit -> {
+            HttpConduit http = (HttpConduit) conduit;
+            Map<String, String> form = http.getFormData().toStringMap();
+
+            String domains = form.getOrDefault("domains", "").trim();
+            String niceName = form.getOrDefault("nice_name", "").trim();
+
+            if (domains.isEmpty()) {
+                return renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/certificates/request"),
+                    Map.of("error", "At least one domain is required")
+                );
+            }
+
+            if (niceName.isEmpty()) {
+                niceName = domains.split("[,\\s]+")[0];
+            }
+
+            var proxy = ServerMain.getProxyServer();
+            if (proxy == null) {
+                return renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/certificates/request"),
+                    Map.of("error", "Proxy server not initialized")
+                );
+            }
+
+            List<String> hostnames = new ArrayList<>();
+            for (String d : domains.split("[,\\s]+")) {
+                d = d.trim();
+                if (!d.isEmpty()) hostnames.add(d);
+            }
+
+            int certId = proxy.getAcmeService().requestCertificate(hostnames, niceName);
+
+            if (certId < 0) {
+                Row failed = certModel.find()
+                    .orderBy(CertificateModel.CREATED_AT, SortOrder.DESC)
+                    .first();
+                String error = failed != null ? (String) failed.get(CertificateModel.RENEWAL_ERROR) : "Unknown error";
+                return renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/certificates/request"),
+                    Map.of("error", "Certificate request failed: " + (error != null ? error : "Unknown"))
+                );
+            }
+
+            reloadProxy();
             return redirectUntyped("/certificates");
         });
 
@@ -531,6 +607,7 @@ public class HohenheimHandlers {
         HohenheimEndpoints.CERTIFICATES_DELETE.setHandler(conduit -> {
             Integer certId = conduit.getParameter(HohenheimEndpoints.CERT_ID);
             certModel.find().where(CertificateModel.ID.eq(certId)).delete();
+            reloadProxy();
             return redirectUntyped("/certificates");
         });
     }

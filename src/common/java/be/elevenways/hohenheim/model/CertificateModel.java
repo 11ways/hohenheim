@@ -29,6 +29,10 @@ public class CertificateModel extends Model {
     public static final StringField DNS_PROVIDER = SCHEMA.addField(StringField.builder().name("dns_provider").build());
     public static final StringField DNS_CREDENTIALS = SCHEMA.addField(StringField.builder().name("dns_credentials").build());
     public static final StringField ACME_SERVER = SCHEMA.addField(StringField.builder().name("acme_server").build());
+    public static final StringField STATUS = SCHEMA.addField(StringField.builder().name("status").build());
+    public static final DateTimeField ISSUED_ON = SCHEMA.addField(DateTimeField.builder().name("issued_on").build());
+    public static final StringField RENEWAL_ERROR = SCHEMA.addField(StringField.builder().name("renewal_error").build());
+    public static final StringField DOMAIN_NAMES_TEXT = SCHEMA.addField(StringField.builder().name("domain_names_text").build());
     public static final SchemaField META = SCHEMA.addField(SchemaField.builder("meta").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

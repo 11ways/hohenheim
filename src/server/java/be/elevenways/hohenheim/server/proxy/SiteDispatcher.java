@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import io.undertow.client.ClientCallback;
@@ -65,8 +66,13 @@ public class SiteDispatcher implements HttpHandler {
     // IP reputation: tracks domain miss count per IP
     private final ConcurrentHashMap<String, IpReputation> ipReputation = new ConcurrentHashMap<>();
 
+    private static final String ACME_CHALLENGE_PREFIX = "/.well-known/acme-challenge/";
+
     // Shared proxy handler for proxy-type sites
     private final ProxyHandler proxyHandler;
+
+    // ACME service for Let's Encrypt challenge responses (nullable)
+    private final AcmeService acmeService;
 
     /**
      * A route entry combines the site handler with domain-level configuration.
@@ -112,7 +118,8 @@ public class SiteDispatcher implements HttpHandler {
         final AtomicLong lastMissTime = new AtomicLong(0);
     }
 
-    public SiteDispatcher() {
+    public SiteDispatcher(AcmeService acmeService) {
+        this.acmeService = acmeService;
         DispatchingProxyClient proxyClient = new DispatchingProxyClient();
         this.proxyHandler = ProxyHandler.builder()
             .setProxyClient(proxyClient)
@@ -180,6 +187,18 @@ public class SiteDispatcher implements HttpHandler {
 
     @Override
     public void handleRequest(HttpServerExchange exchange) throws Exception {
+
+        // --- ACME HTTP-01 challenge ---
+        String acmePath = exchange.getRelativePath();
+        if (acmePath.startsWith(ACME_CHALLENGE_PREFIX) && acmeService != null) {
+            String token = acmePath.substring(ACME_CHALLENGE_PREFIX.length());
+            String response = acmeService.getChallengeResponse(token);
+            if (response != null) {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
+                exchange.getResponseSender().send(response);
+                return;
+            }
+        }
 
         // --- Loop detection ---
         String existingProxiedBy = exchange.getRequestHeaders().getFirst(X_PROXIED_BY);

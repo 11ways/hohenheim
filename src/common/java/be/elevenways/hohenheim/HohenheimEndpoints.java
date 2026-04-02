@@ -148,6 +148,17 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("setup").build())
         .build();
 
+    // --- Certificate Let's Encrypt request ---
+    public static final PageEndpoint CERTIFICATES_REQUEST_FORM = Endpoint.pageBuilder()
+        .identifier(Identifier.of("hohenheim", "certificates_request_form"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("certificates").addDelimiter().addStatic("request").build())
+        .build();
+
+    public static final Endpoint<Object> CERTIFICATES_REQUEST = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "certificates_request"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("certificates").addDelimiter().addStatic("request").build())
+        .build();
+
     // --- Test-only endpoint (throws to verify error handling) ---
     public static final PageEndpoint TEST_ERROR = Endpoint.pageBuilder()
         .identifier(Identifier.of("hohenheim", "test_error"))

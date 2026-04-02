@@ -98,6 +98,17 @@ body {
     margin: 0;
 }
 
+.hh-page-actions__buttons {
+    display: flex;
+    gap: var(--pl-space-sm);
+}
+
+.hh-form-hint {
+    font-size: var(--pl-font-size-xs);
+    color: var(--pl-color-text-muted);
+    margin: var(--pl-space-xs) 0 0;
+}
+
 .hh-stat-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));

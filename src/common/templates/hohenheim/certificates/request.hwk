@@ -1,0 +1,45 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    <header class="hh-header">
+        <h1 class="hh-header__title">Request Certificate</h1>
+    </header>
+    <main class="hh-content">
+
+        {% declare error: String %}
+
+        {% if error != "" %}
+            <pl-alert variant={% "destructive" %} class="hh-form-error">
+                <pl-alert-title>Error</pl-alert-title>
+                <pl-alert-description>{{ error }}</pl-alert-description>
+            </pl-alert>
+        {% /if %}
+
+        <pl-card class="hh-form-card">
+            <pl-card-header>
+                <pl-card-title>Let's Encrypt Certificate</pl-card-title>
+                <pl-card-description>Request a free TLS certificate via Let's Encrypt. The domains must resolve to this server and port 80 must be accessible.</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <form method="POST" action="/certificates/request">
+                    <div class="hh-form-stack">
+                        <div class="hh-form-group">
+                            <pl-label target="nice-name">Certificate Name (optional)</pl-label>
+                            <pl-input id="nice-name" type={% "text" %} name={% "nice_name" %} placeholder={% "example.com wildcard" %}></pl-input>
+                        </div>
+                        <div class="hh-form-group">
+                            <pl-label target="domains">Domains</pl-label>
+                            <pl-textarea name={% "domains" %} placeholder={% "example.com\nwww.example.com" %} required={% true %}></pl-textarea>
+                            <p class="hh-form-hint">One domain per line. All domains must point to this server.</p>
+                        </div>
+                    </div>
+                    <div class="hh-form-actions">
+                        <pl-button variant={% "primary" %} type={% "submit" %}>Request Certificate</pl-button>
+                        <a href="/certificates" class="hh-button-link"><pl-button variant={% "outline" %} type={% "button" %}>Cancel</pl-button></a>
+                    </div>
+                </form>
+            </pl-card-content>
+        </pl-card>
+
+    </main>
+{% /block %}

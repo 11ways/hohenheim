@@ -8,7 +8,8 @@
 
         {% declare siteCount: Integer %}
         {% declare certCount: Integer %}
-        {% declare proxyStatus: String %}
+        {% declare httpStatus: String %}
+        {% declare httpsStatus: String %}
         {% declare routeCount: Integer %}
         {% declare activity: List %}
 
@@ -22,14 +23,26 @@
                 <pl-card-content><p class="hh-stat-value">{{ certCount }}</p></pl-card-content>
             </pl-card>
             <pl-card>
-                <pl-card-header><pl-card-title>Proxy</pl-card-title><pl-card-description>{{ routeCount }} active routes</pl-card-description></pl-card-header>
+                <pl-card-header><pl-card-title>HTTP Proxy</pl-card-title><pl-card-description>{{ routeCount }} active routes</pl-card-description></pl-card-header>
                 <pl-card-content>
-                    {% if proxyStatus |> String.startsWith("Failed") %}
-                        <pl-badge variant={% "destructive" %}>{{ proxyStatus }}</pl-badge>
-                    {% elseif proxyStatus == "Running" %}
-                        <pl-badge variant={% "default" %}>{{ proxyStatus }}</pl-badge>
+                    {% if httpStatus |> String.startsWith("Failed") %}
+                        <pl-badge variant={% "destructive" %}>{{ httpStatus }}</pl-badge>
+                    {% elseif httpStatus == "Running" %}
+                        <pl-badge variant={% "default" %}>{{ httpStatus }}</pl-badge>
                     {% else %}
-                        <pl-badge variant={% "outline" %}>{{ proxyStatus }}</pl-badge>
+                        <pl-badge variant={% "outline" %}>{{ httpStatus }}</pl-badge>
+                    {% /if %}
+                </pl-card-content>
+            </pl-card>
+            <pl-card>
+                <pl-card-header><pl-card-title>HTTPS Proxy</pl-card-title><pl-card-description>TLS termination</pl-card-description></pl-card-header>
+                <pl-card-content>
+                    {% if httpsStatus |> String.startsWith("Failed") %}
+                        <pl-badge variant={% "destructive" %}>{{ httpsStatus }}</pl-badge>
+                    {% elseif httpsStatus |> String.startsWith("Running") %}
+                        <pl-badge variant={% "default" %}>{{ httpsStatus }}</pl-badge>
+                    {% else %}
+                        <pl-badge variant={% "outline" %}>{{ httpsStatus }}</pl-badge>
                     {% /if %}
                 </pl-card-content>
             </pl-card>

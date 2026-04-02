@@ -125,6 +125,12 @@ dependencies {
     // Database
     serverImplementation 'org.xerial:sqlite-jdbc:3.45.1.0'
 
+    // ACME / Let's Encrypt
+    serverImplementation 'org.shredzone.acme4j:acme4j-client:3.4.0'
+
+    // PEM parsing (BouncyCastle)
+    serverImplementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
+
     // Browser tests
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -141,6 +147,7 @@ dependencies {
     browserTestImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:test-support') { changing = true }
     browserTestImplementation ('be.elevenways:plumage:0.1.0-SNAPSHOT:server') { changing = true }
     browserTestImplementation 'org.xerial:sqlite-jdbc:3.45.1.0'
+    browserTestImplementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
 
     // TeaVM libraries
     teavmLibs 'org.teavm:teavm-classlib:0.13.1'
