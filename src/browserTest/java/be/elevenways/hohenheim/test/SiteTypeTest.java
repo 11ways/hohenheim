@@ -13,6 +13,25 @@ class SiteTypeTest extends HohenheimTestBase {
         return page.locator("form[action='/sites/create']").textContent();
     }
 
+    /**
+     * Select a value in a pl-select by clicking its trigger and then clicking the item.
+     * Items are rendered in a portal, so we search the whole page for the option.
+     * Uses the pl-select-item's value attribute (on the custom element) to find the item.
+     */
+    private void selectPlOption(String selectName, String value) {
+        // Click the trigger button to open the dropdown
+        var select = page.locator("pl-select[name='" + selectName + "']");
+        var trigger = select.locator("pl-select-trigger button");
+        trigger.click();
+
+        // Find the option div by its data-value attribute (rendered by the pl-select-item template).
+        var item = page.locator("pl-select-item div[role='option'][data-value='" + value + "']");
+        item.waitFor(new com.microsoft.playwright.Locator.WaitForOptions()
+            .setState(com.microsoft.playwright.options.WaitForSelectorState.VISIBLE)
+            .setTimeout(5000));
+        item.click();
+    }
+
     @Test
     @Order(1)
     void createFormShowsProxyFieldsByDefault() {
@@ -28,18 +47,24 @@ class SiteTypeTest extends HohenheimTestBase {
 
     @Test
     @Order(2)
-    void typeDropdownHasAllThreeTypes() {
+    void typeDropdownHasAllSixTypes() {
         navigateToApp("/sites/create");
         waitForHydration();
 
-        var options = page.locator("select[name='site_type'] option");
-        assertThat(options.count()).isEqualTo(6);
-        assertThat(options.nth(0).textContent()).contains("Proxy");
-        assertThat(options.nth(1).textContent()).contains("Node.js");
-        assertThat(options.nth(2).textContent()).contains("Alchemy");
-        assertThat(options.nth(3).textContent()).contains("Static");
-        assertThat(options.nth(4).textContent()).contains("Redirect");
-        assertThat(options.nth(5).textContent()).contains("Dead");
+        // Open the dropdown to make items visible (rendered in portal)
+        page.locator("pl-select[name='site_type'] pl-select-trigger button").click();
+
+        // Count site type items via their inner option div with data-value attribute
+        var items = page.locator("pl-select-item div[role='option'][data-value^='hohenheim:']");
+        assertThat(items.count()).isEqualTo(6);
+
+        String allText = items.allTextContents().toString();
+        assertThat(allText).contains("Proxy");
+        assertThat(allText).contains("Node.js");
+        assertThat(allText).contains("Alchemy");
+        assertThat(allText).contains("Static");
+        assertThat(allText).contains("Redirect");
+        assertThat(allText).contains("Dead");
     }
 
     @Test
@@ -48,7 +73,7 @@ class SiteTypeTest extends HohenheimTestBase {
         navigateToApp("/sites/create");
         waitForHydration();
 
-        page.locator("select[name='site_type']").selectOption("hohenheim:static");
+        selectPlOption("site_type", "hohenheim:static");
         page.waitForCondition(() -> getFormText().contains("Root Directory"));
 
         String formText = getFormText();
@@ -63,7 +88,7 @@ class SiteTypeTest extends HohenheimTestBase {
         navigateToApp("/sites/create");
         waitForHydration();
 
-        page.locator("select[name='site_type']").selectOption("hohenheim:redirect");
+        selectPlOption("site_type", "hohenheim:redirect");
         page.waitForCondition(() -> getFormText().contains("Target URL"));
 
         String formText = getFormText();
@@ -78,10 +103,10 @@ class SiteTypeTest extends HohenheimTestBase {
         navigateToApp("/sites/create");
         waitForHydration();
 
-        page.locator("select[name='site_type']").selectOption("hohenheim:redirect");
+        selectPlOption("site_type", "hohenheim:redirect");
         page.waitForCondition(() -> getFormText().contains("Target URL"));
 
-        page.locator("select[name='site_type']").selectOption("hohenheim:proxy");
+        selectPlOption("site_type", "hohenheim:proxy");
         page.waitForCondition(() -> getFormText().contains("Upstream Host"));
 
         String formText = getFormText();
@@ -95,5 +120,33 @@ class SiteTypeTest extends HohenheimTestBase {
         navigateToApp("/sites/create");
         waitForHydration();
         assertThat(getFormText()).contains("Domain (optional)");
+    }
+
+    @Test
+    @Order(7)
+    void switchingToNodeShowsAdvancedNodeFields() {
+        navigateToApp("/sites/create");
+        waitForHydration();
+
+        selectPlOption("site_type", "hohenheim:node");
+        page.waitForCondition(() -> getFormText().contains("Environment Variables"));
+
+        String formText = getFormText();
+        assertThat(formText).contains("Environment Variables");
+        assertThat(formText).contains("Wait For Ready Signal");
+    }
+
+    @Test
+    @Order(8)
+    void switchingToStaticShowsIndexControls() {
+        navigateToApp("/sites/create");
+        waitForHydration();
+
+        selectPlOption("site_type", "hohenheim:static");
+        page.waitForCondition(() -> getFormText().contains("Use index.html for directories"));
+
+        String formText = getFormText();
+        assertThat(formText).contains("Use index.html for directories");
+        assertThat(formText).contains("Show directory listing");
     }
 }
