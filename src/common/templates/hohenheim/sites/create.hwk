@@ -2,6 +2,7 @@
 
     public error: String = ""
     public selectedType: String = "hohenheim:proxy"
+    public siteTypes: List = null
 
     template {
         {% if error{:} != "" %}
@@ -27,21 +28,19 @@
 
                         <div class="hh-form-group">
                             <pl-label target="site-type">Site Type</pl-label>
-                            <select id="site-type" name="site_type"
-                                    bind:value={% selectedType{:} %}
-                                    class="hh-select">
-                                <option value="hohenheim:proxy">Proxy - Forward to upstream server</option>
-                                <option value="hohenheim:node">Node.js - Managed Node.js process</option>
-                                <option value="hohenheim:alchemy">Alchemy - Managed Alchemy application</option>
-                                <option value="hohenheim:static">Static - Serve files from directory</option>
-                                <option value="hohenheim:redirect">Redirect - HTTP redirect</option>
-                                <option value="hohenheim:dead">Dead - Return 404 (park domain)</option>
-                            </select>
+                            <pl-select name="site_type" bind:value={% selectedType{:} %}>
+                                <pl-select-trigger placeholder="Select type"></pl-select-trigger>
+                                <pl-select-content>
+                                    {% each siteTypes as index, st %}
+                                        <pl-select-item value={% st.get("value") %} label={% st.get("label") %}>{{ st.get("label") }}{% if st.get("description") != null %} - {{ st.get("description") }}{% /if %}</pl-select-item>
+                                    {% /each %}
+                                </pl-select-content>
+                            </pl-select>
                         </div>
 
                         <pl-separator></pl-separator>
 
-                        <hh-site-type-fields selectedType={% selectedType{:} %}></hh-site-type-fields>
+                        <hh-site-type-fields selectedType={% &selectedType{:} %}></hh-site-type-fields>
 
                         <pl-separator></pl-separator>
 
@@ -69,6 +68,7 @@
     </header>
     <main class="hh-content">
         {% declare error: String %}
-        <hh-site-create error={% error{:} %}></hh-site-create>
+        {% declare siteTypes: List %}
+        <hh-site-create error={% error{:} %} siteTypes={% siteTypes %}></hh-site-create>
     </main>
 {% /block %}

@@ -20,12 +20,10 @@ class SiteTypeTest extends HohenheimTestBase {
      */
     private void selectPlOption(String selectName, String value) {
         // Click the trigger button to open the dropdown
-        var select = page.locator("pl-select[name='" + selectName + "']");
-        var trigger = select.locator("pl-select-trigger button");
-        trigger.click();
+        page.locator("pl-select[name='" + selectName + "'] pl-select-trigger button").click();
 
-        // Find the option div by its data-value attribute (rendered by the pl-select-item template).
-        var item = page.locator("pl-select-item div[role='option'][data-value='" + value + "']");
+        // Wait for portal to render the dropdown items
+        var item = page.locator("div[role='option'][data-value='" + value + "']");
         item.waitFor(new com.microsoft.playwright.Locator.WaitForOptions()
             .setState(com.microsoft.playwright.options.WaitForSelectorState.VISIBLE)
             .setTimeout(5000));
