@@ -3,6 +3,10 @@
     public error: String = ""
     public selectedType: String = "hohenheim:proxy"
     public siteTypes: List = null
+    public nodeVersions: List = null
+    public systemUsers: List = null
+    public environmentVariables: List = null
+    public apiKeys: List = null
 
     template {
         {% if error{:} != "" %}
@@ -40,7 +44,7 @@
 
                         <pl-separator></pl-separator>
 
-                        <hh-site-type-fields selectedType={% &selectedType{:} %}></hh-site-type-fields>
+                        <hh-site-type-fields selectedType={% &selectedType{:} %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %}></hh-site-type-fields>
 
                         <pl-separator></pl-separator>
 
@@ -69,6 +73,10 @@
     <main class="hh-content">
         {% declare error: String %}
         {% declare siteTypes: List %}
-        <hh-site-create error={% error{:} %} siteTypes={% siteTypes %}></hh-site-create>
+        {% declare nodeVersions: List %}
+        {% declare systemUsers: List %}
+        {% declare environmentVariables: List %}
+        {% declare apiKeys: List %}
+        <hh-site-create error={% error{:} %} siteTypes={% siteTypes %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %}></hh-site-create>
     </main>
 {% /block %}

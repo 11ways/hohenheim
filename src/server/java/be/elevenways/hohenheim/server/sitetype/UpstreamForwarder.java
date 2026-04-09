@@ -8,5 +8,10 @@ import java.net.URI;
  * io.undertow.server.handlers.proxy.ProxyCallback.
  */
 public interface UpstreamForwarder {
-    void forwardTo(URI upstream);
+
+    default void forwardTo(URI upstream) {
+        forwardTo(new UpstreamTarget(upstream, false));
+    }
+
+    void forwardTo(UpstreamTarget upstream);
 }

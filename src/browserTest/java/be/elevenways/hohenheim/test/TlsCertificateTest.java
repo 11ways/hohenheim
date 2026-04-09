@@ -3,8 +3,12 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -35,7 +39,7 @@ class TlsCertificateTest {
         java.io.File db = new java.io.File("hohenheim.db");
         if (db.exists()) db.delete();
 
-        be.elevenways.hohenheim.server.sitetype.SiteTypes.register();
+        SiteTypes.register();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
         ServerZenitRuntime.init();
@@ -331,7 +335,7 @@ class TlsCertificateTest {
         // Delete from DB and reload
         int certId = row.get(CertificateModel.ID);
         certModel.find().where(CertificateModel.ID.eq(certId)).delete();
-        store.removeCertificate(certId);
+        store.reload();
 
         assertThat(store.resolveAlias("remove.test")).isNull();
         assertThat(store.isEmpty()).isTrue();
@@ -341,7 +345,7 @@ class TlsCertificateTest {
     @Order(12)
     void acmeChallengeValidatesHostname() {
         var store = new CertificateStore();
-        var acme = new be.elevenways.hohenheim.server.tls.AcmeService(store);
+        var acme = new AcmeService(store);
 
         // No pending challenges -- should return null
         assertThat(acme.getChallengeResponse("some-token", "example.com")).isNull();
@@ -381,27 +385,40 @@ class TlsCertificateTest {
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
-        var siteModel = new be.elevenways.hohenheim.model.SiteModel(ds);
-        var domainModel = new be.elevenways.hohenheim.model.SiteDomainModel(ds);
+        var siteModel = new SiteModel(ds);
+        var domainModel = new SiteDomainModel(ds);
+        var certModel = new CertificateModel(ds);
+
+        KeyPair keyPair = generateKeyPair();
+        X509Certificate cert = generateSelfSignedCert(keyPair, "force-ssl.test");
+
+        Row certRow = certModel.createEmptyRow();
+        certRow.set(CertificateModel.NICE_NAME, "Force SSL Cert");
+        certRow.set(CertificateModel.PROVIDER, "custom");
+        certRow.set(CertificateModel.STATUS, "active");
+        certRow.set(CertificateModel.CERTIFICATE_PEM, certToPem(cert));
+        certRow.set(CertificateModel.PRIVATE_KEY_PEM, keyToPem(keyPair));
+        certModel.save(certRow);
 
         Row site = siteModel.createEmptyRow();
-        site.set(be.elevenways.hohenheim.model.SiteModel.NAME, "Force SSL Site");
-        site.set(be.elevenways.hohenheim.model.SiteModel.SLUG, "force-ssl");
-        site.set(be.elevenways.hohenheim.model.SiteModel.SITE_TYPE, "hohenheim:dead");
-        site.set(be.elevenways.hohenheim.model.SiteModel.ENABLED, true);
-        site.set(be.elevenways.hohenheim.model.SiteModel.STATUS, "active");
+        site.set(SiteModel.NAME, "Force SSL Site");
+        site.set(SiteModel.SLUG, "force-ssl");
+        site.set(SiteModel.SITE_TYPE, "hohenheim:dead");
+        site.set(SiteModel.ENABLED, true);
+        site.set(SiteModel.STATUS, "active");
         siteModel.save(site);
 
-        int siteId = site.get(be.elevenways.hohenheim.model.SiteModel.ID);
+        int siteId = site.get(SiteModel.ID);
 
         Row domain = domainModel.createEmptyRow();
-        domain.set(be.elevenways.hohenheim.model.SiteDomainModel.SITE_ID, siteId);
-        domain.set(be.elevenways.hohenheim.model.SiteDomainModel.HOSTNAME, "force-ssl.test");
-        domain.set(be.elevenways.hohenheim.model.SiteDomainModel.MATCH_TYPE, "exact");
-        domain.set(be.elevenways.hohenheim.model.SiteDomainModel.FORCE_SSL, true);
+        domain.set(SiteDomainModel.SITE_ID, siteId);
+        domain.set(SiteDomainModel.HOSTNAME, "force-ssl.test");
+        domain.set(SiteDomainModel.MATCH_TYPE, "exact");
+        domain.set(SiteDomainModel.FORCE_SSL, true);
         domainModel.save(domain);
 
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 8443);
 
         ProxyServer proxy = new ProxyServer();
         proxy.start();
@@ -432,7 +449,7 @@ class TlsCertificateTest {
                 }
             }
 
-            assertThat(location).isEqualTo("https://force-ssl.test/some/path?q=1");
+            assertThat(location).isEqualTo("https://force-ssl.test:8443/some/path?q=1");
         }
 
         proxy.stop();
@@ -497,5 +514,60 @@ class TlsCertificateTest {
         assertThat(response.statusCode()).isIn(200, 302, 404);
 
         proxy.stop();
+    }
+
+    @Test
+    @Order(15)
+    void preferredCertificateAliasOverridesHostnameSelection() throws Exception {
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) db.delete();
+        HohenheimDatabase.init();
+
+        var ds = HohenheimDatabase.datasource();
+        var certModel = new CertificateModel(ds);
+        var siteModel = new SiteModel(ds);
+        var domainModel = new SiteDomainModel(ds);
+
+        KeyPair firstKeyPair = generateKeyPair();
+        X509Certificate firstCert = generateSelfSignedCert(firstKeyPair, "preferred.test");
+        Row firstRow = certModel.createEmptyRow();
+        firstRow.set(CertificateModel.NICE_NAME, "First Preferred Cert");
+        firstRow.set(CertificateModel.PROVIDER, "custom");
+        firstRow.set(CertificateModel.STATUS, "active");
+        firstRow.set(CertificateModel.CERTIFICATE_PEM, certToPem(firstCert));
+        firstRow.set(CertificateModel.PRIVATE_KEY_PEM, keyToPem(firstKeyPair));
+        certModel.save(firstRow);
+
+        KeyPair secondKeyPair = generateKeyPair();
+        X509Certificate secondCert = generateSelfSignedCert(secondKeyPair, "preferred.test");
+        Row secondRow = certModel.createEmptyRow();
+        secondRow.set(CertificateModel.NICE_NAME, "Second Preferred Cert");
+        secondRow.set(CertificateModel.PROVIDER, "custom");
+        secondRow.set(CertificateModel.STATUS, "active");
+        secondRow.set(CertificateModel.CERTIFICATE_PEM, certToPem(secondCert));
+        secondRow.set(CertificateModel.PRIVATE_KEY_PEM, keyToPem(secondKeyPair));
+        certModel.save(secondRow);
+
+        Row site = siteModel.createEmptyRow();
+        site.set(SiteModel.NAME, "Preferred TLS Site");
+        site.set(SiteModel.SLUG, "preferred-tls-site");
+        site.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        site.set(SiteModel.SETTINGS, java.util.Map.of("forward_host", "127.0.0.1", "forward_port", 8080));
+        site.set(SiteModel.STATUS, "active");
+        site.set(SiteModel.ENABLED, true);
+        siteModel.save(site);
+
+        Row domain = domainModel.createEmptyRow();
+        domain.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
+        domain.set(SiteDomainModel.HOSTNAME, "preferred.test");
+        domain.set(SiteDomainModel.MATCH_TYPE, "exact");
+        domain.set(SiteDomainModel.CERTIFICATE_ID, firstRow.get(CertificateModel.ID));
+        domainModel.save(domain);
+
+        CertificateStore store = new CertificateStore();
+        store.loadFromDatabase();
+
+        assertThat(store.resolvePreferredAlias("preferred.test"))
+            .isEqualTo("cert-" + firstRow.get(CertificateModel.ID));
     }
 }

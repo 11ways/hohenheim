@@ -152,6 +152,31 @@ body {
     width: 100px;
 }
 
+.hh-kv-editor,
+.hh-list-editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pl-space-xs);
+}
+
+.hh-kv-row {
+    display: flex;
+    gap: var(--pl-space-sm);
+    align-items: center;
+}
+
+.hh-kv-row > pl-input {
+    flex: 1;
+}
+
+hh-key-value-editor .hh-kv-row > pl-input:first-child {
+    flex: 0 0 35%;
+}
+
+.hh-kv-row > pl-button {
+    flex-shrink: 0;
+}
+
 .hh-form-actions {
     display: flex;
     gap: var(--pl-space-sm);

@@ -10,6 +10,7 @@
         {% declare proxyHttpsPort: Integer %}
         {% declare proxyFallback: String %}
         {% declare proxyForceHttps: Boolean %}
+        {% declare proxyIpv6Address: String %}
         {% declare adminPort: Integer %}
         {% declare dbPath: String %}
         {% declare logAccessToDb: Boolean %}
@@ -24,7 +25,7 @@
         {% declare saved: String = "" %}
 
         {% if saved == "true" %}
-            <pl-alert variant={% "default" %} class="hh-form-error">
+            <pl-alert variant={% "default" %} class="hh-form-success">
                 <pl-alert-description>Settings saved. Some changes require a restart to take effect.</pl-alert-description>
             </pl-alert>
         {% /if %}
@@ -58,6 +59,10 @@
                                     <input type="checkbox" name="proxy_force_https" checked={% proxyForceHttps %}>
                                     <span>Force HTTPS globally</span>
                                 </label>
+                            </div>
+                            <div class="hh-form-group">
+                                <pl-label target="proxy-ipv6-address">IPv6 Listen Address</pl-label>
+                                <pl-input id="proxy-ipv6-address" type={% "text" %} name={% "proxy_ipv6_address" %} value={% proxyIpv6Address %} placeholder={% "::" %}></pl-input>
                             </div>
                         </div>
                     </pl-card-content>

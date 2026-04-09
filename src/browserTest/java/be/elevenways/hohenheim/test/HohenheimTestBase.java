@@ -4,9 +4,15 @@ import be.elevenways.hawkeye.testSupport.HawkeyeBrowserTestBase;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.server.AuthHelper;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.HohenheimHandlers;
+import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
+import com.microsoft.playwright.options.Cookie;
+
+import java.io.File;
+import java.util.List;
 
 /**
  * Browser test base for Hohenheim.
@@ -24,19 +30,19 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         }
 
         // Delete stale db from previous test class forks
-        java.io.File db = new java.io.File("hohenheim.db");
+        File db = new File("hohenheim.db");
         if (db.exists()) {
             db.delete();
         }
 
-        be.elevenways.hohenheim.server.sitetype.SiteTypes.register();
+        SiteTypes.register();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
 
         ServerZenitRuntime.init();
         Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
 
-        be.elevenways.hohenheim.server.HohenheimHandlers.init();
+        HohenheimHandlers.init();
 
         // Create a test user so the auth middleware doesn't block
         AuthHelper.createUser("test@hohenheim.local", "Test Admin", "testpassword123");
@@ -66,8 +72,8 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
     @Override
     protected void navigateToApp(String path) {
         // Set session cookie before navigation so auth middleware allows access
-        page.context().addCookies(java.util.List.of(
-            new com.microsoft.playwright.options.Cookie("hh_session", sessionToken)
+        page.context().addCookies(List.of(
+            new Cookie("hh_session", sessionToken)
                 .setDomain("localhost")
                 .setPath("/")
         ));

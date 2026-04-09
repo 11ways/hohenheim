@@ -4,16 +4,30 @@
     public siteName: String = ""
     public siteType: String = "hohenheim:proxy"
     public siteEnabled: Boolean = true
+    public siteTypes: List = null
     public error: String = ""
 
     public forwardHost: String = ""
+    public forwardScheme: String = "http"
     public forwardPort: String = ""
     public websocketUpgrade: Boolean = true
+    public ignoreCertificates: Boolean = false
+    public proxySocket: String = ""
     public script: String = ""
     public nodePath: String = ""
     public minimumProcesses: String = "1"
     public maximumProcesses: String = "5"
+    public waitForReady: Boolean = false
+    public environmentVariables: List = null
+    public apiKeys: List = null
+    public nodeVersions: List = null
+    public systemUsers: List = null
+    public siteUser: String = ""
+    public delay: String = ""
     public rootPath: String = ""
+    public indexes: Boolean = true
+    public autoindex: Boolean = false
+    public showHiddenFiles: Boolean = false
     public fallbackFile: String = ""
     public targetUrl: String = ""
     public httpStatus: String = "302"
@@ -42,16 +56,14 @@
 
                         <div class="hh-form-group">
                             <pl-label target="site-type">Site Type</pl-label>
-                            <select id="site-type" name="site_type"
-                                    bind:value={% siteType{:} %}
-                                    class="hh-select">
-                                <option value="hohenheim:proxy">Proxy - Forward to upstream server</option>
-                                <option value="hohenheim:node">Node.js - Managed Node.js process</option>
-                                <option value="hohenheim:alchemy">Alchemy - Managed Alchemy application</option>
-                                <option value="hohenheim:static">Static - Serve files from directory</option>
-                                <option value="hohenheim:redirect">Redirect - HTTP redirect</option>
-                                <option value="hohenheim:dead">Dead - Return 404 (park domain)</option>
-                            </select>
+                            <pl-select name="site_type" bind:value={% siteType{:} %}>
+                                <pl-select-trigger placeholder="Select type"></pl-select-trigger>
+                                <pl-select-content>
+                                    {% each siteTypes{:} as index, st %}
+                                        <pl-select-item value={% st.get("value") %} label={% st.get("label") %}>{{ st.get("label") }}{% if st.get("description") != null %} - {{ st.get("description") }}{% /if %}</pl-select-item>
+                                    {% /each %}
+                                </pl-select-content>
+                            </pl-select>
                         </div>
 
                         <div class="hh-form-group">
@@ -66,13 +78,26 @@
                         <hh-site-type-fields
                             selectedType={% siteType{:} %}
                             forwardHost={% forwardHost %}
+                            forwardScheme={% forwardScheme %}
                             forwardPort={% forwardPort %}
                             websocketUpgrade={% websocketUpgrade %}
+                            ignoreCertificates={% ignoreCertificates %}
+                            proxySocket={% proxySocket %}
                             script={% script %}
                             nodePath={% nodePath %}
                             minimumProcesses={% minimumProcesses %}
                             maximumProcesses={% maximumProcesses %}
+                            waitForReady={% waitForReady %}
+                            environmentVariables={% environmentVariables %}
+                            apiKeys={% apiKeys %}
+                            nodeVersions={% nodeVersions %}
+                            systemUsers={% systemUsers %}
+                            siteUser={% siteUser %}
+                            delay={% delay %}
                             rootPath={% rootPath %}
+                            indexes={% indexes %}
+                            autoindex={% autoindex %}
+                            showHiddenFiles={% showHiddenFiles %}
                             fallbackFile={% fallbackFile %}
                             targetUrl={% targetUrl %}
                             httpStatus={% httpStatus %}
@@ -94,7 +119,14 @@
 {% block "main" %}
     {% declare site: Map %}
     {% declare domains: List %}
+    {% declare siteTypes: List %}
+    {% declare environmentVariables: List %}
+    {% declare apiKeys: List %}
+    {% declare nodeVersions: List %}
+    {% declare systemUsers: List %}
     {% declare error: String %}
+    {% declare processes: List = null %}
+    {% declare isManaged: Boolean = false %}
 
     <header class="hh-header">
         <h1 class="hh-header__title">{{ site.get("name") }}</h1>
@@ -108,15 +140,29 @@
             siteName={% site.get("name") %}
             siteType={% site.get("siteType") != null ? site.get("siteType") : "hohenheim:proxy" %}
             siteEnabled={% site.get("enabled") != null ? site.get("enabled") : true %}
+            siteTypes={% siteTypes %}
             error={% error %}
             forwardHost={% settings != null && settings.get("forward_host") != null ? settings.get("forward_host") + "" : "" %}
+            forwardScheme={% settings != null && settings.get("forward_scheme") != null ? settings.get("forward_scheme") + "" : "http" %}
             forwardPort={% settings != null && settings.get("forward_port") != null ? settings.get("forward_port") + "" : "" %}
             websocketUpgrade={% settings != null && settings.get("websocket_upgrade") != null ? settings.get("websocket_upgrade") : true %}
+            ignoreCertificates={% settings != null && settings.get("ignore_certificates") != null ? settings.get("ignore_certificates") : false %}
+            proxySocket={% settings != null && settings.get("socket") != null ? settings.get("socket") + "" : "" %}
             script={% settings != null && settings.get("script") != null ? settings.get("script") + "" : "" %}
             nodePath={% settings != null && settings.get("node_path") != null ? settings.get("node_path") + "" : "" %}
             minimumProcesses={% settings != null && settings.get("minimum_processes") != null ? settings.get("minimum_processes") + "" : "1" %}
             maximumProcesses={% settings != null && settings.get("maximum_processes") != null ? settings.get("maximum_processes") + "" : "5" %}
+            waitForReady={% settings != null && settings.get("wait_for_ready") != null ? settings.get("wait_for_ready") : false %}
+            environmentVariables={% environmentVariables %}
+            apiKeys={% apiKeys %}
+            nodeVersions={% nodeVersions %}
+            systemUsers={% systemUsers %}
+            siteUser={% settings != null && settings.get("user") != null ? settings.get("user") + "" : "" %}
+            delay={% settings != null && settings.get("delay") != null ? settings.get("delay") + "" : "" %}
             rootPath={% settings != null && settings.get("root_path") != null ? settings.get("root_path") + "" : "" %}
+            indexes={% settings != null && settings.get("indexes") != null ? settings.get("indexes") : true %}
+            autoindex={% settings != null && settings.get("autoindex") != null ? settings.get("autoindex") : false %}
+            showHiddenFiles={% settings != null && settings.get("show_hidden_files") != null ? settings.get("show_hidden_files") : false %}
             fallbackFile={% settings != null && settings.get("fallback_file") != null ? settings.get("fallback_file") + "" : "" %}
             targetUrl={% settings != null && settings.get("target_url") != null ? settings.get("target_url") + "" : "" %}
             httpStatus={% settings != null && settings.get("http_status") != null ? settings.get("http_status") + "" : "302" %}
@@ -170,16 +216,85 @@
                             <pl-input type={% "text" %} name={% "hostname" %} placeholder={% "example.com" %} required={% true %}></pl-input>
                         </div>
                         <div class="hh-form-group">
-                            <select name="match_type" class="hh-select">
-                                <option value="exact">Exact</option>
-                                <option value="wildcard">Wildcard</option>
-                            </select>
+                            <pl-select name="match_type" value="exact">
+                                <pl-select-trigger placeholder="Match type"></pl-select-trigger>
+                                <pl-select-content>
+                                    <pl-select-item value="exact" label="Exact">Exact</pl-select-item>
+                                    <pl-select-item value="wildcard" label="Wildcard">Wildcard</pl-select-item>
+                                    <pl-select-item value="regex" label="Regex">Regex</pl-select-item>
+                                </pl-select-content>
+                            </pl-select>
                         </div>
                         <pl-button variant={% "outline" %} type={% "submit" %}>Add Domain</pl-button>
                     </div>
                 </form>
             </pl-card-content>
         </pl-card>
+
+        {% if isManaged %}
+        <pl-card class="hh-domains-card">
+            <pl-card-header>
+                <pl-card-title>Processes</pl-card-title>
+                <pl-card-description>Running child processes for this site.</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <pl-table>
+                    <pl-table-header><pl-table-row>
+                        <pl-table-head>PID</pl-table-head>
+                        <pl-table-head>Port</pl-table-head>
+                        <pl-table-head>CPU</pl-table-head>
+                        <pl-table-head>Memory</pl-table-head>
+                        <pl-table-head>Status</pl-table-head>
+                        <pl-table-head></pl-table-head>
+                    </pl-table-row></pl-table-header>
+                    <pl-table-body>
+                        {% each processes as index, proc %}
+                        <pl-table-row>
+                            <pl-table-cell>{{ proc.get("pid") }}</pl-table-cell>
+                            <pl-table-cell>{{ proc.get("port") }}</pl-table-cell>
+                            <pl-table-cell>{{ proc.get("cpu") }}%</pl-table-cell>
+                            <pl-table-cell>{{ proc.get("memoryMb") }} MB</pl-table-cell>
+                            <pl-table-cell>
+                                {% if proc.get("isolated") == true %}
+                                    <pl-badge variant={% "destructive" %}>Isolated</pl-badge>
+                                {% else %}
+                                    {% if proc.get("ready") == true %}
+                                        <pl-badge variant={% "default" %}>Ready</pl-badge>
+                                    {% else %}
+                                        <pl-badge variant={% "secondary" %}>Starting</pl-badge>
+                                    {% /if %}
+                                {% /if %}
+                            </pl-table-cell>
+                            <pl-table-cell>
+                                <div class="hh-form-row">
+                                    <form method="POST" action={% "/sites/" + site.get("id") + "/processes/" + proc.get("pid") + "/isolate" %}>
+                                        <pl-button variant={% "outline" %} size={% "sm" %} type={% "submit" %}>
+                                            {% if proc.get("isolated") == true %}Unisolate{% else %}Isolate{% /if %}
+                                        </pl-button>
+                                    </form>
+                                    <form method="POST" action={% "/sites/" + site.get("id") + "/processes/" + proc.get("pid") + "/kill" %}>
+                                        <pl-button variant={% "destructive" %} size={% "sm" %} type={% "submit" %}>Kill</pl-button>
+                                    </form>
+                                </div>
+                            </pl-table-cell>
+                        </pl-table-row>
+                        {% /each %}
+                        {% if processes |> Array.length == 0 %}
+                        <pl-table-row>
+                            <pl-table-cell colspan="6" class="hh-empty-state">No processes running.</pl-table-cell>
+                        </pl-table-row>
+                        {% /if %}
+                    </pl-table-body>
+                </pl-table>
+
+                <div class="hh-form-actions">
+                    <form method="POST" action={% "/sites/" + site.get("id") + "/processes/start" %}>
+                        <pl-button variant={% "outline" %} type={% "submit" %}>Start Process</pl-button>
+                    </form>
+                </div>
+            </pl-card-content>
+        </pl-card>
+        {% /if %}
 
         <pl-card class="hh-domains-card">
             <pl-card-header>

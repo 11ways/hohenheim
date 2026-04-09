@@ -1,0 +1,46 @@
+{% tag HhKeyValueEditor {
+
+    style {
+        display: block;
+    }
+
+    public initialPairs: List = null
+    public namePrefix: String = "kv"
+    public namePlaceholder: String = "NAME"
+    public valuePlaceholder: String = "value"
+    private pairs: List = null
+
+    @mount
+    function init() {
+        if initialPairs != null {
+            pairs = initialPairs |> Array.filter(p => true)
+        } else {
+            pairs = []
+        }
+    }
+
+    function addPair() {
+        let newMap = Map.create()
+        Map.put(newMap, "name", "")
+        Map.put(newMap, "value", "")
+        let copy = pairs |> Array.filter(p => true)
+        List.add(copy, newMap)
+        pairs = copy
+    }
+
+
+    template {
+        <div class="hh-kv-editor">
+            {% each pairs{:} as index, pair %}
+            <div class="hh-kv-row">
+                <pl-input name={% namePrefix + "_name_" + index %} value={% pair.get("name") %} placeholder={% namePlaceholder %}></pl-input>
+                <pl-input name={% namePrefix + "_value_" + index %} value={% pair.get("value") %} placeholder={% valuePlaceholder %}></pl-input>
+                <pl-button variant={% "ghost" %} size={% "sm" %} type={% "button" %} event:click={% () => pairs = pairs |> Array.filter(p => p != pair) %}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </pl-button>
+            </div>
+            {% /each %}
+            <pl-button variant={% "outline" %} size={% "sm" %} type={% "button" %} event:click={% addPair() %}>Add</pl-button>
+        </div>
+    }
+} %}

@@ -30,10 +30,13 @@
 
                         <div class="hh-form-group">
                             <pl-label target="satisfy">Satisfy</pl-label>
-                            <select id="satisfy" name="satisfy" class="hh-select">
-                                <option value="any">Any (IP or Auth)</option>
-                                <option value="all">All (IP and Auth)</option>
-                            </select>
+                            <pl-select name="satisfy" value="any">
+                                <pl-select-trigger placeholder="Satisfy"></pl-select-trigger>
+                                <pl-select-content>
+                                    <pl-select-item value="any" label="Any (IP or Auth)">Any (IP or Auth)</pl-select-item>
+                                    <pl-select-item value="all" label="All (IP and Auth)">All (IP and Auth)</pl-select-item>
+                                </pl-select-content>
+                            </pl-select>
                             <p class="hh-form-hint">Any: pass if IP matches OR auth succeeds. All: both must pass.</p>
                         </div>
 

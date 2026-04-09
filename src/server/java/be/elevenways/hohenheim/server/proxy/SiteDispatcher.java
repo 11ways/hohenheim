@@ -8,12 +8,14 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import io.undertow.client.ClientCallback;
 import io.undertow.client.ClientConnection;
 import io.undertow.client.UndertowClient;
+import io.undertow.protocols.ssl.UndertowXnioSsl;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.server.ServerConnection;
@@ -24,22 +26,41 @@ import io.undertow.server.handlers.proxy.ProxyHandler;
 import io.undertow.server.handlers.ResponseCodeHandler;
 import io.undertow.util.HeaderMap;
 import io.undertow.util.Headers;
+import io.undertow.util.AttachmentKey;
 import io.undertow.util.HttpString;
 import org.xnio.IoUtils;
 import org.xnio.OptionMap;
+import org.xnio.Xnio;
 
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.Writer;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.net.URI;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 /**
  * Routes incoming proxy requests to site-type handlers based on hostname matching.
@@ -57,27 +78,52 @@ public class SiteDispatcher implements HttpHandler {
 
     private final String instanceId = UUID.randomUUID().toString().substring(0, 8);
 
-    // Exact hostname -> route entry
-    private final ConcurrentHashMap<String, RouteEntry> exactRoutes = new ConcurrentHashMap<>();
+    /**
+     * Immutable snapshot of all route tables. Swapped atomically via volatile reference
+     * so concurrent requests never see a partially-loaded state.
+     */
+    private static final class RouteTable {
+        final Map<String, RouteEntry> exactRoutes;
+        final Map<String, RouteEntry> wildcardRoutes;
+        final List<RegexRoute> regexRoutes;
 
-    // Wildcard patterns (*.example.com) -> route entry
-    private final ConcurrentHashMap<String, RouteEntry> wildcardRoutes = new ConcurrentHashMap<>();
+        RouteTable(Map<String, RouteEntry> exact, Map<String, RouteEntry> wildcard,
+                   List<RegexRoute> regex) {
+            this.exactRoutes = exact;
+            this.wildcardRoutes = wildcard;
+            this.regexRoutes = regex;
+        }
+    }
+
+    private volatile RouteTable routes = new RouteTable(Map.of(), Map.of(), List.of());
+
+    // Positive cache for regex matches.
+    private final ConcurrentHashMap<String, CachedRegexMatch> regexMatchCache = new ConcurrentHashMap<>();
 
     // Negative cache for hostnames that don't match any route
     private final ConcurrentHashMap<String, Long> negativeCache = new ConcurrentHashMap<>();
     private static final long NEGATIVE_CACHE_TTL_MS = 5 * 60 * 1000;
     private static final int NEGATIVE_CACHE_MAX = 5000;
 
+    private static final long REGEX_CACHE_TTL_MS = 5 * 60 * 1000;
+    private static final HttpString HOST = Headers.HOST;
+    private static final Pattern NAMED_GROUP_PATTERN = Pattern.compile("\\(\\?<([a-zA-Z][a-zA-Z0-9_]*)>");
+
     // IP reputation: tracks domain miss count per IP
     private final ConcurrentHashMap<String, IpReputation> ipReputation = new ConcurrentHashMap<>();
+    private static final int IP_REPUTATION_REJECT_THRESHOLD = 100;
 
     private static final String ACME_CHALLENGE_PREFIX = "/.well-known/acme-challenge/";
 
     // Shared proxy handler for proxy-type sites
     private final ProxyHandler proxyHandler;
 
+    private final ScheduledExecutorService delayScheduler;
+
     // ACME service for Let's Encrypt challenge responses (nullable)
     private final AcmeService acmeService;
+
+    private volatile boolean httpsAvailable;
 
     /**
      * A route entry combines the site handler with domain-level configuration.
@@ -88,10 +134,11 @@ public class SiteDispatcher implements HttpHandler {
         final String path;
         final boolean stripPath;
         final boolean forceSsl;
+        final int requestDelayMs;
         final boolean hstsEnabled;
         final boolean hstsSubdomains;
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> customHeaders;
+        final List<HeaderRule> customHeaders;
+        final List<String> listenOnAddresses;
 
         // Access list enforcement
         final String[] allowedIps;
@@ -100,7 +147,8 @@ public class SiteDispatcher implements HttpHandler {
         final String basicAuthPass;
         final String accessListSatisfy;
 
-        RouteEntry(SiteRequestHandler handler, String siteName, Row domain, Row accessList) {
+        RouteEntry(SiteRequestHandler handler, String siteName, Row domain, Row accessList,
+                   Map<String, Object> siteSettings) {
             this.handler = handler;
             this.siteName = siteName;
 
@@ -108,11 +156,11 @@ public class SiteDispatcher implements HttpHandler {
             this.path = (p != null && !p.isEmpty()) ? p : null;
             this.stripPath = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.STRIP_PATH));
             this.forceSsl = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL));
+            this.requestDelayMs = parsePositiveInt(siteSettings != null ? siteSettings.get("delay") : null);
             this.hstsEnabled = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_ENABLED));
             this.hstsSubdomains = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
-
-            Object ch = domain != null ? domain.get(SiteDomainModel.CUSTOM_HEADERS) : null;
-            this.customHeaders = (ch instanceof Map) ? (Map<String, Object>) ch : null;
+            this.customHeaders = parseHeaderRules(domain != null ? domain.get(SiteDomainModel.CUSTOM_HEADERS) : null);
+            this.listenOnAddresses = parseListenOnAddresses(domain != null ? domain.get(SiteDomainModel.LISTEN_ON) : null);
 
             if (accessList != null) {
                 this.accessListSatisfy = accessList.get(AccessListModel.SATISFY);
@@ -134,7 +182,36 @@ public class SiteDispatcher implements HttpHandler {
         boolean hasAccessList() {
             return accessListSatisfy != null;
         }
+
+        boolean acceptsListener(String listenerIp) {
+            if (listenOnAddresses.isEmpty() || listenerIp == null || listenerIp.isBlank()) {
+                return true;
+            }
+
+            String normalized = normalizeListenerIp(listenerIp);
+            for (String candidate : listenOnAddresses) {
+                if ("any".equals(candidate)) {
+                    return true;
+                }
+
+                String normalizedCandidate = normalizeListenerIp(candidate);
+                if (normalized.equals(normalizedCandidate)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
+
+    private record HeaderRule(String name, String value) {}
+
+    private record RegexRoute(String hostnamePattern, Pattern pattern, List<String> namedGroups,
+                              RouteEntry entry) {}
+
+    private record CachedRegexMatch(RouteEntry entry, Map<String, String> groups, long cachedAt) {}
+
+    private record RouteMatch(RouteEntry entry, Map<String, String> groups) {}
 
     private static final class IpReputation {
         final AtomicInteger hits = new AtomicInteger(0);
@@ -144,6 +221,11 @@ public class SiteDispatcher implements HttpHandler {
 
     public SiteDispatcher(AcmeService acmeService) {
         this.acmeService = acmeService;
+        this.delayScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread thread = new Thread(r, "site-dispatch-delay");
+            thread.setDaemon(true);
+            return thread;
+        });
         DispatchingProxyClient proxyClient = new DispatchingProxyClient();
         this.proxyHandler = ProxyHandler.builder()
             .setProxyClient(proxyClient)
@@ -163,13 +245,10 @@ public class SiteDispatcher implements HttpHandler {
         var domainModel = new SiteDomainModel(ds);
         var accessListModel = new AccessListModel(ds);
 
-        // Destroy existing handlers
-        for (RouteEntry entry : exactRoutes.values()) entry.handler.destroy();
-        for (RouteEntry entry : wildcardRoutes.values()) entry.handler.destroy();
-
-        exactRoutes.clear();
-        wildcardRoutes.clear();
-        negativeCache.clear();
+        // Build new route maps first, then swap atomically
+        Map<String, RouteEntry> newExact = new HashMap<>();
+        Map<String, RouteEntry> newWildcard = new HashMap<>();
+        List<RegexRoute> newRegex = new ArrayList<>();
 
         List<Row> sites = siteModel.findEnabled();
 
@@ -200,22 +279,43 @@ public class SiteDispatcher implements HttpHandler {
                 String matchType = domain.get(SiteDomainModel.MATCH_TYPE);
                 if (hostname == null || hostname.isEmpty()) continue;
 
-                RouteEntry entry = new RouteEntry(requestHandler, siteName, domain, accessList);
+                RouteEntry entry = new RouteEntry(requestHandler, siteName, domain, accessList, settings);
 
-                if ("wildcard".equals(matchType) || hostname.startsWith("*.")) {
-                    wildcardRoutes.put(hostname.toLowerCase(), entry);
+                if ("regex".equals(matchType)) {
+                    Pattern pattern = compileHostnameRegex(hostname);
+                    if (pattern != null) {
+                        newRegex.add(new RegexRoute(hostname, pattern,
+                            extractNamedGroups(hostname), entry));
+                    }
+                } else if ("wildcard".equals(matchType) || hostname.startsWith("*.")) {
+                    newWildcard.put(hostname.toLowerCase(), entry);
                 } else {
-                    exactRoutes.put(hostname.toLowerCase(), entry);
+                    newExact.put(hostname.toLowerCase(), entry);
                 }
             }
         }
 
-        Blast.log("SiteDispatcher: loaded", exactRoutes.size(), "exact routes,",
-                  wildcardRoutes.size(), "wildcard routes");
+        // Destroy old handlers, then swap in the new routes atomically
+        destroyHandlers();
+        this.routes = new RouteTable(Map.copyOf(newExact), Map.copyOf(newWildcard), List.copyOf(newRegex));
+        negativeCache.clear();
+        regexMatchCache.clear();
+
+        Blast.log("SiteDispatcher: loaded", newExact.size(), "exact routes,",
+                  newWildcard.size(), "wildcard routes,", newRegex.size(), "regex routes");
     }
 
     @Override
     public void handleRequest(HttpServerExchange exchange) throws Exception {
+
+        // --- IP reputation enforcement: reject known-bad IPs early ---
+        String earlyIp = exchange.getSourceAddress().getAddress().getHostAddress();
+        IpReputation rep = ipReputation.get(earlyIp);
+        if (rep != null && rep.misses.get() >= IP_REPUTATION_REJECT_THRESHOLD && rep.hits.get() == 0) {
+            exchange.setStatusCode(403);
+            exchange.endExchange();
+            return;
+        }
 
         // --- ACME HTTP-01 challenge ---
         String acmePath = exchange.getRelativePath();
@@ -239,7 +339,18 @@ public class SiteDispatcher implements HttpHandler {
         }
 
         String hostname = extractHostname(exchange);
-        RouteEntry entry = resolveEntry(hostname);
+
+        if (shouldForceHttpsGlobally(exchange)) {
+            redirectToHttps(exchange, hostname);
+            return;
+        }
+
+        RouteMatch match = resolveEntry(exchange, hostname);
+        RouteEntry entry = match != null ? match.entry() : null;
+
+        if (match != null && match.groups() != null && !match.groups().isEmpty()) {
+            exchange.putAttachment(MATCHED_GROUPS, match.groups());
+        }
 
         // --- IP reputation tracking ---
         String clientIp = getClientIp(exchange);
@@ -263,13 +374,8 @@ public class SiteDispatcher implements HttpHandler {
         }
 
         // --- Force SSL redirect ---
-        if (entry.forceSsl && "http".equals(exchange.getRequestScheme())) {
-            String redirectUrl = "https://" + hostname + exchange.getRelativePath();
-            String query = exchange.getQueryString();
-            if (query != null && !query.isEmpty()) redirectUrl += "?" + query;
-            exchange.setStatusCode(301);
-            exchange.getResponseHeaders().put(Headers.LOCATION, redirectUrl);
-            exchange.endExchange();
+        if (httpsAvailable && entry.forceSsl && "http".equals(exchange.getRequestScheme())) {
+            redirectToHttps(exchange, hostname);
             return;
         }
 
@@ -314,11 +420,15 @@ public class SiteDispatcher implements HttpHandler {
             requestHeaders.put(X_FORWARDED_HOST, hostname);
         }
 
-        // --- Custom response headers ---
-        if (entry.customHeaders != null) {
-            HeaderMap responseHeaders = exchange.getResponseHeaders();
-            for (Map.Entry<String, Object> h : entry.customHeaders.entrySet()) {
-                responseHeaders.put(new HttpString(h.getKey()), String.valueOf(h.getValue()));
+        // --- Custom upstream request headers ---
+        if (!entry.customHeaders.isEmpty()) {
+            for (HeaderRule header : entry.customHeaders) {
+                HttpString headerName = new HttpString(header.name());
+                if (header.value() == null || header.value().isBlank()) {
+                    requestHeaders.remove(headerName);
+                } else {
+                    requestHeaders.put(headerName, header.value());
+                }
             }
         }
 
@@ -332,57 +442,82 @@ public class SiteDispatcher implements HttpHandler {
         // --- Access logging ---
         logAccess(exchange, hostname, clientIp);
 
-        // --- Dispatch to handler ---
-        entry.handler.handleRequest(exchange, uri -> {
-            exchange.putAttachment(UPSTREAM_URI, uri);
-            try {
-                proxyHandler.handleRequest(exchange);
-            } catch (Exception e) {
-                ErrorPages.send502(exchange, e.getMessage());
-            }
-        });
+        dispatchToRoute(entry, exchange);
     }
 
-    private static final io.undertow.util.AttachmentKey<URI> UPSTREAM_URI =
-        io.undertow.util.AttachmentKey.create(URI.class);
+    private static final AttachmentKey<UpstreamTarget> UPSTREAM_URI =
+        AttachmentKey.create(UpstreamTarget.class);
+    private static final AttachmentKey<Map<String, String>> MATCHED_GROUPS =
+        AttachmentKey.create(Map.class);
 
     // -----------------------------------------------------------------------
     // Resolution
     // -----------------------------------------------------------------------
 
     private String extractHostname(HttpServerExchange exchange) {
-        String host = exchange.getRequestHeaders().getFirst(Headers.HOST);
+        String host = exchange.getRequestHeaders().getFirst(HOST);
         if (host == null) return "";
         int colon = host.indexOf(':');
         return (colon != -1 ? host.substring(0, colon) : host).toLowerCase();
     }
 
-    private RouteEntry resolveEntry(String hostname) {
+    private RouteMatch resolveEntry(HttpServerExchange exchange, String hostname) {
         if (hostname.isEmpty()) return null;
 
+        String listenerIp = extractListenerAddress(exchange);
+        String cacheKey = hostname + "|" + (listenerIp != null ? listenerIp : "");
+
         // Check negative cache
-        Long cachedAt = negativeCache.get(hostname);
+        Long cachedAt = negativeCache.get(cacheKey);
         if (cachedAt != null) {
             if (System.currentTimeMillis() - cachedAt < NEGATIVE_CACHE_TTL_MS) {
                 return null;
             }
-            negativeCache.remove(hostname);
+            negativeCache.remove(cacheKey);
         }
 
+        // Take a consistent snapshot of the route table
+        RouteTable rt = this.routes;
+
         // 1. Exact match
-        RouteEntry entry = exactRoutes.get(hostname);
-        if (entry != null) return entry;
+        RouteEntry entry = rt.exactRoutes.get(hostname);
+        if (entry != null && entry.acceptsListener(listenerIp)) return new RouteMatch(entry, null);
 
         // 2. Wildcard match
-        for (Map.Entry<String, RouteEntry> e : wildcardRoutes.entrySet()) {
-            if (matchesWildcard(hostname, e.getKey())) {
-                return e.getValue();
+        for (Map.Entry<String, RouteEntry> e : rt.wildcardRoutes.entrySet()) {
+            RouteEntry wildcardEntry = e.getValue();
+            if (wildcardEntry.acceptsListener(listenerIp) && matchesWildcard(hostname, e.getKey())) {
+                return new RouteMatch(wildcardEntry, null);
             }
         }
 
-        // 3. No match
+        // 3. Regex match (with positive cache)
+        CachedRegexMatch cachedMatch = regexMatchCache.get(cacheKey);
+        if (cachedMatch != null) {
+            if (System.currentTimeMillis() - cachedMatch.cachedAt() < REGEX_CACHE_TTL_MS) {
+                return new RouteMatch(cachedMatch.entry(), cachedMatch.groups());
+            }
+            regexMatchCache.remove(cacheKey);
+        }
+
+        for (RegexRoute regexRoute : rt.regexRoutes) {
+            if (!regexRoute.entry().acceptsListener(listenerIp)) {
+                continue;
+            }
+
+            Matcher matcher = regexRoute.pattern().matcher(hostname);
+            if (matcher.matches()) {
+                Map<String, String> groups = extractRegexGroups(matcher, regexRoute.namedGroups());
+                CachedRegexMatch positiveMatch = new CachedRegexMatch(regexRoute.entry(), groups,
+                    System.currentTimeMillis());
+                regexMatchCache.put(cacheKey, positiveMatch);
+                return new RouteMatch(regexRoute.entry(), groups);
+            }
+        }
+
+        // 4. No match
         if (negativeCache.size() < NEGATIVE_CACHE_MAX) {
-            negativeCache.put(hostname, System.currentTimeMillis());
+            negativeCache.put(cacheKey, System.currentTimeMillis());
         }
         return null;
     }
@@ -490,7 +625,12 @@ public class SiteDispatcher implements HttpHandler {
             if (colon < 0) return false;
             String user = decoded.substring(0, colon);
             String pass = decoded.substring(colon + 1);
-            return entry.basicAuthUser.equals(user) && entry.basicAuthPass.equals(pass);
+            return MessageDigest.isEqual(
+                    entry.basicAuthUser.getBytes(StandardCharsets.UTF_8),
+                    user.getBytes(StandardCharsets.UTF_8))
+                && MessageDigest.isEqual(
+                    entry.basicAuthPass.getBytes(StandardCharsets.UTF_8),
+                    pass.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             return false;
         }
@@ -506,6 +646,222 @@ public class SiteDispatcher implements HttpHandler {
         if (!pattern.startsWith("*.")) return false;
         String suffix = pattern.substring(1);
         return hostname.endsWith(suffix) && hostname.length() > suffix.length();
+    }
+
+    private Pattern compileHostnameRegex(String hostname) {
+        if (hostname == null || hostname.isBlank()) {
+            return null;
+        }
+
+        String source = hostname.trim();
+        int flags = Pattern.CASE_INSENSITIVE;
+
+        if (source.startsWith("/") && source.length() > 1) {
+            int lastSlash = source.lastIndexOf('/');
+            if (lastSlash > 0) {
+                String flagSection = source.substring(lastSlash + 1);
+                source = source.substring(1, lastSlash);
+                if (flagSection.contains("i")) {
+                    flags |= Pattern.CASE_INSENSITIVE;
+                }
+            }
+        }
+
+        try {
+            return Pattern.compile(source, flags);
+        } catch (Exception e) {
+            Blast.log("SiteDispatcher: invalid regex hostname", hostname, "-", e.getMessage());
+            return null;
+        }
+    }
+
+    private static int parsePositiveInt(Object value) {
+        if (value instanceof Integer integer && integer > 0) {
+            return integer;
+        }
+
+        if (value instanceof Number number) {
+            int intValue = number.intValue();
+            return Math.max(intValue, 0);
+        }
+
+        return 0;
+    }
+
+    private static List<HeaderRule> parseHeaderRules(Object value) {
+        if (value == null) {
+            return List.of();
+        }
+
+        List<HeaderRule> result = new ArrayList<>();
+
+        if (value instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() != null) {
+                    result.add(new HeaderRule(String.valueOf(entry.getKey()),
+                        entry.getValue() != null ? String.valueOf(entry.getValue()) : ""));
+                }
+            }
+        } else if (value instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    Object name = map.get("name");
+                    if (name != null && !String.valueOf(name).isBlank()) {
+                        Object headerValue = map.get("value");
+                        result.add(new HeaderRule(String.valueOf(name),
+                            headerValue != null ? String.valueOf(headerValue) : ""));
+                    }
+                }
+            }
+        }
+
+        return List.copyOf(result);
+    }
+
+    private static List<String> parseListenOnAddresses(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+
+        String[] parts = value.split("[,\\s]+");
+        List<String> result = new ArrayList<>();
+        for (String part : parts) {
+            if (!part.isBlank()) {
+                result.add(part.trim().toLowerCase());
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static String normalizeListenerIp(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        String normalized = value.trim().toLowerCase();
+        if (normalized.startsWith("::ffff:")) {
+            normalized = normalized.substring("::ffff:".length());
+        }
+        return normalized;
+    }
+
+    private static Map<String, String> extractRegexGroups(Matcher matcher, List<String> namedGroups) {
+        Map<String, String> groups = new HashMap<>();
+        for (int i = 1; i <= matcher.groupCount(); i++) {
+            String value = matcher.group(i);
+            if (value != null) {
+                groups.put(String.valueOf(i), value);
+            }
+        }
+
+        for (String name : namedGroups) {
+            try {
+                String value = matcher.group(name);
+                if (value != null) {
+                    groups.put(name, value);
+                }
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+
+        return groups.isEmpty() ? Map.of() : Map.copyOf(groups);
+    }
+
+    private static List<String> extractNamedGroups(String patternSource) {
+        if (patternSource == null || patternSource.isBlank()) {
+            return List.of();
+        }
+
+        Matcher matcher = NAMED_GROUP_PATTERN.matcher(patternSource);
+        List<String> result = new ArrayList<>();
+        while (matcher.find()) {
+            result.add(matcher.group(1));
+        }
+        return List.copyOf(result);
+    }
+
+
+
+    private String extractListenerAddress(HttpServerExchange exchange) {
+        InetSocketAddress address = exchange.getDestinationAddress();
+        if (address == null) {
+            address = exchange.getConnection().getLocalAddress(InetSocketAddress.class);
+        }
+        return address != null && address.getAddress() != null ? address.getAddress().getHostAddress() : null;
+    }
+
+    private void dispatchToRoute(RouteEntry entry, HttpServerExchange exchange) {
+        Runnable dispatch = () -> entry.handler.handleRequest(exchange, upstream -> {
+            exchange.putAttachment(UPSTREAM_URI, upstream);
+            try {
+                proxyHandler.handleRequest(exchange);
+            } catch (Exception e) {
+                ErrorPages.send502(exchange, e.getMessage());
+            }
+        });
+
+        if (entry.requestDelayMs <= 0) {
+            dispatch.run();
+            return;
+        }
+
+        exchange.dispatch();
+        delayScheduler.schedule(() -> {
+            if (!exchange.isComplete()) {
+                exchange.dispatch(dispatch);
+            }
+        }, entry.requestDelayMs, TimeUnit.MILLISECONDS);
+    }
+
+    private boolean shouldForceHttpsGlobally(HttpServerExchange exchange) {
+        return httpsAvailable
+            && "http".equals(exchange.getRequestScheme())
+            && Boolean.TRUE.equals(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
+    }
+
+    public void setHttpsAvailable(boolean httpsAvailable) {
+        this.httpsAvailable = httpsAvailable;
+    }
+
+    private void redirectToHttps(HttpServerExchange exchange, String hostname) {
+        String hostHeader = exchange.getRequestHeaders().getFirst(HOST);
+        String authority = hostname;
+        int httpsPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT);
+
+        if (hostHeader != null && !hostHeader.isBlank()) {
+            authority = hostHeader.replaceFirst(":\\d+$", "");
+        }
+
+        if (httpsPort > 0 && httpsPort != 443) {
+            authority = authority + ":" + httpsPort;
+        }
+
+        String redirectUrl = "https://" + authority + exchange.getRelativePath();
+        String query = exchange.getQueryString();
+        if (query != null && !query.isEmpty()) {
+            redirectUrl += "?" + query;
+        }
+
+        exchange.setStatusCode(301);
+        exchange.getResponseHeaders().put(Headers.LOCATION, redirectUrl);
+        exchange.endExchange();
+    }
+
+    private void destroyHandlers() {
+        RouteTable rt = this.routes;
+        Set<SiteRequestHandler> handlers = Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        for (RouteEntry entry : rt.exactRoutes.values()) {
+            handlers.add(entry.handler);
+        }
+        for (RouteEntry entry : rt.wildcardRoutes.values()) {
+            handlers.add(entry.handler);
+        }
+        for (RegexRoute route : rt.regexRoutes) {
+            handlers.add(route.entry().handler);
+        }
+        for (SiteRequestHandler handler : handlers) {
+            handler.destroy();
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -571,13 +927,7 @@ public class SiteDispatcher implements HttpHandler {
                     + " \"" + (hostname != null ? hostname : "-") + "\""
                     + " \"" + (ua != null ? ua : "-") + "\"";
 
-                java.io.File logFile = new java.io.File(logPath);
-                java.io.File parent = logFile.getParentFile();
-                if (parent != null && !parent.exists()) parent.mkdirs();
-
-                try (var writer = new FileWriter(logFile, true)) {
-                    writer.write(line + "\n");
-                }
+                appendToLogFile(logPath, line);
             } catch (Exception ignored) {
                 // Don't let logging break request handling
             }
@@ -588,15 +938,20 @@ public class SiteDispatcher implements HttpHandler {
     private void logDomainMissToFile(String line) {
         String logPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISSES_LOG_PATH);
         if (logPath == null || logPath.isEmpty()) return;
+        appendToLogFile(logPath, line);
+    }
+
+    private static void appendToLogFile(String logPath, String line) {
         try {
             java.io.File logFile = new java.io.File(logPath);
             java.io.File parent = logFile.getParentFile();
             if (parent != null && !parent.exists()) parent.mkdirs();
 
-            try (var writer = new FileWriter(logFile, true)) {
-                writer.write(line + "\n");
+            try (Writer writer = new BufferedWriter(new FileWriter(logFile, true))) {
+                writer.write(line);
+                writer.write('\n');
             }
-        } catch (IOException e) {
+        } catch (IOException ignored) {
             // Don't let log writing failures break request handling
         }
     }
@@ -608,11 +963,12 @@ public class SiteDispatcher implements HttpHandler {
     private class DispatchingProxyClient implements ProxyClient {
 
         private final UndertowClient client = UndertowClient.getInstance();
+        private final org.xnio.ssl.XnioSsl insecureSsl = createInsecureSsl();
 
         @Override
         public ProxyTarget findTarget(HttpServerExchange exchange) {
-            URI uri = exchange.getAttachment(UPSTREAM_URI);
-            return uri != null ? new SimpleTarget(uri) : null;
+            UpstreamTarget target = exchange.getAttachment(UPSTREAM_URI);
+            return target != null ? new SimpleTarget(target) : null;
         }
 
         @Override
@@ -620,7 +976,9 @@ public class SiteDispatcher implements HttpHandler {
                                   ProxyCallback<ProxyConnection> callback,
                                   long timeout, TimeUnit timeUnit) {
             SimpleTarget simpleTarget = (SimpleTarget) target;
-            URI uri = simpleTarget.uri;
+            UpstreamTarget upstreamTarget = simpleTarget.target;
+            URI uri = upstreamTarget.uri();
+            org.xnio.ssl.XnioSsl ssl = upstreamTarget.ignoreCertificates() ? insecureSsl : null;
 
             client.connect(new ClientCallback<ClientConnection>() {
                 @Override
@@ -638,15 +996,39 @@ public class SiteDispatcher implements HttpHandler {
                 public void failed(IOException e) {
                     callback.failed(exchange);
                 }
-            }, uri, exchange.getIoThread(),
+            }, uri, exchange.getIoThread(), ssl,
                exchange.getConnection().getByteBufferPool(),
                OptionMap.EMPTY);
+        }
+
+        private org.xnio.ssl.XnioSsl createInsecureSsl() {
+            try {
+                SSLContext context = SSLContext.getInstance("TLS");
+                context.init(null, new TrustManager[]{new X509TrustManager() {
+                    @Override
+                    public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                        return new java.security.cert.X509Certificate[0];
+                    }
+
+                    @Override
+                    public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) {
+                    }
+
+                    @Override
+                    public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType) {
+                    }
+                }}, new SecureRandom());
+
+                return new UndertowXnioSsl(Xnio.getInstance(), OptionMap.EMPTY, context);
+            } catch (Exception e) {
+                throw new IllegalStateException("Failed to initialize insecure proxy SSL", e);
+            }
         }
     }
 
     private static final class SimpleTarget implements ProxyClient.ProxyTarget {
-        final URI uri;
-        SimpleTarget(URI uri) { this.uri = uri; }
+        final UpstreamTarget target;
+        SimpleTarget(UpstreamTarget target) { this.target = target; }
     }
 
     // -----------------------------------------------------------------------
@@ -654,10 +1036,41 @@ public class SiteDispatcher implements HttpHandler {
     // -----------------------------------------------------------------------
 
     public int getExactRouteCount() {
-        return exactRoutes.size();
+        return routes.exactRoutes.size();
     }
 
     public int getWildcardRouteCount() {
-        return wildcardRoutes.size();
+        return routes.wildcardRoutes.size();
+    }
+
+    public int getRegexRouteCount() {
+        return routes.regexRoutes.size();
+    }
+
+    /**
+     * Find the active request handler for a given site ID.
+     * Returns null if the site is not currently loaded.
+     */
+    public SiteRequestHandler findHandlerBySiteId(int siteId) {
+        RouteTable rt = this.routes;
+
+        for (RouteEntry entry : rt.exactRoutes.values()) {
+            if (entry.handler.getSiteId() == siteId) return entry.handler;
+        }
+        for (RouteEntry entry : rt.wildcardRoutes.values()) {
+            if (entry.handler.getSiteId() == siteId) return entry.handler;
+        }
+        for (RegexRoute route : rt.regexRoutes) {
+            if (route.entry().handler.getSiteId() == siteId) return route.entry().handler;
+        }
+
+        return null;
+    }
+
+    /**
+     * Shut down internal executors. Called from ProxyServer.stop().
+     */
+    public void shutdown() {
+        delayScheduler.shutdownNow();
     }
 }

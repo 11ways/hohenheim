@@ -1,11 +1,15 @@
 package be.elevenways.hohenheim.server.process;
 
+import be.elevenways.hohenheim.model.ProclogModel;
+import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.protoblast.common.Blast;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
+import io.undertow.util.HttpString;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -14,6 +18,7 @@ import java.net.URI;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Base handler for site types that manage child processes.
@@ -25,6 +30,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, ProcessMonitor.StatsListener {
 
+    private static final HttpString X_HOHENHEIM_KEY =
+        new HttpString("X-Hohenheim-Key");
+    private static final HttpString X_HOHENHEIM_ACTION =
+        new HttpString("X-Hohenheim-Action");
+
     // Configuration
     protected final int siteId;
     protected final String siteName;
@@ -32,6 +42,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     protected final int maxProcesses;
     protected final boolean waitForReady;
     protected final Map<String, String> environmentVariables;
+    protected final Set<String> apiKeys;
 
     // Process state
     private final CopyOnWriteArrayList<ManagedProcess> processList = new CopyOnWriteArrayList<>();
@@ -45,18 +56,30 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     // Monitoring
     private final ProcessMonitor monitor;
 
+    // IPC and shared cache
+    private final RemoteCache remoteCache = new RemoteCache();
+    private final ConcurrentHashMap<Long, IpcChannel> ipcChannels = new ConcurrentHashMap<>();
+
     // Crash recovery
     private final LinkedList<Long> exitLog = new LinkedList<>();
     private static final int MAX_EXIT_LOG = 20;
     private static final int CRASH_THRESHOLD_COUNT = 5;
     private static final long CRASH_BACKOFF_MS = 3000;
+    private static final int MAX_EADDRINUSE_RETRIES = 10;
+    private static final long STARTUP_GRACE_MS = 750;
+
+    private static final ScheduledExecutorService crashRecoveryScheduler =
+        Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "crash-recovery");
+            t.setDaemon(true);
+            return t;
+        });
 
     // Debounce
-    private volatile long lastStartMinimumServers;
+    private final AtomicLong lastStartMinimumServers = new AtomicLong(0);
 
     // Startup queue: requests waiting for the first process to be ready
     private final CountDownLatch firstReadyLatch = new CountDownLatch(1);
-    private volatile boolean firstProcessStarted = false;
 
     // Scaling constants
     private static final int SCALE_UP_CPU_THRESHOLD = 50;
@@ -79,22 +102,32 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         this.maxProcesses = maxObj instanceof Integer i && i > 0 ? i : SCALE_UP_HARD_CAP;
         this.waitForReady = Boolean.TRUE.equals(settings.get("wait_for_ready"));
 
+        // Parse API keys
+        this.apiKeys = new LinkedHashSet<>();
+        Object apiKeysObj = settings.get("api_keys");
+        if (apiKeysObj instanceof String keysStr && !keysStr.isBlank()) {
+            for (String key : keysStr.split("[,\\s]+")) {
+                if (!key.isBlank()) apiKeys.add(key.trim());
+            }
+        }
+
         // Parse environment variables from settings
         this.environmentVariables = new LinkedHashMap<>();
         Object envVars = settings.get("environment_variables");
         if (envVars instanceof List<?> list) {
             for (Object item : list) {
                 if (item instanceof Map<?, ?> map) {
-                    String name = String.valueOf(map.get("name"));
-                    String value = String.valueOf(map.get("value"));
-                    if (name != null && !name.isEmpty()) {
+                    Object nameObj = map.get("name");
+                    Object valueObj = map.get("value");
+                    if (nameObj instanceof String name && !name.isEmpty()) {
+                        String value = valueObj instanceof String v ? v : "";
                         environmentVariables.put(name, value);
                     }
                 }
             }
         }
 
-        monitor.setListener(this);
+        monitor.addListener(siteId, this);
     }
 
     // -----------------------------------------------------------------------
@@ -132,8 +165,8 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
      */
     public void startMinimumServers() {
         long now = System.currentTimeMillis();
-        if (now - lastStartMinimumServers < 500) return;
-        lastStartMinimumServers = now;
+        long prev = lastStartMinimumServers.get();
+        if (now - prev < 500 || !lastStartMinimumServers.compareAndSet(prev, now)) return;
 
         int active = activeProcessCount();
         for (int i = active; i < minProcesses; i++) {
@@ -145,6 +178,33 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
      * Spawn a single new child process.
      */
     public ManagedProcess startProcess() {
+        long backoffMs = 150;
+
+        for (int attempt = 1; attempt <= MAX_EADDRINUSE_RETRIES; attempt++) {
+            ManagedProcess managed = startProcessOnce();
+
+            if (managed != null) {
+                return managed;
+            }
+
+            if (attempt == MAX_EADDRINUSE_RETRIES) {
+                return null;
+            }
+
+            try {
+                Thread.sleep(backoffMs);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
+
+            backoffMs = Math.min(backoffMs * 2, 5_000);
+        }
+
+        return null;
+    }
+
+    private ManagedProcess startProcessOnce() {
         int port;
         try {
             port = portAllocator.allocate(siteId);
@@ -156,83 +216,173 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         List<String> command = buildCommand(port);
         File workDir = getWorkingDirectory();
 
+        IpcChannel ipc = null;
         try {
+            // Create IPC channel before spawning so the port is ready
+            ipc = new IpcChannel();
+            ipc.startAccepting();
+
             ProcessBuilder pb = new ProcessBuilder(command);
             if (workDir != null && workDir.exists()) {
                 pb.directory(workDir);
             }
             pb.redirectErrorStream(false);
 
-            // Build environment
             Map<String, String> env = pb.environment();
             env.put("PORT", String.valueOf(port));
+            env.put("HOHENHEIM_IPC_PORT", String.valueOf(ipc.getPort()));
             env.putAll(environmentVariables);
             env.putAll(buildRuntimeEnvironment(port));
 
-            // UID support via su wrapper
             int uid = getUid();
             if (uid > 0) {
-                // Wrap command with su
-                String cmdStr = String.join(" ", command);
-                pb.command("su", "-s", "/bin/sh", "-c", cmdStr, String.valueOf(uid));
+                List<String> suCommand = new ArrayList<>();
+                suCommand.add("sudo");
+                suCommand.add("-u");
+                suCommand.add("#" + uid);
+                suCommand.add("--");
+                suCommand.addAll(command);
+                pb.command(suCommand);
             }
 
             Process process = pb.start();
-            ManagedProcess managed = new ManagedProcess(process, port, siteId);
+            ManagedProcess managed = new ManagedProcess(process, port, null, siteId);
+            captureProcessOutput(managed);
+
+            if (process.waitFor(STARTUP_GRACE_MS, TimeUnit.MILLISECONDS)) {
+                ipc.close();
+                portAllocator.release(port);
+
+                if (managed.hasAddressInUse()) {
+                    Blast.log("PROCESS: retrying", siteName, "after EADDRINUSE on port=" + port);
+                } else {
+                    Blast.log("PROCESS: failed to start", siteName,
+                        "exit=" + process.exitValue(), "port=" + port);
+                }
+
+                return null;
+            }
+
+            // Wire up IPC message handler
+            IpcChannel finalIpc = ipc;
+            ipc.setMessageHandler(msg -> handleIpcMessage(managed, finalIpc, msg));
+            ipcChannels.put(process.pid(), ipc);
 
             processMap.put(process.pid(), managed);
             runningCount.incrementAndGet();
 
-            // If not waiting for ready signal, mark as ready immediately
             if (!waitForReady) {
-                managed.setReady(true);
-                readyCount.incrementAndGet();
-                processList.add(managed);
-                if (!firstProcessStarted) {
-                    firstProcessStarted = true;
-                    firstReadyLatch.countDown();
-                }
+                markProcessReady(managed);
             }
 
-            // Register for monitoring
             monitor.register(managed);
-
-            // Capture stdout in a background thread
-            captureStdout(managed);
-
-            // Watch for exit
             process.onExit().thenAccept(p -> processExit(managed));
 
             Blast.log("PROCESS: started", siteName, "pid=" + process.pid(), "port=" + port);
             return managed;
 
         } catch (Exception e) {
+            if (ipc != null) ipc.close();
             portAllocator.release(port);
             Blast.log("PROCESS: failed to start", siteName, "-", e.getMessage());
             return null;
         }
     }
 
-    private void captureStdout(ManagedProcess managed) {
+    private void captureProcessOutput(ManagedProcess managed) {
         Thread.startVirtualThread(() -> {
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(managed.process().getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    // Simple HTML escaping (not ANSI-to-HTML yet, but functional)
-                    String html = line.replace("&", "&amp;").replace("<", "&lt;")
-                                      .replace(">", "&gt;");
-                    managed.appendLog(html);
+                    managed.appendLog(escapeLogLine(line));
                 }
             } catch (Exception e) {
                 // Process ended
             }
         });
-        // Also drain stderr to prevent blocking
+
         Thread.startVirtualThread(() -> {
-            try { managed.process().getErrorStream().transferTo(java.io.OutputStream.nullOutputStream()); }
-            catch (Exception ignored) {}
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(managed.process().getErrorStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.contains("EADDRINUSE")) {
+                        managed.markAddressInUse();
+                    }
+                    managed.appendLog(escapeLogLine(line));
+                }
+            } catch (Exception ignored) {}
         });
+    }
+
+    private String escapeLogLine(String line) {
+        return line.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;");
+    }
+
+    private void markProcessReady(ManagedProcess managed) {
+        if (managed.isReady()) return;
+        managed.setReady(true);
+        processList.add(managed);
+        readyCount.incrementAndGet();
+        firstReadyLatch.countDown();
+    }
+
+    // -----------------------------------------------------------------------
+    // IPC message handling
+    // -----------------------------------------------------------------------
+
+    private void handleIpcMessage(ManagedProcess proc, IpcChannel ipc, Map<String, Object> msg) {
+        String type = msg.get("type") instanceof String s ? s : "";
+        switch (type) {
+            case "ready" -> {
+                if (waitForReady) {
+                    markProcessReady(proc);
+                    Blast.log("PROCESS: ready signal from", siteName, "pid=" + proc.pid());
+                }
+            }
+            case "remcache_set" -> {
+                String key = (String) msg.get("key");
+                Object value = msg.get("value");
+                Object maxAgeObj = msg.get("maxAge");
+                long maxAge = maxAgeObj instanceof Number n ? n.longValue() : 0;
+                if (key != null) remoteCache.set(key, value, maxAge);
+            }
+            case "remcache_get" -> {
+                String key = (String) msg.get("key");
+                Object id = msg.get("id");
+                Object value = key != null ? remoteCache.get(key) : null;
+                if (id != null) ipc.sendResponse(id, value);
+            }
+            case "remcache_peek" -> {
+                String key = (String) msg.get("key");
+                Object id = msg.get("id");
+                Object value = key != null ? remoteCache.peek(key) : null;
+                if (id != null) ipc.sendResponse(id, value);
+            }
+            case "remcache_remove" -> {
+                String key = (String) msg.get("key");
+                if (key != null) remoteCache.remove(key);
+            }
+        }
+    }
+
+    /**
+     * Broadcast a message to all child processes via their IPC channels.
+     */
+    public void broadcast(Map<String, Object> body) {
+        // Flatten the body into the message itself since the IPC JSON serializer
+        // does not support nested maps.
+        Map<String, Object> msg = new HashMap<>();
+        msg.put("type", "hohenheim_broadcast");
+        if (body != null) {
+            msg.putAll(body);
+        }
+        for (IpcChannel ipc : ipcChannels.values()) {
+            ipc.send(msg);
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -245,18 +395,23 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
         Blast.log("PROCESS: exited", siteName, "pid=" + pid);
 
+        // Persist the process log before cleanup
+        persistProclog(managed);
+
+        // Cleanup IPC channel
+        IpcChannel ipc = ipcChannels.remove(pid);
+        if (ipc != null) ipc.close();
+
         // Cleanup
         monitor.unregister(pid);
         portAllocator.release(port);
         processMap.remove(pid);
         processList.remove(managed);
 
-        int running = runningCount.decrementAndGet();
-        if (running < 0) runningCount.set(0);
+        runningCount.updateAndGet(v -> Math.max(0, v - 1));
 
         if (managed.isReady()) {
-            int ready = readyCount.decrementAndGet();
-            if (ready < 0) readyCount.set(0);
+            readyCount.updateAndGet(v -> Math.max(0, v - 1));
         }
 
         // Track exit for crash detection
@@ -265,18 +420,18 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             exitLog.add(now);
             while (exitLog.size() > MAX_EXIT_LOG) exitLog.removeFirst();
 
-            // Crash backoff: if >5 exits and mean interval is too short
+            // Crash backoff: if >5 exits within a short window, delay restart
             if (exitLog.size() > CRASH_THRESHOLD_COUNT) {
-                long sum = 0;
-                for (long ts : exitLog) sum += ts;
-                long mean = sum / exitLog.size();
-                long diff = now - mean;
+                long oldest = exitLog.getFirst();
+                long windowMs = now - oldest;
                 long threshold = 2500L * exitLog.size();
 
-                if (diff < threshold) {
+                if (windowMs < threshold) {
                     Blast.log("PROCESS: crash loop detected for", siteName,
-                              "- waiting", CRASH_BACKOFF_MS, "ms before restart");
-                    try { Thread.sleep(CRASH_BACKOFF_MS); } catch (InterruptedException ignored) {}
+                              "- scheduling delayed restart in", CRASH_BACKOFF_MS, "ms");
+                    crashRecoveryScheduler.schedule(this::startMinimumServers,
+                        CRASH_BACKOFF_MS, TimeUnit.MILLISECONDS);
+                    return;
                 }
             }
         }
@@ -291,8 +446,6 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
     @Override
     public void onStats(ManagedProcess proc, int cpuPercent, long memoryKb) {
-        if (proc.siteId() != this.siteId) return;
-
         long now = System.currentTimeMillis();
 
         // --- Auto-scale up ---
@@ -340,11 +493,20 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
     @Override
     public void handleRequest(HttpServerExchange exchange, UpstreamForwarder forwarder) {
+        // Check for API key control requests
+        if (!apiKeys.isEmpty()) {
+            String key = exchange.getRequestHeaders().getFirst(X_HOHENHEIM_KEY);
+            String actions = exchange.getRequestHeaders().getFirst(X_HOHENHEIM_ACTION);
+
+            if (key != null && actions != null && apiKeys.contains(key)) {
+                handleApiRequest(exchange, actions);
+                return;
+            }
+        }
+
         // Wait for at least one process to be ready
         if (readyCount.get() == 0) {
-            if (!firstProcessStarted) {
-                startMinimumServers();
-            }
+            startMinimumServers();
             try {
                 if (!firstReadyLatch.await(60, TimeUnit.SECONDS)) {
                     exchange.setStatusCode(503);
@@ -383,11 +545,11 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         if (list.size() == 1) return list.get(0);
 
         // Build fingerprint
-        String ip = exchange.getRequestHeaders().getFirst(new io.undertow.util.HttpString("X-Forwarded-For"));
-        if (ip == null) ip = exchange.getRequestHeaders().getFirst(new io.undertow.util.HttpString("X-Real-IP"));
+        String ip = exchange.getRequestHeaders().getFirst(new HttpString("X-Forwarded-For"));
+        if (ip == null) ip = exchange.getRequestHeaders().getFirst(new HttpString("X-Real-IP"));
         if (ip == null) ip = exchange.getSourceAddress().getAddress().getHostAddress();
         String ua = exchange.getRequestHeaders().getFirst(Headers.USER_AGENT);
-        String al = exchange.getRequestHeaders().getFirst(new io.undertow.util.HttpString("Accept-Language"));
+        String al = exchange.getRequestHeaders().getFirst(new HttpString("Accept-Language"));
         String fingerprint = (ip != null ? ip : "") + (ua != null ? ua : "") + (al != null ? al : "");
 
         // Check if fingerprint is pinned to an existing process
@@ -421,6 +583,9 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     // -----------------------------------------------------------------------
 
     @Override
+    public int getSiteId() { return siteId; }
+
+    @Override
     public SiteHealth getHealth() {
         if (readyCount.get() > 0) return SiteHealth.UP;
         if (runningCount.get() > 0) return SiteHealth.DEGRADED;
@@ -443,8 +608,44 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         return processMap.get(pid);
     }
 
+    private void handleApiRequest(HttpServerExchange exchange, String actions) {
+        for (String action : actions.split(",")) {
+            action = action.trim();
+            if ("broadcast".equals(action)) {
+                broadcast(Map.of("action", "broadcast"));
+            }
+        }
+
+        exchange.setStatusCode(200);
+        exchange.getResponseSender().send("OK");
+    }
+
+    private void persistProclog(ManagedProcess managed) {
+        try {
+            String logHtml = managed.getLogHtml();
+            if (logHtml == null || logHtml.isEmpty()) return;
+
+            var ds = HohenheimDatabase.datasource();
+            var model = new ProclogModel(ds);
+            Row row = model.createEmptyRow();
+            row.set(ProclogModel.SITE_ID, siteId);
+            row.set(ProclogModel.PID, (int) managed.pid());
+            row.set(ProclogModel.LOG_HTML, logHtml);
+            row.set(ProclogModel.CREATED_AT, managed.startTime());
+            model.save(row);
+        } catch (Exception e) {
+            Blast.log("PROCESS: failed to persist proclog for", siteName, "pid=" + managed.pid(), "-", e.getMessage());
+        }
+    }
+
     @Override
     public void destroy() {
+        monitor.removeListener(siteId, this);
+        for (IpcChannel ipc : ipcChannels.values()) {
+            ipc.close();
+        }
+        ipcChannels.clear();
+        remoteCache.clear();
         for (ManagedProcess proc : processMap.values()) {
             proc.kill();
         }

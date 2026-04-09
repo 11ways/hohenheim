@@ -36,10 +36,13 @@
 
                         <div class="hh-form-group">
                             <pl-label target="satisfy">Satisfy</pl-label>
-                            <select id="satisfy" name="satisfy" class="hh-select">
-                                <option value="any" selected={% satisfy == "any" %}>Any (IP or Auth)</option>
-                                <option value="all" selected={% satisfy == "all" %}>All (IP and Auth)</option>
-                            </select>
+                            <pl-select name="satisfy" value={% satisfy %}>
+                                <pl-select-trigger placeholder="Satisfy"></pl-select-trigger>
+                                <pl-select-content>
+                                    <pl-select-item value="any" label="Any (IP or Auth)">Any (IP or Auth)</pl-select-item>
+                                    <pl-select-item value="all" label="All (IP and Auth)">All (IP and Auth)</pl-select-item>
+                                </pl-select-content>
+                            </pl-select>
                         </div>
 
                         <pl-separator></pl-separator>

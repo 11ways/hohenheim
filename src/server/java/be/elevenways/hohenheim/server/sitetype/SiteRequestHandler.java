@@ -17,6 +17,11 @@ public interface SiteRequestHandler {
     void handleRequest(HttpServerExchange exchange, UpstreamForwarder forwarder);
 
     /**
+     * The site ID this handler is bound to, or -1 for anonymous handlers.
+     */
+    default int getSiteId() { return -1; }
+
+    /**
      * Report health status for the admin UI.
      */
     default SiteHealth getHealth() {

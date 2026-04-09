@@ -134,7 +134,7 @@ class DomainEditTest extends HohenheimTestBase {
         assertThat(page.locator("input[name='force_ssl']").count()).isEqualTo(1);
         assertThat(page.locator("input[name='hsts_enabled']").count()).isEqualTo(1);
         assertThat(page.locator("input[name='hsts_subdomains']").count()).isEqualTo(1);
-        assertThat(page.locator("select[name='match_type']").count()).isEqualTo(1);
+        assertThat(page.locator("pl-select[name='match_type']").count()).isEqualTo(1);
 
         // Advanced section exists
         assertThat(page.locator("pl-collapsible").count()).isEqualTo(1);

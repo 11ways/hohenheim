@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.ServerZenitRuntime;
@@ -14,7 +15,14 @@ import static org.assertj.core.api.Assertions.*;
 
 import java.io.*;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+import com.sun.net.httpserver.HttpServer;
 
 /**
  * Tests proxy dispatch features: custom response headers,
@@ -35,7 +43,7 @@ class ProxyDispatchTest {
         java.io.File db = new java.io.File("hohenheim.db");
         if (db.exists()) db.delete();
 
-        be.elevenways.hohenheim.server.sitetype.SiteTypes.register();
+        SiteTypes.register();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
         ServerZenitRuntime.init();
@@ -79,6 +87,8 @@ class ProxyDispatchTest {
                     case "hsts_enabled" -> domain.set(SiteDomainModel.HSTS_ENABLED, (Boolean) entry.getValue());
                     case "hsts_subdomains" -> domain.set(SiteDomainModel.HSTS_SUBDOMAINS, (Boolean) entry.getValue());
                     case "custom_headers" -> domain.set(SiteDomainModel.CUSTOM_HEADERS, entry.getValue());
+                    case "match_type" -> domain.set(SiteDomainModel.MATCH_TYPE, (String) entry.getValue());
+                    case "listen_on" -> domain.set(SiteDomainModel.LISTEN_ON, (String) entry.getValue());
                 }
             }
         }
@@ -88,19 +98,37 @@ class ProxyDispatchTest {
 
     @Test
     @Order(1)
-    void customHeadersAppearOnResponse() throws Exception {
+    void customHeadersModifyUpstreamRequest() throws Exception {
         // Reset DB
         java.io.File db = new java.io.File("hohenheim.db");
         if (db.exists()) db.delete();
         HohenheimDatabase.init();
 
-        // Create a site with custom response headers
-        Map<String, Object> headers = Map.of(
-            "X-Frame-Options", "DENY",
-            "X-Content-Type-Options", "nosniff"
+        AtomicReference<String> seenHeader = new AtomicReference<>();
+        AtomicReference<String> removedHeader = new AtomicReference<>("present");
+        CountDownLatch upstreamHit = new CountDownLatch(1);
+
+        HttpServer upstream = HttpServer.create(new InetSocketAddress(0), 0);
+        upstream.createContext("/", exchange -> {
+            seenHeader.set(exchange.getRequestHeaders().getFirst("X-Test-Header"));
+            removedHeader.set(exchange.getRequestHeaders().getFirst("X-Remove-Me"));
+            byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+            upstreamHit.countDown();
+        });
+        upstream.start();
+
+        List<Map<String, String>> headers = List.of(
+            Map.of("name", "X-Test-Header", "value", "expected-value"),
+            Map.of("name", "X-Remove-Me", "value", "")
         );
 
-        setupSiteWithDomain("headers.test", Map.of("forward_host", "127.0.0.1", "forward_port", 9999),
+        setupSiteWithDomain("headers.test", Map.of(
+                "forward_host", "127.0.0.1",
+                "forward_port", upstream.getAddress().getPort()
+            ),
             Map.of("custom_headers", headers, "force_ssl", false));
 
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
@@ -111,30 +139,23 @@ class ProxyDispatchTest {
         assertThat(info).isNotNull();
         httpPort = ((InetSocketAddress) info.getAddress()).getPort();
 
-        // Make a request to the proxy (upstream won't respond, but headers are set before dispatch)
-        // Use raw socket to see response headers even on connection failure
         try (Socket socket = new Socket("127.0.0.1", httpPort)) {
             socket.setSoTimeout(3000);
             OutputStream out = socket.getOutputStream();
-            out.write(("GET / HTTP/1.1\r\nHost: headers.test\r\nConnection: close\r\n\r\n").getBytes());
+            out.write(("GET / HTTP/1.1\r\nHost: headers.test\r\nX-Remove-Me: delete-me\r\nConnection: close\r\n\r\n").getBytes());
             out.flush();
 
             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                response.append(line).append("\n");
-            }
-
-            String resp = response.toString();
-            // The response should contain our custom headers
-            // (even though upstream is unavailable, the proxy sets response headers before forwarding)
-            assertThat(resp).contains("X-Frame-Options: DENY");
-            assertThat(resp).contains("X-Content-Type-Options: nosniff");
+            assertThat(reader.readLine()).contains("200");
         }
+
+        assertThat(upstreamHit.await(3, TimeUnit.SECONDS)).isTrue();
+        assertThat(seenHeader.get()).isEqualTo("expected-value");
+        assertThat(removedHeader.get()).isNull();
 
         proxy.stop();
         proxy = null;
+        upstream.stop(0);
     }
 
     @Test
@@ -279,5 +300,88 @@ class ProxyDispatchTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> settings = (Map<String, Object>) loaded.get(SiteModel.SETTINGS);
         assertThat(settings.get("websocket_upgrade")).isEqualTo(false);
+    }
+
+    @Test
+    @Order(6)
+    void regexRouteMatchesHostname() throws Exception {
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) db.delete();
+        HohenheimDatabase.init();
+
+        AtomicReference<String> seenHost = new AtomicReference<>();
+        CountDownLatch upstreamHit = new CountDownLatch(1);
+
+        HttpServer upstream = HttpServer.create(new InetSocketAddress(0), 0);
+        upstream.createContext("/", exchange -> {
+            seenHost.set(exchange.getRequestHeaders().getFirst("Host"));
+            byte[] body = "regex".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+            upstreamHit.countDown();
+        });
+        upstream.start();
+
+        setupSiteWithDomain("^(?<tenant>[a-z]+)\\.regex\\.test$", Map.of(
+                "forward_host", "127.0.0.1",
+                "forward_port", upstream.getAddress().getPort()
+            ),
+            Map.of("match_type", "regex", "force_ssl", false));
+
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        proxy = new ProxyServer();
+        proxy.start();
+
+        var info = proxy.getHttpListenerInfo();
+        httpPort = ((InetSocketAddress) info.getAddress()).getPort();
+
+        try (Socket socket = new Socket("127.0.0.1", httpPort)) {
+            socket.setSoTimeout(3000);
+            OutputStream out = socket.getOutputStream();
+            out.write(("GET / HTTP/1.1\r\nHost: alpha.regex.test\r\nConnection: close\r\n\r\n").getBytes());
+            out.flush();
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            assertThat(reader.readLine()).contains("200");
+        }
+
+        assertThat(upstreamHit.await(3, TimeUnit.SECONDS)).isTrue();
+        assertThat(seenHost.get()).isEqualTo("alpha.regex.test");
+
+        proxy.stop();
+        proxy = null;
+        upstream.stop(0);
+    }
+
+    @Test
+    @Order(7)
+    void listenOnBlocksMismatchedListenerAddress() throws Exception {
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) db.delete();
+        HohenheimDatabase.init();
+
+        setupSiteWithDomain("listen.test", Map.of("forward_host", "127.0.0.1", "forward_port", 9999),
+            Map.of("listen_on", "192.0.2.25", "force_ssl", false));
+
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        proxy = new ProxyServer();
+        proxy.start();
+
+        var info = proxy.getHttpListenerInfo();
+        httpPort = ((InetSocketAddress) info.getAddress()).getPort();
+
+        try (Socket socket = new Socket("127.0.0.1", httpPort)) {
+            socket.setSoTimeout(3000);
+            OutputStream out = socket.getOutputStream();
+            out.write(("GET / HTTP/1.1\r\nHost: listen.test\r\nConnection: close\r\n\r\n").getBytes());
+            out.flush();
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            assertThat(reader.readLine()).contains("404");
+        }
+
+        proxy.stop();
+        proxy = null;
     }
 }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
+import be.elevenways.zenit.common.orm.datasource.ColumnType;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
@@ -24,7 +25,7 @@ public class M002_CreateOrganizations extends Migration {
             table.id();
             table.foreignId("organization_id", "organizations");
             table.foreignId("user_id", "users");
-            table.addColumn("role", be.elevenways.zenit.common.orm.datasource.ColumnType.STRING, col -> col.maxLength(50).defaultValue("member"));
+            table.addColumn("role", ColumnType.STRING, col -> col.maxLength(50).defaultValue("member"));
             table.timestamps();
             table.unique("organization_id", "user_id");
         });

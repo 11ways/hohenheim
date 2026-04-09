@@ -35,6 +35,10 @@ public class HohenheimSettings {
             .description("Redirect HTTP to HTTPS globally")
             .build();
 
+        public static final SettingDefinition<String> IPV6_ADDRESS = GROUP.buildSetting("ipv6_address", String.class)
+            .description("Optional IPv6 address for dedicated proxy listeners")
+            .build();
+
         public static final SettingDefinition<String> NOT_FOUND_MESSAGE = GROUP.buildSetting("not_found_message", String.class)
             .defaultValue("There is no site configured for this domain.")
             .description("Error message for unmatched domains")

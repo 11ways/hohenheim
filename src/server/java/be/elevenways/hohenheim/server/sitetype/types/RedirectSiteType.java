@@ -58,6 +58,17 @@ public class RedirectSiteType implements SiteTypeHandler {
             statusCode = 302;
         }
 
+        // Validate URL scheme to prevent open redirect / XSS
+        if (targetUrl != null && !targetUrl.isEmpty()
+                && !targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")
+                && !targetUrl.startsWith("/")) {
+            final String bad = targetUrl;
+            return (exchange, forwarder) -> {
+                exchange.setStatusCode(502);
+                exchange.getResponseSender().send("Invalid redirect target: must start with http://, https://, or /");
+            };
+        }
+
         if (targetUrl == null || targetUrl.isEmpty()) {
             return (exchange, forwarder) -> {
                 exchange.setStatusCode(502);

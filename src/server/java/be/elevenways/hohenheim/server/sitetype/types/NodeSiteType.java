@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.server.process.PortAllocator;
 import be.elevenways.hohenheim.server.process.ProcessMonitor;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
+import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -36,9 +38,22 @@ public class NodeSiteType implements SiteTypeHandler {
     public static final IntegerField MAXIMUM_PROCESSES = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("maximum_processes").build());
 
+    public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
+        IntegerField.builder().name("delay").build());
+
     // Environment variables stored as JSON array of {name, value} objects
     public static final SchemaField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
         SchemaField.builder("environment_variables").build());
+
+    // API keys for X-Hohenheim-Key header validation (stored as comma-separated string)
+    public static final StringField API_KEYS = SETTINGS_SCHEMA.addField(
+        StringField.builder().name("api_keys").build());
+
+    public static final StringField USER = SETTINGS_SCHEMA.addField(
+        StringField.builder().name("user").build());
+
+    public static final BooleanField USE_PORTS = SETTINGS_SCHEMA.addField(
+        BooleanField.builder("use_ports").defaultValue(true).build());
 
     // Shared infrastructure (singleton per server)
     private static PortAllocator portAllocator;
@@ -71,8 +86,8 @@ public class NodeSiteType implements SiteTypeHandler {
 
     @Override
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
-        int siteId = site.get(be.elevenways.hohenheim.model.SiteModel.ID);
-        String siteName = site.get(be.elevenways.hohenheim.model.SiteModel.NAME);
+        int siteId = site.get(SiteModel.ID);
+        String siteName = site.get(SiteModel.NAME);
 
         return new NodeProcessHandler(siteId, siteName, settings, getDefaultArgs());
     }
@@ -92,6 +107,7 @@ public class NodeSiteType implements SiteTypeHandler {
 
         private final String script;
         private final String nodePath;
+        private final String runAsUser;
         private final List<String> defaultArgs;
 
         NodeProcessHandler(int siteId, String siteName, Map<String, Object> settings,
@@ -99,6 +115,8 @@ public class NodeSiteType implements SiteTypeHandler {
             super(siteId, siteName, settings, portAllocator, processMonitor);
             this.script = (String) settings.getOrDefault("script", "");
             this.nodePath = (String) settings.getOrDefault("node_path", "node");
+            Object userObj = settings.get("user");
+            this.runAsUser = userObj instanceof String s && !s.isBlank() ? s : null;
             this.defaultArgs = defaultArgs;
 
             // Start minimum servers on creation
@@ -123,9 +141,20 @@ public class NodeSiteType implements SiteTypeHandler {
 
         @Override
         protected Map<String, String> buildRuntimeEnvironment(int port) {
-            return Map.of(
-                "NODE_ENV", "production"
-            );
+            Map<String, String> result = new LinkedHashMap<>();
+            result.put("NODE_ENV", "production");
+            return result;
+        }
+
+        @Override
+        protected int getUid() {
+            if (runAsUser == null) return 0;
+            for (var user : UpdateSystemUsers.getSystemUsers()) {
+                if (user.name().equals(runAsUser)) {
+                    return user.uid();
+                }
+            }
+            return 0;
         }
 
         @Override

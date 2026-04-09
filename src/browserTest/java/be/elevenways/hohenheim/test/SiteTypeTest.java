@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import com.microsoft.playwright.Locator;
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
@@ -19,15 +20,17 @@ class SiteTypeTest extends HohenheimTestBase {
      * Uses the pl-select-item's value attribute (on the custom element) to find the item.
      */
     private void selectPlOption(String selectName, String value) {
-        // Click the trigger button to open the dropdown
-        page.locator("pl-select[name='" + selectName + "'] pl-select-trigger button").click();
+        var trigger = page.locator("pl-select[name='" + selectName + "'] pl-select-trigger button");
+        trigger.click();
 
-        // Wait for portal to render the dropdown items
+        // Wait for the popup to be positioned on-screen before clicking
         var item = page.locator("div[role='option'][data-value='" + value + "']");
-        item.waitFor(new com.microsoft.playwright.Locator.WaitForOptions()
-            .setState(com.microsoft.playwright.options.WaitForSelectorState.VISIBLE)
-            .setTimeout(5000));
+        item.scrollIntoViewIfNeeded(new Locator.ScrollIntoViewIfNeededOptions().setTimeout(5000));
         item.click();
+
+        // Wait twice to flush cascading reactive updates
+        waitForReactiveIdle();
+        waitForReactiveIdle();
     }
 
     @Test
@@ -72,7 +75,8 @@ class SiteTypeTest extends HohenheimTestBase {
         waitForHydration();
 
         selectPlOption("site_type", "hohenheim:static");
-        page.waitForCondition(() -> getFormText().contains("Root Directory"));
+        page.waitForCondition(() -> getFormText().contains("Root Directory")
+            && !getFormText().contains("Upstream Host"));
 
         String formText = getFormText();
         assertThat(formText).contains("Root Directory");
@@ -87,7 +91,8 @@ class SiteTypeTest extends HohenheimTestBase {
         waitForHydration();
 
         selectPlOption("site_type", "hohenheim:redirect");
-        page.waitForCondition(() -> getFormText().contains("Target URL"));
+        page.waitForCondition(() -> getFormText().contains("Target URL")
+            && !getFormText().contains("Upstream Host"));
 
         String formText = getFormText();
         assertThat(formText).contains("Target URL");

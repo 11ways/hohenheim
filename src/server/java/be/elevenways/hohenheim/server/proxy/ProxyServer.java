@@ -44,6 +44,8 @@ public class ProxyServer {
     private volatile String httpFailureReason;
     private volatile String httpsFailureReason;
 
+    private static final int IO_THREADS = Math.max(2, Runtime.getRuntime().availableProcessors());
+
     public ProxyServer() {
         this.certificateStore = new CertificateStore();
         this.acmeService = new AcmeService(certificateStore);
@@ -93,6 +95,7 @@ public class ProxyServer {
         try {
             certificateStore.loadFromDatabase();
             dispatcher.reloadRoutes();
+            dispatcher.setHttpsAvailable(false);
         } catch (Exception e) {
             Blast.log("PROXY: failed to load routes/certificates:", e.getMessage());
         }
@@ -111,11 +114,13 @@ public class ProxyServer {
         int httpPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
 
         try {
-            httpServer = Undertow.builder()
+            Undertow.Builder builder = Undertow.builder()
                 .addHttpListener(httpPort, "0.0.0.0")
-                .setIoThreads(Math.max(2, Runtime.getRuntime().availableProcessors()))
-                .setHandler(handler)
-                .build();
+                .setIoThreads(IO_THREADS)
+                .setHandler(handler);
+
+            addIpv6Listener(builder, httpPort, null);
+            httpServer = builder.build();
 
             httpServer.start();
             httpState = State.RUNNING;
@@ -133,6 +138,7 @@ public class ProxyServer {
 
     private void startHttpsListener() {
         if (certificateStore.isEmpty()) {
+            dispatcher.setHttpsAvailable(false);
             httpsState = State.STOPPED;
             httpsFailureReason = "No certificates loaded";
             Blast.log("Proxy HTTPS not started: no certificates available");
@@ -142,22 +148,26 @@ public class ProxyServer {
         int httpsPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT);
 
         try {
-            SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
+            SSLContext sslContext = SSLContext.getInstance("TLS");
             SniKeyManager sniKeyManager = new SniKeyManager(certificateStore);
             sslContext.init(new KeyManager[]{sniKeyManager}, null, null);
 
-            httpsServer = Undertow.builder()
+            Undertow.Builder builder = Undertow.builder()
                 .addHttpsListener(httpsPort, "0.0.0.0", sslContext)
-                .setIoThreads(Math.max(2, Runtime.getRuntime().availableProcessors()))
-                .setHandler(handler)
-                .build();
+                .setIoThreads(IO_THREADS)
+                .setHandler(handler);
+
+            addIpv6Listener(builder, httpsPort, sslContext);
+            httpsServer = builder.build();
 
             httpsServer.start();
+            dispatcher.setHttpsAvailable(true);
             httpsState = State.RUNNING;
             httpsFailureReason = null;
             Blast.log("Proxy HTTPS listening on port", httpsPort,
                       "(" + certificateStore.getCertificateCount() + " certificates)");
         } catch (Exception e) {
+            dispatcher.setHttpsAvailable(false);
             httpsState = State.FAILED;
             httpsFailureReason = e.getMessage();
             httpsServer = null;
@@ -165,8 +175,20 @@ public class ProxyServer {
         }
     }
 
+    private static void addIpv6Listener(Undertow.Builder builder, int port, SSLContext sslContext) {
+        String ipv6Address = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS);
+        if (ipv6Address == null || ipv6Address.isBlank()) return;
+
+        if (sslContext != null) {
+            builder.addHttpsListener(port, ipv6Address.trim(), sslContext);
+        } else {
+            builder.addHttpListener(port, ipv6Address.trim());
+        }
+    }
+
     public void stop() {
         acmeService.stop();
+        dispatcher.shutdown();
         if (httpServer != null) {
             httpServer.stop();
             httpServer = null;
@@ -175,6 +197,7 @@ public class ProxyServer {
             httpsServer.stop();
             httpsServer = null;
         }
+        dispatcher.setHttpsAvailable(false);
         httpState = State.STOPPED;
         httpsState = State.STOPPED;
         httpFailureReason = null;
@@ -213,13 +236,13 @@ public class ProxyServer {
     /**
      * Get listener info for discovering bound ports (useful in tests with port 0).
      */
-    public io.undertow.Undertow.ListenerInfo getHttpListenerInfo() {
+    public Undertow.ListenerInfo getHttpListenerInfo() {
         if (httpServer == null) return null;
         var listeners = httpServer.getListenerInfo();
         return listeners.isEmpty() ? null : listeners.get(0);
     }
 
-    public io.undertow.Undertow.ListenerInfo getHttpsListenerInfo() {
+    public Undertow.ListenerInfo getHttpsListenerInfo() {
         if (httpsServer == null) return null;
         var listeners = httpsServer.getListenerInfo();
         return listeners.isEmpty() ? null : listeners.get(0);

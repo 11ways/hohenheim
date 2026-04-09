@@ -2,7 +2,12 @@ package be.elevenways.hohenheim.server.process;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.*;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Monitors child process CPU and memory via /proc/{pid}/stat.
@@ -36,8 +41,8 @@ public class ProcessMonitor {
     // Registered processes
     private final ConcurrentHashMap<Long, ManagedProcess> processes = new ConcurrentHashMap<>();
 
-    // Listener for stats updates
-    private volatile StatsListener listener;
+    // Per-site listeners for stats updates
+    private final ConcurrentHashMap<Integer, Set<StatsListener>> listenersBySite = new ConcurrentHashMap<>();
 
     public interface StatsListener {
         void onStats(ManagedProcess proc, int cpuPercent, long memoryKb);
@@ -60,8 +65,19 @@ public class ProcessMonitor {
         scheduler.shutdownNow();
     }
 
-    public void setListener(StatsListener listener) {
-        this.listener = listener;
+    public void addListener(int siteId, StatsListener listener) {
+        if (listener != null) {
+            listenersBySite.computeIfAbsent(siteId, k -> new CopyOnWriteArraySet<>()).add(listener);
+        }
+    }
+
+    public void removeListener(int siteId, StatsListener listener) {
+        if (listener != null) {
+            listenersBySite.computeIfPresent(siteId, (k, set) -> {
+                set.remove(listener);
+                return set.isEmpty() ? null : set;
+            });
+        }
     }
 
     public void register(ManagedProcess proc) {
@@ -92,20 +108,21 @@ public class ProcessMonitor {
                 // We use the package-private updateStats pattern
                 setCpuAndMem(proc, cpu, mem);
 
-                StatsListener l = listener;
-                if (l != null) l.onStats(proc, cpu, mem);
+                Set<StatsListener> siteListeners = listenersBySite.get(proc.siteId());
+                if (siteListeners != null) {
+                    for (StatsListener listener : siteListeners) {
+                        listener.onStats(proc, cpu, mem);
+                    }
+                }
             } catch (Exception e) {
-                // Process may have exited
+                // Process may have exited (NoSuchFileException) or transient /proc parsing issue
             }
         }
     }
 
     private int sampleCpu(long pid) {
         try {
-            Path statPath = Path.of("/proc/" + pid + "/stat");
-            if (!Files.exists(statPath)) return 0;
-
-            String stat = Files.readString(statPath);
+            String stat = Files.readString(Path.of("/proc/" + pid + "/stat"));
             // Skip past "(comm)" section which may contain spaces
             int closeParen = stat.lastIndexOf(')');
             String[] fields = stat.substring(closeParen + 2).split(" ");
@@ -137,10 +154,7 @@ public class ProcessMonitor {
 
     private long sampleMemory(long pid) {
         try {
-            Path statusPath = Path.of("/proc/" + pid + "/status");
-            if (!Files.exists(statusPath)) return 0;
-
-            for (String line : Files.readAllLines(statusPath)) {
+            for (String line : Files.readAllLines(Path.of("/proc/" + pid + "/status"))) {
                 if (line.startsWith("VmRSS:")) {
                     String kb = line.substring(6).trim().replace(" kB", "").trim();
                     return Long.parseLong(kb);

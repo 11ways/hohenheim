@@ -164,6 +164,7 @@ task serverJar(type: ShadowJar) {
     from sourceSets.server.output
     from sourceSets.common.output
     mergeServiceFiles()
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
 
     manifest {
         attributes(

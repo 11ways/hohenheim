@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
@@ -32,6 +34,21 @@ class AuthFlowTest extends HohenheimTestBase {
 
     @Test
     @Order(3)
+    void loginFormSubmitsCredentialsFromBrowser() {
+        page.context().clearCookies();
+        page.navigate("http://localhost:" + getServerPort() + "/login");
+        waitForHydration();
+
+        page.locator("pl-input#email input").fill("test@hohenheim.local");
+        page.locator("pl-input#password input").fill("testpassword123");
+        page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Sign In")).click();
+
+        page.waitForURL("http://localhost:" + getServerPort() + "/");
+        assertThat(page.url()).isEqualTo("http://localhost:" + getServerPort() + "/");
+    }
+
+    @Test
+    @Order(4)
     void loginWithInvalidCredentialsShowsError() throws Exception {
         java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
             .followRedirects(java.net.http.HttpClient.Redirect.NEVER)
@@ -51,7 +68,7 @@ class AuthFlowTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(4)
+    @Order(5)
     void loginWithValidCredentialsRedirects() throws Exception {
         java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
             .followRedirects(java.net.http.HttpClient.Redirect.NEVER)
@@ -73,7 +90,7 @@ class AuthFlowTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(5)
+    @Order(6)
     void authenticatedDashboardAccessWorks() {
         navigateToApp("/");
         waitForHydration();
@@ -81,7 +98,7 @@ class AuthFlowTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(6)
+    @Order(7)
     void logoutRedirectsToLogin() throws Exception {
         java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
             .followRedirects(java.net.http.HttpClient.Redirect.NEVER)
@@ -102,7 +119,7 @@ class AuthFlowTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(7)
+    @Order(8)
     void staticAssetsAreAccessibleWithoutAuth() throws Exception {
         java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
 

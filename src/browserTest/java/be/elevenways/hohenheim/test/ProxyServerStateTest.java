@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import org.junit.jupiter.api.*;
@@ -26,7 +27,7 @@ class ProxyServerStateTest {
         java.io.File db = new java.io.File("hohenheim.db");
         if (db.exists()) db.delete();
 
-        be.elevenways.hohenheim.server.sitetype.SiteTypes.register();
+        SiteTypes.register();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
         ServerZenitRuntime.init();

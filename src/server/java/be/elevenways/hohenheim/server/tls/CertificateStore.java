@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.tls;
 
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 
 import java.io.*;
 import java.security.*;
@@ -34,12 +36,16 @@ public class CertificateStore {
     private static final class Snapshot {
         final javax.net.ssl.X509ExtendedKeyManager keyManager;
         final Map<String, String> hostnameToAlias;
+        final Map<String, String> preferredHostnameToAlias;
         final int count;
 
         Snapshot(javax.net.ssl.X509ExtendedKeyManager keyManager,
-                 Map<String, String> hostnameToAlias, int count) {
+                 Map<String, String> hostnameToAlias,
+                 Map<String, String> preferredHostnameToAlias,
+                 int count) {
             this.keyManager = keyManager;
             this.hostnameToAlias = hostnameToAlias;
+            this.preferredHostnameToAlias = preferredHostnameToAlias;
             this.count = count;
         }
     }
@@ -47,45 +53,43 @@ public class CertificateStore {
     private volatile Snapshot snapshot;
 
     public CertificateStore() {
-        this.snapshot = new Snapshot(null, Map.of(), 0);
+        this.snapshot = new Snapshot(null, Map.of(), Map.of(), 0);
     }
 
     /**
      * Load all active certificates from the database.
      * Builds a complete new snapshot and swaps it in atomically.
      */
-    public void loadFromDatabase() {
+    public synchronized void loadFromDatabase() {
         var ds = HohenheimDatabase.datasource();
         var certModel = new CertificateModel(ds);
+        var domainModel = new SiteDomainModel(ds);
 
         List<Row> certs = certModel.find()
             .where(CertificateModel.CERTIFICATE_PEM.isNotNull())
             .where(CertificateModel.STATUS.eq("active"))
+            .orderBy(CertificateModel.ID, SortOrder.ASC)
+            .all();
+
+        List<Row> domains = domainModel.find()
+            .where(SiteDomainModel.CERTIFICATE_ID.isNotNull())
             .all();
 
         try {
-            Snapshot newSnapshot = buildSnapshot(certs);
+            Snapshot newSnapshot = buildSnapshot(certs, domains);
             this.snapshot = newSnapshot;
             Blast.log("CertificateStore: loaded", newSnapshot.count, "certificates,",
-                      newSnapshot.hostnameToAlias.size(), "hostname mappings");
+                      newSnapshot.hostnameToAlias.size(), "hostname mappings,",
+                      newSnapshot.preferredHostnameToAlias.size(), "preferred mappings");
         } catch (Exception e) {
             Blast.log("CertificateStore: failed to build snapshot:", e.getMessage());
         }
     }
 
     /**
-     * Add a single certificate and rebuild the snapshot.
+     * Reload the full certificate snapshot from the database.
      */
-    public void addCertificateFromRow(Row cert) throws Exception {
-        // Load all certs from DB to rebuild the full snapshot
-        // (avoids incremental mutation of shared state)
-        loadFromDatabase();
-    }
-
-    /**
-     * Remove a certificate by ID and rebuild the snapshot.
-     */
-    public void removeCertificate(int certId) {
+    public void reload() {
         loadFromDatabase();
     }
 
@@ -94,18 +98,23 @@ public class CertificateStore {
      * Reads from the current snapshot -- always consistent, never blocks.
      */
     public String resolveAlias(String hostname) {
+        return resolveFromMap(hostname, snapshot.hostnameToAlias);
+    }
+
+    public String resolvePreferredAlias(String hostname) {
+        return resolveFromMap(hostname, snapshot.preferredHostnameToAlias);
+    }
+
+    private static String resolveFromMap(String hostname, Map<String, String> map) {
         if (hostname == null) return null;
         hostname = hostname.toLowerCase();
-        Snapshot s = this.snapshot;
 
-        // Exact match
-        String alias = s.hostnameToAlias.get(hostname);
+        String alias = map.get(hostname);
         if (alias != null) return alias;
 
-        // Wildcard match: *.example.com matches sub.example.com
         int dot = hostname.indexOf('.');
         if (dot > 0) {
-            alias = s.hostnameToAlias.get("*" + hostname.substring(dot));
+            alias = map.get("*" + hostname.substring(dot));
             if (alias != null) return alias;
         }
 
@@ -128,15 +137,19 @@ public class CertificateStore {
     // Snapshot construction (all private, no shared mutable state)
     // -----------------------------------------------------------------------
 
-    private static Snapshot buildSnapshot(List<Row> certs) throws Exception {
+    private static Snapshot buildSnapshot(List<Row> certs, List<Row> domains) throws Exception {
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         keyStore.load(null, null);
         Map<String, String> hostnameToAlias = new HashMap<>();
+        Set<String> loadedAliases = new HashSet<>();
 
         int loaded = 0;
         for (Row cert : certs) {
             try {
-                addCertToKeyStore(cert, keyStore, hostnameToAlias);
+                String alias = addCertToKeyStore(cert, keyStore, hostnameToAlias);
+                if (alias != null) {
+                    loadedAliases.add(alias);
+                }
                 loaded++;
             } catch (Exception e) {
                 String name = cert.get(CertificateModel.NICE_NAME);
@@ -145,17 +158,41 @@ public class CertificateStore {
         }
 
         javax.net.ssl.X509ExtendedKeyManager keyManager = buildKeyManager(keyStore);
-        return new Snapshot(keyManager, Map.copyOf(hostnameToAlias), loaded);
+        Map<String, String> preferredAliases = buildPreferredAliases(domains, loadedAliases);
+        return new Snapshot(keyManager, Map.copyOf(hostnameToAlias), Map.copyOf(preferredAliases), loaded);
     }
 
-    private static void addCertToKeyStore(Row cert, KeyStore keyStore,
-                                           Map<String, String> hostnameToAlias) throws Exception {
+    private static Map<String, String> buildPreferredAliases(List<Row> domains,
+                                                             Set<String> loadedAliases) {
+        Map<String, String> result = new HashMap<>();
+
+        for (Row domain : domains) {
+            String hostname = domain.get(SiteDomainModel.HOSTNAME);
+            Integer certificateId = domain.get(SiteDomainModel.CERTIFICATE_ID);
+
+            if (hostname == null || hostname.isBlank() || certificateId == null) {
+                continue;
+            }
+
+            String alias = "cert-" + certificateId;
+            if (!loadedAliases.contains(alias)) {
+                continue;
+            }
+
+            result.put(hostname.toLowerCase(), alias);
+        }
+
+        return result;
+    }
+
+    private static String addCertToKeyStore(Row cert, KeyStore keyStore,
+                                            Map<String, String> hostnameToAlias) throws Exception {
         String certPem = cert.get(CertificateModel.CERTIFICATE_PEM);
         String keyPem = cert.get(CertificateModel.PRIVATE_KEY_PEM);
         Object idRaw = cert.get(CertificateModel.ID);
         String alias = "cert-" + idRaw;
 
-        if (certPem == null || keyPem == null) return;
+        if (certPem == null || keyPem == null) return null;
 
         PrivateKey privateKey = parsePrivateKey(keyPem);
         X509Certificate[] chain = parseCertificateChain(certPem);
@@ -170,6 +207,8 @@ public class CertificateStore {
         for (String hostname : hostnames) {
             hostnameToAlias.put(hostname.toLowerCase(), alias);
         }
+
+        return alias;
     }
 
     private static javax.net.ssl.X509ExtendedKeyManager buildKeyManager(KeyStore keyStore)
@@ -183,7 +222,7 @@ public class CertificateStore {
                 return xkm;
             }
         }
-        return null;
+        throw new IllegalStateException("No X509ExtendedKeyManager found in KeyManagerFactory");
     }
 
     // -----------------------------------------------------------------------

@@ -1,15 +1,11 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
-import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Manages Alchemy (Node.js framework) child processes.
- * Extends NodeSiteType with --stream-janeway default arg and wait_for_ready=true.
  */
 public class AlchemySiteType extends NodeSiteType {
 
@@ -29,13 +25,4 @@ public class AlchemySiteType extends NodeSiteType {
         return List.of("--stream-janeway");
     }
 
-    @Override
-    public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
-        // Default wait_for_ready to true if not explicitly set
-        if (!settings.containsKey("wait_for_ready")) {
-            settings = new java.util.HashMap<>(settings);
-            settings.put("wait_for_ready", true);
-        }
-        return super.createHandler(site, settings);
-    }
 }

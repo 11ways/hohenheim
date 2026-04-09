@@ -22,7 +22,7 @@ public class SiteDomainModel extends Model {
     public static final StringField PATH = SCHEMA.addField(StringField.builder().name("path").build());
     public static final BooleanField STRIP_PATH = SCHEMA.addField(BooleanField.builder("strip_path").defaultValue(false).build());
     public static final BooleanField FORCE_SSL = SCHEMA.addField(BooleanField.builder("force_ssl").defaultValue(true).build());
-    public static final StringField CERTIFICATE_ID = SCHEMA.addField(StringField.builder().name("certificate_id").build());
+    public static final IntegerField CERTIFICATE_ID = SCHEMA.addField(IntegerField.builder().name("certificate_id").build());
     public static final StringField CERTIFICATE_TYPE = SCHEMA.addField(StringField.builder().name("certificate_type").build());
     public static final BooleanField HSTS_ENABLED = SCHEMA.addField(BooleanField.builder("hsts_enabled").defaultValue(false).build());
     public static final BooleanField HSTS_SUBDOMAINS = SCHEMA.addField(BooleanField.builder("hsts_subdomains").defaultValue(false).build());

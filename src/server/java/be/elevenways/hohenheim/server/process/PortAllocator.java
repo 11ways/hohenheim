@@ -26,8 +26,11 @@ public class PortAllocator {
             if (reservedPorts.containsKey(port)) continue;
 
             if (isPortFree(port)) {
-                reservedPorts.put(port, siteId);
-                return port;
+                Integer existing = reservedPorts.putIfAbsent(port, siteId);
+                if (existing == null) {
+                    return port;
+                }
+                // Another thread claimed this port between our check and putIfAbsent
             }
         }
 

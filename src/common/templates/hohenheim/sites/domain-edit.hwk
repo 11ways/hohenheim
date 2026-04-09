@@ -17,6 +17,7 @@
     {% declare excludeFromLetsencrypt: Boolean %}
     {% declare certificateId: String %}
     {% declare certificates: List %}
+    {% declare customHeaders: List %}
     {% declare error: String %}
 
     <header class="hh-header">
@@ -49,10 +50,14 @@
 
                         <div class="hh-form-group">
                             <pl-label target="match-type">Match Type</pl-label>
-                            <select id="match-type" name="match_type" class="hh-select">
-                                <option value="exact" selected={% matchType == "exact" %}>Exact</option>
-                                <option value="wildcard" selected={% matchType == "wildcard" %}>Wildcard</option>
-                            </select>
+                            <pl-select name="match_type" value={% matchType %}>
+                                <pl-select-trigger placeholder="Match type"></pl-select-trigger>
+                                <pl-select-content>
+                                    <pl-select-item value="exact" label="Exact">Exact</pl-select-item>
+                                    <pl-select-item value="wildcard" label="Wildcard">Wildcard</pl-select-item>
+                                    <pl-select-item value="regex" label="Regex">Regex</pl-select-item>
+                                </pl-select-content>
+                            </pl-select>
                         </div>
 
                         <pl-separator></pl-separator>
@@ -85,12 +90,15 @@
 
                         <div class="hh-form-group">
                             <pl-label target="certificate-id">TLS Certificate</pl-label>
-                            <select id="certificate-id" name="certificate_id" class="hh-select">
-                                <option value="">Auto / None</option>
-                                {% each certificates as index, cert %}
-                                    <option value={% cert.get("id") %} selected={% cert.get("id") == certificateId %}>{{ cert.get("name") }}</option>
-                                {% /each %}
-                            </select>
+                            <pl-select name="certificate_id" value={% certificateId %}>
+                                <pl-select-trigger placeholder="Auto / None"></pl-select-trigger>
+                                <pl-select-content>
+                                    <pl-select-item value="" label="Auto / None">Auto / None</pl-select-item>
+                                    {% each certificates as index, cert %}
+                                        <pl-select-item value={% cert.get("id") %} label={% cert.get("name") %}>{{ cert.get("name") }}</pl-select-item>
+                                    {% /each %}
+                                </pl-select-content>
+                            </pl-select>
                             <p class="hh-form-hint">Specific certificate for this domain. Leave on Auto to use SNI matching.</p>
                         </div>
 
@@ -145,6 +153,12 @@
                                     <pl-label target="port">Port</pl-label>
                                     <pl-input id="port" type={% "text" %} name={% "port" %} value={% port %} placeholder={% "Default" %}></pl-input>
                                     <p class="hh-form-hint">Port override. Leave empty for default.</p>
+                                </div>
+
+                                <div class="hh-form-group">
+                                    <pl-label>Upstream Header Overrides</pl-label>
+                                    <hh-key-value-editor initialPairs={% customHeaders %} namePrefix={% "header" %} namePlaceholder={% "Header-Name" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
+                                    <p class="hh-form-hint">Leave the value empty to remove a header from upstream requests.</p>
                                 </div>
                             </div>
                         </pl-card-content>

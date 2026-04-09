@@ -28,8 +28,14 @@ public class StaticSiteType implements SiteTypeHandler {
     public static final BooleanField AUTOINDEX = SETTINGS_SCHEMA.addField(
         BooleanField.builder("autoindex").defaultValue(false).build());
 
+    public static final BooleanField INDEXES = SETTINGS_SCHEMA.addField(
+        BooleanField.builder("indexes").defaultValue(true).build());
+
     public static final BooleanField SHOW_HIDDEN_FILES = SETTINGS_SCHEMA.addField(
         BooleanField.builder("show_hidden_files").defaultValue(false).build());
+
+    public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
+        IntegerField.builder().name("delay").build());
 
     public static final StringField FALLBACK_FILE = SETTINGS_SCHEMA.addField(
         StringField.builder().name("fallback_file").build());
@@ -51,6 +57,7 @@ public class StaticSiteType implements SiteTypeHandler {
         String rootPathStr = (String) settings.get("root_path");
         String fallbackFile = (String) settings.get("fallback_file");
         boolean autoindex = Boolean.TRUE.equals(settings.get("autoindex"));
+        boolean indexes = !Boolean.FALSE.equals(settings.get("indexes"));
         boolean showHidden = Boolean.TRUE.equals(settings.get("show_hidden_files"));
 
         if (rootPathStr == null || rootPathStr.isEmpty()) {
@@ -62,25 +69,23 @@ public class StaticSiteType implements SiteTypeHandler {
 
         Path rootPath = Path.of(rootPathStr);
 
-        return (exchange, forwarder) -> serveStatic(exchange, rootPath, fallbackFile, autoindex, showHidden);
+        return (exchange, forwarder) -> serveStatic(exchange, rootPath, fallbackFile, autoindex,
+            indexes, showHidden);
     }
 
     private static void serveStatic(HttpServerExchange exchange, Path rootPath,
-                                     String fallbackFile, boolean autoindex, boolean showHidden) {
+                                     String fallbackFile, boolean autoindex,
+                                     boolean indexes, boolean showHidden) {
         String requestPath = exchange.getRelativePath();
         if (requestPath.startsWith("/")) requestPath = requestPath.substring(1);
 
-        // Block hidden files unless explicitly allowed
-        if (!showHidden && requestPath.contains("/.")) {
-            exchange.setStatusCode(403);
-            exchange.getResponseSender().send("Forbidden");
-            return;
-        }
-
         Path filePath;
         if (requestPath.isEmpty()) {
-            filePath = rootPath.resolve("index.html");
-            // If no index.html and autoindex is on, serve directory listing
+            filePath = rootPath;
+            if (indexes) {
+                filePath = rootPath.resolve("index.html");
+            }
+
             if (!Files.isRegularFile(filePath) && autoindex) {
                 serveDirectoryListing(exchange, rootPath, rootPath, showHidden);
                 return;
@@ -96,10 +101,22 @@ public class StaticSiteType implements SiteTypeHandler {
             return;
         }
 
+        // Block hidden files unless explicitly allowed (checked after normalization)
+        if (!showHidden) {
+            Path relative = rootPath.relativize(filePath);
+            for (Path segment : relative) {
+                if (segment.toString().startsWith(".")) {
+                    exchange.setStatusCode(403);
+                    exchange.getResponseSender().send("Forbidden");
+                    return;
+                }
+            }
+        }
+
         // If it's a directory, try index.html or autoindex
         if (Files.isDirectory(filePath)) {
-            Path indexFile = filePath.resolve("index.html");
-            if (Files.isRegularFile(indexFile)) {
+            Path indexFile = indexes ? filePath.resolve("index.html") : null;
+            if (indexFile != null && Files.isRegularFile(indexFile)) {
                 filePath = indexFile;
             } else if (autoindex) {
                 serveDirectoryListing(exchange, rootPath, filePath, showHidden);
@@ -120,11 +137,18 @@ public class StaticSiteType implements SiteTypeHandler {
         try {
             String contentType = Files.probeContentType(filePath);
             if (contentType == null) contentType = "application/octet-stream";
+            long fileSize = Files.size(filePath);
             exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, contentType);
-            exchange.getResponseSender().send(java.nio.ByteBuffer.wrap(Files.readAllBytes(filePath)));
+            exchange.getResponseHeaders().put(Headers.CONTENT_LENGTH, fileSize);
+
+            try (var channel = java.nio.channels.FileChannel.open(filePath, java.nio.file.StandardOpenOption.READ)) {
+                exchange.getResponseSender().transferFrom(channel, null);
+            }
         } catch (IOException e) {
-            exchange.setStatusCode(500);
-            exchange.getResponseSender().send("Read error");
+            if (!exchange.isResponseStarted()) {
+                exchange.setStatusCode(500);
+                exchange.getResponseSender().send("Read error");
+            }
         }
     }
 
@@ -137,10 +161,11 @@ public class StaticSiteType implements SiteTypeHandler {
 
             StringBuilder html = new StringBuilder();
             html.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">");
-            html.append("<title>Index of ").append(relativePath).append("</title>");
+            String safeRelPath = escapeHtml(relativePath);
+            html.append("<title>Index of ").append(safeRelPath).append("</title>");
             html.append("<style>body{font-family:monospace;padding:2rem}a{color:#06c}");
             html.append("table{border-collapse:collapse}td{padding:0.25rem 1rem}</style>");
-            html.append("</head><body><h1>Index of ").append(relativePath).append("</h1>");
+            html.append("</head><body><h1>Index of ").append(safeRelPath).append("</h1>");
             html.append("<table>");
 
             // Parent directory link
@@ -161,8 +186,8 @@ public class StaticSiteType implements SiteTypeHandler {
                         if (!isDir) size = formatSize(Files.size(entry));
                     } catch (IOException ignored) {}
 
-                    html.append("<tr><td><a href=\"").append(href).append("\">")
-                        .append(display).append("</a></td><td>").append(size)
+                    html.append("<tr><td><a href=\"").append(escapeHtml(href)).append("\">")
+                        .append(escapeHtml(display)).append("</a></td><td>").append(size)
                         .append("</td></tr>");
                 });
             }
@@ -174,6 +199,13 @@ public class StaticSiteType implements SiteTypeHandler {
             exchange.setStatusCode(500);
             exchange.getResponseSender().send("Error listing directory");
         }
+    }
+
+    private static String escapeHtml(String text) {
+        return text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;");
     }
 
     private static String formatSize(long bytes) {

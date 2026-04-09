@@ -7,12 +7,17 @@ import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.model.UserModel;
+import be.elevenways.hohenheim.server.process.ManagedProcess;
+import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
+import be.elevenways.hohenheim.server.process.ProcessTerminalHandler;
+import be.elevenways.hohenheim.server.stats.DashboardWebSocketHandler;
+import be.elevenways.hohenheim.server.task.UpdateNodeVersions;
+import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
+import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.JsonResult;
@@ -21,6 +26,12 @@ import be.elevenways.zenit.server.http.HttpConduit;
 import be.elevenways.zenit.server.http.Middleware;
 import be.elevenways.zenit.server.http.RedirectResult;
 
+import org.bouncycastle.openssl.PEMParser;
+
+import java.io.ByteArrayInputStream;
+import java.io.StringReader;
+import java.security.cert.CertificateFactory;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 
@@ -56,6 +67,27 @@ public class HohenheimHandlers {
         initSettings();
         initAuditLog(auditModel);
         initAccessLists(accessListModel, auditModel);
+        initProcessControl(auditModel);
+        initWebSockets();
+    }
+
+    private static void initWebSockets() {
+        HohenheimEndpoints.DASHBOARD_LIVE.setHandlerFactory(
+            DashboardWebSocketHandler::new);
+
+        HohenheimEndpoints.PROCESS_TERMINAL.setHandlerFactory(session -> {
+            Integer siteId = session.getParameter(HohenheimEndpoints.SITE_ID);
+            Long pid = session.getParameter(HohenheimEndpoints.PID);
+            var proxy = ServerMain.getProxyServer();
+            ManagedProcess proc = null;
+            if (proxy != null && siteId != null && pid != null) {
+                var handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
+                if (handler instanceof ManagedProcessSiteHandler managed) {
+                    proc = managed.getProcess(pid);
+                }
+            }
+            return new ProcessTerminalHandler(session, proc);
+        });
     }
 
     // -----------------------------------------------------------------------
@@ -100,15 +132,13 @@ public class HohenheimHandlers {
 
                 // If no users exist, redirect to setup
                 if (!AuthHelper.hasAnyUsers()) {
-                    conduit.redirect("/setup");
-                    return new RedirectResult("/setup");
+                    return conduit.hardRedirect("/setup");
                 }
 
                 // Check session
                 Row user = AuthHelper.getCurrentUser(conduit);
                 if (user == null) {
-                    conduit.redirect("/login");
-                    return new RedirectResult("/login");
+                    return conduit.hardRedirect("/login");
                 }
 
                 return null; // Authenticated, proceed to endpoint
@@ -120,7 +150,7 @@ public class HohenheimHandlers {
         HohenheimEndpoints.LOGIN.setHandler(conduit -> {
             Row user = AuthHelper.getCurrentUser(conduit);
             if (user != null) {
-                return redirectUntyped("/");
+                return conduit.hardRedirect("/");
             }
 
             return renderUntyped(
@@ -167,7 +197,7 @@ public class HohenheimHandlers {
             String token = AuthHelper.createSession(userId);
             AuthHelper.setSessionCookie(conduit, token);
 
-            return redirectUntyped("/");
+            return conduit.hardRedirect("/");
         });
 
         // Logout (POST)
@@ -175,13 +205,13 @@ public class HohenheimHandlers {
             String token = AuthHelper.getCookieValue(conduit, "hh_session");
             AuthHelper.deleteSession(token);
             AuthHelper.clearSessionCookie(conduit);
-            return redirectUntyped("/login");
+            return conduit.hardRedirect("/login");
         });
 
         // Setup page (GET) - first user creation
         HohenheimEndpoints.SETUP.setHandler(conduit -> {
             if (AuthHelper.hasAnyUsers()) {
-                return redirectUntyped("/login");
+                return conduit.hardRedirect("/login");
             }
 
             return renderUntyped(
@@ -193,7 +223,7 @@ public class HohenheimHandlers {
         // Setup (POST) - create first user
         HohenheimEndpoints.SETUP_POST.setHandler(conduit -> {
             if (AuthHelper.hasAnyUsers()) {
-                return redirectUntyped("/login");
+                return conduit.hardRedirect("/login");
             }
 
             HttpConduit http = (HttpConduit) conduit;
@@ -230,7 +260,7 @@ public class HohenheimHandlers {
             String token = AuthHelper.createSession(userId);
             AuthHelper.setSessionCookie(conduit, token);
 
-            return redirectUntyped("/");
+            return conduit.hardRedirect("/");
         });
     }
 
@@ -250,7 +280,8 @@ public class HohenheimHandlers {
 
             if (proxy != null) {
                 routeCount = proxy.getDispatcher().getExactRouteCount()
-                           + proxy.getDispatcher().getWildcardRouteCount();
+                           + proxy.getDispatcher().getWildcardRouteCount()
+                           + proxy.getDispatcher().getRegexRouteCount();
 
                 httpStatus = switch (proxy.getHttpState()) {
                     case RUNNING -> "Running";
@@ -327,7 +358,11 @@ public class HohenheimHandlers {
         HohenheimEndpoints.SITES_CREATE_FORM.setHandler(conduit ->
             new RenderTemplateResult(
                 Identifier.of("hohenheim", "hohenheim/sites/create"),
-                Map.of("error", "")
+                Map.of("error", "", "siteTypes", getSiteTypeOptions(),
+                    "nodeVersions", getNodeVersionOptions(),
+                    "systemUsers", getSystemUserOptions(),
+                    "environmentVariables", List.of(),
+                    "apiKeys", List.of())
             )
         );
 
@@ -470,6 +505,11 @@ public class HohenheimHandlers {
                 domainClone.set(SiteDomainModel.HSTS_SUBDOMAINS, domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
                 domainClone.set(SiteDomainModel.PATH, domain.get(SiteDomainModel.PATH));
                 domainClone.set(SiteDomainModel.STRIP_PATH, domain.get(SiteDomainModel.STRIP_PATH));
+                domainClone.set(SiteDomainModel.HTTP2_SUPPORT, domain.get(SiteDomainModel.HTTP2_SUPPORT));
+                domainClone.set(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT));
+                domainClone.set(SiteDomainModel.LISTEN_ON, domain.get(SiteDomainModel.LISTEN_ON));
+                domainClone.set(SiteDomainModel.PORT, domain.get(SiteDomainModel.PORT));
+                domainClone.set(SiteDomainModel.CUSTOM_HEADERS, domain.get(SiteDomainModel.CUSTOM_HEADERS));
                 domainModel.save(domainClone);
             }
 
@@ -512,14 +552,22 @@ public class HohenheimHandlers {
             String matchType = form.getOrDefault("match_type", "exact");
 
             if (!hostname.isEmpty()) {
-                Row domainRow = domainModel.createEmptyRow();
-                domainRow.set(SiteDomainModel.SITE_ID, siteId);
-                domainRow.set(SiteDomainModel.HOSTNAME, hostname);
-                domainRow.set(SiteDomainModel.MATCH_TYPE, matchType);
-                domainModel.save(domainRow);
+                // Check for duplicate hostname on this site
+                Row existing = domainModel.find()
+                    .where(SiteDomainModel.SITE_ID.eq(siteId))
+                    .where(SiteDomainModel.HOSTNAME.eq(hostname))
+                    .first();
 
-                audit(auditModel, conduit, "created", "domain", domainRow.get(SiteDomainModel.ID), hostname);
-                reloadProxy();
+                if (existing == null) {
+                    Row domainRow = domainModel.createEmptyRow();
+                    domainRow.set(SiteDomainModel.SITE_ID, siteId);
+                    domainRow.set(SiteDomainModel.HOSTNAME, hostname);
+                    domainRow.set(SiteDomainModel.MATCH_TYPE, matchType);
+                    domainModel.save(domainRow);
+
+                    audit(auditModel, conduit, "created", "domain", domainRow.get(SiteDomainModel.ID), hostname);
+                    reloadProxy();
+                }
             }
 
             return redirectUntyped("/sites/" + siteId);
@@ -574,7 +622,15 @@ public class HohenheimHandlers {
             domain.set(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, form.containsKey("exclude_from_letsencrypt"));
 
             String certIdStr = form.getOrDefault("certificate_id", "").trim();
-            domain.set(SiteDomainModel.CERTIFICATE_ID, certIdStr.isEmpty() ? null : certIdStr);
+            if (certIdStr.isEmpty()) {
+                domain.set(SiteDomainModel.CERTIFICATE_ID, null);
+            } else {
+                try {
+                    domain.set(SiteDomainModel.CERTIFICATE_ID, Integer.parseInt(certIdStr));
+                } catch (NumberFormatException ignored) {
+                    domain.set(SiteDomainModel.CERTIFICATE_ID, null);
+                }
+            }
 
             String path = form.getOrDefault("path", "").trim();
             domain.set(SiteDomainModel.PATH, path.isEmpty() ? null : path);
@@ -583,14 +639,25 @@ public class HohenheimHandlers {
             String listenOn = form.getOrDefault("listen_on", "").trim();
             domain.set(SiteDomainModel.LISTEN_ON, listenOn.isEmpty() ? null : listenOn);
 
+            List<Map<String, String>> customHeaders = new ArrayList<>();
+            for (int i = 0; i < 100; i++) {
+                String headerName = form.get("header_name_" + i);
+                if (headerName == null) break;
+                String headerValue = form.getOrDefault("header_value_" + i, "");
+                if (!headerName.isBlank()) {
+                    customHeaders.add(Map.of("name", headerName.trim(), "value", headerValue));
+                }
+            }
+            domain.set(SiteDomainModel.CUSTOM_HEADERS, customHeaders.isEmpty() ? null : customHeaders);
+
             String portStr = form.getOrDefault("port", "").trim();
             if (!portStr.isEmpty()) {
                 try {
                     int port = Integer.parseInt(portStr);
-                    if (port >= 1 && port <= 65535) {
-                        domain.set(SiteDomainModel.PORT, port);
-                    }
-                } catch (NumberFormatException ignored) {}
+                    domain.set(SiteDomainModel.PORT, (port >= 1 && port <= 65535) ? port : null);
+                } catch (NumberFormatException e) {
+                    domain.set(SiteDomainModel.PORT, null);
+                }
             } else {
                 domain.set(SiteDomainModel.PORT, null);
             }
@@ -653,7 +720,7 @@ public class HohenheimHandlers {
 
                 // Compute expiry warning level
                 if (expiresOnObj instanceof Instant expiresAt && "active".equals(status)) {
-                    long daysLeft = java.time.Duration.between(now, expiresAt).toDays();
+                    long daysLeft = Duration.between(now, expiresAt).toDays();
                     if (daysLeft < 0) {
                         cert.put("expiryStatus", "expired");
                     } else if (daysLeft <= 7) {
@@ -701,8 +768,8 @@ public class HohenheimHandlers {
 
             // Validate PEM format before saving
             try {
-                java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory.getInstance("X.509");
-                cf.generateCertificates(new java.io.ByteArrayInputStream(certPem.getBytes()));
+                CertificateFactory cf = CertificateFactory.getInstance("X.509");
+                cf.generateCertificates(new ByteArrayInputStream(certPem.getBytes()));
             } catch (Exception e) {
                 return renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/certificates/upload"),
@@ -711,7 +778,7 @@ public class HohenheimHandlers {
             }
 
             try {
-                new org.bouncycastle.openssl.PEMParser(new java.io.StringReader(keyPem)).readObject();
+                new PEMParser(new StringReader(keyPem)).readObject();
             } catch (Exception e) {
                 return renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/certificates/upload"),
@@ -843,6 +910,7 @@ public class HohenheimHandlers {
             vars.put("proxyHttpsPort", HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT));
             vars.put("proxyFallback", valueOrEmpty(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS)));
             vars.put("proxyForceHttps", HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
+            vars.put("proxyIpv6Address", valueOrEmpty(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS)));
             vars.put("adminPort", HohenheimSettings.VALUES.getValue(HohenheimSettings.Admin.PORT));
             vars.put("dbPath", HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.PATH));
             vars.put("logAccessToDb", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_TO_DATABASE));
@@ -880,6 +948,8 @@ public class HohenheimHandlers {
                 form.getOrDefault("proxy_fallback", ""));
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS,
                 form.containsKey("proxy_force_https"));
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.IPV6_ADDRESS,
+                form.getOrDefault("proxy_ipv6_address", "").trim());
 
             // Logging settings
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Logging.ACCESS_TO_DATABASE,
@@ -941,31 +1011,121 @@ public class HohenheimHandlers {
     // Helpers
     // -----------------------------------------------------------------------
 
+    /**
+     * Extract site-type-specific settings from form data using the framework's
+     * RegistryEnumField schema resolution. The SITE_TYPE field resolves to the
+     * correct Schema via the SiteTypeRegistry, so we don't need to look up
+     * handlers or manually iterate field types.
+     */
     private static Map<String, Object> extractTypeSettings(Map<String, String> form, String siteType) {
         Map<String, Object> settings = new HashMap<>();
-        SiteTypeHandler handler = SiteTypes.getHandler(siteType);
 
-        if (handler != null) {
-            for (var entry : handler.getSchema().getFields().entrySet()) {
-                String fieldName = entry.getKey();
-                Field<?, ?> field = entry.getValue();
-                String formValue = form.get(fieldName);
+        // Use the framework's schema resolution: SITE_TYPE -> Registry -> TypeDefinition -> Schema
+        Schema typeSchema = SiteModel.SITE_TYPE.getSchemaForValue(siteType);
+        if (typeSchema == null) return settings;
 
-                if (field instanceof BooleanField) {
-                    // Unchecked checkboxes don't submit a value
-                    settings.put(fieldName, "on".equals(formValue) || "true".equals(formValue));
-                } else if (formValue == null) {
-                    continue;
-                } else if (field instanceof IntegerField) {
-                    try { settings.put(fieldName, Integer.parseInt(formValue)); }
-                    catch (NumberFormatException e) { /* skip invalid */ }
-                } else {
-                    settings.put(fieldName, formValue);
-                }
+        for (var entry : typeSchema.getFields().entrySet()) {
+            String fieldName = entry.getKey();
+            Field<?, ?> field = entry.getValue();
+            String formValue = form.get(fieldName);
+
+            if (field instanceof BooleanField) {
+                // Unchecked checkboxes don't submit a value
+                settings.put(fieldName, "on".equals(formValue) || "true".equals(formValue));
+            } else if (formValue == null) {
+                continue;
+            } else if (field instanceof IntegerField) {
+                try { settings.put(fieldName, Integer.parseInt(formValue)); }
+                catch (NumberFormatException e) { /* skip invalid */ }
+            } else {
+                settings.put(fieldName, formValue);
             }
         }
 
+        if (typeSchema.getFields().containsKey("environment_variables")) {
+            List<Map<String, String>> envVars = new ArrayList<>();
+            for (int i = 0; i < 100; i++) {
+                String name = form.get("env_name_" + i);
+                if (name == null) break;
+                String value = form.getOrDefault("env_value_" + i, "");
+                if (!name.isBlank()) {
+                    envVars.add(Map.of("name", name.trim(), "value", value));
+                }
+            }
+            settings.put("environment_variables", envVars);
+        }
+
+        if (typeSchema.getFields().containsKey("api_keys")) {
+            List<String> keys = new ArrayList<>();
+            for (int i = 0; i < 100; i++) {
+                String key = form.get("api_key_" + i);
+                if (key == null) break;
+                if (!key.isBlank()) {
+                    keys.add(key.trim());
+                }
+            }
+            settings.put("api_keys", keys.isEmpty() ? "" : String.join(",", keys));
+        }
+
         return settings;
+    }
+
+    private static List<Map<String, String>> parseNamedValueLines(String raw, String separator) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+
+        List<Map<String, String>> result = new ArrayList<>();
+        for (String line : raw.split("\\r?\\n")) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+
+            int separatorIndex = trimmed.indexOf(separator);
+            String name;
+            String value;
+            if (separatorIndex == -1) {
+                name = trimmed;
+                value = "";
+            } else {
+                name = trimmed.substring(0, separatorIndex).trim();
+                value = trimmed.substring(separatorIndex + separator.length()).trim();
+            }
+
+            if (!name.isEmpty()) {
+                result.add(Map.of("name", name, "value", value));
+            }
+        }
+
+        return List.copyOf(result);
+    }
+
+    private static String joinNamedValueLines(Object rawValue, String separator) {
+        if (!(rawValue instanceof List<?> list) || list.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder builder = new StringBuilder();
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> map)) {
+                continue;
+            }
+
+            Object name = map.get("name");
+            if (name == null || String.valueOf(name).isBlank()) {
+                continue;
+            }
+
+            if (!builder.isEmpty()) {
+                builder.append('\n');
+            }
+
+            Object value = map.get("value");
+            builder.append(name).append(separator).append(value != null ? value : "");
+        }
+
+        return builder.toString();
     }
 
     private static Map<String, Object> siteToMap(Row site) {
@@ -997,7 +1157,37 @@ public class HohenheimHandlers {
         Map<String, Object> vars = new HashMap<>();
         vars.put("site", siteToMap(site));
         vars.put("domains", domains);
+        vars.put("siteTypes", getSiteTypeOptions());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> settings = (Map<String, Object>) site.get(SiteModel.SETTINGS);
+        vars.put("nodeVersions", getNodeVersionOptions());
+        vars.put("systemUsers", getSystemUserOptions());
+        vars.put("environmentVariables", extractEnvVarsList(settings));
+        vars.put("apiKeys", extractApiKeysList(settings));
         vars.put("error", error);
+
+        // Process data for managed site types
+        var proxy = ServerMain.getProxyServer();
+        if (proxy != null) {
+            var handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
+            if (handler instanceof ManagedProcessSiteHandler managed) {
+                vars.put("isManaged", true);
+                List<Map<String, Object>> processes = new ArrayList<>();
+                for (var proc : managed.getProcesses()) {
+                    Map<String, Object> info = new HashMap<>();
+                    info.put("pid", proc.pid());
+                    info.put("port", proc.port());
+                    info.put("cpu", proc.cpuPercent());
+                    info.put("memoryMb", proc.memoryKb() / 1024);
+                    info.put("isolated", proc.isIsolated());
+                    info.put("ready", proc.isReady());
+                    info.put("fingerprints", proc.activeFingerprintCount());
+                    processes.add(info);
+                }
+                vars.put("processes", processes);
+            }
+        }
+
         return vars;
     }
 
@@ -1024,8 +1214,10 @@ public class HohenheimHandlers {
         Integer port = domain.get(SiteDomainModel.PORT);
         vars.put("port", port != null ? String.valueOf(port) : "");
 
-        String certId = domain.get(SiteDomainModel.CERTIFICATE_ID);
-        vars.put("certificateId", certId != null ? certId : "");
+        Integer certId = domain.get(SiteDomainModel.CERTIFICATE_ID);
+        vars.put("certificateId", certId != null ? String.valueOf(certId) : "");
+        vars.put("customHeadersText", joinNamedValueLines(domain.get(SiteDomainModel.CUSTOM_HEADERS), ": "));
+        vars.put("customHeaders", extractCustomHeadersList(domain));
 
         // Build certificate list for dropdown
         var ds = HohenheimDatabase.datasource();
@@ -1211,7 +1403,191 @@ public class HohenheimHandlers {
 
     private static String siteTypeDisplayName(String typeId) {
         if (typeId == null) return "Unknown";
-        SiteTypeHandler handler = SiteTypes.getHandler(typeId);
-        return handler != null ? handler.getDisplayName() : typeId;
+        // Use the framework's enum field to resolve the display name
+        var enumValue = SiteModel.SITE_TYPE.getValues().get(typeId);
+        return enumValue != null ? enumValue.getDisplayName() : typeId;
     }
+
+    // -----------------------------------------------------------------------
+    // Process control
+    // -----------------------------------------------------------------------
+
+    @SuppressWarnings("unchecked")
+    private static ActionResult<Object> jsonUntyped(Map<String, Object> data) {
+        return (ActionResult<Object>) (ActionResult<?>) new JsonResult(data);
+    }
+
+    private static void initProcessControl(AuditLogModel auditModel) {
+
+        // GET /sites/:id/processes - JSON process list
+        HohenheimEndpoints.SITES_PROCESSES.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            var proxy = ServerMain.getProxyServer();
+            Map<String, Object> result = new HashMap<>();
+
+            if (proxy != null) {
+                var handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
+                if (handler instanceof ManagedProcessSiteHandler managed) {
+                    List<Map<String, Object>> processes = new ArrayList<>();
+
+                    for (var proc : managed.getProcesses()) {
+                        Map<String, Object> info = new HashMap<>();
+                        info.put("pid", proc.pid());
+                        info.put("port", proc.port());
+                        info.put("cpu", proc.cpuPercent());
+                        info.put("memory", proc.memoryKb());
+                        info.put("isolated", proc.isIsolated());
+                        info.put("ready", proc.isReady());
+                        info.put("startTime", proc.startTime().toString());
+                        info.put("fingerprints", proc.activeFingerprintCount());
+                        processes.add(info);
+                    }
+
+                    result.put("running", !processes.isEmpty());
+                    result.put("processes", processes);
+                } else {
+                    result.put("running", false);
+                    result.put("processes", List.of());
+                    result.put("type", "not_managed");
+                }
+            }
+
+            return jsonUntyped(result);
+        });
+
+        // POST /sites/:id/processes/start - Start a new process
+        HohenheimEndpoints.SITES_PROCESS_START.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            var proxy = ServerMain.getProxyServer();
+
+            if (proxy != null) {
+                var handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
+                if (handler instanceof ManagedProcessSiteHandler managed) {
+                    managed.startProcess();
+                    audit(auditModel, conduit, "started_process", "site", siteId, null);
+                }
+            }
+
+            return redirectUntyped("/sites/" + siteId);
+        });
+
+        // POST /sites/:id/processes/:pid/kill - Kill a process
+        HohenheimEndpoints.SITES_PROCESS_KILL.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            Long pid = conduit.getParameter(HohenheimEndpoints.PID);
+            var proxy = ServerMain.getProxyServer();
+
+            if (proxy != null) {
+                var handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
+                if (handler instanceof ManagedProcessSiteHandler managed) {
+                    var proc = managed.getProcess(pid);
+                    if (proc != null) {
+                        proc.kill();
+                        audit(auditModel, conduit, "killed_process", "site", siteId, "PID " + pid);
+                    }
+                }
+            }
+
+            return redirectUntyped("/sites/" + siteId);
+        });
+
+        // POST /sites/:id/processes/:pid/isolate - Toggle isolation
+        HohenheimEndpoints.SITES_PROCESS_ISOLATE.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            Long pid = conduit.getParameter(HohenheimEndpoints.PID);
+            var proxy = ServerMain.getProxyServer();
+
+            if (proxy != null) {
+                var handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
+                if (handler instanceof ManagedProcessSiteHandler managed) {
+                    var proc = managed.getProcess(pid);
+                    if (proc != null) {
+                        proc.setIsolated(!proc.isIsolated());
+                        audit(auditModel, conduit, "isolated_process", "site", siteId, "PID " + pid);
+                    }
+                }
+            }
+
+            return redirectUntyped("/sites/" + siteId);
+        });
+    }
+
+    /**
+     * Build site type options from the RegistryEnumField for template dropdowns.
+     */
+    private static List<Map<String, Object>> getSiteTypeOptions() {
+        List<Map<String, Object>> options = new ArrayList<>();
+        for (var entry : SiteModel.SITE_TYPE.getValues().entrySet()) {
+            Map<String, Object> option = new HashMap<>();
+            option.put("value", entry.getKey());
+            option.put("label", entry.getValue().getDisplayName());
+            Map<String, Object> props = entry.getValue().getProperties();
+            if (props != null && props.containsKey("description")) {
+                option.put("description", props.get("description"));
+            }
+            options.add(option);
+        }
+        return options;
+    }
+
+    private static List<Map<String, Object>> getSystemUserOptions() {
+        List<Map<String, Object>> options = new ArrayList<>();
+        for (var user : UpdateSystemUsers.getSystemUsers()) {
+            options.add(Map.of("name", user.name(), "uid", user.uid(), "gid", user.gid()));
+        }
+        return options;
+    }
+
+    private static List<Map<String, String>> getNodeVersionOptions() {
+        List<Map<String, String>> options = new ArrayList<>();
+        for (var nv : UpdateNodeVersions.getNodeVersions()) {
+            options.add(Map.of("version", nv.version(), "path", nv.path()));
+        }
+        return options;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, String>> extractEnvVarsList(Map<String, Object> settings) {
+        List<Map<String, String>> result = new ArrayList<>();
+        if (settings != null && settings.get("environment_variables") instanceof List<?> rawList) {
+            for (Object item : rawList) {
+                if (item instanceof Map<?, ?> map) {
+                    String name = map.get("name") != null ? map.get("name").toString() : "";
+                    String value = map.get("value") != null ? map.get("value").toString() : "";
+                    result.add(Map.of("name", name, "value", value));
+                }
+            }
+        }
+        return result;
+    }
+
+    private static List<String> extractApiKeysList(Map<String, Object> settings) {
+        List<String> result = new ArrayList<>();
+        if (settings != null) {
+            Object apiKeysObj = settings.get("api_keys");
+            if (apiKeysObj instanceof String keysStr && !keysStr.isBlank()) {
+                for (String key : keysStr.split("[,\\s]+")) {
+                    if (!key.isBlank()) result.add(key.trim());
+                }
+            }
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, String>> extractCustomHeadersList(Row domain) {
+        List<Map<String, String>> result = new ArrayList<>();
+        Object raw = domain.get(SiteDomainModel.CUSTOM_HEADERS);
+        if (raw instanceof List<?> rawList) {
+            for (Object item : rawList) {
+                if (item instanceof Map<?, ?> map) {
+                    String name = map.get("name") != null ? map.get("name").toString() : "";
+                    String value = map.get("value") != null ? map.get("value").toString() : "";
+                    result.add(Map.of("name", name, "value", value));
+                }
+            }
+        }
+        return result;
+    }
+
 }

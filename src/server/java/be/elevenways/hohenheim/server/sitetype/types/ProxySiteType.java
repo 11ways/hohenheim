@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
+import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -37,6 +38,12 @@ public class ProxySiteType implements SiteTypeHandler {
     public static final BooleanField IGNORE_CERTIFICATES = SETTINGS_SCHEMA.addField(
         BooleanField.builder("ignore_certificates").defaultValue(false).build());
 
+    public static final StringField SOCKET = SETTINGS_SCHEMA.addField(
+        StringField.builder().name("socket").build());
+
+    public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
+        IntegerField.builder().name("delay").build());
+
     @Override
     public String getDisplayName() { return "Proxy"; }
 
@@ -51,12 +58,14 @@ public class ProxySiteType implements SiteTypeHandler {
 
     @Override
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
+        String socketPath = (String) settings.get("socket");
         String scheme = (String) settings.getOrDefault("forward_scheme", "http");
         String host = (String) settings.get("forward_host");
         Object portObj = settings.get("forward_port");
-        int port = portObj instanceof Integer i ? i : 80;
+        int defaultPort = "https".equals(scheme) ? 443 : 80;
+        int port = portObj instanceof Integer i ? i : defaultPort;
 
-        if (host == null || host.isEmpty()) {
+        if ((host == null || host.isEmpty()) && (socketPath == null || socketPath.isEmpty())) {
             return (exchange, forwarder) -> {
                 exchange.setStatusCode(502);
                 exchange.getResponseSender().send("No upstream configured");
@@ -74,6 +83,8 @@ public class ProxySiteType implements SiteTypeHandler {
         }
 
         boolean websocketEnabled = Boolean.TRUE.equals(settings.get("websocket_upgrade"));
+        boolean ignoreCertificates = Boolean.TRUE.equals(settings.get("ignore_certificates"));
+        String socket = socketPath != null && !socketPath.isEmpty() ? socketPath : null;
 
         return (exchange, forwarder) -> {
             if (!websocketEnabled
@@ -83,7 +94,7 @@ public class ProxySiteType implements SiteTypeHandler {
                 exchange.getResponseSender().send("WebSocket upgrades disabled for this site");
                 return;
             }
-            forwarder.forwardTo(upstream);
+            forwarder.forwardTo(new UpstreamTarget(upstream, ignoreCertificates, socket));
         };
     }
 }

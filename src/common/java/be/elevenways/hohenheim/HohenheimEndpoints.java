@@ -6,6 +6,7 @@ import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.routing.EndpointRoute;
 import be.elevenways.zenit.common.routing.PageEndpoint;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
+import be.elevenways.zenit.common.routing.WebSocketEndpoint;
 
 /**
  * HTTP endpoint definitions for the Hohenheim admin interface.
@@ -213,6 +214,42 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("delete").build())
         .build();
 
+    // --- Process control ---
+    public static final ParameterDefinition<Long> PID = ParameterDefinition.builder(Long.class)
+        .name("pid")
+        .stringResolver(Long::parseLong)
+        .build();
+
+    public static final Endpoint<Object> SITES_PROCESSES = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_processes"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("processes").build())
+        .build();
+
+    public static final Endpoint<Object> SITES_PROCESS_START = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_process_start"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("processes").addDelimiter().addStatic("start").build())
+        .build();
+
+    public static final Endpoint<Object> SITES_PROCESS_KILL = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_process_kill"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("processes").addDelimiter().addParameter(PID)
+            .addDelimiter().addStatic("kill").build())
+        .build();
+
+    public static final Endpoint<Object> SITES_PROCESS_ISOLATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_process_isolate"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("processes").addDelimiter().addParameter(PID)
+            .addDelimiter().addStatic("isolate").build())
+        .build();
+
     // --- Certificate Let's Encrypt request ---
     public static final PageEndpoint CERTIFICATES_REQUEST_FORM = Endpoint.pageBuilder()
         .identifier(Identifier.of("hohenheim", "certificates_request_form"))
@@ -245,6 +282,23 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("certificates").addDelimiter().addParameter(CERT_ID)
             .addDelimiter().addStatic("download").build())
+        .build();
+
+    // --- WebSocket endpoints ---
+    public static final WebSocketEndpoint DASHBOARD_LIVE = WebSocketEndpoint.builder()
+        .identifier(Identifier.of("hohenheim", "dashboard_live"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("ws").addDelimiter().addStatic("dashboard").build())
+        .handler(session -> null) // Placeholder: set in HohenheimHandlers.init()
+        .build();
+
+    public static final WebSocketEndpoint PROCESS_TERMINAL = WebSocketEndpoint.builder()
+        .identifier(Identifier.of("hohenheim", "process_terminal"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("ws").addDelimiter().addStatic("terminal")
+            .addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addParameter(PID).build())
+        .handler(session -> null) // Placeholder: set in HohenheimHandlers.init()
         .build();
 
     // --- Test-only endpoint (throws to verify error handling) ---

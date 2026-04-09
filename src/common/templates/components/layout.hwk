@@ -1,12 +1,14 @@
 {% tag HhLayout {
 
+    style {
+        display: flex;
+        flex: 1;
+        min-height: 100vh;
+    }
+
     public pageTitle: String = ""
 
     template {
-        {% style(href: "/plumage.css") %}
-        {% style(href: "/hohenheim.css") %}
-        {% script(src: "/hohenheim.js") %}
-
         <nav class="hh-sidebar">
             <div class="hh-sidebar__logo">Hohenheim</div>
             <ul class="hh-sidebar__nav">
