@@ -1,8 +1,6 @@
 // Hohenheim admin UI
-// Plumage tokens come from /plumage.css (loaded separately in base.hwk),
-// so this stylesheet only needs the hawkeye module for extracted tag styles
-// plus the hh- utility classes below.
-@use 'hawkeye';   // component styles (extracted from .hwk templates)
+@use 'plumage';   // tokens + component base styles
+@use 'hawkeye';   // extracted tag styles from .hwk templates
 
 *, *::before, *::after { box-sizing: border-box; }
 
