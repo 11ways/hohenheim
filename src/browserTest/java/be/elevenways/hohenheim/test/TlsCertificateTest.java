@@ -16,6 +16,7 @@ import be.elevenways.zenit.server.ServerZenitRuntime;
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
+import java.io.File;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.cert.X509Certificate;
@@ -32,12 +33,14 @@ class TlsCertificateTest {
     private static boolean initialized = false;
 
     @BeforeAll
-    static void initRuntime() {
+    static void initRuntime() throws Exception {
         if (initialized) return;
         initialized = true;
 
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
 
         SiteTypes.register();
         HohenheimEndpoints.init();
@@ -107,10 +110,12 @@ class TlsCertificateTest {
 
     @Test
     @Order(5)
-    void httpsNotStartedWithoutCertificates() {
+    void httpsNotStartedWithoutCertificates() throws Exception {
         // Use a fresh DB with no certs
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
@@ -128,8 +133,10 @@ class TlsCertificateTest {
     @Order(6)
     void httpsStartsWhenCertificatesAvailable() throws Exception {
         // Re-init DB and insert a cert
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
@@ -160,9 +167,11 @@ class TlsCertificateTest {
 
     @Test
     @Order(7)
-    void certificateModelHasLifecycleFields() {
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+    void certificateModelHasLifecycleFields() throws Exception {
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
@@ -275,8 +284,10 @@ class TlsCertificateTest {
     @Test
     @Order(10)
     void wildcardCertResolvesSubdomains() throws Exception {
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
@@ -310,8 +321,10 @@ class TlsCertificateTest {
     @Test
     @Order(11)
     void certificateRemovalClearsFromStore() throws Exception {
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
@@ -354,8 +367,10 @@ class TlsCertificateTest {
     @Test
     @Order(13)
     void acmeAccountKeyRowExcludedFromStore() throws Exception {
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
@@ -380,8 +395,10 @@ class TlsCertificateTest {
     @Test
     @Order(13)
     void forceSslRedirectsHttpToHttps() throws Exception {
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
@@ -458,8 +475,10 @@ class TlsCertificateTest {
     @Test
     @Order(14)
     void httpsActuallyAcceptsTlsConnections() throws Exception {
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
@@ -519,8 +538,10 @@ class TlsCertificateTest {
     @Test
     @Order(15)
     void preferredCertificateAliasOverridesHostnameSelection() throws Exception {
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();

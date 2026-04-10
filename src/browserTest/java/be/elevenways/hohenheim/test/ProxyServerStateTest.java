@@ -10,6 +10,8 @@ import be.elevenways.zenit.server.ServerZenitRuntime;
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
+import java.io.File;
+
 /**
  * Tests the ProxyServer lifecycle state machine.
  * Does not use Playwright -- pure server-side tests.
@@ -20,12 +22,14 @@ class ProxyServerStateTest {
     private static boolean initialized = false;
 
     @BeforeAll
-    static void initRuntime() {
+    static void initRuntime() throws Exception {
         if (initialized) return;
         initialized = true;
 
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
 
         SiteTypes.register();
         HohenheimEndpoints.init();

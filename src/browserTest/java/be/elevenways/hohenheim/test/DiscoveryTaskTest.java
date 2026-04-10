@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.NodeVersionModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -13,6 +14,7 @@ import be.elevenways.zenit.server.ServerZenitRuntime;
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
+import java.io.File;
 import java.time.Instant;
 
 /**
@@ -26,12 +28,14 @@ class DiscoveryTaskTest {
     private static boolean initialized = false;
 
     @BeforeAll
-    static void initRuntime() {
+    static void initRuntime() throws Exception {
         if (initialized) return;
         initialized = true;
 
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
 
         SiteTypes.register();
         HohenheimEndpoints.init();

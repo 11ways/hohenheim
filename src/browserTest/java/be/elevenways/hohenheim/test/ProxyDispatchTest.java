@@ -40,8 +40,10 @@ class ProxyDispatchTest {
         if (initialized) return;
         initialized = true;
 
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
 
         SiteTypes.register();
         HohenheimEndpoints.init();
@@ -100,8 +102,10 @@ class ProxyDispatchTest {
     @Order(1)
     void customHeadersModifyUpstreamRequest() throws Exception {
         // Reset DB
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         AtomicReference<String> seenHeader = new AtomicReference<>();
@@ -161,8 +165,10 @@ class ProxyDispatchTest {
     @Test
     @Order(2)
     void hstsHeaderOnResponse() throws Exception {
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         setupSiteWithDomain("hsts.test", Map.of("forward_host", "127.0.0.1", "forward_port", 9999),
@@ -199,8 +205,10 @@ class ProxyDispatchTest {
     @Test
     @Order(3)
     void websocketUpgradeBlockedWhenDisabled() throws Exception {
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         // Create site with websocket_upgrade=false
@@ -237,8 +245,10 @@ class ProxyDispatchTest {
     @Test
     @Order(4)
     void websocketUpgradeAllowedWhenEnabled() throws Exception {
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         // Create site with websocket_upgrade=true (default)
@@ -275,8 +285,10 @@ class ProxyDispatchTest {
     @Test
     @Order(5)
     void booleanSettingCanBeToggledOff() throws Exception {
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         // Verify that extractTypeSettings correctly handles unchecked booleans
@@ -305,8 +317,10 @@ class ProxyDispatchTest {
     @Test
     @Order(6)
     void regexRouteMatchesHostname() throws Exception {
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         AtomicReference<String> seenHost = new AtomicReference<>();
@@ -357,8 +371,10 @@ class ProxyDispatchTest {
     @Test
     @Order(7)
     void listenOnBlocksMismatchedListenerAddress() throws Exception {
-        java.io.File db = new java.io.File("hohenheim.db");
-        if (db.exists()) db.delete();
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
         setupSiteWithDomain("listen.test", Map.of("forward_host", "127.0.0.1", "forward_port", 9999),

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hawkeye.testSupport.HawkeyeBrowserTestBase;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.AuthHelper;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimHandlers;
@@ -12,6 +13,7 @@ import be.elevenways.zenit.server.http.ZenitHttpServer;
 import com.microsoft.playwright.options.Cookie;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -29,10 +31,14 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
             return port;
         }
 
-        // Delete stale db from previous test class forks
-        File db = new File("hohenheim.db");
-        if (db.exists()) {
+        // Use a temp file for the test database so we never pollute the working directory
+        try {
+            File db = File.createTempFile("hohenheim-test", ".db");
             db.delete();
+            db.deleteOnExit();
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to create temp database file", e);
         }
 
         SiteTypes.register();
