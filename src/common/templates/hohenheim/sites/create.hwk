@@ -3,6 +3,7 @@
     public error: String = ""
     public selectedType: String = "hohenheim:proxy"
     public siteTypes: List = null
+    public settings: Map = null
     public nodeVersions: List = null
     public systemUsers: List = null
     public environmentVariables: List = null
@@ -44,7 +45,7 @@
 
                         <pl-separator></pl-separator>
 
-                        <hh-site-type-fields selectedType={% &selectedType{:} %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %}></hh-site-type-fields>
+                        <hh-site-type-fields selectedType={% &selectedType{:} %} settings={% settings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %}></hh-site-type-fields>
 
                         <pl-separator></pl-separator>
 
@@ -73,10 +74,11 @@
     <main class="hh-content">
         {% declare error: String %}
         {% declare siteTypes: List %}
+        {% declare settings: Map %}
         {% declare nodeVersions: List %}
         {% declare systemUsers: List %}
         {% declare environmentVariables: List %}
         {% declare apiKeys: List %}
-        <hh-site-create error={% error{:} %} siteTypes={% siteTypes %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %}></hh-site-create>
+        <hh-site-create error={% error{:} %} siteTypes={% siteTypes %} settings={% settings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %}></hh-site-create>
     </main>
 {% /block %}

@@ -211,7 +211,12 @@ task copyClientJs(type: Copy) {
     include 'hohenheim.js'
 }
 
-serverJar.dependsOn copyClientJs
+// The Hawkeye plugin registers compileHawkeyeScss to generate
+// public/hohenheim.css from src/common/scss/app.scss + extracted .hwk tag styles.
+afterEvaluate {
+    serverJar.dependsOn copyClientJs, tasks.named('compileHawkeyeScss')
+    browserTest.dependsOn tasks.named('compileHawkeyeScss')
+}
 
 // --- Browser Test Task ---
 task browserTest(type: Test) {
@@ -255,5 +260,6 @@ tasks.named('clean') {
         delete(layout.buildDirectory.dir('generated-sources/hawkeye'))
         delete(layout.buildDirectory.dir('generated/teavm'))
         delete('public/hohenheim.js')
+        delete('public/hohenheim.css')
     }
 }

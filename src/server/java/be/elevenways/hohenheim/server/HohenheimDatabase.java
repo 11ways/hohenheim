@@ -12,6 +12,8 @@ import be.elevenways.hohenheim.migration.M008_AddCertificateLifecycleFields;
 import be.elevenways.hohenheim.migration.M009_CreateAccessLists;
 import be.elevenways.hohenheim.migration.M010_AddDomainLeExclude;
 import be.elevenways.hohenheim.migration.M011_CreateProclogs;
+import be.elevenways.hohenheim.migration.M012_CreateSystemUsers;
+import be.elevenways.hohenheim.migration.M013_CreateNodeVersions;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
 import be.elevenways.zenit.common.orm.migration.MigrationRunner;
@@ -42,7 +44,9 @@ public class HohenheimDatabase {
                 M008_AddCertificateLifecycleFields::new,
                 M009_CreateAccessLists::new,
                 M010_AddDomainLeExclude::new,
-                M011_CreateProclogs::new
+                M011_CreateProclogs::new,
+                M012_CreateSystemUsers::new,
+                M013_CreateNodeVersions::new
             )
         );
         runner.migrate();

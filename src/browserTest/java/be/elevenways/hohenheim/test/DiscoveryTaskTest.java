@@ -1,0 +1,108 @@
+package be.elevenways.hohenheim.test;
+
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.NodeVersionModel;
+import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.task.UpdateNodeVersions;
+import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.server.ServerZenitRuntime;
+import org.junit.jupiter.api.*;
+import static org.assertj.core.api.Assertions.*;
+
+import java.time.Instant;
+
+/**
+ * Verifies the UpdateSystemUsers / UpdateNodeVersions tasks reconcile discovered
+ * host state with the backing tables — including obsolete-marking of entries that
+ * no longer exist.
+ */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+class DiscoveryTaskTest {
+
+    private static boolean initialized = false;
+
+    @BeforeAll
+    static void initRuntime() {
+        if (initialized) return;
+        initialized = true;
+
+        java.io.File db = new java.io.File("hohenheim.db");
+        if (db.exists()) db.delete();
+
+        SiteTypes.register();
+        HohenheimEndpoints.init();
+        HohenheimDatabase.init();
+        ServerZenitRuntime.init();
+        Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
+    }
+
+    @Test
+    @Order(1)
+    void updateSystemUsersPopulatesTable() {
+        new UpdateSystemUsers().run();
+
+        var model = new SystemUserModel(HohenheimDatabase.datasource());
+        long count = model.find().count();
+
+        // /etc/passwd always has at least 'root' — if this fails on a weird CI
+        // sandbox, we'll need to skip conditionally. For now this is a clear signal.
+        assertThat(count).describedAs("system_users populated from /etc/passwd").isGreaterThan(0);
+
+        // And none should be obsolete on the first run
+        long obsoleteCount = model.find().where(SystemUserModel.OBSOLETE.eq(true)).count();
+        assertThat(obsoleteCount).isEqualTo(0);
+    }
+
+    @Test
+    @Order(2)
+    void updateSystemUsersMarksUnseenRowsObsolete() {
+        var model = new SystemUserModel(HohenheimDatabase.datasource());
+
+        // Insert a ghost user that definitely isn't in /etc/passwd
+        Row ghost = model.createEmptyRow();
+        ghost.set(SystemUserModel.NAME, "hh-phantom-user-does-not-exist");
+        ghost.set(SystemUserModel.UID, 99999);
+        ghost.set(SystemUserModel.GID, 99999);
+        ghost.set(SystemUserModel.HOME, "/nonexistent");
+        ghost.set(SystemUserModel.GECOS, "ghost");
+        ghost.set(SystemUserModel.OBSOLETE, false);
+        ghost.set(SystemUserModel.LAST_SEEN_AT, Instant.now());
+        model.save(ghost);
+
+        new UpdateSystemUsers().run();
+
+        Row reloaded = model.find()
+            .where(SystemUserModel.NAME.eq("hh-phantom-user-does-not-exist"))
+            .first();
+        assertThat(reloaded).describedAs("ghost row should still exist after reconciliation").isNotNull();
+        assertThat((Boolean) reloaded.get(SystemUserModel.OBSOLETE))
+            .describedAs("unseen rows should be marked obsolete, not deleted").isTrue();
+    }
+
+    @Test
+    @Order(3)
+    void updateNodeVersionsReconcilesGhostEntry() {
+        var model = new NodeVersionModel(HohenheimDatabase.datasource());
+
+        Row ghost = model.createEmptyRow();
+        ghost.set(NodeVersionModel.VERSION, "0.0.0-phantom");
+        ghost.set(NodeVersionModel.PATH, "/nonexistent/bin/node-phantom");
+        ghost.set(NodeVersionModel.SOURCE, "test");
+        ghost.set(NodeVersionModel.OBSOLETE, false);
+        ghost.set(NodeVersionModel.LAST_SEEN_AT, Instant.now());
+        model.save(ghost);
+
+        new UpdateNodeVersions().run();
+
+        Row reloaded = model.find()
+            .where(NodeVersionModel.PATH.eq("/nonexistent/bin/node-phantom"))
+            .first();
+        assertThat(reloaded).describedAs("ghost node version should still exist").isNotNull();
+        assertThat((Boolean) reloaded.get(NodeVersionModel.OBSOLETE))
+            .describedAs("unseen node versions should be marked obsolete").isTrue();
+    }
+}

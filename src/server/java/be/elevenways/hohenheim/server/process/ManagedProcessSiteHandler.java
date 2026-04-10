@@ -102,12 +102,14 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         this.maxProcesses = maxObj instanceof Integer i && i > 0 ? i : SCALE_UP_HARD_CAP;
         this.waitForReady = Boolean.TRUE.equals(settings.get("wait_for_ready"));
 
-        // Parse API keys
+        // Parse API keys (stored as a JSON list of strings)
         this.apiKeys = new LinkedHashSet<>();
         Object apiKeysObj = settings.get("api_keys");
-        if (apiKeysObj instanceof String keysStr && !keysStr.isBlank()) {
-            for (String key : keysStr.split("[,\\s]+")) {
-                if (!key.isBlank()) apiKeys.add(key.trim());
+        if (apiKeysObj instanceof List<?> list) {
+            for (Object item : list) {
+                if (item == null) continue;
+                String key = item.toString().trim();
+                if (!key.isEmpty()) apiKeys.add(key);
             }
         }
 

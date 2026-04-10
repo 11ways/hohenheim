@@ -1,0 +1,29 @@
+{% tag HhRedirectSettings {
+
+    public settings: Map = null
+
+    template {
+        {%
+            let targetUrl = settings != null && settings.get("target_url") != null ? settings.get("target_url") + "" : ""
+            let httpStatus = settings != null && settings.get("http_status") != null ? settings.get("http_status") + "" : "302"
+        %}
+        <div class="hh-form-section">
+            <div class="hh-form-group">
+                <pl-label target="target-url">Target URL</pl-label>
+                <pl-input id="target-url" type={% "text" %} name={% "target_url" %} value={% targetUrl %} placeholder={% "https://example.com" %}></pl-input>
+            </div>
+            <div class="hh-form-group">
+                <pl-label target="http-status">Status Code</pl-label>
+                <pl-select name="http_status" value={% httpStatus %}>
+                    <pl-select-trigger placeholder="Status Code"></pl-select-trigger>
+                    <pl-select-content>
+                        <pl-select-item value="302" label="302 Found (temporary)">302 Found (temporary)</pl-select-item>
+                        <pl-select-item value="301" label="301 Permanent">301 Permanent</pl-select-item>
+                        <pl-select-item value="307" label="307 Temporary Redirect">307 Temporary Redirect</pl-select-item>
+                        <pl-select-item value="308" label="308 Permanent Redirect">308 Permanent Redirect</pl-select-item>
+                    </pl-select-content>
+                </pl-select>
+            </div>
+        </div>
+    }
+} %}

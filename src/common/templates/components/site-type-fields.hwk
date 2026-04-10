@@ -1,199 +1,27 @@
 {% tag HhSiteTypeFields {
 
     public selectedType: String = "hohenheim:proxy"
-    public forwardHost: String = ""
-    public forwardScheme: String = "http"
-    public forwardPort: String = ""
-    public websocketUpgrade: Boolean = true
-    public ignoreCertificates: Boolean = false
-    public proxySocket: String = ""
-    public script: String = ""
-    public nodePath: String = ""
-    public minimumProcesses: String = "1"
-    public maximumProcesses: String = "5"
-    public waitForReady: Boolean = false
+    public settings: Map = null
     public environmentVariables: List = null
     public apiKeys: List = null
     public nodeVersions: List = null
     public systemUsers: List = null
-    public siteUser: String = ""
-    public delay: String = ""
-    public rootPath: String = ""
-    public indexes: Boolean = true
-    public autoindex: Boolean = false
-    public showHiddenFiles: Boolean = false
-    public fallbackFile: String = ""
-    public targetUrl: String = ""
-    public httpStatus: String = "302"
 
     template {
         {% if selectedType{:} == "hohenheim:proxy" %}
-        <div class="hh-form-section">
-            <div class="hh-form-row">
-                <div class="hh-form-group hh-form-group--grow">
-                    <pl-label target="forward-scheme">Scheme</pl-label>
-                    <pl-select name="forward_scheme" value={% forwardScheme %}>
-                        <pl-select-trigger placeholder="Scheme"></pl-select-trigger>
-                        <pl-select-content>
-                            <pl-select-item value="http" label="HTTP">HTTP</pl-select-item>
-                            <pl-select-item value="https" label="HTTPS">HTTPS</pl-select-item>
-                        </pl-select-content>
-                    </pl-select>
-                </div>
-                <div class="hh-form-group hh-form-group--grow">
-                    <pl-label target="forward-host">Upstream Host</pl-label>
-                    <pl-input id="forward-host" type={% "text" %} name={% "forward_host" %} value={% forwardHost %} placeholder={% "127.0.0.1" %}></pl-input>
-                </div>
-                <div class="hh-form-group hh-form-group--port">
-                    <pl-label target="forward-port">Port</pl-label>
-                    <pl-input id="forward-port" type={% "number" %} name={% "forward_port" %} value={% forwardPort %} placeholder={% "3000" %} min={% "1" %} max={% "65535" %}></pl-input>
-                </div>
-            </div>
-            <div class="hh-form-group">
-                <pl-label target="proxy-socket">Unix Socket Path</pl-label>
-                <pl-input id="proxy-socket" type={% "text" %} name={% "socket" %} value={% proxySocket %} placeholder={% "/run/app.sock" %}></pl-input>
-                <p class="hh-form-hint">Forward to a Unix socket instead of TCP host and port.</p>
-            </div>
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="websocket_upgrade" checked={% websocketUpgrade %}>
-                    <span>WebSocket Proxying</span>
-                </label>
-                <p class="hh-form-hint">Proxy WebSocket upgrade requests to upstream.</p>
-            </div>
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="ignore_certificates" checked={% ignoreCertificates %}>
-                    <span>Ignore upstream TLS errors</span>
-                </label>
-                <p class="hh-form-hint">Skip certificate verification when proxying to HTTPS upstreams.</p>
-            </div>
-            <div class="hh-form-group">
-                <pl-label target="proxy-delay">Request Delay (ms)</pl-label>
-                <pl-input id="proxy-delay" type={% "number" %} name={% "delay" %} value={% delay %} placeholder={% "0" %}></pl-input>
-            </div>
-        </div>
-        {% /if %}
-
-        {% if selectedType{:} == "hohenheim:node" || selectedType{:} == "hohenheim:alchemy" %}
-        <div class="hh-form-section">
-            <div class="hh-form-group">
-                <pl-label target="script">Script Path</pl-label>
-                <pl-input id="script" type={% "text" %} name={% "script" %} value={% script %} placeholder={% "/path/to/app.js" %}></pl-input>
-                <p class="hh-form-hint">Absolute path to the entry script.</p>
-            </div>
-            <div class="hh-form-group">
-                <pl-label target="node-path">Node Binary</pl-label>
-                <pl-select name="node_path" value={% nodePath %}>
-                    <pl-select-trigger placeholder="System default"></pl-select-trigger>
-                    <pl-select-content>
-                        <pl-select-item value="" label="System default">System default (node)</pl-select-item>
-                        {% each nodeVersions as index, nv %}
-                            <pl-select-item value={% nv.get("path") %} label={% "Node " + nv.get("version") %}>Node {{ nv.get("version") }} ({{ nv.get("path") }})</pl-select-item>
-                        {% /each %}
-                    </pl-select-content>
-                </pl-select>
-            </div>
-            <div class="hh-form-group">
-                <pl-label target="site-user">Run As User</pl-label>
-                <pl-select name="user" value={% siteUser %}>
-                    <pl-select-trigger placeholder="Current user (root)"></pl-select-trigger>
-                    <pl-select-content>
-                        <pl-select-item value="" label="Current user">Current user (root)</pl-select-item>
-                        {% each systemUsers as index, su %}
-                            <pl-select-item value={% su.get("name") %} label={% su.get("name") %}>{{ su.get("name") }} (uid {{ su.get("uid") }})</pl-select-item>
-                        {% /each %}
-                    </pl-select-content>
-                </pl-select>
-                <p class="hh-form-hint">Run child processes as a different system user.</p>
-            </div>
-            <div class="hh-form-row">
-                <div class="hh-form-group hh-form-group--grow">
-                    <pl-label target="min-processes">Min Processes</pl-label>
-                    <pl-input id="min-processes" type={% "number" %} name={% "minimum_processes" %} value={% minimumProcesses %} placeholder={% "1" %} min={% "1" %} max={% "20" %}></pl-input>
-                </div>
-                <div class="hh-form-group hh-form-group--grow">
-                    <pl-label target="max-processes">Max Processes</pl-label>
-                    <pl-input id="max-processes" type={% "number" %} name={% "maximum_processes" %} value={% maximumProcesses %} placeholder={% "5" %} min={% "1" %} max={% "20" %}></pl-input>
-                </div>
-            </div>
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="wait_for_ready" checked={% waitForReady %}>
-                    <span>Wait For Ready Signal</span>
-                </label>
-                <p class="hh-form-hint">Only enable this when the child process sends a ready signal.</p>
-            </div>
-            <div class="hh-form-group">
-                <pl-label>Environment Variables</pl-label>
-                <hh-key-value-editor initialPairs={% environmentVariables %} namePrefix={% "env" %} namePlaceholder={% "NAME" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
-            </div>
-            <div class="hh-form-group">
-                <pl-label>API Keys</pl-label>
-                <hh-list-editor initialItems={% apiKeys %} namePrefix={% "api_key" %} placeholder={% "Enter a key" %}></hh-list-editor>
-                <p class="hh-form-hint">Keys for X-Hohenheim-Key header control.</p>
-            </div>
-            <div class="hh-form-group">
-                <pl-label target="node-delay">Request Delay (ms)</pl-label>
-                <pl-input id="node-delay" type={% "number" %} name={% "delay" %} value={% delay %} placeholder={% "0" %}></pl-input>
-            </div>
-        </div>
-        {% /if %}
-
-        {% if selectedType{:} == "hohenheim:static" %}
-        <div class="hh-form-section">
-            <div class="hh-form-group">
-                <pl-label target="root-path">Root Directory</pl-label>
-                <pl-input id="root-path" type={% "text" %} name={% "root_path" %} value={% rootPath %} placeholder={% "/var/www/html" %}></pl-input>
-            </div>
-            <div class="hh-form-group">
-                <pl-label target="fallback-file">SPA Fallback File</pl-label>
-                <pl-input id="fallback-file" type={% "text" %} name={% "fallback_file" %} value={% fallbackFile %} placeholder={% "index.html" %}></pl-input>
-            </div>
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="indexes" checked={% indexes %}>
-                    <span>Use index.html for directories</span>
-                </label>
-            </div>
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="autoindex" checked={% autoindex %}>
-                    <span>Show directory listing</span>
-                </label>
-            </div>
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="show_hidden_files" checked={% showHiddenFiles %}>
-                    <span>Show hidden files</span>
-                </label>
-            </div>
-            <div class="hh-form-group">
-                <pl-label target="static-delay">Request Delay (ms)</pl-label>
-                <pl-input id="static-delay" type={% "number" %} name={% "delay" %} value={% delay %} placeholder={% "0" %}></pl-input>
-            </div>
-        </div>
-        {% /if %}
-
-        {% if selectedType{:} == "hohenheim:redirect" %}
-        <div class="hh-form-section">
-            <div class="hh-form-group">
-                <pl-label target="target-url">Target URL</pl-label>
-                <pl-input id="target-url" type={% "text" %} name={% "target_url" %} value={% targetUrl %} placeholder={% "https://example.com" %}></pl-input>
-            </div>
-            <div class="hh-form-group">
-                <pl-label target="http-status">Status Code</pl-label>
-                <pl-select name="http_status" value={% httpStatus %}>
-                    <pl-select-trigger placeholder="Status Code"></pl-select-trigger>
-                    <pl-select-content>
-                        <pl-select-item value="302" label="302 Found (temporary)">302 Found (temporary)</pl-select-item>
-                        <pl-select-item value="301" label="301 Permanent">301 Permanent</pl-select-item>
-                        <pl-select-item value="307" label="307 Temporary Redirect">307 Temporary Redirect</pl-select-item>
-                        <pl-select-item value="308" label="308 Permanent Redirect">308 Permanent Redirect</pl-select-item>
-                    </pl-select-content>
-                </pl-select>
-            </div>
-        </div>
+            <hh-proxy-settings settings={% settings %}></hh-proxy-settings>
+        {% elseif selectedType{:} == "hohenheim:node" || selectedType{:} == "hohenheim:alchemy" %}
+            <hh-node-settings
+                settings={% settings %}
+                environmentVariables={% environmentVariables %}
+                apiKeys={% apiKeys %}
+                nodeVersions={% nodeVersions %}
+                systemUsers={% systemUsers %}
+            ></hh-node-settings>
+        {% elseif selectedType{:} == "hohenheim:static" %}
+            <hh-static-settings settings={% settings %}></hh-static-settings>
+        {% elseif selectedType{:} == "hohenheim:redirect" %}
+            <hh-redirect-settings settings={% settings %}></hh-redirect-settings>
         {% /if %}
     }
 } %}

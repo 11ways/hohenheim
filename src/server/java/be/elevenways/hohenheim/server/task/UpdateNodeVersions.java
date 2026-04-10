@@ -1,22 +1,26 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.model.NodeVersionModel;
+import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Stream;
 
 /**
- * Discovers installed Node.js versions from common locations.
- * Checks: system paths, n version manager, nvm, and fnm.
+ * Discovers installed Node.js versions from common locations and reconciles them
+ * with the node_versions table. Removed binaries get marked obsolete rather than
+ * deleted so existing site references still resolve.
  */
 public class UpdateNodeVersions implements Runnable {
 
-    public record NodeVersion(String version, String path) {}
-
-    private static volatile List<NodeVersion> nodeVersions = List.of();
+    /** Record used while scanning the filesystem — flushed to the DB at the end. */
+    private record ParsedVersion(String version, String path, String source) {}
 
     private static final String[] SYSTEM_PATHS = {
         "/usr/bin/node",
@@ -26,49 +30,80 @@ public class UpdateNodeVersions implements Runnable {
 
     @Override
     public void run() {
-        List<NodeVersion> versions = new ArrayList<>();
+        List<ParsedVersion> parsed = discoverAll();
 
-        // Check system paths
+        NodeVersionModel model = new NodeVersionModel(HohenheimDatabase.datasource());
+        Instant now = Instant.now();
+        Set<String> seenPaths = new HashSet<>();
+
+        for (ParsedVersion pv : parsed) {
+            seenPaths.add(pv.path());
+            Row existing = model.find().where(NodeVersionModel.PATH.eq(pv.path())).first();
+            if (existing == null) {
+                Row row = model.createEmptyRow();
+                row.set(NodeVersionModel.VERSION, pv.version());
+                row.set(NodeVersionModel.PATH, pv.path());
+                row.set(NodeVersionModel.SOURCE, pv.source());
+                row.set(NodeVersionModel.OBSOLETE, false);
+                row.set(NodeVersionModel.LAST_SEEN_AT, now);
+                model.save(row);
+            } else {
+                existing.set(NodeVersionModel.VERSION, pv.version());
+                existing.set(NodeVersionModel.SOURCE, pv.source());
+                existing.set(NodeVersionModel.OBSOLETE, false);
+                existing.set(NodeVersionModel.LAST_SEEN_AT, now);
+                model.save(existing);
+            }
+        }
+
+        // Mark any previously-known versions that weren't seen this run as obsolete.
+        for (Row row : model.find().where(NodeVersionModel.OBSOLETE.eq(false)).all()) {
+            String path = row.get(NodeVersionModel.PATH);
+            if (!seenPaths.contains(path)) {
+                row.set(NodeVersionModel.OBSOLETE, true);
+                model.save(row);
+            }
+        }
+
+        Blast.log("TASK: UpdateNodeVersions reconciled", parsed.size(), "versions");
+    }
+
+    private List<ParsedVersion> discoverAll() {
+        List<ParsedVersion> versions = new ArrayList<>();
+        Set<String> dedup = new HashSet<>();
+
         for (String path : SYSTEM_PATHS) {
-            if (new File(path).canExecute()) {
+            if (new File(path).canExecute() && dedup.add(path)) {
                 String version = queryVersion(path);
                 if (version != null) {
-                    versions.add(new NodeVersion(version, path));
+                    versions.add(new ParsedVersion(version, path, "system"));
                 }
             }
         }
 
-        // Check n version manager (~/.n/versions/node/*)
-        Path nVersionsDir = Path.of("/usr/local/n/versions/node");
-        discoverFromDirectory(nVersionsDir, versions);
+        discoverFromDirectory(Path.of("/usr/local/n/versions/node"), "n", versions, dedup);
 
-        // Check nvm (~/.nvm/versions/node/*)
         String home = System.getProperty("user.home");
         if (home != null) {
-            discoverFromDirectory(Path.of(home, ".nvm", "versions", "node"), versions);
-            discoverFromDirectory(Path.of(home, ".local", "share", "fnm", "node-versions"), versions);
+            discoverFromDirectory(Path.of(home, ".nvm", "versions", "node"), "nvm", versions, dedup);
+            discoverFromDirectory(Path.of(home, ".local", "share", "fnm", "node-versions"), "fnm", versions, dedup);
         }
 
-        // Deduplicate by path
-        Set<String> seen = new HashSet<>();
-        versions.removeIf(v -> !seen.add(v.path()));
-
-        nodeVersions = List.copyOf(versions);
-        Blast.log("TASK: UpdateNodeVersions found", versions.size(), "versions");
+        return versions;
     }
 
-    private void discoverFromDirectory(Path dir, List<NodeVersion> versions) {
+    private void discoverFromDirectory(Path dir, String source,
+                                       List<ParsedVersion> versions, Set<String> dedup) {
         if (!Files.isDirectory(dir)) return;
-
         try (Stream<Path> entries = Files.list(dir)) {
             entries.filter(Files::isDirectory).forEach(versionDir -> {
                 Path nodeBin = versionDir.resolve("bin").resolve("node");
-                if (Files.isExecutable(nodeBin)) {
-                    String version = versionDir.getFileName().toString();
-                    // Strip leading 'v' if present
-                    if (version.startsWith("v")) version = version.substring(1);
-                    versions.add(new NodeVersion(version, nodeBin.toString()));
-                }
+                if (!Files.isExecutable(nodeBin)) return;
+                String pathStr = nodeBin.toString();
+                if (!dedup.add(pathStr)) return;
+                String version = versionDir.getFileName().toString();
+                if (version.startsWith("v")) version = version.substring(1);
+                versions.add(new ParsedVersion(version, pathStr, source));
             });
         } catch (Exception e) {
             // Skip directories we can't read
@@ -88,9 +123,5 @@ public class UpdateNodeVersions implements Runnable {
             // Skip if we can't query
         }
         return null;
-    }
-
-    public static List<NodeVersion> getNodeVersions() {
-        return nodeVersions;
     }
 }

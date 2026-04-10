@@ -170,4 +170,73 @@ class SiteLifecycleTest extends HohenheimTestBase {
         // 1 remaining (static) + 1 new (redirect) = 2
         assertThat(page.locator(".hh-site-link").count()).isEqualTo(2);
     }
+
+    /**
+     * Exercises the schema-driven form extraction for nested sub-schemas (environment_variables
+     * as List<Map>) and flat lists (api_keys as List<String>). The script field is left empty
+     * so no child process is actually spawned.
+     */
+    @Test
+    @Order(12)
+    void createNodeSiteWithEnvVarsAndApiKeys() throws Exception {
+        var response = postForm("/sites/create",
+            "name=Node+App&site_type=hohenheim%3Anode"
+            + "&script=&node_path=&user="
+            + "&environment_variables%5B0%5D.name=NODE_ENV"
+            + "&environment_variables%5B0%5D.value=production"
+            + "&environment_variables%5B1%5D.name=PORT"
+            + "&environment_variables%5B1%5D.value=3000"
+            + "&api_keys%5B0%5D=alpha-key"
+            + "&api_keys%5B1%5D=beta-key");
+
+        assertThat(response.statusCode())
+            .describedAs("POST returned %d, body: %s", response.statusCode(),
+                response.body().substring(0, Math.min(500, response.body().length())))
+            .isEqualTo(302);
+    }
+
+    @Test
+    @Order(13)
+    void nodeSiteEditShowsRoundTrippedEnvVarsAndApiKeys() {
+        navigateToApp("/sites");
+        waitForHydration();
+
+        // Find the Node App row and click it
+        var links = page.locator(".hh-site-link").all();
+        String targetHref = null;
+        for (var link : links) {
+            if ("Node App".equals(link.textContent())) {
+                targetHref = link.getAttribute("href");
+                break;
+            }
+        }
+        assertThat(targetHref).describedAs("Node App link should exist").isNotNull();
+
+        navigateToApp(targetHref);
+        waitForHydration();
+
+        // The key-value editor should render one row per stored env var, with the
+        // correct indexed form names. Use the name attribute to target them.
+        String content = page.content();
+        assertThat(content).contains("environment_variables[0].name");
+        assertThat(content).contains("environment_variables[0].value");
+        assertThat(content).contains("environment_variables[1].name");
+        assertThat(content).contains("environment_variables[1].value");
+        assertThat(content).contains("api_keys[0]");
+        assertThat(content).contains("api_keys[1]");
+
+        // And the values themselves should be present in the rendered inputs
+        assertThat(page.locator("pl-input[name='environment_variables[0].name'] input").inputValue())
+            .isEqualTo("NODE_ENV");
+        assertThat(page.locator("pl-input[name='environment_variables[0].value'] input").inputValue())
+            .isEqualTo("production");
+        assertThat(page.locator("pl-input[name='environment_variables[1].name'] input").inputValue())
+            .isEqualTo("PORT");
+        assertThat(page.locator("pl-input[name='environment_variables[1].value'] input").inputValue())
+            .isEqualTo("3000");
+        assertThat(page.locator("pl-input[name='api_keys[0]'] input").inputValue())
+            .isEqualTo("alpha-key");
+        assertThat(page.locator("pl-input[name='api_keys[1]'] input").inputValue())
+            .isEqualTo("beta-key");
+    }
 }

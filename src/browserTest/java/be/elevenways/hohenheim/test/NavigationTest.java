@@ -103,6 +103,28 @@ class NavigationTest extends HohenheimTestBase {
 
     @Test
     @Order(9)
+    void sidebarIsLeftOfMainContent() {
+        // Regression: hh-layout previously had no generated CSS, so nav + main
+        // stacked vertically. The tag style block should now produce a rule
+        // like `hh-layout { display: flex; flex: 1; min-height: 100vh; }`.
+        navigateToApp("/");
+        waitForHydration();
+
+        var sidebar = page.locator(".hh-sidebar").boundingBox();
+        var main = page.locator(".hh-main").boundingBox();
+
+        assertThat(sidebar).isNotNull();
+        assertThat(main).isNotNull();
+        assertThat(sidebar.x + sidebar.width)
+            .as("sidebar right edge should be at or before main left edge")
+            .isLessThanOrEqualTo(main.x + 1.0);
+        assertThat(main.y)
+            .as("main content should sit on the same row as the sidebar")
+            .isLessThan(sidebar.y + sidebar.height);
+    }
+
+    @Test
+    @Order(10)
     void browserBackButtonWorks() {
         navigateToApp("/");
         waitForHydration();

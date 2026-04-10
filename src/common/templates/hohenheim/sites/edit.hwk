@@ -5,32 +5,12 @@
     public siteType: String = "hohenheim:proxy"
     public siteEnabled: Boolean = true
     public siteTypes: List = null
-    public error: String = ""
-
-    public forwardHost: String = ""
-    public forwardScheme: String = "http"
-    public forwardPort: String = ""
-    public websocketUpgrade: Boolean = true
-    public ignoreCertificates: Boolean = false
-    public proxySocket: String = ""
-    public script: String = ""
-    public nodePath: String = ""
-    public minimumProcesses: String = "1"
-    public maximumProcesses: String = "5"
-    public waitForReady: Boolean = false
+    public settings: Map = null
     public environmentVariables: List = null
     public apiKeys: List = null
     public nodeVersions: List = null
     public systemUsers: List = null
-    public siteUser: String = ""
-    public delay: String = ""
-    public rootPath: String = ""
-    public indexes: Boolean = true
-    public autoindex: Boolean = false
-    public showHiddenFiles: Boolean = false
-    public fallbackFile: String = ""
-    public targetUrl: String = ""
-    public httpStatus: String = "302"
+    public error: String = ""
 
     template {
         {% if error{:} != "" %}
@@ -77,30 +57,11 @@
 
                         <hh-site-type-fields
                             selectedType={% siteType{:} %}
-                            forwardHost={% forwardHost %}
-                            forwardScheme={% forwardScheme %}
-                            forwardPort={% forwardPort %}
-                            websocketUpgrade={% websocketUpgrade %}
-                            ignoreCertificates={% ignoreCertificates %}
-                            proxySocket={% proxySocket %}
-                            script={% script %}
-                            nodePath={% nodePath %}
-                            minimumProcesses={% minimumProcesses %}
-                            maximumProcesses={% maximumProcesses %}
-                            waitForReady={% waitForReady %}
+                            settings={% settings %}
                             environmentVariables={% environmentVariables %}
                             apiKeys={% apiKeys %}
                             nodeVersions={% nodeVersions %}
                             systemUsers={% systemUsers %}
-                            siteUser={% siteUser %}
-                            delay={% delay %}
-                            rootPath={% rootPath %}
-                            indexes={% indexes %}
-                            autoindex={% autoindex %}
-                            showHiddenFiles={% showHiddenFiles %}
-                            fallbackFile={% fallbackFile %}
-                            targetUrl={% targetUrl %}
-                            httpStatus={% httpStatus %}
                         ></hh-site-type-fields>
                     </div>
 
@@ -118,6 +79,7 @@
 
 {% block "main" %}
     {% declare site: Map %}
+    {% declare settings: Map %}
     {% declare domains: List %}
     {% declare siteTypes: List %}
     {% declare environmentVariables: List %}
@@ -133,39 +95,18 @@
     </header>
     <main class="hh-content">
 
-        {% let settings = site.get("settings") %}
-
         <hh-site-edit
             siteId={% site.get("id") %}
             siteName={% site.get("name") %}
             siteType={% site.get("siteType") != null ? site.get("siteType") : "hohenheim:proxy" %}
             siteEnabled={% site.get("enabled") != null ? site.get("enabled") : true %}
             siteTypes={% siteTypes %}
-            error={% error %}
-            forwardHost={% settings != null && settings.get("forward_host") != null ? settings.get("forward_host") + "" : "" %}
-            forwardScheme={% settings != null && settings.get("forward_scheme") != null ? settings.get("forward_scheme") + "" : "http" %}
-            forwardPort={% settings != null && settings.get("forward_port") != null ? settings.get("forward_port") + "" : "" %}
-            websocketUpgrade={% settings != null && settings.get("websocket_upgrade") != null ? settings.get("websocket_upgrade") : true %}
-            ignoreCertificates={% settings != null && settings.get("ignore_certificates") != null ? settings.get("ignore_certificates") : false %}
-            proxySocket={% settings != null && settings.get("socket") != null ? settings.get("socket") + "" : "" %}
-            script={% settings != null && settings.get("script") != null ? settings.get("script") + "" : "" %}
-            nodePath={% settings != null && settings.get("node_path") != null ? settings.get("node_path") + "" : "" %}
-            minimumProcesses={% settings != null && settings.get("minimum_processes") != null ? settings.get("minimum_processes") + "" : "1" %}
-            maximumProcesses={% settings != null && settings.get("maximum_processes") != null ? settings.get("maximum_processes") + "" : "5" %}
-            waitForReady={% settings != null && settings.get("wait_for_ready") != null ? settings.get("wait_for_ready") : false %}
+            settings={% settings %}
             environmentVariables={% environmentVariables %}
             apiKeys={% apiKeys %}
             nodeVersions={% nodeVersions %}
             systemUsers={% systemUsers %}
-            siteUser={% settings != null && settings.get("user") != null ? settings.get("user") + "" : "" %}
-            delay={% settings != null && settings.get("delay") != null ? settings.get("delay") + "" : "" %}
-            rootPath={% settings != null && settings.get("root_path") != null ? settings.get("root_path") + "" : "" %}
-            indexes={% settings != null && settings.get("indexes") != null ? settings.get("indexes") : true %}
-            autoindex={% settings != null && settings.get("autoindex") != null ? settings.get("autoindex") : false %}
-            showHiddenFiles={% settings != null && settings.get("show_hidden_files") != null ? settings.get("show_hidden_files") : false %}
-            fallbackFile={% settings != null && settings.get("fallback_file") != null ? settings.get("fallback_file") + "" : "" %}
-            targetUrl={% settings != null && settings.get("target_url") != null ? settings.get("target_url") + "" : "" %}
-            httpStatus={% settings != null && settings.get("http_status") != null ? settings.get("http_status") + "" : "302" %}
+            error={% error %}
         ></hh-site-edit>
 
         <pl-card class="hh-domains-card">

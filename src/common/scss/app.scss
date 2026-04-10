@@ -1,4 +1,9 @@
-/* Hohenheim Admin Layout */
+// Hohenheim admin UI
+// Plumage tokens come from /plumage.css (loaded separately in base.hwk),
+// so this stylesheet only needs the hawkeye module for extracted tag styles
+// plus the hh- utility classes below.
+@use 'hawkeye';   // component styles (extracted from .hwk templates)
+
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
@@ -10,7 +15,7 @@ body {
     min-height: 100vh;
 }
 
-/* Sidebar */
+// Sidebar
 .hh-sidebar {
     width: 240px;
     background: var(--pl-color-surface);
@@ -58,7 +63,7 @@ body {
     color: var(--pl-color-text);
 }
 
-/* Main content area */
+// Main content area
 .hh-main {
     flex: 1;
     display: flex;
@@ -85,7 +90,7 @@ body {
     flex: 1;
 }
 
-/* Page-level utilities */
+// Page-level utilities
 .hh-page-actions {
     display: flex;
     justify-content: space-between;
@@ -120,7 +125,7 @@ body {
     font-weight: 700;
 }
 
-/* Form styles */
+// Form styles
 .hh-form-stack {
     display: flex;
     flex-direction: column;
@@ -192,14 +197,14 @@ hh-key-value-editor .hh-kv-row > pl-input:first-child {
     font-size: var(--pl-font-size-sm);
 }
 
-/* Table empty state */
+// Table empty state
 .hh-empty-state {
     text-align: center;
     color: var(--pl-color-text-muted);
     padding: var(--pl-space-2xl);
 }
 
-/* Form card */
+// Form card
 .hh-form-card {
     max-width: 640px;
 }
@@ -222,7 +227,7 @@ hh-key-value-editor .hh-kv-row > pl-input:first-child {
     text-decoration: underline;
 }
 
-/* Checkbox label */
+// Checkbox label
 .hh-checkbox-label {
     display: flex;
     align-items: center;
@@ -231,13 +236,13 @@ hh-key-value-editor .hh-kv-row > pl-input:first-child {
     font-size: var(--pl-font-size-sm);
 }
 
-/* Domains card (spacing below form card) */
+// Domains card (spacing below form card)
 .hh-domains-card {
     margin-top: var(--pl-space-xl);
     max-width: 640px;
 }
 
-/* Danger zone */
+// Danger zone
 .hh-danger-zone {
     margin-top: var(--pl-space-xl);
     max-width: 640px;
@@ -256,7 +261,7 @@ hh-key-value-editor .hh-kv-row > pl-input:first-child {
     margin: var(--pl-space-xs) 0 0;
 }
 
-/* Add domain form */
+// Add domain form
 .hh-add-domain-form {
     margin-top: var(--pl-space-lg);
     padding-top: var(--pl-space-lg);
@@ -267,7 +272,7 @@ hh-key-value-editor .hh-kv-row > pl-input:first-child {
     align-items: flex-end;
 }
 
-/* Settings page */
+// Settings page
 .hh-settings-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -312,14 +317,14 @@ hh-key-value-editor .hh-kv-row > pl-input:first-child {
     font-weight: 400;
 }
 
-/* Dashboard actions */
+// Dashboard actions
 .hh-dashboard-actions {
     display: flex;
     gap: var(--pl-space-sm);
     margin: var(--pl-space-lg) 0;
 }
 
-/* Activity feed */
+// Activity feed
 .hh-activity-card {
     margin-top: var(--pl-space-lg);
 }
@@ -341,14 +346,14 @@ hh-key-value-editor .hh-kv-row > pl-input:first-child {
     color: var(--pl-color-text-muted);
 }
 
-/* Header subtitle */
+// Header subtitle
 .hh-header__subtitle {
     color: var(--pl-color-text-muted);
     font-size: var(--pl-font-size-sm);
     margin: var(--pl-space-xs) 0 0;
 }
 
-/* Advanced collapsible section */
+// Advanced collapsible section
 .hh-advanced-section {
     max-width: 640px;
     margin-top: var(--pl-space-lg);
@@ -361,13 +366,13 @@ hh-key-value-editor .hh-kv-row > pl-input:first-child {
     padding: var(--pl-space-sm) 0;
 }
 
-/* Table action buttons (inline) */
+// Table action buttons (inline)
 .hh-table-actions {
     display: flex;
     gap: var(--pl-space-xs);
 }
 
-/* Auth pages (login/setup) */
+// Auth pages (login/setup)
 .hh-auth-body {
     display: flex;
     align-items: center;

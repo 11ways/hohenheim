@@ -1,30 +1,78 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.time.Instant;
 import java.util.*;
 
 /**
- * Discovers system users from /etc/passwd.
- * Used for the per-site uid/gid selection in the admin UI.
+ * Discovers system users from /etc/passwd and reconciles them with the
+ * system_users table. Users that disappear from /etc/passwd get marked obsolete
+ * instead of deleted so in-flight site references don't silently break.
  */
 public class UpdateSystemUsers implements Runnable {
 
-    public record SystemUser(String name, int uid, int gid) {}
-
-    private static volatile List<SystemUser> systemUsers = List.of();
+    /** Record used when parsing /etc/passwd before we hit the DB. */
+    private record ParsedUser(String name, int uid, int gid, String home, String gecos) {}
 
     @Override
     public void run() {
-        List<SystemUser> users = new ArrayList<>();
+        List<ParsedUser> parsed = parsePasswdFile();
 
+        SystemUserModel model = new SystemUserModel(HohenheimDatabase.datasource());
+        Instant now = Instant.now();
+        Set<String> seen = new HashSet<>();
+
+        for (ParsedUser pu : parsed) {
+            seen.add(pu.name());
+            Row existing = model.find().where(SystemUserModel.NAME.eq(pu.name())).first();
+            if (existing == null) {
+                Row row = model.createEmptyRow();
+                row.set(SystemUserModel.NAME, pu.name());
+                row.set(SystemUserModel.UID, pu.uid());
+                row.set(SystemUserModel.GID, pu.gid());
+                row.set(SystemUserModel.HOME, pu.home());
+                row.set(SystemUserModel.GECOS, pu.gecos());
+                row.set(SystemUserModel.OBSOLETE, false);
+                row.set(SystemUserModel.LAST_SEEN_AT, now);
+                model.save(row);
+            } else {
+                existing.set(SystemUserModel.UID, pu.uid());
+                existing.set(SystemUserModel.GID, pu.gid());
+                existing.set(SystemUserModel.HOME, pu.home());
+                existing.set(SystemUserModel.GECOS, pu.gecos());
+                existing.set(SystemUserModel.OBSOLETE, false);
+                existing.set(SystemUserModel.LAST_SEEN_AT, now);
+                model.save(existing);
+            }
+        }
+
+        // Mark rows that didn't appear in this scan as obsolete — keeping them
+        // in the table so sites still referencing them resolve to *something*.
+        for (Row row : model.find().where(SystemUserModel.OBSOLETE.eq(false)).all()) {
+            String name = row.get(SystemUserModel.NAME);
+            if (!seen.contains(name)) {
+                row.set(SystemUserModel.OBSOLETE, true);
+                model.save(row);
+            }
+        }
+
+        Blast.log("TASK: UpdateSystemUsers reconciled", parsed.size(), "users");
+    }
+
+    private List<ParsedUser> parsePasswdFile() {
+        List<ParsedUser> result = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader("/etc/passwd"))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                String[] parts = line.split(":");
-                if (parts.length < 4) continue;
+                // Fields: name:passwd:uid:gid:gecos:home:shell
+                String[] parts = line.split(":", -1);
+                if (parts.length < 6) continue;
 
                 String name = parts[0];
                 int uid, gid;
@@ -35,20 +83,17 @@ public class UpdateSystemUsers implements Runnable {
                     continue;
                 }
 
-                // Skip system users with uid < 1000 (except root and nobody)
+                // Skip daemon/system accounts except root and nobody — they're never
+                // the right choice for running user code and just clutter the dropdown.
                 if (uid > 0 && uid < 1000 && !"nobody".equals(name)) continue;
 
-                users.add(new SystemUser(name, uid, gid));
+                String gecos = parts[4];
+                String home = parts[5];
+                result.add(new ParsedUser(name, uid, gid, home, gecos));
             }
         } catch (Exception e) {
             Blast.log("TASK: UpdateSystemUsers failed:", e.getMessage());
         }
-
-        systemUsers = List.copyOf(users);
-        Blast.log("TASK: UpdateSystemUsers found", users.size(), "users");
-    }
-
-    public static List<SystemUser> getSystemUsers() {
-        return systemUsers;
+        return result;
     }
 }

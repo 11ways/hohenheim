@@ -1,0 +1,47 @@
+{% tag HhStaticSettings {
+
+    public settings: Map = null
+
+    template {
+        {%
+            let rootPath = settings != null && settings.get("root_path") != null ? settings.get("root_path") + "" : ""
+            let fallbackFile = settings != null && settings.get("fallback_file") != null ? settings.get("fallback_file") + "" : ""
+            let indexes = settings != null && settings.get("indexes") != null ? settings.get("indexes") == true : true
+            let autoindex = settings != null && settings.get("autoindex") != null ? settings.get("autoindex") == true : false
+            let showHiddenFiles = settings != null && settings.get("show_hidden_files") != null ? settings.get("show_hidden_files") == true : false
+            let staticDelay = settings != null && settings.get("delay") != null ? settings.get("delay") + "" : ""
+        %}
+        <div class="hh-form-section">
+            <div class="hh-form-group">
+                <pl-label target="root-path">Root Directory</pl-label>
+                <pl-input id="root-path" type={% "text" %} name={% "root_path" %} value={% rootPath %} placeholder={% "/var/www/html" %}></pl-input>
+            </div>
+            <div class="hh-form-group">
+                <pl-label target="fallback-file">SPA Fallback File</pl-label>
+                <pl-input id="fallback-file" type={% "text" %} name={% "fallback_file" %} value={% fallbackFile %} placeholder={% "index.html" %}></pl-input>
+            </div>
+            <div class="hh-form-group">
+                <label class="hh-checkbox-label">
+                    <input type="checkbox" name="indexes" checked={% indexes %}>
+                    <span>Use index.html for directories</span>
+                </label>
+            </div>
+            <div class="hh-form-group">
+                <label class="hh-checkbox-label">
+                    <input type="checkbox" name="autoindex" checked={% autoindex %}>
+                    <span>Show directory listing</span>
+                </label>
+            </div>
+            <div class="hh-form-group">
+                <label class="hh-checkbox-label">
+                    <input type="checkbox" name="show_hidden_files" checked={% showHiddenFiles %}>
+                    <span>Show hidden files</span>
+                </label>
+            </div>
+            <div class="hh-form-group">
+                <pl-label target="static-delay">Request Delay (ms)</pl-label>
+                <pl-input id="static-delay" type={% "number" %} name={% "delay" %} value={% staticDelay %} placeholder={% "0" %}></pl-input>
+            </div>
+        </div>
+    }
+} %}

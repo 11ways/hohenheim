@@ -5,15 +5,15 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.NodeVersionModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.model.UserModel;
 import be.elevenways.hohenheim.server.process.ManagedProcess;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.ProcessTerminalHandler;
 import be.elevenways.hohenheim.server.stats.DashboardWebSocketHandler;
-import be.elevenways.hohenheim.server.task.UpdateNodeVersions;
-import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -359,6 +359,7 @@ public class HohenheimHandlers {
             new RenderTemplateResult(
                 Identifier.of("hohenheim", "hohenheim/sites/create"),
                 Map.of("error", "", "siteTypes", getSiteTypeOptions(),
+                    "settings", Map.of(),
                     "nodeVersions", getNodeVersionOptions(),
                     "systemUsers", getSystemUserOptions(),
                     "environmentVariables", List.of(),
@@ -1012,93 +1013,116 @@ public class HohenheimHandlers {
     // -----------------------------------------------------------------------
 
     /**
-     * Extract site-type-specific settings from form data using the framework's
-     * RegistryEnumField schema resolution. The SITE_TYPE field resolves to the
-     * correct Schema via the SiteTypeRegistry, so we don't need to look up
-     * handlers or manually iterate field types.
+     * Walk the type-specific schema and extract each field from the submitted form
+     * generically. SchemaField-with-subSchema and ListField are handled by scanning
+     * indexed form keys (fieldName[N].childName and fieldName[N]) — no per-field hacks.
      */
     private static Map<String, Object> extractTypeSettings(Map<String, String> form, String siteType) {
         Map<String, Object> settings = new HashMap<>();
 
-        // Use the framework's schema resolution: SITE_TYPE -> Registry -> TypeDefinition -> Schema
         Schema typeSchema = SiteModel.SITE_TYPE.getSchemaForValue(siteType);
         if (typeSchema == null) return settings;
 
         for (var entry : typeSchema.getFields().entrySet()) {
             String fieldName = entry.getKey();
             Field<?, ?> field = entry.getValue();
-            String formValue = form.get(fieldName);
 
-            if (field instanceof BooleanField) {
-                // Unchecked checkboxes don't submit a value
-                settings.put(fieldName, "on".equals(formValue) || "true".equals(formValue));
-            } else if (formValue == null) {
-                continue;
-            } else if (field instanceof IntegerField) {
-                try { settings.put(fieldName, Integer.parseInt(formValue)); }
-                catch (NumberFormatException e) { /* skip invalid */ }
+            if (field instanceof SchemaField schemaField && schemaField.getSubSchema() != null) {
+                settings.put(fieldName, extractNestedSchemaList(form, fieldName, schemaField.getSubSchema()));
+            } else if (field instanceof ListField<?> listField) {
+                settings.put(fieldName, extractScalarList(form, fieldName, listField.getItemField()));
+            } else if (field instanceof BooleanField) {
+                // Unchecked checkboxes don't submit a value at all
+                String v = form.get(fieldName);
+                settings.put(fieldName, "on".equals(v) || "true".equals(v));
             } else {
-                settings.put(fieldName, formValue);
+                String formValue = form.get(fieldName);
+                if (formValue == null) continue;
+                Object coerced = coerceScalar(field, formValue);
+                if (coerced != null) settings.put(fieldName, coerced);
             }
-        }
-
-        if (typeSchema.getFields().containsKey("environment_variables")) {
-            List<Map<String, String>> envVars = new ArrayList<>();
-            for (int i = 0; i < 100; i++) {
-                String name = form.get("env_name_" + i);
-                if (name == null) break;
-                String value = form.getOrDefault("env_value_" + i, "");
-                if (!name.isBlank()) {
-                    envVars.add(Map.of("name", name.trim(), "value", value));
-                }
-            }
-            settings.put("environment_variables", envVars);
-        }
-
-        if (typeSchema.getFields().containsKey("api_keys")) {
-            List<String> keys = new ArrayList<>();
-            for (int i = 0; i < 100; i++) {
-                String key = form.get("api_key_" + i);
-                if (key == null) break;
-                if (!key.isBlank()) {
-                    keys.add(key.trim());
-                }
-            }
-            settings.put("api_keys", keys.isEmpty() ? "" : String.join(",", keys));
         }
 
         return settings;
     }
 
-    private static List<Map<String, String>> parseNamedValueLines(String raw, String separator) {
-        if (raw == null || raw.isBlank()) {
-            return List.of();
+    /**
+     * Coerce a raw form-string value to the Java type expected by the given field.
+     * Returns null for unparseable numbers so the caller can skip the entry.
+     */
+    private static Object coerceScalar(Field<?, ?> field, String formValue) {
+        if (field instanceof BooleanField) {
+            return "on".equals(formValue) || "true".equals(formValue);
+        }
+        if (formValue == null) return null;
+        if (field instanceof IntegerField) {
+            try { return Integer.parseInt(formValue); }
+            catch (NumberFormatException e) { return null; }
+        }
+        return formValue;
+    }
+
+    /**
+     * Collect `fieldName[N].childName` entries into a list of sub-schema maps.
+     * Rows where every sub-field is blank are dropped so that trailing empty editor
+     * rows don't pollute the stored value.
+     */
+    private static List<Map<String, Object>> extractNestedSchemaList(
+            Map<String, String> form, String fieldName, Schema subSchema) {
+        String prefix = fieldName + "[";
+        Set<Integer> indices = new TreeSet<>();
+        for (String key : form.keySet()) {
+            if (!key.startsWith(prefix)) continue;
+            int closeBracket = key.indexOf(']', prefix.length());
+            if (closeBracket < 0) continue;
+            // Only accept `[N].something` — bare `[N]` belongs to a flat ListField.
+            if (closeBracket + 1 >= key.length() || key.charAt(closeBracket + 1) != '.') continue;
+            try {
+                indices.add(Integer.parseInt(key.substring(prefix.length(), closeBracket)));
+            } catch (NumberFormatException e) { /* skip */ }
         }
 
-        List<Map<String, String>> result = new ArrayList<>();
-        for (String line : raw.split("\\r?\\n")) {
-            String trimmed = line.trim();
-            if (trimmed.isEmpty()) {
-                continue;
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (int idx : indices) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            String itemPrefix = fieldName + "[" + idx + "].";
+            boolean allBlank = true;
+            for (var childEntry : subSchema.getFields().entrySet()) {
+                String childName = childEntry.getKey();
+                Field<?, ?> childField = childEntry.getValue();
+                String rawValue = form.get(itemPrefix + childName);
+                Object coerced = coerceScalar(childField, rawValue);
+                if (coerced != null) row.put(childName, coerced);
+                if (rawValue != null && !rawValue.isBlank()) allBlank = false;
             }
-
-            int separatorIndex = trimmed.indexOf(separator);
-            String name;
-            String value;
-            if (separatorIndex == -1) {
-                name = trimmed;
-                value = "";
-            } else {
-                name = trimmed.substring(0, separatorIndex).trim();
-                value = trimmed.substring(separatorIndex + separator.length()).trim();
-            }
-
-            if (!name.isEmpty()) {
-                result.add(Map.of("name", name, "value", value));
-            }
+            if (!allBlank) result.add(row);
         }
+        return result;
+    }
 
-        return List.copyOf(result);
+    /**
+     * Collect `fieldName[N]` entries into a flat list of the item field's type.
+     * Blank entries are dropped so trailing empty editor rows don't pollute the list.
+     */
+    private static List<Object> extractScalarList(
+            Map<String, String> form, String fieldName, Field<?, ?> itemField) {
+        String prefix = fieldName + "[";
+        Map<Integer, String> byIndex = new TreeMap<>();
+        for (var entry : form.entrySet()) {
+            String key = entry.getKey();
+            if (!key.startsWith(prefix) || !key.endsWith("]")) continue;
+            try {
+                int idx = Integer.parseInt(key.substring(prefix.length(), key.length() - 1));
+                byIndex.put(idx, entry.getValue());
+            } catch (NumberFormatException e) { /* skip */ }
+        }
+        List<Object> result = new ArrayList<>();
+        for (String value : byIndex.values()) {
+            if (value == null || value.isBlank()) continue;
+            Object coerced = coerceScalar(itemField, value.trim());
+            if (coerced != null) result.add(coerced);
+        }
+        return result;
     }
 
     private static String joinNamedValueLines(Object rawValue, String separator) {
@@ -1160,6 +1184,7 @@ public class HohenheimHandlers {
         vars.put("siteTypes", getSiteTypeOptions());
         @SuppressWarnings("unchecked")
         Map<String, Object> settings = (Map<String, Object>) site.get(SiteModel.SETTINGS);
+        vars.put("settings", settings != null ? settings : Map.of());
         vars.put("nodeVersions", getNodeVersionOptions());
         vars.put("systemUsers", getSystemUserOptions());
         vars.put("environmentVariables", extractEnvVarsList(settings));
@@ -1531,17 +1556,28 @@ public class HohenheimHandlers {
     }
 
     private static List<Map<String, Object>> getSystemUserOptions() {
+        var model = new SystemUserModel(HohenheimDatabase.datasource());
         List<Map<String, Object>> options = new ArrayList<>();
-        for (var user : UpdateSystemUsers.getSystemUsers()) {
-            options.add(Map.of("name", user.name(), "uid", user.uid(), "gid", user.gid()));
+        for (Row row : model.findActive()) {
+            Map<String, Object> option = new HashMap<>();
+            option.put("id", row.get(SystemUserModel.ID));
+            option.put("name", row.get(SystemUserModel.NAME));
+            option.put("uid", row.get(SystemUserModel.UID));
+            option.put("gid", row.get(SystemUserModel.GID));
+            options.add(option);
         }
         return options;
     }
 
-    private static List<Map<String, String>> getNodeVersionOptions() {
-        List<Map<String, String>> options = new ArrayList<>();
-        for (var nv : UpdateNodeVersions.getNodeVersions()) {
-            options.add(Map.of("version", nv.version(), "path", nv.path()));
+    private static List<Map<String, Object>> getNodeVersionOptions() {
+        var model = new NodeVersionModel(HohenheimDatabase.datasource());
+        List<Map<String, Object>> options = new ArrayList<>();
+        for (Row row : model.findActive()) {
+            Map<String, Object> option = new HashMap<>();
+            option.put("id", row.get(NodeVersionModel.ID));
+            option.put("version", row.get(NodeVersionModel.VERSION));
+            option.put("path", row.get(NodeVersionModel.PATH));
+            options.add(option);
         }
         return options;
     }
@@ -1563,11 +1599,13 @@ public class HohenheimHandlers {
 
     private static List<String> extractApiKeysList(Map<String, Object> settings) {
         List<String> result = new ArrayList<>();
-        if (settings != null) {
-            Object apiKeysObj = settings.get("api_keys");
-            if (apiKeysObj instanceof String keysStr && !keysStr.isBlank()) {
-                for (String key : keysStr.split("[,\\s]+")) {
-                    if (!key.isBlank()) result.add(key.trim());
+        if (settings == null) return result;
+        Object apiKeysObj = settings.get("api_keys");
+        if (apiKeysObj instanceof List<?> list) {
+            for (Object item : list) {
+                if (item != null) {
+                    String s = item.toString().trim();
+                    if (!s.isEmpty()) result.add(s);
                 }
             }
         }

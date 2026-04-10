@@ -1,0 +1,82 @@
+{% tag HhNodeSettings {
+
+    public settings: Map = null
+    public environmentVariables: List = null
+    public apiKeys: List = null
+    public nodeVersions: List = null
+    public systemUsers: List = null
+
+    template {
+        {%
+            let script = settings != null && settings.get("script") != null ? settings.get("script") + "" : ""
+            let nodeVersionId = settings != null && settings.get("node_version_id") != null ? settings.get("node_version_id") + "" : ""
+            let systemUserId = settings != null && settings.get("system_user_id") != null ? settings.get("system_user_id") + "" : ""
+            let minimumProcesses = settings != null && settings.get("minimum_processes") != null ? settings.get("minimum_processes") + "" : "1"
+            let maximumProcesses = settings != null && settings.get("maximum_processes") != null ? settings.get("maximum_processes") + "" : "5"
+            let waitForReady = settings != null && settings.get("wait_for_ready") != null ? settings.get("wait_for_ready") == true : false
+            let nodeDelay = settings != null && settings.get("delay") != null ? settings.get("delay") + "" : ""
+        %}
+        <div class="hh-form-section">
+            <div class="hh-form-group">
+                <pl-label target="script">Script Path</pl-label>
+                <pl-input id="script" type={% "text" %} name={% "script" %} value={% script %} placeholder={% "/path/to/app.js" %}></pl-input>
+                <p class="hh-form-hint">Absolute path to the entry script.</p>
+            </div>
+            <div class="hh-form-group">
+                <pl-label target="node-version">Node Binary</pl-label>
+                <pl-select name="node_version_id" value={% nodeVersionId %}>
+                    <pl-select-trigger placeholder="System default"></pl-select-trigger>
+                    <pl-select-content>
+                        <pl-select-item value="" label="System default">System default (node)</pl-select-item>
+                        {% each nodeVersions as index, nv %}
+                            <pl-select-item value={% nv.get("id") + "" %} label={% "Node " + nv.get("version") %}>Node {{ nv.get("version") }} ({{ nv.get("path") }})</pl-select-item>
+                        {% /each %}
+                    </pl-select-content>
+                </pl-select>
+            </div>
+            <div class="hh-form-group">
+                <pl-label target="system-user">Run As User</pl-label>
+                <pl-select name="system_user_id" value={% systemUserId %}>
+                    <pl-select-trigger placeholder="Current user"></pl-select-trigger>
+                    <pl-select-content>
+                        <pl-select-item value="" label="Current user">Current user</pl-select-item>
+                        {% each systemUsers as index, su %}
+                            <pl-select-item value={% su.get("id") + "" %} label={% su.get("name") %}>{{ su.get("name") }} (uid {{ su.get("uid") }})</pl-select-item>
+                        {% /each %}
+                    </pl-select-content>
+                </pl-select>
+                <p class="hh-form-hint">Run child processes as a different system user.</p>
+            </div>
+            <div class="hh-form-row">
+                <div class="hh-form-group hh-form-group--grow">
+                    <pl-label target="min-processes">Min Processes</pl-label>
+                    <pl-input id="min-processes" type={% "number" %} name={% "minimum_processes" %} value={% minimumProcesses %} placeholder={% "1" %} min={% "1" %} max={% "20" %}></pl-input>
+                </div>
+                <div class="hh-form-group hh-form-group--grow">
+                    <pl-label target="max-processes">Max Processes</pl-label>
+                    <pl-input id="max-processes" type={% "number" %} name={% "maximum_processes" %} value={% maximumProcesses %} placeholder={% "5" %} min={% "1" %} max={% "20" %}></pl-input>
+                </div>
+            </div>
+            <div class="hh-form-group">
+                <label class="hh-checkbox-label">
+                    <input type="checkbox" name="wait_for_ready" checked={% waitForReady %}>
+                    <span>Wait For Ready Signal</span>
+                </label>
+                <p class="hh-form-hint">Only enable this when the child process sends a ready signal.</p>
+            </div>
+            <div class="hh-form-group">
+                <pl-label>Environment Variables</pl-label>
+                <hh-key-value-editor initialPairs={% environmentVariables %} namePrefix={% "environment_variables" %} namePlaceholder={% "NAME" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
+            </div>
+            <div class="hh-form-group">
+                <pl-label>API Keys</pl-label>
+                <hh-list-editor initialItems={% apiKeys %} namePrefix={% "api_keys" %} placeholder={% "Enter a key" %}></hh-list-editor>
+                <p class="hh-form-hint">Keys for X-Hohenheim-Key header control.</p>
+            </div>
+            <div class="hh-form-group">
+                <pl-label target="node-delay">Request Delay (ms)</pl-label>
+                <pl-input id="node-delay" type={% "number" %} name={% "delay" %} value={% nodeDelay %} placeholder={% "0" %}></pl-input>
+            </div>
+        </div>
+    }
+} %}
