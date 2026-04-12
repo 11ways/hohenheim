@@ -66,7 +66,7 @@ public class HohenheimHandlers {
         initDashboard(siteModel, certModel, auditModel);
         initSites(siteModel, domainModel, auditModel);
         initDomains(siteModel, domainModel, auditModel);
-        initCertificates(certModel);
+        initCertificates(certModel, auditModel);
         initSettings();
         initAuditLog(auditModel);
         initAccessLists(accessListModel, auditModel);
@@ -751,7 +751,7 @@ public class HohenheimHandlers {
     // Certificates
     // -----------------------------------------------------------------------
 
-    private static void initCertificates(CertificateModel certModel) {
+    private static void initCertificates(CertificateModel certModel, AuditLogModel auditModel) {
         HohenheimEndpoints.CERTIFICATES_LIST.setHandler(conduit -> {
             List<Row> rows = certModel.find()
                 .orderBy(CertificateModel.CREATED_AT, SortOrder.DESC)
@@ -853,6 +853,7 @@ public class HohenheimHandlers {
             cert.set(CertificateModel.STATUS, "active");
             certModel.save(cert);
 
+            audit(auditModel, conduit, "uploaded", "certificate", cert.get(CertificateModel.ID), niceName);
             reloadProxy();
             return redirectUntyped("/certificates");
         });
@@ -916,6 +917,7 @@ public class HohenheimHandlers {
                 );
             }
 
+            audit(auditModel, conduit, "requested", "certificate", certId, niceName);
             reloadProxy();
             return redirectUntyped("/certificates");
         });
@@ -949,7 +951,10 @@ public class HohenheimHandlers {
         // Delete (POST)
         HohenheimEndpoints.CERTIFICATES_DELETE.setHandler(conduit -> {
             Integer certId = conduit.getParameter(HohenheimEndpoints.CERT_ID);
+            Row cert = certModel.findById(certId);
+            String niceName = cert != null ? cert.get(CertificateModel.NICE_NAME) : null;
             certModel.find().where(CertificateModel.ID.eq(certId)).delete();
+            audit(auditModel, conduit, "deleted", "certificate", certId, niceName);
             reloadProxy();
             return redirectUntyped("/certificates");
         });

@@ -453,8 +453,8 @@ public class SiteDispatcher implements HttpHandler {
             }
         }
 
-        // --- HSTS ---
-        if (entry.hstsEnabled) {
+        // RFC 6797 §7.2: HSTS header MUST NOT be emitted over non-secure transport.
+        if (entry.hstsEnabled && "https".equals(exchange.getRequestScheme())) {
             String hstsValue = "max-age=31536000";
             if (entry.hstsSubdomains) hstsValue += "; includeSubDomains";
             exchange.getResponseHeaders().put(STRICT_TRANSPORT_SECURITY, hstsValue);
