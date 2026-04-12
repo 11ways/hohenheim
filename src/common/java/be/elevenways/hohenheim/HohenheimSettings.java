@@ -12,6 +12,27 @@ public class HohenheimSettings {
 
     public static final SettingContext VALUES = new SettingContext.Simple(Zenit.SETTINGS);
 
+    /*
+     * Force every nested group to class-load with this outer class so its
+     * setting definitions register with Zenit.SETTINGS before anything reads
+     * a settings file. Without this, values in a nested group are silently
+     * dropped because the setting visitor can't find the group definition
+     * until the JVM lazily initialises its declaring class.
+     */
+    static {
+        forceInit(
+            Proxy.HTTP_PORT,
+            Ssl.LETSENCRYPT_ENABLED,
+            Admin.PORT,
+            Logging.COLLECT_STATS,
+            Storage.DATA_PATH,
+            Database.PATH,
+            Security.LOG_DOMAIN_MISSES
+        );
+    }
+
+    private static void forceInit(Object... ignored) {}
+
     // --- Proxy ---
     public abstract class Proxy {
         public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("proxy");
@@ -101,6 +122,16 @@ public class HohenheimSettings {
         public static final SettingDefinition<Boolean> COLLECT_STATS = GROUP.buildSetting("collect_stats", Boolean.class)
             .defaultValue(true)
             .description("Collect per-site traffic statistics")
+            .build();
+    }
+
+    // --- Storage ---
+    public abstract class Storage {
+        public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("storage");
+
+        public static final SettingDefinition<String> DATA_PATH = GROUP.buildSetting("data_path", String.class)
+            .defaultValue("data")
+            .description("Base directory for persistent data (git repos, etc.)")
             .build();
     }
 

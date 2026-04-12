@@ -12,6 +12,12 @@ public/plumage.css
 # Database
 *.db
 
+# Per-developer settings overrides (proxy port, TLS toggles, ...)
+settings/local.dry
+
+# Git-provisioned site slots
+data/
+
 # IDE
 .classpath
 .project
