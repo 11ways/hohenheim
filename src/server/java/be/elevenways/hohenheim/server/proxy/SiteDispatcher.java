@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.source.GitProvisioner;
+import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
@@ -271,7 +273,20 @@ public class SiteDispatcher implements HttpHandler {
             Integer accessListId = site.get(SiteModel.ACCESS_LIST_ID);
             Row accessList = accessListId != null ? accessListModel.findById(accessListId) : null;
 
-            SiteRequestHandler requestHandler = typeHandler.createHandler(site, settings);
+            // Check for git provisioning
+            SiteRequestHandler requestHandler;
+            String source = site.get(SiteModel.SOURCE);
+            if ("git".equals(source)) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> sourceSettings = (Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS);
+                if (sourceSettings != null) {
+                    requestHandler = GitProvisioner.createHandler(site, typeHandler, settings, sourceSettings, siteId);
+                } else {
+                    requestHandler = typeHandler.createHandler(site, settings);
+                }
+            } else {
+                requestHandler = typeHandler.createHandler(site, settings);
+            }
             List<Row> domains = domainModel.findBySiteId(siteId);
 
             for (Row domain : domains) {
@@ -328,6 +343,12 @@ public class SiteDispatcher implements HttpHandler {
                 exchange.getResponseSender().send(response);
                 return;
             }
+        }
+
+        // --- Git webhook intercept (before hostname routing) ---
+        if (GitWebhookHandler.matches(exchange)) {
+            GitWebhookHandler.handle(exchange);
+            return;
         }
 
         // --- Loop detection ---

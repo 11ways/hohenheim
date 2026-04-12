@@ -2,6 +2,8 @@
 
     public error: String = ""
     public selectedType: String = "hohenheim:proxy"
+    public source: String = ""
+    public sourceSettings: Map = null
     public siteTypes: List = null
     public settings: Map = null
     public nodeVersions: List = null
@@ -43,6 +45,22 @@
                             </pl-select>
                         </div>
 
+                        <div class="hh-form-group">
+                            <pl-label target="source">Source</pl-label>
+                            <pl-select name="source" bind:value={% source{:} %}>
+                                <pl-select-trigger placeholder="Local"></pl-select-trigger>
+                                <pl-select-content>
+                                    <pl-select-item value="" label="Local">Local - files on disk</pl-select-item>
+                                    <pl-select-item value="git" label="Git">Git - clone from repository</pl-select-item>
+                                </pl-select-content>
+                            </pl-select>
+                        </div>
+
+                        {% if source{:} == "git" %}
+                            <pl-separator></pl-separator>
+                            <hh-git-source-settings sourceSettings={% sourceSettings %}></hh-git-source-settings>
+                        {% /if %}
+
                         <pl-separator></pl-separator>
 
                         <hh-site-type-fields selectedType={% &selectedType{:} %} settings={% settings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %}></hh-site-type-fields>
@@ -75,10 +93,12 @@
         {% declare error: String %}
         {% declare siteTypes: List %}
         {% declare settings: Map %}
+        {% declare source: String = "" %}
+        {% declare sourceSettings: Map = null %}
         {% declare nodeVersions: List %}
         {% declare systemUsers: List %}
         {% declare environmentVariables: List %}
         {% declare apiKeys: List %}
-        <hh-site-create error={% error{:} %} siteTypes={% siteTypes %} settings={% settings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %}></hh-site-create>
+        <hh-site-create error={% error{:} %} siteTypes={% siteTypes %} settings={% settings %} source={% source %} sourceSettings={% sourceSettings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %}></hh-site-create>
     </main>
 {% /block %}

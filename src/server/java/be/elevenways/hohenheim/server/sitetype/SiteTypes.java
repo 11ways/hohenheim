@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.sitetype;
 
 import be.elevenways.hohenheim.server.sitetype.types.AlchemySiteType;
+import be.elevenways.hohenheim.server.sitetype.types.CommandSiteType;
 import be.elevenways.hohenheim.server.sitetype.types.DeadSiteType;
 import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
 import be.elevenways.hohenheim.server.sitetype.types.ProxySiteType;
@@ -26,6 +27,7 @@ public class SiteTypes {
         registerType(DeadSiteType.ID, new DeadSiteType());
         registerType(NodeSiteType.ID, new NodeSiteType());
         registerType(AlchemySiteType.ID, new AlchemySiteType());
+        registerType(CommandSiteType.ID, new CommandSiteType());
 
         // Initialize shared process management infrastructure
         NodeSiteType.initSharedInfrastructure();

@@ -11,6 +11,8 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.model.UserModel;
+import be.elevenways.hohenheim.source.GitSourceSchema;
+import be.elevenways.hohenheim.server.source.GitProvisioner;
 import be.elevenways.hohenheim.server.process.ManagedProcess;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.ProcessTerminalHandler;
@@ -356,17 +358,20 @@ public class HohenheimHandlers {
         });
 
         // Site create form (GET)
-        HohenheimEndpoints.SITES_CREATE_FORM.setHandler(conduit ->
-            new RenderTemplateResult(
-                Identifier.of("hohenheim", "hohenheim/sites/create"),
-                Map.of("error", "", "siteTypes", getSiteTypeOptions(),
-                    "settings", Map.of(),
-                    "nodeVersions", getNodeVersionOptions(),
-                    "systemUsers", getSystemUserOptions(),
-                    "environmentVariables", List.of(),
-                    "apiKeys", List.of())
-            )
-        );
+        HohenheimEndpoints.SITES_CREATE_FORM.setHandler(conduit -> {
+            Map<String, Object> vars = new HashMap<>();
+            vars.put("error", "");
+            vars.put("siteTypes", getSiteTypeOptions());
+            vars.put("settings", Map.of());
+            vars.put("source", "");
+            vars.put("sourceSettings", Map.of());
+            vars.put("nodeVersions", getNodeVersionOptions());
+            vars.put("systemUsers", getSystemUserOptions());
+            vars.put("environmentVariables", List.of());
+            vars.put("apiKeys", List.of());
+            return new RenderTemplateResult(
+                Identifier.of("hohenheim", "hohenheim/sites/create"), vars);
+        });
 
         // Site create (POST)
         HohenheimEndpoints.SITES_CREATE.setHandler(conduit -> {
@@ -386,6 +391,7 @@ public class HohenheimHandlers {
             String slug = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
             Map<String, Object> settings = extractTypeSettings(form, siteType);
             String hostname = form.getOrDefault("hostname", "").trim();
+            String source = form.getOrDefault("source", "");
 
             Row row = siteModel.createEmptyRow();
             row.set(SiteModel.NAME, name);
@@ -393,6 +399,18 @@ public class HohenheimHandlers {
             row.set(SiteModel.SITE_TYPE, siteType);
             row.set(SiteModel.SETTINGS, settings);
             row.set(SiteModel.STATUS, "active");
+
+            // Git source provisioning
+            if ("git".equals(source)) {
+                row.set(SiteModel.SOURCE, "git");
+                Map<String, Object> sourceSettings = extractSchemaSettings(form, GitSourceSchema.SCHEMA);
+                // Auto-generate webhook secret on first save
+                if (sourceSettings.get("webhook_secret") == null || ((String) sourceSettings.getOrDefault("webhook_secret", "")).isEmpty()) {
+                    sourceSettings.put("webhook_secret", java.util.UUID.randomUUID().toString());
+                }
+                row.set(SiteModel.SOURCE_SETTINGS, sourceSettings);
+            }
+
             siteModel.save(row);
 
             if (!hostname.isEmpty()) {
@@ -447,11 +465,34 @@ public class HohenheimHandlers {
             String siteType = form.getOrDefault("site_type", site.get(SiteModel.SITE_TYPE));
             Map<String, Object> settings = extractTypeSettings(form, siteType);
             boolean enabled = "on".equals(form.get("enabled")) || "true".equals(form.get("enabled"));
+            String source = form.getOrDefault("source", "");
 
             site.set(SiteModel.NAME, name);
             site.set(SiteModel.SITE_TYPE, siteType);
             site.set(SiteModel.SETTINGS, settings);
             site.set(SiteModel.ENABLED, enabled);
+
+            // Git source provisioning
+            if ("git".equals(source)) {
+                site.set(SiteModel.SOURCE, "git");
+                Map<String, Object> sourceSettings = extractSchemaSettings(form, GitSourceSchema.SCHEMA);
+                // Preserve existing webhook secret if not in form
+                if (sourceSettings.get("webhook_secret") == null || ((String) sourceSettings.getOrDefault("webhook_secret", "")).isEmpty()) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> existingSource = (Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS);
+                    String existingSecret = existingSource != null ? (String) existingSource.get("webhook_secret") : null;
+                    if (existingSecret != null && !existingSecret.isEmpty()) {
+                        sourceSettings.put("webhook_secret", existingSecret);
+                    } else {
+                        sourceSettings.put("webhook_secret", java.util.UUID.randomUUID().toString());
+                    }
+                }
+                site.set(SiteModel.SOURCE_SETTINGS, sourceSettings);
+            } else {
+                site.set(SiteModel.SOURCE, null);
+                site.set(SiteModel.SOURCE_SETTINGS, null);
+            }
+
             siteModel.save(site);
 
             audit(auditModel, conduit, "updated", "site", siteId, name);
@@ -490,6 +531,16 @@ public class HohenheimHandlers {
             clone.set(SiteModel.SLUG, slug);
             clone.set(SiteModel.SITE_TYPE, site.get(SiteModel.SITE_TYPE));
             clone.set(SiteModel.SETTINGS, site.get(SiteModel.SETTINGS));
+            clone.set(SiteModel.SOURCE, site.get(SiteModel.SOURCE));
+            // Clone source settings but regenerate webhook secret
+            @SuppressWarnings("unchecked")
+            Map<String, Object> clonedSourceSettings = site.get(SiteModel.SOURCE_SETTINGS) != null
+                ? new HashMap<>((Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS))
+                : null;
+            if (clonedSourceSettings != null) {
+                clonedSourceSettings.put("webhook_secret", java.util.UUID.randomUUID().toString());
+            }
+            clone.set(SiteModel.SOURCE_SETTINGS, clonedSourceSettings);
             clone.set(SiteModel.STATUS, "active");
             clone.set(SiteModel.ENABLED, false); // Clones start disabled
             siteModel.save(clone);
@@ -529,6 +580,12 @@ public class HohenheimHandlers {
                 siteModel.save(site);
                 audit(auditModel, conduit, "deleted", "site", siteId, site.get(SiteModel.NAME));
                 reloadProxy();
+
+                // Clean up git repo directory if git-provisioned
+                String source = site.get(SiteModel.SOURCE);
+                if ("git".equals(source)) {
+                    GitProvisioner.deleteSiteDirectory(siteId);
+                }
             }
 
             return redirectUntyped("/sites");
@@ -1051,6 +1108,35 @@ public class HohenheimHandlers {
     }
 
     /**
+     * Extract settings from a form based on a fixed schema (not type-polymorphic).
+     * Used for git source settings.
+     */
+    private static Map<String, Object> extractSchemaSettings(Map<String, String> form, Schema schema) {
+        Map<String, Object> settings = new HashMap<>();
+
+        for (var entry : schema.getFields().entrySet()) {
+            String fieldName = entry.getKey();
+            Field<?, ?> field = entry.getValue();
+
+            if (field instanceof SchemaField schemaField && schemaField.getSubSchema() != null) {
+                settings.put(fieldName, extractNestedSchemaList(form, fieldName, schemaField.getSubSchema()));
+            } else if (field instanceof ListField<?> listField) {
+                settings.put(fieldName, extractScalarList(form, fieldName, listField.getItemField()));
+            } else if (field instanceof BooleanField) {
+                String v = form.get(fieldName);
+                settings.put(fieldName, "on".equals(v) || "true".equals(v));
+            } else {
+                String formValue = form.get(fieldName);
+                if (formValue == null) continue;
+                Object coerced = coerceScalar(field, formValue);
+                if (coerced != null) settings.put(fieldName, coerced);
+            }
+        }
+
+        return settings;
+    }
+
+    /**
      * Coerce a raw form-string value to the Java type expected by the given field.
      * Returns null for unparseable numbers so the caller can skip the entry.
      */
@@ -1189,6 +1275,14 @@ public class HohenheimHandlers {
         @SuppressWarnings("unchecked")
         Map<String, Object> settings = (Map<String, Object>) site.get(SiteModel.SETTINGS);
         vars.put("settings", settings != null ? settings : Map.of());
+
+        // Source provisioning data
+        String source = site.get(SiteModel.SOURCE);
+        vars.put("source", source != null ? source : "");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sourceSettings = (Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS);
+        vars.put("sourceSettings", sourceSettings != null ? sourceSettings : Map.of());
+
         vars.put("nodeVersions", getNodeVersionOptions());
         vars.put("systemUsers", getSystemUserOptions());
         vars.put("environmentVariables", extractEnvVarsList(settings));

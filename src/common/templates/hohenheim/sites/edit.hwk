@@ -5,6 +5,8 @@
     public siteType: String = "hohenheim:proxy"
     public siteEnabled: Boolean = true
     public siteTypes: List = null
+    public source: String = ""
+    public sourceSettings: Map = null
     public settings: Map = null
     public environmentVariables: List = null
     public apiKeys: List = null
@@ -47,11 +49,27 @@
                         </div>
 
                         <div class="hh-form-group">
+                            <pl-label target="source">Source</pl-label>
+                            <pl-select name="source" bind:value={% source{:} %}>
+                                <pl-select-trigger placeholder="Local"></pl-select-trigger>
+                                <pl-select-content>
+                                    <pl-select-item value="" label="Local">Local - files on disk</pl-select-item>
+                                    <pl-select-item value="git" label="Git">Git - clone from repository</pl-select-item>
+                                </pl-select-content>
+                            </pl-select>
+                        </div>
+
+                        <div class="hh-form-group">
                             <label class="hh-checkbox-label">
                                 <input type="checkbox" name="enabled" checked={% siteEnabled %}>
                                 <span>Enabled</span>
                             </label>
                         </div>
+
+                        {% if source{:} == "git" %}
+                            <pl-separator></pl-separator>
+                            <hh-git-source-settings sourceSettings={% sourceSettings %}></hh-git-source-settings>
+                        {% /if %}
 
                         <pl-separator></pl-separator>
 
@@ -80,6 +98,8 @@
 {% block "main" %}
     {% declare site: Map %}
     {% declare settings: Map %}
+    {% declare source: String = "" %}
+    {% declare sourceSettings: Map = null %}
     {% declare domains: List %}
     {% declare siteTypes: List %}
     {% declare environmentVariables: List %}
@@ -100,6 +120,8 @@
             siteName={% site.get("name") %}
             siteType={% site.get("siteType") != null ? site.get("siteType") : "hohenheim:proxy" %}
             siteEnabled={% site.get("enabled") != null ? site.get("enabled") : true %}
+            source={% source != null ? source : "" %}
+            sourceSettings={% sourceSettings %}
             siteTypes={% siteTypes %}
             settings={% settings %}
             environmentVariables={% environmentVariables %}

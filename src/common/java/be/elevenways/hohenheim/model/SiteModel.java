@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.sitetype.SiteTypeRegistry;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -33,6 +34,16 @@ public class SiteModel extends Model {
     public static final SchemaField SETTINGS = SCHEMA.addField(
         SchemaField.builder("settings")
             .schemaFrom("site_type")
+            .build());
+
+    // Source provisioning: null/"local" = local files, "git" = git-provisioned
+    public static final StringField SOURCE = SCHEMA.addField(
+        StringField.builder().name("source").build());
+
+    // Git-specific settings, only relevant when source == "git"
+    public static final SchemaField SOURCE_SETTINGS = SCHEMA.addField(
+        SchemaField.builder("source_settings")
+            .subSchema(GitSourceSchema.SCHEMA)
             .build());
 
     public static final StringField DESCRIPTION = SCHEMA.addField(StringField.builder().name("description").build());

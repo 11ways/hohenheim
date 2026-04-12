@@ -4,5 +4,6 @@ public enum SiteHealth {
     UP,
     DOWN,
     DEGRADED,
+    DEPLOYING,
     UNKNOWN
 }

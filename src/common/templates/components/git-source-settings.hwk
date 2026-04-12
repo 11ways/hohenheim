@@ -1,0 +1,91 @@
+{% tag HhGitSourceSettings {
+
+    public sourceSettings: Map = null
+
+    template {
+        {%
+            let repoUrl = sourceSettings != null && sourceSettings.get("repository_url") != null ? sourceSettings.get("repository_url") + "" : ""
+            let branch = sourceSettings != null && sourceSettings.get("branch") != null ? sourceSettings.get("branch") + "" : "main"
+            let buildCommand = sourceSettings != null && sourceSettings.get("build_command") != null ? sourceSettings.get("build_command") + "" : ""
+            let buildDirectory = sourceSettings != null && sourceSettings.get("build_directory") != null ? sourceSettings.get("build_directory") + "" : ""
+            let buildTimeout = sourceSettings != null && sourceSettings.get("build_timeout") != null ? sourceSettings.get("build_timeout") + "" : "600"
+            let shallowClone = sourceSettings != null && sourceSettings.get("shallow_clone") != null ? sourceSettings.get("shallow_clone") == true : true
+            let submodules = sourceSettings != null && sourceSettings.get("submodules") != null ? sourceSettings.get("submodules") == true : false
+            let autoDeploy = sourceSettings != null && sourceSettings.get("auto_deploy") != null ? sourceSettings.get("auto_deploy") == true : true
+            let pollInterval = sourceSettings != null && sourceSettings.get("poll_interval") != null ? sourceSettings.get("poll_interval") + "" : "0"
+            let webhookSecret = sourceSettings != null && sourceSettings.get("webhook_secret") != null ? sourceSettings.get("webhook_secret") + "" : ""
+        %}
+        <div class="hh-form-section">
+            <h3 class="hh-form-section-title">Git Repository</h3>
+
+            <div class="hh-form-group">
+                <pl-label target="repository-url">Repository URL</pl-label>
+                <pl-input id="repository-url" type={% "text" %} name={% "repository_url" %} value={% repoUrl %} placeholder={% "https://github.com/user/repo.git" %}></pl-input>
+                <p class="hh-form-hint">HTTPS or SSH clone URL.</p>
+            </div>
+
+            <div class="hh-form-group">
+                <pl-label target="branch">Branch</pl-label>
+                <pl-input id="branch" type={% "text" %} name={% "branch" %} value={% branch %} placeholder={% "main" %}></pl-input>
+            </div>
+
+            <div class="hh-form-group">
+                <pl-label target="build-directory">Build Directory</pl-label>
+                <pl-input id="build-directory" type={% "text" %} name={% "build_directory" %} value={% buildDirectory %} placeholder={% "Repository root" %}></pl-input>
+                <p class="hh-form-hint">Subdirectory to cd into before building (for monorepos).</p>
+            </div>
+
+            <div class="hh-form-group">
+                <pl-label target="build-command">Build Command</pl-label>
+                <pl-input id="build-command" type={% "text" %} name={% "build_command" %} value={% buildCommand %} placeholder={% "npm ci && npm run build" %}></pl-input>
+                <p class="hh-form-hint">Shell command to run after clone/pull.</p>
+            </div>
+
+            <div class="hh-form-group">
+                <pl-label target="build-timeout">Build Timeout (seconds)</pl-label>
+                <pl-input id="build-timeout" type={% "number" %} name={% "build_timeout" %} value={% buildTimeout %} placeholder={% "600" %}></pl-input>
+            </div>
+
+            <div class="hh-form-row">
+                <div class="hh-form-group">
+                    <label class="hh-checkbox-label">
+                        <input type="checkbox" name="shallow_clone" checked={% shallowClone %}>
+                        <span>Shallow Clone</span>
+                    </label>
+                </div>
+                <div class="hh-form-group">
+                    <label class="hh-checkbox-label">
+                        <input type="checkbox" name="submodules" checked={% submodules %}>
+                        <span>Submodules</span>
+                    </label>
+                </div>
+            </div>
+
+            <h3 class="hh-form-section-title">Auto-Deploy</h3>
+
+            <div class="hh-form-group">
+                <label class="hh-checkbox-label">
+                    <input type="checkbox" name="auto_deploy" checked={% autoDeploy %}>
+                    <span>Auto-deploy on push</span>
+                </label>
+            </div>
+
+            <div class="hh-form-group">
+                <pl-label target="poll-interval">Poll Interval (minutes, 0 = disabled)</pl-label>
+                <pl-input id="poll-interval" type={% "number" %} name={% "poll_interval" %} value={% pollInterval %} placeholder={% "0" %}></pl-input>
+                <p class="hh-form-hint">Check for new commits on a schedule.</p>
+            </div>
+
+            <div class="hh-form-group">
+                <pl-label>Webhook URL</pl-label>
+                <p class="hh-form-hint">Configure this in your Git provider. Secret is auto-generated on save.</p>
+                <code class="hh-code-block">/api/webhooks/git/SITE-SLUG</code>
+            </div>
+
+            <div class="hh-form-group">
+                <pl-label>Webhook Secret</pl-label>
+                <pl-input type={% "text" %} name={% "webhook_secret" %} value={% webhookSecret %} readonly={% true %}></pl-input>
+            </div>
+        </div>
+    }
+} %}
