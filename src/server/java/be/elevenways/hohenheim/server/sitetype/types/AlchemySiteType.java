@@ -25,4 +25,9 @@ public class AlchemySiteType extends NodeSiteType {
         return List.of("--stream-janeway");
     }
 
+    @Override
+    protected boolean useChildWrapper() {
+        return true;
+    }
+
 }

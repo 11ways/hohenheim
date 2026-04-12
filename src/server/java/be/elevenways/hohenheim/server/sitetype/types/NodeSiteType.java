@@ -103,7 +103,7 @@ public class NodeSiteType implements SiteTypeHandler {
         int siteId = site.get(SiteModel.ID);
         String siteName = site.get(SiteModel.NAME);
 
-        return new NodeProcessHandler(siteId, siteName, settings, getDefaultArgs());
+        return new NodeProcessHandler(siteId, siteName, settings, getDefaultArgs(), useChildWrapper());
     }
 
     /**
@@ -111,6 +111,16 @@ public class NodeSiteType implements SiteTypeHandler {
      */
     protected List<String> getDefaultArgs() {
         return List.of();
+    }
+
+    /**
+     * Whether to launch the site through the hohenheim-child-wrapper fork shim.
+     * Only needed for frameworks (alchemy) that expect a native Node IPC channel
+     * via process.on('message'). Plain Node sites talk to HOHENHEIM_IPC_PORT
+     * directly if they care.
+     */
+    protected boolean useChildWrapper() {
+        return false;
     }
 
     // -----------------------------------------------------------------------
@@ -123,14 +133,16 @@ public class NodeSiteType implements SiteTypeHandler {
         private final String nodePath;
         private final int resolvedUid;
         private final List<String> defaultArgs;
+        private final boolean useChildWrapper;
 
         NodeProcessHandler(int siteId, String siteName, Map<String, Object> settings,
-                           List<String> defaultArgs) {
+                           List<String> defaultArgs, boolean useChildWrapper) {
             super(siteId, siteName, settings, portAllocator, processMonitor);
             this.script = (String) settings.getOrDefault("script", "");
             this.nodePath = resolveNodePath(settings.get("node_version_id"));
             this.resolvedUid = resolveUid(settings.get("system_user_id"));
             this.defaultArgs = defaultArgs;
+            this.useChildWrapper = useChildWrapper;
 
             // Start minimum servers on creation
             if (!script.isEmpty()) {
@@ -171,14 +183,15 @@ public class NodeSiteType implements SiteTypeHandler {
 
         @Override
         protected List<String> buildCommand(int port) {
-            // Run the real site script under our fork-wrapper so it gets a
-            // true Node IPC channel. The wrapper bridges HOHENHEIM_IPC_PORT
-            // into that channel, which lets older alchemy installs receive
-            // janeway_propose_geometry without bundling the TCP bridge.
             List<String> cmd = new ArrayList<>();
             cmd.add(nodePath != null && !nodePath.isEmpty() ? nodePath : "node");
-            cmd.add(ChildWrapper.path().toString());
-            cmd.add("--hh-exec");
+            if (useChildWrapper) {
+                // Framework (alchemy) expects a native Node IPC channel via
+                // process.on('message'). The wrapper forks the real script
+                // and bridges HOHENHEIM_IPC_PORT into that channel.
+                cmd.add(ChildWrapper.path().toString());
+                cmd.add("--hh-exec");
+            }
             cmd.add(script);
             cmd.add("--port=" + port);
 
