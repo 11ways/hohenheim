@@ -11,10 +11,10 @@ import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -292,36 +292,30 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     }
 
     private void captureProcessOutput(ManagedProcess managed) {
-        Thread.startVirtualThread(() -> {
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(managed.process().getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    managed.appendLog(escapeLogLine(line));
-                }
-            } catch (Exception e) {
-                // Process ended
-            }
-        });
-
-        Thread.startVirtualThread(() -> {
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(managed.process().getErrorStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.contains("EADDRINUSE")) {
-                        managed.markAddressInUse();
-                    }
-                    managed.appendLog(escapeLogLine(line));
-                }
-            } catch (Exception ignored) {}
-        });
+        Thread.startVirtualThread(() -> pumpStream(managed.process().getInputStream(), managed, false));
+        Thread.startVirtualThread(() -> pumpStream(managed.process().getErrorStream(), managed, true));
     }
 
-    private String escapeLogLine(String line) {
-        return line.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;");
+    /**
+     * Read raw chunks from the child's stdout/stderr and feed them to the
+     * managed log verbatim (ANSI preserved for the terminal viewer). Stderr
+     * is additionally scanned for EADDRINUSE so the startup retry loop can
+     * detect address-in-use failures.
+     */
+    private void pumpStream(InputStream in, ManagedProcess managed, boolean scanForAddrInUse) {
+        byte[] buf = new byte[4096];
+        try {
+            int len;
+            while ((len = in.read(buf)) != -1) {
+                String chunk = new String(buf, 0, len, StandardCharsets.UTF_8);
+                if (scanForAddrInUse && chunk.contains("EADDRINUSE")) {
+                    managed.markAddressInUse();
+                }
+                managed.appendLog(chunk);
+            }
+        } catch (Exception ignored) {
+            // Process ended or stream closed
+        }
     }
 
     private void markProcessReady(ManagedProcess managed) {
@@ -624,15 +618,17 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
     private void persistProclog(ManagedProcess managed) {
         try {
-            String logHtml = managed.getLogHtml();
-            if (logHtml == null || logHtml.isEmpty()) return;
+            String logText = managed.getLogText();
+            if (logText == null || logText.isEmpty()) return;
 
             var ds = HohenheimDatabase.datasource();
             var model = new ProclogModel(ds);
             Row row = model.createEmptyRow();
             row.set(ProclogModel.SITE_ID, siteId);
             row.set(ProclogModel.PID, (int) managed.pid());
-            row.set(ProclogModel.LOG_HTML, logHtml);
+            // Column is still LOG_HTML but the payload is raw ANSI text; the
+            // proclog viewer feeds it through ghostty-web just like the live view.
+            row.set(ProclogModel.LOG_HTML, logText);
             row.set(ProclogModel.CREATED_AT, managed.startTime());
             model.save(row);
         } catch (Exception e) {

@@ -4,12 +4,19 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
 
+import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 
 /**
- * WebSocket handler that streams a child process's stdout/stderr to the client,
- * and forwards client input to the process's stdin.
- * Equivalent to the original Node.js 'terminallink' linkup.
+ * Streams a child process's stdout/stderr verbatim to a ghostty-web terminal
+ * (pl-terminal) and forwards the client's keystrokes to the process's stdin.
+ *
+ * Wire contract matches plumage's TerminalEndpoint so the same client-side
+ * BrowserTerminalBridge can drive this handler:
+ *   - server -> client: raw terminal bytes as text frames (ANSI preserved)
+ *   - client -> server: raw keystrokes, EXCEPT messages that start with
+ *     {"type":"resize" -- those are parsed and currently ignored (child
+ *     processes are not PTYs, so TIOCSWINSZ would have no effect anyway).
  */
 public class ProcessTerminalHandler implements WebSocketHandler {
 
@@ -26,23 +33,21 @@ public class ProcessTerminalHandler implements WebSocketHandler {
     @Override
     public void onOpen() {
         if (process == null || !process.isAlive()) {
-            session.sendText("{\"type\":\"error\",\"message\":\"Process not found or not running\"}");
+            session.sendText("\r\n[process not found or not running]\r\n");
             session.close();
             return;
         }
 
-        session.sendText("{\"type\":\"connected\",\"pid\":" + process.pid() + ",\"port\":" + process.port() + "}");
-
-        // Send existing log history
-        String logHtml = process.getLogHtml();
-        if (logHtml != null && !logHtml.isEmpty()) {
-            session.sendText("{\"type\":\"history\",\"data\":\"" + escapeJson(logHtml) + "\"}");
+        // Replay the rolling buffer so the terminal shows recent output immediately.
+        String history = process.getLogText();
+        if (history != null && !history.isEmpty()) {
+            session.sendText(history);
         }
 
-        // Stream new output lines as they arrive
-        logListener = line -> {
+        // Stream new chunks as they arrive.
+        logListener = chunk -> {
             if (active && session.isOpen()) {
-                session.sendText("{\"type\":\"output\",\"data\":\"" + escapeJson(line) + "\"}");
+                session.sendText(chunk);
             }
         };
         process.addLogListener(logListener);
@@ -52,15 +57,21 @@ public class ProcessTerminalHandler implements WebSocketHandler {
 
     @Override
     public void onTextMessage(String message) {
-        // Forward client input to the process's stdin
-        if (process != null && process.isAlive()) {
-            try {
-                var stdin = process.process().getOutputStream();
-                stdin.write(message.getBytes());
-                stdin.flush();
-            } catch (Exception e) {
-                Blast.log("TERMINAL: write to stdin failed:", e.getMessage());
-            }
+        if (message == null) return;
+
+        // Resize messages are a JSON envelope; ignore for now (no PTY layer).
+        if (message.startsWith("{\"type\":\"resize\"")) {
+            return;
+        }
+
+        if (process == null || !process.isAlive()) return;
+
+        try {
+            var stdin = process.process().getOutputStream();
+            stdin.write(message.getBytes(StandardCharsets.UTF_8));
+            stdin.flush();
+        } catch (Exception e) {
+            Blast.log("TERMINAL: write to stdin failed:", e.getMessage());
         }
     }
 
@@ -71,13 +82,5 @@ public class ProcessTerminalHandler implements WebSocketHandler {
             process.removeLogListener(logListener);
         }
         Blast.log("TERMINAL: disconnected from pid=" + (process != null ? process.pid() : "null"));
-    }
-
-    private static String escapeJson(String s) {
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
     }
 }

@@ -39,13 +39,15 @@ public class ManagedProcess {
     // Fingerprint cache: fingerprint string -> true (with idle expiry managed externally)
     private final ConcurrentHashMap<String, Long> fingerprints = new ConcurrentHashMap<>();
 
-    // Stdout capture (rolling buffer, HTML-escaped)
+    // Stdout/stderr capture (rolling buffer, raw UTF-8 including ANSI escapes).
+    // Fed by ManagedProcessSiteHandler; consumed by the process-terminal WebSocket
+    // (replayed on open) and by the proclog persister on process exit.
     private final StringBuilder logBuffer = new StringBuilder();
-    private int logLineCount;
-    private static final int MAX_LOG_LINES = 500;
+    private static final int MAX_LOG_CHARS = 256 * 1024;
     private static final long FINGERPRINT_TTL_MS = 3600_000;
 
-    // Live log listeners (for terminal WebSocket connections)
+    // Live log listeners (for terminal WebSocket connections).
+    // Each listener receives the exact raw chunk that was appended -- no transformation.
     private final Set<Consumer<String>> logListeners = new CopyOnWriteArraySet<>();
 
     public ManagedProcess(Process process, int port, String socketPath, int siteId) {
@@ -92,22 +94,21 @@ public class ManagedProcess {
     }
 
     /**
-     * Append a line of stdout to the log buffer.
+     * Append a raw chunk of stdout/stderr to the rolling buffer and fan it out
+     * to any live terminal listeners verbatim (no escaping, ANSI preserved).
+     * The buffer is capped in characters; the oldest head is trimmed first.
      */
-    public void appendLog(String htmlLine) {
+    public void appendLog(String chunk) {
+        if (chunk == null || chunk.isEmpty()) return;
         synchronized (logBuffer) {
-            if (logLineCount >= MAX_LOG_LINES) {
-                int idx = logBuffer.indexOf("\n");
-                if (idx >= 0) {
-                    logBuffer.delete(0, idx + 1);
-                    logLineCount--;
-                }
+            logBuffer.append(chunk);
+            int overflow = logBuffer.length() - MAX_LOG_CHARS;
+            if (overflow > 0) {
+                logBuffer.delete(0, overflow);
             }
-            logBuffer.append(htmlLine).append("\n");
-            logLineCount++;
         }
         for (Consumer<String> listener : logListeners) {
-            listener.accept(htmlLine);
+            listener.accept(chunk);
         }
     }
 
@@ -120,9 +121,9 @@ public class ManagedProcess {
     }
 
     /**
-     * Get the current log content as HTML.
+     * Snapshot of the rolling log (raw text, may contain ANSI escapes).
      */
-    public String getLogHtml() {
+    public String getLogText() {
         synchronized (logBuffer) {
             return logBuffer.toString();
         }
