@@ -12,26 +12,9 @@ public class HohenheimSettings {
 
     public static final SettingContext VALUES = new SettingContext.Simple(Zenit.SETTINGS);
 
-    /*
-     * Force every nested group to class-load with this outer class so its
-     * setting definitions register with Zenit.SETTINGS before anything reads
-     * a settings file. Without this, values in a nested group are silently
-     * dropped because the setting visitor can't find the group definition
-     * until the JVM lazily initialises its declaring class.
-     */
-    static {
-        forceInit(
-            Proxy.HTTP_PORT,
-            Ssl.LETSENCRYPT_ENABLED,
-            Admin.PORT,
-            Logging.COLLECT_STATS,
-            Storage.DATA_PATH,
-            Database.PATH,
-            Security.LOG_DOMAIN_MISSES
-        );
-    }
-
-    private static void forceInit(Object... ignored) {}
+    // Nested groups below are force-loaded by Zenit.registerSettings(HohenheimSettings.class),
+    // which ServerMain calls before the settings files are read. No per-group
+    // boilerplate here; adding a group is enough.
 
     // --- Proxy ---
     public abstract class Proxy {
@@ -90,17 +73,10 @@ public class HohenheimSettings {
             .build();
     }
 
-    // --- Admin Interface ---
-    public abstract class Admin {
-        public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("admin");
-
-        public static final SettingDefinition<Integer> PORT = GROUP.buildSetting("port", Integer.class)
-            .defaultValue(2999)
-            .description("Admin interface listen port")
-            .build();
-    }
-
     // --- Logging ---
+    // Note: the admin UI listens on Zenit's ServerSettings.Network.PORT.
+    // The previous HohenheimSettings.Admin.PORT was displayed in the UI but
+    // wired to nothing, so it was removed to avoid misleading operators.
     public abstract class Logging {
         public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("logging");
 

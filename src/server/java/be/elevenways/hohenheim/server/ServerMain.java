@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.stats.StatsCollector;
-import be.elevenways.zenit.server.setting.SettingFileManager;
 import be.elevenways.hohenheim.server.task.CleanExpiredSessions;
 import be.elevenways.hohenheim.server.task.CleanOldAuditLogs;
 import be.elevenways.hohenheim.server.task.CleanOldProclogs;
@@ -28,23 +27,22 @@ public class ServerMain {
         // Register site types first (before SiteModel's RegistryEnumField is used)
         SiteTypes.register();
 
-        // Load Hohenheim-specific settings before anything reads them.
-        // HohenheimDatabase.init() below consults Database.PATH, and later
-        // stages read Proxy.HTTP_PORT, Storage.DATA_PATH, etc. HohenheimSettings
-        // shares the Zenit SettingGroup root but has its own value map, so
-        // Zenit's own settings load (inside ServerZenitRuntime) doesn't
-        // populate it -- this load does.
-        SettingFileManager.loadSettings(
-            HohenheimSettings.VALUES,
-            ServerZenitRuntime.PATH_ROOT.resolve("settings/default.dry"),
-            ServerZenitRuntime.PATH_ROOT.resolve("settings/local.dry")
-        );
+        // Make HohenheimSettings (and all its nested groups) visible to the
+        // settings loader, and add our context to the shared SettingsSystem so
+        // Zenit's synchronous load inside ServerZenitRuntime.init() populates
+        // it alongside ServerSettings.
+        Zenit.registerSettings(HohenheimSettings.class);
+        Zenit.settings().addContext(HohenheimSettings.VALUES);
 
-        // Load endpoint definitions and database before the runtime starts
+        // init() seeds Zenit's default sources (default.dry / local.dry),
+        // registers ServerSettings, and synchronously loads both contexts.
+        // Anything reading a setting below this line sees configured values.
+        ServerZenitRuntime.init();
+
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
 
-        // Initialize the Zenit runtime and configure the client script
+        // main() does the HTTP-server side of startup; init() is idempotent.
         ServerZenitRuntime.main(args);
         Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
 

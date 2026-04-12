@@ -13,10 +13,14 @@ public/plumage.css
 *.db
 
 # Per-developer settings overrides (proxy port, TLS toggles, ...)
+# Checked-in template: settings/local.dry.example
 settings/local.dry
 
-# Git-provisioned site slots
-data/
+# Git-provisioned site slots. Anchored to the repo root so a `data/` folder
+# anywhere else (tests, fixtures, docs) is NOT ignored. If you reconfigure
+# storage.data_path to somewhere outside the repo, add that path to
+# .git/info/exclude.
+/data/
 
 # IDE
 .classpath

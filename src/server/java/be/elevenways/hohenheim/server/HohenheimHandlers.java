@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.zenit.server.setting.ServerSettings;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -912,7 +913,10 @@ public class HohenheimHandlers {
             vars.put("proxyFallback", valueOrEmpty(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS)));
             vars.put("proxyForceHttps", HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
             vars.put("proxyIpv6Address", valueOrEmpty(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS)));
-            vars.put("adminPort", HohenheimSettings.VALUES.getValue(HohenheimSettings.Admin.PORT));
+            // Read-only: the admin listener is Zenit's HTTP server, whose port
+            // is ServerSettings.Network.PORT. Surfaced here so operators can
+            // see where the admin UI is reachable.
+            vars.put("adminPort", ServerSettings.VALUES.getValue(ServerSettings.Network.PORT));
             vars.put("dbPath", HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.PATH));
             vars.put("logAccessToDb", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_TO_DATABASE));
             vars.put("logAccessToFile", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_TO_FILE));
