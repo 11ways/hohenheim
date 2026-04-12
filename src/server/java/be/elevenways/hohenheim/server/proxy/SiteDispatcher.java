@@ -468,7 +468,9 @@ public class SiteDispatcher implements HttpHandler {
 
     private static final AttachmentKey<UpstreamTarget> UPSTREAM_URI =
         AttachmentKey.create(UpstreamTarget.class);
-    private static final AttachmentKey<Map<String, String>> MATCHED_GROUPS =
+
+    /** Named + numbered regex-host capture groups from the active route, if any. */
+    public static final AttachmentKey<Map<String, String>> MATCHED_GROUPS =
         AttachmentKey.create(Map.class);
 
     // -----------------------------------------------------------------------

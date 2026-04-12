@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
@@ -11,6 +12,8 @@ import io.undertow.util.Headers;
 
 import java.net.URI;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Forwards requests to an upstream HTTP/HTTPS server.
@@ -85,6 +88,7 @@ public class ProxySiteType implements SiteTypeHandler {
         boolean websocketEnabled = Boolean.TRUE.equals(settings.get("websocket_upgrade"));
         boolean ignoreCertificates = Boolean.TRUE.equals(settings.get("ignore_certificates"));
         String socket = socketPath != null && !socketPath.isEmpty() ? socketPath : null;
+        boolean socketHasPlaceholders = socket != null && PLACEHOLDER.matcher(socket).find();
 
         return (exchange, forwarder) -> {
             if (!websocketEnabled
@@ -94,7 +98,30 @@ public class ProxySiteType implements SiteTypeHandler {
                 exchange.getResponseSender().send("WebSocket upgrades disabled for this site");
                 return;
             }
-            forwarder.forwardTo(new UpstreamTarget(upstream, ignoreCertificates, socket));
+            String resolvedSocket = socket;
+            if (socketHasPlaceholders) {
+                Map<String, String> groups = exchange.getAttachment(SiteDispatcher.MATCHED_GROUPS);
+                resolvedSocket = substitutePlaceholders(socket, groups);
+            }
+            forwarder.forwardTo(new UpstreamTarget(upstream, ignoreCertificates, resolvedSocket));
         };
+    }
+
+    /** {name} or {0} placeholders resolved against regex-host capture groups. */
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([A-Za-z_][A-Za-z0-9_]*|\\d+)\\}");
+
+    static String substitutePlaceholders(String template, Map<String, String> groups) {
+        if (template == null || groups == null || groups.isEmpty()) {
+            return template;
+        }
+        Matcher m = PLACEHOLDER.matcher(template);
+        StringBuilder out = new StringBuilder();
+        while (m.find()) {
+            String name = m.group(1);
+            String value = groups.get(name);
+            m.appendReplacement(out, Matcher.quoteReplacement(value != null ? value : m.group(0)));
+        }
+        m.appendTail(out);
+        return out.toString();
     }
 }
