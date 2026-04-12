@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.process;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -101,8 +102,17 @@ public class ProcessMonitor {
             }
 
             try {
-                int cpu = sampleCpu(pid);
-                long mem = sampleMemory(pid);
+                // Aggregate across the pid and any descendants. The managed
+                // pid is our Node fork-wrapper, which is nearly idle; the
+                // real workload runs in the forked child and its workers.
+                Set<Long> tree = collectProcessTree(pid);
+                int cpu = 0;
+                long mem = 0;
+                for (Long tpid : tree) {
+                    cpu += sampleCpu(tpid);
+                    mem += sampleMemory(tpid);
+                }
+                if (cpu > 100) cpu = 100;
 
                 // Update process state (accessed via reflection-free field setting)
                 // We use the package-private updateStats pattern
@@ -117,6 +127,47 @@ public class ProcessMonitor {
             } catch (Exception e) {
                 // Process may have exited (NoSuchFileException) or transient /proc parsing issue
             }
+        }
+    }
+
+    /**
+     * Breadth-first walk of /proc/{pid}/task/{tid}/children, capped at
+     * MAX_TREE_DEPTH to avoid runaway in pathological cases. Returns the
+     * original pid plus every live descendant found.
+     */
+    private Set<Long> collectProcessTree(long rootPid) {
+        Set<Long> out = new HashSet<>();
+        out.add(rootPid);
+        collectDescendants(rootPid, out, 0);
+        return out;
+    }
+
+    private static final int MAX_TREE_DEPTH = 8;
+
+    private void collectDescendants(long pid, Set<Long> out, int depth) {
+        if (depth >= MAX_TREE_DEPTH) return;
+        Path taskDir = Path.of("/proc/" + pid + "/task");
+        try (var tids = Files.list(taskDir)) {
+            tids.forEach(taskPath -> {
+                Path childrenFile = taskPath.resolve("children");
+                try {
+                    String children = Files.readString(childrenFile).trim();
+                    if (children.isEmpty()) return;
+                    for (String tok : children.split("\\s+")) {
+                        try {
+                            long childPid = Long.parseLong(tok);
+                            if (out.add(childPid)) {
+                                collectDescendants(childPid, out, depth + 1);
+                            }
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // Task exited mid-read or /proc entry vanished
+                }
+            });
+        } catch (Exception ignored) {
+            // Root process exited
         }
     }
 

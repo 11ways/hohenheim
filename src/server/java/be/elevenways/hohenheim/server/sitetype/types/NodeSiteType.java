@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.NodeVersionModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.process.ChildWrapper;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.PortAllocator;
 import be.elevenways.hohenheim.server.process.ProcessMonitor;
@@ -170,8 +171,14 @@ public class NodeSiteType implements SiteTypeHandler {
 
         @Override
         protected List<String> buildCommand(int port) {
+            // Run the real site script under our fork-wrapper so it gets a
+            // true Node IPC channel. The wrapper bridges HOHENHEIM_IPC_PORT
+            // into that channel, which lets older alchemy installs receive
+            // janeway_propose_geometry without bundling the TCP bridge.
             List<String> cmd = new ArrayList<>();
             cmd.add(nodePath != null && !nodePath.isEmpty() ? nodePath : "node");
+            cmd.add(ChildWrapper.path().toString());
+            cmd.add("--hh-exec");
             cmd.add(script);
             cmd.add("--port=" + port);
 
