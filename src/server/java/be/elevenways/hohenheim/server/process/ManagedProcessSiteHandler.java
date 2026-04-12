@@ -604,6 +604,15 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         return processMap.get(pid);
     }
 
+    /**
+     * The parent-side IPC channel for a given child pid, or null if the
+     * child never connected (happens for non-Alchemy Node sites and any
+     * custom command-type children without a TCP shim).
+     */
+    public IpcChannel getIpcChannel(long pid) {
+        return ipcChannels.get(pid);
+    }
+
     private void handleApiRequest(HttpServerExchange exchange, String actions) {
         for (String action : actions.split(",")) {
             action = action.trim();

@@ -83,13 +83,15 @@ public class HohenheimHandlers {
             Long pid = session.getParameter(HohenheimEndpoints.PID);
             var proxy = ServerMain.getProxyServer();
             ManagedProcess proc = null;
+            be.elevenways.hohenheim.server.process.IpcChannel ipc = null;
             if (proxy != null && siteId != null && pid != null) {
                 var handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
                 if (handler instanceof ManagedProcessSiteHandler managed) {
                     proc = managed.getProcess(pid);
+                    ipc = managed.getIpcChannel(pid);
                 }
             }
-            return new ProcessTerminalHandler(session, proc);
+            return new ProcessTerminalHandler(session, proc, ipc);
         });
     }
 

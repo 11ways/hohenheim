@@ -5,6 +5,8 @@ import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
 
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -15,19 +17,23 @@ import java.util.function.Consumer;
  * BrowserTerminalBridge can drive this handler:
  *   - server -> client: raw terminal bytes as text frames (ANSI preserved)
  *   - client -> server: raw keystrokes, EXCEPT messages that start with
- *     {"type":"resize" -- those are parsed and currently ignored (child
- *     processes are not PTYs, so TIOCSWINSZ would have no effect anyway).
+ *     {"type":"resize" -- those are forwarded to the child as
+ *     janeway_propose_geometry + janeway_redraw over the TCP IPC channel so
+ *     alchemy/janeway apps can reflow. Regular Node.js children without the
+ *     IPC bridge simply ignore the messages.
  */
 public class ProcessTerminalHandler implements WebSocketHandler {
 
     private final WebSocketSession session;
     private final ManagedProcess process;
+    private final IpcChannel ipc;
     private volatile boolean active = true;
     private Consumer<String> logListener;
 
-    public ProcessTerminalHandler(WebSocketSession session, ManagedProcess process) {
+    public ProcessTerminalHandler(WebSocketSession session, ManagedProcess process, IpcChannel ipc) {
         this.session = session;
         this.process = process;
+        this.ipc = ipc;
     }
 
     @Override
@@ -38,13 +44,11 @@ public class ProcessTerminalHandler implements WebSocketHandler {
             return;
         }
 
-        // Replay the rolling buffer so the terminal shows recent output immediately.
         String history = process.getLogText();
         if (history != null && !history.isEmpty()) {
             session.sendText(history);
         }
 
-        // Stream new chunks as they arrive.
         logListener = chunk -> {
             if (active && session.isOpen()) {
                 session.sendText(chunk);
@@ -59,8 +63,8 @@ public class ProcessTerminalHandler implements WebSocketHandler {
     public void onTextMessage(String message) {
         if (message == null) return;
 
-        // Resize messages are a JSON envelope; ignore for now (no PTY layer).
         if (message.startsWith("{\"type\":\"resize\"")) {
+            handleResize(message);
             return;
         }
 
@@ -82,5 +86,44 @@ public class ProcessTerminalHandler implements WebSocketHandler {
             process.removeLogListener(logListener);
         }
         Blast.log("TERMINAL: disconnected from pid=" + (process != null ? process.pid() : "null"));
+    }
+
+    /**
+     * Parse {"type":"resize","cols":N,"rows":N} and forward to the child as
+     * janeway_propose_geometry (sets size) + janeway_redraw (forces repaint).
+     * Matches the original Node.js Hohenheim controller's two-step sequence.
+     */
+    private void handleResize(String json) {
+        if (ipc == null) return;
+
+        int cols = extractInt(json, "cols");
+        int rows = extractInt(json, "rows");
+        if (cols <= 0 || rows <= 0) return;
+
+        Map<String, Object> propose = new HashMap<>();
+        propose.put("type", "janeway_propose_geometry");
+        propose.put("cols", cols);
+        propose.put("rows", rows);
+        ipc.send(propose);
+
+        Map<String, Object> redraw = new HashMap<>();
+        redraw.put("type", "janeway_redraw");
+        ipc.send(redraw);
+    }
+
+    private static int extractInt(String json, String key) {
+        String needle = "\"" + key + "\":";
+        int idx = json.indexOf(needle);
+        if (idx < 0) return -1;
+        int start = idx + needle.length();
+        while (start < json.length() && !Character.isDigit(json.charAt(start))) start++;
+        int end = start;
+        while (end < json.length() && Character.isDigit(json.charAt(end))) end++;
+        if (start == end) return -1;
+        try {
+            return Integer.parseInt(json.substring(start, end));
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 }
