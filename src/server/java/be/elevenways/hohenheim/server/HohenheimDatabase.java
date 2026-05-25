@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.migration.M011_CreateProclogs;
 import be.elevenways.hohenheim.migration.M012_CreateSystemUsers;
 import be.elevenways.hohenheim.migration.M013_CreateNodeVersions;
 import be.elevenways.hohenheim.migration.M014_AddSiteSourceFields;
+import be.elevenways.hohenheim.migration.M015_CreateManagedDatabases;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
 import be.elevenways.zenit.common.orm.migration.MigrationRunner;
@@ -48,7 +49,8 @@ public class HohenheimDatabase {
                 M011_CreateProclogs::new,
                 M012_CreateSystemUsers::new,
                 M013_CreateNodeVersions::new,
-                M014_AddSiteSourceFields::new
+                M014_AddSiteSourceFields::new,
+                M015_CreateManagedDatabases::new
             )
         );
         runner.migrate();
