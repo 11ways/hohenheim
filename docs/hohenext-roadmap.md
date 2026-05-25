@@ -33,15 +33,17 @@ here first as a concrete consumer; promote to the framework once stable.
   - [x] Images: `listImages`, `pullImage`
   - [x] Containers: `createContainer`, `startContainer`, `stopContainer` (grace),
         `removeContainer`, `inspectContainer`, `listContainers`
-  - [ ] Image `inspect`/`remove`; container `logs` (follow); `exec`; networks + volumes
+  - [x] `containerLogs` (snapshot) + `exec` (stdout/stderr separated, exit code, env) —
+        built on a shared multiplexed-stream demux + a binary-safe raw response path.
+  - [ ] Image `inspect`; container `logs` (follow/stream); networks; volume `create`/`list`
 - [x] **`DockerSiteType`** — `hohenheim:docker` site type (registered, 8 types now).
       `DockerSiteRequestHandler` pulls the image if missing, creates+starts a container
       publishing the app port to an ephemeral `127.0.0.1` host port, reverse-proxies via
       `UpstreamForwarder`, reports health from `inspectContainer` State, and stop+removes
       on `destroy()`. Integration-tested against a live daemon.
-  - [ ] Follow-ups: admin UI settings form (`hh-docker-settings.hwk` + dispatcher entry);
-        async container start (don't block site-load on a slow pull, like GitDeployment's
-        queue); optional shared-network mode instead of host-port publishing.
+  - [x] Admin UI settings form (`docker-settings.hwk` + dispatcher entry).
+  - [ ] Follow-ups: async container start (don't block site-load on a slow pull, like
+        GitDeployment's queue); optional shared-network mode instead of host-port publishing.
 
 ### Git provisioning: slot ownership model
 
@@ -76,11 +78,21 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
 
 ## Phase 3 — Database management ← IN PROGRESS
 
-- [ ] Provision Postgres/MySQL/Redis/Mongo as managed containers (built on Phase 1):
-      a `ManagedDatabase` service that runs the engine container with a named volume +
-      generated credentials + published port, waits for readiness, and exposes connection
-      info. ← starting with Postgres.
-- [ ] Backups + restore + scheduling; connection info surfaced in the admin UI.
+- [x] Provision Postgres/MySQL/Redis/Mongo as managed containers (built on Phase 1):
+      `ManagedDatabase` runs the engine container with generated credentials + published
+      port and exposes connection info. Readiness is probed via the engine itself
+      (`pg_isready` etc. over TCP, inside the container) — a docker-published port accepts
+      via docker-proxy before the DB can serve queries, so a port check is not enough.
+      Postgres integration-tested; the other engines share the same machinery.
+  - [x] **Ephemeral (tmpfs) data mode** — data dir on a RAM mount instead of a named
+        volume (no host disk I/O; Postgres `initdb` no longer fsync-storms btrfs). Doubles
+        as a CI/preview-DB feature; tests use it.
+- [x] **Backup** — `backup`/`backupToFile` run the engine's dump tool (`pg_dump`/
+      `mysqldump`) via `exec`, capturing clean stdout (creds via exec env). Postgres tested.
+- [ ] **Restore** — needs exec-stdin (feed the dump to `psql`/`mysql`) or `PUT
+      /containers/{id}/archive`; Redis/Mongo backup needs binary streaming-to-file.
+- [ ] Backup scheduling (hook into the existing scheduled-task system); a `DatabaseModel`
+      + DB-management admin pages surfacing connection info and backup/restore actions.
 
 ## Phase 4 — Multi-server
 
