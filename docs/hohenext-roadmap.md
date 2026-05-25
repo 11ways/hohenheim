@@ -34,11 +34,14 @@ here first as a concrete consumer; promote to the framework once stable.
   - [x] Containers: `createContainer`, `startContainer`, `stopContainer` (grace),
         `removeContainer`, `inspectContainer`, `listContainers`
   - [ ] Image `inspect`/`remove`; container `logs` (follow); `exec`; networks + volumes
-- [ ] **`DockerSiteType`** ← NEXT — run a container as a managed site, integrated with
-      the existing `SiteTypeRegistry` + proxy dispatch, mirroring how `NodeSiteType`/
-      `CommandSiteType` plug in. Sketch: pull the image, create+start a container with a
-      published port (or join a shared network), expose the upstream to `UpstreamForwarder`,
-      report health via `inspectContainer` State, and stop+remove on `destroy()`.
+- [x] **`DockerSiteType`** — `hohenheim:docker` site type (registered, 8 types now).
+      `DockerSiteRequestHandler` pulls the image if missing, creates+starts a container
+      publishing the app port to an ephemeral `127.0.0.1` host port, reverse-proxies via
+      `UpstreamForwarder`, reports health from `inspectContainer` State, and stop+removes
+      on `destroy()`. Integration-tested against a live daemon.
+  - [ ] Follow-ups: admin UI settings form (`hh-docker-settings.hwk` + dispatcher entry);
+        async container start (don't block site-load on a slow pull, like GitDeployment's
+        queue); optional shared-network mode instead of host-port publishing.
 
 ### Git provisioning: slot ownership model
 
