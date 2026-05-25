@@ -124,6 +124,15 @@ public class DatabaseService {
         databases.restore(name, engineOf(row), user, password, database, dump);
     }
 
+    /** Restore a dump file (text or binary) into a persisted database by name. */
+    public void restoreFromFile(String name, Path source) throws IOException {
+        Row row = require(name);
+        String user = row.get(DatabaseModel.DB_USER);
+        String password = row.get(DatabaseModel.DB_PASSWORD);
+        String database = row.get(DatabaseModel.DB_NAME);
+        databases.restoreFromFile(name, engineOf(row), user, password, database, source);
+    }
+
     /** Stop + remove the container (optionally its data volume) and delete the record. */
     public void destroy(String name, boolean removeData) throws IOException {
         databases.destroy(name, removeData);
