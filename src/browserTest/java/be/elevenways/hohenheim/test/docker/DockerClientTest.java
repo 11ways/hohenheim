@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.ProcessDockerTransport;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -183,6 +184,19 @@ class DockerClientTest {
             docker.stopContainer(id, 1);
             docker.removeContainer(id, true);
         }
+    }
+
+    @Test
+    void worksOverProcessTransportViaDialStdio() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        // `docker system dial-stdio` bridges stdio to the local daemon -- the same mechanism the
+        // SSH transport uses against a remote host, exercised here without needing SSH.
+        DockerClient docker = new DockerClient(
+            new ProcessDockerTransport(List.of("docker", "system", "dial-stdio")));
+
+        assertThat(docker.ping()).isTrue();
+        assertThat(docker.version()).containsKey("ApiVersion");
+        assertThat(docker.listContainers(true)).isNotNull();
     }
 
     @Test

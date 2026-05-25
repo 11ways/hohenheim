@@ -4,13 +4,7 @@ import be.elevenways.protoblast.common.dry.Dry;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.net.SocketException;
-import java.net.StandardProtocolFamily;
 import java.net.URLEncoder;
-import java.net.UnixDomainSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.ClosedChannelException;
-import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,20 +13,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Minimal Docker Engine API client speaking HTTP/1.1 directly over the daemon's
- * unix socket -- the foundation for Hohenext's container/app/database layer.
+ * Minimal Docker Engine API client speaking HTTP/1.1 over a pluggable {@link DockerTransport}
+ * -- a local unix socket by default, or a remote daemon over SSH ({@link #overSsh}). The
+ * foundation for Hohenext's container/app/database layer.
  *
- * Each call opens a fresh connection with {@code Connection: close} (no keep-alive)
- * and reads to EOF, then decodes a chunked body if present. A per-request watchdog
- * closes the channel if the daemon stalls, so an unresponsive daemon can't pin the
- * calling thread forever. Unversioned API paths are used, so the daemon serves them
- * at its current API version.
+ * Each call opens a fresh connection with {@code Connection: close} (no keep-alive) and reads to
+ * EOF, then decodes a chunked body if present. A per-request watchdog (in the transport) aborts
+ * the connection if the daemon stalls, so an unresponsive daemon can't pin the calling thread
+ * forever. Unversioned API paths are used, so the daemon serves them at its current API version.
  *
  * Request bodies are encoded as plain JSON ({@link #toJson}) rather than via DRY,
  * whose {@code stringify} emits DRY's extended (non-JSON) syntax the daemon rejects.
@@ -53,17 +44,7 @@ public class DockerClient {
      *  run for minutes; still bounded so a wedged stream eventually fails. */
     public static final long LONG_OP_TIMEOUT_MS = 600_000;
 
-    // AIDEV-NOTE: A blocking SocketChannel over AF_UNIX can't use Socket.setSoTimeout,
-    // so we bound each request with a watchdog that closes the channel on expiry; the
-    // blocked connect/read then throws ClosedChannelException, surfaced as a timeout.
-    private static final ScheduledExecutorService WATCHDOG =
-        Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "docker-client-watchdog");
-            thread.setDaemon(true);
-            return thread;
-        });
-
-    private final UnixDomainSocketAddress address;
+    private final DockerTransport transport;
     private final long timeoutMillis;
 
     public DockerClient() {
@@ -75,8 +56,21 @@ public class DockerClient {
     }
 
     public DockerClient(String socketPath, long timeoutMillis) {
-        this.address = UnixDomainSocketAddress.of(socketPath);
+        this(new UnixSocketDockerTransport(socketPath), timeoutMillis);
+    }
+
+    public DockerClient(DockerTransport transport) {
+        this(transport, DEFAULT_TIMEOUT_MS);
+    }
+
+    public DockerClient(DockerTransport transport, long timeoutMillis) {
+        this.transport = transport;
         this.timeoutMillis = timeoutMillis;
+    }
+
+    /** Talk to a remote Docker daemon over SSH (key-based ssh + docker required on {@code sshTarget}). */
+    public static DockerClient overSsh(String sshTarget) {
+        return new DockerClient(ProcessDockerTransport.overSsh(sshTarget));
     }
 
     // -----------------------------------------------------------------------
@@ -409,7 +403,7 @@ public class DockerClient {
     }
 
     // -----------------------------------------------------------------------
-    // HTTP/1.1 over the unix socket
+    // HTTP/1.1 over the transport (unix socket or process stdio)
     // -----------------------------------------------------------------------
 
     private record Response(int status, String body) {}
@@ -431,10 +425,14 @@ public class DockerClient {
         return new Response(response.status(), new String(response.body(), StandardCharsets.UTF_8));
     }
 
-    // Performs the HTTP exchange and returns the byte-accurate body, so binary endpoints
-    // (multiplexed log/exec streams) aren't corrupted by a UTF-8 decode.
+    // Performs the HTTP exchange via the transport and returns the byte-accurate body, so binary
+    // endpoints (multiplexed log/exec streams, archive downloads) aren't corrupted by a UTF-8 decode.
     private RawResponse exchange(String method, String path, byte[] body, String contentType, long timeoutMs)
             throws IOException {
+        return parseHttpRaw(transport.roundTrip(buildRequest(method, path, body, contentType), timeoutMs));
+    }
+
+    private static byte[] buildRequest(String method, String path, byte[] body, String contentType) {
         StringBuilder head = new StringBuilder();
         head.append(method).append(' ').append(path).append(" HTTP/1.1\r\n");
         head.append("Host: docker\r\n");
@@ -445,61 +443,14 @@ public class DockerClient {
         }
         head.append("Connection: close\r\n\r\n");
 
-        byte[] raw;
-        SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX);
-        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
-            () -> closeQuietly(channel), timeoutMs, TimeUnit.MILLISECONDS);
-        try {
-            channel.connect(address);
-            writeFully(channel, ByteBuffer.wrap(head.toString().getBytes(StandardCharsets.ISO_8859_1)));
-            if (body != null && body.length > 0) {
-                writeFully(channel, ByteBuffer.wrap(body));
-            }
-            raw = readToEnd(channel);
-        } catch (ClosedChannelException e) {
-            throw new IOException(method + " " + path + " timed out after " + timeoutMs + "ms");
-        } finally {
-            watchdog.cancel(false);
-            closeQuietly(channel);
+        byte[] headBytes = head.toString().getBytes(StandardCharsets.ISO_8859_1);
+        if (body == null || body.length == 0) {
+            return headBytes;
         }
-        return parseHttpRaw(raw);
-    }
-
-    private static void writeFully(SocketChannel channel, ByteBuffer buf) throws IOException {
-        while (buf.hasRemaining()) {
-            channel.write(buf);
-        }
-    }
-
-    private static byte[] readToEnd(SocketChannel channel) throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ByteBuffer buf = ByteBuffer.allocate(8192);
-        try {
-            int n;
-            while ((n = channel.read(buf)) != -1) {
-                buf.flip();
-                out.write(buf.array(), buf.arrayOffset(), n);
-                buf.clear();
-            }
-        } catch (SocketException e) {
-            // AIDEV-NOTE: Docker RSTs some Connection: close streams (notably /build)
-            // after sending the full response, rather than a clean FIN. Keep what we
-            // read and let parseHttp + chunk decoding validate completeness; only a
-            // reset with nothing buffered is a real failure. (Watchdog timeouts surface
-            // as ClosedChannelException, handled separately by the caller.)
-            if (out.size() == 0) {
-                throw e;
-            }
-        }
-        return out.toByteArray();
-    }
-
-    private static void closeQuietly(SocketChannel channel) {
-        try {
-            channel.close();
-        } catch (IOException ignored) {
-            // best effort
-        }
+        byte[] request = new byte[headBytes.length + body.length];
+        System.arraycopy(headBytes, 0, request, 0, headBytes.length);
+        System.arraycopy(body, 0, request, headBytes.length, body.length);
+        return request;
     }
 
     // Tar the build context via the system `tar` (handles file modes, symlinks, and
