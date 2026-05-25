@@ -1568,12 +1568,20 @@ public class HohenheimHandlers {
             String name = form.getOrDefault("name", "").trim();
             String engineToken = form.getOrDefault("engine", "").trim().toLowerCase();
             String database = form.getOrDefault("database", "").trim();
-            String user = form.getOrDefault("db_user", "").trim();
-            String password = form.getOrDefault("db_password", "").trim();
             String image = form.getOrDefault("image", "").trim();
             boolean ephemeral = "on".equals(form.get("ephemeral")) || "true".equals(form.get("ephemeral"));
 
-            String error = validateDatabaseForm(name, engineToken, database, user, password);
+            // User defaults to "appuser"; a blank password is auto-generated (shown on the detail page).
+            String user = form.getOrDefault("db_user", "").trim();
+            if (user.isEmpty()) {
+                user = "appuser";
+            }
+            String password = form.getOrDefault("db_password", "").trim();
+            if (password.isEmpty()) {
+                password = AuthHelper.generatePassword();
+            }
+
+            String error = validateDatabaseForm(name, engineToken, database);
             if (error != null) {
                 return renderUntyped(Identifier.of("hohenheim", "hohenheim/databases/create"),
                     Map.of("error", error));
@@ -1588,7 +1596,7 @@ public class HohenheimHandlers {
             }
 
             audit(auditModel, conduit, "created", "database", name, name);
-            return redirectUntyped("/databases");
+            return redirectUntyped("/databases/" + name);   // detail page shows the connection info
         });
 
         // Backup (POST) -- download a SQL dump
@@ -1623,8 +1631,7 @@ public class HohenheimHandlers {
         });
     }
 
-    private static String validateDatabaseForm(String name, String engine, String database,
-                                               String user, String password) {
+    private static String validateDatabaseForm(String name, String engine, String database) {
         if (name.isEmpty()) return "Name is required";
         if (!name.matches("[a-z0-9][a-z0-9-]*")) {
             return "Name must be lowercase letters, digits, and dashes";
@@ -1636,9 +1643,7 @@ public class HohenheimHandlers {
             return "Unknown engine: " + engine;
         }
         if (database.isEmpty()) return "Database name is required";
-        if (user.isEmpty()) return "User is required";
-        if (password.isEmpty()) return "Password is required";
-        return null;
+        return null;   // user defaults / password auto-generates in the handler
     }
 
     // -----------------------------------------------------------------------

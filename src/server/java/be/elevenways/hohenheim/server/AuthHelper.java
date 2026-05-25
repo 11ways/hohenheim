@@ -24,6 +24,13 @@ public class AuthHelper {
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String COOKIE_NAME = "hh_session";
 
+    /** A strong random password (URL-safe, no padding) for an auto-provisioned resource. */
+    public static String generatePassword() {
+        byte[] bytes = new byte[18];   // 18 bytes -> 24 url-safe base64 chars
+        RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
     public static String hashPassword(String password) {
         byte[] salt = new byte[16];
         RANDOM.nextBytes(salt);
