@@ -66,16 +66,21 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
       tars a context and POSTs `/build`; `removeImage` for lifecycle. Pull/build run on a
       long (10 min) timeout; the transport handles binary bodies and Docker's
       RST-after-response on `/build`. Integration-tested (FROM alpine + RUN).
-- [ ] **Git → build → run integration** ← NEXT — let a `docker` site source from git
-      (reuse `GitSiteRequestHandler`/`GitDeployment`): on deploy, clone, `buildImage`
-      from the checkout's Dockerfile to a per-site tag, then run a container from that
-      image (via `DockerSiteRequestHandler`). Old container/image cleaned up after swap.
-- [ ] Buildpacks/Nixpacks (no-Dockerfile builds); optional local registry; zero-downtime swap.
+- [x] **Git → build → run integration** — a `docker` site sourced from git builds its
+      image from the checkout's Dockerfile (`build_context` injected by `GitDeployment`)
+      to a per-site tag and runs a container from it; falls back to pulling a remote
+      `image` when not git-sourced. Integration-tested.
+- [ ] Follow-ups: zero-downtime swap (unique container names + label-based orphan sweep,
+      currently brief downtime on redeploy via stable name); buildpacks/Nixpacks
+      (no-Dockerfile builds — needs the `pack` CLI); optional local registry.
 
-## Phase 3 — Database management
+## Phase 3 — Database management ← IN PROGRESS
 
-- Provision Postgres/MySQL/Redis/Mongo as managed containers (Phase 1).
-- Backups + restore + scheduling; connection info surfaced in the admin UI.
+- [ ] Provision Postgres/MySQL/Redis/Mongo as managed containers (built on Phase 1):
+      a `ManagedDatabase` service that runs the engine container with a named volume +
+      generated credentials + published port, waits for readiness, and exposes connection
+      info. ← starting with Postgres.
+- [ ] Backups + restore + scheduling; connection info surfaced in the admin UI.
 
 ## Phase 4 — Multi-server
 
