@@ -258,6 +258,36 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("delete").build())
         .build();
 
+    // --- Servers (multi-server inventory) ---
+    public static final ParameterDefinition<String> SERVER_NAME = ParameterDefinition.builder(String.class)
+        .name("serverName")
+        .stringResolver(value -> value)
+        .build();
+
+    public static final PageEndpoint SERVERS = Endpoint.pageBuilder()
+        .identifier(Identifier.of("hohenheim", "servers"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("servers").build())
+        .build();
+
+    public static final PageEndpoint SERVERS_CREATE_FORM = Endpoint.pageBuilder()
+        .identifier(Identifier.of("hohenheim", "servers_create_form"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("servers").addDelimiter().addStatic("create").build())
+        .build();
+
+    public static final Endpoint<Object> SERVERS_CREATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "servers_create"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("servers").addDelimiter().addStatic("create").build())
+        .build();
+
+    public static final Endpoint<Object> SERVERS_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "servers_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("servers").addDelimiter().addParameter(SERVER_NAME)
+            .addDelimiter().addStatic("delete").build())
+        .build();
+
     // --- Process control ---
     public static final ParameterDefinition<Long> PID = ParameterDefinition.builder(Long.class)
         .name("pid")

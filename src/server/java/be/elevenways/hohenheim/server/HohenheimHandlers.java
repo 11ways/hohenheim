@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.model.UserModel;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
 import be.elevenways.hohenheim.server.process.ManagedProcess;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
@@ -74,6 +75,7 @@ public class HohenheimHandlers {
         initAuditLog(auditModel);
         initAccessLists(accessListModel, auditModel);
         initDatabases(new DatabaseService(), auditModel);
+        initServers(new ServerService(), auditModel);
         initProcessControl(auditModel);
         initWebSockets();
     }
@@ -1642,6 +1644,72 @@ public class HohenheimHandlers {
         }
         if (database.isEmpty()) return "Database name is required";
         return null;   // user defaults / password auto-generates in the handler
+    }
+
+    private static void initServers(ServerService serverService, AuditLogModel auditModel) {
+        serverService.ensureLocal();
+
+        // List
+        HohenheimEndpoints.SERVERS.setHandler(conduit -> {
+            serverService.ensureLocal();
+            List<Map<String, Object>> items = new ArrayList<>();
+            for (ServerService.Summary summary : serverService.summaries()) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("name", summary.name());
+                item.put("mode", summary.mode());
+                item.put("sshTarget", summary.sshTarget());
+                item.put("reachable", summary.reachable());
+                item.put("removable", !ServerService.LOCAL.equals(summary.name()));
+                items.add(item);
+            }
+            return new RenderTemplateResult(
+                Identifier.of("hohenheim", "hohenheim/servers/list"),
+                Map.of("servers", items, "listCount", items.size())
+            );
+        });
+
+        // Create form
+        HohenheimEndpoints.SERVERS_CREATE_FORM.setHandler(conduit ->
+            new RenderTemplateResult(
+                Identifier.of("hohenheim", "hohenheim/servers/create"),
+                Map.of("error", "")
+            )
+        );
+
+        // Create (POST)
+        HohenheimEndpoints.SERVERS_CREATE.setHandler(conduit -> {
+            HttpConduit http = (HttpConduit) conduit;
+            Map<String, String> form = http.getFormData().toStringMap();
+            String name = form.getOrDefault("name", "").trim();
+            String sshTarget = form.getOrDefault("ssh_target", "").trim();
+
+            String error = validateServerForm(name, sshTarget);
+            if (error != null) {
+                return renderUntyped(Identifier.of("hohenheim", "hohenheim/servers/create"),
+                    Map.of("error", error));
+            }
+            serverService.add(name, sshTarget);
+            audit(auditModel, conduit, "created", "server", name, name);
+            return redirectUntyped("/servers");
+        });
+
+        // Delete (POST)
+        HohenheimEndpoints.SERVERS_DELETE.setHandler(conduit -> {
+            String name = conduit.getParameter(HohenheimEndpoints.SERVER_NAME);
+            serverService.remove(name);
+            audit(auditModel, conduit, "deleted", "server", name, name);
+            return redirectUntyped("/servers");
+        });
+    }
+
+    private static String validateServerForm(String name, String sshTarget) {
+        if (name.isEmpty()) return "Name is required";
+        if (!name.matches("[a-z0-9][a-z0-9-]*")) {
+            return "Name must be lowercase letters, digits, and dashes";
+        }
+        if (ServerService.LOCAL.equals(name)) return "'local' is reserved for this host";
+        if (sshTarget.isEmpty()) return "SSH target is required (e.g. user@host)";
+        return null;
     }
 
     // -----------------------------------------------------------------------

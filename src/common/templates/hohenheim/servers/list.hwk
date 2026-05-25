@@ -1,0 +1,57 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    <header class="hh-header">
+        <h1 class="hh-header__title">Servers</h1>
+    </header>
+    <main class="hh-content">
+
+        {% declare servers: List %}
+        {% declare listCount: Integer %}
+
+        <div class="hh-page-actions">
+            <p class="hh-page-actions__description">Docker hosts this platform manages -- the local daemon plus remote hosts over SSH.</p>
+            <a href="/servers/create" class="hh-button-link"><pl-button variant="primary">Add Server</pl-button></a>
+        </div>
+
+        <pl-card>
+            <pl-card-content>
+                <pl-table>
+                    <pl-table-header><pl-table-row>
+                        <pl-table-head>Name</pl-table-head>
+                        <pl-table-head>Mode</pl-table-head>
+                        <pl-table-head>Target</pl-table-head>
+                        <pl-table-head>Reachable</pl-table-head>
+                        <pl-table-head></pl-table-head>
+                    </pl-table-row></pl-table-header>
+                    <pl-table-body>
+                        {% each servers as index, item %}
+                        <pl-table-row>
+                            <pl-table-cell>{{ item.get("name") }}</pl-table-cell>
+                            <pl-table-cell>
+                                <pl-badge variant={% "secondary" %}>{{ item.get("mode") }}</pl-badge>
+                            </pl-table-cell>
+                            <pl-table-cell>{{ item.get("sshTarget") }}</pl-table-cell>
+                            <pl-table-cell>
+                                {% if item.get("reachable") == true %}
+                                    <pl-badge variant={% "default" %}>Reachable</pl-badge>
+                                {% else %}
+                                    <pl-badge variant={% "destructive" %}>Unreachable</pl-badge>
+                                {% /if %}
+                            </pl-table-cell>
+                            <pl-table-cell>
+                                {% if item.get("removable") == true %}
+                                <form method="POST" action={% "/servers/" + item.get("name") + "/delete" %}>
+                                    <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Remove</pl-button>
+                                </form>
+                                {% /if %}
+                            </pl-table-cell>
+                        </pl-table-row>
+                        {% /each %}
+                    </pl-table-body>
+                </pl-table>
+            </pl-card-content>
+        </pl-card>
+
+    </main>
+{% /block %}
