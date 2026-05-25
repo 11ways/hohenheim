@@ -266,12 +266,18 @@ public class DockerClient {
         return demuxStream(exchange("GET", path, null, null, timeoutMillis).body());
     }
 
-    /** Result of an in-container {@link #exec}: the process exit code and its combined output. */
-    public record ExecResult(int exitCode, String output) {}
+    /** Result of an in-container {@link #exec}: exit code plus stdout and stderr, kept separate
+     *  so callers (e.g. backups) get clean stdout without diagnostic noise from stderr. */
+    public record ExecResult(int exitCode, String stdout, String stderr) {
+        /** stdout with stderr appended -- for simple logging when separation doesn't matter. */
+        public String output() {
+            return stderr.isEmpty() ? stdout : stdout + stderr;
+        }
+    }
 
     /**
      * Run a command inside a running container and block until it exits, capturing stdout and
-     * stderr (interleaved) plus the exit code. The basis of database backup/restore, which run
+     * stderr separately plus the exit code. The basis of database backup/restore, which run
      * {@code pg_dump}/{@code psql} (etc.) inside the engine's own container.
      */
     @SuppressWarnings("unchecked")
@@ -286,11 +292,17 @@ public class DockerClient {
         RawResponse stream = exchange("POST", "/exec/" + execId + "/start",
             toJson(Map.of("Detach", false, "Tty", false)).getBytes(StandardCharsets.UTF_8),
             "application/json", LONG_OP_TIMEOUT_MS);
-        String output = demuxStream(stream.body());
+
+        ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+        ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+        walkFrames(stream.body(), (type, buffer, offset, length) ->
+            (type == 2 ? stderr : stdout).write(buffer, offset, length));
 
         Map<String, Object> info = (Map<String, Object>) parseJson(get("/exec/" + execId + "/json").body());
         int exitCode = info.get("ExitCode") instanceof Number n ? n.intValue() : -1;
-        return new ExecResult(exitCode, output);
+        return new ExecResult(exitCode,
+            new String(stdout.toByteArray(), StandardCharsets.UTF_8),
+            new String(stderr.toByteArray(), StandardCharsets.UTF_8));
     }
 
     /**
@@ -516,30 +528,38 @@ public class DockerClient {
         return out.toString();
     }
 
+    private interface FrameConsumer {
+        void accept(int streamType, byte[] buffer, int offset, int length);
+    }
+
     // AIDEV-NOTE: Docker multiplexes stdout/stderr over one stream for non-TTY containers:
     // each frame is an 8-byte header [streamType, 0,0,0, size(4, big-endian)] then `size`
     // payload bytes (streamType 1=stdout, 2=stderr). TTY containers send a raw unframed
-    // stream; if the bytes don't look framed we emit them verbatim. stdout/stderr are
-    // concatenated in arrival order, like `docker logs`. (exec reuses this demux.)
-    private static String demuxStream(byte[] data) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
+    // stream; unframed or truncated data is delivered as a single stdout slice.
+    private static void walkFrames(byte[] data, FrameConsumer consumer) {
         int pos = 0;
         while (pos + 8 <= data.length) {
             int streamType = data[pos] & 0xFF;
             if (streamType > 2 || data[pos + 1] != 0 || data[pos + 2] != 0 || data[pos + 3] != 0) {
-                out.write(data, pos, data.length - pos);   // not framed (TTY) -> raw remainder
-                return new String(out.toByteArray(), StandardCharsets.UTF_8);
+                consumer.accept(1, data, pos, data.length - pos);   // unframed (TTY) -> stdout
+                return;
             }
             int size = ((data[pos + 4] & 0xFF) << 24) | ((data[pos + 5] & 0xFF) << 16)
                      | ((data[pos + 6] & 0xFF) << 8) | (data[pos + 7] & 0xFF);
             pos += 8;
             if (size < 0 || pos + size > data.length) {
-                out.write(data, pos, data.length - pos);   // truncated frame -> emit remainder
-                break;
+                consumer.accept(1, data, pos, data.length - pos);   // truncated -> stdout
+                return;
             }
-            out.write(data, pos, size);
+            consumer.accept(streamType, data, pos, size);
             pos += size;
         }
+    }
+
+    // stdout and stderr concatenated in arrival order, like `docker logs`.
+    private static String demuxStream(byte[] data) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        walkFrames(data, (type, buffer, offset, length) -> out.write(buffer, offset, length));
         return new String(out.toByteArray(), StandardCharsets.UTF_8);
     }
 

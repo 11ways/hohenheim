@@ -175,9 +175,10 @@ class DockerClientTest {
             DockerClient.ExecResult result = docker.exec(id,
                 List.of("sh", "-c", "echo exec-out; echo exec-err 1>&2; exit 3"));
 
-            assertThat(result.output()).contains("exec-out");   // stdout demuxed
-            assertThat(result.output()).contains("exec-err");   // stderr demuxed
-            assertThat(result.exitCode()).isEqualTo(3);         // exit code captured
+            assertThat(result.stdout()).contains("exec-out");          // stdout frame
+            assertThat(result.stdout()).doesNotContain("exec-err");    // kept separate
+            assertThat(result.stderr()).contains("exec-err");          // stderr frame
+            assertThat(result.exitCode()).isEqualTo(3);                // exit code captured
         } finally {
             docker.stopContainer(id, 1);
             docker.removeContainer(id, true);
