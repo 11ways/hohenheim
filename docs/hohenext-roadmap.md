@@ -108,6 +108,9 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
 - [x] **Mongo restore** — `mongorestore --archive --drop`, binary-safe round-trip tested.
 - [ ] **Redis restore** — an RDB loads only at container startup, so live restore into a running
       container isn't possible (rejected up-front). Needs container-recreate-with-RDB orchestration.
+- [x] **Async provisioning** — create persists the record as "provisioning" and provisions in a
+      background pool (`DatabaseService.createAsync`), so the request returns immediately; status
+      (provisioning/active/failed) is tracked (M016) and shown in the list and detail pages.
 - [ ] Follow-up: surface binary-backup download + a restore action in the admin UI (today the UI
       Backup button is text engines only; restore is API/task-level).
 
