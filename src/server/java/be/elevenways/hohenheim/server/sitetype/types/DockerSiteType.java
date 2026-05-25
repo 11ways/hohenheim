@@ -35,6 +35,10 @@ public class DockerSiteType implements SiteTypeHandler {
     public static final StringField DOCKERFILE = SETTINGS_SCHEMA.addField(
         StringField.builder().name("dockerfile").build());
 
+    // Target server (servers.name); blank/local runs on the local daemon, else a remote host over SSH.
+    public static final StringField SERVER = SETTINGS_SCHEMA.addField(
+        StringField.builder().name("server").build());
+
     // Reuse the same env-var sub-schema shape as the node/command site types.
     public static final Schema ENV_VAR_SCHEMA = new Schema();
     static {

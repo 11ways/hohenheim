@@ -9,6 +9,7 @@
             let containerPort = settings != null && settings.get("container_port") != null ? settings.get("container_port") + "" : ""
             let command = settings != null && settings.get("command") != null ? settings.get("command") + "" : ""
             let dockerfile = settings != null && settings.get("dockerfile") != null ? settings.get("dockerfile") + "" : ""
+            let server = settings != null && settings.get("server") != null ? settings.get("server") + "" : ""
         %}
         <div class="hh-form-section">
             <div class="hh-form-row">
@@ -35,6 +36,11 @@
                 <pl-label target="docker-dockerfile">Dockerfile Path</pl-label>
                 <pl-input id="docker-dockerfile" type={% "text" %} name={% "dockerfile" %} value={% dockerfile %} placeholder={% "Dockerfile" %}></pl-input>
                 <p class="hh-form-hint">Used only for git-sourced sites (path within the checkout).</p>
+            </div>
+            <div class="hh-form-group">
+                <pl-label target="docker-server">Server</pl-label>
+                <pl-input id="docker-server" type={% "text" %} name={% "server" %} value={% server %} placeholder={% "local" %}></pl-input>
+                <p class="hh-form-hint">Registered server name to run on; leave empty for the local host.</p>
             </div>
         </div>
     }
