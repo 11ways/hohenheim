@@ -90,15 +90,18 @@ public class ManagedDatabase {
         }
 
         /** The tool + args that load a dump file (already inside the container) back in. */
-        List<String> restoreCommand(String user, String database, String filePath) {
+        List<String> restoreCommand(String user, String password, String database, String filePath) {
             return switch (this) {
                 // ON_ERROR_STOP makes a failed statement abort with non-zero (no silent half-restore).
                 case POSTGRES -> List.of("psql", "-v", "ON_ERROR_STOP=1", "-U", user, "-d", database,
                     "-f", filePath);
                 // mysql's `source` builtin reads the file -- avoids a shell redirect.
                 case MYSQL -> List.of("mysql", "-u", user, database, "-e", "source " + filePath);
-                case REDIS, MONGO -> throw new UnsupportedOperationException(
-                    this + " restore needs binary import, not a text load (follow-up)");
+                // --drop replaces existing collections; the archive carries its own db name.
+                case MONGO -> List.of("mongorestore", "--username", user, "--password", password,
+                    "--authenticationDatabase", "admin", "--drop", "--archive=" + filePath);
+                case REDIS -> throw new UnsupportedOperationException(
+                    "redis restore loads the RDB only at container startup; live restore is not supported");
             };
         }
 
@@ -300,13 +303,31 @@ public class ManagedDatabase {
      */
     public void restore(String name, Engine engine, String user, String password,
                         String database, String dump) throws IOException {
+        Path tempFile = Files.createTempFile("hohenheim-restore", "." + engine.dumpExtension());
+        try {
+            Files.writeString(tempFile, dump, StandardCharsets.UTF_8);
+            restoreFromFile(name, engine, user, password, database, tempFile);
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    /**
+     * Restore a dump file into a provisioned database: push it into the container and load it with
+     * the engine's client (binary-safe, so it handles SQL text and the Mongo archive alike).
+     *
+     * @throws UnsupportedOperationException for Redis (its RDB loads only at startup)
+     */
+    public void restoreFromFile(String name, Engine engine, String user, String password,
+                                String database, Path source) throws IOException {
         String containerName = "hohenheim-db-" + name;
-        String fileName = "hohenheim-restore.sql";
-        List<String> command = engine.restoreCommand(user, database, "/tmp/" + fileName);
+        String fileName = "hohenheim-restore." + engine.dumpExtension();
+        // Resolve the restore command first so an unsupported engine fails before any upload.
+        List<String> command = engine.restoreCommand(user, password, database, "/tmp/" + fileName);
 
         Path tempDir = Files.createTempDirectory("hohenheim-restore");
         try {
-            Files.writeString(tempDir.resolve(fileName), dump, StandardCharsets.UTF_8);
+            Files.copy(source, tempDir.resolve(fileName));
             docker.putArchiveFromDirectory(containerName, "/tmp", tempDir);
 
             DockerClient.ExecResult result = docker.exec(containerName, command, engine.dumpEnv(password));
@@ -318,12 +339,6 @@ public class ManagedDatabase {
             Files.deleteIfExists(tempDir.resolve(fileName));
             Files.deleteIfExists(tempDir);
         }
-    }
-
-    /** Restore a database from a UTF-8 dump file; see {@link #restore}. */
-    public void restoreFromFile(String name, Engine engine, String user, String password,
-                                String database, Path source) throws IOException {
-        restore(name, engine, user, password, database, Files.readString(source, StandardCharsets.UTF_8));
     }
 
     /** Size cap for an ephemeral (tmpfs) data mount: 1 GiB -- generous for tests and small

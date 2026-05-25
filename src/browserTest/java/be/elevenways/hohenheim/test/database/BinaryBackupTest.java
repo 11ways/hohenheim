@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -58,30 +59,59 @@ class BinaryBackupTest {
     }
 
     @Test
-    void mongoBackupProducesArchive() throws IOException {
+    void mongoBackupRestoreRoundTrips() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, MONGO_IMAGE), MONGO_IMAGE + " not present locally");
 
         DatabaseService service = new DatabaseService(docker, freshDatasource());
         String name = "mongo" + System.nanoTime();
+        String container = "hohenheim-db-" + name;
         Path dir = Files.createTempDirectory("hohenheim-mongo-bk");
         try {
             service.create(name, ManagedDatabase.Engine.MONGO, MONGO_IMAGE,
                 "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs
-            DockerClient.ExecResult insert = docker.exec("hohenheim-db-" + name, List.of(
-                "mongosh", "--username", "appuser", "--password", "secret123",
-                "--authenticationDatabase", "admin", "--quiet",
-                "--eval", "db.getSiblingDB('appdb').things.insertOne({ x: 1 })"));
-            assertThat(insert.exitCode()).withFailMessage("mongo insert failed: %s", insert.stderr()).isZero();
+            mongo(docker, container, "db.getSiblingDB('appdb').things.insertOne({ x: 7 })");
 
             Path dump = service.backupToFile(name, dir, "dump");
             assertThat(dump.getFileName().toString()).endsWith(".archive");
-            // A mongodump archive of a non-empty db carries a header plus the collection data.
             assertThat(Files.size(dump)).isGreaterThan(100L);
+
+            mongo(docker, container, "db.getSiblingDB('appdb').things.drop()");   // wipe what the dump holds
+            service.restoreFromFile(name, dump);
+
+            DockerClient.ExecResult count = docker.exec(container, List.of(
+                "mongosh", "--username", "appuser", "--password", "secret123",
+                "--authenticationDatabase", "admin", "--quiet",
+                "--eval", "db.getSiblingDB('appdb').things.countDocuments({ x: 7 })"));
+            assertThat(count.exitCode()).withFailMessage("count failed: %s", count.stderr()).isZero();
+            assertThat(count.stdout().trim()).isEqualTo("1");   // document survived the round-trip
         } finally {
             cleanup(service, name, dir);
         }
+    }
+
+    @Test
+    void redisRestoreIsUnsupported() throws IOException {
+        // Redis loads its RDB only at container startup, so live restore isn't possible; the
+        // engine rejects it up-front (before any Docker interaction), so no daemon is needed.
+        ManagedDatabase databases = new ManagedDatabase(new DockerClient());
+        Path dummy = Files.createTempFile("hohenheim-redis-restore", ".rdb");
+        try {
+            assertThatThrownBy(() -> databases.restoreFromFile(
+                    "any", ManagedDatabase.Engine.REDIS, "u", "p", "d", dummy))
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("redis");
+        } finally {
+            Files.deleteIfExists(dummy);
+        }
+    }
+
+    private static void mongo(DockerClient docker, String container, String eval) throws IOException {
+        DockerClient.ExecResult result = docker.exec(container, List.of(
+            "mongosh", "--username", "appuser", "--password", "secret123",
+            "--authenticationDatabase", "admin", "--quiet", "--eval", eval));
+        assertThat(result.exitCode()).withFailMessage("mongo eval failed: %s", result.stderr()).isZero();
     }
 
     private static void cleanup(DatabaseService service, String name, Path dir) throws IOException {
