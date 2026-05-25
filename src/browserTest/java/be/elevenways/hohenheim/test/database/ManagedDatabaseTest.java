@@ -23,6 +23,7 @@ class ManagedDatabaseTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String PG_IMAGE = "postgres:17-alpine";
+    private static final String MYSQL_IMAGE = "mysql:8.0";
 
     @Test
     @SuppressWarnings("unchecked")
@@ -130,6 +131,46 @@ class ManagedDatabaseTest {
         DockerClient.ExecResult result = docker.exec(containerName,
             List.of("psql", "-v", "ON_ERROR_STOP=1", "-U", "appuser", "-d", "appdb", "-c", sql), env);
         assertThat(result.exitCode()).withFailMessage("psql failed: %s", result.stderr()).isZero();
+    }
+
+    @Test
+    void backupRestoreRoundTripsMysql() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, MYSQL_IMAGE), MYSQL_IMAGE + " not present locally");
+
+        ManagedDatabase databases = new ManagedDatabase(docker);
+        String name = "mytest" + System.nanoTime();
+        String containerName = "hohenheim-db-" + name;
+        List<String> env = List.of("MYSQL_PWD=secret123");
+        try {
+            databases.provision(name, ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE,
+                "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs, no btrfs I/O
+
+            mysql(docker, containerName, env, "CREATE TABLE notes (id int); INSERT INTO notes VALUES (7);");
+            String dump = databases.backup(name, ManagedDatabase.Engine.MYSQL,
+                "appuser", "secret123", "appdb");
+
+            mysql(docker, containerName, env, "DROP TABLE notes;");
+
+            databases.restore(name, ManagedDatabase.Engine.MYSQL,
+                "appuser", "secret123", "appdb", dump);
+
+            DockerClient.ExecResult check = docker.exec(containerName,
+                List.of("mysql", "-u", "appuser", "appdb", "-N", "-B", "-e", "SELECT count(*) FROM notes WHERE id=7"),
+                env);
+            assertThat(check.exitCode()).withFailMessage("query failed: %s", check.stderr()).isZero();
+            assertThat(check.stdout().trim()).isEqualTo("1");   // row survived the round-trip
+        } finally {
+            databases.destroy(name, true);
+        }
+    }
+
+    private static void mysql(DockerClient docker, String containerName, List<String> env, String sql)
+            throws IOException {
+        DockerClient.ExecResult result = docker.exec(containerName,
+            List.of("mysql", "-u", "appuser", "appdb", "-e", sql), env);
+        assertThat(result.exitCode()).withFailMessage("mysql failed: %s", result.stderr()).isZero();
     }
 
     private static boolean imagePresent(DockerClient docker, String tag) throws IOException {

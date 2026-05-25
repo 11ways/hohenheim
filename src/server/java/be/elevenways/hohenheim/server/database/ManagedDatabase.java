@@ -61,7 +61,10 @@ public class ManagedDatabase {
         List<String> dumpCommand(String user, String database) {
             return switch (this) {
                 case POSTGRES -> List.of("pg_dump", "-U", user, "-d", database);
-                case MYSQL -> List.of("mysqldump", "-u", user, database);
+                // --no-tablespaces: MySQL 8 otherwise needs the global PROCESS privilege, which a
+                // per-database app user lacks. --single-transaction: consistent InnoDB dump, no locks.
+                case MYSQL -> List.of("mysqldump", "--no-tablespaces", "--single-transaction",
+                    "-u", user, database);
                 case REDIS, MONGO -> throw new UnsupportedOperationException(
                     this + " backup needs binary streaming, not a text dump (follow-up)");
             };
