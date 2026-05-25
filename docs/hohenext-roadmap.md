@@ -117,10 +117,17 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
 Phase 3 is effectively complete: provision, persistence, orchestration, admin UI, scheduled
 backups, and backup for all four engines + restore for the SQL engines and Mongo.
 
-## Phase 4 — Multi-server
+## Phase 4 — Multi-server ← STARTED
 
-- SSH client (Protoblast) → drive a remote Docker daemon over SSH.
-- Server inventory + resource monitoring (Sentinel-style lightweight agent).
+- [x] **Remote Docker over SSH** — pluggable `DockerTransport` (unix socket vs process-stdio);
+      `DockerClient.overSsh(target)` drives a remote daemon via `ssh <host> docker system
+      dial-stdio` (no new deps -- shells out to ssh like tar/git). `ProcessDockerTransport` keeps
+      stdin open while reading (dial-stdio truncates the response on stdin EOF otherwise). Tested
+      end-to-end against local `docker system dial-stdio`. Promote the transport to Protoblast once stable.
+- [ ] **Server inventory** — persist Docker hosts (local + remote ssh) in a `ServerModel`;
+      `DockerClient.forServer(...)`; admin UI to add servers + show reachability (ping); let managed
+      sites/databases target a chosen host.
+- [ ] **Resource monitoring** — per-server stats (Sentinel-style lightweight agent).
 
 ## Phase 5 — Platform services
 
