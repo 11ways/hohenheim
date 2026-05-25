@@ -115,6 +115,7 @@ class SiteTypeTest extends HohenheimTestBase {
         String formText = getFormText();
         assertThat(formText).contains("Container Port");
         assertThat(formText).contains("Command Override");
+        assertThat(formText).contains("Registered server name");   // the host-routing field
         assertThat(formText).doesNotContain("Upstream Host");
     }
 

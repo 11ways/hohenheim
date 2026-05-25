@@ -41,7 +41,7 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
 
     public DockerSiteRequestHandler(int siteId, Map<String, Object> settings) {
         this.siteId = siteId;
-        this.docker = new DockerClient();
+        this.docker = dockerFor(settings);
         this.containerName = "hohenheim-site-" + siteId;
 
         Integer port = asInt(settings.get("container_port"));
@@ -137,6 +137,15 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
     }
 
     // -----------------------------------------------------------------------
+
+    // Resolve the daemon for this site's target server. Local is a direct client (no inventory
+    // lookup, so it works without the DB); a named remote host resolves through the inventory.
+    private static DockerClient dockerFor(Map<String, Object> settings) {
+        Object server = settings.get("server");
+        String name = (server == null || server.toString().isBlank())
+            ? ServerService.LOCAL : server.toString().trim();
+        return ServerService.LOCAL.equals(name) ? new DockerClient() : new ServerService().clientFor(name);
+    }
 
     private void removeExisting() {
         try {
