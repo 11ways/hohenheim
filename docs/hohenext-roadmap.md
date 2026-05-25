@@ -117,7 +117,7 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
 Phase 3 is effectively complete: provision, persistence, orchestration, admin UI, scheduled
 backups, and backup for all four engines + restore for the SQL engines and Mongo.
 
-## Phase 4 — Multi-server ← STARTED
+## Phase 4 — Multi-server ← COMPLETE (SSH-transport remote half untestable locally)
 
 - [x] **Remote Docker over SSH** — pluggable `DockerTransport` (unix socket vs process-stdio);
       `DockerClient.overSsh(target)` drives a remote daemon via `ssh <host> docker system
@@ -135,8 +135,13 @@ backups, and backup for all four engines + restore for the SQL engines and Mongo
 - [x] **Route Docker sites to a chosen host** — `DockerSiteType` has a `server` setting; the
       handler builds its client via `ServerService` for a named remote host (local stays a direct
       client). The docker site form exposes the field.
-- [ ] **Resource monitoring** — per-server stats (Sentinel-style lightweight agent): CPU/mem/disk
-      via the Docker `/info` + `/containers/{id}/stats` endpoints per server, shown on `/servers`.
+- [x] **Resource monitoring** — `DockerClient.info()` host snapshot; `ServerService.summaries`
+      reports CPUs, memory, container counts, and images per server (one call that also serves as
+      the reachability probe). Shown on `/servers`. (Follow-up: per-container `/stats` deltas, disk.)
+
+Phase 4 is functionally complete: register remote hosts, see their reachability + resources, and
+provision databases and Docker sites on a chosen host. The SSH transport's remote leg is tested
+only via the equivalent local `docker system dial-stdio` (no remote host available here).
 
 ## Phase 5 — Platform services
 
