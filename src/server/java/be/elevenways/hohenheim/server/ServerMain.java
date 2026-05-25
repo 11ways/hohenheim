@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.stats.StatsCollector;
+import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.server.task.CleanExpiredSessions;
 import be.elevenways.hohenheim.server.task.CleanOldAuditLogs;
 import be.elevenways.hohenheim.server.task.CleanOldProclogs;
@@ -72,6 +73,9 @@ public class ServerMain {
         taskScheduler.schedule("CleanExpiredSessions", new CleanExpiredSessions(), 5, 360);
         taskScheduler.schedule("CleanOldAuditLogs", new CleanOldAuditLogs(), 5, 360);
         taskScheduler.schedule("CleanOldProclogs", new CleanOldProclogs(), 5, 360);
+
+        // Managed-database backups: daily, after a 10-minute initial delay
+        taskScheduler.schedule("BackupDatabases", new BackupDatabases(), 10, 1440);
     }
 
     public static ProxyServer getProxyServer() {

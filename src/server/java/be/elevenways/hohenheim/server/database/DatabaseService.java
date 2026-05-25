@@ -7,6 +7,9 @@ import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -95,6 +98,11 @@ public class DatabaseService {
         String password = row.get(DatabaseModel.DB_PASSWORD);
         String database = row.get(DatabaseModel.DB_NAME);
         return databases.backup(name, engineOf(row), user, password, database);
+    }
+
+    /** Back up a persisted database by name to a UTF-8 file. */
+    public void backupToFile(String name, Path target) throws IOException {
+        Files.writeString(target, backup(name), StandardCharsets.UTF_8);
     }
 
     /** Restore a dump into a persisted database by name. */
