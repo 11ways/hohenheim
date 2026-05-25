@@ -155,6 +155,41 @@ public class DockerClient {
         request("DELETE", "/images/" + name + (force ? "?force=true" : ""), null, null, timeoutMillis);
     }
 
+    /**
+     * Pull {@code image:tag} only if it is not already present locally. {@code image} may
+     * embed the tag (e.g. {@code "postgres:17-alpine"}); a colon that is part of a
+     * registry host:port (followed by {@code /}) is not treated as a tag separator.
+     */
+    public void ensureImage(String image, String tag) throws IOException {
+        String repo = image;
+        String resolvedTag = tag;
+        int colon = image.lastIndexOf(':');
+        if (colon > 0 && !image.substring(colon + 1).contains("/")) {
+            repo = image.substring(0, colon);
+            resolvedTag = image.substring(colon + 1);
+        }
+        if (resolvedTag == null || resolvedTag.isBlank()) {
+            resolvedTag = "latest";
+        }
+        String ref = repo + ":" + resolvedTag;
+        for (Object entry : listImages()) {
+            Object repoTags = ((Map<?, ?>) entry).get("RepoTags");
+            if (repoTags instanceof List<?> tags && tags.contains(ref)) {
+                return;
+            }
+        }
+        pullImage(repo, resolvedTag);
+    }
+
+    // -----------------------------------------------------------------------
+    // Volumes
+    // -----------------------------------------------------------------------
+
+    /** Remove a named volume; {@code force} removes it even if in use by stopped containers. */
+    public void removeVolume(String name, boolean force) throws IOException {
+        request("DELETE", "/volumes/" + enc(name) + (force ? "?force=true" : ""), null, null, timeoutMillis);
+    }
+
     // -----------------------------------------------------------------------
     // Containers
     // -----------------------------------------------------------------------
@@ -214,6 +249,27 @@ public class DockerClient {
     @SuppressWarnings("unchecked")
     public Map<String, Object> inspectContainer(String id) throws IOException {
         return (Map<String, Object>) parseJson(get("/containers/" + id + "/json").body());
+    }
+
+    /**
+     * @return the host port Docker published for {@code containerPort}/tcp on the container
+     * @throws IOException if the container did not publish that port
+     */
+    public int publishedPort(String containerId, int containerPort) throws IOException {
+        Object networkSettings = inspectContainer(containerId).get("NetworkSettings");
+        Object ports = networkSettings instanceof Map<?, ?> ns ? ns.get("Ports") : null;
+        Object bindings = ports instanceof Map<?, ?> p ? p.get(containerPort + "/tcp") : null;
+        if (bindings instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> binding) {
+            Object hostPort = binding.get("HostPort");
+            if (hostPort != null && !hostPort.toString().isBlank()) {
+                try {
+                    return Integer.parseInt(hostPort.toString());
+                } catch (NumberFormatException e) {
+                    throw new IOException("Bad published port '" + hostPort + "'");
+                }
+            }
+        }
+        throw new IOException("Container did not publish port " + containerPort);
     }
 
     // -----------------------------------------------------------------------
