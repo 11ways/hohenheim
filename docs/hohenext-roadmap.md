@@ -96,11 +96,22 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
       desired config; `DatabaseService` ties it to `ManagedDatabase`: create provisions +
       records, list reads records, backup/restore resolve engine+credentials by name, destroy
       removes container and record. Model round-trip + Docker/DB integration tested.
-- [ ] **Admin UI** — DB-management pages (list, create, connection info, backup/restore/destroy
-      actions) on top of `DatabaseService`; generate credentials in the create handler.
-- [ ] **Backup scheduling** — hook `DatabaseService.backup` into the scheduled-task system,
-      writing dumps to a backups dir with retention.
-- [ ] Redis/Mongo backup/restore (binary streaming-to-file, not text dumps).
+- [x] **Admin UI** — `/databases` pages on `DatabaseService`: list (with live status), create
+      form (provisions + persists), per-row backup download, delete. Sidebar link + render tests.
+      (Follow-up: generate credentials in the create handler instead of entering them.)
+- [x] **Backup scheduling** — daily `BackupDatabases` task dumps each running database to a
+      timestamped file under `database.backup_path`, pruning to `database.backup_retention`.
+- [x] **Redis/Mongo binary backup** — `getArchiveFile` fetches the native dump (redis `--rdb`,
+      `mongodump --archive`) from the container's `/tmp` (writable layer; the archive API can't
+      read tmpfs/volume mounts). All four engines back up; the scheduled task covers them all.
+- [x] **Mongo restore** — `mongorestore --archive --drop`, binary-safe round-trip tested.
+- [ ] **Redis restore** — an RDB loads only at container startup, so live restore into a running
+      container isn't possible (rejected up-front). Needs container-recreate-with-RDB orchestration.
+- [ ] Follow-up: surface binary-backup download + a restore action in the admin UI (today the UI
+      Backup button is text engines only; restore is API/task-level).
+
+Phase 3 is effectively complete: provision, persistence, orchestration, admin UI, scheduled
+backups, and backup for all four engines + restore for the SQL engines and Mongo.
 
 ## Phase 4 — Multi-server
 
