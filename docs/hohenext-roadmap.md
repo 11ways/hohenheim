@@ -132,9 +132,11 @@ backups, and backup for all four engines + restore for the SQL engines and Mongo
       `DatabaseService` resolves the `ManagedDatabase` per record via `ServerService` (local socket
       or remote SSH); create form offers a host dropdown; list/detail show the host. (Local path
       fully tested; the remote path shares the code with a different transport.)
-- [ ] **Route managed sites to a chosen host** — same treatment for `DockerSiteType` (add
-      `server_name` to sites; build the site handler's client via `ServerService.clientFor`).
-- [ ] **Resource monitoring** — per-server stats (Sentinel-style lightweight agent).
+- [x] **Route Docker sites to a chosen host** — `DockerSiteType` has a `server` setting; the
+      handler builds its client via `ServerService` for a named remote host (local stays a direct
+      client). The docker site form exposes the field.
+- [ ] **Resource monitoring** — per-server stats (Sentinel-style lightweight agent): CPU/mem/disk
+      via the Docker `/info` + `/containers/{id}/stats` endpoints per server, shown on `/servers`.
 
 ## Phase 5 — Platform services
 
