@@ -10,6 +10,7 @@ import io.undertow.util.Headers;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,18 +43,34 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
         this.docker = new DockerClient();
         this.containerName = "hohenheim-site-" + siteId;
 
-        String image = (String) settings.get("image");
-        String tag = (String) settings.getOrDefault("tag", "latest");
         Integer port = asInt(settings.get("container_port"));
-        if (image == null || image.isBlank() || port == null || port <= 0) {
-            Blast.log("DOCKER: site", siteId, "missing image/container_port; staying down");
+        if (port == null || port <= 0) {
+            Blast.log("DOCKER: site", siteId, "missing container_port; staying down");
             return;
         }
 
+        String buildContext = (String) settings.get("build_context");
+        String image = (String) settings.get("image");
+
         try {
-            ensureImage(image, (tag == null || tag.isBlank()) ? "latest" : tag);
+            String imageRef;
+            if (buildContext != null && !buildContext.isBlank()) {
+                // Git-provisioned: build the image from the checkout's Dockerfile.
+                imageRef = "hohenheim-site-" + siteId + ":latest";
+                docker.buildImage(Path.of(buildContext), imageRef, (String) settings.get("dockerfile"));
+            } else if (image != null && !image.isBlank()) {
+                // Run a remote image, pulling it if absent.
+                String tag = (String) settings.getOrDefault("tag", "latest");
+                String resolvedTag = (tag == null || tag.isBlank()) ? "latest" : tag;
+                ensureImage(image, resolvedTag);
+                imageRef = image.contains(":") ? image : image + ":" + resolvedTag;
+            } else {
+                Blast.log("DOCKER: site", siteId, "needs an image or a git source; staying down");
+                return;
+            }
+
             removeExisting();   // clean up a leftover container from a previous run
-            String id = docker.createContainer(containerName, buildSpec(image, tag, port, settings));
+            String id = docker.createContainer(containerName, buildSpec(imageRef, port, settings));
             docker.startContainer(id);
             this.containerId = id;
             this.upstream = resolveUpstream(id, port);
@@ -139,11 +156,11 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
         }
     }
 
-    private static Map<String, Object> buildSpec(String image, String tag, int port,
+    private static Map<String, Object> buildSpec(String imageRef, int port,
                                                  Map<String, Object> settings) {
         String portKey = port + "/tcp";
         Map<String, Object> spec = new LinkedHashMap<>();
-        spec.put("Image", image.contains(":") ? image : image + ":" + tag);
+        spec.put("Image", imageRef);
 
         String command = (String) settings.get("command");
         if (command != null && !command.isBlank()) {
