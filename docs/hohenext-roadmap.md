@@ -124,9 +124,12 @@ backups, and backup for all four engines + restore for the SQL engines and Mongo
       dial-stdio` (no new deps -- shells out to ssh like tar/git). `ProcessDockerTransport` keeps
       stdin open while reading (dial-stdio truncates the response on stdin EOF otherwise). Tested
       end-to-end against local `docker system dial-stdio`. Promote the transport to Protoblast once stable.
-- [ ] **Server inventory** — persist Docker hosts (local + remote ssh) in a `ServerModel`;
-      `DockerClient.forServer(...)`; admin UI to add servers + show reachability (ping); let managed
-      sites/databases target a chosen host.
+- [x] **Server inventory** — `ServerModel` (M017) persists Docker hosts; `ServerService` ensures
+      the implicit `local` host, builds a `DockerClient` per server (local socket or SSH), and
+      reports reachability (ping). Admin UI at `/servers` lists hosts with reachability, adds remote
+      SSH servers, and removes them (not local).
+- [ ] **Route managed sites/databases to a chosen host** — add `server_id` to sites/databases and
+      build their `DockerClient` via `ServerService.clientFor(...)` instead of always-local.
 - [ ] **Resource monitoring** — per-server stats (Sentinel-style lightweight agent).
 
 ## Phase 5 — Platform services
