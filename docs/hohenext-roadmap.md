@@ -62,9 +62,15 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
 
 ## Phase 2 — Deployment pipeline
 
-- Build-from-source (Dockerfile, then buildpacks/Nixpacks); reuse the existing
-  dual-slot git provisioning, swapping "build command" for "image build".
-- Image lifecycle + optional local registry; zero-downtime container swap.
+- [x] **Image build-from-source** — `DockerClient.buildImage(contextDir, tag, dockerfile)`
+      tars a context and POSTs `/build`; `removeImage` for lifecycle. Pull/build run on a
+      long (10 min) timeout; the transport handles binary bodies and Docker's
+      RST-after-response on `/build`. Integration-tested (FROM alpine + RUN).
+- [ ] **Git → build → run integration** ← NEXT — let a `docker` site source from git
+      (reuse `GitSiteRequestHandler`/`GitDeployment`): on deploy, clone, `buildImage`
+      from the checkout's Dockerfile to a per-site tag, then run a container from that
+      image (via `DockerSiteRequestHandler`). Old container/image cleaned up after swap.
+- [ ] Buildpacks/Nixpacks (no-Dockerfile builds); optional local registry; zero-downtime swap.
 
 ## Phase 3 — Database management
 
