@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.SystemUserModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
@@ -94,22 +93,11 @@ public class CommandSiteType implements SiteTypeHandler {
             this.startCommand = (String) settings.getOrDefault("start_command", "");
             this.workingDirectory = (String) settings.get("working_directory");
             this.portArgument = (String) settings.get("port_argument");
-            this.resolvedUid = resolveUid(settings.get("system_user_id"));
+            this.resolvedUid = SystemUsers.resolveUid(settings.get("system_user_id"));
 
             if (!startCommand.isEmpty()) {
                 startMinimumServers();
             }
-        }
-
-        private static int resolveUid(Object systemUserIdObj) {
-            if (!(systemUserIdObj instanceof Integer id) || id <= 0) {
-                return 0;
-            }
-            var model = new SystemUserModel(HohenheimDatabase.datasource());
-            Row row = model.findById(id);
-            if (row == null) return 0;
-            Integer uid = row.get(SystemUserModel.UID);
-            return uid != null ? uid : 0;
         }
 
         @Override

@@ -36,6 +36,23 @@ here first as a concrete consumer; promote to the framework once stable.
       existing `SiteTypeRegistry` + proxy dispatch (port/health/lifecycle), mirroring
       how `NodeSiteType`/`CommandSiteType` plug in today.
 
+### Git provisioning: slot ownership model
+
+When a git site sets `system_user_id`, both `git` and the build run as that uid
+(so a compromised repo can't execute as the sudo-capable Hohenheim user). The
+filesystem ownership is split so both users can operate:
+
+- The per-site `data/<id>` dir (and the `active` symlink) stay owned by Hohenheim,
+  which creates/flips the symlink and serves files.
+- Each fresh slot (`a`/`b`) dir is created by Hohenheim, then `chown`ed to the site
+  uid so the uid-dropped clone/build can write into it.
+- Slot cleanup clears site-owned contents as the site uid (`sudo -u`), then removes
+  the now-empty dir as Hohenheim (which has parent-dir write). This handles slots
+  with mixed ownership left by older deploys.
+
+Requires the Hohenheim user's NOPASSWD sudo (already needed for per-site process
+uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim path.
+
 ## Phase 2 — Deployment pipeline
 
 - Build-from-source (Dockerfile, then buildpacks/Nixpacks); reuse the existing
