@@ -13,6 +13,7 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -275,16 +276,30 @@ public class DockerClient {
         }
     }
 
+    /** Run a command inside a running container; see {@link #exec(String, List, List)}. */
+    public ExecResult exec(String containerId, List<String> command) throws IOException {
+        return exec(containerId, command, List.of());
+    }
+
     /**
      * Run a command inside a running container and block until it exits, capturing stdout and
      * stderr separately plus the exit code. The basis of database backup/restore, which run
      * {@code pg_dump}/{@code psql} (etc.) inside the engine's own container.
+     *
+     * @param env {@code "KEY=value"} entries set for the command (e.g. a dump password, which
+     *            stays out of the captured stdout)
      */
     @SuppressWarnings("unchecked")
-    public ExecResult exec(String containerId, List<String> command) throws IOException {
+    public ExecResult exec(String containerId, List<String> command, List<String> env) throws IOException {
+        Map<String, Object> createSpec = new LinkedHashMap<>();
+        createSpec.put("AttachStdout", true);
+        createSpec.put("AttachStderr", true);
+        createSpec.put("Cmd", command);
+        if (!env.isEmpty()) {
+            createSpec.put("Env", env);
+        }
         Map<String, Object> created = (Map<String, Object>) parseJson(request("POST",
-            "/containers/" + containerId + "/exec",
-            toJson(Map.of("AttachStdout", true, "AttachStderr", true, "Cmd", command))).body());
+            "/containers/" + containerId + "/exec", toJson(createSpec)).body());
         String execId = (String) created.get("Id");
 
         // Detach=false streams the (multiplexed, non-TTY) output until the process exits and
