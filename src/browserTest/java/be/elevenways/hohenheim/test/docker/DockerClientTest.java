@@ -56,6 +56,31 @@ class DockerClientTest {
     }
 
     @Test
+    void buildsImageFromDockerfile() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " (build base) not present");
+
+        Path context = Files.createTempDirectory("hohenheim-build-test");
+        String tag = "hohenheim-buildtest-" + System.nanoTime() + ":latest";
+        try {
+            Files.writeString(context.resolve("Dockerfile"),
+                "FROM alpine:latest\nRUN echo hohenheim > /built.txt\n");
+
+            docker.buildImage(context, tag, "Dockerfile");
+            assertThat(imagePresent(docker, tag)).isTrue();
+        } finally {
+            try {
+                docker.removeImage(tag, true);
+            } catch (IOException ignored) {
+                // best effort cleanup
+            }
+            Files.deleteIfExists(context.resolve("Dockerfile"));
+            Files.deleteIfExists(context);
+        }
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void containerLifecycle() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
