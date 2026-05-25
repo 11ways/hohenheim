@@ -21,6 +21,7 @@
                         <pl-table-head>Name</pl-table-head>
                         <pl-table-head>Engine</pl-table-head>
                         <pl-table-head>Database</pl-table-head>
+                        <pl-table-head>Server</pl-table-head>
                         <pl-table-head>Status</pl-table-head>
                         <pl-table-head>Storage</pl-table-head>
                         <pl-table-head></pl-table-head>
@@ -28,7 +29,7 @@
                     <pl-table-body>
                         {% if listCount == 0 %}
                         <pl-table-row>
-                            <pl-table-cell colspan="6" class="hh-empty-state">No databases yet.</pl-table-cell>
+                            <pl-table-cell colspan="7" class="hh-empty-state">No databases yet.</pl-table-cell>
                         </pl-table-row>
                         {% /if %}
                         {% each databases as index, item %}
@@ -40,6 +41,7 @@
                                 <pl-badge variant={% "secondary" %}>{{ item.get("engine") }}</pl-badge>
                             </pl-table-cell>
                             <pl-table-cell>{{ item.get("database") }}</pl-table-cell>
+                            <pl-table-cell>{{ item.get("server") }}</pl-table-cell>
                             <pl-table-cell>
                                 {% if item.get("status") == "provisioning" %}
                                     <pl-badge variant={% "secondary" %}>Provisioning</pl-badge>

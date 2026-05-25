@@ -2,6 +2,7 @@
 
 {% block "main" %}
     {% declare error: String %}
+    {% declare servers: List %}
 
     <header class="hh-header">
         <h1 class="hh-header__title">Create Database</h1>
@@ -40,6 +41,19 @@
                                     <pl-select-item value="mongo" label="MongoDB">MongoDB</pl-select-item>
                                 </pl-select-content>
                             </pl-select>
+                        </div>
+
+                        <div class="hh-form-group">
+                            <pl-label target="server">Server</pl-label>
+                            <pl-select name="server" value="local">
+                                <pl-select-trigger placeholder="Server"></pl-select-trigger>
+                                <pl-select-content>
+                                    {% each servers as serverIndex, serverName %}
+                                    <pl-select-item value={% serverName %} label={% serverName %}>{{ serverName }}</pl-select-item>
+                                    {% /each %}
+                                </pl-select-content>
+                            </pl-select>
+                            <p class="hh-form-hint">The Docker host to run this database on.</p>
                         </div>
 
                         <div class="hh-form-group">

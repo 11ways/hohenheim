@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.migration.M015_CreateManagedDatabases;
 import be.elevenways.hohenheim.migration.M016_AddDatabaseStatus;
+import be.elevenways.hohenheim.migration.M018_AddDatabaseServer;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -53,6 +54,7 @@ class DatabaseServiceTest {
             assertThat(all).hasSize(1);
             assertThat((String) all.get(0).get(DatabaseModel.ENGINE)).isEqualTo("postgres");
             assertThat((Boolean) all.get(0).get(DatabaseModel.EPHEMERAL)).isTrue();
+            assertThat((String) all.get(0).get(DatabaseModel.SERVER_NAME)).isEqualTo("local");   // default host
 
             // backup(name) resolves engine + credentials from the record (caller passes no params).
             DockerClient.ExecResult seed = docker.exec(containerName,
@@ -114,7 +116,8 @@ class DatabaseServiceTest {
         db.deleteOnExit();
         SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner((MigrationCapableDatasource) ds,
-            List.of(M015_CreateManagedDatabases::new, M016_AddDatabaseStatus::new)).migrate();
+            List.of(M015_CreateManagedDatabases::new, M016_AddDatabaseStatus::new,
+                M018_AddDatabaseServer::new)).migrate();
         return ds;
     }
 

@@ -73,9 +73,10 @@ public class HohenheimHandlers {
         initCertificates(certModel, auditModel);
         initSettings();
         initAuditLog(auditModel);
+        ServerService serverService = new ServerService();
         initAccessLists(accessListModel, auditModel);
-        initDatabases(new DatabaseService(), auditModel);
-        initServers(new ServerService(), auditModel);
+        initDatabases(new DatabaseService(), serverService, auditModel);
+        initServers(serverService, auditModel);
         initProcessControl(auditModel);
         initWebSockets();
     }
@@ -1509,7 +1510,8 @@ public class HohenheimHandlers {
         return vars;
     }
 
-    private static void initDatabases(DatabaseService databaseService, AuditLogModel auditModel) {
+    private static void initDatabases(DatabaseService databaseService, ServerService serverService,
+                                      AuditLogModel auditModel) {
 
         // List
         HohenheimEndpoints.DATABASES.setHandler(conduit -> {
@@ -1522,6 +1524,7 @@ public class HohenheimHandlers {
                 item.put("database", summary.database());
                 item.put("user", summary.user());
                 item.put("ephemeral", summary.ephemeral());
+                item.put("server", summary.server());
                 item.put("status", summary.status());
                 item.put("running", summary.running());
                 item.put("port", summary.port() != null ? summary.port() : 0);
@@ -1536,11 +1539,8 @@ public class HohenheimHandlers {
 
         // Create form
         HohenheimEndpoints.DATABASES_CREATE_FORM.setHandler(conduit ->
-            new RenderTemplateResult(
-                Identifier.of("hohenheim", "hohenheim/databases/create"),
-                Map.of("error", "")
-            )
-        );
+            new RenderTemplateResult(Identifier.of("hohenheim", "hohenheim/databases/create"),
+                databaseCreateVars(serverService, "")));
 
         // Detail (connection info)
         HohenheimEndpoints.DATABASES_DETAIL.setHandler(conduit -> {
@@ -1557,6 +1557,7 @@ public class HohenheimHandlers {
             vars.put("user", detail.user());
             vars.put("password", detail.password());
             vars.put("ephemeral", detail.ephemeral());
+            vars.put("server", detail.server());
             vars.put("status", detail.status());
             vars.put("running", detail.running());
             vars.put("port", detail.port() != null ? detail.port() : 0);
@@ -1574,6 +1575,10 @@ public class HohenheimHandlers {
             String database = form.getOrDefault("database", "").trim();
             String image = form.getOrDefault("image", "").trim();
             boolean ephemeral = "on".equals(form.get("ephemeral")) || "true".equals(form.get("ephemeral"));
+            String server = form.getOrDefault("server", ServerService.LOCAL).trim();
+            if (server.isEmpty()) {
+                server = ServerService.LOCAL;
+            }
 
             // User defaults to "appuser"; a blank password is auto-generated (shown on the detail page).
             String user = form.getOrDefault("db_user", "").trim();
@@ -1588,12 +1593,12 @@ public class HohenheimHandlers {
             String error = validateDatabaseForm(name, engineToken, database);
             if (error != null) {
                 return renderUntyped(Identifier.of("hohenheim", "hohenheim/databases/create"),
-                    Map.of("error", error));
+                    databaseCreateVars(serverService, error));
             }
 
-            // Provision in the background; the detail page shows the provisioning status.
+            // Provision in the background on the chosen host; the detail page shows the status.
             databaseService.createAsync(name, ManagedDatabase.Engine.valueOf(engineToken.toUpperCase()),
-                image.isEmpty() ? null : image, user, password, database, ephemeral);
+                image.isEmpty() ? null : image, user, password, database, ephemeral, server);
 
             audit(auditModel, conduit, "created", "database", name, name);
             return redirectUntyped("/databases/" + name);   // detail page shows status + connection info
@@ -1629,6 +1634,13 @@ public class HohenheimHandlers {
             }
             return redirectUntyped("/databases");
         });
+    }
+
+    private static Map<String, Object> databaseCreateVars(ServerService serverService, String error) {
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("error", error);
+        vars.put("servers", serverService.names());   // names only -- no reachability probe on the form
+        return vars;
     }
 
     private static String validateDatabaseForm(String name, String engine, String database) {

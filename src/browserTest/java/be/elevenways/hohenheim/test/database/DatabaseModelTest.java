@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.migration.M015_CreateManagedDatabases;
 import be.elevenways.hohenheim.migration.M016_AddDatabaseStatus;
+import be.elevenways.hohenheim.migration.M018_AddDatabaseServer;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
@@ -31,7 +32,8 @@ class DatabaseModelTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner((MigrationCapableDatasource) datasource,
-            List.of(M015_CreateManagedDatabases::new, M016_AddDatabaseStatus::new)).migrate();
+            List.of(M015_CreateManagedDatabases::new, M016_AddDatabaseStatus::new,
+                M018_AddDatabaseServer::new)).migrate();
     }
 
     @Test
@@ -46,10 +48,12 @@ class DatabaseModelTest {
         row.set(DatabaseModel.DB_PASSWORD, "secret123");
         row.set(DatabaseModel.DB_NAME, "appdb");
         row.set(DatabaseModel.EPHEMERAL, false);
+        row.set(DatabaseModel.SERVER_NAME, "edge-1");
         model.save(row);
 
         Row reloaded = model.findByName("blog");
         assertThat(reloaded).isNotNull();
+        assertThat((String) reloaded.get(DatabaseModel.SERVER_NAME)).isEqualTo("edge-1");
         assertThat((String) reloaded.get(DatabaseModel.ENGINE)).isEqualTo("postgres");
         assertThat((String) reloaded.get(DatabaseModel.IMAGE)).isEqualTo("postgres:17-alpine");
         assertThat((String) reloaded.get(DatabaseModel.DB_USER)).isEqualTo("appuser");
