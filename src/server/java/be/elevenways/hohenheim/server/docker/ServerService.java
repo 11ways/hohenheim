@@ -7,6 +7,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The multi-server inventory: persists Docker hosts ({@link ServerModel}) and builds a
@@ -45,19 +46,28 @@ public class ServerService {
         }
     }
 
-    /** A server plus its best-effort reachability (a Docker ping), for the admin list. */
-    public record Summary(String name, String mode, String sshTarget, boolean reachable) {}
+    /** A server with its best-effort reachability and host resource snapshot, for the admin list.
+     *  All resource fields are 0 when the host is unreachable. */
+    public record Summary(String name, String mode, String sshTarget, boolean reachable,
+                          int cpus, long memoryBytes, int containersRunning, int containersTotal,
+                          int images) {}
 
-    /** All servers with reachability, best-effort per record. */
+    /** All servers with reachability + host stats (from Docker {@code /info}), best-effort per record. */
     public List<Summary> summaries() {
         List<Summary> result = new ArrayList<>();
         for (Row row : model.find().all()) {
             String target = row.get(ServerModel.SSH_TARGET);
+            Map<String, Object> info = infoFor(row);
             result.add(new Summary(
                 row.get(ServerModel.NAME),
                 row.get(ServerModel.MODE),
                 target != null ? target : "",
-                isReachable(row)));
+                info != null,
+                asInt(info, "NCPU"),
+                asLong(info, "MemTotal"),
+                asInt(info, "ContainersRunning"),
+                asInt(info, "Containers"),
+                asInt(info, "Images")));
         }
         return result;
     }
@@ -107,11 +117,20 @@ public class ServerService {
         return new UnixSocketDockerTransport(DockerClient.DEFAULT_SOCKET);
     }
 
-    private static boolean isReachable(Row row) {
+    // Host /info (also serves as the reachability probe), or null when unreachable.
+    private static Map<String, Object> infoFor(Row row) {
         try {
-            return new DockerClient(transportFor(row), PING_TIMEOUT_MS).ping();
+            return new DockerClient(transportFor(row), PING_TIMEOUT_MS).info();
         } catch (Exception e) {
-            return false;
+            return null;
         }
+    }
+
+    private static int asInt(Map<String, Object> info, String key) {
+        return info != null && info.get(key) instanceof Number n ? n.intValue() : 0;
+    }
+
+    private static long asLong(Map<String, Object> info, String key) {
+        return info != null && info.get(key) instanceof Number n ? n.longValue() : 0L;
     }
 }

@@ -22,6 +22,10 @@
                         <pl-table-head>Mode</pl-table-head>
                         <pl-table-head>Target</pl-table-head>
                         <pl-table-head>Reachable</pl-table-head>
+                        <pl-table-head>CPUs</pl-table-head>
+                        <pl-table-head>Memory</pl-table-head>
+                        <pl-table-head>Containers</pl-table-head>
+                        <pl-table-head>Images</pl-table-head>
                         <pl-table-head></pl-table-head>
                     </pl-table-row></pl-table-header>
                     <pl-table-body>
@@ -39,6 +43,10 @@
                                     <pl-badge variant={% "destructive" %}>Unreachable</pl-badge>
                                 {% /if %}
                             </pl-table-cell>
+                            <pl-table-cell>{{ item.get("cpus") }}</pl-table-cell>
+                            <pl-table-cell>{{ item.get("memory") }}</pl-table-cell>
+                            <pl-table-cell>{{ item.get("containers") }}</pl-table-cell>
+                            <pl-table-cell>{{ item.get("images") }}</pl-table-cell>
                             <pl-table-cell>
                                 {% if item.get("removable") == true %}
                                 <form method="POST" action={% "/servers/" + item.get("name") + "/delete" %}>

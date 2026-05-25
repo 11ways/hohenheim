@@ -96,6 +96,15 @@ public class DockerClient {
         return (Map<String, Object>) parseJson(get("/version").body());
     }
 
+    /**
+     * @return the daemon's {@code /info} payload (NCPU, MemTotal, Containers, ContainersRunning,
+     *         Images, ...) -- a cheap host-level resource snapshot
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> info() throws IOException {
+        return (Map<String, Object>) parseJson(get("/info").body());
+    }
+
     // -----------------------------------------------------------------------
     // Images
     // -----------------------------------------------------------------------
