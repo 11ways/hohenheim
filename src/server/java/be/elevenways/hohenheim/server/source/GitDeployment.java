@@ -12,6 +12,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,10 +30,11 @@ public class GitDeployment {
     private final Map<String, Object> sourceSettings;
     private final GitRepository gitRepo;
     private final File siteDir;
+    private final int uid;
 
     public GitDeployment(int siteId, Row site, SiteTypeHandler typeHandler,
                          Map<String, Object> typeSettings, Map<String, Object> sourceSettings,
-                         GitRepository gitRepo, File siteDir) {
+                         GitRepository gitRepo, File siteDir, int uid) {
         this.siteId = siteId;
         this.site = site;
         this.typeHandler = typeHandler;
@@ -40,6 +42,7 @@ public class GitDeployment {
         this.sourceSettings = sourceSettings;
         this.gitRepo = gitRepo;
         this.siteDir = siteDir;
+        this.uid = uid;
     }
 
     /**
@@ -171,7 +174,22 @@ public class GitDeployment {
         Blast.log("GIT: site", siteId, "running build:", buildCommand);
 
         try {
-            ProcessBuilder pb = new ProcessBuilder("sh", "-c", buildCommand);
+            // Run the build under the site's system user when configured, matching the
+            // runtime process's uid drop. Without this, a compromised repo's build script
+            // would run as the (sudo-capable) Hohenheim user. The "--" terminates sudo
+            // option parsing so the shell invocation can't be read as sudo flags.
+            List<String> cmd = new ArrayList<>();
+            if (uid > 0) {
+                cmd.add("sudo");
+                cmd.add("-u");
+                cmd.add("#" + uid);
+                cmd.add("--");
+            }
+            cmd.add("sh");
+            cmd.add("-c");
+            cmd.add(buildCommand);
+
+            ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.directory(workDir);
             pb.redirectErrorStream(true);
 

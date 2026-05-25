@@ -130,6 +130,7 @@ public class GitRepository {
             fullCmd.add("sudo");
             fullCmd.add("-u");
             fullCmd.add("#" + uid);
+            fullCmd.add("--");
             fullCmd.addAll(command);
         } else {
             fullCmd = command;

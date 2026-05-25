@@ -96,6 +96,15 @@ public class StaticFileHandler implements SiteRequestHandler {
             return;
         }
 
+        // Real-path containment: normalize() collapses ".." lexically but does NOT
+        // resolve symlinks, so a symlink inside the root pointing outside it would
+        // otherwise be served. Re-check against the resolved real paths.
+        if (!withinRoot(rootPath, filePath)) {
+            exchange.setStatusCode(403);
+            exchange.getResponseSender().send("Forbidden");
+            return;
+        }
+
         FileChannel channel = null;
         try {
             String contentType = Files.probeContentType(filePath);
@@ -134,6 +143,12 @@ public class StaticFileHandler implements SiteRequestHandler {
 
     static void serveDirectoryListing(HttpServerExchange exchange, Path rootPath,
                                       Path dirPath, boolean showHidden) {
+        // Same symlink-escape guard as file serving (see withinRoot).
+        if (!withinRoot(rootPath, dirPath)) {
+            exchange.setStatusCode(403);
+            exchange.getResponseSender().send("Forbidden");
+            return;
+        }
         try {
             String relativePath = rootPath.relativize(dirPath).toString();
             if (relativePath.isEmpty()) relativePath = "/";
@@ -183,6 +198,18 @@ public class StaticFileHandler implements SiteRequestHandler {
 
     private static void closeQuietly(FileChannel channel) {
         try { channel.close(); } catch (IOException ignored) {}
+    }
+
+    /**
+     * Real-path containment check; defends against symlinks inside the root that
+     * resolve outside it. Denies (returns false) if the real path can't be read.
+     */
+    private static boolean withinRoot(Path root, Path target) {
+        try {
+            return target.toRealPath().startsWith(root.toRealPath());
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     static String escapeHtml(String text) {

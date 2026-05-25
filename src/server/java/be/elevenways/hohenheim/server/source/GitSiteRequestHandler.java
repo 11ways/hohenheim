@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
@@ -27,6 +29,7 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
     private final File siteDir;
     private final GitRepository gitRepo;
     private final GitDeploymentQueue queue;
+    private final int uid;
 
     private volatile SiteRequestHandler innerHandler;
     private volatile String currentCommit;
@@ -48,8 +51,10 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
         boolean shallow = Boolean.TRUE.equals(sourceSettings.get("shallow_clone"));
         boolean submodules = Boolean.TRUE.equals(sourceSettings.get("submodules"));
 
-        // TODO: resolve system_user_id from type settings
-        this.gitRepo = new GitRepository(repoUrl, branch, shallow, submodules, 0);
+        // Drop git ops + build to the site's system user when configured, so a
+        // compromised repo can't run as the (sudo-capable) Hohenheim user.
+        this.uid = resolveUid(typeSettings.get("system_user_id"));
+        this.gitRepo = new GitRepository(repoUrl, branch, shallow, submodules, uid);
 
         // Create the deploy queue with deploy action
         this.queue = new GitDeploymentQueue(siteId, this::executeDeploy);
@@ -160,7 +165,20 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
 
     private GitDeployment createDeployment() {
         return new GitDeployment(siteId, site, typeHandler, typeSettings,
-            sourceSettings, gitRepo, siteDir);
+            sourceSettings, gitRepo, siteDir, uid);
+    }
+
+    /** Resolve a site's configured system_user_id to its numeric uid (0 = no drop). */
+    private static int resolveUid(Object systemUserIdObj) {
+        if (!(systemUserIdObj instanceof Integer id) || id <= 0) {
+            return 0;
+        }
+        Row row = new SystemUserModel(HohenheimDatabase.datasource()).findById(id);
+        if (row == null) {
+            return 0;
+        }
+        Integer uid = row.get(SystemUserModel.UID);
+        return uid != null ? uid : 0;
     }
 
     private File getActiveSlotDir() {
