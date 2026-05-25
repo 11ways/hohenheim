@@ -291,6 +291,11 @@ public class GitDeployment {
             adjusted.put("working_directory", new File(baseDir, workDirValue).getAbsolutePath());
         }
 
+        // Docker sites build their image from the checkout; expose the context dir so
+        // DockerSiteRequestHandler builds-from-source instead of pulling a remote image.
+        // Harmless for other site types, which ignore unknown settings.
+        adjusted.put("build_context", baseDir.getAbsolutePath());
+
         return adjusted;
     }
 

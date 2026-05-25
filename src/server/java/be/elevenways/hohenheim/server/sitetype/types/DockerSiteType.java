@@ -31,6 +31,10 @@ public class DockerSiteType implements SiteTypeHandler {
     public static final StringField COMMAND = SETTINGS_SCHEMA.addField(
         StringField.builder().name("command").build());
 
+    // Used only for git-sourced sites: path to the Dockerfile within the checkout.
+    public static final StringField DOCKERFILE = SETTINGS_SCHEMA.addField(
+        StringField.builder().name("dockerfile").build());
+
     // Reuse the same env-var sub-schema shape as the node/command site types.
     public static final Schema ENV_VAR_SCHEMA = new Schema();
     static {

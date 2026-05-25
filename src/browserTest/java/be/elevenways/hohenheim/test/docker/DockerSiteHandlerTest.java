@@ -68,6 +68,43 @@ class DockerSiteHandlerTest {
         }
     }
 
+    @Test
+    void buildsImageFromContextAndRuns() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " (build base) not present");
+
+        int siteId = 999_002;
+        String builtImage = "hohenheim-site-" + siteId + ":latest";
+        Path context = Files.createTempDirectory("hohenheim-docker-build");
+        try {
+            // A git-provisioned docker site builds from its checkout's Dockerfile; here
+            // build_context stands in for the checkout dir GitDeployment would inject.
+            Files.writeString(context.resolve("Dockerfile"),
+                "FROM alpine:latest\nCMD [\"sleep\", \"3600\"]\n");
+
+            DockerSiteRequestHandler handler = new DockerSiteRequestHandler(siteId, Map.of(
+                "build_context", context.toString(),
+                "container_port", 8080
+            ));
+            try {
+                assertThat(handler.getUpstream()).isNotNull();
+                assertThat(handler.getHealth()).isEqualTo(SiteHealth.UP);
+                assertThat(imagePresent(docker, builtImage)).isTrue();
+            } finally {
+                handler.destroy();
+            }
+        } finally {
+            try {
+                docker.removeImage(builtImage, true);
+            } catch (IOException ignored) {
+                // best effort cleanup
+            }
+            Files.deleteIfExists(context.resolve("Dockerfile"));
+            Files.deleteIfExists(context);
+        }
+    }
+
     private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
         for (Object image : docker.listImages()) {
             Object repoTags = ((Map<?, ?>) image).get("RepoTags");
