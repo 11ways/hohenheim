@@ -35,9 +35,11 @@ class ManagedDatabaseTest {
         String name = "test" + System.nanoTime();
         String containerName = "hohenheim-db-" + name;
         try {
+            // ephemeral=true -> data dir is a RAM tmpfs mount, so Postgres initdb never
+            // fsync-storms the btrfs root (which previously stalled it for minutes).
             ManagedDatabase.Connection conn = databases.provision(
                 name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
-                "appuser", "secret123", "appdb");
+                "appuser", "secret123", "appdb", true);
 
             assertThat(conn.host()).isEqualTo("127.0.0.1");
             assertThat(conn.port()).isGreaterThan(0);

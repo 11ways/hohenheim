@@ -72,25 +72,38 @@ public class ManagedDatabase {
     }
 
     /**
-     * Provision (or re-provision) a database container and block until its port accepts
-     * connections. The data volume persists across re-provisioning.
-     *
-     * @param name     stable database name (container + volume are derived from it)
-     * @param engine   database engine
-     * @param image    image override, or null for the engine default
-     * @param user     application user
-     * @param password application password
-     * @param database initial database name
+     * Provision a persistent database (data survives re-provisioning in a named volume);
+     * see {@link #provision(String, Engine, String, String, String, String, boolean)}.
      */
     public Connection provision(String name, Engine engine, String image,
                                 String user, String password, String database) throws IOException {
+        return provision(name, engine, image, user, password, database, false);
+    }
+
+    /**
+     * Provision (or re-provision) a database container and block until its port accepts
+     * connections.
+     *
+     * @param name      stable database name (container + volume are derived from it)
+     * @param engine    database engine
+     * @param image     image override, or null for the engine default
+     * @param user      application user
+     * @param password  application password
+     * @param database  initial database name
+     * @param ephemeral when true the data directory is a RAM-backed tmpfs mount (fast, no host
+     *                  disk I/O, discarded with the container) instead of a persistent named
+     *                  volume -- suited to tests, CI, and preview environments
+     */
+    public Connection provision(String name, Engine engine, String image,
+                                String user, String password, String database,
+                                boolean ephemeral) throws IOException {
         String containerName = "hohenheim-db-" + name;
         String volumeName = containerName + "-data";
         String imageRef = (image == null || image.isBlank()) ? engine.defaultImage : image;
 
         docker.ensureImage(imageRef, null);
 
-        // Replace any prior container for this database; the named volume keeps the data.
+        // Replace any prior container for this database; a persistent named volume keeps the data.
         try {
             docker.removeContainer(containerName, true);
         } catch (IOException ignored) {
@@ -98,7 +111,7 @@ public class ManagedDatabase {
         }
 
         String id = docker.createContainer(containerName,
-            buildSpec(engine, imageRef, volumeName, engine.env(user, password, database)));
+            buildSpec(engine, imageRef, volumeName, engine.env(user, password, database), ephemeral));
         docker.startContainer(id);
 
         int hostPort = docker.publishedPort(id, engine.port);
@@ -129,11 +142,23 @@ public class ManagedDatabase {
         }
     }
 
+    /** Size cap for an ephemeral (tmpfs) data mount: 1 GiB -- generous for tests and small
+     *  preview databases, while bounding RAM use (tmpfs only consumes RAM for live data). */
+    private static final long EPHEMERAL_DATA_SIZE_BYTES = 1024L * 1024 * 1024;
+
     private static Map<String, Object> buildSpec(Engine engine, String imageRef, String volumeName,
-                                                 Map<String, String> env) {
+                                                 Map<String, String> env, boolean ephemeral) {
         String portKey = engine.port + "/tcp";
         List<String> envList = new ArrayList<>();
         env.forEach((key, value) -> envList.add(key + "=" + value));
+
+        // Ephemeral data lives in a RAM-backed tmpfs mount: no host disk I/O at all (no btrfs
+        // fsync storms from initdb), freed when the container is removed. Persistent data lives
+        // in a named volume that survives re-provisioning.
+        Map<String, Object> dataMount = ephemeral
+            ? Map.of("Type", "tmpfs", "Target", engine.dataPath,
+                     "TmpfsOptions", Map.of("SizeBytes", EPHEMERAL_DATA_SIZE_BYTES))
+            : Map.of("Type", "volume", "Source", volumeName, "Target", engine.dataPath);
 
         Map<String, Object> spec = new LinkedHashMap<>();
         spec.put("Image", imageRef);
@@ -143,10 +168,7 @@ public class ManagedDatabase {
         spec.put("ExposedPorts", Map.of(portKey, Map.of()));
         spec.put("HostConfig", Map.of(
             "PortBindings", Map.of(portKey, List.of(Map.of("HostIp", "127.0.0.1", "HostPort", ""))),
-            "Mounts", List.of(Map.of(
-                "Type", "volume",
-                "Source", volumeName,
-                "Target", engine.dataPath))
+            "Mounts", List.of(dataMount)
         ));
         return spec;
     }
