@@ -89,10 +89,18 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
         as a CI/preview-DB feature; tests use it.
 - [x] **Backup** — `backup`/`backupToFile` run the engine's dump tool (`pg_dump`/
       `mysqldump`) via `exec`, capturing clean stdout (creds via exec env). Postgres tested.
-- [ ] **Restore** — needs exec-stdin (feed the dump to `psql`/`mysql`) or `PUT
-      /containers/{id}/archive`; Redis/Mongo backup needs binary streaming-to-file.
-- [ ] Backup scheduling (hook into the existing scheduled-task system); a `DatabaseModel`
-      + DB-management admin pages surfacing connection info and backup/restore actions.
+- [x] **Restore** — `restore`/`restoreFromFile` upload the dump via `PUT /archive`
+      (`DockerClient.putArchiveFromDirectory`) and load it (`psql -f` / `mysql source`,
+      ON_ERROR_STOP). Backup->drop->restore round-trip tested on Postgres and MySQL.
+- [x] **Persistence + orchestration** — `DatabaseModel` (+ M015 `managed_databases`) stores
+      desired config; `DatabaseService` ties it to `ManagedDatabase`: create provisions +
+      records, list reads records, backup/restore resolve engine+credentials by name, destroy
+      removes container and record. Model round-trip + Docker/DB integration tested.
+- [ ] **Admin UI** — DB-management pages (list, create, connection info, backup/restore/destroy
+      actions) on top of `DatabaseService`; generate credentials in the create handler.
+- [ ] **Backup scheduling** — hook `DatabaseService.backup` into the scheduled-task system,
+      writing dumps to a backups dir with retention.
+- [ ] Redis/Mongo backup/restore (binary streaming-to-file, not text dumps).
 
 ## Phase 4 — Multi-server
 
