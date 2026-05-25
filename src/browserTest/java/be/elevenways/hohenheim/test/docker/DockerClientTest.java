@@ -159,6 +159,32 @@ class DockerClientTest {
     }
 
     @Test
+    void execCapturesOutputAndExitCode() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+
+        String name = "hohenheim-exec-test-" + System.nanoTime();
+        String id = docker.createContainer(name, Map.of(
+            "Image", TEST_IMAGE,
+            "Cmd", List.of("sleep", "30")   // long-lived so we can exec into it
+        ));
+        try {
+            docker.startContainer(id);
+
+            DockerClient.ExecResult result = docker.exec(id,
+                List.of("sh", "-c", "echo exec-out; echo exec-err 1>&2; exit 3"));
+
+            assertThat(result.output()).contains("exec-out");   // stdout demuxed
+            assertThat(result.output()).contains("exec-err");   // stderr demuxed
+            assertThat(result.exitCode()).isEqualTo(3);         // exit code captured
+        } finally {
+            docker.stopContainer(id, 1);
+            docker.removeContainer(id, true);
+        }
+    }
+
+    @Test
     void toJsonEncodesNestedSpecWithEscaping() {
         String json = DockerClient.toJson(Map.of(
             "Image", "alpine",

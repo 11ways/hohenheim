@@ -266,6 +266,33 @@ public class DockerClient {
         return demuxStream(exchange("GET", path, null, null, timeoutMillis).body());
     }
 
+    /** Result of an in-container {@link #exec}: the process exit code and its combined output. */
+    public record ExecResult(int exitCode, String output) {}
+
+    /**
+     * Run a command inside a running container and block until it exits, capturing stdout and
+     * stderr (interleaved) plus the exit code. The basis of database backup/restore, which run
+     * {@code pg_dump}/{@code psql} (etc.) inside the engine's own container.
+     */
+    @SuppressWarnings("unchecked")
+    public ExecResult exec(String containerId, List<String> command) throws IOException {
+        Map<String, Object> created = (Map<String, Object>) parseJson(request("POST",
+            "/containers/" + containerId + "/exec",
+            toJson(Map.of("AttachStdout", true, "AttachStderr", true, "Cmd", command))).body());
+        String execId = (String) created.get("Id");
+
+        // Detach=false streams the (multiplexed, non-TTY) output until the process exits and
+        // the daemon closes the connection; LONG_OP_TIMEOUT covers slow ops like a dump.
+        RawResponse stream = exchange("POST", "/exec/" + execId + "/start",
+            toJson(Map.of("Detach", false, "Tty", false)).getBytes(StandardCharsets.UTF_8),
+            "application/json", LONG_OP_TIMEOUT_MS);
+        String output = demuxStream(stream.body());
+
+        Map<String, Object> info = (Map<String, Object>) parseJson(get("/exec/" + execId + "/json").body());
+        int exitCode = info.get("ExitCode") instanceof Number n ? n.intValue() : -1;
+        return new ExecResult(exitCode, output);
+    }
+
     /**
      * @return the host port Docker published for {@code containerPort}/tcp on the container
      * @throws IOException if the container did not publish that port
