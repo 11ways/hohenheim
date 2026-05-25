@@ -7,6 +7,7 @@ import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -60,6 +61,31 @@ public class DatabaseService {
     /** All persisted database records. */
     public List<Row> list() {
         return model.find().all();
+    }
+
+    /** A persisted database plus its best-effort live container status, for the admin list. */
+    public record Summary(String name, String engine, String image, String database, String user,
+                          boolean ephemeral, boolean running, Integer port) {}
+
+    /** All databases with live status (running + published port), best-effort per record. */
+    public List<Summary> summaries() {
+        List<Summary> result = new ArrayList<>();
+        for (Row row : model.find().all()) {
+            ManagedDatabase.Engine engine = engineOf(row);
+            ManagedDatabase.LiveStatus status = databases.status(row.get(DatabaseModel.NAME), engine);
+            String image = row.get(DatabaseModel.IMAGE);
+            result.add(new Summary(
+                row.get(DatabaseModel.NAME),
+                engine.name().toLowerCase(),
+                image != null ? image : "",
+                row.get(DatabaseModel.DB_NAME),
+                row.get(DatabaseModel.DB_USER),
+                Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL)),
+                status.running(),
+                status.port()
+            ));
+        }
+        return result;
     }
 
     /** Back up a persisted database by name, using its stored engine and credentials. */

@@ -12,6 +12,8 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.model.UserModel;
 import be.elevenways.hohenheim.source.GitSourceSchema;
+import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
 import be.elevenways.hohenheim.server.process.ManagedProcess;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
@@ -32,6 +34,7 @@ import be.elevenways.zenit.server.http.RedirectResult;
 import org.bouncycastle.openssl.PEMParser;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.StringReader;
 import java.security.cert.CertificateFactory;
 import java.time.Duration;
@@ -70,6 +73,7 @@ public class HohenheimHandlers {
         initSettings();
         initAuditLog(auditModel);
         initAccessLists(accessListModel, auditModel);
+        initDatabases(new DatabaseService(), auditModel);
         initProcessControl(auditModel);
         initWebSockets();
     }
@@ -1501,6 +1505,119 @@ public class HohenheimHandlers {
         vars.put("deniedIps", valueOrEmpty(row.get(AccessListModel.DENIED_IPS)));
         vars.put("error", error);
         return vars;
+    }
+
+    private static void initDatabases(DatabaseService databaseService, AuditLogModel auditModel) {
+
+        // List
+        HohenheimEndpoints.DATABASES.setHandler(conduit -> {
+            List<Map<String, Object>> items = new ArrayList<>();
+            for (DatabaseService.Summary summary : databaseService.summaries()) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("name", summary.name());
+                item.put("engine", summary.engine());
+                item.put("image", summary.image());
+                item.put("database", summary.database());
+                item.put("user", summary.user());
+                item.put("ephemeral", summary.ephemeral());
+                item.put("running", summary.running());
+                item.put("port", summary.port() != null ? summary.port() : 0);
+                item.put("canBackup", summary.engine().equals("postgres") || summary.engine().equals("mysql"));
+                items.add(item);
+            }
+            return new RenderTemplateResult(
+                Identifier.of("hohenheim", "hohenheim/databases/list"),
+                Map.of("databases", items, "listCount", items.size())
+            );
+        });
+
+        // Create form
+        HohenheimEndpoints.DATABASES_CREATE_FORM.setHandler(conduit ->
+            new RenderTemplateResult(
+                Identifier.of("hohenheim", "hohenheim/databases/create"),
+                Map.of("error", "")
+            )
+        );
+
+        // Create (POST) -- provisions the container synchronously, then persists the record.
+        HohenheimEndpoints.DATABASES_CREATE.setHandler(conduit -> {
+            HttpConduit http = (HttpConduit) conduit;
+            Map<String, String> form = http.getFormData().toStringMap();
+
+            String name = form.getOrDefault("name", "").trim();
+            String engineToken = form.getOrDefault("engine", "").trim().toLowerCase();
+            String database = form.getOrDefault("database", "").trim();
+            String user = form.getOrDefault("db_user", "").trim();
+            String password = form.getOrDefault("db_password", "").trim();
+            String image = form.getOrDefault("image", "").trim();
+            boolean ephemeral = "on".equals(form.get("ephemeral")) || "true".equals(form.get("ephemeral"));
+
+            String error = validateDatabaseForm(name, engineToken, database, user, password);
+            if (error != null) {
+                return renderUntyped(Identifier.of("hohenheim", "hohenheim/databases/create"),
+                    Map.of("error", error));
+            }
+
+            try {
+                databaseService.create(name, ManagedDatabase.Engine.valueOf(engineToken.toUpperCase()),
+                    image.isEmpty() ? null : image, user, password, database, ephemeral);
+            } catch (IOException e) {
+                return renderUntyped(Identifier.of("hohenheim", "hohenheim/databases/create"),
+                    Map.of("error", "Provisioning failed: " + e.getMessage()));
+            }
+
+            audit(auditModel, conduit, "created", "database", name, name);
+            return redirectUntyped("/databases");
+        });
+
+        // Backup (POST) -- download a SQL dump
+        HohenheimEndpoints.DATABASES_BACKUP.setHandler(conduit -> {
+            String name = conduit.getParameter(HohenheimEndpoints.DATABASE_NAME);
+            String dump;
+            try {
+                dump = databaseService.backup(name);
+            } catch (IOException e) {
+                return redirectUntyped("/databases");
+            }
+            if (conduit instanceof HttpConduit http) {
+                String safeName = name.replaceAll("[^a-zA-Z0-9._-]", "_");
+                http.setResponseHeader("Content-Type", "application/sql");
+                http.setResponseHeader("Content-Disposition",
+                    "attachment; filename=\"" + safeName + ".sql\"");
+            }
+            conduit.endWithContentType("application/sql", dump);
+            return null;
+        });
+
+        // Delete (POST)
+        HohenheimEndpoints.DATABASES_DELETE.setHandler(conduit -> {
+            String name = conduit.getParameter(HohenheimEndpoints.DATABASE_NAME);
+            try {
+                databaseService.destroy(name, true);
+                audit(auditModel, conduit, "deleted", "database", name, name);
+            } catch (IOException ignored) {
+                // best effort -- the record/container may already be gone
+            }
+            return redirectUntyped("/databases");
+        });
+    }
+
+    private static String validateDatabaseForm(String name, String engine, String database,
+                                               String user, String password) {
+        if (name.isEmpty()) return "Name is required";
+        if (!name.matches("[a-z0-9][a-z0-9-]*")) {
+            return "Name must be lowercase letters, digits, and dashes";
+        }
+        if (engine.isEmpty()) return "Engine is required";
+        try {
+            ManagedDatabase.Engine.valueOf(engine.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return "Unknown engine: " + engine;
+        }
+        if (database.isEmpty()) return "Database name is required";
+        if (user.isEmpty()) return "User is required";
+        if (password.isEmpty()) return "Password is required";
+        return null;
     }
 
     // -----------------------------------------------------------------------

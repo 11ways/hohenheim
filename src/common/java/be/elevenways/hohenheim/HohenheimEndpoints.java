@@ -214,6 +214,43 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("delete").build())
         .build();
 
+    // --- Databases ---
+    public static final ParameterDefinition<String> DATABASE_NAME = ParameterDefinition.builder(String.class)
+        .name("databaseName")
+        .stringResolver(value -> value)
+        .build();
+
+    public static final PageEndpoint DATABASES = Endpoint.pageBuilder()
+        .identifier(Identifier.of("hohenheim", "databases"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("databases").build())
+        .build();
+
+    public static final PageEndpoint DATABASES_CREATE_FORM = Endpoint.pageBuilder()
+        .identifier(Identifier.of("hohenheim", "databases_create_form"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("databases").addDelimiter().addStatic("create").build())
+        .build();
+
+    public static final Endpoint<Object> DATABASES_CREATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "databases_create"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("databases").addDelimiter().addStatic("create").build())
+        .build();
+
+    public static final Endpoint<Object> DATABASES_BACKUP = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "databases_backup"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME)
+            .addDelimiter().addStatic("backup").build())
+        .build();
+
+    public static final Endpoint<Object> DATABASES_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "databases_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME)
+            .addDelimiter().addStatic("delete").build())
+        .build();
+
     // --- Process control ---
     public static final ParameterDefinition<Long> PID = ParameterDefinition.builder(Long.class)
         .name("pid")
