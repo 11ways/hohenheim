@@ -1,0 +1,100 @@
+package be.elevenways.hohenheim.test.database;
+
+import be.elevenways.hohenheim.migration.M015_CreateManagedDatabases;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
+import be.elevenways.zenit.common.orm.migration.MigrationRunner;
+import be.elevenways.zenit.server.orm.SqliteDatasource;
+import org.junit.jupiter.api.Test;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+/**
+ * Integration test for {@link DatabaseService}: create persists + provisions, backup resolves
+ * the engine/credentials by name, destroy removes both container and record. Uses an isolated
+ * SQLite + the live Docker daemon (skipped without either).
+ */
+class DatabaseServiceTest {
+
+    private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
+    private static final String PG_IMAGE = "postgres:17-alpine";
+
+    @Test
+    void createPersistsProvisionsBackupByNameAndDestroyRemovesRecord() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
+
+        SqliteDatasource datasource = freshDatasource();
+        DatabaseService service = new DatabaseService(docker, datasource);
+
+        String name = "svc" + System.nanoTime();
+        String containerName = "hohenheim-db-" + name;
+        try {
+            ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
+                PG_IMAGE, "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs, no btrfs I/O
+            assertThat(conn.port()).isGreaterThan(0);
+
+            // create() persisted exactly one record with the right config.
+            List<Row> all = service.list();
+            assertThat(all).hasSize(1);
+            assertThat((String) all.get(0).get(DatabaseModel.ENGINE)).isEqualTo("postgres");
+            assertThat((Boolean) all.get(0).get(DatabaseModel.EPHEMERAL)).isTrue();
+
+            // backup(name) resolves engine + credentials from the record (caller passes no params).
+            DockerClient.ExecResult seed = docker.exec(containerName,
+                List.of("psql", "-U", "appuser", "-d", "appdb", "-c", "CREATE TABLE t (id int);"),
+                List.of("PGPASSWORD=secret123"));
+            assertThat(seed.exitCode()).withFailMessage("seed failed: %s", seed.stderr()).isZero();
+            assertThat(service.backup(name)).contains("CREATE TABLE");
+
+            service.destroy(name, true);
+            assertThat(service.list()).isEmpty();              // record gone
+            try {
+                docker.inspectContainer(containerName);
+                throw new AssertionError("expected container to be removed");
+            } catch (IOException expected) {
+                // 404 from the daemon -> container removed, as intended
+            }
+        } finally {
+            // ensure no leftovers if an assertion above failed before destroy ran
+            try {
+                service.destroy(name, true);
+            } catch (IOException ignored) {
+                // best effort
+            }
+        }
+    }
+
+    private static SqliteDatasource freshDatasource() throws IOException {
+        File db = File.createTempFile("hohenheim-dbservice-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
+        new MigrationRunner((MigrationCapableDatasource) ds,
+            List.of(M015_CreateManagedDatabases::new)).migrate();
+        return ds;
+    }
+
+    private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
+        for (Object image : docker.listImages()) {
+            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
+            if (repoTags instanceof List<?> tags && tags.contains(tag)) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
