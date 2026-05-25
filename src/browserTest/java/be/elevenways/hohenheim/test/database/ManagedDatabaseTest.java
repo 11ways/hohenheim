@@ -64,6 +64,34 @@ class ManagedDatabaseTest {
         }
     }
 
+    @Test
+    void backsUpPostgresAsSql() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
+
+        ManagedDatabase databases = new ManagedDatabase(docker);
+        String name = "buptest" + System.nanoTime();
+        String containerName = "hohenheim-db-" + name;
+        try {
+            databases.provision(name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
+                "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs, no btrfs I/O
+
+            // Seed a table so the dump has identifiable content (also exercises exec-with-env).
+            DockerClient.ExecResult create = docker.exec(containerName,
+                List.of("psql", "-U", "appuser", "-d", "appdb", "-c", "CREATE TABLE widgets (id int);"),
+                List.of("PGPASSWORD=secret123"));
+            assertThat(create.exitCode()).withFailMessage("seed failed: %s", create.stderr()).isZero();
+
+            String dump = databases.backup(name, ManagedDatabase.Engine.POSTGRES,
+                "appuser", "secret123", "appdb");
+            assertThat(dump).contains("CREATE TABLE");
+            assertThat(dump).contains("widgets");
+        } finally {
+            databases.destroy(name, true);
+        }
+    }
+
     private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
         for (Object image : docker.listImages()) {
             Object repoTags = ((Map<?, ?>) image).get("RepoTags");
