@@ -38,7 +38,8 @@ public class ProcessDockerTransport implements DockerTransport {
     /** Drive a remote daemon over SSH; requires key-based ssh access and docker on {@code sshTarget}. */
     public static ProcessDockerTransport overSsh(String sshTarget) {
         return new ProcessDockerTransport(List.of("ssh", "-o", "BatchMode=yes",
-            "-o", "StrictHostKeyChecking=accept-new", sshTarget, "docker", "system", "dial-stdio"));
+            "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10",
+            sshTarget, "docker", "system", "dial-stdio"));
     }
 
     @Override
