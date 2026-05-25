@@ -27,14 +27,18 @@ items worth verifying/closing, roughly in value order:
 Everything in the PaaS direction depends on talking to a container engine. Built
 here first as a concrete consumer; promote to the framework once stable.
 
-- [x] **`DockerClient`** — HTTP/1.1 over the daemon unix socket (no new deps):
-      `ping`, `version`, `listContainers`. (`server/docker/DockerClient.java`)
-- [ ] Images: `pull` (streamed progress), `list`, `inspect`, `remove`
-- [ ] Containers: `create`, `start`, `stop`, `remove`, `inspect`, `logs` (follow)
-- [ ] Networks + volumes; `exec`
-- [ ] `DockerSiteType` — run a container as a managed site, integrated with the
-      existing `SiteTypeRegistry` + proxy dispatch (port/health/lifecycle), mirroring
-      how `NodeSiteType`/`CommandSiteType` plug in today.
+- [x] **`DockerClient`** — HTTP/1.1 over the daemon unix socket (no new deps),
+      with a per-request watchdog timeout and chunked decoding. (`server/docker/DockerClient.java`)
+  - [x] Daemon: `ping`, `version`
+  - [x] Images: `listImages`, `pullImage`
+  - [x] Containers: `createContainer`, `startContainer`, `stopContainer` (grace),
+        `removeContainer`, `inspectContainer`, `listContainers`
+  - [ ] Image `inspect`/`remove`; container `logs` (follow); `exec`; networks + volumes
+- [ ] **`DockerSiteType`** ← NEXT — run a container as a managed site, integrated with
+      the existing `SiteTypeRegistry` + proxy dispatch, mirroring how `NodeSiteType`/
+      `CommandSiteType` plug in. Sketch: pull the image, create+start a container with a
+      published port (or join a shared network), expose the upstream to `UpstreamForwarder`,
+      report health via `inspectContainer` State, and stop+remove on `destroy()`.
 
 ### Git provisioning: slot ownership model
 
