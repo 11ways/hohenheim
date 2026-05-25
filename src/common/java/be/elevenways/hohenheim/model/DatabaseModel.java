@@ -28,6 +28,7 @@ public class DatabaseModel extends Model {
     public static final StringField DB_NAME = SCHEMA.addField(StringField.builder().name("db_name").build());
     public static final BooleanField EPHEMERAL = SCHEMA.addField(BooleanField.builder("ephemeral").defaultValue(false).build());
     public static final StringField STATUS = SCHEMA.addField(StringField.builder().name("status").build());
+    public static final StringField SERVER_NAME = SCHEMA.addField(StringField.builder().name("server_name").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

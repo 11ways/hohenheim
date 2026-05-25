@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.database;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -14,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Function;
 
 /**
  * Lifecycle entry point for managed databases: ties the persisted {@link DatabaseModel} record
@@ -37,41 +39,62 @@ public class DatabaseService {
         return thread;
     });
 
-    private final ManagedDatabase databases;
+    // Resolves the ManagedDatabase for a database's target server (server name -> client). In
+    // production this routes through ServerService (local socket or remote SSH); tests inject a
+    // single fixed client.
+    private final Function<String, ManagedDatabase> managedFor;
     private final DatabaseModel model;
 
     public DatabaseService() {
-        this(new DockerClient(), HohenheimDatabase.datasource());
+        ServerService servers = new ServerService();
+        this.managedFor = serverName -> new ManagedDatabase(servers.clientFor(serverName));
+        this.model = new DatabaseModel(HohenheimDatabase.datasource());
     }
 
     public DatabaseService(DockerClient docker, Datasource datasource) {
-        this.databases = new ManagedDatabase(docker);
+        ManagedDatabase fixed = new ManagedDatabase(docker);
+        this.managedFor = serverName -> fixed;   // tests: a single host regardless of server name
         this.model = new DatabaseModel(datasource);
     }
 
-    /**
-     * Provision a database synchronously and persist its record as active. Blocking -- intended for
-     * tests and scripted use; request handlers should use {@link #createAsync}.
-     */
+    /** Provision synchronously on the local host; see the server-aware overload. */
     public ManagedDatabase.Connection create(String name, ManagedDatabase.Engine engine, String image,
                                              String user, String password, String database,
                                              boolean ephemeral) throws IOException {
-        ManagedDatabase.Connection connection =
-            databases.provision(name, engine, image, user, password, database, ephemeral);
-        upsertRecord(name, engine, image, user, password, database, ephemeral, STATUS_ACTIVE);
-        return connection;
+        return create(name, engine, image, user, password, database, ephemeral, ServerService.LOCAL);
     }
 
     /**
-     * Persist the record immediately as "provisioning" and provision in the background, flipping the
-     * status to active or failed when done -- so a slow image pull doesn't block the request.
+     * Provision a database synchronously on {@code serverName} and persist its record as active.
+     * Blocking -- intended for tests and scripted use; request handlers should use {@link #createAsync}.
      */
+    public ManagedDatabase.Connection create(String name, ManagedDatabase.Engine engine, String image,
+                                             String user, String password, String database,
+                                             boolean ephemeral, String serverName) throws IOException {
+        ManagedDatabase.Connection connection =
+            managedFor.apply(serverName).provision(name, engine, image, user, password, database, ephemeral);
+        upsertRecord(name, engine, image, user, password, database, ephemeral, serverName, STATUS_ACTIVE);
+        return connection;
+    }
+
+    /** Provision asynchronously on the local host; see the server-aware overload. */
     public void createAsync(String name, ManagedDatabase.Engine engine, String image,
                             String user, String password, String database, boolean ephemeral) {
-        upsertRecord(name, engine, image, user, password, database, ephemeral, STATUS_PROVISIONING);
+        createAsync(name, engine, image, user, password, database, ephemeral, ServerService.LOCAL);
+    }
+
+    /**
+     * Persist the record immediately as "provisioning" and provision on {@code serverName} in the
+     * background, flipping the status to active or failed when done -- so a slow image pull (or a
+     * remote SSH round-trip) doesn't block the request.
+     */
+    public void createAsync(String name, ManagedDatabase.Engine engine, String image,
+                            String user, String password, String database, boolean ephemeral,
+                            String serverName) {
+        upsertRecord(name, engine, image, user, password, database, ephemeral, serverName, STATUS_PROVISIONING);
         PROVISION_EXECUTOR.submit(() -> {
             try {
-                databases.provision(name, engine, image, user, password, database, ephemeral);
+                managedFor.apply(serverName).provision(name, engine, image, user, password, database, ephemeral);
                 setStatus(name, STATUS_ACTIVE);
             } catch (Exception e) {
                 setStatus(name, STATUS_FAILED);
@@ -81,7 +104,8 @@ public class DatabaseService {
     }
 
     private void upsertRecord(String name, ManagedDatabase.Engine engine, String image, String user,
-                              String password, String database, boolean ephemeral, String status) {
+                              String password, String database, boolean ephemeral, String serverName,
+                              String status) {
         Row row = model.findByName(name);
         if (row == null) {
             row = model.createEmptyRow();
@@ -94,6 +118,7 @@ public class DatabaseService {
         row.set(DatabaseModel.DB_NAME, database);
         row.set(DatabaseModel.EPHEMERAL, ephemeral);
         row.set(DatabaseModel.STATUS, status);
+        row.set(DatabaseModel.SERVER_NAME, serverName);
         model.save(row);
     }
 
@@ -114,11 +139,12 @@ public class DatabaseService {
      *  {@code status} is the provisioning lifecycle (provisioning/active/failed); {@code running}
      *  + {@code port} are the live container state (meaningful once active). */
     public record Summary(String name, String engine, String image, String database, String user,
-                          boolean ephemeral, String status, boolean running, Integer port) {}
+                          boolean ephemeral, String server, String status, boolean running, Integer port) {}
 
     /** Full detail for one database, including the password (admin detail page only). */
     public record Detail(String name, String engine, String image, String database, String user,
-                         String password, boolean ephemeral, String status, boolean running, Integer port) {}
+                         String password, boolean ephemeral, String server, String status,
+                         boolean running, Integer port) {}
 
     /** Full detail for one database by name with live status, or null if there is no such record. */
     public Detail detail(String name) {
@@ -127,7 +153,7 @@ public class DatabaseService {
             return null;
         }
         ManagedDatabase.Engine engine = engineOf(row);
-        ManagedDatabase.LiveStatus live = databases.status(name, engine);
+        ManagedDatabase.LiveStatus live = liveStatus(row, engine);
         String image = row.get(DatabaseModel.IMAGE);
         return new Detail(
             row.get(DatabaseModel.NAME),
@@ -137,6 +163,7 @@ public class DatabaseService {
             row.get(DatabaseModel.DB_USER),
             row.get(DatabaseModel.DB_PASSWORD),
             Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL)),
+            serverOf(row),
             statusOf(row),
             live.running(),
             live.port());
@@ -147,7 +174,7 @@ public class DatabaseService {
         List<Summary> result = new ArrayList<>();
         for (Row row : model.find().all()) {
             ManagedDatabase.Engine engine = engineOf(row);
-            ManagedDatabase.LiveStatus live = databases.status(row.get(DatabaseModel.NAME), engine);
+            ManagedDatabase.LiveStatus live = liveStatus(row, engine);
             String image = row.get(DatabaseModel.IMAGE);
             result.add(new Summary(
                 row.get(DatabaseModel.NAME),
@@ -156,6 +183,7 @@ public class DatabaseService {
                 row.get(DatabaseModel.DB_NAME),
                 row.get(DatabaseModel.DB_USER),
                 Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL)),
+                serverOf(row),
                 statusOf(row),
                 live.running(),
                 live.port()
@@ -164,9 +192,23 @@ public class DatabaseService {
         return result;
     }
 
+    // Best-effort live status on the record's target host; never throws (an unreachable host -> down).
+    private ManagedDatabase.LiveStatus liveStatus(Row row, ManagedDatabase.Engine engine) {
+        try {
+            return managedFor.apply(serverOf(row)).status(row.get(DatabaseModel.NAME), engine);
+        } catch (Exception e) {
+            return new ManagedDatabase.LiveStatus(false, null);
+        }
+    }
+
     private static String statusOf(Row row) {
         String status = row.get(DatabaseModel.STATUS);
         return status != null ? status : STATUS_ACTIVE;   // records predating the status column
+    }
+
+    private static String serverOf(Row row) {
+        String server = row.get(DatabaseModel.SERVER_NAME);
+        return server != null ? server : ServerService.LOCAL;   // records predating the server column
     }
 
     /** Back up a persisted database by name, using its stored engine and credentials. */
@@ -175,7 +217,7 @@ public class DatabaseService {
         String user = row.get(DatabaseModel.DB_USER);
         String password = row.get(DatabaseModel.DB_PASSWORD);
         String database = row.get(DatabaseModel.DB_NAME);
-        return databases.backup(name, engineOf(row), user, password, database);
+        return managedFor.apply(serverOf(row)).backup(name, engineOf(row), user, password, database);
     }
 
     /**
@@ -188,7 +230,7 @@ public class DatabaseService {
         ManagedDatabase.Engine engine = engineOf(row);
         Files.createDirectories(directory);
         Path target = directory.resolve(baseName + "." + engine.dumpExtension());
-        databases.backupToFile(name, engine,
+        managedFor.apply(serverOf(row)).backupToFile(name, engine,
             row.get(DatabaseModel.DB_USER), row.get(DatabaseModel.DB_PASSWORD),
             row.get(DatabaseModel.DB_NAME), target);
         return target;
@@ -200,7 +242,7 @@ public class DatabaseService {
         String user = row.get(DatabaseModel.DB_USER);
         String password = row.get(DatabaseModel.DB_PASSWORD);
         String database = row.get(DatabaseModel.DB_NAME);
-        databases.restore(name, engineOf(row), user, password, database, dump);
+        managedFor.apply(serverOf(row)).restore(name, engineOf(row), user, password, database, dump);
     }
 
     /** Restore a dump file (text or binary) into a persisted database by name. */
@@ -209,12 +251,15 @@ public class DatabaseService {
         String user = row.get(DatabaseModel.DB_USER);
         String password = row.get(DatabaseModel.DB_PASSWORD);
         String database = row.get(DatabaseModel.DB_NAME);
-        databases.restoreFromFile(name, engineOf(row), user, password, database, source);
+        managedFor.apply(serverOf(row)).restoreFromFile(name, engineOf(row), user, password, database, source);
     }
 
     /** Stop + remove the container (optionally its data volume) and delete the record. */
     public void destroy(String name, boolean removeData) throws IOException {
-        databases.destroy(name, removeData);
+        Row row = model.findByName(name);
+        if (row != null) {
+            managedFor.apply(serverOf(row)).destroy(name, removeData);
+        }
         model.find().where(DatabaseModel.NAME.eq(name)).delete();
     }
 

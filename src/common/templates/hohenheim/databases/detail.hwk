@@ -7,6 +7,7 @@
     {% declare database: String %}
     {% declare user: String %}
     {% declare password: String %}
+    {% declare server: String %}
     {% declare status: String %}
     {% declare port: Integer %}
 
@@ -65,6 +66,10 @@
                         <pl-table-row>
                             <pl-table-head>Password</pl-table-head>
                             <pl-table-cell>{{ password }}</pl-table-cell>
+                        </pl-table-row>
+                        <pl-table-row>
+                            <pl-table-head>Server</pl-table-head>
+                            <pl-table-cell>{{ server }}</pl-table-cell>
                         </pl-table-row>
                         <pl-table-row>
                             <pl-table-head>Image</pl-table-head>

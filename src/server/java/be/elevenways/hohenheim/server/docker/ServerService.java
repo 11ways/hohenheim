@@ -62,6 +62,15 @@ public class ServerService {
         return result;
     }
 
+    /** Just the server names (no reachability probe), for form dropdowns. */
+    public List<String> names() {
+        List<String> names = new ArrayList<>();
+        for (Row row : model.find().all()) {
+            names.add(row.get(ServerModel.NAME));
+        }
+        return names;
+    }
+
     /** A DockerClient for the named server (local socket or remote over SSH). */
     public DockerClient clientFor(String name) {
         Row row = model.findByName(name);
