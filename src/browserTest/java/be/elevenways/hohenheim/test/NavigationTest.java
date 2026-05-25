@@ -88,7 +88,7 @@ class NavigationTest extends HohenheimTestBase {
         waitForTitle("Sites");
 
         assertThat(page.locator(".hh-sidebar__logo").textContent()).isEqualTo("Hohenheim");
-        assertThat(page.locator(".hh-sidebar__link").count()).isEqualTo(6);
+        assertThat(page.locator(".hh-sidebar__link").count()).isEqualTo(7);
     }
 
     @Test

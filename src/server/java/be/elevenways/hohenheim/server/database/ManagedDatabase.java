@@ -177,6 +177,29 @@ public class ManagedDatabase {
         return new Connection(engine, "127.0.0.1", hostPort, user, password, database);
     }
 
+    /** Live container state for a managed database: running plus its published host port. */
+    public record LiveStatus(boolean running, Integer port) {}
+
+    /** Best-effort live status of a database's container; (false, null) if absent or unreachable. */
+    public LiveStatus status(String name, Engine engine) {
+        String containerName = "hohenheim-db-" + name;
+        try {
+            Object state = docker.inspectContainer(containerName).get("State");
+            boolean running = state instanceof Map<?, ?> s && Boolean.TRUE.equals(s.get("Running"));
+            Integer port = null;
+            if (running) {
+                try {
+                    port = docker.publishedPort(containerName, engine.port);
+                } catch (IOException ignored) {
+                    // not published yet / not ready
+                }
+            }
+            return new LiveStatus(running, port);
+        } catch (IOException e) {
+            return new LiveStatus(false, null);   // no such container or daemon unreachable
+        }
+    }
+
     /** Stop and remove the database container; optionally delete its data volume. */
     public void destroy(String name, boolean removeData) throws IOException {
         String containerName = "hohenheim-db-" + name;
