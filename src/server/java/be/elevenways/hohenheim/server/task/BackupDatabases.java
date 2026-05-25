@@ -41,16 +41,12 @@ public class BackupDatabases implements Runnable {
 
         int backedUp = 0;
         for (DatabaseService.Summary db : databaseService.summaries()) {
-            if (!db.engine().equals("postgres") && !db.engine().equals("mysql")) {
-                continue;   // no text dump for redis/mongo yet
-            }
             if (!db.running()) {
                 continue;   // can't dump a stopped container
             }
             try {
                 Path dbDir = backupRoot.resolve(db.name());
-                Files.createDirectories(dbDir);
-                databaseService.backupToFile(db.name(), dbDir.resolve(STAMP.format(Instant.now()) + ".sql"));
+                databaseService.backupToFile(db.name(), dbDir, STAMP.format(Instant.now()));
                 pruneOldBackups(dbDir, retention);
                 backedUp++;
             } catch (IOException e) {
@@ -67,7 +63,7 @@ public class BackupDatabases implements Runnable {
         }
         try (Stream<Path> files = Files.list(dir)) {
             List<Path> dumps = files
-                .filter(path -> path.getFileName().toString().endsWith(".sql"))
+                .filter(Files::isRegularFile)
                 .sorted(Comparator.reverseOrder())
                 .toList();
             for (int i = retention; i < dumps.size(); i++) {

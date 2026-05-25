@@ -80,6 +80,15 @@ public class ManagedDatabase {
             };
         }
 
+        /** File extension for this engine's dump artifact. */
+        String dumpExtension() {
+            return switch (this) {
+                case POSTGRES, MYSQL -> "sql";
+                case REDIS -> "rdb";
+                case MONGO -> "archive";
+            };
+        }
+
         /** The tool + args that load a dump file (already inside the container) back in. */
         List<String> restoreCommand(String user, String database, String filePath) {
             return switch (this) {
@@ -93,10 +102,11 @@ public class ManagedDatabase {
             };
         }
 
-        // AIDEV-NOTE: Probe over TCP (-h 127.0.0.1), not the unix socket: Postgres/MySQL run a
-        // socket-only temporary server during init, so a socket probe reports ready too early.
-        // Only the real server binds TCP. (Only POSTGRES is integration-tested today.)
-        List<String> readyCommand(String user, String database) {
+        // AIDEV-NOTE: Probe over TCP (-h 127.0.0.1), not the unix socket. Postgres/MySQL run a
+        // socket-only temporary server during init, so only the real server binds TCP. Mongo's
+        // init server DOES bind TCP, so its probe must authenticate to confirm the real (auth-
+        // enabled) server with the root user is up -- an unauthenticated ping passes too early.
+        List<String> readyCommand(String user, String password, String database) {
             return switch (this) {
                 case POSTGRES -> List.of("pg_isready", "-h", "127.0.0.1", "-p", String.valueOf(port),
                     "-U", user, "-d", database);
@@ -104,6 +114,7 @@ public class ManagedDatabase {
                     "-u", user);
                 case REDIS -> List.of("redis-cli", "-p", String.valueOf(port), "ping");
                 case MONGO -> List.of("mongosh", "--host", "127.0.0.1", "--port", String.valueOf(port),
+                    "--username", user, "--password", password, "--authenticationDatabase", "admin",
                     "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok");
             };
         }
@@ -242,11 +253,41 @@ public class ManagedDatabase {
         return result.stdout();
     }
 
-    /** Back up a database to a UTF-8 file; see {@link #backup}. */
+    /**
+     * Back up any engine to a file: SQL text for Postgres/MySQL, the engine's native binary dump
+     * for Redis (RDB snapshot) and Mongo (mongodump archive). Binary dumps are produced inside
+     * the container, then fetched out via the archive API.
+     */
+    // AIDEV-NOTE: Binary dumps must land in the container's writable layer (/tmp), not on a
+    // mount: the Docker archive API (getArchiveFile) cannot read files inside a tmpfs (or
+    // volume) mount. So redis dumps via `--rdb /tmp/...` (not SAVE, which writes to the /data
+    // mount) and mongodump targets /tmp.
     public void backupToFile(String name, Engine engine, String user, String password,
                              String database, Path target) throws IOException {
-        Files.writeString(target, backup(name, engine, user, password, database),
-            StandardCharsets.UTF_8);
+        String containerName = "hohenheim-db-" + name;
+        switch (engine) {
+            case POSTGRES, MYSQL ->
+                Files.writeString(target, backup(name, engine, user, password, database), StandardCharsets.UTF_8);
+            case REDIS -> {
+                String rdbPath = "/tmp/hohenheim-dump.rdb";
+                DockerClient.ExecResult save = docker.exec(containerName,
+                    List.of("redis-cli", "--rdb", rdbPath));
+                if (save.exitCode() != 0) {
+                    throw new IOException("redis dump failed for '" + name + "': " + save.stderr().trim());
+                }
+                Files.write(target, docker.getArchiveFile(containerName, rdbPath));
+            }
+            case MONGO -> {
+                String archivePath = "/tmp/hohenheim-dump.archive";
+                DockerClient.ExecResult dump = docker.exec(containerName, List.of("mongodump",
+                    "--username", user, "--password", password, "--authenticationDatabase", "admin",
+                    "--db", database, "--archive=" + archivePath));
+                if (dump.exitCode() != 0) {
+                    throw new IOException("mongodump failed for '" + name + "': " + dump.stderr().trim());
+                }
+                Files.write(target, docker.getArchiveFile(containerName, archivePath));
+            }
+        }
     }
 
     /**
@@ -322,7 +363,7 @@ public class ManagedDatabase {
     private void waitForReady(String containerId, Engine engine, String user, String password,
                              String database, long timeoutMillis) throws IOException {
         long deadline = System.currentTimeMillis() + timeoutMillis;
-        List<String> command = engine.readyCommand(user, database);
+        List<String> command = engine.readyCommand(user, password, database);
         List<String> env = engine.readyEnv(password);
         IOException last = null;
         while (System.currentTimeMillis() < deadline) {
