@@ -67,12 +67,26 @@ public class ManagedDatabase {
             };
         }
 
-        /** Env for {@link #dumpCommand} so the password never appears in the captured stdout. */
+        /** Env for {@link #dumpCommand}/{@link #restoreCommand} so the password never appears
+         *  in argv or captured stdout. */
         List<String> dumpEnv(String password) {
             return switch (this) {
                 case POSTGRES -> List.of("PGPASSWORD=" + password);
                 case MYSQL -> List.of("MYSQL_PWD=" + password);
                 case REDIS, MONGO -> List.of();
+            };
+        }
+
+        /** The tool + args that load a dump file (already inside the container) back in. */
+        List<String> restoreCommand(String user, String database, String filePath) {
+            return switch (this) {
+                // ON_ERROR_STOP makes a failed statement abort with non-zero (no silent half-restore).
+                case POSTGRES -> List.of("psql", "-v", "ON_ERROR_STOP=1", "-U", user, "-d", database,
+                    "-f", filePath);
+                // mysql's `source` builtin reads the file -- avoids a shell redirect.
+                case MYSQL -> List.of("mysql", "-u", user, database, "-e", "source " + filePath);
+                case REDIS, MONGO -> throw new UnsupportedOperationException(
+                    this + " restore needs binary import, not a text load (follow-up)");
             };
         }
 
@@ -207,6 +221,42 @@ public class ManagedDatabase {
                              String database, Path target) throws IOException {
         Files.writeString(target, backup(name, engine, user, password, database),
             StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Restore a text dump into a provisioned database: upload it into the container and load it
+     * with the engine's client. The dump must match the engine (e.g. {@code pg_dump} output for
+     * Postgres). Restoring into a non-empty database may conflict; restore into a fresh one.
+     *
+     * @throws IOException                   if the upload or load command fails
+     * @throws UnsupportedOperationException if the engine has no text restore (Redis/Mongo)
+     */
+    public void restore(String name, Engine engine, String user, String password,
+                        String database, String dump) throws IOException {
+        String containerName = "hohenheim-db-" + name;
+        String fileName = "hohenheim-restore.sql";
+        List<String> command = engine.restoreCommand(user, database, "/tmp/" + fileName);
+
+        Path tempDir = Files.createTempDirectory("hohenheim-restore");
+        try {
+            Files.writeString(tempDir.resolve(fileName), dump, StandardCharsets.UTF_8);
+            docker.putArchiveFromDirectory(containerName, "/tmp", tempDir);
+
+            DockerClient.ExecResult result = docker.exec(containerName, command, engine.dumpEnv(password));
+            if (result.exitCode() != 0) {
+                throw new IOException("Database restore of '" + name + "' failed (exit "
+                    + result.exitCode() + "): " + result.stderr().trim());
+            }
+        } finally {
+            Files.deleteIfExists(tempDir.resolve(fileName));
+            Files.deleteIfExists(tempDir);
+        }
+    }
+
+    /** Restore a database from a UTF-8 dump file; see {@link #restore}. */
+    public void restoreFromFile(String name, Engine engine, String user, String password,
+                                String database, Path source) throws IOException {
+        restore(name, engine, user, password, database, Files.readString(source, StandardCharsets.UTF_8));
     }
 
     /** Size cap for an ephemeral (tmpfs) data mount: 1 GiB -- generous for tests and small

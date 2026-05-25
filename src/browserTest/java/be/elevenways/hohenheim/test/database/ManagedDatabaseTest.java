@@ -92,6 +92,46 @@ class ManagedDatabaseTest {
         }
     }
 
+    @Test
+    void backupRestoreRoundTripsPostgres() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
+
+        ManagedDatabase databases = new ManagedDatabase(docker);
+        String name = "rttest" + System.nanoTime();
+        String containerName = "hohenheim-db-" + name;
+        List<String> env = List.of("PGPASSWORD=secret123");
+        try {
+            databases.provision(name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
+                "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs, no btrfs I/O
+
+            psql(docker, containerName, env, "CREATE TABLE notes (id int); INSERT INTO notes VALUES (7);");
+            String dump = databases.backup(name, ManagedDatabase.Engine.POSTGRES,
+                "appuser", "secret123", "appdb");
+
+            psql(docker, containerName, env, "DROP TABLE notes;");   // wipe what the dump holds
+
+            databases.restore(name, ManagedDatabase.Engine.POSTGRES,
+                "appuser", "secret123", "appdb", dump);
+
+            DockerClient.ExecResult check = docker.exec(containerName,
+                List.of("psql", "-U", "appuser", "-d", "appdb", "-tAc", "SELECT count(*) FROM notes WHERE id=7"),
+                env);
+            assertThat(check.exitCode()).withFailMessage("query failed: %s", check.stderr()).isZero();
+            assertThat(check.stdout().trim()).isEqualTo("1");   // row survived the round-trip
+        } finally {
+            databases.destroy(name, true);
+        }
+    }
+
+    private static void psql(DockerClient docker, String containerName, List<String> env, String sql)
+            throws IOException {
+        DockerClient.ExecResult result = docker.exec(containerName,
+            List.of("psql", "-v", "ON_ERROR_STOP=1", "-U", "appuser", "-d", "appdb", "-c", sql), env);
+        assertThat(result.exitCode()).withFailMessage("psql failed: %s", result.stderr()).isZero();
+    }
+
     private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
         for (Object image : docker.listImages()) {
             Object repoTags = ((Map<?, ?>) image).get("RepoTags");
