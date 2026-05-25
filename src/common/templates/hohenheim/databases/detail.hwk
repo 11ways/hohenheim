@@ -1,0 +1,85 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    {% declare name: String %}
+    {% declare engine: String %}
+    {% declare image: String %}
+    {% declare database: String %}
+    {% declare user: String %}
+    {% declare password: String %}
+    {% declare port: Integer %}
+
+    <header class="hh-header">
+        <h1 class="hh-header__title">{{ name }}</h1>
+    </header>
+    <main class="hh-content">
+
+        <div class="hh-page-actions">
+            <p class="hh-page-actions__description">
+                <pl-badge variant={% "secondary" %}>{{ engine }}</pl-badge>
+                {% if running == true %}
+                    <pl-badge variant={% "default" %}>Running {{ port }}</pl-badge>
+                {% else %}
+                    <pl-badge variant={% "outline" %}>Stopped</pl-badge>
+                {% /if %}
+                {% if ephemeral == true %}
+                    <pl-badge variant={% "outline" %}>Ephemeral</pl-badge>
+                {% else %}
+                    <pl-badge variant={% "outline" %}>Persistent</pl-badge>
+                {% /if %}
+            </p>
+            <a href="/databases" class="hh-button-link"><pl-button variant={% "outline" %}>Back</pl-button></a>
+        </div>
+
+        <pl-card>
+            <pl-card-header>
+                <pl-card-title>Connection</pl-card-title>
+                <pl-card-description>Reachable on the host loopback once the container is running.</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <pl-table>
+                    <pl-table-body>
+                        <pl-table-row>
+                            <pl-table-head>Host</pl-table-head>
+                            <pl-table-cell>127.0.0.1</pl-table-cell>
+                        </pl-table-row>
+                        <pl-table-row>
+                            <pl-table-head>Port</pl-table-head>
+                            <pl-table-cell>
+                                {% if running == true %}{{ port }}{% else %}(not running){% /if %}
+                            </pl-table-cell>
+                        </pl-table-row>
+                        <pl-table-row>
+                            <pl-table-head>Database</pl-table-head>
+                            <pl-table-cell>{{ database }}</pl-table-cell>
+                        </pl-table-row>
+                        <pl-table-row>
+                            <pl-table-head>User</pl-table-head>
+                            <pl-table-cell>{{ user }}</pl-table-cell>
+                        </pl-table-row>
+                        <pl-table-row>
+                            <pl-table-head>Password</pl-table-head>
+                            <pl-table-cell>{{ password }}</pl-table-cell>
+                        </pl-table-row>
+                        <pl-table-row>
+                            <pl-table-head>Image</pl-table-head>
+                            <pl-table-cell>{{ image }}</pl-table-cell>
+                        </pl-table-row>
+                    </pl-table-body>
+                </pl-table>
+            </pl-card-content>
+        </pl-card>
+
+        <div class="hh-form-actions">
+            {% if canBackup == true %}
+            <form method="POST" action={% "/databases/" + name + "/backup" %}>
+                <pl-button variant={% "outline" %} type={% "submit" %}>Download Backup</pl-button>
+            </form>
+            {% /if %}
+            <form method="POST" action={% "/databases/" + name + "/delete" %}>
+                <pl-button variant={% "destructive" %} type={% "submit" %}>Delete</pl-button>
+            </form>
+        </div>
+
+    </main>
+{% /block %}

@@ -33,7 +33,9 @@
                         {% /if %}
                         {% each databases as index, item %}
                         <pl-table-row>
-                            <pl-table-cell>{{ item.get("name") }}</pl-table-cell>
+                            <pl-table-cell>
+                                <a href={% "/databases/" + item.get("name") %} class="hh-site-link">{{ item.get("name") }}</a>
+                            </pl-table-cell>
                             <pl-table-cell>
                                 <pl-badge variant={% "secondary" %}>{{ item.get("engine") }}</pl-badge>
                             </pl-table-cell>

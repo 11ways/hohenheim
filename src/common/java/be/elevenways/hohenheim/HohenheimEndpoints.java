@@ -231,6 +231,13 @@ public class HohenheimEndpoints {
             .addStatic("databases").addDelimiter().addStatic("create").build())
         .build();
 
+    // Endpoint<Object> (not PageEndpoint) so the handler can render or redirect (not-found).
+    public static final Endpoint<Object> DATABASES_DETAIL = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "databases_detail"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME).build())
+        .build();
+
     public static final Endpoint<Object> DATABASES_CREATE = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "databases_create"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)

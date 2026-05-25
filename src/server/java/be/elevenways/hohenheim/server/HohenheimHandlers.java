@@ -1539,6 +1539,27 @@ public class HohenheimHandlers {
             )
         );
 
+        // Detail (connection info)
+        HohenheimEndpoints.DATABASES_DETAIL.setHandler(conduit -> {
+            String name = conduit.getParameter(HohenheimEndpoints.DATABASE_NAME);
+            DatabaseService.Detail detail = databaseService.detail(name);
+            if (detail == null) {
+                return redirectUntyped("/databases");
+            }
+            Map<String, Object> vars = new HashMap<>();
+            vars.put("name", detail.name());
+            vars.put("engine", detail.engine());
+            vars.put("image", detail.image());
+            vars.put("database", detail.database());
+            vars.put("user", detail.user());
+            vars.put("password", detail.password());
+            vars.put("ephemeral", detail.ephemeral());
+            vars.put("running", detail.running());
+            vars.put("port", detail.port() != null ? detail.port() : 0);
+            vars.put("canBackup", detail.engine().equals("postgres") || detail.engine().equals("mysql"));
+            return renderUntyped(Identifier.of("hohenheim", "hohenheim/databases/detail"), vars);
+        });
+
         // Create (POST) -- provisions the container synchronously, then persists the record.
         HohenheimEndpoints.DATABASES_CREATE.setHandler(conduit -> {
             HttpConduit http = (HttpConduit) conduit;
