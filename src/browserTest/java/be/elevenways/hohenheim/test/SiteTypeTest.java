@@ -103,6 +103,22 @@ class SiteTypeTest extends HohenheimTestBase {
     }
 
     @Test
+    @Order(9)
+    void switchingToDockerShowsDockerFields() {
+        navigateToApp("/sites/create");
+        waitForHydration();
+
+        selectPlOption("site_type", "hohenheim:docker");
+        page.waitForCondition(() -> getFormText().contains("Container Port")
+            && !getFormText().contains("Upstream Host"));
+
+        String formText = getFormText();
+        assertThat(formText).contains("Container Port");
+        assertThat(formText).contains("Command Override");
+        assertThat(formText).doesNotContain("Upstream Host");
+    }
+
+    @Test
     @Order(5)
     void switchingBackToProxyRestoresProxyFields() {
         navigateToApp("/sites/create");

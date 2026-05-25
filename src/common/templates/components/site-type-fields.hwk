@@ -22,6 +22,8 @@
             <hh-static-settings settings={% settings %}></hh-static-settings>
         {% elseif selectedType{:} == "hohenheim:redirect" %}
             <hh-redirect-settings settings={% settings %}></hh-redirect-settings>
+        {% elseif selectedType{:} == "hohenheim:docker" %}
+            <hh-docker-settings settings={% settings %}></hh-docker-settings>
         {% /if %}
     }
 } %}
