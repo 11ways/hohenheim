@@ -1666,12 +1666,19 @@ public class HohenheimHandlers {
             serverService.ensureLocal();
             List<Map<String, Object>> items = new ArrayList<>();
             for (ServerService.Summary summary : serverService.summaries()) {
+                boolean up = summary.reachable();
                 Map<String, Object> item = new HashMap<>();
                 item.put("name", summary.name());
                 item.put("mode", summary.mode());
                 item.put("sshTarget", summary.sshTarget());
-                item.put("reachable", summary.reachable());
+                item.put("reachable", up);
                 item.put("removable", !ServerService.LOCAL.equals(summary.name()));
+                item.put("cpus", up ? String.valueOf(summary.cpus()) : "-");
+                item.put("memory", up
+                    ? String.format("%.1f GB", summary.memoryBytes() / 1_000_000_000.0) : "-");
+                item.put("containers", up
+                    ? summary.containersRunning() + "/" + summary.containersTotal() : "-");
+                item.put("images", up ? String.valueOf(summary.images()) : "-");
                 items.add(item);
             }
             return new RenderTemplateResult(

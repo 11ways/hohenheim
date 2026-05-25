@@ -37,6 +37,14 @@ class DockerClientTest {
     }
 
     @Test
+    void infoReportsHostResources() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        Map<String, Object> info = new DockerClient().info();
+        assertThat(info).containsKey("NCPU");
+        assertThat(info).containsKey("MemTotal");
+    }
+
+    @Test
     void listContainersParsesIntoMaps() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         List<Object> containers = new DockerClient().listContainers(true);
