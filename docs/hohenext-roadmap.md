@@ -96,9 +96,10 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
       desired config; `DatabaseService` ties it to `ManagedDatabase`: create provisions +
       records, list reads records, backup/restore resolve engine+credentials by name, destroy
       removes container and record. Model round-trip + Docker/DB integration tested.
-- [x] **Admin UI** — `/databases` pages on `DatabaseService`: list (with live status), create
-      form (provisions + persists), per-row backup download, delete. Sidebar link + render tests.
-      (Follow-up: generate credentials in the create handler instead of entering them.)
+- [x] **Admin UI** — `/databases` pages on `DatabaseService`: list (with live status), detail
+      (full connection info), create form (provisions + persists; user/password optional and
+      auto-generated, then shown on the detail page), per-row backup download, delete. Sidebar
+      link + render tests.
 - [x] **Backup scheduling** — daily `BackupDatabases` task dumps each running database to a
       timestamped file under `database.backup_path`, pruning to `database.backup_retention`.
 - [x] **Redis/Mongo binary backup** — `getArchiveFile` fetches the native dump (redis `--rdb`,
