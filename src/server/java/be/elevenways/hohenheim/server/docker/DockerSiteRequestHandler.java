@@ -10,6 +10,7 @@ import io.undertow.util.Headers;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -62,7 +63,7 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
                 // Run a remote image, pulling it if absent.
                 String tag = (String) settings.getOrDefault("tag", "latest");
                 String resolvedTag = (tag == null || tag.isBlank()) ? "latest" : tag;
-                ensureImage(image, resolvedTag);
+                docker.ensureImage(image, resolvedTag);
                 imageRef = image.contains(":") ? image : image + ":" + resolvedTag;
             } else {
                 Blast.log("DOCKER: site", siteId, "needs an image or a git source; staying down");
@@ -137,17 +138,6 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
 
     // -----------------------------------------------------------------------
 
-    private void ensureImage(String image, String tag) throws IOException {
-        String ref = image.contains(":") ? image : image + ":" + tag;
-        for (Object entry : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) entry).get("RepoTags");
-            if (repoTags instanceof List<?> tags && tags.contains(ref)) {
-                return;
-            }
-        }
-        docker.pullImage(image, tag);
-    }
-
     private void removeExisting() {
         try {
             docker.removeContainer(containerName, true);
@@ -180,20 +170,12 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
     }
 
     private URI resolveUpstream(String id, int port) throws IOException {
-        Object networkSettings = docker.inspectContainer(id).get("NetworkSettings");
-        Object ports = networkSettings instanceof Map<?, ?> ns ? ns.get("Ports") : null;
-        Object bindings = ports instanceof Map<?, ?> p ? p.get(port + "/tcp") : null;
-        if (bindings instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> binding) {
-            Object hostPort = binding.get("HostPort");
-            if (hostPort != null && !hostPort.toString().isBlank()) {
-                try {
-                    return new URI("http", null, "127.0.0.1", Integer.parseInt(hostPort.toString()), "/", null, null);
-                } catch (Exception e) {
-                    throw new IOException("Bad published port '" + hostPort + "' for site " + siteId);
-                }
-            }
+        int hostPort = docker.publishedPort(id, port);
+        try {
+            return new URI("http", null, "127.0.0.1", hostPort, "/", null, null);
+        } catch (URISyntaxException e) {
+            throw new IOException("Bad upstream URI for site " + siteId, e);
         }
-        throw new IOException("Container for site " + siteId + " did not publish port " + port);
     }
 
     private static List<String> buildEnv(Object envObj) {
