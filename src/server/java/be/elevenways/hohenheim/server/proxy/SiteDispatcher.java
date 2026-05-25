@@ -273,19 +273,26 @@ public class SiteDispatcher implements HttpHandler {
             Integer accessListId = site.get(SiteModel.ACCESS_LIST_ID);
             Row accessList = accessListId != null ? accessListModel.findById(accessListId) : null;
 
-            // Check for git provisioning
+            // Check for git provisioning. Isolate per-site handler creation so one
+            // misconfigured site (e.g. a dangling system_user_id, which now fails
+            // closed) is skipped with a log line instead of aborting the whole load.
             SiteRequestHandler requestHandler;
-            String source = site.get(SiteModel.SOURCE);
-            if ("git".equals(source)) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> sourceSettings = (Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS);
-                if (sourceSettings != null) {
-                    requestHandler = GitProvisioner.createHandler(site, typeHandler, settings, sourceSettings, siteId);
+            try {
+                String source = site.get(SiteModel.SOURCE);
+                if ("git".equals(source)) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> sourceSettings = (Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS);
+                    if (sourceSettings != null) {
+                        requestHandler = GitProvisioner.createHandler(site, typeHandler, settings, sourceSettings, siteId);
+                    } else {
+                        requestHandler = typeHandler.createHandler(site, settings);
+                    }
                 } else {
                     requestHandler = typeHandler.createHandler(site, settings);
                 }
-            } else {
-                requestHandler = typeHandler.createHandler(site, settings);
+            } catch (Exception e) {
+                Blast.log("SiteDispatcher: failed to create handler for site", siteName, "-", e.getMessage());
+                continue;
             }
             List<Row> domains = domainModel.findBySiteId(siteId);
 

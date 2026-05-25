@@ -7,18 +7,25 @@ import java.io.IOException;
 import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Minimal Docker Engine API client speaking HTTP/1.1 directly over the daemon's
  * unix socket -- the foundation for Hohenext's container/app/database layer.
  *
  * Each call opens a fresh connection with {@code Connection: close} (no keep-alive)
- * and reads to EOF, then decodes a chunked body if present. Unversioned API paths
- * are used, so the daemon serves them at its current API version.
+ * and reads to EOF, then decodes a chunked body if present. A per-request watchdog
+ * closes the channel if the daemon stalls, so an unresponsive daemon can't pin the
+ * calling thread forever. Unversioned API paths are used, so the daemon serves them
+ * at its current API version.
  *
  * @author  Jelle De Loecker
  * @since   0.1.0
@@ -28,14 +35,33 @@ public class DockerClient {
     /** Default Docker daemon socket on Linux. */
     public static final String DEFAULT_SOCKET = "/var/run/docker.sock";
 
+    /** Default per-request deadline (connect + full read). */
+    public static final long DEFAULT_TIMEOUT_MS = 10_000;
+
+    // AIDEV-NOTE: A blocking SocketChannel over AF_UNIX can't use Socket.setSoTimeout,
+    // so we bound each request with a watchdog that closes the channel on expiry; the
+    // blocked connect/read then throws ClosedChannelException, surfaced as a timeout.
+    private static final ScheduledExecutorService WATCHDOG =
+        Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "docker-client-watchdog");
+            thread.setDaemon(true);
+            return thread;
+        });
+
     private final UnixDomainSocketAddress address;
+    private final long timeoutMillis;
 
     public DockerClient() {
         this(DEFAULT_SOCKET);
     }
 
     public DockerClient(String socketPath) {
+        this(socketPath, DEFAULT_TIMEOUT_MS);
+    }
+
+    public DockerClient(String socketPath, long timeoutMillis) {
         this.address = UnixDomainSocketAddress.of(socketPath);
+        this.timeoutMillis = timeoutMillis;
     }
 
     /**
@@ -80,10 +106,18 @@ public class DockerClient {
             + "Connection: close\r\n\r\n";
 
         byte[] raw;
-        try (SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX)) {
+        SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX);
+        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
+            () -> closeQuietly(channel), timeoutMillis, TimeUnit.MILLISECONDS);
+        try {
             channel.connect(address);
             channel.write(ByteBuffer.wrap(request.getBytes(StandardCharsets.UTF_8)));
             raw = readToEnd(channel);
+        } catch (ClosedChannelException e) {
+            throw new IOException("Docker request to " + path + " timed out after " + timeoutMillis + "ms");
+        } finally {
+            watchdog.cancel(false);
+            closeQuietly(channel);
         }
         return parseHttp(raw);
     }
@@ -98,6 +132,14 @@ public class DockerClient {
             buf.clear();
         }
         return out.toByteArray();
+    }
+
+    private static void closeQuietly(SocketChannel channel) {
+        try {
+            channel.close();
+        } catch (IOException ignored) {
+            // best effort
+        }
     }
 
     // AIDEV-NOTE: We decode raw bytes as ISO-8859-1 (1 char == 1 byte) so header
@@ -145,13 +187,15 @@ public class DockerClient {
         }
     }
 
-    private static String dechunk(String body) {
+    // Decodes HTTP/1.1 chunked transfer encoding. Throws on malformed framing
+    // rather than returning a silently-truncated body (matches parseHttp's strictness).
+    private static String dechunk(String body) throws IOException {
         StringBuilder out = new StringBuilder();
         int pos = 0;
-        while (pos < body.length()) {
+        while (true) {
             int crlf = body.indexOf("\r\n", pos);
             if (crlf < 0) {
-                break;
+                throw new IOException("Malformed chunked body from Docker daemon: missing chunk header");
             }
             String sizeToken = body.substring(pos, crlf).trim();
             int semicolon = sizeToken.indexOf(';');           // strip any chunk extension
@@ -162,13 +206,16 @@ public class DockerClient {
             try {
                 size = Integer.parseInt(sizeToken, 16);
             } catch (NumberFormatException e) {
-                break;
+                throw new IOException("Malformed chunked body from Docker daemon: bad chunk size '" + sizeToken + "'");
             }
             if (size == 0) {
                 break;                                          // terminating chunk
             }
             int start = crlf + 2;
-            int end = Math.min(start + size, body.length());
+            int end = start + size;
+            if (end > body.length()) {
+                throw new IOException("Malformed chunked body from Docker daemon: chunk exceeds available data");
+            }
             out.append(body, start, end);
             pos = end + 2;                                       // skip the chunk's trailing CRLF
         }

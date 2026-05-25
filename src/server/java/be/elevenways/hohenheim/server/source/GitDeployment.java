@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -153,6 +154,16 @@ public class GitDeployment {
 
     private boolean freshClone(File targetDir) throws InterruptedException {
         targetDir.getParentFile().mkdirs();
+        if (uid > 0) {
+            // Create the slot dir as Hohenheim (which owns the parent siteDir), then
+            // hand ownership to the site user so the uid-dropped clone/build can write
+            // into it. See docs/hohenext-roadmap.md for the slot-ownership model.
+            targetDir.mkdirs();
+            if (!chownToSiteUser(targetDir)) {
+                Blast.log("GIT: chown of slot to uid", uid, "failed for site", siteId);
+                return false;
+            }
+        }
         GitRepository.GitResult result = gitRepo.clone(targetDir);
         if (!result.success()) {
             Blast.log("GIT: clone failed for site", siteId, "-", result.output());
@@ -321,16 +332,48 @@ public class GitDeployment {
         }
     }
 
-    private static void deleteDirectory(File dir) {
+    private void deleteDirectory(File dir) {
+        if (dir == null || !dir.exists()) return;
+        if (uid > 0) {
+            // Slot contents may be owned by the site user; clear those as that user.
+            // deleteTree() then removes whatever remains (Hohenheim-owned leftovers and
+            // the now-empty slot dir, which Hohenheim can remove via parent-dir write).
+            runProcess(List.of("sudo", "-u", "#" + uid, "--", "rm", "-rf", dir.getAbsolutePath()));
+        }
+        deleteTree(dir);
+    }
+
+    private static void deleteTree(File dir) {
         if (dir == null || !dir.exists()) return;
         File[] files = dir.listFiles();
         if (files != null) {
             for (File f : files) {
-                if (f.isDirectory()) deleteDirectory(f);
+                if (f.isDirectory()) deleteTree(f);
                 else f.delete();
             }
         }
         dir.delete();
+    }
+
+    /** Give the site user ownership of a freshly-created slot directory (sudo chown). */
+    private boolean chownToSiteUser(File dir) {
+        return runProcess(List.of("sudo", "chown", String.valueOf(uid), dir.getAbsolutePath()));
+    }
+
+    /** Run a short-lived helper process, draining its output; true on exit code 0. */
+    private boolean runProcess(List<String> command) {
+        try {
+            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            try (var stdout = process.getInputStream()) {
+                stdout.readAllBytes();
+            }
+            return process.waitFor() == 0;
+        } catch (IOException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
     }
 
     // -----------------------------------------------------------------------

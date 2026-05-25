@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.model.NodeVersionModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.process.ChildWrapper;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.PortAllocator;
@@ -140,7 +140,7 @@ public class NodeSiteType implements SiteTypeHandler {
             super(siteId, siteName, settings, portAllocator, processMonitor);
             this.script = (String) settings.getOrDefault("script", "");
             this.nodePath = resolveNodePath(settings.get("node_version_id"));
-            this.resolvedUid = resolveUid(settings.get("system_user_id"));
+            this.resolvedUid = SystemUsers.resolveUid(settings.get("system_user_id"));
             this.defaultArgs = defaultArgs;
             this.useChildWrapper = useChildWrapper;
 
@@ -164,21 +164,6 @@ public class NodeSiteType implements SiteTypeHandler {
             if (row == null) return "node";
             String path = row.get(NodeVersionModel.PATH);
             return path != null && !path.isBlank() ? path : "node";
-        }
-
-        /**
-         * Look up the uid by system_user_id. Returns 0 (current user) when no user is
-         * referenced or the referenced row is missing/obsolete.
-         */
-        private static int resolveUid(Object systemUserIdObj) {
-            if (!(systemUserIdObj instanceof Integer id) || id <= 0) {
-                return 0;
-            }
-            var model = new SystemUserModel(HohenheimDatabase.datasource());
-            Row row = model.findById(id);
-            if (row == null) return 0;
-            Integer uid = row.get(SystemUserModel.UID);
-            return uid != null ? uid : 0;
         }
 
         @Override
