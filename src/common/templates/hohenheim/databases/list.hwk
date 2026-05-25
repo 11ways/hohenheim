@@ -41,7 +41,11 @@
                             </pl-table-cell>
                             <pl-table-cell>{{ item.get("database") }}</pl-table-cell>
                             <pl-table-cell>
-                                {% if item.get("running") == true %}
+                                {% if item.get("status") == "provisioning" %}
+                                    <pl-badge variant={% "secondary" %}>Provisioning</pl-badge>
+                                {% elseif item.get("status") == "failed" %}
+                                    <pl-badge variant={% "destructive" %}>Failed</pl-badge>
+                                {% elseif item.get("running") == true %}
                                     <pl-badge variant={% "default" %}>Running {{ item.get("port") }}</pl-badge>
                                 {% else %}
                                     <pl-badge variant={% "outline" %}>Stopped</pl-badge>

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.database;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
@@ -11,6 +12,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Lifecycle entry point for managed databases: ties the persisted {@link DatabaseModel} record
@@ -21,6 +24,18 @@ import java.util.List;
  * @since   0.1.0
  */
 public class DatabaseService {
+
+    public static final String STATUS_PROVISIONING = "provisioning";
+    public static final String STATUS_ACTIVE = "active";
+    public static final String STATUS_FAILED = "failed";
+
+    // Background pool for provisioning (image pull + container start can take tens of seconds);
+    // shared because handlers construct DatabaseService per request. Bounded to limit load.
+    private static final ExecutorService PROVISION_EXECUTOR = Executors.newFixedThreadPool(2, runnable -> {
+        Thread thread = new Thread(runnable, "db-provision");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private final ManagedDatabase databases;
     private final DatabaseModel model;
@@ -35,15 +50,38 @@ public class DatabaseService {
     }
 
     /**
-     * Provision (or re-provision) a database container and persist its record. Provisioning runs
-     * first so a failed provision leaves no orphan record; an existing record is updated in place.
+     * Provision a database synchronously and persist its record as active. Blocking -- intended for
+     * tests and scripted use; request handlers should use {@link #createAsync}.
      */
     public ManagedDatabase.Connection create(String name, ManagedDatabase.Engine engine, String image,
                                              String user, String password, String database,
                                              boolean ephemeral) throws IOException {
         ManagedDatabase.Connection connection =
             databases.provision(name, engine, image, user, password, database, ephemeral);
+        upsertRecord(name, engine, image, user, password, database, ephemeral, STATUS_ACTIVE);
+        return connection;
+    }
 
+    /**
+     * Persist the record immediately as "provisioning" and provision in the background, flipping the
+     * status to active or failed when done -- so a slow image pull doesn't block the request.
+     */
+    public void createAsync(String name, ManagedDatabase.Engine engine, String image,
+                            String user, String password, String database, boolean ephemeral) {
+        upsertRecord(name, engine, image, user, password, database, ephemeral, STATUS_PROVISIONING);
+        PROVISION_EXECUTOR.submit(() -> {
+            try {
+                databases.provision(name, engine, image, user, password, database, ephemeral);
+                setStatus(name, STATUS_ACTIVE);
+            } catch (Exception e) {
+                setStatus(name, STATUS_FAILED);
+                Blast.log("DB: provisioning failed for", name, "-", e.getMessage());
+            }
+        });
+    }
+
+    private void upsertRecord(String name, ManagedDatabase.Engine engine, String image, String user,
+                              String password, String database, boolean ephemeral, String status) {
         Row row = model.findByName(name);
         if (row == null) {
             row = model.createEmptyRow();
@@ -55,9 +93,16 @@ public class DatabaseService {
         row.set(DatabaseModel.DB_PASSWORD, password);
         row.set(DatabaseModel.DB_NAME, database);
         row.set(DatabaseModel.EPHEMERAL, ephemeral);
+        row.set(DatabaseModel.STATUS, status);
         model.save(row);
+    }
 
-        return connection;
+    private void setStatus(String name, String status) {
+        Row row = model.findByName(name);
+        if (row != null) {
+            row.set(DatabaseModel.STATUS, status);
+            model.save(row);
+        }
     }
 
     /** All persisted database records. */
@@ -65,13 +110,15 @@ public class DatabaseService {
         return model.find().all();
     }
 
-    /** A persisted database plus its best-effort live container status, for the admin list. */
+    /** A persisted database plus its best-effort live container status, for the admin list.
+     *  {@code status} is the provisioning lifecycle (provisioning/active/failed); {@code running}
+     *  + {@code port} are the live container state (meaningful once active). */
     public record Summary(String name, String engine, String image, String database, String user,
-                          boolean ephemeral, boolean running, Integer port) {}
+                          boolean ephemeral, String status, boolean running, Integer port) {}
 
     /** Full detail for one database, including the password (admin detail page only). */
     public record Detail(String name, String engine, String image, String database, String user,
-                         String password, boolean ephemeral, boolean running, Integer port) {}
+                         String password, boolean ephemeral, String status, boolean running, Integer port) {}
 
     /** Full detail for one database by name with live status, or null if there is no such record. */
     public Detail detail(String name) {
@@ -80,7 +127,7 @@ public class DatabaseService {
             return null;
         }
         ManagedDatabase.Engine engine = engineOf(row);
-        ManagedDatabase.LiveStatus status = databases.status(name, engine);
+        ManagedDatabase.LiveStatus live = databases.status(name, engine);
         String image = row.get(DatabaseModel.IMAGE);
         return new Detail(
             row.get(DatabaseModel.NAME),
@@ -90,8 +137,9 @@ public class DatabaseService {
             row.get(DatabaseModel.DB_USER),
             row.get(DatabaseModel.DB_PASSWORD),
             Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL)),
-            status.running(),
-            status.port());
+            statusOf(row),
+            live.running(),
+            live.port());
     }
 
     /** All databases with live status (running + published port), best-effort per record. */
@@ -99,7 +147,7 @@ public class DatabaseService {
         List<Summary> result = new ArrayList<>();
         for (Row row : model.find().all()) {
             ManagedDatabase.Engine engine = engineOf(row);
-            ManagedDatabase.LiveStatus status = databases.status(row.get(DatabaseModel.NAME), engine);
+            ManagedDatabase.LiveStatus live = databases.status(row.get(DatabaseModel.NAME), engine);
             String image = row.get(DatabaseModel.IMAGE);
             result.add(new Summary(
                 row.get(DatabaseModel.NAME),
@@ -108,11 +156,17 @@ public class DatabaseService {
                 row.get(DatabaseModel.DB_NAME),
                 row.get(DatabaseModel.DB_USER),
                 Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL)),
-                status.running(),
-                status.port()
+                statusOf(row),
+                live.running(),
+                live.port()
             ));
         }
         return result;
+    }
+
+    private static String statusOf(Row row) {
+        String status = row.get(DatabaseModel.STATUS);
+        return status != null ? status : STATUS_ACTIVE;   // records predating the status column
     }
 
     /** Back up a persisted database by name, using its stored engine and credentials. */

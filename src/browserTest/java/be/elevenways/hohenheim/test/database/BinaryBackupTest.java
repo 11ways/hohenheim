@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.migration.M015_CreateManagedDatabases;
+import be.elevenways.hohenheim.migration.M016_AddDatabaseStatus;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -137,7 +138,7 @@ class BinaryBackupTest {
         db.deleteOnExit();
         SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner((MigrationCapableDatasource) ds,
-            List.of(M015_CreateManagedDatabases::new)).migrate();
+            List.of(M015_CreateManagedDatabases::new, M016_AddDatabaseStatus::new)).migrate();
         return ds;
     }
 
