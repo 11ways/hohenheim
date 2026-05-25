@@ -69,6 +69,31 @@ public class DatabaseService {
     public record Summary(String name, String engine, String image, String database, String user,
                           boolean ephemeral, boolean running, Integer port) {}
 
+    /** Full detail for one database, including the password (admin detail page only). */
+    public record Detail(String name, String engine, String image, String database, String user,
+                         String password, boolean ephemeral, boolean running, Integer port) {}
+
+    /** Full detail for one database by name with live status, or null if there is no such record. */
+    public Detail detail(String name) {
+        Row row = model.findByName(name);
+        if (row == null) {
+            return null;
+        }
+        ManagedDatabase.Engine engine = engineOf(row);
+        ManagedDatabase.LiveStatus status = databases.status(name, engine);
+        String image = row.get(DatabaseModel.IMAGE);
+        return new Detail(
+            row.get(DatabaseModel.NAME),
+            engine.name().toLowerCase(),
+            image != null ? image : "",
+            row.get(DatabaseModel.DB_NAME),
+            row.get(DatabaseModel.DB_USER),
+            row.get(DatabaseModel.DB_PASSWORD),
+            Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL)),
+            status.running(),
+            status.port());
+    }
+
     /** All databases with live status (running + published port), best-effort per record. */
     public List<Summary> summaries() {
         List<Summary> result = new ArrayList<>();
