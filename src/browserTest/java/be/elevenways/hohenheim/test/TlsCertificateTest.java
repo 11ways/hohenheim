@@ -196,13 +196,13 @@ class TlsCertificateTest {
     // Self-signed cert generation for testing
     // -----------------------------------------------------------------------
 
-    private static KeyPair generateKeyPair() throws Exception {
+    static KeyPair generateKeyPair() throws Exception {
         KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
         gen.initialize(2048);
         return gen.generateKeyPair();
     }
 
-    private static X509Certificate generateSelfSignedCert(KeyPair keyPair, String cn) throws Exception {
+    static X509Certificate generateSelfSignedCert(KeyPair keyPair, String cn) throws Exception {
         // Use BouncyCastle to generate a self-signed cert
         var now = new Date();
         var until = new Date(now.getTime() + 365L * 86400000);
@@ -231,7 +231,7 @@ class TlsCertificateTest {
             .getCertificate(builder.build(signer));
     }
 
-    private static String certToPem(X509Certificate cert) throws Exception {
+    static String certToPem(X509Certificate cert) throws Exception {
         StringBuilder sb = new StringBuilder();
         sb.append("-----BEGIN CERTIFICATE-----\n");
         sb.append(java.util.Base64.getMimeEncoder(64, "\n".getBytes())
@@ -240,7 +240,7 @@ class TlsCertificateTest {
         return sb.toString();
     }
 
-    private static String keyToPem(KeyPair keyPair) throws Exception {
+    static String keyToPem(KeyPair keyPair) throws Exception {
         StringBuilder sb = new StringBuilder();
         sb.append("-----BEGIN PRIVATE KEY-----\n");
         sb.append(java.util.Base64.getMimeEncoder(64, "\n".getBytes())

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -16,6 +17,8 @@ import static org.assertj.core.api.Assertions.*;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -171,20 +174,58 @@ class ProxyDispatchTest {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
 
-        setupSiteWithDomain("hsts.test", Map.of("forward_host", "127.0.0.1", "forward_port", 9999),
+        // RFC 6797 §7.2: HSTS is emitted only over HTTPS, so this exercises a real TLS
+        // connection. A cert must exist for the HTTPS listener to start; SNI resolves it.
+        var certModel = new CertificateModel(HohenheimDatabase.datasource());
+        KeyPair keyPair = TlsCertificateTest.generateKeyPair();
+        X509Certificate cert = TlsCertificateTest.generateSelfSignedCert(keyPair, "hsts.test");
+        Row certRow = certModel.createEmptyRow();
+        certRow.set(CertificateModel.NICE_NAME, "HSTS Test");
+        certRow.set(CertificateModel.PROVIDER, "custom");
+        certRow.set(CertificateModel.STATUS, "active");
+        certRow.set(CertificateModel.CERTIFICATE_PEM, TlsCertificateTest.certToPem(cert));
+        certRow.set(CertificateModel.PRIVATE_KEY_PEM, TlsCertificateTest.keyToPem(keyPair));
+        certModel.save(certRow);
+
+        // Live upstream so HSTS is asserted on a real 200 response.
+        HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        upstream.createContext("/", ex -> {
+            byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+        });
+        upstream.start();
+
+        setupSiteWithDomain("hsts.test",
+            Map.of("forward_host", "127.0.0.1", "forward_port", upstream.getAddress().getPort()),
             Map.of("hsts_enabled", true, "hsts_subdomains", true, "force_ssl", false));
 
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
 
-        var info = proxy.getHttpListenerInfo();
-        httpPort = ((InetSocketAddress) info.getAddress()).getPort();
+        int httpsPort = ((InetSocketAddress) proxy.getHttpsListenerInfo().getAddress()).getPort();
 
-        try (Socket socket = new Socket("127.0.0.1", httpPort)) {
+        javax.net.ssl.SSLContext tls = javax.net.ssl.SSLContext.getInstance("TLS");
+        tls.init(null, new javax.net.ssl.TrustManager[]{ new javax.net.ssl.X509TrustManager() {
+            public void checkClientTrusted(X509Certificate[] c, String a) {}
+            public void checkServerTrusted(X509Certificate[] c, String a) {}
+            public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+        }}, null);
+
+        try (javax.net.ssl.SSLSocket socket = (javax.net.ssl.SSLSocket)
+                tls.getSocketFactory().createSocket("127.0.0.1", httpsPort)) {
+            javax.net.ssl.SSLParameters params = socket.getSSLParameters();
+            params.setServerNames(List.of(new javax.net.ssl.SNIHostName("hsts.test")));
+            socket.setSSLParameters(params);
             socket.setSoTimeout(3000);
+            socket.startHandshake();
+
             OutputStream out = socket.getOutputStream();
-            out.write(("GET / HTTP/1.1\r\nHost: hsts.test\r\nConnection: close\r\n\r\n").getBytes());
+            out.write(("GET / HTTP/1.1\r\nHost: hsts.test\r\nConnection: close\r\n\r\n")
+                .getBytes(StandardCharsets.UTF_8));
             out.flush();
 
             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
@@ -193,11 +234,11 @@ class ProxyDispatchTest {
             while ((line = reader.readLine()) != null) {
                 response.append(line).append("\n");
             }
-
-            String resp = response.toString();
-            assertThat(resp).contains("Strict-Transport-Security: max-age=31536000; includeSubDomains");
+            assertThat(response.toString())
+                .contains("Strict-Transport-Security: max-age=31536000; includeSubDomains");
         }
 
+        upstream.stop(0);
         proxy.stop();
         proxy = null;
     }

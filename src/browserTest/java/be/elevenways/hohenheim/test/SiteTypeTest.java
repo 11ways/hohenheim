@@ -48,7 +48,7 @@ class SiteTypeTest extends HohenheimTestBase {
 
     @Test
     @Order(2)
-    void typeDropdownHasAllSixTypes() {
+    void typeDropdownHasAllSevenTypes() {
         navigateToApp("/sites/create");
         waitForHydration();
 
@@ -57,12 +57,13 @@ class SiteTypeTest extends HohenheimTestBase {
 
         // Count site type items via their inner option div with data-value attribute
         var items = page.locator("pl-select-item div[role='option'][data-value^='hohenheim:']");
-        assertThat(items.count()).isEqualTo(6);
+        assertThat(items.count()).isEqualTo(7);
 
         String allText = items.allTextContents().toString();
         assertThat(allText).contains("Proxy");
         assertThat(allText).contains("Node.js");
         assertThat(allText).contains("Alchemy");
+        assertThat(allText).contains("Command");
         assertThat(allText).contains("Static");
         assertThat(allText).contains("Redirect");
         assertThat(allText).contains("Dead");
