@@ -4,6 +4,7 @@ import be.elevenways.protoblast.common.dry.Dry;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.SocketException;
 import java.net.StandardProtocolFamily;
 import java.net.URLEncoder;
 import java.net.UnixDomainSocketAddress;
@@ -11,6 +12,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -42,6 +44,10 @@ public class DockerClient {
     /** Default per-request deadline (connect + full read); generous enough for a
      *  container stop grace period, short enough to catch a truly-hung daemon. */
     public static final long DEFAULT_TIMEOUT_MS = 60_000;
+
+    /** Deadline for long streaming operations (image pull / build) that legitimately
+     *  run for minutes; still bounded so a wedged stream eventually fails. */
+    public static final long LONG_OP_TIMEOUT_MS = 600_000;
 
     // AIDEV-NOTE: A blocking SocketChannel over AF_UNIX can't use Socket.setSoTimeout,
     // so we bound each request with a watchdog that closes the channel on expiry; the
@@ -115,10 +121,38 @@ public class DockerClient {
     public void pullImage(String image, String tag) throws IOException {
         String resolvedTag = (tag == null || tag.isBlank()) ? "latest" : tag;
         String path = "/images/create?fromImage=" + enc(image) + "&tag=" + enc(resolvedTag);
-        String body = request("POST", path, null).body();
+        String body = request("POST", path, null, null, LONG_OP_TIMEOUT_MS).body();
         if (body.contains("\"error\":")) {
             throw new IOException("Docker image pull failed for " + image + ":" + resolvedTag + " -- " + body.trim());
         }
+    }
+
+    /**
+     * Build an image from a source directory containing a Dockerfile (the basis of
+     * Hohenext's build-from-source pipeline). Blocks until the build finishes; the
+     * daemon streams progress (HTTP 200 even on failure), so this throws if the stream
+     * carries an error object.
+     *
+     * @param contextDir build context (tarred and sent as the request body)
+     * @param tag        image tag to apply, e.g. {@code "myapp:latest"}
+     * @param dockerfile path to the Dockerfile within the context (null -> "Dockerfile")
+     */
+    public void buildImage(Path contextDir, String tag, String dockerfile) throws IOException {
+        byte[] context = tarDirectory(contextDir);
+        String file = (dockerfile == null || dockerfile.isBlank()) ? "Dockerfile" : dockerfile;
+        String path = "/build?t=" + enc(tag) + "&dockerfile=" + enc(file) + "&rm=true";
+        String body = request("POST", path, context, "application/x-tar", LONG_OP_TIMEOUT_MS).body();
+        if (body.contains("\"error\":")) {
+            throw new IOException("Docker image build failed for " + tag + " -- " + body.trim());
+        }
+    }
+
+    /**
+     * Remove an image by name/tag or id. {@code name} may contain {@code /} and {@code :}
+     * (kept as path, not URL-encoded, per the Engine API).
+     */
+    public void removeImage(String name, boolean force) throws IOException {
+        request("DELETE", "/images/" + name + (force ? "?force=true" : ""), null, null, timeoutMillis);
     }
 
     // -----------------------------------------------------------------------
@@ -189,35 +223,39 @@ public class DockerClient {
     private record Response(int status, String body) {}
 
     private Response get(String path) throws IOException {
-        return request("GET", path, null);
+        return request("GET", path, null, null, timeoutMillis);
     }
 
     private Response request(String method, String path, String jsonBody) throws IOException {
-        byte[] bodyBytes = jsonBody == null ? new byte[0] : jsonBody.getBytes(StandardCharsets.UTF_8);
+        byte[] body = jsonBody == null ? null : jsonBody.getBytes(StandardCharsets.UTF_8);
+        return request(method, path, body, jsonBody == null ? null : "application/json", timeoutMillis);
+    }
 
+    private Response request(String method, String path, byte[] body, String contentType, long timeoutMs)
+            throws IOException {
         StringBuilder head = new StringBuilder();
         head.append(method).append(' ').append(path).append(" HTTP/1.1\r\n");
         head.append("Host: docker\r\n");
         head.append("Accept: application/json\r\n");
-        if (jsonBody != null) {
-            head.append("Content-Type: application/json\r\n");
-            head.append("Content-Length: ").append(bodyBytes.length).append("\r\n");
+        if (body != null) {
+            head.append("Content-Type: ").append(contentType).append("\r\n");
+            head.append("Content-Length: ").append(body.length).append("\r\n");
         }
         head.append("Connection: close\r\n\r\n");
 
         byte[] raw;
         SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX);
         ScheduledFuture<?> watchdog = WATCHDOG.schedule(
-            () -> closeQuietly(channel), timeoutMillis, TimeUnit.MILLISECONDS);
+            () -> closeQuietly(channel), timeoutMs, TimeUnit.MILLISECONDS);
         try {
             channel.connect(address);
             writeFully(channel, ByteBuffer.wrap(head.toString().getBytes(StandardCharsets.ISO_8859_1)));
-            if (bodyBytes.length > 0) {
-                writeFully(channel, ByteBuffer.wrap(bodyBytes));
+            if (body != null && body.length > 0) {
+                writeFully(channel, ByteBuffer.wrap(body));
             }
             raw = readToEnd(channel);
         } catch (ClosedChannelException e) {
-            throw new IOException(method + " " + path + " timed out after " + timeoutMillis + "ms");
+            throw new IOException(method + " " + path + " timed out after " + timeoutMs + "ms");
         } finally {
             watchdog.cancel(false);
             closeQuietly(channel);
@@ -234,11 +272,22 @@ public class DockerClient {
     private static byte[] readToEnd(SocketChannel channel) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteBuffer buf = ByteBuffer.allocate(8192);
-        int n;
-        while ((n = channel.read(buf)) != -1) {
-            buf.flip();
-            out.write(buf.array(), buf.arrayOffset(), n);
-            buf.clear();
+        try {
+            int n;
+            while ((n = channel.read(buf)) != -1) {
+                buf.flip();
+                out.write(buf.array(), buf.arrayOffset(), n);
+                buf.clear();
+            }
+        } catch (SocketException e) {
+            // AIDEV-NOTE: Docker RSTs some Connection: close streams (notably /build)
+            // after sending the full response, rather than a clean FIN. Keep what we
+            // read and let parseHttp + chunk decoding validate completeness; only a
+            // reset with nothing buffered is a real failure. (Watchdog timeouts surface
+            // as ClosedChannelException, handled separately by the caller.)
+            if (out.size() == 0) {
+                throw e;
+            }
         }
         return out.toByteArray();
     }
@@ -249,6 +298,29 @@ public class DockerClient {
         } catch (IOException ignored) {
             // best effort
         }
+    }
+
+    // Tar the build context via the system `tar` (handles file modes, symlinks, and
+    // nesting robustly); the daemon's /build endpoint wants the context as a tar body.
+    private static byte[] tarDirectory(Path dir) throws IOException {
+        Process process = new ProcessBuilder("tar", "-C", dir.toString(), "-cf", "-", ".").start();
+        byte[] tar;
+        try (var stdout = process.getInputStream()) {
+            tar = stdout.readAllBytes();
+        }
+        try {
+            if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IOException("tar of build context timed out: " + dir);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("tar of build context interrupted: " + dir);
+        }
+        if (process.exitValue() != 0) {
+            throw new IOException("tar of build context failed (exit " + process.exitValue() + "): " + dir);
+        }
+        return tar;
     }
 
     // AIDEV-NOTE: We decode raw bytes as ISO-8859-1 (1 char == 1 byte) so header
