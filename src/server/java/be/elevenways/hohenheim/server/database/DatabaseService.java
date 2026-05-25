@@ -7,7 +7,6 @@ import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -100,9 +99,20 @@ public class DatabaseService {
         return databases.backup(name, engineOf(row), user, password, database);
     }
 
-    /** Back up a persisted database by name to a UTF-8 file. */
-    public void backupToFile(String name, Path target) throws IOException {
-        Files.writeString(target, backup(name), StandardCharsets.UTF_8);
+    /**
+     * Back up a persisted database into {@code directory}, naming the file {@code baseName} plus
+     * the engine's dump extension, and return the written path. Handles text (SQL) and binary
+     * (RDB / mongodump archive) engines.
+     */
+    public Path backupToFile(String name, Path directory, String baseName) throws IOException {
+        Row row = require(name);
+        ManagedDatabase.Engine engine = engineOf(row);
+        Files.createDirectories(directory);
+        Path target = directory.resolve(baseName + "." + engine.dumpExtension());
+        databases.backupToFile(name, engine,
+            row.get(DatabaseModel.DB_USER), row.get(DatabaseModel.DB_PASSWORD),
+            row.get(DatabaseModel.DB_NAME), target);
+        return target;
     }
 
     /** Restore a dump into a persisted database by name. */

@@ -12,10 +12,13 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -349,6 +352,60 @@ public class DockerClient {
     public void putArchiveFromDirectory(String containerId, String targetDir, Path hostDir) throws IOException {
         String path = "/containers/" + containerId + "/archive?path=" + enc(targetDir);
         request("PUT", path, tarDirectory(hostDir), "application/x-tar", LONG_OP_TIMEOUT_MS);
+    }
+
+    /**
+     * Download a single file from a container ({@code GET /containers/{id}/archive}) and return
+     * its raw bytes, unwrapping Docker's tar envelope. Binary-safe (used for RDB / mongodump
+     * archives). {@code path} must point at a single file, not a directory.
+     */
+    public byte[] getArchiveFile(String containerId, String path) throws IOException {
+        byte[] tar = exchange("GET", "/containers/" + containerId + "/archive?path=" + enc(path),
+            null, null, LONG_OP_TIMEOUT_MS).body();
+        return extractSingleFile(tar);
+    }
+
+    // Extract the one file from a tar via the system `tar` (symmetry with tarDirectory).
+    private static byte[] extractSingleFile(byte[] tar) throws IOException {
+        Path tmpDir = Files.createTempDirectory("hohenheim-getarchive");
+        Path tarFile = tmpDir.resolve("archive.tar");
+        try {
+            Files.write(tarFile, tar);
+            Process process = new ProcessBuilder("tar", "-xf", tarFile.toString(), "-C", tmpDir.toString()).start();
+            try {
+                if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                    process.destroyForcibly();
+                    throw new IOException("tar extract of archive timed out");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("tar extract of archive interrupted");
+            }
+            if (process.exitValue() != 0) {
+                throw new IOException("tar extract of archive failed (exit " + process.exitValue() + ")");
+            }
+            try (Stream<Path> files = Files.list(tmpDir)) {
+                Path extracted = files.filter(file -> !file.equals(tarFile)).findFirst()
+                    .orElseThrow(() -> new IOException("Docker archive contained no file"));
+                return Files.readAllBytes(extracted);
+            }
+        } finally {
+            deleteRecursively(tmpDir);
+        }
+    }
+
+    private static void deleteRecursively(Path root) {
+        try (Stream<Path> paths = Files.walk(root)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException ignored) {
+                    // best effort
+                }
+            });
+        } catch (IOException ignored) {
+            // best effort
+        }
     }
 
     // -----------------------------------------------------------------------
