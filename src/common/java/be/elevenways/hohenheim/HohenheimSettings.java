@@ -126,6 +126,16 @@ public class HohenheimSettings {
             .defaultValue("hohenheim.db")
             .description("SQLite database file path")
             .build();
+
+        public static final SettingDefinition<String> BACKUP_PATH = GROUP.buildSetting("backup_path", String.class)
+            .defaultValue("data/backups")
+            .description("Directory for scheduled managed-database dumps")
+            .build();
+
+        public static final SettingDefinition<Integer> BACKUP_RETENTION = GROUP.buildSetting("backup_retention", Integer.class)
+            .defaultValue(7)
+            .description("Number of dumps to keep per managed database")
+            .build();
     }
 
     // --- Security ---
