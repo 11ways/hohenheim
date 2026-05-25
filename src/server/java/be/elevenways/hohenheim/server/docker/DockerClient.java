@@ -341,6 +341,16 @@ public class DockerClient {
         throw new IOException("Container did not publish port " + containerPort);
     }
 
+    /**
+     * Tar {@code hostDir} and extract it into {@code targetDir} inside the container
+     * ({@code PUT /containers/{id}/archive}); {@code targetDir} must already exist. Used to
+     * push a file (e.g. a dump to restore) into a running container.
+     */
+    public void putArchiveFromDirectory(String containerId, String targetDir, Path hostDir) throws IOException {
+        String path = "/containers/" + containerId + "/archive?path=" + enc(targetDir);
+        request("PUT", path, tarDirectory(hostDir), "application/x-tar", LONG_OP_TIMEOUT_MS);
+    }
+
     // -----------------------------------------------------------------------
     // HTTP/1.1 over the unix socket
     // -----------------------------------------------------------------------
