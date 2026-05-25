@@ -57,12 +57,14 @@
 
                         <div class="hh-form-group">
                             <pl-label target="db-user">User</pl-label>
-                            <pl-input id="db-user" type={% "text" %} name={% "db_user" %} placeholder={% "appuser" %} required={% true %}></pl-input>
+                            <pl-input id="db-user" type={% "text" %} name={% "db_user" %} placeholder={% "appuser" %}></pl-input>
+                            <p class="hh-form-hint">Leave blank to use appuser.</p>
                         </div>
 
                         <div class="hh-form-group">
                             <pl-label target="db-pass">Password</pl-label>
-                            <pl-input id="db-pass" type={% "password" %} name={% "db_password" %} required={% true %}></pl-input>
+                            <pl-input id="db-pass" type={% "password" %} name={% "db_password" %}></pl-input>
+                            <p class="hh-form-hint">Leave blank to auto-generate a strong password (shown after creation).</p>
                         </div>
 
                         <pl-separator></pl-separator>
