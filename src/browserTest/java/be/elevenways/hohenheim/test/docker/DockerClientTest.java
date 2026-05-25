@@ -117,6 +117,48 @@ class DockerClientTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void containerLogsDemuxesStdoutAndStderr() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+
+        String name = "hohenheim-logs-test-" + System.nanoTime();
+        String id = docker.createContainer(name, Map.of(
+            "Image", TEST_IMAGE,
+            "Cmd", List.of("sh", "-c", "echo hohenheim-out; echo hohenheim-err 1>&2")
+        ));
+        try {
+            docker.startContainer(id);
+            waitForExit(docker, id, 10_000);
+
+            // Both frames (stdout=1, stderr=2) must be demultiplexed into the snapshot.
+            String logs = docker.containerLogs(id, true, true, 0);
+            assertThat(logs).contains("hohenheim-out");
+            assertThat(logs).contains("hohenheim-err");
+        } finally {
+            docker.removeContainer(id, true);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void waitForExit(DockerClient docker, String id, long timeoutMillis) throws IOException {
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (System.currentTimeMillis() < deadline) {
+            Map<String, Object> state = (Map<String, Object>) docker.inspectContainer(id).get("State");
+            if (Boolean.FALSE.equals(state.get("Running"))) {
+                return;
+            }
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("interrupted waiting for container exit");
+            }
+        }
+    }
+
+    @Test
     void toJsonEncodesNestedSpecWithEscaping() {
         String json = DockerClient.toJson(Map.of(
             "Image", "alpine",

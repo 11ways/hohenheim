@@ -252,6 +252,21 @@ public class DockerClient {
     }
 
     /**
+     * Fetch a container's logs as a single text snapshot (stdout and stderr interleaved in
+     * arrival order, like {@code docker logs}). Demultiplexes Docker's framed stream for
+     * non-TTY containers -- all hohenheim-managed containers run without a TTY.
+     *
+     * @param tail max number of trailing lines, or {@code <= 0} for the full log
+     */
+    public String containerLogs(String id, boolean stdout, boolean stderr, int tail) throws IOException {
+        String path = "/containers/" + id + "/logs?stdout=" + (stdout ? 1 : 0) + "&stderr=" + (stderr ? 1 : 0);
+        if (tail > 0) {
+            path += "&tail=" + tail;
+        }
+        return demuxStream(exchange("GET", path, null, null, timeoutMillis).body());
+    }
+
+    /**
      * @return the host port Docker published for {@code containerPort}/tcp on the container
      * @throws IOException if the container did not publish that port
      */
@@ -278,6 +293,8 @@ public class DockerClient {
 
     private record Response(int status, String body) {}
 
+    private record RawResponse(int status, byte[] body) {}
+
     private Response get(String path) throws IOException {
         return request("GET", path, null, null, timeoutMillis);
     }
@@ -288,6 +305,14 @@ public class DockerClient {
     }
 
     private Response request(String method, String path, byte[] body, String contentType, long timeoutMs)
+            throws IOException {
+        RawResponse response = exchange(method, path, body, contentType, timeoutMs);
+        return new Response(response.status(), new String(response.body(), StandardCharsets.UTF_8));
+    }
+
+    // Performs the HTTP exchange and returns the byte-accurate body, so binary endpoints
+    // (multiplexed log/exec streams) aren't corrupted by a UTF-8 decode.
+    private RawResponse exchange(String method, String path, byte[] body, String contentType, long timeoutMs)
             throws IOException {
         StringBuilder head = new StringBuilder();
         head.append(method).append(' ').append(path).append(" HTTP/1.1\r\n");
@@ -316,7 +341,7 @@ public class DockerClient {
             watchdog.cancel(false);
             closeQuietly(channel);
         }
-        return parseHttp(raw);
+        return parseHttpRaw(raw);
     }
 
     private static void writeFully(SocketChannel channel, ByteBuffer buf) throws IOException {
@@ -382,7 +407,7 @@ public class DockerClient {
     // AIDEV-NOTE: We decode raw bytes as ISO-8859-1 (1 char == 1 byte) so header
     // splitting and chunk-size offsets stay byte-accurate, then re-decode the
     // assembled body as UTF-8. Don't "simplify" this to a single UTF-8 decode.
-    private static Response parseHttp(byte[] raw) throws IOException {
+    private static RawResponse parseHttpRaw(byte[] raw) throws IOException {
         String text = new String(raw, StandardCharsets.ISO_8859_1);
         int sep = text.indexOf("\r\n\r\n");
         if (sep < 0) {
@@ -404,14 +429,17 @@ public class DockerClient {
         if (chunked) {
             body = dechunk(body);
         }
-        body = new String(body.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
+        // ISO-8859-1 round-trips each char back to its exact source byte, preserving binary
+        // bodies (log/exec frames); JSON callers re-decode these bytes as UTF-8 in request().
+        byte[] bodyBytes = body.getBytes(StandardCharsets.ISO_8859_1);
 
         // 2xx is success; 304 ("not modified") is the daemon's idempotent answer for
         // start/stop when the container is already in the requested state.
         if ((status < 200 || status >= 300) && status != 304) {
-            throw new IOException("Docker API returned HTTP " + status + ": " + body.trim());
+            throw new IOException("Docker API returned HTTP " + status + ": "
+                + new String(bodyBytes, StandardCharsets.UTF_8).trim());
         }
-        return new Response(status, body);
+        return new RawResponse(status, bodyBytes);
     }
 
     private static int parseStatus(String statusLine) throws IOException {
@@ -459,6 +487,33 @@ public class DockerClient {
             pos = end + 2;                                       // skip the chunk's trailing CRLF
         }
         return out.toString();
+    }
+
+    // AIDEV-NOTE: Docker multiplexes stdout/stderr over one stream for non-TTY containers:
+    // each frame is an 8-byte header [streamType, 0,0,0, size(4, big-endian)] then `size`
+    // payload bytes (streamType 1=stdout, 2=stderr). TTY containers send a raw unframed
+    // stream; if the bytes don't look framed we emit them verbatim. stdout/stderr are
+    // concatenated in arrival order, like `docker logs`. (exec reuses this demux.)
+    private static String demuxStream(byte[] data) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        int pos = 0;
+        while (pos + 8 <= data.length) {
+            int streamType = data[pos] & 0xFF;
+            if (streamType > 2 || data[pos + 1] != 0 || data[pos + 2] != 0 || data[pos + 3] != 0) {
+                out.write(data, pos, data.length - pos);   // not framed (TTY) -> raw remainder
+                return new String(out.toByteArray(), StandardCharsets.UTF_8);
+            }
+            int size = ((data[pos + 4] & 0xFF) << 24) | ((data[pos + 5] & 0xFF) << 16)
+                     | ((data[pos + 6] & 0xFF) << 8) | (data[pos + 7] & 0xFF);
+            pos += 8;
+            if (size < 0 || pos + size > data.length) {
+                out.write(data, pos, data.length - pos);   // truncated frame -> emit remainder
+                break;
+            }
+            out.write(data, pos, size);
+            pos += size;
+        }
+        return new String(out.toByteArray(), StandardCharsets.UTF_8);
     }
 
     private static Object parseJson(String json) {
