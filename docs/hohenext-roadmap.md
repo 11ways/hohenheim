@@ -128,8 +128,12 @@ backups, and backup for all four engines + restore for the SQL engines and Mongo
       the implicit `local` host, builds a `DockerClient` per server (local socket or SSH), and
       reports reachability (ping). Admin UI at `/servers` lists hosts with reachability, adds remote
       SSH servers, and removes them (not local).
-- [ ] **Route managed sites/databases to a chosen host** — add `server_id` to sites/databases and
-      build their `DockerClient` via `ServerService.clientFor(...)` instead of always-local.
+- [x] **Route managed databases to a chosen host** — `managed_databases.server_name` (M018);
+      `DatabaseService` resolves the `ManagedDatabase` per record via `ServerService` (local socket
+      or remote SSH); create form offers a host dropdown; list/detail show the host. (Local path
+      fully tested; the remote path shares the code with a different transport.)
+- [ ] **Route managed sites to a chosen host** — same treatment for `DockerSiteType` (add
+      `server_name` to sites; build the site handler's client via `ServerService.clientFor`).
 - [ ] **Resource monitoring** — per-server stats (Sentinel-style lightweight agent).
 
 ## Phase 5 — Platform services
