@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.migration.M015_CreateManagedDatabases;
+import be.elevenways.hohenheim.migration.M016_AddDatabaseStatus;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -78,13 +79,42 @@ class DatabaseServiceTest {
         }
     }
 
+    @Test
+    void createAsyncRecordsProvisioningThenActive() throws IOException, InterruptedException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
+
+        DatabaseService service = new DatabaseService(docker, freshDatasource());
+        String name = "async" + System.nanoTime();
+        try {
+            service.createAsync(name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
+                "appuser", "secret123", "appdb", true);
+
+            // The call returned without blocking on the pull: the record is already "provisioning".
+            assertThat(service.detail(name).status()).isEqualTo(DatabaseService.STATUS_PROVISIONING);
+
+            // The background job flips it to "active" once the container is up and ready.
+            long deadline = System.currentTimeMillis() + 60_000;
+            String status = service.detail(name).status();
+            while (!DatabaseService.STATUS_ACTIVE.equals(status) && System.currentTimeMillis() < deadline) {
+                Thread.sleep(500);
+                status = service.detail(name).status();
+            }
+            assertThat(status).isEqualTo(DatabaseService.STATUS_ACTIVE);
+            assertThat(service.detail(name).running()).isTrue();
+        } finally {
+            service.destroy(name, true);
+        }
+    }
+
     private static SqliteDatasource freshDatasource() throws IOException {
         File db = File.createTempFile("hohenheim-dbservice-test", ".db");
         db.delete();
         db.deleteOnExit();
         SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner((MigrationCapableDatasource) ds,
-            List.of(M015_CreateManagedDatabases::new)).migrate();
+            List.of(M015_CreateManagedDatabases::new, M016_AddDatabaseStatus::new)).migrate();
         return ds;
     }
 

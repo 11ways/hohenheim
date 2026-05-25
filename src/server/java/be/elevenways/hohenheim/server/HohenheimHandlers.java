@@ -1520,6 +1520,7 @@ public class HohenheimHandlers {
                 item.put("database", summary.database());
                 item.put("user", summary.user());
                 item.put("ephemeral", summary.ephemeral());
+                item.put("status", summary.status());
                 item.put("running", summary.running());
                 item.put("port", summary.port() != null ? summary.port() : 0);
                 item.put("canBackup", summary.engine().equals("postgres") || summary.engine().equals("mysql"));
@@ -1554,6 +1555,7 @@ public class HohenheimHandlers {
             vars.put("user", detail.user());
             vars.put("password", detail.password());
             vars.put("ephemeral", detail.ephemeral());
+            vars.put("status", detail.status());
             vars.put("running", detail.running());
             vars.put("port", detail.port() != null ? detail.port() : 0);
             vars.put("canBackup", detail.engine().equals("postgres") || detail.engine().equals("mysql"));
@@ -1587,16 +1589,12 @@ public class HohenheimHandlers {
                     Map.of("error", error));
             }
 
-            try {
-                databaseService.create(name, ManagedDatabase.Engine.valueOf(engineToken.toUpperCase()),
-                    image.isEmpty() ? null : image, user, password, database, ephemeral);
-            } catch (IOException e) {
-                return renderUntyped(Identifier.of("hohenheim", "hohenheim/databases/create"),
-                    Map.of("error", "Provisioning failed: " + e.getMessage()));
-            }
+            // Provision in the background; the detail page shows the provisioning status.
+            databaseService.createAsync(name, ManagedDatabase.Engine.valueOf(engineToken.toUpperCase()),
+                image.isEmpty() ? null : image, user, password, database, ephemeral);
 
             audit(auditModel, conduit, "created", "database", name, name);
-            return redirectUntyped("/databases/" + name);   // detail page shows the connection info
+            return redirectUntyped("/databases/" + name);   // detail page shows status + connection info
         });
 
         // Backup (POST) -- download a SQL dump

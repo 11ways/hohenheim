@@ -7,6 +7,7 @@
     {% declare database: String %}
     {% declare user: String %}
     {% declare password: String %}
+    {% declare status: String %}
     {% declare port: Integer %}
 
     <header class="hh-header">
@@ -17,7 +18,11 @@
         <div class="hh-page-actions">
             <p class="hh-page-actions__description">
                 <pl-badge variant={% "secondary" %}>{{ engine }}</pl-badge>
-                {% if running == true %}
+                {% if status == "provisioning" %}
+                    <pl-badge variant={% "secondary" %}>Provisioning</pl-badge>
+                {% elseif status == "failed" %}
+                    <pl-badge variant={% "destructive" %}>Failed</pl-badge>
+                {% elseif running == true %}
                     <pl-badge variant={% "default" %}>Running {{ port }}</pl-badge>
                 {% else %}
                     <pl-badge variant={% "outline" %}>Stopped</pl-badge>
