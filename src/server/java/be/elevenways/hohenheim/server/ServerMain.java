@@ -27,17 +27,16 @@ public class ServerMain {
         // Register site types first (before SiteModel's RegistryEnumField is used)
         SiteTypes.register();
 
-        // Make HohenheimSettings (and all its nested groups) visible to the
-        // settings loader, and add our context to the shared SettingsSystem so
-        // Zenit's synchronous load inside ServerZenitRuntime.init() populates
-        // it alongside ServerSettings.
-        Zenit.registerSettings(HohenheimSettings.class);
-        Zenit.settings().addContext(HohenheimSettings.VALUES);
-
-        // init() seeds Zenit's default sources (default.dry / local.dry),
-        // registers ServerSettings, and synchronously loads both contexts.
-        // Anything reading a setting below this line sees configured values.
+        // init() loads ServerSettings from default.dry / local.dry, fires the
+        // BlastAutoLoadInit force-loader (materializing HohenheimSettings'
+        // @ZenitAutoLoad groups), and kicks off the boot stages.
         ServerZenitRuntime.init();
+
+        // Load Hohenheim's own settings from the same sources. Its context roots
+        // at Zenit.SETTINGS (groups are top-level), so it loads them the way
+        // ServerSettings does. Boot stages run async and read no Hohenheim
+        // setting; the manual startup below sees configured values.
+        HohenheimSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
 
         HohenheimEndpoints.init();
         HohenheimDatabase.init();

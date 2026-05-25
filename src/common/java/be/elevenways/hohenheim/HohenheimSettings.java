@@ -1,20 +1,27 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.setting.SettingContext;
+import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.setting.SettingGroup;
+import be.elevenways.zenit.common.setting.SettingsContext;
 
 /**
  * All Hohenheim configuration settings, organized by group.
  */
+@ZenitAutoLoad(loadInnerClasses = true)
 public class HohenheimSettings {
 
-    public static final SettingContext VALUES = new SettingContext.Simple(Zenit.SETTINGS);
+    // AIDEV-NOTE: Rooted at Zenit.SETTINGS (like ServerSettings, unlike a typical
+    // consumer that roots at its own subtree) because Hohenheim's groups (proxy,
+    // ssl, ...) are top-level, matching the flat .dry config schema. ServerMain
+    // loads this context from the same default.dry/local.dry sources.
+    public static final SettingsContext VALUES = new SettingsContext(Zenit.SETTINGS);
 
-    // Nested groups below are force-loaded by Zenit.registerSettings(HohenheimSettings.class),
-    // which ServerMain calls before the settings files are read. No per-group
-    // boilerplate here; adding a group is enough.
+    // Nested groups below are force-loaded at compile time via @ZenitAutoLoad
+    // (loadInnerClasses=true): Protoblast's Gradle plugin emits a reference to
+    // each into the generated BlastAutoLoadInit, fired on first Blast use. No
+    // per-group boilerplate here; adding a group is enough.
 
     // --- Proxy ---
     public abstract class Proxy {

@@ -8,7 +8,7 @@ plugins {
     id 'org.teavm' version '0.13.1'
     id 'com.gradleup.shadow' version '8.3.0'
     id 'org.checkerframework' version '0.6.40'
-    id 'be.elevenways.hawkeye' version '0.1.0-SNAPSHOT'
+    id 'be.elevenways.protoblast' version '0.1.0-SNAPSHOT'
 }
 
 apply plugin: 'org.checkerframework'
@@ -203,26 +203,19 @@ teavm {
     }
 }
 
-task copyClientJs(type: Copy) {
-    description = 'Copies TeaVM-generated JS to public directory'
-    dependsOn 'generateJavaScript'
-    from "${buildDir}/generated/teavm/js"
-    into 'public'
-    include 'hohenheim.js'
-}
-
-// The Hawkeye plugin registers compileHawkeyeScss to generate
-// public/hohenheim.css from src/common/scss/app.scss + extracted .hwk tag styles.
+// The protoblast plugin's Hawkeye template stage registers copyClientJs (copies
+// TeaVM JS + source map into public/) and compileHawkeyeScss (generates
+// public/hohenheim.css from src/common/scss/app.scss + extracted .hwk tag styles).
 afterEvaluate {
-    serverJar.dependsOn copyClientJs, tasks.named('compileHawkeyeScss')
-    browserTest.dependsOn tasks.named('compileHawkeyeScss')
+    serverJar.dependsOn 'copyClientJs', 'compileHawkeyeScss'
+    browserTest.dependsOn 'compileHawkeyeScss'
 }
 
 // --- Browser Test Task ---
 task browserTest(type: Test) {
     description = 'Run browser tests using Playwright'
     group = 'verification'
-    dependsOn copyClientJs
+    dependsOn 'copyClientJs'
 
     testClassesDirs = sourceSets.browserTest.output.classesDirs
     classpath = sourceSets.browserTest.runtimeClasspath
