@@ -1,0 +1,57 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    <header class="hh-header">
+        <h1 class="hh-header__title">Notifications</h1>
+    </header>
+    <main class="hh-content">
+
+        {% declare channels: List %}
+        {% declare listCount: Integer %}
+
+        <div class="hh-page-actions">
+            <p class="hh-page-actions__description">Webhook delivery for platform events (Slack, Discord, or a generic JSON receiver).</p>
+            <a href="/notifications/create" class="hh-button-link"><pl-button variant="primary">Add Channel</pl-button></a>
+        </div>
+
+        <pl-card>
+            <pl-card-content>
+                <pl-table>
+                    <pl-table-header><pl-table-row>
+                        <pl-table-head>Name</pl-table-head>
+                        <pl-table-head>Format</pl-table-head>
+                        <pl-table-head>URL</pl-table-head>
+                        <pl-table-head></pl-table-head>
+                    </pl-table-row></pl-table-header>
+                    <pl-table-body>
+                        {% if listCount == 0 %}
+                        <pl-table-row>
+                            <pl-table-cell colspan="4" class="hh-empty-state">No channels yet.</pl-table-cell>
+                        </pl-table-row>
+                        {% /if %}
+                        {% each channels as index, item %}
+                        <pl-table-row>
+                            <pl-table-cell>{{ item.get("name") }}</pl-table-cell>
+                            <pl-table-cell>
+                                <pl-badge variant={% "secondary" %}>{{ item.get("format") }}</pl-badge>
+                            </pl-table-cell>
+                            <pl-table-cell>{{ item.get("url") }}</pl-table-cell>
+                            <pl-table-cell>
+                                <div class="hh-table-actions">
+                                    <form method="POST" action={% "/notifications/" + item.get("name") + "/test" %}>
+                                        <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Send Test</pl-button>
+                                    </form>
+                                    <form method="POST" action={% "/notifications/" + item.get("name") + "/delete" %}>
+                                        <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Delete</pl-button>
+                                    </form>
+                                </div>
+                            </pl-table-cell>
+                        </pl-table-row>
+                        {% /each %}
+                    </pl-table-body>
+                </pl-table>
+            </pl-card-content>
+        </pl-card>
+
+    </main>
+{% /block %}
