@@ -288,6 +288,43 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("delete").build())
         .build();
 
+    // --- Notifications ---
+    public static final ParameterDefinition<String> NOTIFICATION_NAME = ParameterDefinition.builder(String.class)
+        .name("notificationName")
+        .stringResolver(value -> value)
+        .build();
+
+    public static final PageEndpoint NOTIFICATIONS = Endpoint.pageBuilder()
+        .identifier(Identifier.of("hohenheim", "notifications"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("notifications").build())
+        .build();
+
+    public static final PageEndpoint NOTIFICATIONS_CREATE_FORM = Endpoint.pageBuilder()
+        .identifier(Identifier.of("hohenheim", "notifications_create_form"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("notifications").addDelimiter().addStatic("create").build())
+        .build();
+
+    public static final Endpoint<Object> NOTIFICATIONS_CREATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "notifications_create"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("notifications").addDelimiter().addStatic("create").build())
+        .build();
+
+    public static final Endpoint<Object> NOTIFICATIONS_TEST = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "notifications_test"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("notifications").addDelimiter().addParameter(NOTIFICATION_NAME)
+            .addDelimiter().addStatic("test").build())
+        .build();
+
+    public static final Endpoint<Object> NOTIFICATIONS_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "notifications_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("notifications").addDelimiter().addParameter(NOTIFICATION_NAME)
+            .addDelimiter().addStatic("delete").build())
+        .build();
+
     // --- Process control ---
     public static final ParameterDefinition<Long> PID = ParameterDefinition.builder(Long.class)
         .name("pid")
