@@ -63,15 +63,9 @@
                             <pl-table-cell>
                                 <div class="hh-table-actions">
                                     {% if item.get("canBackup") == true %}
-                                    <form method="POST" action={% "/databases/" + item.get("name") + "/backup" %}>
-                {% csrf() %}
-                                        <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Backup</pl-button>
-                                    </form>
+                                    <hh-post-action action={% "/databases/" + item.get("name") + "/backup" %} label={% "Backup" %}></hh-post-action>
                                     {% /if %}
-                                    <form method="POST" action={% "/databases/" + item.get("name") + "/delete" %}>
-                {% csrf() %}
-                                        <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Delete</pl-button>
-                                    </form>
+                                    <hh-post-action action={% "/databases/" + item.get("name") + "/delete" %} label={% "Delete" %}></hh-post-action>
                                 </div>
                             </pl-table-cell>
                         </pl-table-row>

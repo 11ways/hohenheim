@@ -12,6 +12,7 @@
     public apiKeys: List = null
     public nodeVersions: List = null
     public systemUsers: List = null
+    public servers: List = null
     public error: String = ""
 
     template {
@@ -81,6 +82,7 @@
                             apiKeys={% apiKeys %}
                             nodeVersions={% nodeVersions %}
                             systemUsers={% systemUsers %}
+                            servers={% servers %}
                         ></hh-site-type-fields>
                     </div>
 
@@ -107,6 +109,7 @@
     {% declare apiKeys: List %}
     {% declare nodeVersions: List %}
     {% declare systemUsers: List %}
+    {% declare servers: List %}
     {% declare error: String %}
     {% declare processes: List = null %}
     {% declare isManaged: Boolean = false %}
@@ -129,6 +132,7 @@
             apiKeys={% apiKeys %}
             nodeVersions={% nodeVersions %}
             systemUsers={% systemUsers %}
+            servers={% servers %}
             error={% error %}
         ></hh-site-edit>
 

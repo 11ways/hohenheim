@@ -73,10 +73,7 @@
                                     <a href={% "/certificates/" + cert.get("id") + "/download" %} class="hh-button-link">
                                         <pl-button variant={% "ghost" %} size={% "sm" %}>Download</pl-button>
                                     </a>
-                                    <form method="POST" action={% "/certificates/" + cert.get("id") + "/delete" %}>
-                {% csrf() %}
-                                        <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Delete</pl-button>
-                                    </form>
+                                    <hh-post-action action={% "/certificates/" + cert.get("id") + "/delete" %} label={% "Delete" %}></hh-post-action>
                                 </div>
                             </pl-table-cell>
                         </pl-table-row>

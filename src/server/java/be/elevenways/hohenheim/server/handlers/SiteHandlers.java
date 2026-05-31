@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.source.GitSourceSchema;
+import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -68,6 +69,9 @@ public final class SiteHandlers {
             vars.put("systemUsers", getSystemUserOptions());
             vars.put("environmentVariables", List.of());
             vars.put("apiKeys", List.of());
+            ServerService serverService = new ServerService();
+            serverService.ensureLocal();
+            vars.put("servers", serverService.names());
             return new RenderTemplateResult(
                 Identifier.of("hohenheim", "hohenheim/sites/create"), vars);
         });
@@ -483,6 +487,9 @@ public final class SiteHandlers {
         vars.put("systemUsers", getSystemUserOptions());
         vars.put("environmentVariables", extractEnvVarsList(settings));
         vars.put("apiKeys", extractApiKeysList(settings));
+        ServerService serverService = new ServerService();
+        serverService.ensureLocal();
+        vars.put("servers", serverService.names());
         vars.put("error", error);
 
         // Process data for managed site types
