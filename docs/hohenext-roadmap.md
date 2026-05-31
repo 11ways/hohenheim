@@ -161,15 +161,18 @@ only via the equivalent local `docker system dial-stdio` (no remote host availab
 - [x] Notifications: webhook channels (Slack / Discord / generic JSON), admin UI + test send.
       Distinct kinds (email / Telegram) still open.
 - Background job/queue + real-time logs (WebSocket or SSE) — Zenit capabilities.
-- **Auth / Proteus SSO — belongs in `zenit-auth`, NOT this app.** The framework already has a
-  `zenit-auth` module with a working `ProteusIdentityProvider` + OIDC provider, an
-  `IdentityProvider` SPI, and `auth_external_identities` linking. Proper path is: (1) finish
-  zenit-auth (config-driven provider registration from realm rows/`auth.dry`; persistent
-  remember-me cookie [needs ORM `update().execute()`]; OIDC id_token signature verification
-  [needs a JOSE dep]; per-table migrations), (2) add zenit-auth to the build chain, (3) migrate
-  hohenheim off its hand-rolled `AuthHelper`/`SessionModel` onto the module and register its
-  Proteus realm(s) + a per-site permission gate (`requiresPermissionOnResource` + a `site`
-  resolver). Do not reimplement SSO inside hohenheim. Design: `../../research/zenit-auth-architecture.md`.
+- [x] **Auth via `zenit-auth`** — hohenheim's hand-rolled auth is replaced by the framework module.
+  Native email/password login plus an optional Proteus SSO provider (registered from
+  `auth_proteus.*` settings when enabled). `ZenitAuth.init` installs the session store + CSRF +
+  `/login`/`/setup`/`/account`/`/admin`; admin areas gated via `AuthRegistry` baselines; all POST
+  forms carry `{% csrf() %}`. Password login + SSO-provider integration are tested (fake provider).
+  - Follow-ups: per-site SSO gate for proxied sites (Node's `proteus_realm_permission` -> 403),
+    persistent remember-me cookie, OIDC id_token signature verification (needs a JOSE dep),
+    reskin zenit-auth's auth templates to the hohenheim layout, and a `users`->`auth_users`
+    backfill if any pre-existing local accounts must survive (cutover assumed fresh `/setup`).
+  - **Build chain:** `zenit-auth` is not yet known to `zenit-dev`; it was published to mavenLocal
+    via its own gradle. Teach `zenit-dev` about it (chain: protoblast..zenit -> zenit-auth -> app)
+    so consumer rebuilds refresh it.
 
 ## Cross-cutting framework work (pulled in on demand)
 
