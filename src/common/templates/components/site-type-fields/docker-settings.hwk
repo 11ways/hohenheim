@@ -40,7 +40,7 @@
             </div>
             <div class="hh-form-group">
                 <pl-label target="docker-server">Server</pl-label>
-                <pl-select name="server" value={% server %}>
+                <pl-select id="docker-server" name="server" value={% server %}>
                     <pl-select-trigger placeholder="local"></pl-select-trigger>
                     <pl-select-content>
                         {% each servers as srvIndex, srvName %}

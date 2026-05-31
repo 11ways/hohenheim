@@ -16,7 +16,7 @@
             <div class="hh-form-row">
                 <div class="hh-form-group hh-form-group--grow">
                     <pl-label target="forward-scheme">Scheme</pl-label>
-                    <pl-select name="forward_scheme" value={% forwardScheme %}>
+                    <pl-select id="forward-scheme" name="forward_scheme" value={% forwardScheme %}>
                         <pl-select-trigger placeholder="Scheme"></pl-select-trigger>
                         <pl-select-content>
                             <pl-select-item value="http" label="HTTP">HTTP</pl-select-item>

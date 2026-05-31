@@ -14,7 +14,7 @@
             </div>
             <div class="hh-form-group">
                 <pl-label target="http-status">Status Code</pl-label>
-                <pl-select name="http_status" value={% httpStatus %}>
+                <pl-select id="http-status" name="http_status" value={% httpStatus %}>
                     <pl-select-trigger placeholder="Status Code"></pl-select-trigger>
                     <pl-select-content>
                         <pl-select-item value="302" label="302 Found (temporary)">302 Found (temporary)</pl-select-item>

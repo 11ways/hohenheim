@@ -20,7 +20,7 @@
 
         <div class="hh-form-group">
             <pl-label target="site-type">Site Type</pl-label>
-            <pl-select name="site_type" bind:value={% selectedType{:} %}>
+            <pl-select id="site-type" name="site_type" bind:value={% selectedType{:} %}>
                 <pl-select-trigger placeholder="Select type"></pl-select-trigger>
                 <pl-select-content>
                     {% each siteTypes as index, st %}
@@ -32,7 +32,7 @@
 
         <div class="hh-form-group">
             <pl-label target="source">Source</pl-label>
-            <pl-select name="source" bind:value={% source{:} %}>
+            <pl-select id="source" name="source" bind:value={% source{:} %}>
                 <pl-select-trigger placeholder="Local"></pl-select-trigger>
                 <pl-select-content>
                     <pl-select-item value="" label="Local">Local - files on disk</pl-select-item>

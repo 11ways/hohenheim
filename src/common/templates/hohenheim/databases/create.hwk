@@ -20,7 +20,7 @@
 
             <div class="hh-form-group">
                 <pl-label target="engine">Engine</pl-label>
-                <pl-select name="engine" value="postgres">
+                <pl-select id="engine" name="engine" value="postgres">
                     <pl-select-trigger placeholder="Engine"></pl-select-trigger>
                     <pl-select-content>
                         <pl-select-item value="postgres" label="PostgreSQL">PostgreSQL</pl-select-item>
@@ -33,7 +33,7 @@
 
             <div class="hh-form-group">
                 <pl-label target="server">Server</pl-label>
-                <pl-select name="server" value="local">
+                <pl-select id="server" name="server" value="local">
                     <pl-select-trigger placeholder="Server"></pl-select-trigger>
                     <pl-select-content>
                         {% each servers as serverIndex, serverName %}

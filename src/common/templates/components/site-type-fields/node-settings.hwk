@@ -24,7 +24,7 @@
             </div>
             <div class="hh-form-group">
                 <pl-label target="node-version">Node Binary</pl-label>
-                <pl-select name="node_version_id" value={% nodeVersionId %}>
+                <pl-select id="node-version" name="node_version_id" value={% nodeVersionId %}>
                     <pl-select-trigger placeholder="System default"></pl-select-trigger>
                     <pl-select-content>
                         <pl-select-item value="" label="System default">System default (node)</pl-select-item>
@@ -36,7 +36,7 @@
             </div>
             <div class="hh-form-group">
                 <pl-label target="system-user">Run As User</pl-label>
-                <pl-select name="system_user_id" value={% systemUserId %}>
+                <pl-select id="system-user" name="system_user_id" value={% systemUserId %}>
                     <pl-select-trigger placeholder="Current user"></pl-select-trigger>
                     <pl-select-content>
                         <pl-select-item value="" label="Current user">Current user</pl-select-item>

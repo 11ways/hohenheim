@@ -15,7 +15,7 @@
 
         <div class="hh-form-group">
             <pl-label target="satisfy">Satisfy</pl-label>
-            <pl-select name="satisfy" value={% satisfy %}>
+            <pl-select id="satisfy" name="satisfy" value={% satisfy %}>
                 <pl-select-trigger placeholder="Satisfy"></pl-select-trigger>
                 <pl-select-content>
                     <pl-select-item value="any" label="Any (IP or Auth)">Any (IP or Auth)</pl-select-item>
