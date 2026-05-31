@@ -116,6 +116,7 @@ dependencies {
     serverImplementation ('be.elevenways:protoblast:0.1.0-SNAPSHOT:server') { changing = true }
     serverImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:server') { changing = true }
     serverImplementation ('be.elevenways:zenit:0.1.0-SNAPSHOT:server') { changing = true }
+    serverImplementation ('be.elevenways:zenit-auth:0.1.0-SNAPSHOT:server-lib') { changing = true }
     serverImplementation ('be.elevenways:plumage:0.1.0-SNAPSHOT:server') { changing = true }
 
     commonImplementation 'org.checkerframework:checker-qual:3.42.0'
@@ -143,6 +144,7 @@ dependencies {
     browserTestImplementation sourceSets.server.output
     browserTestImplementation ('be.elevenways:protoblast:0.1.0-SNAPSHOT:server') { changing = true }
     browserTestImplementation ('be.elevenways:zenit:0.1.0-SNAPSHOT:server') { changing = true }
+    browserTestImplementation ('be.elevenways:zenit-auth:0.1.0-SNAPSHOT:server-lib') { changing = true }
     browserTestImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:server') { changing = true }
     browserTestImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:test-support') { changing = true }
     browserTestImplementation ('be.elevenways:plumage:0.1.0-SNAPSHOT:server') { changing = true }
