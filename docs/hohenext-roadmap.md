@@ -13,14 +13,27 @@ once they have a real consumer here and have stabilized — not speculatively.
 ## Phase 0 — Finish the port (near-term parity)
 
 The current port already closed most of the original gap audit (regex host
-matching, unix-socket upstreams with regex placeholder substitution, scheduled
-maintenance tasks, system-user discovery + per-site uid execution). Remaining
-items worth verifying/closing, roughly in value order:
+matching, scheduled maintenance tasks, system-user discovery + per-site uid
+execution). Done since: custom error pages (Hawkeye `ErrorPages`), IPv6
+dedicated listener (`ProxyServer.addIpv6Listener`), and TLS-handshake-stage IP
+reputation rejection (`SniKeyManager` refuses a cert to a banned peer).
 
-- Custom error-page templates (proxy error pages are hardcoded HTML; move to Hawkeye templates)
-- IPv6 dedicated listener (`proxy.ipv6_address` is wired but the listener is missing)
-- SNI cache staggered refresh / fetch backoff / in-flight dedup
-- Persistent remember-me cookies; SSO integration (defer if not needed yet)
+Remaining parity items, roughly in value order:
+
+- **Unix-socket upstreams/transport are inert config (decide: wire up or remove).** ProxySite's
+  `socket_path` is parsed + placeholder-substituted but `DispatchingProxyClient` never dials it;
+  `SocketAllocator` exists but Node sites are always TCP (`socketPath=null`). The config fields
+  silently no-op today.
+- **Per-site traffic stats are inert (decide: wire up or remove).** `StatsCollector.recordHit/
+  recordBytes/recordConnection` are never called, so the dashboard streams zeros. Node's live
+  stats dashboard was a headline feature.
+- **TOTP/2FA is a schema stub.** `users.totp_secret/totp_enabled` exist but no code verifies a
+  code. Implement (with zenit-auth) or drop the columns until built.
+- Stale-cert cleanup task (Node `CleanupGreenlockDomains`); brute-force hostname guards in regex
+  matching; SNI cache staggered refresh / backoff / in-flight dedup (optimization).
+- Persistent remember-me cookies + SSO — see Phase 5 (belongs in `zenit-auth`, not this app).
+
+Deliberately deferred (owner): per-request DB hit logging (was not performant in Node; revisit later).
 
 ## Phase 1 — Container layer (PaaS cornerstone) ← STARTED
 
@@ -145,9 +158,18 @@ only via the equivalent local `docker system dial-stdio` (no remote host availab
 
 ## Phase 5 — Platform services
 
-- Notifications: email / Slack / Discord / Telegram / webhooks.
+- [x] Notifications: webhook channels (Slack / Discord / generic JSON), admin UI + test send.
+      Distinct kinds (email / Telegram) still open.
 - Background job/queue + real-time logs (WebSocket or SSE) — Zenit capabilities.
-- Auth: OIDC + TOTP/2FA, RBAC (design already in `../../research/zenit-auth-architecture.md`).
+- **Auth / Proteus SSO — belongs in `zenit-auth`, NOT this app.** The framework already has a
+  `zenit-auth` module with a working `ProteusIdentityProvider` + OIDC provider, an
+  `IdentityProvider` SPI, and `auth_external_identities` linking. Proper path is: (1) finish
+  zenit-auth (config-driven provider registration from realm rows/`auth.dry`; persistent
+  remember-me cookie [needs ORM `update().execute()`]; OIDC id_token signature verification
+  [needs a JOSE dep]; per-table migrations), (2) add zenit-auth to the build chain, (3) migrate
+  hohenheim off its hand-rolled `AuthHelper`/`SessionModel` onto the module and register its
+  Proteus realm(s) + a per-site permission gate (`requiresPermissionOnResource` + a `site`
+  resolver). Do not reimplement SSO inside hohenheim. Design: `../../research/zenit-auth-architecture.md`.
 
 ## Cross-cutting framework work (pulled in on demand)
 
