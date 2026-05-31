@@ -1670,8 +1670,8 @@ public class HohenheimHandlers {
         Principal principal = conduit.getAttribute(ConduitAttributes.PRINCIPAL);
         Row row = model.createEmptyRow();
         if (principal != null && !principal.isAnonymous()) {
-            row.set(AuditLogModel.USER_ID, String.valueOf(principal.id()));
-            row.set(AuditLogModel.USER_EMAIL, principal.displayName());
+            row.set(AuditLogModel.USER_ID, (int) principal.id());
+            row.set(AuditLogModel.USER_LABEL, principal.displayName());
         }
         row.set(AuditLogModel.ACTION, action);
         row.set(AuditLogModel.RESOURCE_TYPE, resourceType);

@@ -28,7 +28,6 @@ public class SiteModel extends Model {
             .build());
 
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true).build());
-    public static final StringField ORGANIZATION_ID = SCHEMA.addField(StringField.builder().name("organization_id").build());
 
     // Polymorphic settings: schema resolved dynamically from site_type
     public static final SchemaField SETTINGS = SCHEMA.addField(

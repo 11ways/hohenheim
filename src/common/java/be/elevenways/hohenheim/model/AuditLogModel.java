@@ -16,10 +16,8 @@ public class AuditLogModel extends Model {
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final StringField ORGANIZATION_ID = SCHEMA.addField(StringField.builder().name("organization_id").build());
-    public static final StringField USER_ID = SCHEMA.addField(StringField.builder().name("user_id").build());
-    public static final StringField USER_EMAIL = SCHEMA.addField(StringField.builder().name("user_email").build());
-    public static final StringField USER_ROLE = SCHEMA.addField(StringField.builder().name("user_role").build());
+    public static final IntegerField USER_ID = SCHEMA.addField(IntegerField.builder().name("user_id").build());
+    public static final StringField USER_LABEL = SCHEMA.addField(StringField.builder().name("user_label").build());
     public static final StringField ACTION = SCHEMA.addField(StringField.builder().name("action").build());
     public static final StringField RESOURCE_TYPE = SCHEMA.addField(StringField.builder().name("resource_type").build());
     public static final StringField RESOURCE_ID = SCHEMA.addField(StringField.builder().name("resource_id").build());

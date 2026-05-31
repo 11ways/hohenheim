@@ -18,9 +18,7 @@ public class CertificateModel extends Model {
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final StringField ORGANIZATION_ID = SCHEMA.addField(StringField.builder().name("organization_id").build());
     public static final StringField NICE_NAME = SCHEMA.addField(StringField.builder().name("nice_name").build());
-    public static final SchemaField DOMAIN_NAMES = SCHEMA.addField(SchemaField.builder("domain_names").build());
     public static final StringField PROVIDER = SCHEMA.addField(StringField.builder().name("provider").build());
     public static final StringField CERTIFICATE_PEM = SCHEMA.addField(StringField.builder().name("certificate_pem").build());
     public static final StringField PRIVATE_KEY_PEM = SCHEMA.addField(StringField.builder().name("private_key_pem").build());
