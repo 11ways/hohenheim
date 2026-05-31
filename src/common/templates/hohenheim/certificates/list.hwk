@@ -2,7 +2,7 @@
 
 {% block "main" %}
     {% declare certificates: List %}
-    {% declare certCount: Integer %}
+    {% declare listCount: Integer %}
 
     <hh-page title={% "Certificates" %}>
         <hh-page-actions description={% "SSL/TLS certificates for your sites." %}>
@@ -20,7 +20,7 @@
                 <pl-table-head></pl-table-head>
             </pl-table-row></pl-table-header>
             <pl-table-body>
-                <hh-empty-row count={% certCount %} colspan={% "6" %} message={% "No certificates yet." %}></hh-empty-row>
+                <hh-empty-row count={% listCount %} colspan={% "6" %} message={% "No certificates yet." %}></hh-empty-row>
                 {% each certificates as index, cert %}
                 <pl-table-row>
                     <pl-table-cell>{{ cert.get("niceName") }}</pl-table-cell>

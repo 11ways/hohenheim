@@ -2,7 +2,7 @@
 
 {% block "main" %}
     {% declare sites: List %}
-    {% declare siteCount: Integer %}
+    {% declare listCount: Integer %}
 
     <hh-page title={% "Sites" %}>
         <hh-page-actions description={% "Manage your proxy sites and their domains." %}>
@@ -18,7 +18,7 @@
                 <pl-table-head></pl-table-head>
             </pl-table-row></pl-table-header>
             <pl-table-body>
-                <hh-empty-row count={% siteCount %} colspan={% "5" %} message={% "No sites configured yet." %}></hh-empty-row>
+                <hh-empty-row count={% listCount %} colspan={% "5" %} message={% "No sites configured yet." %}></hh-empty-row>
                 {% each sites as index, site %}
                 <pl-table-row>
                     <pl-table-cell>
@@ -37,14 +37,7 @@
                     <pl-table-cell>{{ site.get("domainCount") }}</pl-table-cell>
                     <pl-table-cell>
                         <div class="hh-table-actions">
-                            <form method="POST" action={% "/sites/" + site.get("id") + "/toggle" %}>
-                                {% csrf() %}
-                                {% if site.get("enabled") == true %}
-                                    <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Disable</pl-button>
-                                {% else %}
-                                    <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Enable</pl-button>
-                                {% /if %}
-                            </form>
+                            <hh-post-action action={% "/sites/" + site.get("id") + "/toggle" %} label={% site.get("enabled") == true ? "Disable" : "Enable" %} variant={% "ghost" %} size={% "sm" %}></hh-post-action>
                             <a href={% "/sites/" + site.get("id") %} class="hh-button-link">
                                 <pl-button variant={% "ghost" %} size={% "sm" %}>Edit</pl-button>
                             </a>

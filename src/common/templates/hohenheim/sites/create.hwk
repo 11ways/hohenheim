@@ -13,45 +13,33 @@
     public servers: List = null
 
     template {
-        <hh-form-error error={% error{:} %}></hh-form-error>
+        <hh-form-shell
+            action={% "/sites/create" %}
+            title={% "New Site" %}
+            description={% "Configure a new site for the reverse proxy." %}
+            submitLabel={% "Create Site" %}
+            cancelHref={% "/sites" %}
+            error={% error{:} %}>
+            <hh-site-form-fields
+                siteName={% "" %}
+                selectedType={% &selectedType{:} %}
+                source={% &source{:} %}
+                siteTypes={% siteTypes %}
+                settings={% settings %}
+                sourceSettings={% sourceSettings %}
+                nodeVersions={% nodeVersions %}
+                systemUsers={% systemUsers %}
+                environmentVariables={% environmentVariables %}
+                apiKeys={% apiKeys %}
+                servers={% servers %}></hh-site-form-fields>
 
-        <pl-card class="hh-form-card">
-            <pl-card-header>
-                <pl-card-title>New Site</pl-card-title>
-                <pl-card-description>Configure a new site for the reverse proxy.</pl-card-description>
-            </pl-card-header>
-            <pl-card-content>
-                <form method="POST" action="/sites/create">
-                    {% csrf() %}
-                    <div class="hh-form-stack">
-                        <hh-site-form-fields
-                            siteName={% "" %}
-                            selectedType={% &selectedType{:} %}
-                            source={% &source{:} %}
-                            siteTypes={% siteTypes %}
-                            settings={% settings %}
-                            sourceSettings={% sourceSettings %}
-                            nodeVersions={% nodeVersions %}
-                            systemUsers={% systemUsers %}
-                            environmentVariables={% environmentVariables %}
-                            apiKeys={% apiKeys %}
-                            servers={% servers %}></hh-site-form-fields>
+            <pl-separator></pl-separator>
 
-                        <pl-separator></pl-separator>
-
-                        <div class="hh-form-group">
-                            <pl-label target="hostname">Domain (optional)</pl-label>
-                            <pl-input id="hostname" type={% "text" %} name={% "hostname" %} placeholder={% "example.com" %}></pl-input>
-                        </div>
-                    </div>
-
-                    <div class="hh-form-actions">
-                        <pl-button variant={% "primary" %} type={% "submit" %}>Create Site</pl-button>
-                        <a href="/sites" class="hh-button-link"><pl-button variant={% "outline" %} type={% "button" %}>Cancel</pl-button></a>
-                    </div>
-                </form>
-            </pl-card-content>
-        </pl-card>
+            <div class="hh-form-group">
+                <pl-label target="hostname">Domain (optional)</pl-label>
+                <pl-input id="hostname" type={% "text" %} name={% "hostname" %} placeholder={% "example.com" %}></pl-input>
+            </div>
+        </hh-form-shell>
     }
 } %}
 

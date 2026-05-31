@@ -16,45 +16,33 @@
     public error: String = ""
 
     template {
-        <hh-form-error error={% error{:} %}></hh-form-error>
+        <hh-form-shell
+            action={% "/sites/" + siteId %}
+            title={% "Site Settings" %}
+            description={% "Update the configuration for this site." %}
+            submitLabel={% "Save Changes" %}
+            cancelHref={% "/sites" %}
+            error={% error{:} %}>
+            <hh-site-form-fields
+                siteName={% siteName %}
+                selectedType={% &siteType{:} %}
+                source={% &source{:} %}
+                siteTypes={% siteTypes %}
+                settings={% settings %}
+                sourceSettings={% sourceSettings %}
+                nodeVersions={% nodeVersions %}
+                systemUsers={% systemUsers %}
+                environmentVariables={% environmentVariables %}
+                apiKeys={% apiKeys %}
+                servers={% servers %}></hh-site-form-fields>
 
-        <pl-card class="hh-form-card">
-            <pl-card-header>
-                <pl-card-title>Site Settings</pl-card-title>
-                <pl-card-description>Update the configuration for this site.</pl-card-description>
-            </pl-card-header>
-            <pl-card-content>
-                <form method="POST" action={% "/sites/" + siteId %}>
-                    {% csrf() %}
-                    <div class="hh-form-stack">
-                        <hh-site-form-fields
-                            siteName={% siteName %}
-                            selectedType={% &siteType{:} %}
-                            source={% &source{:} %}
-                            siteTypes={% siteTypes %}
-                            settings={% settings %}
-                            sourceSettings={% sourceSettings %}
-                            nodeVersions={% nodeVersions %}
-                            systemUsers={% systemUsers %}
-                            environmentVariables={% environmentVariables %}
-                            apiKeys={% apiKeys %}
-                            servers={% servers %}></hh-site-form-fields>
-
-                        <div class="hh-form-group">
-                            <label class="hh-checkbox-label">
-                                <input type="checkbox" name="enabled" checked={% siteEnabled %}>
-                                <span>Enabled</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="hh-form-actions">
-                        <pl-button variant={% "primary" %} type={% "submit" %}>Save Changes</pl-button>
-                        <a href="/sites" class="hh-button-link"><pl-button variant={% "outline" %} type={% "button" %}>Cancel</pl-button></a>
-                    </div>
-                </form>
-            </pl-card-content>
-        </pl-card>
+            <div class="hh-form-group">
+                <label class="hh-checkbox-label">
+                    <input type="checkbox" name="enabled" checked={% siteEnabled %}>
+                    <span>Enabled</span>
+                </label>
+            </div>
+        </hh-form-shell>
     }
 } %}
 
@@ -189,12 +177,7 @@
                             </pl-table-cell>
                             <pl-table-cell>
                                 <div class="hh-form-row">
-                                    <form method="POST" action={% "/sites/" + site.get("id") + "/processes/" + proc.get("pid") + "/isolate" %}>
-                                        {% csrf() %}
-                                        <pl-button variant={% "outline" %} size={% "sm" %} type={% "submit" %}>
-                                            {% if proc.get("isolated") == true %}Unisolate{% else %}Isolate{% /if %}
-                                        </pl-button>
-                                    </form>
+                                    <hh-post-action action={% "/sites/" + site.get("id") + "/processes/" + proc.get("pid") + "/isolate" %} label={% proc.get("isolated") == true ? "Unisolate" : "Isolate" %} variant={% "outline" %} size={% "sm" %}></hh-post-action>
                                     <hh-post-action action={% "/sites/" + site.get("id") + "/processes/" + proc.get("pid") + "/kill" %} label={% "Kill" %} variant={% "destructive" %} size={% "sm" %}></hh-post-action>
                                 </div>
                             </pl-table-cell>

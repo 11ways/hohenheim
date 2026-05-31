@@ -23,10 +23,7 @@
                 <li><a class="hh-sidebar__link" href="/audit">Audit Log</a></li>
             </ul>
             <div class="hh-sidebar__footer">
-                <form method="POST" action="/logout">
-                    {% csrf() %}
-                    <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Sign Out</pl-button>
-                </form>
+                <hh-post-action action={% "/logout" %} label={% "Sign Out" %}></hh-post-action>
             </div>
         </nav>
         <div class="hh-main">
