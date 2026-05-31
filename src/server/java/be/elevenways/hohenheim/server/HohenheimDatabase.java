@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.migration.M016_AddDatabaseStatus;
 import be.elevenways.hohenheim.migration.M017_CreateServers;
 import be.elevenways.hohenheim.migration.M018_AddDatabaseServer;
 import be.elevenways.hohenheim.migration.M019_CreateNotificationChannels;
+import be.elevenways.zenit.auth.server.migration.M001_CreateAuthTables;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
 import be.elevenways.zenit.common.orm.migration.MigrationRunner;
@@ -58,7 +59,8 @@ public class HohenheimDatabase {
                 M016_AddDatabaseStatus::new,
                 M017_CreateServers::new,
                 M018_AddDatabaseServer::new,
-                M019_CreateNotificationChannels::new
+                M019_CreateNotificationChannels::new,
+                M001_CreateAuthTables::new   // zenit-auth schema (auth_users, auth_external_identities, ...)
             )
         );
         runner.migrate();
