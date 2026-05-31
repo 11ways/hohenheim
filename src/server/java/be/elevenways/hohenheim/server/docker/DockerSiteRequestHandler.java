@@ -61,7 +61,7 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
                 docker.buildImage(Path.of(buildContext), imageRef, (String) settings.get("dockerfile"));
             } else if (image != null && !image.isBlank()) {
                 // Run a remote image, pulling it if absent.
-                String tag = (String) settings.getOrDefault("tag", "latest");
+                String tag = (String) settings.get("tag");
                 String resolvedTag = (tag == null || tag.isBlank()) ? "latest" : tag;
                 docker.ensureImage(image, resolvedTag);
                 imageRef = image.contains(":") ? image : image + ":" + resolvedTag;

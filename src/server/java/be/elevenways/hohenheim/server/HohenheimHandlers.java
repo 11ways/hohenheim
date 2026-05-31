@@ -18,11 +18,13 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
+import be.elevenways.hohenheim.server.process.IpcChannel;
 import be.elevenways.hohenheim.server.process.ManagedProcess;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.ProcessTerminalHandler;
 import be.elevenways.hohenheim.server.stats.DashboardWebSocketHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -93,7 +95,7 @@ public class HohenheimHandlers {
             Long pid = session.getParameter(HohenheimEndpoints.PID);
             var proxy = ServerMain.getProxyServer();
             ManagedProcess proc = null;
-            be.elevenways.hohenheim.server.process.IpcChannel ipc = null;
+            IpcChannel ipc = null;
             if (proxy != null && siteId != null && pid != null) {
                 var handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
                 if (handler instanceof ManagedProcessSiteHandler managed) {
@@ -1646,11 +1648,18 @@ public class HohenheimHandlers {
         return vars;
     }
 
-    private static String validateDatabaseForm(String name, String engine, String database) {
+    /** Shared identifier-name rule for the resource create forms; returns an error or null. */
+    private static String validateName(String name) {
         if (name.isEmpty()) return "Name is required";
         if (!name.matches("[a-z0-9][a-z0-9-]*")) {
             return "Name must be lowercase letters, digits, and dashes";
         }
+        return null;
+    }
+
+    private static String validateDatabaseForm(String name, String engine, String database) {
+        String nameError = validateName(name);
+        if (nameError != null) return nameError;
         if (engine.isEmpty()) return "Engine is required";
         try {
             ManagedDatabase.Engine.valueOf(engine.toUpperCase());
@@ -1725,10 +1734,8 @@ public class HohenheimHandlers {
     }
 
     private static String validateServerForm(String name, String sshTarget) {
-        if (name.isEmpty()) return "Name is required";
-        if (!name.matches("[a-z0-9][a-z0-9-]*")) {
-            return "Name must be lowercase letters, digits, and dashes";
-        }
+        String nameError = validateName(name);
+        if (nameError != null) return nameError;
         if (ServerService.LOCAL.equals(name)) return "'local' is reserved for this host";
         if (sshTarget.isEmpty()) return "SSH target is required (e.g. user@host)";
         return null;
@@ -1796,10 +1803,8 @@ public class HohenheimHandlers {
     }
 
     private static String validateNotificationForm(String name, String format, String url) {
-        if (name.isEmpty()) return "Name is required";
-        if (!name.matches("[a-z0-9][a-z0-9-]*")) {
-            return "Name must be lowercase letters, digits, and dashes";
-        }
+        String nameError = validateName(name);
+        if (nameError != null) return nameError;
         if (!NotificationService.FORMAT_SLACK.equals(format)
             && !NotificationService.FORMAT_DISCORD.equals(format)
             && !NotificationService.FORMAT_GENERIC.equals(format)) {
@@ -1815,7 +1820,7 @@ public class HohenheimHandlers {
     // Helpers
     // -----------------------------------------------------------------------
 
-    private static void audit(AuditLogModel model, be.elevenways.zenit.common.conduit.Conduit conduit,
+    private static void audit(AuditLogModel model, Conduit conduit,
                               String action, String resourceType, Object resourceId, String resourceName) {
         Row user = AuthHelper.getCurrentUser(conduit);
         Row row = model.createEmptyRow();
