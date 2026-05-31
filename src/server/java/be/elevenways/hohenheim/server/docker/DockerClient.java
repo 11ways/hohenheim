@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.dry.Dry;
 
 import java.io.ByteArrayOutputStream;
@@ -47,16 +48,9 @@ public class DockerClient {
     private final DockerTransport transport;
     private final long timeoutMillis;
 
+    /** Talk to the local daemon over its default unix socket. */
     public DockerClient() {
-        this(DEFAULT_SOCKET);
-    }
-
-    public DockerClient(String socketPath) {
-        this(socketPath, DEFAULT_TIMEOUT_MS);
-    }
-
-    public DockerClient(String socketPath, long timeoutMillis) {
-        this(new UnixSocketDockerTransport(socketPath), timeoutMillis);
+        this(new UnixSocketDockerTransport(DEFAULT_SOCKET), DEFAULT_TIMEOUT_MS);
     }
 
     public DockerClient(DockerTransport transport) {
@@ -613,70 +607,8 @@ public class DockerClient {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
-    // -----------------------------------------------------------------------
-    // Minimal JSON writer (Map / List / String / Number / Boolean / null)
-    // -----------------------------------------------------------------------
-
     /** Encode a Map/List/String/Number/Boolean/null tree as plain JSON for request bodies. */
     public static String toJson(Object value) {
-        StringBuilder sb = new StringBuilder();
-        writeJson(value, sb);
-        return sb.toString();
-    }
-
-    private static void writeJson(Object value, StringBuilder sb) {
-        switch (value) {
-            case null -> sb.append("null");
-            case String s -> writeJsonString(s, sb);
-            case Boolean b -> sb.append(b.toString());
-            case Number n -> sb.append(n.toString());
-            case Map<?, ?> map -> {
-                sb.append('{');
-                boolean first = true;
-                for (Map.Entry<?, ?> entry : map.entrySet()) {
-                    if (!first) sb.append(',');
-                    first = false;
-                    writeJsonString(String.valueOf(entry.getKey()), sb);
-                    sb.append(':');
-                    writeJson(entry.getValue(), sb);
-                }
-                sb.append('}');
-            }
-            case Iterable<?> list -> {
-                sb.append('[');
-                boolean first = true;
-                for (Object element : list) {
-                    if (!first) sb.append(',');
-                    first = false;
-                    writeJson(element, sb);
-                }
-                sb.append(']');
-            }
-            default -> writeJsonString(value.toString(), sb);
-        }
-    }
-
-    private static void writeJsonString(String s, StringBuilder sb) {
-        sb.append('"');
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            switch (c) {
-                case '"' -> sb.append("\\\"");
-                case '\\' -> sb.append("\\\\");
-                case '\n' -> sb.append("\\n");
-                case '\r' -> sb.append("\\r");
-                case '\t' -> sb.append("\\t");
-                case '\b' -> sb.append("\\b");
-                case '\f' -> sb.append("\\f");
-                default -> {
-                    if (c < 0x20) {
-                        sb.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        sb.append(c);
-                    }
-                }
-            }
-        }
-        sb.append('"');
+        return Json.stringify(value);
     }
 }

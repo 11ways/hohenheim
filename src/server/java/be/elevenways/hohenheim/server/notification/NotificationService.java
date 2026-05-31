@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.notification;
 
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -11,7 +12,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Delivers a notification to every configured channel (webhook POST). Slack and Discord both
@@ -110,33 +113,14 @@ public class NotificationService {
     static String buildBody(String format, String subject, String message) {
         String text = subject + (message == null || message.isBlank() ? "" : "\n\n" + message);
         return switch (format) {
-            case FORMAT_SLACK -> "{\"text\":" + jsonString(text) + "}";
-            case FORMAT_DISCORD -> "{\"content\":" + jsonString(text) + "}";
-            default -> "{\"subject\":" + jsonString(subject)
-                + ",\"message\":" + jsonString(message == null ? "" : message) + "}";
+            case FORMAT_SLACK -> Json.stringify(Map.of("text", text));
+            case FORMAT_DISCORD -> Json.stringify(Map.of("content", text));
+            default -> {
+                Map<String, Object> envelope = new LinkedHashMap<>();
+                envelope.put("subject", subject);
+                envelope.put("message", message == null ? "" : message);
+                yield Json.stringify(envelope);
+            }
         };
     }
-
-    private static String jsonString(String value) {
-        StringBuilder sb = new StringBuilder().append('"');
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            switch (c) {
-                case '"' -> sb.append("\\\"");
-                case '\\' -> sb.append("\\\\");
-                case '\n' -> sb.append("\\n");
-                case '\r' -> sb.append("\\r");
-                case '\t' -> sb.append("\\t");
-                default -> {
-                    if (c < 0x20) {
-                        sb.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        sb.append(c);
-                    }
-                }
-            }
-        }
-        return sb.append('"').toString();
-    }
-
 }

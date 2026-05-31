@@ -134,21 +134,8 @@ public class ManagedDatabase {
 
     private final DockerClient docker;
 
-    public ManagedDatabase() {
-        this(new DockerClient());
-    }
-
     public ManagedDatabase(DockerClient docker) {
         this.docker = docker;
-    }
-
-    /**
-     * Provision a persistent database (data survives re-provisioning in a named volume);
-     * see {@link #provision(String, Engine, String, String, String, String, boolean)}.
-     */
-    public Connection provision(String name, Engine engine, String image,
-                                String user, String password, String database) throws IOException {
-        return provision(name, engine, image, user, password, database, false);
     }
 
     /**
