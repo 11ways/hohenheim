@@ -62,7 +62,7 @@
                 {% /if %}
                 {% each activity as index, entry %}
                     <div class="hh-activity-item">
-                        <pl-badge variant={% entry.get("action") == "created" ? "default" : entry.get("action") == "deleted" ? "destructive" : "secondary" %}>{{ entry.get("action") }}</pl-badge>
+                        <hh-action-badge action={% entry.get("action") %}></hh-action-badge>
                         <span class="hh-activity-text">{{ entry.get("resourceType") }}: {{ entry.get("resourceName") }}</span>
                     </div>
                 {% /each %}

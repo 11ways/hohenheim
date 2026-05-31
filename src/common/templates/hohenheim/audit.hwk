@@ -4,34 +4,26 @@
     {% declare entries: List %}
 
     <hh-page title={% "Audit Log" %}>
-        <pl-card>
-            <pl-card-header>
-                <pl-card-title>Recent Activity</pl-card-title>
-                <pl-card-description>Administrative actions performed on this instance.</pl-card-description>
-            </pl-card-header>
-            <pl-card-content>
-                <pl-table>
-                    <pl-table-header><pl-table-row>
-                        <pl-table-head>Action</pl-table-head>
-                        <pl-table-head>Resource</pl-table-head>
-                        <pl-table-head>Name</pl-table-head>
-                        <pl-table-head>Time</pl-table-head>
-                    </pl-table-row></pl-table-header>
-                    <pl-table-body>
-                        <hh-empty-row count={% entries |> Array.length %} colspan={% "4" %} message={% "No activity recorded yet." %}></hh-empty-row>
-                        {% each entries as index, entry %}
-                        <pl-table-row>
-                            <pl-table-cell>
-                                <pl-badge variant={% entry.get("action") == "created" ? "default" : entry.get("action") == "deleted" ? "destructive" : "secondary" %}>{{ entry.get("action") }}</pl-badge>
-                            </pl-table-cell>
-                            <pl-table-cell>{{ entry.get("resourceType") }}</pl-table-cell>
-                            <pl-table-cell>{{ entry.get("resourceName") }}</pl-table-cell>
-                            <pl-table-cell>{{ entry.get("createdAt") }}</pl-table-cell>
-                        </pl-table-row>
-                        {% /each %}
-                    </pl-table-body>
-                </pl-table>
-            </pl-card-content>
-        </pl-card>
+        <hh-table-card>
+            <pl-table-header><pl-table-row>
+                <pl-table-head>Action</pl-table-head>
+                <pl-table-head>Resource</pl-table-head>
+                <pl-table-head>Name</pl-table-head>
+                <pl-table-head>Time</pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                <hh-empty-row count={% entries |> Array.length %} colspan={% "4" %} message={% "No activity recorded yet." %}></hh-empty-row>
+                {% each entries as index, entry %}
+                <pl-table-row>
+                    <pl-table-cell>
+                        <hh-action-badge action={% entry.get("action") %}></hh-action-badge>
+                    </pl-table-cell>
+                    <pl-table-cell>{{ entry.get("resourceType") }}</pl-table-cell>
+                    <pl-table-cell>{{ entry.get("resourceName") }}</pl-table-cell>
+                    <pl-table-cell>{{ entry.get("createdAt") }}</pl-table-cell>
+                </pl-table-row>
+                {% /each %}
+            </pl-table-body>
+        </hh-table-card>
     </hh-page>
 {% /block %}

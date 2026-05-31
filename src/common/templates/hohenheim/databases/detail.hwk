@@ -15,26 +15,14 @@
     {% declare canBackup: Boolean %}
 
     <hh-page title={% name %}>
-        <div class="hh-page-actions">
-            <p class="hh-page-actions__description">
+        <hh-page-actions>
+            <div slot="description" class="hh-page-actions__description">
                 <pl-badge variant={% "secondary" %}>{{ engine }}</pl-badge>
-                {% if status == "provisioning" %}
-                    <pl-badge variant={% "secondary" %}>Provisioning</pl-badge>
-                {% elseif status == "failed" %}
-                    <pl-badge variant={% "destructive" %}>Failed</pl-badge>
-                {% elseif running == true %}
-                    <pl-badge variant={% "default" %}>Running {{ port }}</pl-badge>
-                {% else %}
-                    <pl-badge variant={% "outline" %}>Stopped</pl-badge>
-                {% /if %}
-                {% if ephemeral == true %}
-                    <pl-badge variant={% "outline" %}>Ephemeral</pl-badge>
-                {% else %}
-                    <pl-badge variant={% "outline" %}>Persistent</pl-badge>
-                {% /if %}
-            </p>
+                <hh-database-status-badge status={% status %} running={% running %} port={% port %}></hh-database-status-badge>
+                <hh-storage-badge ephemeral={% ephemeral %}></hh-storage-badge>
+            </div>
             <a href="/databases" class="hh-button-link"><pl-button variant={% "outline" %}>Back</pl-button></a>
-        </div>
+        </hh-page-actions>
 
         <pl-card>
             <pl-card-header>

@@ -2,22 +2,22 @@
 
 {% block "main" %}
     {% declare proxyHttpPort: Integer %}
-        {% declare proxyHttpsPort: Integer %}
-        {% declare proxyFallback: String %}
-        {% declare proxyForceHttps: Boolean %}
-        {% declare proxyIpv6Address: String %}
-        {% declare adminPort: Integer %}
-        {% declare dbPath: String %}
-        {% declare logAccessToDb: Boolean %}
-        {% declare logAccessToFile: Boolean %}
-        {% declare logAccessPath: String %}
-        {% declare logCollectStats: Boolean %}
-        {% declare secLogDomainMisses: Boolean %}
-        {% declare secDomainMissThreshold: Integer %}
-        {% declare sslLeEnabled: Boolean %}
-        {% declare sslLeEmail: String %}
-        {% declare sslLeStaging: Boolean %}
-        {% declare saved: String = "" %}
+    {% declare proxyHttpsPort: Integer %}
+    {% declare proxyFallback: String %}
+    {% declare proxyForceHttps: Boolean %}
+    {% declare proxyIpv6Address: String %}
+    {% declare adminPort: Integer %}
+    {% declare dbPath: String %}
+    {% declare logAccessToDb: Boolean %}
+    {% declare logAccessToFile: Boolean %}
+    {% declare logAccessPath: String %}
+    {% declare logCollectStats: Boolean %}
+    {% declare secLogDomainMisses: Boolean %}
+    {% declare secDomainMissThreshold: Integer %}
+    {% declare sslLeEnabled: Boolean %}
+    {% declare sslLeEmail: String %}
+    {% declare sslLeStaging: Boolean %}
+    {% declare saved: String = "" %}
 
     <hh-page title={% "Settings" %}>
 

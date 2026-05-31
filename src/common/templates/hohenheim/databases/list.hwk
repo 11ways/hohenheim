@@ -32,22 +32,10 @@
                     <pl-table-cell>{{ item.get("database") }}</pl-table-cell>
                     <pl-table-cell>{{ item.get("server") }}</pl-table-cell>
                     <pl-table-cell>
-                        {% if item.get("status") == "provisioning" %}
-                            <pl-badge variant={% "secondary" %}>Provisioning</pl-badge>
-                        {% elseif item.get("status") == "failed" %}
-                            <pl-badge variant={% "destructive" %}>Failed</pl-badge>
-                        {% elseif item.get("running") == true %}
-                            <pl-badge variant={% "default" %}>Running {{ item.get("port") }}</pl-badge>
-                        {% else %}
-                            <pl-badge variant={% "outline" %}>Stopped</pl-badge>
-                        {% /if %}
+                        <hh-database-status-badge status={% item.get("status") %} running={% item.get("running") %} port={% item.get("port") %}></hh-database-status-badge>
                     </pl-table-cell>
                     <pl-table-cell>
-                        {% if item.get("ephemeral") == true %}
-                            <pl-badge variant={% "outline" %}>Ephemeral</pl-badge>
-                        {% else %}
-                            <pl-badge variant={% "outline" %}>Persistent</pl-badge>
-                        {% /if %}
+                        <hh-storage-badge ephemeral={% item.get("ephemeral") %}></hh-storage-badge>
                     </pl-table-cell>
                     <pl-table-cell>
                         <div class="hh-table-actions">
