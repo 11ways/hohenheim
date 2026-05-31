@@ -1,6 +1,7 @@
 {% tag HhDockerSettings {
 
     public settings: Map = null
+    public servers: List = null
 
     template {
         {%
@@ -39,7 +40,14 @@
             </div>
             <div class="hh-form-group">
                 <pl-label target="docker-server">Server</pl-label>
-                <pl-input id="docker-server" type={% "text" %} name={% "server" %} value={% server %} placeholder={% "local" %}></pl-input>
+                <pl-select name="server" value={% server %}>
+                    <pl-select-trigger placeholder="local"></pl-select-trigger>
+                    <pl-select-content>
+                        {% each servers as srvIndex, srvName %}
+                        <pl-select-item value={% srvName %} label={% srvName %}>{{ srvName }}</pl-select-item>
+                        {% /each %}
+                    </pl-select-content>
+                </pl-select>
                 <p class="hh-form-hint">Registered server name to run on; leave empty for the local host.</p>
             </div>
         </div>

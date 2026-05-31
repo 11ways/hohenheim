@@ -10,6 +10,7 @@
     public systemUsers: List = null
     public environmentVariables: List = null
     public apiKeys: List = null
+    public servers: List = null
 
     template {
         {% if error{:} != "" %}
@@ -64,7 +65,7 @@
 
                         <pl-separator></pl-separator>
 
-                        <hh-site-type-fields selectedType={% &selectedType{:} %} settings={% settings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %}></hh-site-type-fields>
+                        <hh-site-type-fields selectedType={% &selectedType{:} %} settings={% settings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %} servers={% servers %}></hh-site-type-fields>
 
                         <pl-separator></pl-separator>
 
@@ -100,6 +101,7 @@
         {% declare systemUsers: List %}
         {% declare environmentVariables: List %}
         {% declare apiKeys: List %}
-        <hh-site-create error={% error{:} %} siteTypes={% siteTypes %} settings={% settings %} source={% source %} sourceSettings={% sourceSettings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %}></hh-site-create>
+        {% declare servers: List %}
+        <hh-site-create error={% error{:} %} siteTypes={% siteTypes %} settings={% settings %} source={% source %} sourceSettings={% sourceSettings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %} servers={% servers %}></hh-site-create>
     </main>
 {% /block %}

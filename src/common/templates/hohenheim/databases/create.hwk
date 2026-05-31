@@ -85,8 +85,10 @@
                         <pl-separator></pl-separator>
 
                         <div class="hh-form-group">
-                            <pl-label target="ephemeral">Ephemeral Storage</pl-label>
-                            <input id="ephemeral" type="checkbox" name="ephemeral" />
+                            <label class="hh-checkbox-label">
+                                <input type="checkbox" name="ephemeral">
+                                <span>Ephemeral Storage</span>
+                            </label>
                             <p class="hh-form-hint">Data lives in RAM and is lost when the container is removed (previews/CI). Unchecked keeps a persistent volume.</p>
                         </div>
                     </div>

@@ -6,6 +6,7 @@
     public apiKeys: List = null
     public nodeVersions: List = null
     public systemUsers: List = null
+    public servers: List = null
 
     template {
         {% if selectedType{:} == "hohenheim:proxy" %}
@@ -23,7 +24,7 @@
         {% elseif selectedType{:} == "hohenheim:redirect" %}
             <hh-redirect-settings settings={% settings %}></hh-redirect-settings>
         {% elseif selectedType{:} == "hohenheim:docker" %}
-            <hh-docker-settings settings={% settings %}></hh-docker-settings>
+            <hh-docker-settings settings={% settings %} servers={% servers %}></hh-docker-settings>
         {% /if %}
     }
 } %}

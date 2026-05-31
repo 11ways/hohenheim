@@ -49,14 +49,16 @@
                             <pl-table-cell>{{ item.get("images") }}</pl-table-cell>
                             <pl-table-cell>
                                 {% if item.get("removable") == true %}
-                                <form method="POST" action={% "/servers/" + item.get("name") + "/delete" %}>
-                {% csrf() %}
-                                    <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Remove</pl-button>
-                                </form>
+                                <hh-post-action action={% "/servers/" + item.get("name") + "/delete" %} label={% "Remove" %}></hh-post-action>
                                 {% /if %}
                             </pl-table-cell>
                         </pl-table-row>
                         {% /each %}
+                        {% if listCount == 0 %}
+                        <pl-table-row>
+                            <pl-table-cell colspan="9" class="hh-empty-state">No servers yet.</pl-table-cell>
+                        </pl-table-row>
+                        {% /if %}
                     </pl-table-body>
                 </pl-table>
             </pl-card-content>

@@ -1,0 +1,13 @@
+{% tag HhPostAction {
+
+    public action: String = ""
+    public label: String = ""
+    public variant: String = "ghost"
+
+    template {
+        <form method="POST" action={% action %}>
+            {% csrf() %}
+            <pl-button variant={% variant %} size={% "sm" %} type={% "submit" %}>{{ label }}</pl-button>
+        </form>
+    }
+} %}

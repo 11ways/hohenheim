@@ -10,6 +10,9 @@
     {% declare server: String %}
     {% declare status: String %}
     {% declare port: Integer %}
+    {% declare running: Boolean %}
+    {% declare ephemeral: Boolean %}
+    {% declare canBackup: Boolean %}
 
     <header class="hh-header">
         <h1 class="hh-header__title">{{ name }}</h1>
