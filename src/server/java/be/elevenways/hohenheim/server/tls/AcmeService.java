@@ -11,6 +11,7 @@ import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.util.CSRBuilder;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
+import java.io.StringReader;
 import java.io.StringWriter;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
@@ -313,7 +314,7 @@ public class AcmeService {
         if (accountRow != null) {
             String keyPem = accountRow.get(CertificateModel.PRIVATE_KEY_PEM);
             if (keyPem != null) {
-                try (var reader = new java.io.StringReader(keyPem)) {
+                try (var reader = new StringReader(keyPem)) {
                     return KeyPairUtils.readKeyPair(reader);
                 }
             }
