@@ -3,11 +3,12 @@
     public action: String = ""
     public label: String = ""
     public variant: String = "ghost"
+    public size: String = "sm"
 
     template {
         <form method="POST" action={% action %}>
             {% csrf() %}
-            <pl-button variant={% variant %} size={% "sm" %} type={% "submit" %}>{{ label }}</pl-button>
+            <pl-button variant={% variant %} size={% size %} type={% "submit" %}>{{ label }}</pl-button>
         </form>
     }
 } %}

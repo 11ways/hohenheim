@@ -13,12 +13,7 @@
     public servers: List = null
 
     template {
-        {% if error{:} != "" %}
-            <pl-alert variant={% "destructive" %} class="hh-form-error">
-                <pl-alert-title>Error</pl-alert-title>
-                <pl-alert-description>{{ error{:} }}</pl-alert-description>
-            </pl-alert>
-        {% /if %}
+        <hh-form-error error={% error{:} %}></hh-form-error>
 
         <pl-card class="hh-form-card">
             <pl-card-header>
@@ -27,45 +22,20 @@
             </pl-card-header>
             <pl-card-content>
                 <form method="POST" action="/sites/create">
-                {% csrf() %}
+                    {% csrf() %}
                     <div class="hh-form-stack">
-
-                        <div class="hh-form-group">
-                            <pl-label target="site-name">Site Name</pl-label>
-                            <pl-input id="site-name" type={% "text" %} name={% "name" %} placeholder={% "My Website" %} required={% true %}></pl-input>
-                        </div>
-
-                        <div class="hh-form-group">
-                            <pl-label target="site-type">Site Type</pl-label>
-                            <pl-select name="site_type" bind:value={% selectedType{:} %}>
-                                <pl-select-trigger placeholder="Select type"></pl-select-trigger>
-                                <pl-select-content>
-                                    {% each siteTypes as index, st %}
-                                        <pl-select-item value={% st.get("value") %} label={% st.get("label") %}>{{ st.get("label") }}{% if st.get("description") != null %} - {{ st.get("description") }}{% /if %}</pl-select-item>
-                                    {% /each %}
-                                </pl-select-content>
-                            </pl-select>
-                        </div>
-
-                        <div class="hh-form-group">
-                            <pl-label target="source">Source</pl-label>
-                            <pl-select name="source" bind:value={% source{:} %}>
-                                <pl-select-trigger placeholder="Local"></pl-select-trigger>
-                                <pl-select-content>
-                                    <pl-select-item value="" label="Local">Local - files on disk</pl-select-item>
-                                    <pl-select-item value="git" label="Git">Git - clone from repository</pl-select-item>
-                                </pl-select-content>
-                            </pl-select>
-                        </div>
-
-                        {% if source{:} == "git" %}
-                            <pl-separator></pl-separator>
-                            <hh-git-source-settings sourceSettings={% sourceSettings %}></hh-git-source-settings>
-                        {% /if %}
-
-                        <pl-separator></pl-separator>
-
-                        <hh-site-type-fields selectedType={% &selectedType{:} %} settings={% settings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %} servers={% servers %}></hh-site-type-fields>
+                        <hh-site-form-fields
+                            siteName={% "" %}
+                            selectedType={% &selectedType{:} %}
+                            source={% &source{:} %}
+                            siteTypes={% siteTypes %}
+                            settings={% settings %}
+                            sourceSettings={% sourceSettings %}
+                            nodeVersions={% nodeVersions %}
+                            systemUsers={% systemUsers %}
+                            environmentVariables={% environmentVariables %}
+                            apiKeys={% apiKeys %}
+                            servers={% servers %}></hh-site-form-fields>
 
                         <pl-separator></pl-separator>
 
@@ -88,20 +58,18 @@
 {% extend "hohenheim:hohenheim/base" %}
 
 {% block "main" %}
-    <header class="hh-header">
-        <h1 class="hh-header__title">Create Site</h1>
-    </header>
-    <main class="hh-content">
-        {% declare error: String %}
-        {% declare siteTypes: List %}
-        {% declare settings: Map %}
-        {% declare source: String = "" %}
-        {% declare sourceSettings: Map = null %}
-        {% declare nodeVersions: List %}
-        {% declare systemUsers: List %}
-        {% declare environmentVariables: List %}
-        {% declare apiKeys: List %}
-        {% declare servers: List %}
+    {% declare error: String %}
+    {% declare siteTypes: List %}
+    {% declare settings: Map %}
+    {% declare source: String = "" %}
+    {% declare sourceSettings: Map = null %}
+    {% declare nodeVersions: List %}
+    {% declare systemUsers: List %}
+    {% declare environmentVariables: List %}
+    {% declare apiKeys: List %}
+    {% declare servers: List %}
+
+    <hh-page title={% "Create Site" %}>
         <hh-site-create error={% error{:} %} siteTypes={% siteTypes %} settings={% settings %} source={% source %} sourceSettings={% sourceSettings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %} servers={% servers %}></hh-site-create>
-    </main>
+    </hh-page>
 {% /block %}

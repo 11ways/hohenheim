@@ -20,158 +20,126 @@
     {% declare customHeaders: List %}
     {% declare error: String %}
 
-    <header class="hh-header">
-        <div>
-            <h1 class="hh-header__title">Edit Domain</h1>
-            <p class="hh-header__subtitle">{{ hostname }} on {{ siteName }}</p>
-        </div>
-    </header>
-    <main class="hh-content">
+    <hh-page title={% "Edit Domain" %} subtitle={% hostname + " on " + siteName %}>
+        <hh-form-shell
+            action={% "/sites/" + siteId + "/domains/" + domainId %}
+            title={% "Domain Settings" %}
+            submitLabel={% "Save Domain" %}
+            cancelHref={% "/sites/" + siteId %}
+            error={% error %}>
+            <div class="hh-form-group">
+                <pl-label target="hostname">Hostname</pl-label>
+                <pl-input id="hostname" type={% "text" %} name={% "hostname" %} value={% hostname %} required={% true %}></pl-input>
+            </div>
 
-        {% if error != "" %}
-            <pl-alert variant={% "destructive" %} class="hh-form-error">
-                <pl-alert-title>Error</pl-alert-title>
-                <pl-alert-description>{{ error }}</pl-alert-description>
-            </pl-alert>
-        {% /if %}
+            <div class="hh-form-group">
+                <pl-label target="match-type">Match Type</pl-label>
+                <pl-select name="match_type" value={% matchType %}>
+                    <pl-select-trigger placeholder="Match type"></pl-select-trigger>
+                    <pl-select-content>
+                        <pl-select-item value="exact" label="Exact">Exact</pl-select-item>
+                        <pl-select-item value="wildcard" label="Wildcard">Wildcard</pl-select-item>
+                        <pl-select-item value="regex" label="Regex">Regex</pl-select-item>
+                    </pl-select-content>
+                </pl-select>
+            </div>
 
-        <form method="POST" action={% "/sites/" + siteId + "/domains/" + domainId %}>
-                {% csrf() %}
+            <pl-separator></pl-separator>
 
-            <pl-card class="hh-form-card">
-                <pl-card-header>
-                    <pl-card-title>Domain Settings</pl-card-title>
-                </pl-card-header>
-                <pl-card-content>
-                    <div class="hh-form-stack">
-                        <div class="hh-form-group">
-                            <pl-label target="hostname">Hostname</pl-label>
-                            <pl-input id="hostname" type={% "text" %} name={% "hostname" %} value={% hostname %} required={% true %}></pl-input>
-                        </div>
+            <div class="hh-form-group">
+                <label class="hh-checkbox-label">
+                    <input type="checkbox" name="force_ssl" checked={% forceSsl %}>
+                    <span>Force SSL</span>
+                </label>
+                <p class="hh-form-hint">Redirect HTTP requests to HTTPS.</p>
+            </div>
 
-                        <div class="hh-form-group">
-                            <pl-label target="match-type">Match Type</pl-label>
-                            <pl-select name="match_type" value={% matchType %}>
-                                <pl-select-trigger placeholder="Match type"></pl-select-trigger>
-                                <pl-select-content>
-                                    <pl-select-item value="exact" label="Exact">Exact</pl-select-item>
-                                    <pl-select-item value="wildcard" label="Wildcard">Wildcard</pl-select-item>
-                                    <pl-select-item value="regex" label="Regex">Regex</pl-select-item>
-                                </pl-select-content>
-                            </pl-select>
-                        </div>
+            <div class="hh-form-group">
+                <label class="hh-checkbox-label">
+                    <input type="checkbox" name="hsts_enabled" checked={% hstsEnabled %}>
+                    <span>HSTS</span>
+                </label>
+                <p class="hh-form-hint">Send Strict-Transport-Security header.</p>
+            </div>
 
-                        <pl-separator></pl-separator>
+            <div class="hh-form-group">
+                <label class="hh-checkbox-label">
+                    <input type="checkbox" name="hsts_subdomains" checked={% hstsSubdomains %}>
+                    <span>HSTS Include Subdomains</span>
+                </label>
+                <p class="hh-form-hint">Apply HSTS to all subdomains.</p>
+            </div>
 
-                        <div class="hh-form-group">
-                            <label class="hh-checkbox-label">
-                                <input type="checkbox" name="force_ssl" checked={% forceSsl %}>
-                                <span>Force SSL</span>
-                            </label>
-                            <p class="hh-form-hint">Redirect HTTP requests to HTTPS.</p>
-                        </div>
+            <pl-separator></pl-separator>
 
-                        <div class="hh-form-group">
-                            <label class="hh-checkbox-label">
-                                <input type="checkbox" name="hsts_enabled" checked={% hstsEnabled %}>
-                                <span>HSTS</span>
-                            </label>
-                            <p class="hh-form-hint">Send Strict-Transport-Security header.</p>
-                        </div>
+            <div class="hh-form-group">
+                <pl-label target="certificate-id">TLS Certificate</pl-label>
+                <pl-select name="certificate_id" value={% certificateId %}>
+                    <pl-select-trigger placeholder="Auto / None"></pl-select-trigger>
+                    <pl-select-content>
+                        <pl-select-item value="" label="Auto / None">Auto / None</pl-select-item>
+                        {% each certificates as index, cert %}
+                            <pl-select-item value={% cert.get("id") %} label={% cert.get("name") %}>{{ cert.get("name") }}</pl-select-item>
+                        {% /each %}
+                    </pl-select-content>
+                </pl-select>
+                <p class="hh-form-hint">Specific certificate for this domain. Leave on Auto to use SNI matching.</p>
+            </div>
 
-                        <div class="hh-form-group">
-                            <label class="hh-checkbox-label">
-                                <input type="checkbox" name="hsts_subdomains" checked={% hstsSubdomains %}>
-                                <span>HSTS Include Subdomains</span>
-                            </label>
-                            <p class="hh-form-hint">Apply HSTS to all subdomains.</p>
-                        </div>
+            <div class="hh-form-group">
+                <label class="hh-checkbox-label">
+                    <input type="checkbox" name="http2_support" checked={% http2Support %}>
+                    <span>HTTP/2</span>
+                </label>
+                <p class="hh-form-hint">Enable HTTP/2 protocol support.</p>
+            </div>
 
-                        <pl-separator></pl-separator>
-
-                        <div class="hh-form-group">
-                            <pl-label target="certificate-id">TLS Certificate</pl-label>
-                            <pl-select name="certificate_id" value={% certificateId %}>
-                                <pl-select-trigger placeholder="Auto / None"></pl-select-trigger>
-                                <pl-select-content>
-                                    <pl-select-item value="" label="Auto / None">Auto / None</pl-select-item>
-                                    {% each certificates as index, cert %}
-                                        <pl-select-item value={% cert.get("id") %} label={% cert.get("name") %}>{{ cert.get("name") }}</pl-select-item>
-                                    {% /each %}
-                                </pl-select-content>
-                            </pl-select>
-                            <p class="hh-form-hint">Specific certificate for this domain. Leave on Auto to use SNI matching.</p>
-                        </div>
-
-                        <div class="hh-form-group">
-                            <label class="hh-checkbox-label">
-                                <input type="checkbox" name="http2_support" checked={% http2Support %}>
-                                <span>HTTP/2</span>
-                            </label>
-                            <p class="hh-form-hint">Enable HTTP/2 protocol support.</p>
-                        </div>
-
-                        <div class="hh-form-group">
-                            <label class="hh-checkbox-label">
-                                <input type="checkbox" name="exclude_from_letsencrypt" checked={% excludeFromLetsencrypt %}>
-                                <span>Exclude from Let's Encrypt</span>
-                            </label>
-                            <p class="hh-form-hint">Do not automatically issue a certificate for this domain.</p>
-                        </div>
-                    </div>
-                </pl-card-content>
-            </pl-card>
+            <div class="hh-form-group">
+                <label class="hh-checkbox-label">
+                    <input type="checkbox" name="exclude_from_letsencrypt" checked={% excludeFromLetsencrypt %}>
+                    <span>Exclude from Let's Encrypt</span>
+                </label>
+                <p class="hh-form-hint">Do not automatically issue a certificate for this domain.</p>
+            </div>
 
             <pl-collapsible class="hh-advanced-section">
                 <pl-collapsible-trigger class="hh-advanced-trigger">Advanced Settings</pl-collapsible-trigger>
                 <pl-collapsible-content>
-                    <pl-card class="hh-form-card">
-                        <pl-card-content>
-                            <div class="hh-form-stack">
-                                <div class="hh-form-group">
-                                    <pl-label target="path">Path Prefix</pl-label>
-                                    <pl-input id="path" type={% "text" %} name={% "path" %} value={% path %} placeholder={% "/api" %}></pl-input>
-                                    <p class="hh-form-hint">Only route requests matching this path prefix.</p>
-                                </div>
+                    <div class="hh-form-group">
+                        <pl-label target="path">Path Prefix</pl-label>
+                        <pl-input id="path" type={% "text" %} name={% "path" %} value={% path %} placeholder={% "/api" %}></pl-input>
+                        <p class="hh-form-hint">Only route requests matching this path prefix.</p>
+                    </div>
 
-                                <div class="hh-form-group">
-                                    <label class="hh-checkbox-label">
-                                        <input type="checkbox" name="strip_path" checked={% stripPath %}>
-                                        <span>Strip Path Prefix</span>
-                                    </label>
-                                    <p class="hh-form-hint">Remove the path prefix before forwarding to upstream.</p>
-                                </div>
+                    <div class="hh-form-group">
+                        <label class="hh-checkbox-label">
+                            <input type="checkbox" name="strip_path" checked={% stripPath %}>
+                            <span>Strip Path Prefix</span>
+                        </label>
+                        <p class="hh-form-hint">Remove the path prefix before forwarding to upstream.</p>
+                    </div>
 
-                                <pl-separator></pl-separator>
+                    <pl-separator></pl-separator>
 
-                                <div class="hh-form-group">
-                                    <pl-label target="listen-on">Listen Address</pl-label>
-                                    <pl-input id="listen-on" type={% "text" %} name={% "listen_on" %} value={% listenOn %} placeholder={% "0.0.0.0" %}></pl-input>
-                                    <p class="hh-form-hint">Bind address override. Leave empty for default.</p>
-                                </div>
+                    <div class="hh-form-group">
+                        <pl-label target="listen-on">Listen Address</pl-label>
+                        <pl-input id="listen-on" type={% "text" %} name={% "listen_on" %} value={% listenOn %} placeholder={% "0.0.0.0" %}></pl-input>
+                        <p class="hh-form-hint">Bind address override. Leave empty for default.</p>
+                    </div>
 
-                                <div class="hh-form-group">
-                                    <pl-label target="port">Port</pl-label>
-                                    <pl-input id="port" type={% "text" %} name={% "port" %} value={% port %} placeholder={% "Default" %}></pl-input>
-                                    <p class="hh-form-hint">Port override. Leave empty for default.</p>
-                                </div>
+                    <div class="hh-form-group">
+                        <pl-label target="port">Port</pl-label>
+                        <pl-input id="port" type={% "text" %} name={% "port" %} value={% port %} placeholder={% "Default" %}></pl-input>
+                        <p class="hh-form-hint">Port override. Leave empty for default.</p>
+                    </div>
 
-                                <div class="hh-form-group">
-                                    <pl-label>Upstream Header Overrides</pl-label>
-                                    <hh-key-value-editor initialPairs={% customHeaders %} namePrefix={% "header" %} namePlaceholder={% "Header-Name" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
-                                    <p class="hh-form-hint">Leave the value empty to remove a header from upstream requests.</p>
-                                </div>
-                            </div>
-                        </pl-card-content>
-                    </pl-card>
+                    <div class="hh-form-group">
+                        <pl-label>Upstream Header Overrides</pl-label>
+                        <hh-key-value-editor initialPairs={% customHeaders %} namePrefix={% "header" %} namePlaceholder={% "Header-Name" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
+                        <p class="hh-form-hint">Leave the value empty to remove a header from upstream requests.</p>
+                    </div>
                 </pl-collapsible-content>
             </pl-collapsible>
-
-            <div class="hh-form-actions">
-                <pl-button variant={% "primary" %} type={% "submit" %}>Save Domain</pl-button>
-                <a href={% "/sites/" + siteId %} class="hh-button-link"><pl-button variant={% "outline" %} type={% "button" %}>Cancel</pl-button></a>
-            </div>
-        </form>
-
-    </main>
+        </hh-form-shell>
+    </hh-page>
 {% /block %}

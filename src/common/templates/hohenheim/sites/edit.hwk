@@ -16,12 +16,7 @@
     public error: String = ""
 
     template {
-        {% if error{:} != "" %}
-            <pl-alert variant={% "destructive" %} class="hh-form-error">
-                <pl-alert-title>Error</pl-alert-title>
-                <pl-alert-description>{{ error{:} }}</pl-alert-description>
-            </pl-alert>
-        {% /if %}
+        <hh-form-error error={% error{:} %}></hh-form-error>
 
         <pl-card class="hh-form-card">
             <pl-card-header>
@@ -30,36 +25,20 @@
             </pl-card-header>
             <pl-card-content>
                 <form method="POST" action={% "/sites/" + siteId %}>
-                {% csrf() %}
+                    {% csrf() %}
                     <div class="hh-form-stack">
-
-                        <div class="hh-form-group">
-                            <pl-label target="site-name">Site Name</pl-label>
-                            <pl-input id="site-name" type={% "text" %} name={% "name" %} value={% siteName %} required={% true %}></pl-input>
-                        </div>
-
-                        <div class="hh-form-group">
-                            <pl-label target="site-type">Site Type</pl-label>
-                            <pl-select name="site_type" bind:value={% siteType{:} %}>
-                                <pl-select-trigger placeholder="Select type"></pl-select-trigger>
-                                <pl-select-content>
-                                    {% each siteTypes{:} as index, st %}
-                                        <pl-select-item value={% st.get("value") %} label={% st.get("label") %}>{{ st.get("label") }}{% if st.get("description") != null %} - {{ st.get("description") }}{% /if %}</pl-select-item>
-                                    {% /each %}
-                                </pl-select-content>
-                            </pl-select>
-                        </div>
-
-                        <div class="hh-form-group">
-                            <pl-label target="source">Source</pl-label>
-                            <pl-select name="source" bind:value={% source{:} %}>
-                                <pl-select-trigger placeholder="Local"></pl-select-trigger>
-                                <pl-select-content>
-                                    <pl-select-item value="" label="Local">Local - files on disk</pl-select-item>
-                                    <pl-select-item value="git" label="Git">Git - clone from repository</pl-select-item>
-                                </pl-select-content>
-                            </pl-select>
-                        </div>
+                        <hh-site-form-fields
+                            siteName={% siteName %}
+                            selectedType={% &siteType{:} %}
+                            source={% &source{:} %}
+                            siteTypes={% siteTypes %}
+                            settings={% settings %}
+                            sourceSettings={% sourceSettings %}
+                            nodeVersions={% nodeVersions %}
+                            systemUsers={% systemUsers %}
+                            environmentVariables={% environmentVariables %}
+                            apiKeys={% apiKeys %}
+                            servers={% servers %}></hh-site-form-fields>
 
                         <div class="hh-form-group">
                             <label class="hh-checkbox-label">
@@ -67,23 +46,6 @@
                                 <span>Enabled</span>
                             </label>
                         </div>
-
-                        {% if source{:} == "git" %}
-                            <pl-separator></pl-separator>
-                            <hh-git-source-settings sourceSettings={% sourceSettings %}></hh-git-source-settings>
-                        {% /if %}
-
-                        <pl-separator></pl-separator>
-
-                        <hh-site-type-fields
-                            selectedType={% siteType{:} %}
-                            settings={% settings %}
-                            environmentVariables={% environmentVariables %}
-                            apiKeys={% apiKeys %}
-                            nodeVersions={% nodeVersions %}
-                            systemUsers={% systemUsers %}
-                            servers={% servers %}
-                        ></hh-site-type-fields>
                     </div>
 
                     <div class="hh-form-actions">
@@ -114,11 +76,7 @@
     {% declare processes: List = null %}
     {% declare isManaged: Boolean = false %}
 
-    <header class="hh-header">
-        <h1 class="hh-header__title">{{ site.get("name") }}</h1>
-    </header>
-    <main class="hh-content">
-
+    <hh-page title={% site.get("name") %}>
         <hh-site-edit
             siteId={% site.get("id") %}
             siteName={% site.get("name") %}
@@ -150,6 +108,7 @@
                         <pl-table-head></pl-table-head>
                     </pl-table-row></pl-table-header>
                     <pl-table-body>
+                        <hh-empty-row count={% domains |> Array.length %} colspan={% "4" %} message={% "No domains configured." %}></hh-empty-row>
                         {% each domains as index, domain %}
                         <pl-table-row>
                             <pl-table-cell><a href={% "/sites/" + site.get("id") + "/domains/" + domain.get("id") %}>{{ domain.get("hostname") }}</a></pl-table-cell>
@@ -164,23 +123,15 @@
                                 {% /if %}
                             </pl-table-cell>
                             <pl-table-cell>
-                                <form method="POST" action={% "/sites/" + site.get("id") + "/domains/" + domain.get("id") + "/delete" %}>
-                {% csrf() %}
-                                    <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Remove</pl-button>
-                                </form>
+                                <hh-post-action action={% "/sites/" + site.get("id") + "/domains/" + domain.get("id") + "/delete" %} label={% "Remove" %} variant={% "ghost" %} size={% "sm" %}></hh-post-action>
                             </pl-table-cell>
                         </pl-table-row>
                         {% /each %}
-                        {% if domains |> Array.length == 0 %}
-                        <pl-table-row>
-                            <pl-table-cell colspan="4" class="hh-empty-state">No domains configured.</pl-table-cell>
-                        </pl-table-row>
-                        {% /if %}
                     </pl-table-body>
                 </pl-table>
 
                 <form method="POST" action={% "/sites/" + site.get("id") + "/domains" %} class="hh-add-domain-form">
-                {% csrf() %}
+                    {% csrf() %}
                     <div class="hh-form-row">
                         <div class="hh-form-group hh-form-group--grow">
                             <pl-input type={% "text" %} name={% "hostname" %} placeholder={% "example.com" %} required={% true %}></pl-input>
@@ -218,6 +169,7 @@
                         <pl-table-head></pl-table-head>
                     </pl-table-row></pl-table-header>
                     <pl-table-body>
+                        <hh-empty-row count={% processes |> Array.length %} colspan={% "6" %} message={% "No processes running." %}></hh-empty-row>
                         {% each processes as index, proc %}
                         <pl-table-row>
                             <pl-table-cell>{{ proc.get("pid") }}</pl-table-cell>
@@ -238,32 +190,21 @@
                             <pl-table-cell>
                                 <div class="hh-form-row">
                                     <form method="POST" action={% "/sites/" + site.get("id") + "/processes/" + proc.get("pid") + "/isolate" %}>
-                {% csrf() %}
+                                        {% csrf() %}
                                         <pl-button variant={% "outline" %} size={% "sm" %} type={% "submit" %}>
                                             {% if proc.get("isolated") == true %}Unisolate{% else %}Isolate{% /if %}
                                         </pl-button>
                                     </form>
-                                    <form method="POST" action={% "/sites/" + site.get("id") + "/processes/" + proc.get("pid") + "/kill" %}>
-                {% csrf() %}
-                                        <pl-button variant={% "destructive" %} size={% "sm" %} type={% "submit" %}>Kill</pl-button>
-                                    </form>
+                                    <hh-post-action action={% "/sites/" + site.get("id") + "/processes/" + proc.get("pid") + "/kill" %} label={% "Kill" %} variant={% "destructive" %} size={% "sm" %}></hh-post-action>
                                 </div>
                             </pl-table-cell>
                         </pl-table-row>
                         {% /each %}
-                        {% if processes |> Array.length == 0 %}
-                        <pl-table-row>
-                            <pl-table-cell colspan="6" class="hh-empty-state">No processes running.</pl-table-cell>
-                        </pl-table-row>
-                        {% /if %}
                     </pl-table-body>
                 </pl-table>
 
                 <div class="hh-form-actions">
-                    <form method="POST" action={% "/sites/" + site.get("id") + "/processes/start" %}>
-                {% csrf() %}
-                        <pl-button variant={% "outline" %} type={% "submit" %}>Start Process</pl-button>
-                    </form>
+                    <hh-post-action action={% "/sites/" + site.get("id") + "/processes/start" %} label={% "Start Process" %} variant={% "outline" %} size={% "md" %}></hh-post-action>
                 </div>
             </pl-card-content>
         </pl-card>
@@ -295,10 +236,7 @@
                         <strong>Clone this site</strong>
                         <p class="hh-danger-description">Create a copy with the same settings and domains (disabled by default).</p>
                     </div>
-                    <form method="POST" action={% "/sites/" + site.get("id") + "/clone" %}>
-                {% csrf() %}
-                        <pl-button variant={% "outline" %} type={% "submit" %}>Clone Site</pl-button>
-                    </form>
+                    <hh-post-action action={% "/sites/" + site.get("id") + "/clone" %} label={% "Clone Site" %} variant={% "outline" %} size={% "md" %}></hh-post-action>
                 </div>
             </pl-card-content>
         </pl-card>
@@ -314,14 +252,10 @@
                             <strong>Delete this site</strong>
                             <p class="hh-danger-description">This will soft-delete the site and remove it from the proxy.</p>
                         </div>
-                        <form method="POST" action={% "/sites/" + site.get("id") + "/delete" %}>
-                {% csrf() %}
-                            <pl-button variant={% "destructive" %} type={% "submit" %}>Delete Site</pl-button>
-                        </form>
+                        <hh-post-action action={% "/sites/" + site.get("id") + "/delete" %} label={% "Delete Site" %} variant={% "destructive" %} size={% "md" %}></hh-post-action>
                     </div>
                 </pl-card-content>
             </pl-card>
         </div>
-
-    </main>
+    </hh-page>
 {% /block %}

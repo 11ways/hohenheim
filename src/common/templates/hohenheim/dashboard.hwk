@@ -1,18 +1,14 @@
 {% extend "hohenheim:hohenheim/base" %}
 
 {% block "main" %}
-    <header class="hh-header">
-        <h1 class="hh-header__title">Dashboard</h1>
-    </header>
-    <main class="hh-content">
+    {% declare siteCount: Integer %}
+    {% declare certCount: Integer %}
+    {% declare httpStatus: String %}
+    {% declare httpsStatus: String %}
+    {% declare routeCount: Integer %}
+    {% declare activity: List %}
 
-        {% declare siteCount: Integer %}
-        {% declare certCount: Integer %}
-        {% declare httpStatus: String %}
-        {% declare httpsStatus: String %}
-        {% declare routeCount: Integer %}
-        {% declare activity: List %}
-
+    <hh-page title={% "Dashboard" %}>
         <div class="hh-stat-grid">
             <pl-card>
                 <pl-card-header><pl-card-title>Sites</pl-card-title><pl-card-description>Managed proxy sites</pl-card-description></pl-card-header>
@@ -72,6 +68,5 @@
                 {% /each %}
             </pl-card-content>
         </pl-card>
-
-    </main>
+    </hh-page>
 {% /block %}

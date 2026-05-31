@@ -14,11 +14,7 @@
     {% declare ephemeral: Boolean %}
     {% declare canBackup: Boolean %}
 
-    <header class="hh-header">
-        <h1 class="hh-header__title">{{ name }}</h1>
-    </header>
-    <main class="hh-content">
-
+    <hh-page title={% name %}>
         <div class="hh-page-actions">
             <p class="hh-page-actions__description">
                 <pl-badge variant={% "secondary" %}>{{ engine }}</pl-badge>
@@ -85,16 +81,9 @@
 
         <div class="hh-form-actions">
             {% if canBackup == true %}
-            <form method="POST" action={% "/databases/" + name + "/backup" %}>
-                {% csrf() %}
-                <pl-button variant={% "outline" %} type={% "submit" %}>Download Backup</pl-button>
-            </form>
+            <hh-post-action action={% "/databases/" + name + "/backup" %} label={% "Download Backup" %} variant={% "outline" %} size={% "md" %}></hh-post-action>
             {% /if %}
-            <form method="POST" action={% "/databases/" + name + "/delete" %}>
-                {% csrf() %}
-                <pl-button variant={% "destructive" %} type={% "submit" %}>Delete</pl-button>
-            </form>
+            <hh-post-action action={% "/databases/" + name + "/delete" %} label={% "Delete" %} variant={% "destructive" %} size={% "md" %}></hh-post-action>
         </div>
-
-    </main>
+    </hh-page>
 {% /block %}

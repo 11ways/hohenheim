@@ -1,79 +1,65 @@
 {% extend "hohenheim:hohenheim/base" %}
 
 {% block "main" %}
-    <header class="hh-header">
-        <h1 class="hh-header__title">Databases</h1>
-    </header>
-    <main class="hh-content">
+    {% declare databases: List %}
+    {% declare listCount: Integer %}
 
-        {% declare databases: List %}
-        {% declare listCount: Integer %}
-
-        <div class="hh-page-actions">
-            <p class="hh-page-actions__description">Managed database engines running as containers.</p>
+    <hh-page title={% "Databases" %}>
+        <hh-page-actions description={% "Managed database engines running as containers." %}>
             <a href="/databases/create" class="hh-button-link"><pl-button variant="primary">Create Database</pl-button></a>
-        </div>
+        </hh-page-actions>
 
-        <pl-card>
-            <pl-card-content>
-                <pl-table>
-                    <pl-table-header><pl-table-row>
-                        <pl-table-head>Name</pl-table-head>
-                        <pl-table-head>Engine</pl-table-head>
-                        <pl-table-head>Database</pl-table-head>
-                        <pl-table-head>Server</pl-table-head>
-                        <pl-table-head>Status</pl-table-head>
-                        <pl-table-head>Storage</pl-table-head>
-                        <pl-table-head></pl-table-head>
-                    </pl-table-row></pl-table-header>
-                    <pl-table-body>
-                        {% if listCount == 0 %}
-                        <pl-table-row>
-                            <pl-table-cell colspan="7" class="hh-empty-state">No databases yet.</pl-table-cell>
-                        </pl-table-row>
+        <hh-table-card>
+            <pl-table-header><pl-table-row>
+                <pl-table-head>Name</pl-table-head>
+                <pl-table-head>Engine</pl-table-head>
+                <pl-table-head>Database</pl-table-head>
+                <pl-table-head>Server</pl-table-head>
+                <pl-table-head>Status</pl-table-head>
+                <pl-table-head>Storage</pl-table-head>
+                <pl-table-head></pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                <hh-empty-row count={% listCount %} colspan={% "7" %} message={% "No databases yet." %}></hh-empty-row>
+                {% each databases as index, item %}
+                <pl-table-row>
+                    <pl-table-cell>
+                        <a href={% "/databases/" + item.get("name") %} class="hh-site-link">{{ item.get("name") }}</a>
+                    </pl-table-cell>
+                    <pl-table-cell>
+                        <pl-badge variant={% "secondary" %}>{{ item.get("engine") }}</pl-badge>
+                    </pl-table-cell>
+                    <pl-table-cell>{{ item.get("database") }}</pl-table-cell>
+                    <pl-table-cell>{{ item.get("server") }}</pl-table-cell>
+                    <pl-table-cell>
+                        {% if item.get("status") == "provisioning" %}
+                            <pl-badge variant={% "secondary" %}>Provisioning</pl-badge>
+                        {% elseif item.get("status") == "failed" %}
+                            <pl-badge variant={% "destructive" %}>Failed</pl-badge>
+                        {% elseif item.get("running") == true %}
+                            <pl-badge variant={% "default" %}>Running {{ item.get("port") }}</pl-badge>
+                        {% else %}
+                            <pl-badge variant={% "outline" %}>Stopped</pl-badge>
                         {% /if %}
-                        {% each databases as index, item %}
-                        <pl-table-row>
-                            <pl-table-cell>
-                                <a href={% "/databases/" + item.get("name") %} class="hh-site-link">{{ item.get("name") }}</a>
-                            </pl-table-cell>
-                            <pl-table-cell>
-                                <pl-badge variant={% "secondary" %}>{{ item.get("engine") }}</pl-badge>
-                            </pl-table-cell>
-                            <pl-table-cell>{{ item.get("database") }}</pl-table-cell>
-                            <pl-table-cell>{{ item.get("server") }}</pl-table-cell>
-                            <pl-table-cell>
-                                {% if item.get("status") == "provisioning" %}
-                                    <pl-badge variant={% "secondary" %}>Provisioning</pl-badge>
-                                {% elseif item.get("status") == "failed" %}
-                                    <pl-badge variant={% "destructive" %}>Failed</pl-badge>
-                                {% elseif item.get("running") == true %}
-                                    <pl-badge variant={% "default" %}>Running {{ item.get("port") }}</pl-badge>
-                                {% else %}
-                                    <pl-badge variant={% "outline" %}>Stopped</pl-badge>
-                                {% /if %}
-                            </pl-table-cell>
-                            <pl-table-cell>
-                                {% if item.get("ephemeral") == true %}
-                                    <pl-badge variant={% "outline" %}>Ephemeral</pl-badge>
-                                {% else %}
-                                    <pl-badge variant={% "outline" %}>Persistent</pl-badge>
-                                {% /if %}
-                            </pl-table-cell>
-                            <pl-table-cell>
-                                <div class="hh-table-actions">
-                                    {% if item.get("canBackup") == true %}
-                                    <hh-post-action action={% "/databases/" + item.get("name") + "/backup" %} label={% "Backup" %}></hh-post-action>
-                                    {% /if %}
-                                    <hh-post-action action={% "/databases/" + item.get("name") + "/delete" %} label={% "Delete" %}></hh-post-action>
-                                </div>
-                            </pl-table-cell>
-                        </pl-table-row>
-                        {% /each %}
-                    </pl-table-body>
-                </pl-table>
-            </pl-card-content>
-        </pl-card>
-
-    </main>
+                    </pl-table-cell>
+                    <pl-table-cell>
+                        {% if item.get("ephemeral") == true %}
+                            <pl-badge variant={% "outline" %}>Ephemeral</pl-badge>
+                        {% else %}
+                            <pl-badge variant={% "outline" %}>Persistent</pl-badge>
+                        {% /if %}
+                    </pl-table-cell>
+                    <pl-table-cell>
+                        <div class="hh-table-actions">
+                            {% if item.get("canBackup") == true %}
+                            <hh-post-action action={% "/databases/" + item.get("name") + "/backup" %} label={% "Backup" %}></hh-post-action>
+                            {% /if %}
+                            <hh-post-action action={% "/databases/" + item.get("name") + "/delete" %} label={% "Delete" %}></hh-post-action>
+                        </div>
+                    </pl-table-cell>
+                </pl-table-row>
+                {% /each %}
+            </pl-table-body>
+        </hh-table-card>
+    </hh-page>
 {% /block %}

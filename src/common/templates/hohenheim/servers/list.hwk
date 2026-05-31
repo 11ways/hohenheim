@@ -1,68 +1,54 @@
 {% extend "hohenheim:hohenheim/base" %}
 
 {% block "main" %}
-    <header class="hh-header">
-        <h1 class="hh-header__title">Servers</h1>
-    </header>
-    <main class="hh-content">
+    {% declare servers: List %}
+    {% declare listCount: Integer %}
 
-        {% declare servers: List %}
-        {% declare listCount: Integer %}
-
-        <div class="hh-page-actions">
-            <p class="hh-page-actions__description">Docker hosts this platform manages -- the local daemon plus remote hosts over SSH.</p>
+    <hh-page title={% "Servers" %}>
+        <hh-page-actions description={% "Docker hosts this platform manages -- the local daemon plus remote hosts over SSH." %}>
             <a href="/servers/create" class="hh-button-link"><pl-button variant="primary">Add Server</pl-button></a>
-        </div>
+        </hh-page-actions>
 
-        <pl-card>
-            <pl-card-content>
-                <pl-table>
-                    <pl-table-header><pl-table-row>
-                        <pl-table-head>Name</pl-table-head>
-                        <pl-table-head>Mode</pl-table-head>
-                        <pl-table-head>Target</pl-table-head>
-                        <pl-table-head>Reachable</pl-table-head>
-                        <pl-table-head>CPUs</pl-table-head>
-                        <pl-table-head>Memory</pl-table-head>
-                        <pl-table-head>Containers</pl-table-head>
-                        <pl-table-head>Images</pl-table-head>
-                        <pl-table-head></pl-table-head>
-                    </pl-table-row></pl-table-header>
-                    <pl-table-body>
-                        {% each servers as index, item %}
-                        <pl-table-row>
-                            <pl-table-cell>{{ item.get("name") }}</pl-table-cell>
-                            <pl-table-cell>
-                                <pl-badge variant={% "secondary" %}>{{ item.get("mode") }}</pl-badge>
-                            </pl-table-cell>
-                            <pl-table-cell>{{ item.get("sshTarget") }}</pl-table-cell>
-                            <pl-table-cell>
-                                {% if item.get("reachable") == true %}
-                                    <pl-badge variant={% "default" %}>Reachable</pl-badge>
-                                {% else %}
-                                    <pl-badge variant={% "destructive" %}>Unreachable</pl-badge>
-                                {% /if %}
-                            </pl-table-cell>
-                            <pl-table-cell>{{ item.get("cpus") }}</pl-table-cell>
-                            <pl-table-cell>{{ item.get("memory") }}</pl-table-cell>
-                            <pl-table-cell>{{ item.get("containers") }}</pl-table-cell>
-                            <pl-table-cell>{{ item.get("images") }}</pl-table-cell>
-                            <pl-table-cell>
-                                {% if item.get("removable") == true %}
-                                <hh-post-action action={% "/servers/" + item.get("name") + "/delete" %} label={% "Remove" %}></hh-post-action>
-                                {% /if %}
-                            </pl-table-cell>
-                        </pl-table-row>
-                        {% /each %}
-                        {% if listCount == 0 %}
-                        <pl-table-row>
-                            <pl-table-cell colspan="9" class="hh-empty-state">No servers yet.</pl-table-cell>
-                        </pl-table-row>
+        <hh-table-card>
+            <pl-table-header><pl-table-row>
+                <pl-table-head>Name</pl-table-head>
+                <pl-table-head>Mode</pl-table-head>
+                <pl-table-head>Target</pl-table-head>
+                <pl-table-head>Reachable</pl-table-head>
+                <pl-table-head>CPUs</pl-table-head>
+                <pl-table-head>Memory</pl-table-head>
+                <pl-table-head>Containers</pl-table-head>
+                <pl-table-head>Images</pl-table-head>
+                <pl-table-head></pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                <hh-empty-row count={% listCount %} colspan={% "9" %} message={% "No servers yet." %}></hh-empty-row>
+                {% each servers as index, item %}
+                <pl-table-row>
+                    <pl-table-cell>{{ item.get("name") }}</pl-table-cell>
+                    <pl-table-cell>
+                        <pl-badge variant={% "secondary" %}>{{ item.get("mode") }}</pl-badge>
+                    </pl-table-cell>
+                    <pl-table-cell>{{ item.get("sshTarget") }}</pl-table-cell>
+                    <pl-table-cell>
+                        {% if item.get("reachable") == true %}
+                            <pl-badge variant={% "default" %}>Reachable</pl-badge>
+                        {% else %}
+                            <pl-badge variant={% "destructive" %}>Unreachable</pl-badge>
                         {% /if %}
-                    </pl-table-body>
-                </pl-table>
-            </pl-card-content>
-        </pl-card>
-
-    </main>
+                    </pl-table-cell>
+                    <pl-table-cell>{{ item.get("cpus") }}</pl-table-cell>
+                    <pl-table-cell>{{ item.get("memory") }}</pl-table-cell>
+                    <pl-table-cell>{{ item.get("containers") }}</pl-table-cell>
+                    <pl-table-cell>{{ item.get("images") }}</pl-table-cell>
+                    <pl-table-cell>
+                        {% if item.get("removable") == true %}
+                        <hh-post-action action={% "/servers/" + item.get("name") + "/delete" %} label={% "Remove" %}></hh-post-action>
+                        {% /if %}
+                    </pl-table-cell>
+                </pl-table-row>
+                {% /each %}
+            </pl-table-body>
+        </hh-table-card>
+    </hh-page>
 {% /block %}
