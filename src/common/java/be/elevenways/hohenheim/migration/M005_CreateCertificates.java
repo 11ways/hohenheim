@@ -14,9 +14,7 @@ public class M005_CreateCertificates extends Migration {
     public void up(MigrationBuilder schema) {
         schema.createTable("certificates", table -> {
             table.id();
-            table.addColumn("organization_id", ColumnType.INTEGER, col -> col.nullable(true));
             table.string("nice_name", 255);
-            table.addColumn("domain_names", ColumnType.JSON, col -> col.nullable(true));
             table.addColumn("provider", ColumnType.STRING, col -> col.maxLength(50).defaultValue("letsencrypt"));
             table.addColumn("certificate_pem", ColumnType.TEXT, col -> col.nullable(true));
             table.addColumn("private_key_pem", ColumnType.TEXT, col -> col.nullable(true));
@@ -27,7 +25,6 @@ public class M005_CreateCertificates extends Migration {
             table.addColumn("acme_server", ColumnType.STRING, col -> col.maxLength(255).nullable(true));
             table.addColumn("meta", ColumnType.JSON, col -> col.nullable(true));
             table.timestamps();
-            table.addIndex("organization_id");
         });
     }
 
