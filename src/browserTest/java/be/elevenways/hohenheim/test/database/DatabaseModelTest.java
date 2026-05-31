@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.migration.M015_CreateManagedDatabases;
 import be.elevenways.hohenheim.migration.M016_AddDatabaseStatus;
 import be.elevenways.hohenheim.migration.M018_AddDatabaseServer;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.test.TestModels;
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
@@ -37,7 +37,7 @@ class DatabaseModelTest {
         new MigrationRunner((MigrationCapableDatasource) datasource,
             List.of(M015_CreateManagedDatabases::new, M016_AddDatabaseStatus::new,
                 M018_AddDatabaseServer::new)).migrate();
-        TestModels.registerAll();
+        HohenheimTestRuntime.ensureBooted();
     }
 
     @Test

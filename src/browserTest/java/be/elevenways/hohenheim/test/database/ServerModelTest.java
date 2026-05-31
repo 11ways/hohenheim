@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.migration.M017_CreateServers;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.test.TestModels;
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
@@ -32,7 +32,7 @@ class ServerModelTest {
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner((MigrationCapableDatasource) datasource,
             List.of(M017_CreateServers::new)).migrate();
-        TestModels.registerAll();
+        HohenheimTestRuntime.ensureBooted();
     }
 
     @Test

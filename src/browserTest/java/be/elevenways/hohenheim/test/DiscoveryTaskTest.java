@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.server.task.UpdateNodeVersions;
 import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.server.ServerZenitRuntime;
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
@@ -41,8 +40,7 @@ class DiscoveryTaskTest {
         SiteTypes.register();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
-        TestModels.registerAll();
-        ServerZenitRuntime.init();
+        HohenheimTestRuntime.ensureBooted();
         Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
     }
 

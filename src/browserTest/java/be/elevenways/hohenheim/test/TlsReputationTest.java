@@ -49,7 +49,7 @@ class TlsReputationTest {
         db.deleteOnExit();
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
-        TestModels.registerAll();
+        HohenheimTestRuntime.ensureBooted();
     }
 
     @Test
