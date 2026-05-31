@@ -1,101 +1,85 @@
 {% extend "hohenheim:hohenheim/base" %}
 
 {% block "main" %}
-    <header class="hh-header">
-        <h1 class="hh-header__title">Certificates</h1>
-    </header>
-    <main class="hh-content">
+    {% declare certificates: List %}
+    {% declare certCount: Integer %}
 
-        {% declare certificates: List %}
-        {% declare certCount: Integer %}
+    <hh-page title={% "Certificates" %}>
+        <hh-page-actions description={% "SSL/TLS certificates for your sites." %}>
+            <a href="/certificates/request" class="hh-button-link"><pl-button variant="primary">Request (Let's Encrypt)</pl-button></a>
+            <a href="/certificates/upload" class="hh-button-link"><pl-button variant="outline">Upload Custom</pl-button></a>
+        </hh-page-actions>
 
-        <div class="hh-page-actions">
-            <p class="hh-page-actions__description">SSL/TLS certificates for your sites.</p>
-            <div class="hh-page-actions__buttons">
-                <a href="/certificates/request" class="hh-button-link"><pl-button variant="primary">Request (Let's Encrypt)</pl-button></a>
-                <a href="/certificates/upload" class="hh-button-link"><pl-button variant="outline">Upload Custom</pl-button></a>
-            </div>
-        </div>
-
-        <pl-card>
-            <pl-card-content>
-                <pl-table>
-                    <pl-table-header><pl-table-row>
-                        <pl-table-head>Name</pl-table-head>
-                        <pl-table-head>Provider</pl-table-head>
-                        <pl-table-head>Domains</pl-table-head>
-                        <pl-table-head>Status</pl-table-head>
-                        <pl-table-head>Expires</pl-table-head>
-                        <pl-table-head></pl-table-head>
-                    </pl-table-row></pl-table-header>
-                    <pl-table-body>
-                        {% each certificates as index, cert %}
-                        <pl-table-row>
-                            <pl-table-cell>{{ cert.get("niceName") }}</pl-table-cell>
-                            <pl-table-cell>
-                                {% if cert.get("provider") == "letsencrypt" %}
-                                    <pl-badge variant={% "default" %}>Let's Encrypt</pl-badge>
-                                {% else %}
-                                    <pl-badge variant={% "secondary" %}>{{ cert.get("provider") }}</pl-badge>
-                                {% /if %}
-                            </pl-table-cell>
-                            <pl-table-cell>
-                                {% if cert.get("domains") != null %}
-                                    <span class="hh-text-muted">{{ cert.get("domains") }}</span>
-                                {% /if %}
-                            </pl-table-cell>
-                            <pl-table-cell>
-                                {% if cert.get("status") == "active" %}
-                                    <pl-badge variant={% "default" %}>Active</pl-badge>
-                                {% elseif cert.get("status") == "pending" %}
-                                    <pl-badge variant={% "outline" %}>Pending</pl-badge>
-                                {% elseif cert.get("status") == "error" %}
-                                    <pl-badge variant={% "destructive" %}>Error</pl-badge>
-                                {% else %}
-                                    <pl-badge variant={% "secondary" %}>{{ cert.get("status") }}</pl-badge>
-                                {% /if %}
-                            </pl-table-cell>
-                            <pl-table-cell>
-                                {% if cert.get("expiryStatus") == "expired" %}
-                                    <pl-badge variant={% "destructive" %}>Expired</pl-badge>
-                                {% elseif cert.get("expiryStatus") == "critical" %}
-                                    <pl-badge variant={% "destructive" %}>{{ cert.get("daysLeft") }}d left</pl-badge>
-                                {% elseif cert.get("expiryStatus") == "warning" %}
-                                    <pl-badge variant={% "outline" %}>{{ cert.get("daysLeft") }}d left</pl-badge>
-                                {% elseif cert.get("expiresOn") != null %}
-                                    <pl-badge variant={% "secondary" %}>{{ cert.get("daysLeft") }}d left</pl-badge>
-                                {% else %}
-                                    <span class="hh-text-muted">N/A</span>
-                                {% /if %}
-                            </pl-table-cell>
-                            <pl-table-cell>
-                                <div class="hh-table-actions">
-                                    <a href={% "/certificates/" + cert.get("id") + "/download" %} class="hh-button-link">
-                                        <pl-button variant={% "ghost" %} size={% "sm" %}>Download</pl-button>
-                                    </a>
-                                    <hh-post-action action={% "/certificates/" + cert.get("id") + "/delete" %} label={% "Delete" %}></hh-post-action>
-                                </div>
-                            </pl-table-cell>
-                        </pl-table-row>
-                        {% if cert.get("renewalError") != null %}
-                        <pl-table-row>
-                            <pl-table-cell colspan="6">
-                                <pl-alert variant={% "destructive" %}>
-                                    <pl-alert-description>{{ cert.get("renewalError") }}</pl-alert-description>
-                                </pl-alert>
-                            </pl-table-cell>
-                        </pl-table-row>
+        <hh-table-card>
+            <pl-table-header><pl-table-row>
+                <pl-table-head>Name</pl-table-head>
+                <pl-table-head>Provider</pl-table-head>
+                <pl-table-head>Domains</pl-table-head>
+                <pl-table-head>Status</pl-table-head>
+                <pl-table-head>Expires</pl-table-head>
+                <pl-table-head></pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                <hh-empty-row count={% certCount %} colspan={% "6" %} message={% "No certificates yet." %}></hh-empty-row>
+                {% each certificates as index, cert %}
+                <pl-table-row>
+                    <pl-table-cell>{{ cert.get("niceName") }}</pl-table-cell>
+                    <pl-table-cell>
+                        {% if cert.get("provider") == "letsencrypt" %}
+                            <pl-badge variant={% "default" %}>Let's Encrypt</pl-badge>
+                        {% else %}
+                            <pl-badge variant={% "secondary" %}>{{ cert.get("provider") }}</pl-badge>
                         {% /if %}
-                        {% /each %}
-                        {% if certCount == 0 %}
-                        <pl-table-row>
-                            <pl-table-cell colspan="6" class="hh-empty-state">No certificates yet.</pl-table-cell>
-                        </pl-table-row>
+                    </pl-table-cell>
+                    <pl-table-cell>
+                        {% if cert.get("domains") != null %}
+                            <span class="hh-text-muted">{{ cert.get("domains") }}</span>
                         {% /if %}
-                    </pl-table-body>
-                </pl-table>
-            </pl-card-content>
-        </pl-card>
-
-    </main>
+                    </pl-table-cell>
+                    <pl-table-cell>
+                        {% if cert.get("status") == "active" %}
+                            <pl-badge variant={% "default" %}>Active</pl-badge>
+                        {% elseif cert.get("status") == "pending" %}
+                            <pl-badge variant={% "outline" %}>Pending</pl-badge>
+                        {% elseif cert.get("status") == "error" %}
+                            <pl-badge variant={% "destructive" %}>Error</pl-badge>
+                        {% else %}
+                            <pl-badge variant={% "secondary" %}>{{ cert.get("status") }}</pl-badge>
+                        {% /if %}
+                    </pl-table-cell>
+                    <pl-table-cell>
+                        {% if cert.get("expiryStatus") == "expired" %}
+                            <pl-badge variant={% "destructive" %}>Expired</pl-badge>
+                        {% elseif cert.get("expiryStatus") == "critical" %}
+                            <pl-badge variant={% "destructive" %}>{{ cert.get("daysLeft") }}d left</pl-badge>
+                        {% elseif cert.get("expiryStatus") == "warning" %}
+                            <pl-badge variant={% "outline" %}>{{ cert.get("daysLeft") }}d left</pl-badge>
+                        {% elseif cert.get("expiresOn") != null %}
+                            <pl-badge variant={% "secondary" %}>{{ cert.get("daysLeft") }}d left</pl-badge>
+                        {% else %}
+                            <span class="hh-text-muted">N/A</span>
+                        {% /if %}
+                    </pl-table-cell>
+                    <pl-table-cell>
+                        <div class="hh-table-actions">
+                            <a href={% "/certificates/" + cert.get("id") + "/download" %} class="hh-button-link">
+                                <pl-button variant={% "ghost" %} size={% "sm" %}>Download</pl-button>
+                            </a>
+                            <hh-post-action action={% "/certificates/" + cert.get("id") + "/delete" %} label={% "Delete" %}></hh-post-action>
+                        </div>
+                    </pl-table-cell>
+                </pl-table-row>
+                {% if cert.get("renewalError") != null %}
+                <pl-table-row>
+                    <pl-table-cell colspan="6">
+                        <pl-alert variant={% "destructive" %}>
+                            <pl-alert-description>{{ cert.get("renewalError") }}</pl-alert-description>
+                        </pl-alert>
+                    </pl-table-cell>
+                </pl-table-row>
+                {% /if %}
+                {% /each %}
+            </pl-table-body>
+        </hh-table-card>
+    </hh-page>
 {% /block %}

@@ -1,72 +1,58 @@
 {% extend "hohenheim:hohenheim/base" %}
 
 {% block "main" %}
-    <header class="hh-header">
-        <h1 class="hh-header__title">Sites</h1>
-    </header>
-    <main class="hh-content">
+    {% declare sites: List %}
+    {% declare siteCount: Integer %}
 
-        {% declare sites: List %}
-        {% declare siteCount: Integer %}
-
-        <div class="hh-page-actions">
-            <p class="hh-page-actions__description">Manage your proxy sites and their domains.</p>
+    <hh-page title={% "Sites" %}>
+        <hh-page-actions description={% "Manage your proxy sites and their domains." %}>
             <a href="/sites/create" class="hh-button-link"><pl-button variant="primary">Create Site</pl-button></a>
-        </div>
+        </hh-page-actions>
 
-        <pl-card>
-            <pl-card-content>
-                <pl-table>
-                    <pl-table-header><pl-table-row>
-                        <pl-table-head>Name</pl-table-head>
-                        <pl-table-head>Type</pl-table-head>
-                        <pl-table-head>Status</pl-table-head>
-                        <pl-table-head>Domains</pl-table-head>
-                        <pl-table-head></pl-table-head>
-                    </pl-table-row></pl-table-header>
-                    <pl-table-body>
-                        {% if siteCount == 0 %}
-                        <pl-table-row>
-                            <pl-table-cell colspan="5" class="hh-empty-state">No sites configured yet.</pl-table-cell>
-                        </pl-table-row>
+        <hh-table-card>
+            <pl-table-header><pl-table-row>
+                <pl-table-head>Name</pl-table-head>
+                <pl-table-head>Type</pl-table-head>
+                <pl-table-head>Status</pl-table-head>
+                <pl-table-head>Domains</pl-table-head>
+                <pl-table-head></pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                <hh-empty-row count={% siteCount %} colspan={% "5" %} message={% "No sites configured yet." %}></hh-empty-row>
+                {% each sites as index, site %}
+                <pl-table-row>
+                    <pl-table-cell>
+                        <a href={% "/sites/" + site.get("id") %} class="hh-site-link">{{ site.get("name") }}</a>
+                    </pl-table-cell>
+                    <pl-table-cell>
+                        <pl-badge variant={% "secondary" %}>{{ site.get("siteType") }}</pl-badge>
+                    </pl-table-cell>
+                    <pl-table-cell>
+                        {% if site.get("enabled") == true %}
+                            <pl-badge variant={% "default" %}>Active</pl-badge>
+                        {% else %}
+                            <pl-badge variant={% "outline" %}>Disabled</pl-badge>
                         {% /if %}
-                        {% each sites as index, site %}
-                        <pl-table-row>
-                            <pl-table-cell>
-                                <a href={% "/sites/" + site.get("id") %} class="hh-site-link">{{ site.get("name") }}</a>
-                            </pl-table-cell>
-                            <pl-table-cell>
-                                <pl-badge variant={% "secondary" %}>{{ site.get("siteType") }}</pl-badge>
-                            </pl-table-cell>
-                            <pl-table-cell>
+                    </pl-table-cell>
+                    <pl-table-cell>{{ site.get("domainCount") }}</pl-table-cell>
+                    <pl-table-cell>
+                        <div class="hh-table-actions">
+                            <form method="POST" action={% "/sites/" + site.get("id") + "/toggle" %}>
+                                {% csrf() %}
                                 {% if site.get("enabled") == true %}
-                                    <pl-badge variant={% "default" %}>Active</pl-badge>
+                                    <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Disable</pl-button>
                                 {% else %}
-                                    <pl-badge variant={% "outline" %}>Disabled</pl-badge>
+                                    <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Enable</pl-button>
                                 {% /if %}
-                            </pl-table-cell>
-                            <pl-table-cell>{{ site.get("domainCount") }}</pl-table-cell>
-                            <pl-table-cell>
-                                <div class="hh-table-actions">
-                                    <form method="POST" action={% "/sites/" + site.get("id") + "/toggle" %}>
-                {% csrf() %}
-                                        {% if site.get("enabled") == true %}
-                                            <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Disable</pl-button>
-                                        {% else %}
-                                            <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Enable</pl-button>
-                                        {% /if %}
-                                    </form>
-                                    <a href={% "/sites/" + site.get("id") %} class="hh-button-link">
-                                        <pl-button variant={% "ghost" %} size={% "sm" %}>Edit</pl-button>
-                                    </a>
-                                </div>
-                            </pl-table-cell>
-                        </pl-table-row>
-                        {% /each %}
-                    </pl-table-body>
-                </pl-table>
-            </pl-card-content>
-        </pl-card>
-
-    </main>
+                            </form>
+                            <a href={% "/sites/" + site.get("id") %} class="hh-button-link">
+                                <pl-button variant={% "ghost" %} size={% "sm" %}>Edit</pl-button>
+                            </a>
+                        </div>
+                    </pl-table-cell>
+                </pl-table-row>
+                {% /each %}
+            </pl-table-body>
+        </hh-table-card>
+    </hh-page>
 {% /block %}

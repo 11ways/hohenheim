@@ -1,0 +1,15 @@
+{% tag HhPageActions {
+
+    public description: String = ""
+
+    template {
+        <div class="hh-page-actions">
+            {% if description != "" %}
+                <p class="hh-page-actions__description">{{ description }}</p>
+            {% /if %}
+            <div class="hh-page-actions__buttons">
+                <slot></slot>
+            </div>
+        </div>
+    }
+} %}

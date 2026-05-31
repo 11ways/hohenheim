@@ -1,0 +1,53 @@
+{% tag HhSiteFormFields {
+
+    public siteName: String = ""
+    public selectedType: String = "hohenheim:proxy"
+    public source: String = ""
+    public siteTypes: List = null
+    public settings: Map = null
+    public sourceSettings: Map = null
+    public nodeVersions: List = null
+    public systemUsers: List = null
+    public environmentVariables: List = null
+    public apiKeys: List = null
+    public servers: List = null
+
+    template {
+        <div class="hh-form-group">
+            <pl-label target="site-name">Site Name</pl-label>
+            <pl-input id="site-name" type={% "text" %} name={% "name" %} value={% siteName %} placeholder={% "My Website" %} required={% true %}></pl-input>
+        </div>
+
+        <div class="hh-form-group">
+            <pl-label target="site-type">Site Type</pl-label>
+            <pl-select name="site_type" bind:value={% selectedType{:} %}>
+                <pl-select-trigger placeholder="Select type"></pl-select-trigger>
+                <pl-select-content>
+                    {% each siteTypes as index, st %}
+                        <pl-select-item value={% st.get("value") %} label={% st.get("label") %}>{{ st.get("label") }}{% if st.get("description") != null %} - {{ st.get("description") }}{% /if %}</pl-select-item>
+                    {% /each %}
+                </pl-select-content>
+            </pl-select>
+        </div>
+
+        <div class="hh-form-group">
+            <pl-label target="source">Source</pl-label>
+            <pl-select name="source" bind:value={% source{:} %}>
+                <pl-select-trigger placeholder="Local"></pl-select-trigger>
+                <pl-select-content>
+                    <pl-select-item value="" label="Local">Local - files on disk</pl-select-item>
+                    <pl-select-item value="git" label="Git">Git - clone from repository</pl-select-item>
+                </pl-select-content>
+            </pl-select>
+        </div>
+
+        {% if source{:} == "git" %}
+            <pl-separator></pl-separator>
+            <hh-git-source-settings sourceSettings={% sourceSettings %}></hh-git-source-settings>
+        {% /if %}
+
+        <pl-separator></pl-separator>
+
+        <hh-site-type-fields selectedType={% &selectedType{:} %} settings={% settings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %} servers={% servers %}></hh-site-type-fields>
+    }
+} %}

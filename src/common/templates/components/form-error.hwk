@@ -1,0 +1,13 @@
+{% tag HhFormError {
+
+    public error: String = ""
+
+    template {
+        {% if error != "" %}
+            <pl-alert variant={% "destructive" %} class="hh-form-error">
+                <pl-alert-title>Error</pl-alert-title>
+                <pl-alert-description>{{ error }}</pl-alert-description>
+            </pl-alert>
+        {% /if %}
+    }
+} %}

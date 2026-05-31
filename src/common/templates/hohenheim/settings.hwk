@@ -1,12 +1,7 @@
 {% extend "hohenheim:hohenheim/base" %}
 
 {% block "main" %}
-    <header class="hh-header">
-        <h1 class="hh-header__title">Settings</h1>
-    </header>
-    <main class="hh-content">
-
-        {% declare proxyHttpPort: Integer %}
+    {% declare proxyHttpPort: Integer %}
         {% declare proxyHttpsPort: Integer %}
         {% declare proxyFallback: String %}
         {% declare proxyForceHttps: Boolean %}
@@ -24,6 +19,8 @@
         {% declare sslLeStaging: Boolean %}
         {% declare saved: String = "" %}
 
+    <hh-page title={% "Settings" %}>
+
         {% if saved == "true" %}
             <pl-alert variant={% "default" %} class="hh-form-success">
                 <pl-alert-description>Settings saved. Some changes require a restart to take effect.</pl-alert-description>
@@ -31,7 +28,7 @@
         {% /if %}
 
         <form method="POST" action="/settings">
-                {% csrf() %}
+            {% csrf() %}
             <div class="hh-settings-grid">
 
                 <pl-card>
@@ -179,5 +176,5 @@
             </div>
         </form>
 
-    </main>
+    </hh-page>
 {% /block %}

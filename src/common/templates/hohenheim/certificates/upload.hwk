@@ -1,49 +1,28 @@
 {% extend "hohenheim:hohenheim/base" %}
 
 {% block "main" %}
-    <header class="hh-header">
-        <h1 class="hh-header__title">Upload Certificate</h1>
-    </header>
-    <main class="hh-content">
+    {% declare error: String %}
 
-        {% declare error: String %}
-
-        {% if error != "" %}
-            <pl-alert variant={% "destructive" %} class="hh-form-error">
-                <pl-alert-title>Error</pl-alert-title>
-                <pl-alert-description>{{ error }}</pl-alert-description>
-            </pl-alert>
-        {% /if %}
-
-        <pl-card class="hh-form-card">
-            <pl-card-header>
-                <pl-card-title>Custom Certificate</pl-card-title>
-                <pl-card-description>Upload a PEM-encoded certificate and private key.</pl-card-description>
-            </pl-card-header>
-            <pl-card-content>
-                <form method="POST" action="/certificates/upload">
-                {% csrf() %}
-                    <div class="hh-form-stack">
-                        <div class="hh-form-group">
-                            <pl-label target="nice-name">Certificate Name</pl-label>
-                            <pl-input id="nice-name" type={% "text" %} name={% "nice_name" %} placeholder={% "example.com wildcard" %} required={% true %}></pl-input>
-                        </div>
-                        <div class="hh-form-group">
-                            <pl-label target="cert-pem">Certificate (PEM)</pl-label>
-                            <pl-textarea name={% "certificate_pem" %} placeholder={% "-----BEGIN CERTIFICATE-----" %} required={% true %}></pl-textarea>
-                        </div>
-                        <div class="hh-form-group">
-                            <pl-label target="key-pem">Private Key (PEM)</pl-label>
-                            <pl-textarea name={% "private_key_pem" %} placeholder={% "-----BEGIN PRIVATE KEY-----" %} required={% true %}></pl-textarea>
-                        </div>
-                    </div>
-                    <div class="hh-form-actions">
-                        <pl-button variant={% "primary" %} type={% "submit" %}>Upload Certificate</pl-button>
-                        <a href="/certificates" class="hh-button-link"><pl-button variant={% "outline" %} type={% "button" %}>Cancel</pl-button></a>
-                    </div>
-                </form>
-            </pl-card-content>
-        </pl-card>
-
-    </main>
+    <hh-page title={% "Upload Certificate" %}>
+        <hh-form-shell
+            action={% "/certificates/upload" %}
+            title={% "Custom Certificate" %}
+            description={% "Upload a PEM-encoded certificate and private key." %}
+            submitLabel={% "Upload Certificate" %}
+            cancelHref={% "/certificates" %}
+            error={% error %}>
+            <div class="hh-form-group">
+                <pl-label target="nice-name">Certificate Name</pl-label>
+                <pl-input id="nice-name" type={% "text" %} name={% "nice_name" %} placeholder={% "example.com wildcard" %} required={% true %}></pl-input>
+            </div>
+            <div class="hh-form-group">
+                <pl-label target="cert-pem">Certificate (PEM)</pl-label>
+                <pl-textarea id="cert-pem" name={% "certificate_pem" %} placeholder={% "-----BEGIN CERTIFICATE-----" %} required={% true %}></pl-textarea>
+            </div>
+            <div class="hh-form-group">
+                <pl-label target="key-pem">Private Key (PEM)</pl-label>
+                <pl-textarea id="key-pem" name={% "private_key_pem" %} placeholder={% "-----BEGIN PRIVATE KEY-----" %} required={% true %}></pl-textarea>
+            </div>
+        </hh-form-shell>
+    </hh-page>
 {% /block %}
