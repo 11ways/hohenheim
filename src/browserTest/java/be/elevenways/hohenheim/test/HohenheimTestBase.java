@@ -55,11 +55,10 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         SiteTypes.register();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
-        // Production awaits the MODELS boot stage (ClassGraph discovery) via ServerZenitRuntime.main();
-        // this base builds its own server and never runs that stage, so register the singletons here.
-        TestModels.registerAll();
 
-        ServerZenitRuntime.init();
+        // Run the real boot path (MODELS discovery registers the model singletons); HTTP auto-start
+        // is disabled inside ensureBooted() since this base binds its own server below.
+        HohenheimTestRuntime.ensureBooted();
         Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
 
         // Install auth exactly as production does, then seed a logged-in admin for the tests.

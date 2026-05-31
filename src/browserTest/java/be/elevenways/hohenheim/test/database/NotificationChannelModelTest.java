@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.migration.M019_CreateNotificationChannels;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
-import be.elevenways.hohenheim.test.TestModels;
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
@@ -30,7 +30,7 @@ class NotificationChannelModelTest {
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner((MigrationCapableDatasource) datasource,
             List.of(M019_CreateNotificationChannels::new)).migrate();
-        TestModels.registerAll();
+        HohenheimTestRuntime.ensureBooted();
     }
 
     @Test
