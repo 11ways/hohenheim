@@ -18,7 +18,7 @@
             </div>
             <div class="hh-form-group">
                 <pl-label target="format">Format</pl-label>
-                <pl-select name="format" value="slack">
+                <pl-select id="format" name="format" value="slack">
                     <pl-select-trigger placeholder="Format"></pl-select-trigger>
                     <pl-select-content>
                         <pl-select-item value="slack" label="Slack">Slack</pl-select-item>
