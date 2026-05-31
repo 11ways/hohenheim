@@ -49,6 +49,7 @@
                             <pl-table-cell>
                                 <div class="hh-table-actions">
                                     <form method="POST" action={% "/sites/" + site.get("id") + "/toggle" %}>
+                {% csrf() %}
                                         {% if site.get("enabled") == true %}
                                             <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Disable</pl-button>
                                         {% else %}

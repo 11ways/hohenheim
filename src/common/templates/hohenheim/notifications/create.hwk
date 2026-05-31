@@ -16,6 +16,7 @@
         {% /if %}
 
         <form method="POST" action="/notifications/create">
+                {% csrf() %}
             <pl-card class="hh-form-card">
                 <pl-card-header>
                     <pl-card-title>Webhook Channel</pl-card-title>

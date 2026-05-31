@@ -23,6 +23,7 @@
         {% /if %}
 
         <form method="POST" action={% "/access-lists/" + id %}>
+                {% csrf() %}
             <pl-card class="hh-form-card">
                 <pl-card-header>
                     <pl-card-title>{{ name }}</pl-card-title>

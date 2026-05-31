@@ -6,13 +6,19 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.stats.StatsCollector;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
-import be.elevenways.hohenheim.server.task.CleanExpiredSessions;
 import be.elevenways.hohenheim.server.task.CleanOldAuditLogs;
 import be.elevenways.hohenheim.server.task.CleanOldProclogs;
 import be.elevenways.hohenheim.server.task.TaskScheduler;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.task.UpdateNodeVersions;
 import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
+import be.elevenways.zenit.auth.server.AuthRegistry;
+import be.elevenways.zenit.auth.server.AuthRequirement;
+import be.elevenways.zenit.auth.server.ZenitAuth;
+import be.elevenways.zenit.auth.server.identity.AutoProvisioningSink;
+import be.elevenways.zenit.auth.server.identity.IdentityProviderRegistry;
+import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
+import be.elevenways.zenit.auth.server.identity.proteus.ProteusIdentityProvider;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 
@@ -42,6 +48,12 @@ public class ServerMain {
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
 
+        // Install zenit-auth (session store, CSRF, middleware, /login + /setup + /account + /admin).
+        // Password login is native; Proteus SSO is added below when configured.
+        ZenitAuth.init(HohenheimDatabase.datasource());
+        installAuthBaselines();
+        registerProteusIfConfigured();
+
         // main() does the HTTP-server side of startup; init() is idempotent.
         ServerZenitRuntime.main(args);
         Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
@@ -70,12 +82,43 @@ public class ServerMain {
         taskScheduler.schedule("UpdateNodeVersions", nodeTask, 60, 60);
 
         // Cleanup tasks: run every 6 hours after a 5-minute initial delay
-        taskScheduler.schedule("CleanExpiredSessions", new CleanExpiredSessions(), 5, 360);
+        // (session expiry is owned by zenit-auth's session store)
         taskScheduler.schedule("CleanOldAuditLogs", new CleanOldAuditLogs(), 5, 360);
         taskScheduler.schedule("CleanOldProclogs", new CleanOldProclogs(), 5, 360);
 
         // Managed-database backups: daily, after a 10-minute initial delay
         taskScheduler.schedule("BackupDatabases", new BackupDatabases(), 10, 1440);
+    }
+
+    // zenit-auth is not default-deny, so each admin area is gated explicitly; everything not
+    // listed (assets, /login, /setup, /api/health) stays public. Public so tests gate identically.
+    public static void installAuthBaselines() {
+        AuthRegistry.registerPublicPrefix("/api/health");
+        for (String prefix : new String[]{
+            "/", "/sites", "/certificates", "/access-lists", "/databases",
+            "/servers", "/notifications", "/settings", "/audit", "/ws"
+        }) {
+            AuthRegistry.baseline(prefix, AuthRequirement.requiresLogin());
+        }
+    }
+
+    // Register the Proteus realm as an SSO option when configured; password login is always available.
+    private static void registerProteusIfConfigured() {
+        if (!Boolean.TRUE.equals(HohenheimSettings.VALUES.getValue(HohenheimSettings.AuthProteus.ENABLED))) {
+            return;
+        }
+        String endpoint = HohenheimSettings.VALUES.getValue(HohenheimSettings.AuthProteus.ENDPOINT);
+        String realmClient = HohenheimSettings.VALUES.getValue(HohenheimSettings.AuthProteus.REALM_CLIENT);
+        String accessKey = HohenheimSettings.VALUES.getValue(HohenheimSettings.AuthProteus.ACCESS_KEY);
+        if (endpoint == null || endpoint.isBlank() || realmClient == null || realmClient.isBlank()
+            || accessKey == null || accessKey.isBlank()) {
+            return;
+        }
+        String authenticator = HohenheimSettings.VALUES.getValue(HohenheimSettings.AuthProteus.AUTHENTICATOR);
+        IdentityProviderRegistry.register(
+            new ProteusIdentityProvider("proteus", "Proteus",
+                new ProteusClient(endpoint, realmClient, accessKey), authenticator, false),
+            AutoProvisioningSink.builder().build());
     }
 
     public static ProxyServer getProxyServer() {

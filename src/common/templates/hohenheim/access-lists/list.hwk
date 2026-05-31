@@ -58,6 +58,7 @@
                                         <pl-button variant={% "ghost" %} size={% "sm" %}>Edit</pl-button>
                                     </a>
                                     <form method="POST" action={% "/access-lists/" + item.get("id") + "/delete" %}>
+                {% csrf() %}
                                         <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Delete</pl-button>
                                     </form>
                                 </div>

@@ -16,6 +16,7 @@
         {% /if %}
 
         <form method="POST" action="/servers/create">
+                {% csrf() %}
             <pl-card class="hh-form-card">
                 <pl-card-header>
                     <pl-card-title>Remote Server</pl-card-title>

@@ -31,6 +31,7 @@
         {% /if %}
 
         <form method="POST" action="/settings">
+                {% csrf() %}
             <div class="hh-settings-grid">
 
                 <pl-card>

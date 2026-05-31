@@ -3,27 +3,38 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hawkeye.testSupport.HawkeyeBrowserTestBase;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.server.AuthHelper;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimHandlers;
+import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.security.csrf.CsrfTokens;
+import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
 import com.microsoft.playwright.options.Cookie;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 
 /**
- * Browser test base for Hohenheim.
+ * Browser test base for Hohenheim. Authenticates via zenit-auth: seeds an admin user and mints
+ * a session, injected as the auth cookie so the (zenit-auth-gated) admin pages are reachable.
  */
 public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
 
     private static ZenitHttpServer zenitServer;
     private static int port;
     protected static String sessionToken;
+    protected static String csrfToken;
 
     @Override
     protected int startServer() throws Exception {
@@ -48,11 +59,12 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         ServerZenitRuntime.init();
         Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
 
+        // Install auth exactly as production does, then seed a logged-in admin for the tests.
+        ZenitAuth.init(HohenheimDatabase.datasource());
+        ServerMain.installAuthBaselines();
         HohenheimHandlers.init();
 
-        // Create a test user so the auth middleware doesn't block
-        AuthHelper.createUser("test@hohenheim.local", "Test Admin", "testpassword123");
-        sessionToken = AuthHelper.createSession(1);
+        sessionToken = seedAuthenticatedAdmin();
 
         zenitServer = ServerZenitRuntime.createServer(0);
         zenitServer.start();
@@ -60,6 +72,25 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
 
         System.out.println("Hohenheim test server started on http://localhost:" + port);
         return port;
+    }
+
+    /** Create an enabled admin user and an active session for it; returns the session id (cookie value). */
+    private static String seedAuthenticatedAdmin() {
+        Row user = AuthModels.users().createEmptyRow();
+        user.set(UserModel.EMAIL, "test@hohenheim.local");
+        user.set(UserModel.DISPLAY_NAME, "Test Admin");
+        user.set(UserModel.ENABLED, true);
+        user.set(UserModel.CREATED_AT, Instant.now());
+        user.set(UserModel.UPDATED_AT, Instant.now());
+        AuthModels.users().save(user);
+        ZenitAuth.markSeeded();   // a user exists, so the setup gate must not redirect
+
+        Session session = Zenit.getSessionStore().create();
+        session.set(AuthKeys.USER_ID, ((Integer) user.get(UserModel.ID)).longValue());
+        csrfToken = ZenitAuth.randomToken();
+        session.set(CsrfTokens.TOKEN, csrfToken);   // so direct-POST tests can send X-Csrf-Token
+        Zenit.getSessionStore().save(session);
+        return session.id();
     }
 
     @Override
@@ -77,9 +108,9 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
 
     @Override
     protected void navigateToApp(String path) {
-        // Set session cookie before navigation so auth middleware allows access
+        // Inject the zenit-auth session cookie before navigation so gated admin pages are reachable.
         page.context().addCookies(List.of(
-            new Cookie("hh_session", sessionToken)
+            new Cookie(AuthCookieSupport.sessionCookieName(), sessionToken)
                 .setDomain("localhost")
                 .setPath("/")
         ));

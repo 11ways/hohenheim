@@ -1,4 +1,5 @@
 package be.elevenways.hohenheim.test;
+import be.elevenways.zenit.auth.server.AuthCookieSupport;
 
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
@@ -33,7 +34,8 @@ class SiteLifecycleTest extends HohenheimTestBase {
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(baseUrl() + path))
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", "hh_session=" + sessionToken)
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .header("X-Csrf-Token", csrfToken)
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .build();
 

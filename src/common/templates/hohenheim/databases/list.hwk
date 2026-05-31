@@ -64,10 +64,12 @@
                                 <div class="hh-table-actions">
                                     {% if item.get("canBackup") == true %}
                                     <form method="POST" action={% "/databases/" + item.get("name") + "/backup" %}>
+                {% csrf() %}
                                         <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Backup</pl-button>
                                     </form>
                                     {% /if %}
                                     <form method="POST" action={% "/databases/" + item.get("name") + "/delete" %}>
+                {% csrf() %}
                                         <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Delete</pl-button>
                                     </form>
                                 </div>

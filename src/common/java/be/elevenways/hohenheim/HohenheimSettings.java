@@ -157,4 +157,31 @@ public class HohenheimSettings {
             .description("Path for domain miss log file (fail2ban)")
             .build();
     }
+
+    // --- Proteus SSO (optional; password login is always available) ---
+    public abstract class AuthProteus {
+        public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("auth_proteus");
+
+        public static final SettingDefinition<Boolean> ENABLED = GROUP.buildSetting("enabled", Boolean.class)
+            .defaultValue(false)
+            .description("Offer Proteus SSO as a login option")
+            .build();
+
+        public static final SettingDefinition<String> ENDPOINT = GROUP.buildSetting("endpoint", String.class)
+            .description("Proteus realm server URL")
+            .build();
+
+        public static final SettingDefinition<String> REALM_CLIENT = GROUP.buildSetting("realm_client", String.class)
+            .description("Proteus realm client slug")
+            .build();
+
+        public static final SettingDefinition<String> ACCESS_KEY = GROUP.buildSetting("access_key", String.class)
+            .description("Proteus realm access key")
+            .build();
+
+        public static final SettingDefinition<String> AUTHENTICATOR = GROUP.buildSetting("authenticator", String.class)
+            .defaultValue("password")
+            .description("Proteus authenticator slug")
+            .build();
+    }
 }

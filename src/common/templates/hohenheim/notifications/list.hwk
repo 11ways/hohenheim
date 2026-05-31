@@ -39,9 +39,11 @@
                             <pl-table-cell>
                                 <div class="hh-table-actions">
                                     <form method="POST" action={% "/notifications/" + item.get("name") + "/test" %}>
+                {% csrf() %}
                                         <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Send Test</pl-button>
                                     </form>
                                     <form method="POST" action={% "/notifications/" + item.get("name") + "/delete" %}>
+                {% csrf() %}
                                         <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Delete</pl-button>
                                     </form>
                                 </div>

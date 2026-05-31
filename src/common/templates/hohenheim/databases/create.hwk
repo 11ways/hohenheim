@@ -17,6 +17,7 @@
         {% /if %}
 
         <form method="POST" action="/databases/create">
+                {% csrf() %}
             <pl-card class="hh-form-card">
                 <pl-card-header>
                     <pl-card-title>Database</pl-card-title>
