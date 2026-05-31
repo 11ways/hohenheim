@@ -4,12 +4,15 @@ import java.security.SecureRandom;
 import java.util.Base64;
 
 /**
- * Credential helpers. Admin authentication is handled by zenit-auth; this only generates
- * strong random secrets (e.g. auto-provisioned managed-database passwords).
+ * Generates strong random secrets (e.g. auto-provisioned managed-database passwords).
+ * Authentication itself is handled by zenit-auth.
  */
-public class AuthHelper {
+public final class Secrets {
 
     private static final SecureRandom RANDOM = new SecureRandom();
+
+    private Secrets() {
+    }
 
     /** A strong random password (URL-safe, no padding) for an auto-provisioned resource. */
     public static String generatePassword() {
