@@ -330,10 +330,10 @@ public class SiteDispatcher implements HttpHandler {
     @Override
     public void handleRequest(HttpServerExchange exchange) throws Exception {
 
-        // --- IP reputation enforcement: reject known-bad IPs early ---
+        // --- IP reputation enforcement: reject known-bad IPs early (plain HTTP; HTTPS is
+        //     rejected earlier still, at the TLS handshake, via SniKeyManager) ---
         String earlyIp = exchange.getSourceAddress().getAddress().getHostAddress();
-        IpReputation rep = ipReputation.get(earlyIp);
-        if (rep != null && rep.misses.get() >= IP_REPUTATION_REJECT_THRESHOLD && rep.hits.get() == 0) {
+        if (isBanned(earlyIp)) {
             exchange.setStatusCode(403);
             exchange.endExchange();
             return;
@@ -900,6 +900,17 @@ public class SiteDispatcher implements HttpHandler {
 
     private String getClientIp(HttpServerExchange exchange) {
         return exchange.getSourceAddress().getAddress().getHostAddress();
+    }
+
+    /**
+     * Whether this source IP is currently reputation-banned: many domain misses (likely a
+     * hostname-scanning bot) and not a single real hit. Used both at the HTTP stage and, for
+     * HTTPS, at the TLS handshake stage (via {@link SniKeyManager}) to drop bad IPs before a
+     * certificate is served.
+     */
+    public boolean isBanned(String ip) {
+        IpReputation rep = ipReputation.get(ip);
+        return rep != null && rep.misses.get() >= IP_REPUTATION_REJECT_THRESHOLD && rep.hits.get() == 0;
     }
 
     private void trackHit(String ip) {

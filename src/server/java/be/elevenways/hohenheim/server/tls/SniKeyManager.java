@@ -6,6 +6,7 @@ import java.security.Principal;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 
 /**
  * SNI-aware key manager that selects certificates based on the hostname
@@ -13,11 +14,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * and to a wrapped X509ExtendedKeyManager for actual key/cert retrieval.
  *
  * Includes a domain-level resolution cache with TTL and negative-result backoff
- * to avoid repeated lookups on the TLS handshake hot path.
+ * to avoid repeated lookups on the TLS handshake hot path. Also enforces IP
+ * reputation at the handshake stage: a banned peer gets no certificate, which
+ * aborts the handshake before any content is served.
  */
 public class SniKeyManager extends X509ExtendedKeyManager {
 
     private final CertificateStore store;
+    private final Predicate<String> bannedIpCheck;
 
     private static final long POSITIVE_CACHE_TTL_MS = 5 * 60 * 1000;
     private static final long NEGATIVE_CACHE_TTL_MS = 30 * 1000;
@@ -28,12 +32,24 @@ public class SniKeyManager extends X509ExtendedKeyManager {
     private final ConcurrentHashMap<String, CachedAlias> aliasCache = new ConcurrentHashMap<>();
 
     public SniKeyManager(CertificateStore store) {
+        this(store, ip -> false);
+    }
+
+    public SniKeyManager(CertificateStore store, Predicate<String> bannedIpCheck) {
         this.store = store;
+        this.bannedIpCheck = bannedIpCheck;
     }
 
     @Override
     public String chooseEngineServerAlias(String keyType, Principal[] issuers, SSLEngine engine) {
         if (engine == null) return fallback(keyType, issuers);
+
+        // IP reputation at the handshake stage: refuse a certificate to a banned peer, aborting
+        // the handshake. The engine carries the peer address Undertow set when accepting it.
+        String peerIp = engine.getPeerHost();
+        if (peerIp != null && bannedIpCheck.test(peerIp)) {
+            return null;
+        }
 
         SSLSession session = engine.getHandshakeSession();
         if (session instanceof ExtendedSSLSession extSession) {
