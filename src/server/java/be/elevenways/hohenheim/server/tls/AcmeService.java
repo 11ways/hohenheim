@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.tls;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -94,7 +95,7 @@ public class AcmeService {
      */
     public int requestCertificate(List<String> hostnames, String niceName) {
         var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
+        var certModel = Models.get(CertificateModel.class);
 
         Row certRow = certModel.createEmptyRow();
         certRow.set(CertificateModel.NICE_NAME, niceName);
@@ -137,7 +138,7 @@ public class AcmeService {
     private void checkRenewals() {
         try {
             var ds = HohenheimDatabase.datasource();
-            var certModel = new CertificateModel(ds);
+            var certModel = Models.get(CertificateModel.class);
 
             Instant cutoff = Instant.now().plus(RENEWAL_THRESHOLD_DAYS, ChronoUnit.DAYS);
             List<Row> expiring = certModel.find()
@@ -303,7 +304,7 @@ public class AcmeService {
 
     private KeyPair loadOrCreateAccountKeyPair() throws Exception {
         var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
+        var certModel = Models.get(CertificateModel.class);
 
         Row accountRow = certModel.find()
             .where(CertificateModel.PROVIDER.eq("acme_account"))

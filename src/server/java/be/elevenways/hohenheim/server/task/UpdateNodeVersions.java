@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.NodeVersionModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.protoblast.common.Blast;
@@ -32,7 +33,7 @@ public class UpdateNodeVersions implements Runnable {
     public void run() {
         List<ParsedVersion> parsed = discoverAll();
 
-        NodeVersionModel model = new NodeVersionModel(HohenheimDatabase.datasource());
+        NodeVersionModel model = Models.get(NodeVersionModel.class);
         Instant now = Instant.now();
         Set<String> seenPaths = new HashSet<>();
 

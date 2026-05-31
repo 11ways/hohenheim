@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.protoblast.common.Blast;
@@ -18,7 +19,7 @@ public class CleanOldProclogs implements Runnable {
     public void run() {
         try {
             var ds = HohenheimDatabase.datasource();
-            var model = new ProclogModel(ds);
+            var model = Models.get(ProclogModel.class);
             Instant cutoff = Instant.now().minus(RETENTION_DAYS, ChronoUnit.DAYS);
 
             long deleted = model.find()

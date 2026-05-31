@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
@@ -26,7 +27,7 @@ public final class SystemUsers {
         if (!(systemUserIdObj instanceof Integer id) || id <= 0) {
             return 0;
         }
-        Row row = new SystemUserModel(HohenheimDatabase.datasource()).findById(id);
+        Row row = Models.get(SystemUserModel.class).findById(id);
         if (row == null) {
             throw new IllegalStateException("Configured system_user_id " + id + " does not exist");
         }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.zenit.server.setting.ServerSettings;
@@ -63,11 +64,11 @@ public class HohenheimHandlers {
 
     public static void init() {
         var ds = HohenheimDatabase.datasource();
-        var siteModel = new SiteModel(ds);
-        var domainModel = new SiteDomainModel(ds);
-        var certModel = new CertificateModel(ds);
-        var auditModel = new AuditLogModel(ds);
-        var accessListModel = new AccessListModel(ds);
+        var siteModel = Models.get(SiteModel.class);
+        var domainModel = Models.get(SiteDomainModel.class);
+        var certModel = Models.get(CertificateModel.class);
+        var auditModel = Models.get(AuditLogModel.class);
+        var accessListModel = Models.get(AccessListModel.class);
 
         initTestEndpoints();
         initDashboard(siteModel, certModel, auditModel);
@@ -763,7 +764,7 @@ public class HohenheimHandlers {
             if (certId < 0) {
                 // Lookup the specific cert row to get the error message
                 var ds2 = HohenheimDatabase.datasource();
-                var certModel2 = new CertificateModel(ds2);
+                var certModel2 = Models.get(CertificateModel.class);
                 // requestCertificate creates a row even on failure -- find it by provider+status
                 Row failed = certModel2.find()
                     .where(CertificateModel.STATUS.eq("error"))
@@ -1208,7 +1209,7 @@ public class HohenheimHandlers {
 
         // Build certificate list for dropdown
         var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
+        var certModel = Models.get(CertificateModel.class);
         List<Row> certRows = certModel.find().all();
         certRows.removeIf(r -> "acme_account".equals(r.get(CertificateModel.PROVIDER)));
         List<Map<String, Object>> certs = new ArrayList<>();
@@ -1819,7 +1820,7 @@ public class HohenheimHandlers {
     }
 
     private static List<Map<String, Object>> getSystemUserOptions() {
-        var model = new SystemUserModel(HohenheimDatabase.datasource());
+        var model = Models.get(SystemUserModel.class);
         List<Map<String, Object>> options = new ArrayList<>();
         for (Row row : model.findActive()) {
             Map<String, Object> option = new HashMap<>();
@@ -1833,7 +1834,7 @@ public class HohenheimHandlers {
     }
 
     private static List<Map<String, Object>> getNodeVersionOptions() {
-        var model = new NodeVersionModel(HohenheimDatabase.datasource());
+        var model = Models.get(NodeVersionModel.class);
         List<Map<String, Object>> options = new ArrayList<>();
         for (Row row : model.findActive()) {
             Map<String, Object> option = new HashMap<>();

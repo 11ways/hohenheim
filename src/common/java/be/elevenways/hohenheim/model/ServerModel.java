@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -24,11 +23,6 @@ public class ServerModel extends Model {
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
-    private final Datasource datasource;
-
-    public ServerModel(Datasource datasource) {
-        this.datasource = datasource;
-    }
 
     /** The server with this unique name, or null if none. */
     public Row findByName(String name) {
@@ -49,7 +43,4 @@ public class ServerModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
-
-    @Override
-    protected Datasource getDatasource() { return this.datasource; }
 }

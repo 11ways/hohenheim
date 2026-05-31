@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -55,7 +56,7 @@ class DatabaseAdminTest extends HohenheimTestBase {
     void detailPageShowsConnectionInfo() {
         // Insert a record directly (no real container) so the render test stays fast; the detail
         // handler's live-status probe is best-effort and resolves to "stopped" without one.
-        DatabaseModel model = new DatabaseModel(HohenheimDatabase.datasource());
+        DatabaseModel model = Models.get(DatabaseModel.class);
         String name = "detailtest";
         Row row = model.createEmptyRow();
         row.set(DatabaseModel.NAME, name);

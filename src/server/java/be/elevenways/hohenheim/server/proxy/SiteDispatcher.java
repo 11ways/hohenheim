@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -249,9 +250,9 @@ public class SiteDispatcher implements HttpHandler {
      */
     public void reloadRoutes() {
         var ds = HohenheimDatabase.datasource();
-        var siteModel = new SiteModel(ds);
-        var domainModel = new SiteDomainModel(ds);
-        var accessListModel = new AccessListModel(ds);
+        var siteModel = Models.get(SiteModel.class);
+        var domainModel = Models.get(SiteDomainModel.class);
+        var accessListModel = Models.get(AccessListModel.class);
 
         // Build new route maps first, then swap atomically
         Map<String, RouteEntry> newExact = new HashMap<>();

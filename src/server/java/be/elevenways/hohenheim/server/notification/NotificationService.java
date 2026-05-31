@@ -1,11 +1,12 @@
 package be.elevenways.hohenheim.server.notification;
 
 import be.elevenways.hohenheim.model.NotificationChannelModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -25,7 +26,7 @@ import java.util.Map;
  * @author  Jelle De Loecker
  * @since   0.1.0
  */
-public class NotificationService {
+public class NotificationService extends DatasourceScoped {
 
     public static final String KIND_WEBHOOK = "webhook";
     public static final String FORMAT_SLACK = "slack";
@@ -36,42 +37,47 @@ public class NotificationService {
         .connectTimeout(Duration.ofSeconds(10)).build();
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(20);
 
-    private final NotificationChannelModel model;
-
     public NotificationService() {
-        this(HohenheimDatabase.datasource());
+        super(null);
     }
 
     public NotificationService(Datasource datasource) {
-        this.model = new NotificationChannelModel(datasource);
+        super(datasource);
+    }
+
+    private static NotificationChannelModel model() {
+        return Models.get(NotificationChannelModel.class);
     }
 
     /** All persisted channels (admin list). */
     public List<Row> list() {
-        return model.find().all();
+        return query(() -> model().find().all());
     }
 
     /** Register (or update) a channel. */
     public void add(String name, String format, String url) {
-        Row row = model.findByName(name);
-        if (row == null) {
-            row = model.createEmptyRow();
-            row.set(NotificationChannelModel.NAME, name);
-        }
-        row.set(NotificationChannelModel.KIND, KIND_WEBHOOK);
-        row.set(NotificationChannelModel.FORMAT, format);
-        row.set(NotificationChannelModel.URL, url);
-        model.save(row);
+        exec(() -> {
+            NotificationChannelModel model = model();
+            Row row = model.findByName(name);
+            if (row == null) {
+                row = model.createEmptyRow();
+                row.set(NotificationChannelModel.NAME, name);
+            }
+            row.set(NotificationChannelModel.KIND, KIND_WEBHOOK);
+            row.set(NotificationChannelModel.FORMAT, format);
+            row.set(NotificationChannelModel.URL, url);
+            model.save(row);
+        });
     }
 
     public void remove(String name) {
-        model.find().where(NotificationChannelModel.NAME.eq(name)).delete();
+        exec(() -> model().find().where(NotificationChannelModel.NAME.eq(name)).delete());
     }
 
     /** Send to every channel best-effort; returns the number of channels successfully delivered to. */
     public int send(String subject, String message) {
         int delivered = 0;
-        for (Row row : model.find().all()) {
+        for (Row row : query(() -> model().find().all())) {
             if (sendOne(row, subject, message)) {
                 delivered++;
             }
@@ -81,7 +87,7 @@ public class NotificationService {
 
     /** Send to a single channel by name; returns true if delivered (HTTP 2xx). */
     public boolean sendTo(String name, String subject, String message) {
-        Row row = model.findByName(name);
+        Row row = query(() -> model().findByName(name));
         return row != null && sendOne(row, subject, message);
     }
 

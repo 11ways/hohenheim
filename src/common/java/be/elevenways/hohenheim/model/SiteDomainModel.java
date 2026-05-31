@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -32,11 +31,6 @@ public class SiteDomainModel extends Model {
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
-    private final Datasource datasource;
-
-    public SiteDomainModel(Datasource datasource) {
-        this.datasource = datasource;
-    }
 
     public List<Row> findBySiteId(int siteId) {
         return find()
@@ -64,7 +58,4 @@ public class SiteDomainModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
-
-    @Override
-    protected Datasource getDatasource() { return this.datasource; }
 }

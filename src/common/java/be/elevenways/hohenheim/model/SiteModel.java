@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.model;
 import be.elevenways.hohenheim.sitetype.SiteTypeRegistry;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -52,11 +51,6 @@ public class SiteModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
 
-    private final Datasource datasource;
-
-    public SiteModel(Datasource datasource) {
-        this.datasource = datasource;
-    }
 
     public List<Row> findEnabled() {
         return find()
@@ -87,7 +81,4 @@ public class SiteModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
-
-    @Override
-    protected Datasource getDatasource() { return this.datasource; }
 }

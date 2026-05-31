@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -30,11 +29,6 @@ public class NodeVersionModel extends Model {
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
-    private final Datasource datasource;
-
-    public NodeVersionModel(Datasource datasource) {
-        this.datasource = datasource;
-    }
 
     /**
      * All non-obsolete node versions, newest first (lexicographic on version),
@@ -61,7 +55,4 @@ public class NodeVersionModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
-
-    @Override
-    protected Datasource getDatasource() { return this.datasource; }
 }
