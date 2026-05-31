@@ -149,7 +149,7 @@ public class ProxyServer {
 
         try {
             SSLContext sslContext = SSLContext.getInstance("TLS");
-            SniKeyManager sniKeyManager = new SniKeyManager(certificateStore);
+            SniKeyManager sniKeyManager = new SniKeyManager(certificateStore, dispatcher::isBanned);
             sslContext.init(new KeyManager[]{sniKeyManager}, null, null);
 
             Undertow.Builder builder = Undertow.builder()
