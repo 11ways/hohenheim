@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.process;
 import be.elevenways.protoblast.common.Blast;
 
 import java.io.*;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
@@ -40,7 +41,7 @@ public class IpcChannel implements AutoCloseable {
     private Consumer<Map<String, Object>> messageHandler;
 
     public IpcChannel() throws IOException {
-        this.serverSocket = new ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress());
+        this.serverSocket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
         this.port = serverSocket.getLocalPort();
     }
 
