@@ -83,10 +83,12 @@
         <div class="hh-form-actions">
             {% if canBackup == true %}
             <form method="POST" action={% "/databases/" + name + "/backup" %}>
+                {% csrf() %}
                 <pl-button variant={% "outline" %} type={% "submit" %}>Download Backup</pl-button>
             </form>
             {% /if %}
             <form method="POST" action={% "/databases/" + name + "/delete" %}>
+                {% csrf() %}
                 <pl-button variant={% "destructive" %} type={% "submit" %}>Delete</pl-button>
             </form>
         </div>

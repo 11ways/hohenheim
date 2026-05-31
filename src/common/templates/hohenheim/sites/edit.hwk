@@ -29,6 +29,7 @@
             </pl-card-header>
             <pl-card-content>
                 <form method="POST" action={% "/sites/" + siteId %}>
+                {% csrf() %}
                     <div class="hh-form-stack">
 
                         <div class="hh-form-group">
@@ -160,6 +161,7 @@
                             </pl-table-cell>
                             <pl-table-cell>
                                 <form method="POST" action={% "/sites/" + site.get("id") + "/domains/" + domain.get("id") + "/delete" %}>
+                {% csrf() %}
                                     <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Remove</pl-button>
                                 </form>
                             </pl-table-cell>
@@ -174,6 +176,7 @@
                 </pl-table>
 
                 <form method="POST" action={% "/sites/" + site.get("id") + "/domains" %} class="hh-add-domain-form">
+                {% csrf() %}
                     <div class="hh-form-row">
                         <div class="hh-form-group hh-form-group--grow">
                             <pl-input type={% "text" %} name={% "hostname" %} placeholder={% "example.com" %} required={% true %}></pl-input>
@@ -231,11 +234,13 @@
                             <pl-table-cell>
                                 <div class="hh-form-row">
                                     <form method="POST" action={% "/sites/" + site.get("id") + "/processes/" + proc.get("pid") + "/isolate" %}>
+                {% csrf() %}
                                         <pl-button variant={% "outline" %} size={% "sm" %} type={% "submit" %}>
                                             {% if proc.get("isolated") == true %}Unisolate{% else %}Isolate{% /if %}
                                         </pl-button>
                                     </form>
                                     <form method="POST" action={% "/sites/" + site.get("id") + "/processes/" + proc.get("pid") + "/kill" %}>
+                {% csrf() %}
                                         <pl-button variant={% "destructive" %} size={% "sm" %} type={% "submit" %}>Kill</pl-button>
                                     </form>
                                 </div>
@@ -252,6 +257,7 @@
 
                 <div class="hh-form-actions">
                     <form method="POST" action={% "/sites/" + site.get("id") + "/processes/start" %}>
+                {% csrf() %}
                         <pl-button variant={% "outline" %} type={% "submit" %}>Start Process</pl-button>
                     </form>
                 </div>
@@ -286,6 +292,7 @@
                         <p class="hh-danger-description">Create a copy with the same settings and domains (disabled by default).</p>
                     </div>
                     <form method="POST" action={% "/sites/" + site.get("id") + "/clone" %}>
+                {% csrf() %}
                         <pl-button variant={% "outline" %} type={% "submit" %}>Clone Site</pl-button>
                     </form>
                 </div>
@@ -304,6 +311,7 @@
                             <p class="hh-danger-description">This will soft-delete the site and remove it from the proxy.</p>
                         </div>
                         <form method="POST" action={% "/sites/" + site.get("id") + "/delete" %}>
+                {% csrf() %}
                             <pl-button variant={% "destructive" %} type={% "submit" %}>Delete Site</pl-button>
                         </form>
                     </div>

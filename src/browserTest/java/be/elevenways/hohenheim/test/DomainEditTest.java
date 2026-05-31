@@ -1,4 +1,5 @@
 package be.elevenways.hohenheim.test;
+import be.elevenways.zenit.auth.server.AuthCookieSupport;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -34,7 +35,8 @@ class DomainEditTest extends HohenheimTestBase {
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(baseUrl() + path))
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", "hh_session=" + sessionToken)
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .header("X-Csrf-Token", csrfToken)
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .build();
 
@@ -48,7 +50,8 @@ class DomainEditTest extends HohenheimTestBase {
 
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(baseUrl() + path))
-            .header("Cookie", "hh_session=" + sessionToken)
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .header("X-Csrf-Token", csrfToken)
             .GET()
             .build();
 

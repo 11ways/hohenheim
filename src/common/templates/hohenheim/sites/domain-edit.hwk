@@ -36,6 +36,7 @@
         {% /if %}
 
         <form method="POST" action={% "/sites/" + siteId + "/domains/" + domainId %}>
+                {% csrf() %}
 
             <pl-card class="hh-form-card">
                 <pl-card-header>

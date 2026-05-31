@@ -146,31 +146,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("audit").build())
         .build();
 
-    // --- Auth ---
-    public static final Endpoint<Object> LOGIN = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "login"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("login").build())
-        .build();
-
-    public static final Endpoint<Object> LOGIN_POST = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "login_post"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("login").build())
-        .build();
-
-    public static final Endpoint<Object> LOGOUT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "logout"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("logout").build())
-        .build();
-
-    public static final Endpoint<Object> SETUP = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "setup"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("setup").build())
-        .build();
-
-    public static final Endpoint<Object> SETUP_POST = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "setup_post"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("setup").build())
-        .build();
+    // Auth (/login, /setup, /logout, /account, /admin) is owned by zenit-auth.
 
     // --- Access Lists ---
     public static final ParameterDefinition<Integer> ACCESS_LIST_ID = ParameterDefinition.builder(Integer.class)

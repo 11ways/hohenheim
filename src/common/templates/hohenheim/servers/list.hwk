@@ -50,6 +50,7 @@
                             <pl-table-cell>
                                 {% if item.get("removable") == true %}
                                 <form method="POST" action={% "/servers/" + item.get("name") + "/delete" %}>
+                {% csrf() %}
                                     <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Remove</pl-button>
                                 </form>
                                 {% /if %}

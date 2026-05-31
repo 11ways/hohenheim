@@ -74,6 +74,7 @@
                                         <pl-button variant={% "ghost" %} size={% "sm" %}>Download</pl-button>
                                     </a>
                                     <form method="POST" action={% "/certificates/" + cert.get("id") + "/delete" %}>
+                {% csrf() %}
                                         <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Delete</pl-button>
                                     </form>
                                 </div>

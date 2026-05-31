@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
-import be.elevenways.hohenheim.model.UserModel;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -25,7 +24,9 @@ import be.elevenways.hohenheim.server.process.ProcessTerminalHandler;
 import be.elevenways.hohenheim.server.stats.DashboardWebSocketHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -33,7 +34,6 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.JsonResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.server.http.HttpConduit;
-import be.elevenways.zenit.server.http.Middleware;
 import be.elevenways.zenit.server.http.RedirectResult;
 
 import org.bouncycastle.openssl.PEMParser;
@@ -69,7 +69,6 @@ public class HohenheimHandlers {
         var auditModel = new AuditLogModel(ds);
         var accessListModel = new AccessListModel(ds);
 
-        initAuth();
         initTestEndpoints();
         initDashboard(siteModel, certModel, auditModel);
         initSites(siteModel, domainModel, auditModel);
@@ -124,160 +123,6 @@ public class HohenheimHandlers {
             status.put("httpState", proxy != null ? proxy.getHttpState().name() : "UNKNOWN");
             status.put("httpsState", proxy != null ? proxy.getHttpsState().name() : "UNKNOWN");
             return new JsonResult<>(status);
-        });
-    }
-
-    // -----------------------------------------------------------------------
-    // Auth
-    // -----------------------------------------------------------------------
-
-    private static void initAuth() {
-        // Auth middleware: protect all routes except /login, /setup, and static assets
-        Middleware authMiddleware = new Middleware(
-            Identifier.of("hohenheim", "auth"),
-            "/",
-            (middlePath, conduit) -> {
-                String path = conduit.getPath();
-
-                // Allow login, setup, and asset paths through
-                if (path.equals("/login") || path.equals("/setup")
-                    || path.startsWith("/api/health")
-                    || path.endsWith(".js") || path.endsWith(".css")
-                    || path.endsWith(".ico")) {
-                    return null;
-                }
-
-                // If no users exist, redirect to setup
-                if (!AuthHelper.hasAnyUsers()) {
-                    return conduit.hardRedirect("/setup");
-                }
-
-                // Check session
-                Row user = AuthHelper.getCurrentUser(conduit);
-                if (user == null) {
-                    return conduit.hardRedirect("/login");
-                }
-
-                return null; // Authenticated, proceed to endpoint
-            }
-        );
-        authMiddleware.setWeight(50);
-
-        // Login page (GET)
-        HohenheimEndpoints.LOGIN.setHandler(conduit -> {
-            Row user = AuthHelper.getCurrentUser(conduit);
-            if (user != null) {
-                return conduit.hardRedirect("/");
-            }
-
-            return renderUntyped(
-                Identifier.of("hohenheim", "hohenheim/login"),
-                Map.of("error", "")
-            );
-        });
-
-        // Login (POST)
-        HohenheimEndpoints.LOGIN_POST.setHandler(conduit -> {
-            HttpConduit http = (HttpConduit) conduit;
-            Map<String, String> form = http.getFormData().toStringMap();
-
-            String email = form.getOrDefault("email", "").trim();
-            String password = form.getOrDefault("password", "");
-
-            if (email.isEmpty() || password.isEmpty()) {
-                return renderUntyped(
-                    Identifier.of("hohenheim", "hohenheim/login"),
-                    Map.of("error", "Email and password are required")
-                );
-            }
-
-            var ds = HohenheimDatabase.datasource();
-            var userModel = new UserModel(ds);
-            Row user = userModel.find().where(UserModel.EMAIL.eq(email)).first();
-
-            if (user == null || !AuthHelper.verifyPassword(password, user.get(UserModel.PASSWORD_HASH))) {
-                return renderUntyped(
-                    Identifier.of("hohenheim", "hohenheim/login"),
-                    Map.of("error", "Invalid email or password")
-                );
-            }
-
-            boolean isDisabled = Boolean.TRUE.equals(user.get(UserModel.IS_DISABLED));
-            if (isDisabled) {
-                return renderUntyped(
-                    Identifier.of("hohenheim", "hohenheim/login"),
-                    Map.of("error", "Account is disabled")
-                );
-            }
-
-            int userId = user.get(UserModel.ID);
-            String token = AuthHelper.createSession(userId);
-            AuthHelper.setSessionCookie(conduit, token);
-
-            return conduit.hardRedirect("/");
-        });
-
-        // Logout (POST)
-        HohenheimEndpoints.LOGOUT.setHandler(conduit -> {
-            String token = AuthHelper.getCookieValue(conduit, "hh_session");
-            AuthHelper.deleteSession(token);
-            AuthHelper.clearSessionCookie(conduit);
-            return conduit.hardRedirect("/login");
-        });
-
-        // Setup page (GET) - first user creation
-        HohenheimEndpoints.SETUP.setHandler(conduit -> {
-            if (AuthHelper.hasAnyUsers()) {
-                return conduit.hardRedirect("/login");
-            }
-
-            return renderUntyped(
-                Identifier.of("hohenheim", "hohenheim/setup"),
-                Map.of("error", "")
-            );
-        });
-
-        // Setup (POST) - create first user
-        HohenheimEndpoints.SETUP_POST.setHandler(conduit -> {
-            if (AuthHelper.hasAnyUsers()) {
-                return conduit.hardRedirect("/login");
-            }
-
-            HttpConduit http = (HttpConduit) conduit;
-            Map<String, String> form = http.getFormData().toStringMap();
-
-            String email = form.getOrDefault("email", "").trim();
-            String name = form.getOrDefault("name", "").trim();
-            String password = form.getOrDefault("password", "");
-            String confirm = form.getOrDefault("confirm_password", "");
-
-            if (email.isEmpty() || name.isEmpty() || password.isEmpty()) {
-                return renderUntyped(
-                    Identifier.of("hohenheim", "hohenheim/setup"),
-                    Map.of("error", "All fields are required")
-                );
-            }
-
-            if (!password.equals(confirm)) {
-                return renderUntyped(
-                    Identifier.of("hohenheim", "hohenheim/setup"),
-                    Map.of("error", "Passwords do not match")
-                );
-            }
-
-            if (password.length() < 8) {
-                return renderUntyped(
-                    Identifier.of("hohenheim", "hohenheim/setup"),
-                    Map.of("error", "Password must be at least 8 characters")
-                );
-            }
-
-            Row user = AuthHelper.createUser(email, name, password);
-            int userId = user.get(UserModel.ID);
-            String token = AuthHelper.createSession(userId);
-            AuthHelper.setSessionCookie(conduit, token);
-
-            return conduit.hardRedirect("/");
         });
     }
 
@@ -1822,11 +1667,11 @@ public class HohenheimHandlers {
 
     private static void audit(AuditLogModel model, Conduit conduit,
                               String action, String resourceType, Object resourceId, String resourceName) {
-        Row user = AuthHelper.getCurrentUser(conduit);
+        Principal principal = conduit.getAttribute(ConduitAttributes.PRINCIPAL);
         Row row = model.createEmptyRow();
-        if (user != null) {
-            row.set(AuditLogModel.USER_ID, String.valueOf(user.get(UserModel.ID)));
-            row.set(AuditLogModel.USER_EMAIL, user.get(UserModel.EMAIL));
+        if (principal != null && !principal.isAnonymous()) {
+            row.set(AuditLogModel.USER_ID, String.valueOf(principal.id()));
+            row.set(AuditLogModel.USER_EMAIL, principal.displayName());
         }
         row.set(AuditLogModel.ACTION, action);
         row.set(AuditLogModel.RESOURCE_TYPE, resourceType);

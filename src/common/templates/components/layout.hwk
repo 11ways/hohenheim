@@ -24,6 +24,7 @@
             </ul>
             <div class="hh-sidebar__footer">
                 <form method="POST" action="/logout">
+                {% csrf() %}
                     <pl-button variant={% "ghost" %} size={% "sm" %} type={% "submit" %}>Sign Out</pl-button>
                 </form>
             </div>

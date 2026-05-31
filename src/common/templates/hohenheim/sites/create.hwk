@@ -26,6 +26,7 @@
             </pl-card-header>
             <pl-card-content>
                 <form method="POST" action="/sites/create">
+                {% csrf() %}
                     <div class="hh-form-stack">
 
                         <div class="hh-form-group">

@@ -16,6 +16,7 @@
         {% /if %}
 
         <form method="POST" action="/access-lists/create">
+                {% csrf() %}
             <pl-card class="hh-form-card">
                 <pl-card-header>
                     <pl-card-title>Access List</pl-card-title>

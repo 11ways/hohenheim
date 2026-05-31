@@ -22,6 +22,7 @@
             </pl-card-header>
             <pl-card-content>
                 <form method="POST" action="/certificates/request">
+                {% csrf() %}
                     <div class="hh-form-stack">
                         <div class="hh-form-group">
                             <pl-label target="nice-name">Certificate Name (optional)</pl-label>

@@ -1,96 +1,50 @@
 package be.elevenways.hohenheim.test;
 
-import com.microsoft.playwright.Page;
-import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.*;
-import static org.assertj.core.api.Assertions.*;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Tests the authentication flow: login, logout, session protection, setup wizard.
+ * Auth integration: the admin tree is gated by zenit-auth (anonymous -> /login), the login page
+ * offers password login, an authenticated session reaches the dashboard, and assets stay public.
+ * The login/logout/setup mechanics themselves are owned and tested by zenit-auth.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class AuthFlowTest extends HohenheimTestBase {
 
+    private HttpResponse<String> get(String path, boolean followRedirects) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(followRedirects ? HttpClient.Redirect.NORMAL : HttpClient.Redirect.NEVER)
+            .build();
+        return client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + path)).GET().build(),
+            HttpResponse.BodyHandlers.ofString());
+    }
+
     @Test
     @Order(1)
-    void unauthenticatedRequestRedirectsToLogin() {
-        // Navigate without the session cookie
-        page.context().clearCookies();
-        page.navigate("http://localhost:" + getServerPort() + "/");
-        page.waitForURL("**/login");
-        assertThat(page.url()).contains("/login");
+    void unauthenticatedRequestRedirectsToLogin() throws Exception {
+        HttpResponse<String> response = get("/", false);   // no session cookie
+        assertThat(response.statusCode()).isEqualTo(302);
+        assertThat(response.headers().firstValue("Location")).hasValue("/login");
     }
 
     @Test
     @Order(2)
-    void loginPageRendersForm() {
-        page.context().clearCookies();
-        page.navigate("http://localhost:" + getServerPort() + "/login");
-        waitForHydration();
-        assertThat(page.locator("form[action='/login']").count()).isEqualTo(1);
-        assertThat(page.locator("pl-input").count()).isGreaterThanOrEqualTo(2);
-        assertThat(page.content()).contains("Sign In");
+    void loginPageOffersPasswordLogin() throws Exception {
+        HttpResponse<String> response = get("/login", false);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("action=\"/login\"");
+        assertThat(response.body()).contains("name=\"password\"");
     }
 
     @Test
     @Order(3)
-    void loginFormSubmitsCredentialsFromBrowser() {
-        page.context().clearCookies();
-        page.navigate("http://localhost:" + getServerPort() + "/login");
-        waitForHydration();
-
-        page.locator("pl-input#email input").fill("test@hohenheim.local");
-        page.locator("pl-input#password input").fill("testpassword123");
-        page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Sign In")).click();
-
-        page.waitForURL("http://localhost:" + getServerPort() + "/");
-        assertThat(page.url()).isEqualTo("http://localhost:" + getServerPort() + "/");
-    }
-
-    @Test
-    @Order(4)
-    void loginWithInvalidCredentialsShowsError() throws Exception {
-        java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
-            .followRedirects(java.net.http.HttpClient.Redirect.NEVER)
-            .build();
-
-        java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-            .uri(java.net.URI.create("http://localhost:" + getServerPort() + "/login"))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .POST(java.net.http.HttpRequest.BodyPublishers.ofString("email=wrong@example.com&password=wrong"))
-            .build();
-
-        java.net.http.HttpResponse<String> response = client.send(request,
-            java.net.http.HttpResponse.BodyHandlers.ofString());
-
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("Invalid email or password");
-    }
-
-    @Test
-    @Order(5)
-    void loginWithValidCredentialsRedirects() throws Exception {
-        java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
-            .followRedirects(java.net.http.HttpClient.Redirect.NEVER)
-            .build();
-
-        java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-            .uri(java.net.URI.create("http://localhost:" + getServerPort() + "/login"))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(
-                "email=test@hohenheim.local&password=testpassword123"))
-            .build();
-
-        java.net.http.HttpResponse<String> response = client.send(request,
-            java.net.http.HttpResponse.BodyHandlers.ofString());
-
-        assertThat(response.statusCode()).isEqualTo(302);
-        assertThat(response.headers().firstValue("Location")).hasValue("/");
-        assertThat(response.headers().allValues("Set-Cookie").toString()).contains("hh_session");
-    }
-
-    @Test
-    @Order(6)
     void authenticatedDashboardAccessWorks() {
         navigateToApp("/");
         waitForHydration();
@@ -98,39 +52,9 @@ class AuthFlowTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(7)
-    void logoutRedirectsToLogin() throws Exception {
-        java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
-            .followRedirects(java.net.http.HttpClient.Redirect.NEVER)
-            .build();
-
-        java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-            .uri(java.net.URI.create("http://localhost:" + getServerPort() + "/logout"))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", "hh_session=" + sessionToken)
-            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(""))
-            .build();
-
-        java.net.http.HttpResponse<String> response = client.send(request,
-            java.net.http.HttpResponse.BodyHandlers.ofString());
-
-        assertThat(response.statusCode()).isEqualTo(302);
-        assertThat(response.headers().firstValue("Location")).hasValue("/login");
-    }
-
-    @Test
-    @Order(8)
+    @Order(4)
     void staticAssetsAreAccessibleWithoutAuth() throws Exception {
-        java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-
-        java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-            .uri(java.net.URI.create("http://localhost:" + getServerPort() + "/hohenheim.css"))
-            .GET()
-            .build();
-
-        java.net.http.HttpResponse<String> response = client.send(request,
-            java.net.http.HttpResponse.BodyHandlers.ofString());
-
+        HttpResponse<String> response = get("/hohenheim.css", true);
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("hh-sidebar");
     }
