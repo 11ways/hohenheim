@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -25,11 +24,6 @@ public class AuditLogModel extends Model {
     public static final SchemaField METADATA = SCHEMA.addField(SchemaField.builder("metadata").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
 
-    private final Datasource datasource;
-
-    public AuditLogModel(Datasource datasource) {
-        this.datasource = datasource;
-    }
 
     public List<Row> findRecent(int limit) {
         return find()
@@ -60,7 +54,4 @@ public class AuditLogModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
-
-    @Override
-    protected Datasource getDatasource() { return this.datasource; }
 }

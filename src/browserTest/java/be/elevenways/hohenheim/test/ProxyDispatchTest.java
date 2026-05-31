@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -51,6 +52,7 @@ class ProxyDispatchTest {
         SiteTypes.register();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
+        TestModels.registerAll();
         ServerZenitRuntime.init();
         Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
     }
@@ -66,8 +68,8 @@ class ProxyDispatchTest {
     private static void setupSiteWithDomain(String hostname, Map<String, Object> settings,
                                              Map<String, Object> domainOverrides) {
         var ds = HohenheimDatabase.datasource();
-        var siteModel = new SiteModel(ds);
-        var domainModel = new SiteDomainModel(ds);
+        var siteModel = Models.get(SiteModel.class);
+        var domainModel = Models.get(SiteDomainModel.class);
 
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Test Site " + hostname);
@@ -176,7 +178,7 @@ class ProxyDispatchTest {
 
         // RFC 6797 §7.2: HSTS is emitted only over HTTPS, so this exercises a real TLS
         // connection. A cert must exist for the HTTPS listener to start; SNI resolves it.
-        var certModel = new CertificateModel(HohenheimDatabase.datasource());
+        var certModel = Models.get(CertificateModel.class);
         KeyPair keyPair = TlsCertificateTest.generateKeyPair();
         X509Certificate cert = TlsCertificateTest.generateSelfSignedCert(keyPair, "hsts.test");
         Row certRow = certModel.createEmptyRow();
@@ -335,7 +337,7 @@ class ProxyDispatchTest {
         // Verify that extractTypeSettings correctly handles unchecked booleans
         // by creating a site, then checking its settings persist correctly
         var ds = HohenheimDatabase.datasource();
-        var siteModel = new SiteModel(ds);
+        var siteModel = Models.get(SiteModel.class);
 
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Toggle Test");

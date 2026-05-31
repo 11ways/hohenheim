@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -45,6 +46,7 @@ class TlsCertificateTest {
         SiteTypes.register();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
+        TestModels.registerAll();
         ServerZenitRuntime.init();
         Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
     }
@@ -63,7 +65,7 @@ class TlsCertificateTest {
     void certificateStoreLoadsFromDatabase() throws Exception {
         // Insert a self-signed cert into the database
         var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
+        var certModel = Models.get(CertificateModel.class);
 
         KeyPair keyPair = generateKeyPair();
         X509Certificate cert = generateSelfSignedCert(keyPair, "test.example.com");
@@ -88,7 +90,7 @@ class TlsCertificateTest {
     @Order(3)
     void sniResolvesExactHostname() throws Exception {
         var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
+        var certModel = Models.get(CertificateModel.class);
 
         // The cert from the previous test should still be in DB
         CertificateStore store = new CertificateStore();
@@ -140,7 +142,7 @@ class TlsCertificateTest {
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
+        var certModel = Models.get(CertificateModel.class);
 
         KeyPair keyPair = generateKeyPair();
         X509Certificate cert = generateSelfSignedCert(keyPair, "ssl.example.com");
@@ -175,7 +177,7 @@ class TlsCertificateTest {
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
+        var certModel = Models.get(CertificateModel.class);
 
         Row row = certModel.createEmptyRow();
         row.set(CertificateModel.NICE_NAME, "Lifecycle Test");
@@ -291,7 +293,7 @@ class TlsCertificateTest {
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
+        var certModel = Models.get(CertificateModel.class);
 
         KeyPair kp = generateKeyPair();
         X509Certificate cert = generateWildcardCert(kp, "*.wildcard.test");
@@ -328,7 +330,7 @@ class TlsCertificateTest {
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
+        var certModel = Models.get(CertificateModel.class);
 
         KeyPair kp = generateKeyPair();
         X509Certificate cert = generateSelfSignedCert(kp, "remove.test");
@@ -374,7 +376,7 @@ class TlsCertificateTest {
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
+        var certModel = Models.get(CertificateModel.class);
 
         // Create an ACME account key row (should be excluded from TLS store)
         Row accountRow = certModel.createEmptyRow();
@@ -402,9 +404,9 @@ class TlsCertificateTest {
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
-        var siteModel = new SiteModel(ds);
-        var domainModel = new SiteDomainModel(ds);
-        var certModel = new CertificateModel(ds);
+        var siteModel = Models.get(SiteModel.class);
+        var domainModel = Models.get(SiteDomainModel.class);
+        var certModel = Models.get(CertificateModel.class);
 
         KeyPair keyPair = generateKeyPair();
         X509Certificate cert = generateSelfSignedCert(keyPair, "force-ssl.test");
@@ -482,7 +484,7 @@ class TlsCertificateTest {
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
+        var certModel = Models.get(CertificateModel.class);
 
         KeyPair kp = generateKeyPair();
         X509Certificate cert = generateSelfSignedCert(kp, "localhost");
@@ -545,9 +547,9 @@ class TlsCertificateTest {
         HohenheimDatabase.init();
 
         var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
-        var siteModel = new SiteModel(ds);
-        var domainModel = new SiteDomainModel(ds);
+        var certModel = Models.get(CertificateModel.class);
+        var siteModel = Models.get(SiteModel.class);
+        var domainModel = Models.get(SiteDomainModel.class);
 
         KeyPair firstKeyPair = generateKeyPair();
         X509Certificate firstCert = generateSelfSignedCert(firstKeyPair, "preferred.test");

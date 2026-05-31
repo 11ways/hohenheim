@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +18,7 @@ import java.util.Map;
  * @author  Jelle De Loecker
  * @since   0.1.0
  */
-public class ServerService {
+public class ServerService extends DatasourceScoped {
 
     public static final String LOCAL = "local";
     public static final String MODE_LOCAL = "local";
@@ -26,24 +27,29 @@ public class ServerService {
     // Short deadline for the list's reachability probe so a down remote can't hang the page long.
     private static final long PING_TIMEOUT_MS = 8000;
 
-    private final ServerModel model;
-
     public ServerService() {
-        this(HohenheimDatabase.datasource());
+        super(null);
     }
 
     public ServerService(Datasource datasource) {
-        this.model = new ServerModel(datasource);
+        super(datasource);
+    }
+
+    private static ServerModel model() {
+        return Models.get(ServerModel.class);
     }
 
     /** Ensure the implicit local host has a record (idempotent). */
     public void ensureLocal() {
-        if (model.findByName(LOCAL) == null) {
-            Row row = model.createEmptyRow();
-            row.set(ServerModel.NAME, LOCAL);
-            row.set(ServerModel.MODE, MODE_LOCAL);
-            model.save(row);
-        }
+        exec(() -> {
+            ServerModel model = model();
+            if (model.findByName(LOCAL) == null) {
+                Row row = model.createEmptyRow();
+                row.set(ServerModel.NAME, LOCAL);
+                row.set(ServerModel.MODE, MODE_LOCAL);
+                model.save(row);
+            }
+        });
     }
 
     /** A server with its best-effort reachability and host resource snapshot, for the admin list.
@@ -55,7 +61,7 @@ public class ServerService {
     /** All servers with reachability + host stats (from Docker {@code /info}), best-effort per record. */
     public List<Summary> summaries() {
         List<Summary> result = new ArrayList<>();
-        for (Row row : model.find().all()) {
+        for (Row row : query(() -> model().find().all())) {
             String target = row.get(ServerModel.SSH_TARGET);
             Map<String, Object> info = infoFor(row);
             result.add(new Summary(
@@ -75,7 +81,7 @@ public class ServerService {
     /** Just the server names (no reachability probe), for form dropdowns. */
     public List<String> names() {
         List<String> names = new ArrayList<>();
-        for (Row row : model.find().all()) {
+        for (Row row : query(() -> model().find().all())) {
             names.add(row.get(ServerModel.NAME));
         }
         return names;
@@ -83,7 +89,7 @@ public class ServerService {
 
     /** A DockerClient for the named server (local socket or remote over SSH). */
     public DockerClient clientFor(String name) {
-        Row row = model.findByName(name);
+        Row row = query(() -> model().findByName(name));
         if (row == null) {
             throw new IllegalArgumentException("No server named '" + name + "'");
         }
@@ -92,14 +98,17 @@ public class ServerService {
 
     /** Register (or update) a remote SSH server. */
     public void add(String name, String sshTarget) {
-        Row row = model.findByName(name);
-        if (row == null) {
-            row = model.createEmptyRow();
-            row.set(ServerModel.NAME, name);
-        }
-        row.set(ServerModel.MODE, MODE_SSH);
-        row.set(ServerModel.SSH_TARGET, sshTarget);
-        model.save(row);
+        exec(() -> {
+            ServerModel model = model();
+            Row row = model.findByName(name);
+            if (row == null) {
+                row = model.createEmptyRow();
+                row.set(ServerModel.NAME, name);
+            }
+            row.set(ServerModel.MODE, MODE_SSH);
+            row.set(ServerModel.SSH_TARGET, sshTarget);
+            model.save(row);
+        });
     }
 
     /** Remove a server; the implicit local host (the machine itself) cannot be removed. */
@@ -107,7 +116,7 @@ public class ServerService {
         if (LOCAL.equals(name)) {
             return;
         }
-        model.find().where(ServerModel.NAME.eq(name)).delete();
+        exec(() -> model().find().where(ServerModel.NAME.eq(name)).delete());
     }
 
     private static DockerTransport transportFor(Row row) {

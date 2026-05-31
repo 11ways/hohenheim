@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.process;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
@@ -631,7 +632,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             if (logText == null || logText.isEmpty()) return;
 
             var ds = HohenheimDatabase.datasource();
-            var model = new ProclogModel(ds);
+            var model = Models.get(ProclogModel.class);
             Row row = model.createEmptyRow();
             row.set(ProclogModel.SITE_ID, siteId);
             row.set(ProclogModel.PID, (int) managed.pid());

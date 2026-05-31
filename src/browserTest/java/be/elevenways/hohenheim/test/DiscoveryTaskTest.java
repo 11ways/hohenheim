@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.NodeVersionModel;
@@ -40,6 +41,7 @@ class DiscoveryTaskTest {
         SiteTypes.register();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
+        TestModels.registerAll();
         ServerZenitRuntime.init();
         Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
     }
@@ -49,7 +51,7 @@ class DiscoveryTaskTest {
     void updateSystemUsersPopulatesTable() {
         new UpdateSystemUsers().run();
 
-        var model = new SystemUserModel(HohenheimDatabase.datasource());
+        var model = Models.get(SystemUserModel.class);
         long count = model.find().count();
 
         // /etc/passwd always has at least 'root' — if this fails on a weird CI
@@ -64,7 +66,7 @@ class DiscoveryTaskTest {
     @Test
     @Order(2)
     void updateSystemUsersMarksUnseenRowsObsolete() {
-        var model = new SystemUserModel(HohenheimDatabase.datasource());
+        var model = Models.get(SystemUserModel.class);
 
         // Insert a ghost user that definitely isn't in /etc/passwd
         Row ghost = model.createEmptyRow();
@@ -90,7 +92,7 @@ class DiscoveryTaskTest {
     @Test
     @Order(3)
     void updateNodeVersionsReconcilesGhostEntry() {
-        var model = new NodeVersionModel(HohenheimDatabase.datasource());
+        var model = Models.get(NodeVersionModel.class);
 
         Row ghost = model.createEmptyRow();
         ghost.set(NodeVersionModel.VERSION, "0.0.0-phantom");

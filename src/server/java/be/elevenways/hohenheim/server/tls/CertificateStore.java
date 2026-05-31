@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.tls;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -62,8 +63,8 @@ public class CertificateStore {
      */
     public synchronized void loadFromDatabase() {
         var ds = HohenheimDatabase.datasource();
-        var certModel = new CertificateModel(ds);
-        var domainModel = new SiteDomainModel(ds);
+        var certModel = Models.get(CertificateModel.class);
+        var domainModel = Models.get(SiteDomainModel.class);
 
         List<Row> certs = certModel.find()
             .where(CertificateModel.CERTIFICATE_PEM.isNotNull())

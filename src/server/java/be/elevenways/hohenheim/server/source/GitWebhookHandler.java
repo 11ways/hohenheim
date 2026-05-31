@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.ServerMain;
@@ -63,7 +64,7 @@ public class GitWebhookHandler {
 
     private static void processWebhook(HttpServerExchange exchange, String slug, String body) {
         // Look up site by slug
-        var siteModel = new SiteModel(HohenheimDatabase.datasource());
+        var siteModel = Models.get(SiteModel.class);
         Row site = siteModel.find()
             .where(SiteModel.SLUG.eq(slug))
             .where(SiteModel.DELETED_AT.isNull())

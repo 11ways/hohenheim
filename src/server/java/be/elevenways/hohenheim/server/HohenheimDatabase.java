@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.migration.M018_AddDatabaseServer;
 import be.elevenways.hohenheim.migration.M019_CreateNotificationChannels;
 import be.elevenways.zenit.auth.server.migration.M001_CreateAuthTables;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
 import be.elevenways.zenit.common.orm.migration.MigrationRunner;
 
@@ -34,6 +35,10 @@ public class HohenheimDatabase {
     public static void init() {
         String dbPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.PATH);
         datasource = new SqliteDatasource("jdbc:sqlite:" + dbPath);
+
+        // Make this the framework's default datasource so model singletons resolve it. Done here
+        // (not just at boot) so test classes that re-init with a fresh DB stay in sync.
+        Datasources.register("default", datasource);
 
         MigrationRunner runner = new MigrationRunner(
             (MigrationCapableDatasource) datasource,

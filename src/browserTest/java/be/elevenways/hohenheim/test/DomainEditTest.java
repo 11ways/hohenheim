@@ -1,4 +1,5 @@
 package be.elevenways.hohenheim.test;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -68,8 +69,8 @@ class DomainEditTest extends HohenheimTestBase {
 
         // Query the database directly for the IDs
         var ds = HohenheimDatabase.datasource();
-        var siteModel = new SiteModel(ds);
-        var domainModel = new SiteDomainModel(ds);
+        var siteModel = Models.get(SiteModel.class);
+        var domainModel = Models.get(SiteDomainModel.class);
 
         Row site = siteModel.find().where(SiteModel.NAME.eq("Domain Test Site")).first();
         assertThat(site).isNotNull();

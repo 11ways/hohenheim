@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.NodeVersionModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -159,7 +160,7 @@ public class NodeSiteType implements SiteTypeHandler {
             if (!(nodeVersionIdObj instanceof Integer id) || id <= 0) {
                 return "node";
             }
-            var model = new NodeVersionModel(HohenheimDatabase.datasource());
+            var model = Models.get(NodeVersionModel.class);
             Row row = model.findById(id);
             if (row == null) return "node";
             String path = row.get(NodeVersionModel.PATH);

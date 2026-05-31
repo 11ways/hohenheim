@@ -46,7 +46,7 @@ public class ServerMain {
         HohenheimSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
 
         HohenheimEndpoints.init();
-        HohenheimDatabase.init();
+        HohenheimDatabase.init();   // also registers the SQLite datasource as the framework default
 
         // Install zenit-auth (session store, CSRF, middleware, /login + /setup + /account + /admin).
         // Password login is native; Proteus SSO is added below when configured.

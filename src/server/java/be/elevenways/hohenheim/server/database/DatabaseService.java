@@ -1,12 +1,13 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,7 +26,7 @@ import java.util.function.Function;
  * @author  Jelle De Loecker
  * @since   0.1.0
  */
-public class DatabaseService {
+public class DatabaseService extends DatasourceScoped {
 
     public static final String STATUS_PROVISIONING = "provisioning";
     public static final String STATUS_ACTIVE = "active";
@@ -43,18 +44,21 @@ public class DatabaseService {
     // production this routes through ServerService (local socket or remote SSH); tests inject a
     // single fixed client.
     private final Function<String, ManagedDatabase> managedFor;
-    private final DatabaseModel model;
 
     public DatabaseService() {
+        super(null);
         ServerService servers = new ServerService();
         this.managedFor = serverName -> new ManagedDatabase(servers.clientFor(serverName));
-        this.model = new DatabaseModel(HohenheimDatabase.datasource());
     }
 
     public DatabaseService(DockerClient docker, Datasource datasource) {
+        super(datasource);
         ManagedDatabase fixed = new ManagedDatabase(docker);
         this.managedFor = serverName -> fixed;   // tests: a single host regardless of server name
-        this.model = new DatabaseModel(datasource);
+    }
+
+    private static DatabaseModel model() {
+        return Models.get(DatabaseModel.class);
     }
 
     /** Provision synchronously on the local host; see the server-aware overload. */
@@ -106,33 +110,39 @@ public class DatabaseService {
     private void upsertRecord(String name, ManagedDatabase.Engine engine, String image, String user,
                               String password, String database, boolean ephemeral, String serverName,
                               String status) {
-        Row row = model.findByName(name);
-        if (row == null) {
-            row = model.createEmptyRow();
-            row.set(DatabaseModel.NAME, name);
-        }
-        row.set(DatabaseModel.ENGINE, engine.name().toLowerCase());
-        row.set(DatabaseModel.IMAGE, image);
-        row.set(DatabaseModel.DB_USER, user);
-        row.set(DatabaseModel.DB_PASSWORD, password);
-        row.set(DatabaseModel.DB_NAME, database);
-        row.set(DatabaseModel.EPHEMERAL, ephemeral);
-        row.set(DatabaseModel.STATUS, status);
-        row.set(DatabaseModel.SERVER_NAME, serverName);
-        model.save(row);
+        exec(() -> {
+            DatabaseModel model = model();
+            Row row = model.findByName(name);
+            if (row == null) {
+                row = model.createEmptyRow();
+                row.set(DatabaseModel.NAME, name);
+            }
+            row.set(DatabaseModel.ENGINE, engine.name().toLowerCase());
+            row.set(DatabaseModel.IMAGE, image);
+            row.set(DatabaseModel.DB_USER, user);
+            row.set(DatabaseModel.DB_PASSWORD, password);
+            row.set(DatabaseModel.DB_NAME, database);
+            row.set(DatabaseModel.EPHEMERAL, ephemeral);
+            row.set(DatabaseModel.STATUS, status);
+            row.set(DatabaseModel.SERVER_NAME, serverName);
+            model.save(row);
+        });
     }
 
     private void setStatus(String name, String status) {
-        Row row = model.findByName(name);
-        if (row != null) {
-            row.set(DatabaseModel.STATUS, status);
-            model.save(row);
-        }
+        exec(() -> {
+            DatabaseModel model = model();
+            Row row = model.findByName(name);
+            if (row != null) {
+                row.set(DatabaseModel.STATUS, status);
+                model.save(row);
+            }
+        });
     }
 
     /** All persisted database records. */
     public List<Row> list() {
-        return model.find().all();
+        return query(() -> model().find().all());
     }
 
     /** A persisted database plus its best-effort live container status, for the admin list.
@@ -148,7 +158,7 @@ public class DatabaseService {
 
     /** Full detail for one database by name with live status, or null if there is no such record. */
     public Detail detail(String name) {
-        Row row = model.findByName(name);
+        Row row = query(() -> model().findByName(name));
         if (row == null) {
             return null;
         }
@@ -172,7 +182,7 @@ public class DatabaseService {
     /** All databases with live status (running + published port), best-effort per record. */
     public List<Summary> summaries() {
         List<Summary> result = new ArrayList<>();
-        for (Row row : model.find().all()) {
+        for (Row row : query(() -> model().find().all())) {
             ManagedDatabase.Engine engine = engineOf(row);
             ManagedDatabase.LiveStatus live = liveStatus(row, engine);
             String image = row.get(DatabaseModel.IMAGE);
@@ -256,15 +266,15 @@ public class DatabaseService {
 
     /** Stop + remove the container (optionally its data volume) and delete the record. */
     public void destroy(String name, boolean removeData) throws IOException {
-        Row row = model.findByName(name);
+        Row row = query(() -> model().findByName(name));
         if (row != null) {
             managedFor.apply(serverOf(row)).destroy(name, removeData);
         }
-        model.find().where(DatabaseModel.NAME.eq(name)).delete();
+        exec(() -> model().find().where(DatabaseModel.NAME.eq(name)).delete());
     }
 
     private Row require(String name) throws IOException {
-        Row row = model.findByName(name);
+        Row row = query(() -> model().findByName(name));
         if (row == null) {
             throw new IOException("No managed database named '" + name + "'");
         }

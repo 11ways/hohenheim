@@ -2,9 +2,12 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.migration.M019_CreateNotificationChannels;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
+import be.elevenways.hohenheim.test.TestModels;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
 import be.elevenways.zenit.common.orm.migration.MigrationRunner;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -27,23 +30,25 @@ class NotificationChannelModelTest {
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner((MigrationCapableDatasource) datasource,
             List.of(M019_CreateNotificationChannels::new)).migrate();
+        TestModels.registerAll();
     }
 
     @Test
     void persistsAndReloadsChannel() {
-        NotificationChannelModel model = new NotificationChannelModel(datasource);
+        Db.run(datasource, () -> {
+            NotificationChannelModel model = Models.get(NotificationChannelModel.class);
+            Row row = model.createEmptyRow();
+            row.set(NotificationChannelModel.NAME, "ops-slack");
+            row.set(NotificationChannelModel.KIND, "webhook");
+            row.set(NotificationChannelModel.FORMAT, "slack");
+            row.set(NotificationChannelModel.URL, "https://hooks.example.com/services/AAA/BBB/CCC");
+            model.save(row);
 
-        Row row = model.createEmptyRow();
-        row.set(NotificationChannelModel.NAME, "ops-slack");
-        row.set(NotificationChannelModel.KIND, "webhook");
-        row.set(NotificationChannelModel.FORMAT, "slack");
-        row.set(NotificationChannelModel.URL, "https://hooks.example.com/services/AAA/BBB/CCC");
-        model.save(row);
-
-        Row reloaded = model.findByName("ops-slack");
-        assertThat(reloaded).isNotNull();
-        assertThat((String) reloaded.get(NotificationChannelModel.FORMAT)).isEqualTo("slack");
-        assertThat((String) reloaded.get(NotificationChannelModel.URL))
-            .isEqualTo("https://hooks.example.com/services/AAA/BBB/CCC");
+            Row reloaded = model.findByName("ops-slack");
+            assertThat(reloaded).isNotNull();
+            assertThat((String) reloaded.get(NotificationChannelModel.FORMAT)).isEqualTo("slack");
+            assertThat((String) reloaded.get(NotificationChannelModel.URL))
+                .isEqualTo("https://hooks.example.com/services/AAA/BBB/CCC");
+        });
     }
 }

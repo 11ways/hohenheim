@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.test.TestModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
 import be.elevenways.zenit.common.orm.migration.MigrationRunner;
@@ -118,6 +119,7 @@ class DatabaseServiceTest {
         new MigrationRunner((MigrationCapableDatasource) ds,
             List.of(M015_CreateManagedDatabases::new, M016_AddDatabaseStatus::new,
                 M018_AddDatabaseServer::new)).migrate();
+        TestModels.registerAll();
         return ds;
     }
 

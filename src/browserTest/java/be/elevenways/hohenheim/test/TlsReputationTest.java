@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import io.undertow.Undertow;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,7 @@ class TlsReputationTest {
         db.deleteOnExit();
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
+        TestModels.registerAll();
     }
 
     @Test
@@ -89,7 +91,7 @@ class TlsReputationTest {
     }
 
     private static CertificateStore localhostStore() throws Exception {
-        var certModel = new CertificateModel(HohenheimDatabase.datasource());
+        var certModel = Models.get(CertificateModel.class);
 
         KeyPair kp = TlsCertificateTest.generateKeyPair();
         X509Certificate cert = TlsCertificateTest.generateSelfSignedCert(kp, "localhost");
