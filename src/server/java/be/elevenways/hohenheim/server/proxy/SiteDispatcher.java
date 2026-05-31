@@ -33,20 +33,26 @@ import io.undertow.util.HttpString;
 import org.xnio.IoUtils;
 import org.xnio.OptionMap;
 import org.xnio.Xnio;
+import org.xnio.ssl.XnioSsl;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.Writer;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -618,8 +624,8 @@ public class SiteDispatcher implements HttpHandler {
             // CIDR notation
             try {
                 String[] parts = rule.split("/");
-                byte[] ruleAddr = java.net.InetAddress.getByName(parts[0]).getAddress();
-                byte[] clientAddr = java.net.InetAddress.getByName(clientIp).getAddress();
+                byte[] ruleAddr = InetAddress.getByName(parts[0]).getAddress();
+                byte[] clientAddr = InetAddress.getByName(clientIp).getAddress();
                 int prefixLen = Integer.parseInt(parts[1]);
 
                 if (ruleAddr.length != clientAddr.length) return false;
@@ -650,7 +656,7 @@ public class SiteDispatcher implements HttpHandler {
         if (authHeader == null || !authHeader.startsWith("Basic ")) return false;
 
         try {
-            String decoded = new String(java.util.Base64.getDecoder().decode(authHeader.substring(6)));
+            String decoded = new String(Base64.getDecoder().decode(authHeader.substring(6)));
             int colon = decoded.indexOf(':');
             if (colon < 0) return false;
             String user = decoded.substring(0, colon);
@@ -879,7 +885,7 @@ public class SiteDispatcher implements HttpHandler {
 
     private void destroyHandlers() {
         RouteTable rt = this.routes;
-        Set<SiteRequestHandler> handlers = Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        Set<SiteRequestHandler> handlers = Collections.newSetFromMap(new IdentityHashMap<>());
         for (RouteEntry entry : rt.exactRoutes.values()) {
             handlers.add(entry.handler);
         }
@@ -984,8 +990,8 @@ public class SiteDispatcher implements HttpHandler {
 
     private static void appendToLogFile(String logPath, String line) {
         try {
-            java.io.File logFile = new java.io.File(logPath);
-            java.io.File parent = logFile.getParentFile();
+            File logFile = new File(logPath);
+            File parent = logFile.getParentFile();
             if (parent != null && !parent.exists()) parent.mkdirs();
 
             try (Writer writer = new BufferedWriter(new FileWriter(logFile, true))) {
@@ -1004,7 +1010,7 @@ public class SiteDispatcher implements HttpHandler {
     private class DispatchingProxyClient implements ProxyClient {
 
         private final UndertowClient client = UndertowClient.getInstance();
-        private final org.xnio.ssl.XnioSsl insecureSsl = createInsecureSsl();
+        private final XnioSsl insecureSsl = createInsecureSsl();
 
         @Override
         public ProxyTarget findTarget(HttpServerExchange exchange) {
@@ -1019,7 +1025,7 @@ public class SiteDispatcher implements HttpHandler {
             SimpleTarget simpleTarget = (SimpleTarget) target;
             UpstreamTarget upstreamTarget = simpleTarget.target;
             URI uri = upstreamTarget.uri();
-            org.xnio.ssl.XnioSsl ssl = upstreamTarget.ignoreCertificates() ? insecureSsl : null;
+            XnioSsl ssl = upstreamTarget.ignoreCertificates() ? insecureSsl : null;
 
             client.connect(new ClientCallback<ClientConnection>() {
                 @Override
@@ -1042,21 +1048,21 @@ public class SiteDispatcher implements HttpHandler {
                OptionMap.EMPTY);
         }
 
-        private org.xnio.ssl.XnioSsl createInsecureSsl() {
+        private XnioSsl createInsecureSsl() {
             try {
                 SSLContext context = SSLContext.getInstance("TLS");
                 context.init(null, new TrustManager[]{new X509TrustManager() {
                     @Override
-                    public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-                        return new java.security.cert.X509Certificate[0];
+                    public X509Certificate[] getAcceptedIssuers() {
+                        return new X509Certificate[0];
                     }
 
                     @Override
-                    public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) {
+                    public void checkClientTrusted(X509Certificate[] chain, String authType) {
                     }
 
                     @Override
-                    public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType) {
+                    public void checkServerTrusted(X509Certificate[] chain, String authType) {
                     }
                 }}, new SecureRandom());
 

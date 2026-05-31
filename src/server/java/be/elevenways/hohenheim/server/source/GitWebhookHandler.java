@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -107,7 +108,7 @@ public class GitWebhookHandler {
 
         // Find the handler and enqueue a deploy
         int siteId = site.get(SiteModel.ID);
-        var proxy = be.elevenways.hohenheim.server.ServerMain.getProxyServer();
+        var proxy = ServerMain.getProxyServer();
         if (proxy == null) {
             sendJson(exchange, 503, "{\"error\":\"proxy not running\"}");
             return;

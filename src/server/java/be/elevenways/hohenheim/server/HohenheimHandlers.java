@@ -1437,7 +1437,7 @@ public class HohenheimHandlers {
             }
             String password = form.getOrDefault("db_password", "").trim();
             if (password.isEmpty()) {
-                password = AuthHelper.generatePassword();
+                password = Secrets.generatePassword();
             }
 
             String error = validateDatabaseForm(name, engineToken, database);
