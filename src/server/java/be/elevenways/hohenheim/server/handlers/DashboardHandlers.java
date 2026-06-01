@@ -58,12 +58,7 @@ public final class DashboardHandlers {
             List<Row> recentAudit = auditModel.findRecent(10);
             List<Map<String, Object>> activity = new ArrayList<>();
             for (Row row : recentAudit) {
-                Map<String, Object> entry = new HashMap<>();
-                entry.put("action", row.get(AuditLogModel.ACTION));
-                entry.put("resourceType", row.get(AuditLogModel.RESOURCE_TYPE));
-                entry.put("resourceName", row.get(AuditLogModel.RESOURCE_NAME));
-                entry.put("createdAt", row.get(AuditLogModel.CREATED_AT));
-                activity.add(entry);
+                activity.add(HandlerSupport.auditEntryToMap(row));
             }
 
             Map<String, Object> vars = new HashMap<>();

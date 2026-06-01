@@ -12,6 +12,9 @@ public class SiteDomainModel extends Model {
     public static final Identifier MODEL_ID = Identifier.of("hohenheim", "site_domain");
     public static final Schema SCHEMA = new Schema();
 
+    /** {@link #MATCH_TYPE} value for an exact hostname match. */
+    public static final String MATCH_EXACT = "exact";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());
     public static final StringField HOSTNAME = SCHEMA.addField(StringField.builder().name("hostname").build());

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.handlers;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.model.NodeVersionModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -90,8 +91,8 @@ public final class SiteHandlers {
                 );
             }
 
-            String slug = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
-            Map<String, Object> settings = extractTypeSettings(form, siteType);
+            String slug = HandlerSupport.slug(name);
+            Map<String, Object> settings = extractSettings(form, SiteModel.SITE_TYPE.getSchemaForValue(siteType));
             String hostname = form.getOrDefault("hostname", "").trim();
             String source = form.getOrDefault("source", "");
 
@@ -100,14 +101,14 @@ public final class SiteHandlers {
             row.set(SiteModel.SLUG, slug);
             row.set(SiteModel.SITE_TYPE, siteType);
             row.set(SiteModel.SETTINGS, settings);
-            row.set(SiteModel.STATUS, "active");
+            row.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
 
             // Git source provisioning
-            if ("git".equals(source)) {
-                row.set(SiteModel.SOURCE, "git");
-                Map<String, Object> sourceSettings = extractSchemaSettings(form, GitSourceSchema.SCHEMA);
+            if (SiteModel.SOURCE_GIT.equals(source)) {
+                row.set(SiteModel.SOURCE, SiteModel.SOURCE_GIT);
+                Map<String, Object> sourceSettings = extractSettings(form, GitSourceSchema.SCHEMA);
                 // Auto-generate webhook secret on first save
-                if (sourceSettings.get("webhook_secret") == null || ((String) sourceSettings.getOrDefault("webhook_secret", "")).isEmpty()) {
+                if (!hasSecret(sourceSettings)) {
                     sourceSettings.put("webhook_secret", UUID.randomUUID().toString());
                 }
                 row.set(SiteModel.SOURCE_SETTINGS, sourceSettings);
@@ -120,11 +121,12 @@ public final class SiteHandlers {
                 Row domainRow = domainModel.createEmptyRow();
                 domainRow.set(SiteDomainModel.SITE_ID, siteId);
                 domainRow.set(SiteDomainModel.HOSTNAME, hostname);
-                domainRow.set(SiteDomainModel.MATCH_TYPE, "exact");
+                domainRow.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
                 domainModel.save(domainRow);
             }
 
-            HandlerSupport.audit(conduit, "created", "site", row.get(SiteModel.ID), name);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_CREATED, AuditLogModel.RESOURCE_SITE,
+                row.get(SiteModel.ID), name);
             HandlerSupport.reloadProxy();
             return HandlerSupport.redirectUntyped("/sites");
         });
@@ -164,8 +166,8 @@ public final class SiteHandlers {
             }
 
             String siteType = form.getOrDefault("site_type", site.get(SiteModel.SITE_TYPE));
-            Map<String, Object> settings = extractTypeSettings(form, siteType);
-            boolean enabled = "on".equals(form.get("enabled")) || "true".equals(form.get("enabled"));
+            Map<String, Object> settings = extractSettings(form, SiteModel.SITE_TYPE.getSchemaForValue(siteType));
+            boolean enabled = HandlerSupport.checkbox(form, "enabled");
             String source = form.getOrDefault("source", "");
 
             site.set(SiteModel.NAME, name);
@@ -174,16 +176,15 @@ public final class SiteHandlers {
             site.set(SiteModel.ENABLED, enabled);
 
             // Git source provisioning
-            if ("git".equals(source)) {
-                site.set(SiteModel.SOURCE, "git");
-                Map<String, Object> sourceSettings = extractSchemaSettings(form, GitSourceSchema.SCHEMA);
-                // Preserve existing webhook secret if not in form
-                if (sourceSettings.get("webhook_secret") == null || ((String) sourceSettings.getOrDefault("webhook_secret", "")).isEmpty()) {
+            if (SiteModel.SOURCE_GIT.equals(source)) {
+                site.set(SiteModel.SOURCE, SiteModel.SOURCE_GIT);
+                Map<String, Object> sourceSettings = extractSettings(form, GitSourceSchema.SCHEMA);
+                // Preserve existing webhook secret if not in form, else generate a fresh one.
+                if (!hasSecret(sourceSettings)) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> existingSource = (Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS);
-                    String existingSecret = existingSource != null ? (String) existingSource.get("webhook_secret") : null;
-                    if (existingSecret != null && !existingSecret.isEmpty()) {
-                        sourceSettings.put("webhook_secret", existingSecret);
+                    if (existingSource != null && hasSecret(existingSource)) {
+                        sourceSettings.put("webhook_secret", existingSource.get("webhook_secret"));
                     } else {
                         sourceSettings.put("webhook_secret", UUID.randomUUID().toString());
                     }
@@ -196,7 +197,7 @@ public final class SiteHandlers {
 
             siteModel.save(site);
 
-            HandlerSupport.audit(conduit, "updated", "site", siteId, name);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_UPDATED, AuditLogModel.RESOURCE_SITE, siteId, name);
             HandlerSupport.reloadProxy();
             return HandlerSupport.redirectUntyped("/sites/" + siteId);
         });
@@ -210,8 +211,9 @@ public final class SiteHandlers {
                 boolean current = Boolean.TRUE.equals(site.get(SiteModel.ENABLED));
                 site.set(SiteModel.ENABLED, !current);
                 siteModel.save(site);
-                HandlerSupport.audit(conduit, current ? "disabled" : "enabled", "site",
-                      siteId, site.get(SiteModel.NAME));
+                HandlerSupport.audit(conduit,
+                      current ? AuditLogModel.ACTION_DISABLED : AuditLogModel.ACTION_ENABLED,
+                      AuditLogModel.RESOURCE_SITE, siteId, site.get(SiteModel.NAME));
                 HandlerSupport.reloadProxy();
             }
 
@@ -225,7 +227,7 @@ public final class SiteHandlers {
             if (site == null) return HandlerSupport.redirectUntyped("/sites");
 
             String name = site.get(SiteModel.NAME) + " (copy)";
-            String slug = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+            String slug = HandlerSupport.slug(name);
 
             Row clone = siteModel.createEmptyRow();
             clone.set(SiteModel.NAME, name);
@@ -242,7 +244,7 @@ public final class SiteHandlers {
                 clonedSourceSettings.put("webhook_secret", UUID.randomUUID().toString());
             }
             clone.set(SiteModel.SOURCE_SETTINGS, clonedSourceSettings);
-            clone.set(SiteModel.STATUS, "active");
+            clone.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
             clone.set(SiteModel.ENABLED, false); // Clones start disabled
             siteModel.save(clone);
 
@@ -267,7 +269,8 @@ public final class SiteHandlers {
                 domainModel.save(domainClone);
             }
 
-            HandlerSupport.audit(conduit, "cloned", "site", newSiteId, name);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_CLONED, AuditLogModel.RESOURCE_SITE,
+                newSiteId, name);
             return HandlerSupport.redirectUntyped("/sites/" + newSiteId);
         });
 
@@ -279,18 +282,25 @@ public final class SiteHandlers {
             if (site != null) {
                 site.set(SiteModel.DELETED_AT, Instant.now());
                 siteModel.save(site);
-                HandlerSupport.audit(conduit, "deleted", "site", siteId, site.get(SiteModel.NAME));
+                HandlerSupport.audit(conduit, AuditLogModel.ACTION_DELETED, AuditLogModel.RESOURCE_SITE,
+                    siteId, site.get(SiteModel.NAME));
                 HandlerSupport.reloadProxy();
 
                 // Clean up git repo directory if git-provisioned
                 String source = site.get(SiteModel.SOURCE);
-                if ("git".equals(source)) {
+                if (SiteModel.SOURCE_GIT.equals(source)) {
                     GitProvisioner.deleteSiteDirectory(siteId);
                 }
             }
 
             return HandlerSupport.redirectUntyped("/sites");
         });
+    }
+
+    /** Whether the source settings already carry a non-blank git webhook secret. */
+    private static boolean hasSecret(Map<String, Object> src) {
+        Object secret = src.get("webhook_secret");
+        return secret != null && !((String) secret).isEmpty();
     }
 
     private static String siteTypeDisplayName(String typeId) {
@@ -301,45 +311,12 @@ public final class SiteHandlers {
     }
 
     /**
-     * Walk the type-specific schema and extract each field from the submitted form
-     * generically. SchemaField-with-subSchema and ListField are handled by scanning
-     * indexed form keys (fieldName[N].childName and fieldName[N]) — no per-field hacks.
+     * Extract settings from a form based on a schema. SchemaField-with-subSchema and ListField
+     * are handled by scanning indexed form keys (fieldName[N].childName and fieldName[N]).
      */
-    private static Map<String, Object> extractTypeSettings(Map<String, String> form, String siteType) {
+    private static Map<String, Object> extractSettings(Map<String, String> form, Schema schema) {
         Map<String, Object> settings = new HashMap<>();
-
-        Schema typeSchema = SiteModel.SITE_TYPE.getSchemaForValue(siteType);
-        if (typeSchema == null) return settings;
-
-        for (var entry : typeSchema.getFields().entrySet()) {
-            String fieldName = entry.getKey();
-            Field<?, ?> field = entry.getValue();
-
-            if (field instanceof SchemaField schemaField && schemaField.getSubSchema() != null) {
-                settings.put(fieldName, extractNestedSchemaList(form, fieldName, schemaField.getSubSchema()));
-            } else if (field instanceof ListField<?> listField) {
-                settings.put(fieldName, extractScalarList(form, fieldName, listField.getItemField()));
-            } else if (field instanceof BooleanField) {
-                // Unchecked checkboxes don't submit a value at all
-                String v = form.get(fieldName);
-                settings.put(fieldName, "on".equals(v) || "true".equals(v));
-            } else {
-                String formValue = form.get(fieldName);
-                if (formValue == null) continue;
-                Object coerced = coerceScalar(field, formValue);
-                if (coerced != null) settings.put(fieldName, coerced);
-            }
-        }
-
-        return settings;
-    }
-
-    /**
-     * Extract settings from a form based on a fixed schema (not type-polymorphic).
-     * Used for git source settings.
-     */
-    private static Map<String, Object> extractSchemaSettings(Map<String, String> form, Schema schema) {
-        Map<String, Object> settings = new HashMap<>();
+        if (schema == null) return settings;
 
         for (var entry : schema.getFields().entrySet()) {
             String fieldName = entry.getKey();
@@ -350,8 +327,8 @@ public final class SiteHandlers {
             } else if (field instanceof ListField<?> listField) {
                 settings.put(fieldName, extractScalarList(form, fieldName, listField.getItemField()));
             } else if (field instanceof BooleanField) {
-                String v = form.get(fieldName);
-                settings.put(fieldName, "on".equals(v) || "true".equals(v));
+                // Unchecked checkboxes don't submit a value at all
+                settings.put(fieldName, HandlerSupport.checkbox(form, fieldName));
             } else {
                 String formValue = form.get(fieldName);
                 if (formValue == null) continue;
@@ -368,6 +345,7 @@ public final class SiteHandlers {
      * Returns null for unparseable numbers so the caller can skip the entry.
      */
     private static Object coerceScalar(Field<?, ?> field, String formValue) {
+        // A missing checkbox value is a real "false"; every other field type maps null to null.
         if (field instanceof BooleanField) {
             return "on".equals(formValue) || "true".equals(formValue);
         }
@@ -485,7 +463,8 @@ public final class SiteHandlers {
 
         vars.put("nodeVersions", getNodeVersionOptions());
         vars.put("systemUsers", getSystemUserOptions());
-        vars.put("environmentVariables", extractEnvVarsList(settings));
+        vars.put("environmentVariables",
+            HandlerSupport.nameValuePairs(settings != null ? settings.get("environment_variables") : null));
         vars.put("apiKeys", extractApiKeysList(settings));
         ServerService serverService = new ServerService();
         serverService.ensureLocal();
@@ -497,14 +476,8 @@ public final class SiteHandlers {
             vars.put("isManaged", true);
             List<Map<String, Object>> processes = new ArrayList<>();
             for (var proc : managed.getProcesses()) {
-                Map<String, Object> info = new HashMap<>();
-                info.put("pid", proc.pid());
-                info.put("port", proc.port());
-                info.put("cpu", proc.cpuPercent());
+                Map<String, Object> info = HandlerSupport.processToMap(proc);
                 info.put("memoryMb", proc.memoryKb() / 1024);
-                info.put("isolated", proc.isIsolated());
-                info.put("ready", proc.isReady());
-                info.put("fingerprints", proc.activeFingerprintCount());
                 processes.add(info);
             }
             vars.put("processes", processes);
@@ -556,21 +529,6 @@ public final class SiteHandlers {
             options.add(option);
         }
         return options;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<Map<String, String>> extractEnvVarsList(Map<String, Object> settings) {
-        List<Map<String, String>> result = new ArrayList<>();
-        if (settings != null && settings.get("environment_variables") instanceof List<?> rawList) {
-            for (Object item : rawList) {
-                if (item instanceof Map<?, ?> map) {
-                    String name = map.get("name") != null ? map.get("name").toString() : "";
-                    String value = map.get("value") != null ? map.get("value").toString() : "";
-                    result.add(Map.of("name", name, "value", value));
-                }
-            }
-        }
-        return result;
     }
 
     private static List<String> extractApiKeysList(Map<String, Object> settings) {

@@ -16,6 +16,12 @@ public class CertificateModel extends Model {
     public static final Identifier MODEL_ID = Identifier.of("hohenheim", "certificate");
     public static final Schema SCHEMA = new Schema();
 
+    /** {@link #STATUS} value for an active certificate. */
+    public static final String STATUS_ACTIVE = "active";
+
+    /** {@link #PROVIDER} value for the internal ACME account key row (excluded from listings). */
+    public static final String PROVIDER_ACME_ACCOUNT = "acme_account";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NICE_NAME = SCHEMA.addField(StringField.builder().name("nice_name").build());
     public static final StringField PROVIDER = SCHEMA.addField(StringField.builder().name("provider").build());

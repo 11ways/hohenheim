@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.handlers;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -8,7 +9,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.server.http.HttpConduit;
 
 import org.bouncycastle.openssl.PEMParser;
 
@@ -39,7 +39,7 @@ public final class CertificateHandlers {
                 .all();
 
             // Filter out the internal ACME account key row
-            rows.removeIf(r -> "acme_account".equals(r.get(CertificateModel.PROVIDER)));
+            rows.removeIf(r -> CertificateModel.PROVIDER_ACME_ACCOUNT.equals(r.get(CertificateModel.PROVIDER)));
 
             Instant now = Instant.now();
             List<Map<String, Object>> certs = new ArrayList<>();
@@ -54,12 +54,12 @@ public final class CertificateHandlers {
                 cert.put("autoRenew", row.get(CertificateModel.AUTO_RENEW));
 
                 String status = row.get(CertificateModel.STATUS);
-                cert.put("status", status != null ? status : "active");
+                cert.put("status", status != null ? status : CertificateModel.STATUS_ACTIVE);
                 cert.put("renewalError", row.get(CertificateModel.RENEWAL_ERROR));
                 cert.put("domains", row.get(CertificateModel.DOMAIN_NAMES_TEXT));
 
                 // Compute expiry warning level
-                if (expiresOnObj instanceof Instant expiresAt && "active".equals(status)) {
+                if (expiresOnObj instanceof Instant expiresAt && CertificateModel.STATUS_ACTIVE.equals(status)) {
                     long daysLeft = Duration.between(now, expiresAt).toDays();
                     if (daysLeft < 0) {
                         cert.put("expiryStatus", "expired");
@@ -130,10 +130,11 @@ public final class CertificateHandlers {
             cert.set(CertificateModel.CERTIFICATE_PEM, certPem);
             cert.set(CertificateModel.PRIVATE_KEY_PEM, keyPem);
             cert.set(CertificateModel.PROVIDER, "custom");
-            cert.set(CertificateModel.STATUS, "active");
+            cert.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
             certModel.save(cert);
 
-            HandlerSupport.audit(conduit, "uploaded", "certificate", cert.get(CertificateModel.ID), niceName);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_UPLOADED, AuditLogModel.RESOURCE_CERTIFICATE,
+                cert.get(CertificateModel.ID), niceName);
             HandlerSupport.reloadProxy();
             return HandlerSupport.redirectUntyped("/certificates");
         });
@@ -194,7 +195,8 @@ public final class CertificateHandlers {
                 );
             }
 
-            HandlerSupport.audit(conduit, "requested", "certificate", certId, niceName);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_REQUESTED, AuditLogModel.RESOURCE_CERTIFICATE,
+                certId, niceName);
             HandlerSupport.reloadProxy();
             return HandlerSupport.redirectUntyped("/certificates");
         });
@@ -214,14 +216,8 @@ public final class CertificateHandlers {
             // Build a simple concatenated PEM bundle
             String bundle = "# Certificate: " + niceName + "\n\n" + certPem + "\n" + keyPem;
 
-            if (conduit instanceof HttpConduit http) {
-                String safeName = (niceName != null ? niceName : "certificate")
-                    .replaceAll("[^a-zA-Z0-9._-]", "_");
-                http.setResponseHeader("Content-Type", "application/x-pem-file");
-                http.setResponseHeader("Content-Disposition",
-                    "attachment; filename=\"" + safeName + ".pem\"");
-            }
-            conduit.endWithContentType("application/x-pem-file", bundle);
+            HandlerSupport.download(conduit, "application/x-pem-file",
+                (niceName != null ? niceName : "certificate") + ".pem", bundle);
             return null;
         });
 
@@ -231,7 +227,8 @@ public final class CertificateHandlers {
             Row cert = certModel.findById(certId);
             String niceName = cert != null ? cert.get(CertificateModel.NICE_NAME) : null;
             certModel.find().where(CertificateModel.ID.eq(certId)).delete();
-            HandlerSupport.audit(conduit, "deleted", "certificate", certId, niceName);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_DELETED, AuditLogModel.RESOURCE_CERTIFICATE,
+                certId, niceName);
             HandlerSupport.reloadProxy();
             return HandlerSupport.redirectUntyped("/certificates");
         });

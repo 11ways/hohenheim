@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.handlers;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -66,11 +67,12 @@ public final class AccessListHandlers {
 
             Row row = accessListModel.createEmptyRow();
             row.set(AccessListModel.NAME, name);
-            row.set(AccessListModel.SATISFY, form.getOrDefault("satisfy", "any"));
+            row.set(AccessListModel.SATISFY, form.getOrDefault("satisfy", AccessListModel.SATISFY_ANY));
             setAccessListFields(row, form);
             accessListModel.save(row);
 
-            HandlerSupport.audit(conduit, "created", "access_list", row.get(AccessListModel.ID), name);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_CREATED, AuditLogModel.RESOURCE_ACCESS_LIST,
+                row.get(AccessListModel.ID), name);
             return HandlerSupport.redirectUntyped("/access-lists");
         });
 
@@ -103,11 +105,12 @@ public final class AccessListHandlers {
             }
 
             row.set(AccessListModel.NAME, name);
-            row.set(AccessListModel.SATISFY, form.getOrDefault("satisfy", "any"));
+            row.set(AccessListModel.SATISFY, form.getOrDefault("satisfy", AccessListModel.SATISFY_ANY));
             setAccessListFields(row, form);
             accessListModel.save(row);
 
-            HandlerSupport.audit(conduit, "updated", "access_list", id, name);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_UPDATED, AuditLogModel.RESOURCE_ACCESS_LIST,
+                id, name);
             HandlerSupport.reloadProxy();
             return HandlerSupport.redirectUntyped("/access-lists");
         });
@@ -119,7 +122,8 @@ public final class AccessListHandlers {
             if (row != null) {
                 String name = row.get(AccessListModel.NAME);
                 accessListModel.find().where(AccessListModel.ID.eq(id)).delete();
-                HandlerSupport.audit(conduit, "deleted", "access_list", id, name);
+                HandlerSupport.audit(conduit, AuditLogModel.ACTION_DELETED, AuditLogModel.RESOURCE_ACCESS_LIST,
+                    id, name);
                 HandlerSupport.reloadProxy();
             }
             return HandlerSupport.redirectUntyped("/access-lists");

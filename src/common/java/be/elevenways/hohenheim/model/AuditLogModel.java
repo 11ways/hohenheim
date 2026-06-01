@@ -14,6 +14,29 @@ public class AuditLogModel extends Model {
     public static final Identifier MODEL_ID = Identifier.of("hohenheim", "audit_log");
     public static final Schema SCHEMA = new Schema();
 
+    // Action verbs -- the HhActionBadge template ternary depends on these exact values.
+    public static final String ACTION_CREATED = "created";
+    public static final String ACTION_UPDATED = "updated";
+    public static final String ACTION_DELETED = "deleted";
+    public static final String ACTION_CLONED = "cloned";
+    public static final String ACTION_ENABLED = "enabled";
+    public static final String ACTION_DISABLED = "disabled";
+    public static final String ACTION_UPLOADED = "uploaded";
+    public static final String ACTION_REQUESTED = "requested";
+    public static final String ACTION_TESTED = "tested";
+    public static final String ACTION_STARTED_PROCESS = "started_process";
+    public static final String ACTION_KILLED_PROCESS = "killed_process";
+    public static final String ACTION_ISOLATED_PROCESS = "isolated_process";
+
+    // Resource types.
+    public static final String RESOURCE_SITE = "site";
+    public static final String RESOURCE_DOMAIN = "domain";
+    public static final String RESOURCE_CERTIFICATE = "certificate";
+    public static final String RESOURCE_ACCESS_LIST = "access_list";
+    public static final String RESOURCE_DATABASE = "database";
+    public static final String RESOURCE_SERVER = "server";
+    public static final String RESOURCE_NOTIFICATION_CHANNEL = "notification_channel";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField USER_ID = SCHEMA.addField(IntegerField.builder().name("user_id").build());
     public static final StringField USER_LABEL = SCHEMA.addField(StringField.builder().name("user_label").build());

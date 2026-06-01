@@ -13,6 +13,9 @@ public class AccessListModel extends Model {
     public static final Identifier MODEL_ID = Identifier.of("hohenheim", "access_list");
     public static final Schema SCHEMA = new Schema();
 
+    /** {@link #SATISFY} value: any matching rule grants access. */
+    public static final String SATISFY_ANY = "any";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
     public static final StringField SATISFY = SCHEMA.addField(StringField.builder().name("satisfy").build());
