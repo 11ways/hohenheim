@@ -8,13 +8,13 @@
 
     template {
         {%
-            let script = settings != null && settings.get("script") != null ? settings.get("script") + "" : ""
-            let nodeVersionId = settings != null && settings.get("node_version_id") != null ? settings.get("node_version_id") + "" : ""
-            let systemUserId = settings != null && settings.get("system_user_id") != null ? settings.get("system_user_id") + "" : ""
-            let minimumProcesses = settings != null && settings.get("minimum_processes") != null ? settings.get("minimum_processes") + "" : "1"
-            let maximumProcesses = settings != null && settings.get("maximum_processes") != null ? settings.get("maximum_processes") + "" : "5"
-            let waitForReady = settings != null && settings.get("wait_for_ready") != null ? settings.get("wait_for_ready") == true : false
-            let nodeDelay = settings != null && settings.get("delay") != null ? settings.get("delay") + "" : ""
+            let script = settings.getString("script", "")
+            let nodeVersionId = settings.getString("node_version_id", "")
+            let systemUserId = settings.getString("system_user_id", "")
+            let minimumProcesses = settings.getString("minimum_processes", "1")
+            let maximumProcesses = settings.getString("maximum_processes", "5")
+            let waitForReady = settings.getBoolean("wait_for_ready", false)
+            let nodeDelay = settings.getString("delay", "")
         %}
         <div class="hh-form-section">
             <div class="hh-form-group">

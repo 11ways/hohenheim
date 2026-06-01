@@ -5,16 +5,16 @@
 
     template {
         {%
-            let repoUrl = sourceSettings != null && sourceSettings.get("repository_url") != null ? sourceSettings.get("repository_url") + "" : ""
-            let branch = sourceSettings != null && sourceSettings.get("branch") != null ? sourceSettings.get("branch") + "" : "main"
-            let buildCommand = sourceSettings != null && sourceSettings.get("build_command") != null ? sourceSettings.get("build_command") + "" : ""
-            let buildDirectory = sourceSettings != null && sourceSettings.get("build_directory") != null ? sourceSettings.get("build_directory") + "" : ""
-            let buildTimeout = sourceSettings != null && sourceSettings.get("build_timeout") != null ? sourceSettings.get("build_timeout") + "" : "600"
-            let shallowClone = sourceSettings != null && sourceSettings.get("shallow_clone") != null ? sourceSettings.get("shallow_clone") == true : true
-            let submodules = sourceSettings != null && sourceSettings.get("submodules") != null ? sourceSettings.get("submodules") == true : false
-            let autoDeploy = sourceSettings != null && sourceSettings.get("auto_deploy") != null ? sourceSettings.get("auto_deploy") == true : true
-            let pollInterval = sourceSettings != null && sourceSettings.get("poll_interval") != null ? sourceSettings.get("poll_interval") + "" : "0"
-            let webhookSecret = sourceSettings != null && sourceSettings.get("webhook_secret") != null ? sourceSettings.get("webhook_secret") + "" : ""
+            let repoUrl = sourceSettings.getString("repository_url", "")
+            let branch = sourceSettings.getString("branch", "main")
+            let buildCommand = sourceSettings.getString("build_command", "")
+            let buildDirectory = sourceSettings.getString("build_directory", "")
+            let buildTimeout = sourceSettings.getString("build_timeout", "600")
+            let shallowClone = sourceSettings.getBoolean("shallow_clone", true)
+            let submodules = sourceSettings.getBoolean("submodules", false)
+            let autoDeploy = sourceSettings.getBoolean("auto_deploy", true)
+            let pollInterval = sourceSettings.getString("poll_interval", "0")
+            let webhookSecret = sourceSettings.getString("webhook_secret", "")
         %}
         <div class="hh-form-section">
             <h3 class="hh-form-section-title">Git Repository</h3>

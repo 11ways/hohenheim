@@ -5,12 +5,12 @@
 
     template {
         {%
-            let image = settings != null && settings.get("image") != null ? settings.get("image") + "" : ""
-            let imageTag = settings != null && settings.get("tag") != null ? settings.get("tag") + "" : ""
-            let containerPort = settings != null && settings.get("container_port") != null ? settings.get("container_port") + "" : ""
-            let command = settings != null && settings.get("command") != null ? settings.get("command") + "" : ""
-            let dockerfile = settings != null && settings.get("dockerfile") != null ? settings.get("dockerfile") + "" : ""
-            let server = settings != null && settings.get("server") != null ? settings.get("server") + "" : ""
+            let image = settings.getString("image", "")
+            let imageTag = settings.getString("tag", "")
+            let containerPort = settings.getString("container_port", "")
+            let command = settings.getString("command", "")
+            let dockerfile = settings.getString("dockerfile", "")
+            let server = settings.getString("server", "")
         %}
         <div class="hh-form-section">
             <div class="hh-form-row">

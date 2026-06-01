@@ -4,13 +4,13 @@
 
     template {
         {%
-            let forwardScheme = settings != null && settings.get("forward_scheme") != null ? settings.get("forward_scheme") + "" : "http"
-            let forwardHost = settings != null && settings.get("forward_host") != null ? settings.get("forward_host") + "" : ""
-            let forwardPort = settings != null && settings.get("forward_port") != null ? settings.get("forward_port") + "" : ""
-            let proxySocket = settings != null && settings.get("socket") != null ? settings.get("socket") + "" : ""
-            let websocketUpgrade = settings != null && settings.get("websocket_upgrade") != null ? settings.get("websocket_upgrade") == true : true
-            let ignoreCertificates = settings != null && settings.get("ignore_certificates") != null ? settings.get("ignore_certificates") == true : false
-            let proxyDelay = settings != null && settings.get("delay") != null ? settings.get("delay") + "" : ""
+            let forwardScheme = settings.getString("forward_scheme", "http")
+            let forwardHost = settings.getString("forward_host", "")
+            let forwardPort = settings.getString("forward_port", "")
+            let proxySocket = settings.getString("socket", "")
+            let websocketUpgrade = settings.getBoolean("websocket_upgrade", true)
+            let ignoreCertificates = settings.getBoolean("ignore_certificates", false)
+            let proxyDelay = settings.getString("delay", "")
         %}
         <div class="hh-form-section">
             <div class="hh-form-row">

@@ -4,12 +4,12 @@
 
     template {
         {%
-            let rootPath = settings != null && settings.get("root_path") != null ? settings.get("root_path") + "" : ""
-            let fallbackFile = settings != null && settings.get("fallback_file") != null ? settings.get("fallback_file") + "" : ""
-            let indexes = settings != null && settings.get("indexes") != null ? settings.get("indexes") == true : true
-            let autoindex = settings != null && settings.get("autoindex") != null ? settings.get("autoindex") == true : false
-            let showHiddenFiles = settings != null && settings.get("show_hidden_files") != null ? settings.get("show_hidden_files") == true : false
-            let staticDelay = settings != null && settings.get("delay") != null ? settings.get("delay") + "" : ""
+            let rootPath = settings.getString("root_path", "")
+            let fallbackFile = settings.getString("fallback_file", "")
+            let indexes = settings.getBoolean("indexes", true)
+            let autoindex = settings.getBoolean("autoindex", false)
+            let showHiddenFiles = settings.getBoolean("show_hidden_files", false)
+            let staticDelay = settings.getString("delay", "")
         %}
         <div class="hh-form-section">
             <div class="hh-form-group">
