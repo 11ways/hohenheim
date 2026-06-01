@@ -67,7 +67,7 @@ class AdminPagesTest extends HohenheimTestBase {
         waitForHydration();
 
         assertThat(page.locator("pl-input").count()).isGreaterThanOrEqualTo(3);
-        assertThat(page.locator("input[type='checkbox']").count()).isGreaterThanOrEqualTo(3);
+        assertThat(page.locator("pl-checkbox").count()).isGreaterThanOrEqualTo(3);
         assertThat(page.locator("form[action='/settings'] pl-button[type='submit']").count()).isEqualTo(1);
     }
 

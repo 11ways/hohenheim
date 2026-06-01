@@ -20,23 +20,17 @@
                 <pl-label target="fallback-file">SPA Fallback File</pl-label>
                 <pl-input id="fallback-file" type={% "text" %} name={% "fallback_file" %} value={% fallbackFile %} placeholder={% "index.html" %}></pl-input>
             </div>
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="indexes" checked={% indexes %}>
-                    <span>Use index.html for directories</span>
-                </label>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="indexes" name="indexes" checked={% indexes %}></pl-checkbox>
+                <pl-label target="indexes">Use index.html for directories</pl-label>
             </div>
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="autoindex" checked={% autoindex %}>
-                    <span>Show directory listing</span>
-                </label>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="autoindex" name="autoindex" checked={% autoindex %}></pl-checkbox>
+                <pl-label target="autoindex">Show directory listing</pl-label>
             </div>
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="show_hidden_files" checked={% showHiddenFiles %}>
-                    <span>Show hidden files</span>
-                </label>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="show_hidden_files" name="show_hidden_files" checked={% showHiddenFiles %}></pl-checkbox>
+                <pl-label target="show_hidden_files">Show hidden files</pl-label>
             </div>
             <div class="hh-form-group">
                 <pl-label target="static-delay">Request Delay (ms)</pl-label>

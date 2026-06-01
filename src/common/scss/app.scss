@@ -155,6 +155,18 @@ body {
     width: 100px;
 }
 
+// pl-checkbox + its pl-label sit inline on one row; any hint wraps to the line below.
+.hh-checkbox-field {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pl-space-sm);
+}
+
+.hh-checkbox-field > .hh-form-hint {
+    flex-basis: 100%;
+}
+
 .hh-kv-editor,
 .hh-list-editor {
     display: flex;

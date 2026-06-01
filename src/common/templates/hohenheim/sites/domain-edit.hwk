@@ -39,27 +39,21 @@
 
             <pl-separator></pl-separator>
 
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="force_ssl" checked={% forceSsl %}>
-                    <span>Force SSL</span>
-                </label>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="force_ssl" name="force_ssl" checked={% forceSsl %}></pl-checkbox>
+                <pl-label target="force_ssl">Force SSL</pl-label>
                 <p class="hh-form-hint">Redirect HTTP requests to HTTPS.</p>
             </div>
 
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="hsts_enabled" checked={% hstsEnabled %}>
-                    <span>HSTS</span>
-                </label>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="hsts_enabled" name="hsts_enabled" checked={% hstsEnabled %}></pl-checkbox>
+                <pl-label target="hsts_enabled">HSTS</pl-label>
                 <p class="hh-form-hint">Send Strict-Transport-Security header.</p>
             </div>
 
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="hsts_subdomains" checked={% hstsSubdomains %}>
-                    <span>HSTS Include Subdomains</span>
-                </label>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="hsts_subdomains" name="hsts_subdomains" checked={% hstsSubdomains %}></pl-checkbox>
+                <pl-label target="hsts_subdomains">HSTS Include Subdomains</pl-label>
                 <p class="hh-form-hint">Apply HSTS to all subdomains.</p>
             </div>
 
@@ -79,19 +73,15 @@
                 <p class="hh-form-hint">Specific certificate for this domain. Leave on Auto to use SNI matching.</p>
             </div>
 
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="http2_support" checked={% http2Support %}>
-                    <span>HTTP/2</span>
-                </label>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="http2_support" name="http2_support" checked={% http2Support %}></pl-checkbox>
+                <pl-label target="http2_support">HTTP/2</pl-label>
                 <p class="hh-form-hint">Enable HTTP/2 protocol support.</p>
             </div>
 
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="exclude_from_letsencrypt" checked={% excludeFromLetsencrypt %}>
-                    <span>Exclude from Let's Encrypt</span>
-                </label>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="exclude_from_letsencrypt" name="exclude_from_letsencrypt" checked={% excludeFromLetsencrypt %}></pl-checkbox>
+                <pl-label target="exclude_from_letsencrypt">Exclude from Let's Encrypt</pl-label>
                 <p class="hh-form-hint">Do not automatically issue a certificate for this domain.</p>
             </div>
 
@@ -104,11 +94,9 @@
                         <p class="hh-form-hint">Only route requests matching this path prefix.</p>
                     </div>
 
-                    <div class="hh-form-group">
-                        <label class="hh-checkbox-label">
-                            <input type="checkbox" name="strip_path" checked={% stripPath %}>
-                            <span>Strip Path Prefix</span>
-                        </label>
+                    <div class="hh-form-group hh-checkbox-field">
+                        <pl-checkbox inputId="strip_path" name="strip_path" checked={% stripPath %}></pl-checkbox>
+                        <pl-label target="strip_path">Strip Path Prefix</pl-label>
                         <p class="hh-form-hint">Remove the path prefix before forwarding to upstream.</p>
                     </div>
 
