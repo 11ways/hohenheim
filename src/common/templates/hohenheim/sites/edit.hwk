@@ -13,6 +13,7 @@
     public nodeVersions: List = null
     public systemUsers: List = null
     public servers: List = null
+    public siteSlug: String = ""
     public error: String = ""
 
     template {
@@ -34,7 +35,8 @@
                 systemUsers={% systemUsers %}
                 environmentVariables={% environmentVariables %}
                 apiKeys={% apiKeys %}
-                servers={% servers %}></hh-site-form-fields>
+                servers={% servers %}
+                siteSlug={% siteSlug %}></hh-site-form-fields>
 
             <div class="hh-form-group">
                 <label class="hh-checkbox-label">
@@ -79,6 +81,7 @@
             nodeVersions={% nodeVersions %}
             systemUsers={% systemUsers %}
             servers={% servers %}
+            siteSlug={% site.get("slug") != null ? site.get("slug") : "" %}
             error={% error %}
         ></hh-site-edit>
 
@@ -104,11 +107,7 @@
                                 <pl-badge variant={% "secondary" %}>{{ domain.get("matchType") }}</pl-badge>
                             </pl-table-cell>
                             <pl-table-cell>
-                                {% if domain.get("forceSsl") == true %}
-                                    <pl-badge variant={% "default" %}>Forced</pl-badge>
-                                {% else %}
-                                    <pl-badge variant={% "outline" %}>Off</pl-badge>
-                                {% /if %}
+                                <hh-bool-badge value={% domain.get("forceSsl") %} onLabel={% "Forced" %} offLabel={% "Off" %}></hh-bool-badge>
                             </pl-table-cell>
                             <pl-table-cell>
                                 <hh-post-action action={% "/sites/" + site.get("id") + "/domains/" + domain.get("id") + "/delete" %} label={% "Remove" %} variant={% "ghost" %} size={% "sm" %}></hh-post-action>
@@ -125,14 +124,7 @@
                             <pl-input type={% "text" %} name={% "hostname" %} placeholder={% "example.com" %} required={% true %}></pl-input>
                         </div>
                         <div class="hh-form-group">
-                            <pl-select name="match_type" value="exact">
-                                <pl-select-trigger placeholder="Match type"></pl-select-trigger>
-                                <pl-select-content>
-                                    <pl-select-item value="exact" label="Exact">Exact</pl-select-item>
-                                    <pl-select-item value="wildcard" label="Wildcard">Wildcard</pl-select-item>
-                                    <pl-select-item value="regex" label="Regex">Regex</pl-select-item>
-                                </pl-select-content>
-                            </pl-select>
+                            <hh-match-type-select></hh-match-type-select>
                         </div>
                         <pl-button variant={% "outline" %} type={% "submit" %}>Add Domain</pl-button>
                     </div>

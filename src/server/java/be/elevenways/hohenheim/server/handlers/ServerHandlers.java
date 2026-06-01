@@ -45,7 +45,7 @@ public final class ServerHandlers {
             }
             return new RenderTemplateResult(
                 Identifier.of("hohenheim", "hohenheim/servers/list"),
-                Map.of("servers", items, "listCount", items.size())
+                Map.of("servers", items)
             );
         });
 

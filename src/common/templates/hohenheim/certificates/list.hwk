@@ -2,12 +2,11 @@
 
 {% block "main" %}
     {% declare certificates: List %}
-    {% declare listCount: Integer %}
 
     <hh-page title={% "Certificates" %}>
         <hh-page-actions description={% "SSL/TLS certificates for your sites." %}>
-            <a href="/certificates/request" class="hh-button-link"><pl-button variant="primary">Request (Let's Encrypt)</pl-button></a>
-            <a href="/certificates/upload" class="hh-button-link"><pl-button variant="outline">Upload Custom</pl-button></a>
+            <a href="/certificates/request" class="hh-button-link"><pl-button variant={% "primary" %}>Request (Let's Encrypt)</pl-button></a>
+            <a href="/certificates/upload" class="hh-button-link"><pl-button variant={% "outline" %}>Upload Custom</pl-button></a>
         </hh-page-actions>
 
         <hh-table-card>
@@ -20,7 +19,7 @@
                 <pl-table-head></pl-table-head>
             </pl-table-row></pl-table-header>
             <pl-table-body>
-                <hh-empty-row count={% listCount %} colspan={% "6" %} message={% "No certificates yet." %}></hh-empty-row>
+                <hh-empty-row count={% certificates |> Array.length %} colspan={% "6" %} message={% "No certificates yet." %}></hh-empty-row>
                 {% each certificates as index, cert %}
                 <pl-table-row>
                     <pl-table-cell>{{ cert.get("niceName") }}</pl-table-cell>

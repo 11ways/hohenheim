@@ -54,7 +54,7 @@ public final class SiteHandlers {
 
             return new RenderTemplateResult(
                 Identifier.of("hohenheim", "hohenheim/sites/list"),
-                Map.of("sites", sites, "listCount", sites.size())
+                Map.of("sites", sites)
             );
         });
 
@@ -139,7 +139,7 @@ public final class SiteHandlers {
             if (site == null) {
                 return new RenderTemplateResult(
                     Identifier.of("hohenheim", "hohenheim/sites/list"),
-                    Map.of("sites", List.of(), "listCount", 0)
+                    Map.of("sites", List.of())
                 );
             }
 

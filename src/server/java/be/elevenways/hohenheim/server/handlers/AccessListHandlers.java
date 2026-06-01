@@ -41,7 +41,7 @@ public final class AccessListHandlers {
             }
             return new RenderTemplateResult(
                 Identifier.of("hohenheim", "hohenheim/access-lists/list"),
-                Map.of("accessLists", lists, "listCount", lists.size())
+                Map.of("accessLists", lists)
             );
         });
 

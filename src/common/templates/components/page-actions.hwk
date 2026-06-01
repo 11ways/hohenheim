@@ -4,10 +4,7 @@
 
     template {
         <div class="hh-page-actions">
-            {% if description != "" %}
-                <p class="hh-page-actions__description">{{ description }}</p>
-            {% /if %}
-            <slot name="description"></slot>
+            <div class="hh-page-actions__description"><slot name="description">{{ description }}</slot></div>
             <div class="hh-page-actions__buttons">
                 <slot></slot>
             </div>
