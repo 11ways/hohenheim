@@ -17,14 +17,14 @@
             let nodeDelay = settings.getString("delay", "")
         %}
         <div class="hh-form-section">
-            <div class="hh-form-group">
-                <pl-label target="script">Script Path</pl-label>
-                <pl-input id="script" type={% "text" %} name={% "script" %} value={% script %} placeholder={% "/path/to/app.js" %}></pl-input>
-                <p class="hh-form-hint">Absolute path to the entry script.</p>
-            </div>
-            <div class="hh-form-group">
-                <pl-label target="node-version">Node Binary</pl-label>
-                <pl-select id="node-version" name="node_version_id" value={% nodeVersionId %}>
+            <pl-field>
+                <pl-label>Script Path</pl-label>
+                <pl-input type={% "text" %} name={% "script" %} value={% script %} placeholder={% "/path/to/app.js" %}></pl-input>
+                <pl-field-description>Absolute path to the entry script.</pl-field-description>
+            </pl-field>
+            <pl-field>
+                <pl-label>Node Binary</pl-label>
+                <pl-select name="node_version_id" value={% nodeVersionId %}>
                     <pl-select-trigger placeholder="System default"></pl-select-trigger>
                     <pl-select-content>
                         <pl-select-item value="" label="System default">System default (node)</pl-select-item>
@@ -33,10 +33,10 @@
                         {% /each %}
                     </pl-select-content>
                 </pl-select>
-            </div>
-            <div class="hh-form-group">
-                <pl-label target="system-user">Run As User</pl-label>
-                <pl-select id="system-user" name="system_user_id" value={% systemUserId %}>
+            </pl-field>
+            <pl-field>
+                <pl-label>Run As User</pl-label>
+                <pl-select name="system_user_id" value={% systemUserId %}>
                     <pl-select-trigger placeholder="Current user"></pl-select-trigger>
                     <pl-select-content>
                         <pl-select-item value="" label="Current user">Current user</pl-select-item>
@@ -45,18 +45,23 @@
                         {% /each %}
                     </pl-select-content>
                 </pl-select>
-                <p class="hh-form-hint">Run child processes as a different system user.</p>
-            </div>
+                <pl-field-description>Run child processes as a different system user.</pl-field-description>
+            </pl-field>
             <div class="hh-form-row">
-                <div class="hh-form-group hh-form-group--grow">
-                    <pl-label target="min-processes">Min Processes</pl-label>
-                    <pl-input id="min-processes" type={% "number" %} name={% "minimum_processes" %} value={% minimumProcesses %} placeholder={% "1" %} min={% "1" %} max={% "20" %}></pl-input>
-                </div>
-                <div class="hh-form-group hh-form-group--grow">
-                    <pl-label target="max-processes">Max Processes</pl-label>
-                    <pl-input id="max-processes" type={% "number" %} name={% "maximum_processes" %} value={% maximumProcesses %} placeholder={% "5" %} min={% "1" %} max={% "20" %}></pl-input>
-                </div>
+                <pl-field>
+                    <pl-label>Min Processes</pl-label>
+                    <pl-input type={% "number" %} name={% "minimum_processes" %} value={% minimumProcesses %} placeholder={% "1" %} min={% "1" %} max={% "20" %}></pl-input>
+                </pl-field>
+                <pl-field>
+                    <pl-label>Max Processes</pl-label>
+                    <pl-input type={% "number" %} name={% "maximum_processes" %} value={% maximumProcesses %} placeholder={% "5" %} min={% "1" %} max={% "20" %}></pl-input>
+                </pl-field>
             </div>
+            {#
+                Composite/grouped controls stay on hh-form-group: pl-field publishes a single control id
+                via its plumage.field.id statekey, which descendant pl-inputs inherit -- the multi-input
+                key-value editors and the checkbox would get duplicate/incorrect ids inside a pl-field.
+            #}
             <div class="hh-form-group hh-checkbox-field">
                 <pl-checkbox inputId="wait_for_ready" name="wait_for_ready" checked={% waitForReady %}></pl-checkbox>
                 <pl-label target="wait_for_ready">Wait For Ready Signal</pl-label>
@@ -71,10 +76,10 @@
                 <hh-key-value-editor initialPairs={% apiKeys %} namePrefix={% "api_keys" %} valueOnly={% true %} valuePlaceholder={% "Enter a key" %}></hh-key-value-editor>
                 <p class="hh-form-hint">Keys for X-Hohenheim-Key header control.</p>
             </div>
-            <div class="hh-form-group">
-                <pl-label target="node-delay">Request Delay (ms)</pl-label>
-                <pl-input id="node-delay" type={% "number" %} name={% "delay" %} value={% nodeDelay %} placeholder={% "0" %}></pl-input>
-            </div>
+            <pl-field>
+                <pl-label>Request Delay (ms)</pl-label>
+                <pl-input type={% "number" %} name={% "delay" %} value={% nodeDelay %} placeholder={% "0" %}></pl-input>
+            </pl-field>
         </div>
     }
 } %}
