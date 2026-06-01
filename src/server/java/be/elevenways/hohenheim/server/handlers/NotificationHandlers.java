@@ -36,7 +36,7 @@ public final class NotificationHandlers {
             }
             return new RenderTemplateResult(
                 Identifier.of("hohenheim", "hohenheim/notifications/list"),
-                Map.of("channels", items, "listCount", items.size())
+                Map.of("channels", items)
             );
         });
 

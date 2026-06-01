@@ -2,11 +2,10 @@
 
 {% block "main" %}
     {% declare databases: List %}
-    {% declare listCount: Integer %}
 
     <hh-page title={% "Databases" %}>
         <hh-page-actions description={% "Managed database engines running as containers." %}>
-            <a href="/databases/create" class="hh-button-link"><pl-button variant="primary">Create Database</pl-button></a>
+            <a href="/databases/create" class="hh-button-link"><pl-button variant={% "primary" %}>Create Database</pl-button></a>
         </hh-page-actions>
 
         <hh-table-card>
@@ -20,7 +19,7 @@
                 <pl-table-head></pl-table-head>
             </pl-table-row></pl-table-header>
             <pl-table-body>
-                <hh-empty-row count={% listCount %} colspan={% "7" %} message={% "No databases yet." %}></hh-empty-row>
+                <hh-empty-row count={% databases |> Array.length %} colspan={% "7" %} message={% "No databases yet." %}></hh-empty-row>
                 {% each databases as index, item %}
                 <pl-table-row>
                     <pl-table-cell>

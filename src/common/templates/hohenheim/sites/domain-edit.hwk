@@ -34,14 +34,7 @@
 
             <div class="hh-form-group">
                 <pl-label target="match-type">Match Type</pl-label>
-                <pl-select id="match-type" name="match_type" value={% matchType %}>
-                    <pl-select-trigger placeholder="Match type"></pl-select-trigger>
-                    <pl-select-content>
-                        <pl-select-item value="exact" label="Exact">Exact</pl-select-item>
-                        <pl-select-item value="wildcard" label="Wildcard">Wildcard</pl-select-item>
-                        <pl-select-item value="regex" label="Regex">Regex</pl-select-item>
-                    </pl-select-content>
-                </pl-select>
+                <hh-match-type-select value={% matchType %}></hh-match-type-select>
             </div>
 
             <pl-separator></pl-separator>

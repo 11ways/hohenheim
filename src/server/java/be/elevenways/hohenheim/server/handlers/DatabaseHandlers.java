@@ -48,7 +48,7 @@ public final class DatabaseHandlers {
             }
             return new RenderTemplateResult(
                 Identifier.of("hohenheim", "hohenheim/databases/list"),
-                Map.of("databases", items, "listCount", items.size())
+                Map.of("databases", items)
             );
         });
 

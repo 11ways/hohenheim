@@ -78,7 +78,7 @@ public final class CertificateHandlers {
 
             return new RenderTemplateResult(
                 Identifier.of("hohenheim", "hohenheim/certificates/list"),
-                Map.of("certificates", certs, "listCount", certs.size())
+                Map.of("certificates", certs)
             );
         });
 

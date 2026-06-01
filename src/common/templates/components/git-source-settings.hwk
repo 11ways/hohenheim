@@ -1,6 +1,7 @@
 {% tag HhGitSourceSettings {
 
     public sourceSettings: Map = null
+    public siteSlug: String = ""
 
     template {
         {%
@@ -79,7 +80,11 @@
             <div class="hh-form-group">
                 <pl-label>Webhook URL</pl-label>
                 <p class="hh-form-hint">Configure this in your Git provider. Secret is auto-generated on save.</p>
-                <code class="hh-code-block">/api/webhooks/git/SITE-SLUG</code>
+                {% if siteSlug != "" %}
+                    <code class="hh-code-block">/api/webhooks/git/{{ siteSlug }}</code>
+                {% else %}
+                    <code class="hh-code-block">/api/webhooks/git/SITE-SLUG</code>
+                {% /if %}
             </div>
 
             <div class="hh-form-group">

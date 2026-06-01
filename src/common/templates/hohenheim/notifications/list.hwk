@@ -2,11 +2,10 @@
 
 {% block "main" %}
     {% declare channels: List %}
-    {% declare listCount: Integer %}
 
     <hh-page title={% "Notifications" %}>
         <hh-page-actions description={% "Webhook delivery for platform events (Slack, Discord, or a generic JSON receiver)." %}>
-            <a href="/notifications/create" class="hh-button-link"><pl-button variant="primary">Add Channel</pl-button></a>
+            <a href="/notifications/create" class="hh-button-link"><pl-button variant={% "primary" %}>Add Channel</pl-button></a>
         </hh-page-actions>
 
         <hh-table-card>
@@ -17,7 +16,7 @@
                 <pl-table-head></pl-table-head>
             </pl-table-row></pl-table-header>
             <pl-table-body>
-                <hh-empty-row count={% listCount %} colspan={% "4" %} message={% "No channels yet." %}></hh-empty-row>
+                <hh-empty-row count={% channels |> Array.length %} colspan={% "4" %} message={% "No channels yet." %}></hh-empty-row>
                 {% each channels as index, item %}
                 <pl-table-row>
                     <pl-table-cell>{{ item.get("name") }}</pl-table-cell>

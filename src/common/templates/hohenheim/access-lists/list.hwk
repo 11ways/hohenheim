@@ -2,11 +2,10 @@
 
 {% block "main" %}
     {% declare accessLists: List %}
-    {% declare listCount: Integer %}
 
     <hh-page title={% "Access Lists" %}>
         <hh-page-actions description={% "IP allow/deny rules and basic auth for your sites." %}>
-            <a href="/access-lists/create" class="hh-button-link"><pl-button variant="primary">Create Access List</pl-button></a>
+            <a href="/access-lists/create" class="hh-button-link"><pl-button variant={% "primary" %}>Create Access List</pl-button></a>
         </hh-page-actions>
 
         <hh-table-card>
@@ -18,7 +17,7 @@
                 <pl-table-head></pl-table-head>
             </pl-table-row></pl-table-header>
             <pl-table-body>
-                <hh-empty-row count={% listCount %} colspan={% "5" %} message={% "No access lists yet." %}></hh-empty-row>
+                <hh-empty-row count={% accessLists |> Array.length %} colspan={% "5" %} message={% "No access lists yet." %}></hh-empty-row>
                 {% each accessLists as index, item %}
                 <pl-table-row>
                     <pl-table-cell>
@@ -28,18 +27,10 @@
                         <pl-badge variant={% "secondary" %}>{{ item.get("satisfy") }}</pl-badge>
                     </pl-table-cell>
                     <pl-table-cell>
-                        {% if item.get("hasAuth") == true %}
-                            <pl-badge variant={% "default" %}>Yes</pl-badge>
-                        {% else %}
-                            <pl-badge variant={% "outline" %}>No</pl-badge>
-                        {% /if %}
+                        <hh-bool-badge value={% item.get("hasAuth") %}></hh-bool-badge>
                     </pl-table-cell>
                     <pl-table-cell>
-                        {% if item.get("hasIpRules") == true %}
-                            <pl-badge variant={% "default" %}>Yes</pl-badge>
-                        {% else %}
-                            <pl-badge variant={% "outline" %}>No</pl-badge>
-                        {% /if %}
+                        <hh-bool-badge value={% item.get("hasIpRules") %}></hh-bool-badge>
                     </pl-table-cell>
                     <pl-table-cell>
                         <div class="hh-table-actions">

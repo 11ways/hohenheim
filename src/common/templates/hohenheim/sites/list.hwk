@@ -2,11 +2,10 @@
 
 {% block "main" %}
     {% declare sites: List %}
-    {% declare listCount: Integer %}
 
     <hh-page title={% "Sites" %}>
         <hh-page-actions description={% "Manage your proxy sites and their domains." %}>
-            <a href="/sites/create" class="hh-button-link"><pl-button variant="primary">Create Site</pl-button></a>
+            <a href="/sites/create" class="hh-button-link"><pl-button variant={% "primary" %}>Create Site</pl-button></a>
         </hh-page-actions>
 
         <hh-table-card>
@@ -18,7 +17,7 @@
                 <pl-table-head></pl-table-head>
             </pl-table-row></pl-table-header>
             <pl-table-body>
-                <hh-empty-row count={% listCount %} colspan={% "5" %} message={% "No sites configured yet." %}></hh-empty-row>
+                <hh-empty-row count={% sites |> Array.length %} colspan={% "5" %} message={% "No sites configured yet." %}></hh-empty-row>
                 {% each sites as index, site %}
                 <pl-table-row>
                     <pl-table-cell>
@@ -28,11 +27,7 @@
                         <pl-badge variant={% "secondary" %}>{{ site.get("siteType") }}</pl-badge>
                     </pl-table-cell>
                     <pl-table-cell>
-                        {% if site.get("enabled") == true %}
-                            <pl-badge variant={% "default" %}>Active</pl-badge>
-                        {% else %}
-                            <pl-badge variant={% "outline" %}>Disabled</pl-badge>
-                        {% /if %}
+                        <hh-bool-badge value={% site.get("enabled") %} onLabel={% "Active" %} offLabel={% "Disabled" %}></hh-bool-badge>
                     </pl-table-cell>
                     <pl-table-cell>{{ site.get("domainCount") }}</pl-table-cell>
                     <pl-table-cell>

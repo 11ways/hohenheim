@@ -16,7 +16,7 @@
 
     <hh-page title={% name %}>
         <hh-page-actions>
-            <div slot="description" class="hh-page-actions__description">
+            <div slot="description">
                 <pl-badge variant={% "secondary" %}>{{ engine }}</pl-badge>
                 <hh-database-status-badge status={% status %} running={% running %} port={% port %}></hh-database-status-badge>
                 <hh-storage-badge ephemeral={% ephemeral %}></hh-storage-badge>

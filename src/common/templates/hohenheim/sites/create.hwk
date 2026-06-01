@@ -31,7 +31,8 @@
                 systemUsers={% systemUsers %}
                 environmentVariables={% environmentVariables %}
                 apiKeys={% apiKeys %}
-                servers={% servers %}></hh-site-form-fields>
+                servers={% servers %}
+                siteSlug={% "" %}></hh-site-form-fields>
 
             <pl-separator></pl-separator>
 
