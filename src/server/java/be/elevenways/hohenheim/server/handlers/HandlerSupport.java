@@ -146,6 +146,21 @@ public final class HandlerSupport {
         return result;
     }
 
+    /** Parse {@code prefix[i].name}/{@code prefix[i].value} form fields (as emitted by hh-key-value-editor) into pairs. */
+    public static List<Map<String, String>> extractIndexedPairs(Map<String, String> form, String prefix) {
+        List<Map<String, String>> pairs = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            String name = form.get(prefix + "[" + i + "].name");
+            if (name == null) {
+                break;
+            }
+            if (!name.isBlank()) {
+                pairs.add(Map.of("name", name.trim(), "value", form.getOrDefault(prefix + "[" + i + "].value", "")));
+            }
+        }
+        return pairs;
+    }
+
     /** Dropdown {id, name} options from certificate rows, excluding the internal ACME account row. */
     public static List<Map<String, Object>> certificateOptions(List<Row> certRows) {
         List<Map<String, Object>> certs = new ArrayList<>();

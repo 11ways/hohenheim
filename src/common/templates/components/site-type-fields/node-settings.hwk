@@ -70,7 +70,7 @@
             </div>
             <div class="hh-form-group">
                 <pl-label>API Keys</pl-label>
-                <hh-list-editor initialItems={% apiKeys %} namePrefix={% "api_keys" %} placeholder={% "Enter a key" %}></hh-list-editor>
+                <hh-key-value-editor initialPairs={% apiKeys %} namePrefix={% "api_keys" %} valueOnly={% true %} valuePlaceholder={% "Enter a key" %}></hh-key-value-editor>
                 <p class="hh-form-hint">Keys for X-Hohenheim-Key header control.</p>
             </div>
             <div class="hh-form-group">
