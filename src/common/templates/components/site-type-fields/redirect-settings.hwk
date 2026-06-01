@@ -4,8 +4,8 @@
 
     template {
         {%
-            let targetUrl = settings != null && settings.get("target_url") != null ? settings.get("target_url") + "" : ""
-            let httpStatus = settings != null && settings.get("http_status") != null ? settings.get("http_status") + "" : "302"
+            let targetUrl = settings.getString("target_url", "")
+            let httpStatus = settings.getString("http_status", "302")
         %}
         <div class="hh-form-section">
             <div class="hh-form-group">
