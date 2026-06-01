@@ -10,7 +10,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -126,15 +125,7 @@ public final class DomainHandlers {
             String listenOn = form.getOrDefault("listen_on", "").trim();
             domain.set(SiteDomainModel.LISTEN_ON, listenOn.isEmpty() ? null : listenOn);
 
-            List<Map<String, String>> customHeaders = new ArrayList<>();
-            for (int i = 0; i < 100; i++) {
-                String headerName = form.get("header_name_" + i);
-                if (headerName == null) break;
-                String headerValue = form.getOrDefault("header_value_" + i, "");
-                if (!headerName.isBlank()) {
-                    customHeaders.add(Map.of("name", headerName.trim(), "value", headerValue));
-                }
-            }
+            List<Map<String, String>> customHeaders = HandlerSupport.extractIndexedPairs(form, "header");
             domain.set(SiteDomainModel.CUSTOM_HEADERS, customHeaders.isEmpty() ? null : customHeaders);
 
             String portStr = form.getOrDefault("port", "").trim();
@@ -202,7 +193,6 @@ public final class DomainHandlers {
 
         Integer certId = domain.get(SiteDomainModel.CERTIFICATE_ID);
         vars.put("certificateId", certId != null ? String.valueOf(certId) : "");
-        vars.put("customHeadersText", joinNamedValueLines(domain.get(SiteDomainModel.CUSTOM_HEADERS), ": "));
         vars.put("customHeaders", HandlerSupport.nameValuePairs(domain.get(SiteDomainModel.CUSTOM_HEADERS)));
 
         // Build certificate list for dropdown (excludes the internal ACME account row)
@@ -211,32 +201,5 @@ public final class DomainHandlers {
 
         vars.put("error", error);
         return vars;
-    }
-
-    private static String joinNamedValueLines(Object rawValue, String separator) {
-        if (!(rawValue instanceof List<?> list) || list.isEmpty()) {
-            return "";
-        }
-
-        StringBuilder builder = new StringBuilder();
-        for (Object item : list) {
-            if (!(item instanceof Map<?, ?> map)) {
-                continue;
-            }
-
-            Object name = map.get("name");
-            if (name == null || String.valueOf(name).isBlank()) {
-                continue;
-            }
-
-            if (!builder.isEmpty()) {
-                builder.append('\n');
-            }
-
-            Object value = map.get("value");
-            builder.append(name).append(separator).append(value != null ? value : "");
-        }
-
-        return builder.toString();
     }
 }

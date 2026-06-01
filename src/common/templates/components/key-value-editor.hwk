@@ -8,33 +8,50 @@
     public namePrefix: String = "kv"
     public namePlaceholder: String = "NAME"
     public valuePlaceholder: String = "value"
+    public valueOnly: Boolean = false
     private pairs: List = null
 
     @mount
     function init() {
+        let result = []
         if initialPairs != null {
-            pairs = initialPairs |> Array.filter(p => true)
-        } else {
-            pairs = []
+            if valueOnly == true {
+                initialPairs |> Array.forEach(v => {
+                    let row = Map.create()
+                    Map.put(row, "value", v)
+                    List.add(result, row)
+                })
+            } else {
+                initialPairs |> Array.forEach(p => {
+                    let row = Map.create()
+                    Map.put(row, "name", Map.getString(p, "name", ""))
+                    Map.put(row, "value", Map.getString(p, "value", ""))
+                    List.add(result, row)
+                })
+            }
         }
+        pairs = result
     }
 
     function addPair() {
-        let newMap = Map.create()
-        Map.put(newMap, "name", "")
-        Map.put(newMap, "value", "")
+        let row = Map.create()
+        if valueOnly == false {
+            Map.put(row, "name", "")
+        }
+        Map.put(row, "value", "")
         let copy = pairs |> Array.filter(p => true)
-        List.add(copy, newMap)
+        List.add(copy, row)
         pairs = copy
     }
-
 
     template {
         <div class="hh-kv-editor">
             {% each pairs{:} as index, pair %}
             <div class="hh-kv-row">
-                <pl-input name={% namePrefix + "[" + index + "].name" %} value={% pair.get("name") %} placeholder={% namePlaceholder %}></pl-input>
-                <pl-input name={% namePrefix + "[" + index + "].value" %} value={% pair.get("value") %} placeholder={% valuePlaceholder %}></pl-input>
+                {% if valueOnly == false %}
+                <pl-input name={% namePrefix + "[" + index + "].name" %} bind:value={% pair["name"] %} placeholder={% namePlaceholder %}></pl-input>
+                {% /if %}
+                <pl-input name={% valueOnly == true ? namePrefix + "[" + index + "]" : namePrefix + "[" + index + "].value" %} bind:value={% pair["value"] %} placeholder={% valuePlaceholder %}></pl-input>
                 <pl-button variant={% "ghost" %} size={% "sm" %} type={% "button" %} event:click={% () => pairs = pairs |> Array.filter(p => p != pair) %}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </pl-button>
