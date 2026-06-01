@@ -56,6 +56,6 @@ class AuthFlowTest extends HohenheimTestBase {
     void staticAssetsAreAccessibleWithoutAuth() throws Exception {
         HttpResponse<String> response = get("/hohenheim.css", true);
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("hh-sidebar");
+        assertThat(response.body()).contains("pl-app-sidebar");
     }
 }

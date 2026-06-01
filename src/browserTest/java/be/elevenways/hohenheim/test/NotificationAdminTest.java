@@ -39,6 +39,6 @@ class NotificationAdminTest extends HohenheimTestBase {
         waitForHydration();
 
         PlaywrightAssertions.assertThat(
-            page.locator("a.hh-sidebar__link[href='/notifications']")).hasCount(1);
+            page.locator("pl-app-sidebar a[href='/notifications']")).hasCount(1);
     }
 }

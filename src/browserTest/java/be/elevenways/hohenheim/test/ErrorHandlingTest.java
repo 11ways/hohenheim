@@ -79,8 +79,8 @@ class ErrorHandlingTest extends HohenheimTestBase {
         softNavToError();
 
         // Sidebar should still be intact -- the layout wasn't destroyed
-        assertThat(page.locator(".hh-sidebar").count()).isEqualTo(1);
-        assertThat(page.locator(".hh-sidebar__logo").textContent()).isEqualTo("Hohenheim");
+        assertThat(page.locator("pl-app-sidebar").count()).isEqualTo(1);
+        assertThat(page.locator(".hh-brand").textContent()).isEqualTo("Hohenheim");
 
         getCollectedErrors().clear();
     }

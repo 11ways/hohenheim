@@ -77,7 +77,7 @@ class AdminPagesTest extends HohenheimTestBase {
         navigateToApp("/");
         waitForHydration();
 
-        page.locator(".hh-sidebar__link[href='/settings']").click();
+        page.locator("pl-app-sidebar a[href='/settings']").click();
         waitForTitle("Settings");
 
         assertThat(page.url()).endsWith("/settings");
@@ -133,7 +133,7 @@ class AdminPagesTest extends HohenheimTestBase {
         navigateToApp("/");
         waitForHydration();
 
-        page.locator(".hh-sidebar__link[href='/audit']").click();
+        page.locator("pl-app-sidebar a[href='/audit']").click();
         waitForTitle("Audit Log");
 
         assertThat(page.url()).endsWith("/audit");

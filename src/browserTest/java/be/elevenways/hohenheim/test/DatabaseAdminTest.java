@@ -48,7 +48,7 @@ class DatabaseAdminTest extends HohenheimTestBase {
         waitForHydration();
 
         PlaywrightAssertions.assertThat(
-            page.locator("a.hh-sidebar__link[href='/databases']")).hasCount(1);
+            page.locator("pl-app-sidebar a[href='/databases']")).hasCount(1);
     }
 
     @Test
