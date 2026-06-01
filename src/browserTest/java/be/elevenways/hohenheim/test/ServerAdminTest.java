@@ -42,6 +42,6 @@ class ServerAdminTest extends HohenheimTestBase {
         waitForHydration();
 
         PlaywrightAssertions.assertThat(
-            page.locator("a.hh-sidebar__link[href='/servers']")).hasCount(1);
+            page.locator("pl-app-sidebar a[href='/servers']")).hasCount(1);
     }
 }

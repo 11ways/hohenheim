@@ -1,33 +1,36 @@
 {% tag HhLayout {
 
     style {
-        display: flex;
-        flex: 1;
-        min-height: 100vh;
+        display: block;
     }
 
     public pageTitle: String = ""
 
     template {
-        <nav class="hh-sidebar">
-            <div class="hh-sidebar__logo">Hohenheim</div>
-            <ul class="hh-sidebar__nav">
-                <li><a class="hh-sidebar__link" href="/">Dashboard</a></li>
-                <li><a class="hh-sidebar__link" href="/sites">Sites</a></li>
-                <li><a class="hh-sidebar__link" href="/certificates">Certificates</a></li>
-                <li><a class="hh-sidebar__link" href="/access-lists">Access Lists</a></li>
-                <li><a class="hh-sidebar__link" href="/databases">Databases</a></li>
-                <li><a class="hh-sidebar__link" href="/servers">Servers</a></li>
-                <li><a class="hh-sidebar__link" href="/notifications">Notifications</a></li>
-                <li><a class="hh-sidebar__link" href="/settings">Settings</a></li>
-                <li><a class="hh-sidebar__link" href="/audit">Audit Log</a></li>
-            </ul>
-            <div class="hh-sidebar__footer">
-                <hh-post-action action={% "/logout" %} label={% "Sign Out" %}></hh-post-action>
-            </div>
-        </nav>
-        <div class="hh-main">
-            <he-block block-name="main"></he-block>
-        </div>
+        <pl-app-shell>
+            <pl-app-header>
+                <pl-sidebar-toggle></pl-sidebar-toggle>
+                <span class="hh-brand">Hohenheim</span>
+            </pl-app-header>
+            <pl-app-sidebar>
+                <pl-nav>
+                    <pl-nav-item href="/">Dashboard</pl-nav-item>
+                    <pl-nav-item href="/sites">Sites</pl-nav-item>
+                    <pl-nav-item href="/certificates">Certificates</pl-nav-item>
+                    <pl-nav-item href="/access-lists">Access Lists</pl-nav-item>
+                    <pl-nav-item href="/databases">Databases</pl-nav-item>
+                    <pl-nav-item href="/servers">Servers</pl-nav-item>
+                    <pl-nav-item href="/notifications">Notifications</pl-nav-item>
+                    <pl-nav-item href="/settings">Settings</pl-nav-item>
+                    <pl-nav-item href="/audit">Audit Log</pl-nav-item>
+                </pl-nav>
+                <div class="hh-sidebar__footer">
+                    <hh-post-action action={% "/logout" %} label={% "Sign Out" %}></hh-post-action>
+                </div>
+            </pl-app-sidebar>
+            <pl-app-content>
+                <he-block block-name="main"></he-block>
+            </pl-app-content>
+        </pl-app-shell>
     }
 } %}

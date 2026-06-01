@@ -14,51 +14,22 @@ body {
 }
 
 // Sidebar
-.hh-sidebar {
-    width: 240px;
-    background: var(--pl-color-surface);
-    border-right: 1px solid var(--pl-color-border);
-    padding: var(--pl-space-lg) 0;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.hh-sidebar__logo {
-    padding: 0 var(--pl-space-lg);
-    margin-bottom: var(--pl-space-xl);
+// Brand wordmark in the pl-app-header
+.hh-brand {
     font-size: var(--pl-font-size-lg);
     font-weight: 700;
     letter-spacing: -0.02em;
 }
 
-.hh-sidebar__nav {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
-
-.hh-sidebar__link {
-    display: flex;
-    align-items: center;
-    gap: var(--pl-space-sm);
-    padding: var(--pl-space-sm) var(--pl-space-lg);
-    color: var(--pl-color-text-muted);
-    text-decoration: none;
-    font-size: var(--pl-font-size-sm);
-    transition: background var(--pl-transition-fast), color var(--pl-transition-fast);
+// Nav + logout footer inside the Plumage app sidebar
+pl-app-sidebar pl-nav {
+    padding: var(--pl-space-md);
 }
 
 .hh-sidebar__footer {
     margin-top: auto;
-    padding: var(--pl-space-sm) var(--pl-space-lg);
+    padding: var(--pl-space-md);
     border-top: 1px solid var(--pl-color-border);
-}
-
-.hh-sidebar__link:hover,
-.hh-sidebar__link--active {
-    background: var(--pl-color-background);
-    color: var(--pl-color-text);
 }
 
 // Main content area

@@ -43,7 +43,7 @@ class NavigationTest extends HohenheimTestBase {
         navigateToApp("/");
         waitForHydration();
 
-        page.locator(".hh-sidebar__link[href='/sites']").click();
+        page.locator("pl-app-sidebar a[href='/sites']").click();
         waitForTitle("Sites");
 
         assertThat(page.url()).endsWith("/sites");
@@ -56,7 +56,7 @@ class NavigationTest extends HohenheimTestBase {
         navigateToApp("/sites");
         waitForHydration();
 
-        page.locator(".hh-sidebar__link[href='/certificates']").click();
+        page.locator("pl-app-sidebar a[href='/certificates']").click();
         waitForTitle("Certificates");
 
         assertThat(page.url()).endsWith("/certificates");
@@ -69,7 +69,7 @@ class NavigationTest extends HohenheimTestBase {
         navigateToApp("/certificates");
         waitForHydration();
 
-        page.locator(".hh-sidebar__link[href='/']").click();
+        page.locator("pl-app-sidebar a[href='/']").click();
         waitForTitle("Dashboard");
 
         assertThat(page.url()).endsWith("/");
@@ -82,13 +82,13 @@ class NavigationTest extends HohenheimTestBase {
         navigateToApp("/");
         waitForHydration();
 
-        assertThat(page.locator(".hh-sidebar__logo").textContent()).isEqualTo("Hohenheim");
+        assertThat(page.locator(".hh-brand").textContent()).isEqualTo("Hohenheim");
 
-        page.locator(".hh-sidebar__link[href='/sites']").click();
+        page.locator("pl-app-sidebar a[href='/sites']").click();
         waitForTitle("Sites");
 
-        assertThat(page.locator(".hh-sidebar__logo").textContent()).isEqualTo("Hohenheim");
-        assertThat(page.locator(".hh-sidebar__link").count()).isEqualTo(9);
+        assertThat(page.locator(".hh-brand").textContent()).isEqualTo("Hohenheim");
+        assertThat(page.locator("pl-app-sidebar a").count()).isEqualTo(9);
     }
 
     @Test
@@ -104,14 +104,13 @@ class NavigationTest extends HohenheimTestBase {
     @Test
     @Order(9)
     void sidebarIsLeftOfMainContent() {
-        // Regression: hh-layout previously had no generated CSS, so nav + main
-        // stacked vertically. The tag style block should now produce a rule
-        // like `hh-layout { display: flex; flex: 1; min-height: 100vh; }`.
+        // The pl-app-shell grid places the sidebar to the left of the content
+        // (grid-areas "sidebar content"), so they sit on the same row.
         navigateToApp("/");
         waitForHydration();
 
-        var sidebar = page.locator(".hh-sidebar").boundingBox();
-        var main = page.locator(".hh-main").boundingBox();
+        var sidebar = page.locator("pl-app-sidebar").boundingBox();
+        var main = page.locator("pl-app-content").boundingBox();
 
         assertThat(sidebar).isNotNull();
         assertThat(main).isNotNull();
@@ -129,7 +128,7 @@ class NavigationTest extends HohenheimTestBase {
         navigateToApp("/");
         waitForHydration();
 
-        page.locator(".hh-sidebar__link[href='/sites']").click();
+        page.locator("pl-app-sidebar a[href='/sites']").click();
         waitForTitle("Sites");
 
         page.goBack();
