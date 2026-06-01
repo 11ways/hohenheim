@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.handlers;
 
 import be.elevenways.hohenheim.model.AuditLogModel;
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.process.ManagedProcess;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -15,6 +17,9 @@ import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.server.http.HttpConduit;
 import be.elevenways.zenit.server.http.RedirectResult;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -60,7 +65,31 @@ public final class HandlerSupport {
     }
 
     public static Map<String, String> formMap(Conduit conduit) {
-        return ((HttpConduit) conduit).getFormData().toStringMap();
+        if (conduit instanceof HttpConduit http) {
+            return http.getFormData().toStringMap();
+        }
+        return Map.of();
+    }
+
+    /** Whether a checkbox-style form field is checked ("on" or "true"). */
+    public static boolean checkbox(Map<String, String> form, String key) {
+        String v = form.get(key);
+        return "on".equals(v) || "true".equals(v);
+    }
+
+    /** Lowercase dash-slug of a display name (collapses non-alphanumerics, trims leading/trailing dashes). */
+    public static String slug(String name) {
+        return name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+    }
+
+    /** Stream a string body as a downloadable attachment with a sanitized filename. */
+    public static void download(Conduit conduit, String contentType, String filename, String body) {
+        if (conduit instanceof HttpConduit http) {
+            String safeName = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
+            http.setResponseHeader("Content-Type", contentType);
+            http.setResponseHeader("Content-Disposition", "attachment; filename=\"" + safeName + "\"");
+        }
+        conduit.endWithContentType(contentType, body);
     }
 
     public static void audit(Conduit conduit, String action, String resourceType,
@@ -77,6 +106,59 @@ public final class HandlerSupport {
         row.set(AuditLogModel.RESOURCE_ID, resourceId != null ? String.valueOf(resourceId) : null);
         row.set(AuditLogModel.RESOURCE_NAME, resourceName);
         model.save(row);
+    }
+
+    /** Common audit-entry view map (action/resourceType/resourceName/createdAt) for template lists. */
+    public static Map<String, Object> auditEntryToMap(Row row) {
+        Map<String, Object> entry = new HashMap<>();
+        entry.put("action", row.get(AuditLogModel.ACTION));
+        entry.put("resourceType", row.get(AuditLogModel.RESOURCE_TYPE));
+        entry.put("resourceName", row.get(AuditLogModel.RESOURCE_NAME));
+        entry.put("createdAt", row.get(AuditLogModel.CREATED_AT));
+        return entry;
+    }
+
+    /** Shared process view map (pid/port/cpu/isolated/ready/fingerprints); callers add memory/startTime. */
+    public static Map<String, Object> processToMap(ManagedProcess proc) {
+        Map<String, Object> info = new HashMap<>();
+        info.put("pid", proc.pid());
+        info.put("port", proc.port());
+        info.put("cpu", proc.cpuPercent());
+        info.put("isolated", proc.isIsolated());
+        info.put("ready", proc.isReady());
+        info.put("fingerprints", proc.activeFingerprintCount());
+        return info;
+    }
+
+    /** Read a list of {name, value} maps from a raw stored value into clean string pairs. */
+    @SuppressWarnings("unchecked")
+    public static List<Map<String, String>> nameValuePairs(Object rawList) {
+        List<Map<String, String>> result = new ArrayList<>();
+        if (rawList instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    String name = map.get("name") != null ? map.get("name").toString() : "";
+                    String value = map.get("value") != null ? map.get("value").toString() : "";
+                    result.add(Map.of("name", name, "value", value));
+                }
+            }
+        }
+        return result;
+    }
+
+    /** Dropdown {id, name} options from certificate rows, excluding the internal ACME account row. */
+    public static List<Map<String, Object>> certificateOptions(List<Row> certRows) {
+        List<Map<String, Object>> certs = new ArrayList<>();
+        for (Row cr : certRows) {
+            if (CertificateModel.PROVIDER_ACME_ACCOUNT.equals(cr.get(CertificateModel.PROVIDER))) {
+                continue;
+            }
+            Map<String, Object> c = new HashMap<>();
+            c.put("id", String.valueOf(cr.get(CertificateModel.ID)));
+            c.put("name", cr.get(CertificateModel.NICE_NAME));
+            certs.add(c);
+        }
+        return certs;
     }
 
     public static Optional<ManagedProcessSiteHandler> managedHandler(Integer siteId) {

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.handlers;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.server.ServerMain;
 
 import java.util.ArrayList;
@@ -20,36 +21,28 @@ public final class ProcessControlHandlers {
         // GET /sites/:id/processes - JSON process list
         HohenheimEndpoints.SITES_PROCESSES.setHandler(conduit -> {
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
-            var proxy = ServerMain.getProxyServer();
             Map<String, Object> result = new HashMap<>();
 
-            if (proxy != null) {
-                var managedOpt = HandlerSupport.managedHandler(siteId);
-                if (managedOpt.isPresent()) {
-                    var managed = managedOpt.get();
-                    List<Map<String, Object>> processes = new ArrayList<>();
-
-                    for (var proc : managed.getProcesses()) {
-                        Map<String, Object> info = new HashMap<>();
-                        info.put("pid", proc.pid());
-                        info.put("port", proc.port());
-                        info.put("cpu", proc.cpuPercent());
-                        info.put("memory", proc.memoryKb());
-                        info.put("isolated", proc.isIsolated());
-                        info.put("ready", proc.isReady());
-                        info.put("startTime", proc.startTime().toString());
-                        info.put("fingerprints", proc.activeFingerprintCount());
-                        processes.add(info);
-                    }
-
-                    result.put("running", !processes.isEmpty());
-                    result.put("processes", processes);
-                } else {
+            // managedHandler() already null-checks the proxy; an empty Optional covers both
+            // "proxy not initialized" (empty result) and "proxy up but site not managed".
+            boolean proxyUp = ServerMain.getProxyServer() != null;
+            HandlerSupport.managedHandler(siteId).ifPresentOrElse(managed -> {
+                List<Map<String, Object>> processes = new ArrayList<>();
+                for (var proc : managed.getProcesses()) {
+                    Map<String, Object> info = HandlerSupport.processToMap(proc);
+                    info.put("memory", proc.memoryKb());
+                    info.put("startTime", proc.startTime().toString());
+                    processes.add(info);
+                }
+                result.put("running", !processes.isEmpty());
+                result.put("processes", processes);
+            }, () -> {
+                if (proxyUp) {
                     result.put("running", false);
                     result.put("processes", List.of());
                     result.put("type", "not_managed");
                 }
-            }
+            });
 
             return HandlerSupport.jsonUntyped(result);
         });
@@ -60,7 +53,8 @@ public final class ProcessControlHandlers {
 
             HandlerSupport.managedHandler(siteId).ifPresent(managed -> {
                 managed.startProcess();
-                HandlerSupport.audit(conduit, "started_process", "site", siteId, null);
+                HandlerSupport.audit(conduit, AuditLogModel.ACTION_STARTED_PROCESS,
+                    AuditLogModel.RESOURCE_SITE, siteId, null);
             });
 
             return HandlerSupport.redirectUntyped("/sites/" + siteId);
@@ -75,7 +69,8 @@ public final class ProcessControlHandlers {
                 var proc = managed.getProcess(pid);
                 if (proc != null) {
                     proc.kill();
-                    HandlerSupport.audit(conduit, "killed_process", "site", siteId, "PID " + pid);
+                    HandlerSupport.audit(conduit, AuditLogModel.ACTION_KILLED_PROCESS,
+                        AuditLogModel.RESOURCE_SITE, siteId, "PID " + pid);
                 }
             });
 
@@ -91,7 +86,8 @@ public final class ProcessControlHandlers {
                 var proc = managed.getProcess(pid);
                 if (proc != null) {
                     proc.setIsolated(!proc.isIsolated());
-                    HandlerSupport.audit(conduit, "isolated_process", "site", siteId, "PID " + pid);
+                    HandlerSupport.audit(conduit, AuditLogModel.ACTION_ISOLATED_PROCESS,
+                        AuditLogModel.RESOURCE_SITE, siteId, "PID " + pid);
                 }
             });
 

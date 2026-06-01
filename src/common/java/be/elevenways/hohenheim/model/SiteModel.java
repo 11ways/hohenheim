@@ -16,6 +16,12 @@ public class SiteModel extends Model {
     public static final Identifier MODEL_ID = Identifier.of("hohenheim", "site");
     public static final Schema SCHEMA = new Schema();
 
+    /** {@link #SOURCE} value for git-provisioned sites. */
+    public static final String SOURCE_GIT = "git";
+
+    /** {@link #STATUS} value for an active site. */
+    public static final String STATUS_ACTIVE = "active";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
     public static final StringField SLUG = SCHEMA.addField(StringField.builder().name("slug").build());

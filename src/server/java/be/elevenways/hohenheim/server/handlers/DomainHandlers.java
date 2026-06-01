@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.handlers;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -35,7 +36,7 @@ public final class DomainHandlers {
             if (site == null) return HandlerSupport.redirectUntyped("/sites");
 
             String hostname = form.getOrDefault("hostname", "").trim();
-            String matchType = form.getOrDefault("match_type", "exact");
+            String matchType = form.getOrDefault("match_type", SiteDomainModel.MATCH_EXACT);
 
             if (!hostname.isEmpty()) {
                 // Check for duplicate hostname on this site
@@ -51,7 +52,8 @@ public final class DomainHandlers {
                     domainRow.set(SiteDomainModel.MATCH_TYPE, matchType);
                     domainModel.save(domainRow);
 
-                    HandlerSupport.audit(conduit, "created", "domain", domainRow.get(SiteDomainModel.ID), hostname);
+                    HandlerSupport.audit(conduit, AuditLogModel.ACTION_CREATED, AuditLogModel.RESOURCE_DOMAIN,
+                        domainRow.get(SiteDomainModel.ID), hostname);
                     HandlerSupport.reloadProxy();
                 }
             }
@@ -99,7 +101,7 @@ public final class DomainHandlers {
             }
 
             domain.set(SiteDomainModel.HOSTNAME, hostname);
-            domain.set(SiteDomainModel.MATCH_TYPE, form.getOrDefault("match_type", "exact"));
+            domain.set(SiteDomainModel.MATCH_TYPE, form.getOrDefault("match_type", SiteDomainModel.MATCH_EXACT));
             domain.set(SiteDomainModel.FORCE_SSL, form.containsKey("force_ssl"));
             domain.set(SiteDomainModel.HSTS_ENABLED, form.containsKey("hsts_enabled"));
             domain.set(SiteDomainModel.HSTS_SUBDOMAINS, form.containsKey("hsts_subdomains"));
@@ -148,7 +150,8 @@ public final class DomainHandlers {
             }
 
             domainModel.save(domain);
-            HandlerSupport.audit(conduit, "updated", "domain", domainId, hostname);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_UPDATED, AuditLogModel.RESOURCE_DOMAIN,
+                domainId, hostname);
             HandlerSupport.reloadProxy();
             return HandlerSupport.redirectUntyped("/sites/" + siteId);
         });
@@ -165,7 +168,8 @@ public final class DomainHandlers {
             if (domain != null) {
                 String hostname = domain.get(SiteDomainModel.HOSTNAME);
                 domainModel.find().where(SiteDomainModel.ID.eq(domainId)).delete();
-                HandlerSupport.audit(conduit, "deleted", "domain", domainId, hostname);
+                HandlerSupport.audit(conduit, AuditLogModel.ACTION_DELETED, AuditLogModel.RESOURCE_DOMAIN,
+                    domainId, hostname);
                 HandlerSupport.reloadProxy();
             }
 
@@ -199,20 +203,11 @@ public final class DomainHandlers {
         Integer certId = domain.get(SiteDomainModel.CERTIFICATE_ID);
         vars.put("certificateId", certId != null ? String.valueOf(certId) : "");
         vars.put("customHeadersText", joinNamedValueLines(domain.get(SiteDomainModel.CUSTOM_HEADERS), ": "));
-        vars.put("customHeaders", extractCustomHeadersList(domain));
+        vars.put("customHeaders", HandlerSupport.nameValuePairs(domain.get(SiteDomainModel.CUSTOM_HEADERS)));
 
-        // Build certificate list for dropdown
+        // Build certificate list for dropdown (excludes the internal ACME account row)
         var certModel = Models.get(CertificateModel.class);
-        List<Row> certRows = certModel.find().all();
-        certRows.removeIf(r -> "acme_account".equals(r.get(CertificateModel.PROVIDER)));
-        List<Map<String, Object>> certs = new ArrayList<>();
-        for (Row cr : certRows) {
-            Map<String, Object> c = new HashMap<>();
-            c.put("id", String.valueOf(cr.get(CertificateModel.ID)));
-            c.put("name", cr.get(CertificateModel.NICE_NAME));
-            certs.add(c);
-        }
-        vars.put("certificates", certs);
+        vars.put("certificates", HandlerSupport.certificateOptions(certModel.find().all()));
 
         vars.put("error", error);
         return vars;
@@ -243,21 +238,5 @@ public final class DomainHandlers {
         }
 
         return builder.toString();
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<Map<String, String>> extractCustomHeadersList(Row domain) {
-        List<Map<String, String>> result = new ArrayList<>();
-        Object raw = domain.get(SiteDomainModel.CUSTOM_HEADERS);
-        if (raw instanceof List<?> rawList) {
-            for (Object item : rawList) {
-                if (item instanceof Map<?, ?> map) {
-                    String name = map.get("name") != null ? map.get("name").toString() : "";
-                    String value = map.get("value") != null ? map.get("value").toString() : "";
-                    result.add(Map.of("name", name, "value", value));
-                }
-            }
-        }
-        return result;
     }
 }

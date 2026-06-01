@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.handlers;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
@@ -68,7 +69,7 @@ public final class ServerHandlers {
                     Map.of("error", error));
             }
             serverService.add(name, sshTarget);
-            HandlerSupport.audit(conduit, "created", "server", name, name);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_CREATED, AuditLogModel.RESOURCE_SERVER, name, name);
             return HandlerSupport.redirectUntyped("/servers");
         });
 
@@ -76,7 +77,7 @@ public final class ServerHandlers {
         HohenheimEndpoints.SERVERS_DELETE.setHandler(conduit -> {
             String name = conduit.getParameter(HohenheimEndpoints.SERVER_NAME);
             serverService.remove(name);
-            HandlerSupport.audit(conduit, "deleted", "server", name, name);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_DELETED, AuditLogModel.RESOURCE_SERVER, name, name);
             return HandlerSupport.redirectUntyped("/servers");
         });
     }

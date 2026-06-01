@@ -126,6 +126,21 @@ public class ManagedDatabase {
         List<String> readyEnv(String password) {
             return this == MYSQL ? List.of("MYSQL_PWD=" + password) : List.of();
         }
+
+        /** Whether this engine can produce a downloadable text dump (the others need binary streaming). */
+        public boolean supportsBackup() {
+            return this == POSTGRES || this == MYSQL;
+        }
+
+        /** Backup support keyed by engine token (e.g. "postgres"); false for unknown engines. */
+        public static boolean supportsBackup(String engine) {
+            if (engine == null) return false;
+            try {
+                return valueOf(engine.toUpperCase()).supportsBackup();
+            } catch (IllegalArgumentException e) {
+                return false;
+            }
+        }
     }
 
     /** Connection details for a provisioned database. */

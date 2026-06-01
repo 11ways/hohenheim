@@ -8,7 +8,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -27,12 +26,8 @@ public final class AuditLogHandlers {
             List<Row> rows = auditModel.findRecent(100);
             List<Map<String, Object>> entries = new ArrayList<>();
             for (Row row : rows) {
-                Map<String, Object> entry = new HashMap<>();
-                entry.put("action", row.get(AuditLogModel.ACTION));
-                entry.put("resourceType", row.get(AuditLogModel.RESOURCE_TYPE));
+                Map<String, Object> entry = HandlerSupport.auditEntryToMap(row);
                 entry.put("resourceId", row.get(AuditLogModel.RESOURCE_ID));
-                entry.put("resourceName", row.get(AuditLogModel.RESOURCE_NAME));
-                entry.put("createdAt", row.get(AuditLogModel.CREATED_AT));
                 entries.add(entry);
             }
 

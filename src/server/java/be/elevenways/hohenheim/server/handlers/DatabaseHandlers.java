@@ -1,13 +1,14 @@
 package be.elevenways.hohenheim.server.handlers;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.server.http.HttpConduit;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -42,7 +43,7 @@ public final class DatabaseHandlers {
                 item.put("status", summary.status());
                 item.put("running", summary.running());
                 item.put("port", summary.port() != null ? summary.port() : 0);
-                item.put("canBackup", summary.engine().equals("postgres") || summary.engine().equals("mysql"));
+                item.put("canBackup", ManagedDatabase.Engine.supportsBackup(summary.engine()));
                 items.add(item);
             }
             return new RenderTemplateResult(
@@ -75,7 +76,7 @@ public final class DatabaseHandlers {
             vars.put("status", detail.status());
             vars.put("running", detail.running());
             vars.put("port", detail.port() != null ? detail.port() : 0);
-            vars.put("canBackup", detail.engine().equals("postgres") || detail.engine().equals("mysql"));
+            vars.put("canBackup", ManagedDatabase.Engine.supportsBackup(detail.engine()));
             return HandlerSupport.renderUntyped(Identifier.of("hohenheim", "hohenheim/databases/detail"), vars);
         });
 
@@ -87,7 +88,7 @@ public final class DatabaseHandlers {
             String engineToken = form.getOrDefault("engine", "").trim().toLowerCase();
             String database = form.getOrDefault("database", "").trim();
             String image = form.getOrDefault("image", "").trim();
-            boolean ephemeral = "on".equals(form.get("ephemeral")) || "true".equals(form.get("ephemeral"));
+            boolean ephemeral = HandlerSupport.checkbox(form, "ephemeral");
             String server = form.getOrDefault("server", ServerService.LOCAL).trim();
             if (server.isEmpty()) {
                 server = ServerService.LOCAL;
@@ -113,7 +114,7 @@ public final class DatabaseHandlers {
             databaseService.createAsync(name, ManagedDatabase.Engine.valueOf(engineToken.toUpperCase()),
                 image.isEmpty() ? null : image, user, password, database, ephemeral, server);
 
-            HandlerSupport.audit(conduit, "created", "database", name, name);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_CREATED, AuditLogModel.RESOURCE_DATABASE, name, name);
             return HandlerSupport.redirectUntyped("/databases/" + name);   // detail page shows status + connection info
         });
 
@@ -124,15 +125,10 @@ public final class DatabaseHandlers {
             try {
                 dump = databaseService.backup(name);
             } catch (IOException e) {
-                return HandlerSupport.redirectUntyped("/databases");
+                Blast.log("DB: backup of", name, "failed -", e.getMessage());
+                return HandlerSupport.redirectUntyped("/databases?error=backup_failed");
             }
-            if (conduit instanceof HttpConduit http) {
-                String safeName = name.replaceAll("[^a-zA-Z0-9._-]", "_");
-                http.setResponseHeader("Content-Type", "application/sql");
-                http.setResponseHeader("Content-Disposition",
-                    "attachment; filename=\"" + safeName + ".sql\"");
-            }
-            conduit.endWithContentType("application/sql", dump);
+            HandlerSupport.download(conduit, "application/sql", name + ".sql", dump);
             return null;
         });
 
@@ -141,9 +137,12 @@ public final class DatabaseHandlers {
             String name = conduit.getParameter(HohenheimEndpoints.DATABASE_NAME);
             try {
                 databaseService.destroy(name, true);
-                HandlerSupport.audit(conduit, "deleted", "database", name, name);
-            } catch (IOException ignored) {
-                // best effort -- the record/container may already be gone
+                HandlerSupport.audit(conduit, AuditLogModel.ACTION_DELETED, AuditLogModel.RESOURCE_DATABASE,
+                    name, name);
+            } catch (IOException e) {
+                // The container/volume may already be gone; record only succeeds via destroy() above.
+                Blast.log("DB: delete of", name, "failed -", e.getMessage());
+                return HandlerSupport.redirectUntyped("/databases?error=delete_failed");
             }
             return HandlerSupport.redirectUntyped("/databases");
         });

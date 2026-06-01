@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.handlers;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -60,7 +61,8 @@ public final class NotificationHandlers {
                     Map.of("error", error));
             }
             notifications.add(name, format, url);
-            HandlerSupport.audit(conduit, "created", "notification_channel", name, name);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_CREATED,
+                AuditLogModel.RESOURCE_NOTIFICATION_CHANNEL, name, name);
             return HandlerSupport.redirectUntyped("/notifications");
         });
 
@@ -68,7 +70,8 @@ public final class NotificationHandlers {
         HohenheimEndpoints.NOTIFICATIONS_TEST.setHandler(conduit -> {
             String name = conduit.getParameter(HohenheimEndpoints.NOTIFICATION_NAME);
             notifications.sendTo(name, "Hohenheim test", "If you can read this, the channel works.");
-            HandlerSupport.audit(conduit, "tested", "notification_channel", name, name);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_TESTED,
+                AuditLogModel.RESOURCE_NOTIFICATION_CHANNEL, name, name);
             return HandlerSupport.redirectUntyped("/notifications");
         });
 
@@ -76,7 +79,8 @@ public final class NotificationHandlers {
         HohenheimEndpoints.NOTIFICATIONS_DELETE.setHandler(conduit -> {
             String name = conduit.getParameter(HohenheimEndpoints.NOTIFICATION_NAME);
             notifications.remove(name);
-            HandlerSupport.audit(conduit, "deleted", "notification_channel", name, name);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_DELETED,
+                AuditLogModel.RESOURCE_NOTIFICATION_CHANNEL, name, name);
             return HandlerSupport.redirectUntyped("/notifications");
         });
     }
