@@ -38,11 +38,9 @@
                 servers={% servers %}
                 siteSlug={% siteSlug %}></hh-site-form-fields>
 
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="enabled" checked={% siteEnabled %}>
-                    <span>Enabled</span>
-                </label>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="enabled" name="enabled" checked={% siteEnabled %}></pl-checkbox>
+                <pl-label target="enabled">Enabled</pl-label>
             </div>
         </hh-form-shell>
     }

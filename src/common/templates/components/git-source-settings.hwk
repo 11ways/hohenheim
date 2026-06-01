@@ -48,27 +48,21 @@
             </div>
 
             <div class="hh-form-row">
-                <div class="hh-form-group">
-                    <label class="hh-checkbox-label">
-                        <input type="checkbox" name="shallow_clone" checked={% shallowClone %}>
-                        <span>Shallow Clone</span>
-                    </label>
+                <div class="hh-form-group hh-checkbox-field">
+                    <pl-checkbox inputId="shallow_clone" name="shallow_clone" checked={% shallowClone %}></pl-checkbox>
+                    <pl-label target="shallow_clone">Shallow Clone</pl-label>
                 </div>
-                <div class="hh-form-group">
-                    <label class="hh-checkbox-label">
-                        <input type="checkbox" name="submodules" checked={% submodules %}>
-                        <span>Submodules</span>
-                    </label>
+                <div class="hh-form-group hh-checkbox-field">
+                    <pl-checkbox inputId="submodules" name="submodules" checked={% submodules %}></pl-checkbox>
+                    <pl-label target="submodules">Submodules</pl-label>
                 </div>
             </div>
 
             <h3 class="hh-form-section-title">Auto-Deploy</h3>
 
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="auto_deploy" checked={% autoDeploy %}>
-                    <span>Auto-deploy on push</span>
-                </label>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="auto_deploy" name="auto_deploy" checked={% autoDeploy %}></pl-checkbox>
+                <pl-label target="auto_deploy">Auto-deploy on push</pl-label>
             </div>
 
             <div class="hh-form-group">

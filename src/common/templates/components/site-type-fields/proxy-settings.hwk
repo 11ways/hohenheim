@@ -38,18 +38,14 @@
                 <pl-input id="proxy-socket" type={% "text" %} name={% "socket" %} value={% proxySocket %} placeholder={% "/run/app.sock" %}></pl-input>
                 <p class="hh-form-hint">Forward to a Unix socket instead of TCP host and port.</p>
             </div>
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="websocket_upgrade" checked={% websocketUpgrade %}>
-                    <span>WebSocket Proxying</span>
-                </label>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="websocket_upgrade" name="websocket_upgrade" checked={% websocketUpgrade %}></pl-checkbox>
+                <pl-label target="websocket_upgrade">WebSocket Proxying</pl-label>
                 <p class="hh-form-hint">Proxy WebSocket upgrade requests to upstream.</p>
             </div>
-            <div class="hh-form-group">
-                <label class="hh-checkbox-label">
-                    <input type="checkbox" name="ignore_certificates" checked={% ignoreCertificates %}>
-                    <span>Ignore upstream TLS errors</span>
-                </label>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="ignore_certificates" name="ignore_certificates" checked={% ignoreCertificates %}></pl-checkbox>
+                <pl-label target="ignore_certificates">Ignore upstream TLS errors</pl-label>
                 <p class="hh-form-hint">Skip certificate verification when proxying to HTTPS upstreams.</p>
             </div>
             <div class="hh-form-group">
