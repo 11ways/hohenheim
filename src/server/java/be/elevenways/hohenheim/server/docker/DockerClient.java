@@ -123,9 +123,7 @@ public class DockerClient {
         String resolvedTag = (tag == null || tag.isBlank()) ? "latest" : tag;
         String path = "/images/create?fromImage=" + enc(image) + "&tag=" + enc(resolvedTag);
         String body = request("POST", path, null, null, LONG_OP_TIMEOUT_MS).body();
-        if (body.contains("\"error\":")) {
-            throw new IOException("Docker image pull failed for " + image + ":" + resolvedTag + " -- " + body.trim());
-        }
+        throwIfStreamError(body, "Docker image pull for " + image + ":" + resolvedTag);
     }
 
     /**
@@ -143,9 +141,7 @@ public class DockerClient {
         String file = (dockerfile == null || dockerfile.isBlank()) ? "Dockerfile" : dockerfile;
         String path = "/build?t=" + enc(tag) + "&dockerfile=" + enc(file) + "&rm=true";
         String body = request("POST", path, context, "application/x-tar", LONG_OP_TIMEOUT_MS).body();
-        if (body.contains("\"error\":")) {
-            throw new IOException("Docker image build failed for " + tag + " -- " + body.trim());
-        }
+        throwIfStreamError(body, "Docker image build for " + tag);
     }
 
     /**
@@ -601,6 +597,35 @@ public class DockerClient {
 
     private static Object parseJson(String json) {
         return new Dry().parse(json);
+    }
+
+    /**
+     * The pull/build endpoints stream NDJSON progress and return HTTP 200 even on failure. Parse the
+     * stream line-by-line and throw if any status object carries an {@code error} field. A substring
+     * scan for {@code "error":} is fragile -- a benign progress line can contain that text.
+     */
+    private static void throwIfStreamError(String body, String what) throws IOException {
+        for (String line : body.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.charAt(0) != '{') {
+                continue;
+            }
+            Object parsed;
+            try {
+                parsed = parseJson(trimmed);
+            } catch (RuntimeException notJson) {
+                // A line we can't parse as a single JSON object (e.g. concatenated objects). Don't
+                // silently skip it -- if it structurally carries an error field, surface it rather
+                // than risk a silent partial pull/build.
+                if (trimmed.matches(".*\"error\"\\s*:.*")) {
+                    throw new IOException(what + " failed -- " + trimmed);
+                }
+                continue;
+            }
+            if (parsed instanceof Map<?, ?> obj && obj.get("error") != null) {
+                throw new IOException(what + " failed -- " + obj.get("error"));
+            }
+        }
     }
 
     private static String enc(String value) {
