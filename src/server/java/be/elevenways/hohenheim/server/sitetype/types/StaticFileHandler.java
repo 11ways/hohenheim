@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.sitetype.types;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
 import io.undertow.io.IoCallback;
+import io.undertow.io.Sender;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 
@@ -117,13 +118,13 @@ public class StaticFileHandler implements SiteRequestHandler {
             FileChannel owned = channel;
             exchange.getResponseSender().transferFrom(owned, new IoCallback() {
                 @Override
-                public void onComplete(HttpServerExchange exchange, io.undertow.io.Sender sender) {
+                public void onComplete(HttpServerExchange exchange, Sender sender) {
                     closeQuietly(owned);
                     IoCallback.END_EXCHANGE.onComplete(exchange, sender);
                 }
 
                 @Override
-                public void onException(HttpServerExchange exchange, io.undertow.io.Sender sender,
+                public void onException(HttpServerExchange exchange, Sender sender,
                                         IOException exception) {
                     closeQuietly(owned);
                     IoCallback.END_EXCHANGE.onException(exchange, sender, exception);

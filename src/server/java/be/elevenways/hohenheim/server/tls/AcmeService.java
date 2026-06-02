@@ -123,7 +123,6 @@ public class AcmeService {
 
         } catch (Exception e) {
             Blast.log("ACME: certificate request failed for", String.join(", ", hostnames), "-", e.getMessage());
-            e.printStackTrace();
 
             certRow.set(CertificateModel.STATUS, "error");
             certRow.set(CertificateModel.RENEWAL_ERROR, e.getMessage());

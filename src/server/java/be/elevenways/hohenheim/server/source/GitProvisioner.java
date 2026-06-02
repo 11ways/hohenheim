@@ -7,6 +7,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -61,7 +62,7 @@ public class GitProvisioner {
         if (dir == null || !dir.exists()) return;
 
         // Handle symlinks: don't follow, just delete
-        if (java.nio.file.Files.isSymbolicLink(dir.toPath())) {
+        if (Files.isSymbolicLink(dir.toPath())) {
             dir.delete();
             return;
         }
