@@ -30,6 +30,7 @@ public class M009_CreateAccessLists extends Migration {
 
     @Override
     public void down(MigrationBuilder schema) {
+        schema.alterTable("sites", table -> table.dropColumn("access_list_id"));
         schema.dropTable("access_lists");
     }
 }
