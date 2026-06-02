@@ -14,6 +14,10 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.*;
 
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.X509ExtendedKeyManager;
+
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
@@ -35,12 +39,12 @@ public class CertificateStore {
      * Swapped atomically via volatile reference.
      */
     private static final class Snapshot {
-        final javax.net.ssl.X509ExtendedKeyManager keyManager;
+        final X509ExtendedKeyManager keyManager;
         final Map<String, String> hostnameToAlias;
         final Map<String, String> preferredHostnameToAlias;
         final int count;
 
-        Snapshot(javax.net.ssl.X509ExtendedKeyManager keyManager,
+        Snapshot(X509ExtendedKeyManager keyManager,
                  Map<String, String> hostnameToAlias,
                  Map<String, String> preferredHostnameToAlias,
                  int count) {
@@ -122,7 +126,7 @@ public class CertificateStore {
         return null;
     }
 
-    public javax.net.ssl.X509ExtendedKeyManager getDelegateKeyManager() {
+    public X509ExtendedKeyManager getDelegateKeyManager() {
         return snapshot.keyManager;
     }
 
@@ -158,7 +162,7 @@ public class CertificateStore {
             }
         }
 
-        javax.net.ssl.X509ExtendedKeyManager keyManager = buildKeyManager(keyStore);
+        X509ExtendedKeyManager keyManager = buildKeyManager(keyStore);
         Map<String, String> preferredAliases = buildPreferredAliases(domains, loadedAliases);
         return new Snapshot(keyManager, Map.copyOf(hostnameToAlias), Map.copyOf(preferredAliases), loaded);
     }
@@ -212,14 +216,14 @@ public class CertificateStore {
         return alias;
     }
 
-    private static javax.net.ssl.X509ExtendedKeyManager buildKeyManager(KeyStore keyStore)
+    private static X509ExtendedKeyManager buildKeyManager(KeyStore keyStore)
             throws Exception {
-        javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory.getInstance(
-            javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(
+            KeyManagerFactory.getDefaultAlgorithm());
         kmf.init(keyStore, KEYSTORE_PASSWORD);
 
-        for (javax.net.ssl.KeyManager km : kmf.getKeyManagers()) {
-            if (km instanceof javax.net.ssl.X509ExtendedKeyManager xkm) {
+        for (KeyManager km : kmf.getKeyManagers()) {
+            if (km instanceof X509ExtendedKeyManager xkm) {
                 return xkm;
             }
         }
