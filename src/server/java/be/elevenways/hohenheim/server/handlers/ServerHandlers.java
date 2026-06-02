@@ -10,11 +10,18 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Server request handlers.
  */
 public final class ServerHandlers {
+
+    // AIDEV-NOTE: SSH target must be a bare [user@]host[:port] that never starts with '-', so it
+    // cannot be parsed as an ssh option (e.g. -oProxyCommand=...) when passed to the ssh argv. The
+    // host may be a DNS/IPv4 name or a bracketed IPv6 literal ([2001:db8::1]).
+    private static final Pattern SSH_TARGET =
+        Pattern.compile("^(?:[A-Za-z0-9_.][A-Za-z0-9_.-]*@)?(?:[A-Za-z0-9_.][A-Za-z0-9_.-]*|\\[[0-9A-Fa-f:]+\\])(?::[0-9]{1,5})?$");
 
     private ServerHandlers() {
     }
@@ -87,6 +94,7 @@ public final class ServerHandlers {
         if (nameError != null) return nameError;
         if (ServerService.LOCAL.equals(name)) return "'local' is reserved for this host";
         if (sshTarget.isEmpty()) return "SSH target is required (e.g. user@host)";
+        if (!SSH_TARGET.matcher(sshTarget).matches()) return "SSH target must be a plain [user@]host[:port]";
         return null;
     }
 }

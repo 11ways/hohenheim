@@ -35,11 +35,15 @@ public class ProcessDockerTransport implements DockerTransport {
         this.command = List.copyOf(command);
     }
 
-    /** Drive a remote daemon over SSH; requires key-based ssh access and docker on {@code sshTarget}. */
+    /**
+     * Drive a remote daemon over SSH; requires key-based ssh access and docker on {@code sshTarget}.
+     * The {@code --} terminator stops ssh from parsing the target as an option (e.g. a target of
+     * {@code -oProxyCommand=...} would otherwise execute an arbitrary command on this host).
+     */
     public static ProcessDockerTransport overSsh(String sshTarget) {
         return new ProcessDockerTransport(List.of("ssh", "-o", "BatchMode=yes",
             "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10",
-            sshTarget, "docker", "system", "dial-stdio"));
+            "--", sshTarget, "docker", "system", "dial-stdio"));
     }
 
     @Override
