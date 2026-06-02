@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
 import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
+import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
@@ -71,10 +72,10 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
             }
 
             removeExisting();   // clean up a leftover container from a previous run
-            String id = docker.createContainer(containerName, buildSpec(imageRef, port, settings));
-            docker.startContainer(id);
-            this.containerId = id;
-            this.upstream = resolveUpstream(id, port);
+            // Record the id before starting so a failed start/upstream-resolve is torn down by destroy().
+            this.containerId = docker.createContainer(containerName, buildSpec(imageRef, port, settings));
+            docker.startContainer(this.containerId);
+            this.upstream = resolveUpstream(this.containerId, port);
         } catch (IOException e) {
             Blast.log("DOCKER: failed to start site", siteId, "-", e.getMessage());
             destroy();   // tear down a partial start so a retry is clean
@@ -189,17 +190,7 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
 
     private static List<String> buildEnv(Object envObj) {
         List<String> result = new ArrayList<>();
-        if (envObj instanceof List<?> list) {
-            for (Object item : list) {
-                if (item instanceof Map<?, ?> entry) {
-                    Object name = entry.get("name");
-                    if (name != null && !name.toString().isBlank()) {
-                        Object value = entry.get("value");
-                        result.add(name + "=" + (value == null ? "" : value));
-                    }
-                }
-            }
-        }
+        EnvVars.toMap(envObj).forEach((name, value) -> result.add(name + "=" + value));
         return result;
     }
 

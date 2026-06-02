@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
+import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.protoblast.common.Blast;
 import io.undertow.server.HttpServerExchange;
@@ -115,20 +116,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         }
 
         // Parse environment variables from settings
-        this.environmentVariables = new LinkedHashMap<>();
-        Object envVars = settings.get("environment_variables");
-        if (envVars instanceof List<?> list) {
-            for (Object item : list) {
-                if (item instanceof Map<?, ?> map) {
-                    Object nameObj = map.get("name");
-                    Object valueObj = map.get("value");
-                    if (nameObj instanceof String name && !name.isEmpty()) {
-                        String value = valueObj instanceof String v ? v : "";
-                        environmentVariables.put(name, value);
-                    }
-                }
-            }
-        }
+        this.environmentVariables = EnvVars.toMap(settings.get("environment_variables"));
 
         monitor.addListener(siteId, this);
     }

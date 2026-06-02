@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.source;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
+import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
@@ -255,16 +256,7 @@ public class GitDeployment {
     }
 
     private void mergeEnvVars(Map<String, String> env, Object envVarsObj) {
-        if (!(envVarsObj instanceof List<?> list)) return;
-        for (Object item : list) {
-            if (item instanceof Map<?, ?> map) {
-                Object nameObj = map.get("name");
-                Object valueObj = map.get("value");
-                if (nameObj instanceof String name && !name.isEmpty()) {
-                    env.put(name, valueObj instanceof String v ? v : "");
-                }
-            }
-        }
+        env.putAll(EnvVars.toMap(envVarsObj));
     }
 
     /**
@@ -307,14 +299,23 @@ public class GitDeployment {
     }
 
     private String readActiveSlot() {
+        String name = activeSlotName(siteDir);
+        return ("a".equals(name) || "b".equals(name)) ? name : null;
+    }
+
+    /**
+     * The filename the {@code <siteDir>/active} symlink points at (the active deploy slot), or null
+     * when there is no valid symlink. Shared with {@code GitSiteRequestHandler}.
+     */
+    static String activeSlotName(File siteDir) {
         Path symlink = siteDir.toPath().resolve("active");
         try {
             if (Files.isSymbolicLink(symlink)) {
-                Path target = Files.readSymbolicLink(symlink);
-                String name = target.getFileName().toString();
-                if ("a".equals(name) || "b".equals(name)) return name;
+                return Files.readSymbolicLink(symlink).getFileName().toString();
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+            // unreadable/missing symlink -> no active slot
+        }
         return null;
     }
 

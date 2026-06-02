@@ -168,15 +168,8 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
     }
 
     private File getActiveSlotDir() {
-        // Read the symlink to find which slot is active
-        java.nio.file.Path symlink = siteDir.toPath().resolve("active");
-        try {
-            if (java.nio.file.Files.isSymbolicLink(symlink)) {
-                java.nio.file.Path target = java.nio.file.Files.readSymbolicLink(symlink);
-                return new File(siteDir, target.getFileName().toString());
-            }
-        } catch (Exception ignored) {}
-        return null;
+        String name = GitDeployment.activeSlotName(siteDir);
+        return name == null ? null : new File(siteDir, name);
     }
 
     // -----------------------------------------------------------------------
