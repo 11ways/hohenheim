@@ -36,11 +36,7 @@ import org.xnio.OptionMap;
 import org.xnio.Xnio;
 import org.xnio.ssl.XnioSsl;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.Writer;
-import java.io.BufferedWriter;
-import java.io.FileWriter;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.InetSocketAddress;
@@ -48,7 +44,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -62,8 +57,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -118,9 +111,9 @@ public class SiteDispatcher implements HttpHandler {
     private static final HttpString HOST = Headers.HOST;
     private static final Pattern NAMED_GROUP_PATTERN = Pattern.compile("\\(\\?<([a-zA-Z][a-zA-Z0-9_]*)>");
 
-    // IP reputation: tracks domain miss count per IP
-    private final ConcurrentHashMap<String, IpReputation> ipReputation = new ConcurrentHashMap<>();
-    private static final int IP_REPUTATION_REJECT_THRESHOLD = 100;
+    // IP reputation (hostname-scanning ban tracking) and access/domain-miss logging.
+    private final IpReputationTracker ipReputation = new IpReputationTracker();
+    private final AccessLog accessLog = new AccessLog();
 
     private static final String ACME_CHALLENGE_PREFIX = "/.well-known/acme-challenge/";
 
@@ -221,12 +214,6 @@ public class SiteDispatcher implements HttpHandler {
     private record CachedRegexMatch(RouteEntry entry, Map<String, String> groups, long cachedAt) {}
 
     private record RouteMatch(RouteEntry entry, Map<String, String> groups) {}
-
-    private static final class IpReputation {
-        final AtomicInteger hits = new AtomicInteger(0);
-        final AtomicInteger misses = new AtomicInteger(0);
-        final AtomicLong lastMissTime = new AtomicLong(0);
-    }
 
     public SiteDispatcher(AcmeService acmeService) {
         this.acmeService = acmeService;
@@ -390,9 +377,9 @@ public class SiteDispatcher implements HttpHandler {
         // --- IP reputation tracking ---
         String clientIp = getClientIp(exchange);
         if (entry != null) {
-            trackHit(clientIp);
+            ipReputation.recordHit(clientIp);
         } else {
-            trackMiss(clientIp, hostname);
+            accessLog.logDomainMiss(clientIp, hostname, ipReputation.recordMiss(clientIp));
         }
 
         // --- Default fallback ---
@@ -475,7 +462,7 @@ public class SiteDispatcher implements HttpHandler {
         }
 
         // --- Access logging ---
-        logAccess(exchange, hostname, clientIp);
+        accessLog.logAccess(exchange, hostname, clientIp);
 
         dispatchToRoute(entry, exchange);
     }
@@ -910,98 +897,12 @@ public class SiteDispatcher implements HttpHandler {
     }
 
     /**
-     * Whether this source IP is currently reputation-banned: many domain misses (likely a
-     * hostname-scanning bot) and not a single real hit. Used both at the HTTP stage and, for
+     * Whether this source IP is currently reputation-banned. Used both at the HTTP stage and, for
      * HTTPS, at the TLS handshake stage (via {@link SniKeyManager}) to drop bad IPs before a
      * certificate is served.
      */
     public boolean isBanned(String ip) {
-        IpReputation rep = ipReputation.get(ip);
-        return rep != null && rep.misses.get() >= IP_REPUTATION_REJECT_THRESHOLD && rep.hits.get() == 0;
-    }
-
-    private void trackHit(String ip) {
-        ipReputation.computeIfAbsent(ip, k -> new IpReputation()).hits.incrementAndGet();
-    }
-
-    private void trackMiss(String ip, String hostname) {
-        IpReputation rep = ipReputation.computeIfAbsent(ip, k -> new IpReputation());
-        int misses = rep.misses.incrementAndGet();
-        rep.lastMissTime.set(System.currentTimeMillis());
-
-        boolean logEnabled = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.LOG_DOMAIN_MISSES);
-        int threshold = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD);
-
-        if (logEnabled && misses >= threshold) {
-            // Strip newlines to prevent log injection
-            String safeHost = hostname.replace("\n", "").replace("\r", "");
-            String safeIp = ip.replace("\n", "").replace("\r", "");
-            String line = Instant.now() + " DOMAIN_MISS ip=" + safeIp
-                + " domain=" + safeHost + " misses=" + misses;
-            Blast.log(line);
-            logDomainMissToFile(line);
-        }
-
-        // Evict old entries if the map grows too large
-        if (ipReputation.size() > 50000) {
-            long cutoff = System.currentTimeMillis() - 3600_000;
-            ipReputation.entrySet().removeIf(e -> e.getValue().lastMissTime.get() < cutoff);
-        }
-    }
-
-    private void logAccess(HttpServerExchange exchange, String hostname, String clientIp) {
-        boolean logToFile = Boolean.TRUE.equals(
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_TO_FILE));
-
-        if (!logToFile) return;
-
-        // Register a completion listener to log after the response
-        exchange.addExchangeCompleteListener((ex, next) -> {
-            try {
-                String logPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_PATH);
-                if (logPath == null || logPath.isEmpty()) { next.proceed(); return; }
-
-                int status = ex.getStatusCode();
-                String method = ex.getRequestMethod().toString();
-                String path = ex.getRelativePath();
-                String query = ex.getQueryString();
-                String ua = ex.getRequestHeaders().getFirst(Headers.USER_AGENT);
-                long size = ex.getResponseBytesSent();
-
-                // Combined log format
-                String line = clientIp + " - - [" + Instant.now() + "] \""
-                    + method + " " + path + (query != null && !query.isEmpty() ? "?" + query : "")
-                    + " " + ex.getProtocol() + "\" " + status + " " + size
-                    + " \"" + (hostname != null ? hostname : "-") + "\""
-                    + " \"" + (ua != null ? ua : "-") + "\"";
-
-                appendToLogFile(logPath, line);
-            } catch (Exception ignored) {
-                // Don't let logging break request handling
-            }
-            next.proceed();
-        });
-    }
-
-    private void logDomainMissToFile(String line) {
-        String logPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISSES_LOG_PATH);
-        if (logPath == null || logPath.isEmpty()) return;
-        appendToLogFile(logPath, line);
-    }
-
-    private static void appendToLogFile(String logPath, String line) {
-        try {
-            File logFile = new File(logPath);
-            File parent = logFile.getParentFile();
-            if (parent != null && !parent.exists()) parent.mkdirs();
-
-            try (Writer writer = new BufferedWriter(new FileWriter(logFile, true))) {
-                writer.write(line);
-                writer.write('\n');
-            }
-        } catch (IOException ignored) {
-            // Don't let log writing failures break request handling
-        }
+        return ipReputation.isBanned(ip);
     }
 
     // -----------------------------------------------------------------------
