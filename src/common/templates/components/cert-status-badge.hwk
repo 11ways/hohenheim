@@ -1,0 +1,16 @@
+{% tag HhCertStatusBadge {
+
+    public status: String = ""
+
+    template {
+        {% if status == "active" %}
+            <pl-badge variant={% "default" %}>Active</pl-badge>
+        {% elseif status == "pending" %}
+            <pl-badge variant={% "outline" %}>Pending</pl-badge>
+        {% elseif status == "error" %}
+            <pl-badge variant={% "destructive" %}>Error</pl-badge>
+        {% else %}
+            <pl-badge variant={% "secondary" %}>{{ status }}</pl-badge>
+        {% /if %}
+    }
+} %}

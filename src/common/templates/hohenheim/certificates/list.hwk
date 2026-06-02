@@ -36,28 +36,10 @@
                         {% /if %}
                     </pl-table-cell>
                     <pl-table-cell>
-                        {% if cert.get("status") == "active" %}
-                            <pl-badge variant={% "default" %}>Active</pl-badge>
-                        {% elseif cert.get("status") == "pending" %}
-                            <pl-badge variant={% "outline" %}>Pending</pl-badge>
-                        {% elseif cert.get("status") == "error" %}
-                            <pl-badge variant={% "destructive" %}>Error</pl-badge>
-                        {% else %}
-                            <pl-badge variant={% "secondary" %}>{{ cert.get("status") }}</pl-badge>
-                        {% /if %}
+                        <hh-cert-status-badge status={% cert.get("status") + "" %}></hh-cert-status-badge>
                     </pl-table-cell>
                     <pl-table-cell>
-                        {% if cert.get("expiryStatus") == "expired" %}
-                            <pl-badge variant={% "destructive" %}>Expired</pl-badge>
-                        {% elseif cert.get("expiryStatus") == "critical" %}
-                            <pl-badge variant={% "destructive" %}>{{ cert.get("daysLeft") }}d left</pl-badge>
-                        {% elseif cert.get("expiryStatus") == "warning" %}
-                            <pl-badge variant={% "outline" %}>{{ cert.get("daysLeft") }}d left</pl-badge>
-                        {% elseif cert.get("expiresOn") != null %}
-                            <pl-badge variant={% "secondary" %}>{{ cert.get("daysLeft") }}d left</pl-badge>
-                        {% else %}
-                            <span class="hh-text-muted">N/A</span>
-                        {% /if %}
+                        <hh-cert-expiry-badge status={% cert.get("expiryStatus") + "" %} daysLeft={% cert.get("daysLeft") + "" %} hasExpiry={% cert.get("expiresOn") != null %}></hh-cert-expiry-badge>
                     </pl-table-cell>
                     <pl-table-cell>
                         <div class="hh-table-actions">

@@ -14,30 +14,30 @@
         %}
         <div class="hh-form-section">
             <div class="hh-form-row">
-                <div class="hh-form-group hh-form-group--grow">
-                    <pl-label target="forward-scheme">Scheme</pl-label>
-                    <pl-select id="forward-scheme" name="forward_scheme" value={% forwardScheme %}>
+                <pl-field class="hh-form-group--grow">
+                    <pl-label>Scheme</pl-label>
+                    <pl-select name="forward_scheme" value={% forwardScheme %}>
                         <pl-select-trigger placeholder="Scheme"></pl-select-trigger>
                         <pl-select-content>
                             <pl-select-item value="http" label="HTTP">HTTP</pl-select-item>
                             <pl-select-item value="https" label="HTTPS">HTTPS</pl-select-item>
                         </pl-select-content>
                     </pl-select>
-                </div>
-                <div class="hh-form-group hh-form-group--grow">
-                    <pl-label target="forward-host">Upstream Host</pl-label>
-                    <pl-input id="forward-host" type={% "text" %} name={% "forward_host" %} value={% forwardHost %} placeholder={% "127.0.0.1" %}></pl-input>
-                </div>
-                <div class="hh-form-group hh-form-group--port">
-                    <pl-label target="forward-port">Port</pl-label>
-                    <pl-input id="forward-port" type={% "number" %} name={% "forward_port" %} value={% forwardPort %} placeholder={% "3000" %} min={% "1" %} max={% "65535" %}></pl-input>
-                </div>
+                </pl-field>
+                <pl-field class="hh-form-group--grow">
+                    <pl-label>Upstream Host</pl-label>
+                    <pl-input type={% "text" %} name={% "forward_host" %} value={% forwardHost %} placeholder={% "127.0.0.1" %}></pl-input>
+                </pl-field>
+                <pl-field class="hh-form-group--port">
+                    <pl-label>Port</pl-label>
+                    <pl-input type={% "number" %} name={% "forward_port" %} value={% forwardPort %} placeholder={% "3000" %} min={% "1" %} max={% "65535" %}></pl-input>
+                </pl-field>
             </div>
-            <div class="hh-form-group">
-                <pl-label target="proxy-socket">Unix Socket Path</pl-label>
-                <pl-input id="proxy-socket" type={% "text" %} name={% "socket" %} value={% proxySocket %} placeholder={% "/run/app.sock" %}></pl-input>
-                <p class="hh-form-hint">Forward to a Unix socket instead of TCP host and port.</p>
-            </div>
+            <pl-field>
+                <pl-label>Unix Socket Path</pl-label>
+                <pl-input type={% "text" %} name={% "socket" %} value={% proxySocket %} placeholder={% "/run/app.sock" %}></pl-input>
+                <pl-field-description>Forward to a Unix socket instead of TCP host and port.</pl-field-description>
+            </pl-field>
             <div class="hh-form-group hh-checkbox-field">
                 <pl-checkbox inputId="websocket_upgrade" name="websocket_upgrade" checked={% websocketUpgrade %}></pl-checkbox>
                 <pl-label target="websocket_upgrade">WebSocket Proxying</pl-label>
@@ -48,10 +48,10 @@
                 <pl-label target="ignore_certificates">Ignore upstream TLS errors</pl-label>
                 <p class="hh-form-hint">Skip certificate verification when proxying to HTTPS upstreams.</p>
             </div>
-            <div class="hh-form-group">
-                <pl-label target="proxy-delay">Request Delay (ms)</pl-label>
-                <pl-input id="proxy-delay" type={% "number" %} name={% "delay" %} value={% proxyDelay %} placeholder={% "0" %}></pl-input>
-            </div>
+            <pl-field>
+                <pl-label>Request Delay (ms)</pl-label>
+                <pl-input type={% "number" %} name={% "delay" %} value={% proxyDelay %} placeholder={% "0" %}></pl-input>
+            </pl-field>
         </div>
     }
 } %}

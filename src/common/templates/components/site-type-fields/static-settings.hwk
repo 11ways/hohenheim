@@ -12,14 +12,14 @@
             let staticDelay = settings.getString("delay", "")
         %}
         <div class="hh-form-section">
-            <div class="hh-form-group">
-                <pl-label target="root-path">Root Directory</pl-label>
-                <pl-input id="root-path" type={% "text" %} name={% "root_path" %} value={% rootPath %} placeholder={% "/var/www/html" %}></pl-input>
-            </div>
-            <div class="hh-form-group">
-                <pl-label target="fallback-file">SPA Fallback File</pl-label>
-                <pl-input id="fallback-file" type={% "text" %} name={% "fallback_file" %} value={% fallbackFile %} placeholder={% "index.html" %}></pl-input>
-            </div>
+            <pl-field>
+                <pl-label>Root Directory</pl-label>
+                <pl-input type={% "text" %} name={% "root_path" %} value={% rootPath %} placeholder={% "/var/www/html" %}></pl-input>
+            </pl-field>
+            <pl-field>
+                <pl-label>SPA Fallback File</pl-label>
+                <pl-input type={% "text" %} name={% "fallback_file" %} value={% fallbackFile %} placeholder={% "index.html" %}></pl-input>
+            </pl-field>
             <div class="hh-form-group hh-checkbox-field">
                 <pl-checkbox inputId="indexes" name="indexes" checked={% indexes %}></pl-checkbox>
                 <pl-label target="indexes">Use index.html for directories</pl-label>
@@ -32,10 +32,10 @@
                 <pl-checkbox inputId="show_hidden_files" name="show_hidden_files" checked={% showHiddenFiles %}></pl-checkbox>
                 <pl-label target="show_hidden_files">Show hidden files</pl-label>
             </div>
-            <div class="hh-form-group">
-                <pl-label target="static-delay">Request Delay (ms)</pl-label>
-                <pl-input id="static-delay" type={% "number" %} name={% "delay" %} value={% staticDelay %} placeholder={% "0" %}></pl-input>
-            </div>
+            <pl-field>
+                <pl-label>Request Delay (ms)</pl-label>
+                <pl-input type={% "number" %} name={% "delay" %} value={% staticDelay %} placeholder={% "0" %}></pl-input>
+            </pl-field>
         </div>
     }
 } %}

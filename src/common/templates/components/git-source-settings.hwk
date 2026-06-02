@@ -82,8 +82,8 @@
             </div>
 
             <div class="hh-form-group">
-                <pl-label>Webhook Secret</pl-label>
-                <pl-input type={% "text" %} name={% "webhook_secret" %} value={% webhookSecret %} readonly={% true %}></pl-input>
+                <pl-label target="webhook-secret">Webhook Secret</pl-label>
+                <pl-input id="webhook-secret" type={% "text" %} name={% "webhook_secret" %} value={% webhookSecret %} readonly={% true %}></pl-input>
             </div>
         </div>
     }

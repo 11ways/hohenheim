@@ -19,6 +19,13 @@
                 nodeVersions={% nodeVersions %}
                 systemUsers={% systemUsers %}
             ></hh-node-settings>
+        {% elseif selectedType{:} == "hohenheim:command" %}
+            <hh-command-settings
+                settings={% settings %}
+                environmentVariables={% environmentVariables %}
+                apiKeys={% apiKeys %}
+                systemUsers={% systemUsers %}
+            ></hh-command-settings>
         {% elseif selectedType{:} == "hohenheim:static" %}
             <hh-static-settings settings={% settings %}></hh-static-settings>
         {% elseif selectedType{:} == "hohenheim:redirect" %}

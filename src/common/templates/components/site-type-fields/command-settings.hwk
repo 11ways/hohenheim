@@ -1,0 +1,77 @@
+{% tag HhCommandSettings {
+
+    public settings: Map = null
+    public environmentVariables: List = null
+    public apiKeys: List = null
+    public systemUsers: List = null
+
+    template {
+        {%
+            let startCommand = settings.getString("start_command", "")
+            let workingDirectory = settings.getString("working_directory", "")
+            let portArgument = settings.getString("port_argument", "")
+            let systemUserId = settings.getString("system_user_id", "")
+            let minimumProcesses = settings.getString("minimum_processes", "1")
+            let maximumProcesses = settings.getString("maximum_processes", "5")
+            let waitForReady = settings.getBoolean("wait_for_ready", false)
+            let commandDelay = settings.getString("delay", "")
+        %}
+        <div class="hh-form-section">
+            <pl-field>
+                <pl-label>Start Command</pl-label>
+                <pl-input type={% "text" %} name={% "start_command" %} value={% startCommand %} placeholder={% "/usr/bin/myapp --serve" %}></pl-input>
+                <pl-field-description>The command to run as a managed process.</pl-field-description>
+            </pl-field>
+            <pl-field>
+                <pl-label>Working Directory</pl-label>
+                <pl-input type={% "text" %} name={% "working_directory" %} value={% workingDirectory %} placeholder={% "/path/to/app" %}></pl-input>
+            </pl-field>
+            <pl-field>
+                <pl-label>Port Argument</pl-label>
+                <pl-input type={% "text" %} name={% "port_argument" %} value={% portArgument %} placeholder={% "--port" %}></pl-input>
+                <pl-field-description>Flag the allocated port is passed to (e.g. {{ "--port" }}); leave blank to pass it via the PORT env var.</pl-field-description>
+            </pl-field>
+            <pl-field>
+                <pl-label>Run As User</pl-label>
+                <pl-select name="system_user_id" value={% systemUserId %}>
+                    <pl-select-trigger placeholder="Current user"></pl-select-trigger>
+                    <pl-select-content>
+                        <pl-select-item value="" label="Current user">Current user</pl-select-item>
+                        {% each systemUsers as index, su %}
+                            <pl-select-item value={% su.get("id") + "" %} label={% su.get("name") %}>{{ su.get("name") }} (uid {{ su.get("uid") }})</pl-select-item>
+                        {% /each %}
+                    </pl-select-content>
+                </pl-select>
+                <pl-field-description>Run the process as a different system user.</pl-field-description>
+            </pl-field>
+            <div class="hh-form-row">
+                <pl-field>
+                    <pl-label>Min Processes</pl-label>
+                    <pl-input type={% "number" %} name={% "minimum_processes" %} value={% minimumProcesses %} placeholder={% "1" %} min={% "1" %} max={% "20" %}></pl-input>
+                </pl-field>
+                <pl-field>
+                    <pl-label>Max Processes</pl-label>
+                    <pl-input type={% "number" %} name={% "maximum_processes" %} value={% maximumProcesses %} placeholder={% "5" %} min={% "1" %} max={% "20" %}></pl-input>
+                </pl-field>
+            </div>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="wait_for_ready" name="wait_for_ready" checked={% waitForReady %}></pl-checkbox>
+                <pl-label target="wait_for_ready">Wait For Ready Signal</pl-label>
+                <p class="hh-form-hint">Only enable this when the process sends a ready signal.</p>
+            </div>
+            <div class="hh-form-group">
+                <pl-label>Environment Variables</pl-label>
+                <hh-key-value-editor initialPairs={% environmentVariables %} namePrefix={% "environment_variables" %} namePlaceholder={% "NAME" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
+            </div>
+            <div class="hh-form-group">
+                <pl-label>API Keys</pl-label>
+                <hh-key-value-editor initialPairs={% apiKeys %} namePrefix={% "api_keys" %} valueOnly={% true %} valuePlaceholder={% "Enter a key" %}></hh-key-value-editor>
+                <p class="hh-form-hint">Keys for X-Hohenheim-Key header control.</p>
+            </div>
+            <pl-field>
+                <pl-label>Request Delay (ms)</pl-label>
+                <pl-input type={% "number" %} name={% "delay" %} value={% commandDelay %} placeholder={% "0" %}></pl-input>
+            </pl-field>
+        </div>
+    }
+} %}

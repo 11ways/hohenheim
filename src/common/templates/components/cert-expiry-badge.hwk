@@ -1,0 +1,20 @@
+{% tag HhCertExpiryBadge {
+
+    public status: String = ""
+    public daysLeft: String = ""
+    public hasExpiry: Boolean = false
+
+    template {
+        {% if status == "expired" %}
+            <pl-badge variant={% "destructive" %}>Expired</pl-badge>
+        {% elseif status == "critical" %}
+            <pl-badge variant={% "destructive" %}>{{ daysLeft }}d left</pl-badge>
+        {% elseif status == "warning" %}
+            <pl-badge variant={% "outline" %}>{{ daysLeft }}d left</pl-badge>
+        {% elseif hasExpiry == true %}
+            <pl-badge variant={% "secondary" %}>{{ daysLeft }}d left</pl-badge>
+        {% else %}
+            <span class="hh-text-muted">N/A</span>
+        {% /if %}
+    }
+} %}
