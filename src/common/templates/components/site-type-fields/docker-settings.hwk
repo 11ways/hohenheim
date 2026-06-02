@@ -14,33 +14,33 @@
         %}
         <div class="hh-form-section">
             <div class="hh-form-row">
-                <div class="hh-form-group hh-form-group--grow">
-                    <pl-label target="docker-image">Image</pl-label>
-                    <pl-input id="docker-image" type={% "text" %} name={% "image" %} value={% image %} placeholder={% "nginx" %}></pl-input>
-                    <p class="hh-form-hint">Leave empty for a git-sourced site; the image is built from its Dockerfile.</p>
-                </div>
-                <div class="hh-form-group">
-                    <pl-label target="docker-tag">Tag</pl-label>
-                    <pl-input id="docker-tag" type={% "text" %} name={% "tag" %} value={% imageTag %} placeholder={% "latest" %}></pl-input>
-                </div>
-                <div class="hh-form-group hh-form-group--port">
-                    <pl-label target="docker-port">Container Port</pl-label>
-                    <pl-input id="docker-port" type={% "number" %} name={% "container_port" %} value={% containerPort %} placeholder={% "80" %} min={% "1" %} max={% "65535" %}></pl-input>
-                </div>
+                <pl-field class="hh-form-group--grow">
+                    <pl-label>Image</pl-label>
+                    <pl-input type={% "text" %} name={% "image" %} value={% image %} placeholder={% "nginx" %}></pl-input>
+                    <pl-field-description>Leave empty for a git-sourced site; the image is built from its Dockerfile.</pl-field-description>
+                </pl-field>
+                <pl-field>
+                    <pl-label>Tag</pl-label>
+                    <pl-input type={% "text" %} name={% "tag" %} value={% imageTag %} placeholder={% "latest" %}></pl-input>
+                </pl-field>
+                <pl-field class="hh-form-group--port">
+                    <pl-label>Container Port</pl-label>
+                    <pl-input type={% "number" %} name={% "container_port" %} value={% containerPort %} placeholder={% "80" %} min={% "1" %} max={% "65535" %}></pl-input>
+                </pl-field>
             </div>
-            <div class="hh-form-group">
-                <pl-label target="docker-command">Command Override</pl-label>
-                <pl-input id="docker-command" type={% "text" %} name={% "command" %} value={% command %} placeholder={% "(image default)" %}></pl-input>
-                <p class="hh-form-hint">Overrides the image's default command (space-separated).</p>
-            </div>
-            <div class="hh-form-group">
-                <pl-label target="docker-dockerfile">Dockerfile Path</pl-label>
-                <pl-input id="docker-dockerfile" type={% "text" %} name={% "dockerfile" %} value={% dockerfile %} placeholder={% "Dockerfile" %}></pl-input>
-                <p class="hh-form-hint">Used only for git-sourced sites (path within the checkout).</p>
-            </div>
-            <div class="hh-form-group">
-                <pl-label target="docker-server">Server</pl-label>
-                <pl-select id="docker-server" name="server" value={% server %}>
+            <pl-field>
+                <pl-label>Command Override</pl-label>
+                <pl-input type={% "text" %} name={% "command" %} value={% command %} placeholder={% "(image default)" %}></pl-input>
+                <pl-field-description>Overrides the image's default command (space-separated).</pl-field-description>
+            </pl-field>
+            <pl-field>
+                <pl-label>Dockerfile Path</pl-label>
+                <pl-input type={% "text" %} name={% "dockerfile" %} value={% dockerfile %} placeholder={% "Dockerfile" %}></pl-input>
+                <pl-field-description>Used only for git-sourced sites (path within the checkout).</pl-field-description>
+            </pl-field>
+            <pl-field>
+                <pl-label>Server</pl-label>
+                <pl-select name="server" value={% server %}>
                     <pl-select-trigger placeholder="local"></pl-select-trigger>
                     <pl-select-content>
                         {% each servers as srvIndex, srvName %}
@@ -48,8 +48,8 @@
                         {% /each %}
                     </pl-select-content>
                 </pl-select>
-                <p class="hh-form-hint">Registered server name to run on; leave empty for the local host.</p>
-            </div>
+                <pl-field-description>Registered server name to run on; leave empty for the local host.</pl-field-description>
+            </pl-field>
         </div>
     }
 } %}
