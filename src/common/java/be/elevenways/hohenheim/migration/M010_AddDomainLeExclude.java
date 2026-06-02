@@ -18,5 +18,7 @@ public class M010_AddDomainLeExclude extends Migration {
     }
 
     @Override
-    public void down(MigrationBuilder schema) {}
+    public void down(MigrationBuilder schema) {
+        schema.alterTable("site_domains", table -> table.dropColumn("exclude_from_letsencrypt"));
+    }
 }

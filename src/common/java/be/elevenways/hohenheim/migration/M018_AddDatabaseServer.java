@@ -18,5 +18,7 @@ public class M018_AddDatabaseServer extends Migration {
     }
 
     @Override
-    public void down(MigrationBuilder schema) {}
+    public void down(MigrationBuilder schema) {
+        schema.alterTable("managed_databases", table -> table.dropColumn("server_name"));
+    }
 }

@@ -19,5 +19,10 @@ public class M014_AddSiteSourceFields extends Migration {
     }
 
     @Override
-    public void down(MigrationBuilder schema) {}
+    public void down(MigrationBuilder schema) {
+        schema.alterTable("sites", table -> {
+            table.dropColumn("source");
+            table.dropColumn("source_settings");
+        });
+    }
 }

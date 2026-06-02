@@ -18,5 +18,7 @@ public class M016_AddDatabaseStatus extends Migration {
     }
 
     @Override
-    public void down(MigrationBuilder schema) {}
+    public void down(MigrationBuilder schema) {
+        schema.alterTable("managed_databases", table -> table.dropColumn("status"));
+    }
 }
