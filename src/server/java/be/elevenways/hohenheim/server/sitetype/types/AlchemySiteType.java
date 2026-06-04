@@ -1,8 +1,12 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Manages Alchemy (Node.js framework) child processes.
@@ -30,4 +34,17 @@ public class AlchemySiteType extends NodeSiteType {
         return true;
     }
 
+    // Alchemy apps always signal readiness via janeway, so each process is held out of the routing
+    // pool until it reports ready by default (when the site settings don't specify wait_for_ready).
+    @Override
+    public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
+        int siteId = site.get(SiteModel.ID);
+        String siteName = site.get(SiteModel.NAME);
+        return new NodeProcessHandler(siteId, siteName, settings, getDefaultArgs(), useChildWrapper()) {
+            @Override
+            protected boolean defaultWaitForReady() {
+                return true;
+            }
+        };
+    }
 }

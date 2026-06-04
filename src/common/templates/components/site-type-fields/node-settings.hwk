@@ -5,6 +5,7 @@
     public apiKeys: List = null
     public nodeVersions: List = null
     public systemUsers: List = null
+    public waitForReadyDefault: Boolean = false
 
     template {
         {%
@@ -13,7 +14,7 @@
             let systemUserId = settings.getString("system_user_id", "")
             let minimumProcesses = settings.getString("minimum_processes", "1")
             let maximumProcesses = settings.getString("maximum_processes", "5")
-            let waitForReady = settings.getBoolean("wait_for_ready", false)
+            let waitForReady = settings.getBoolean("wait_for_ready", waitForReadyDefault)
             let nodeDelay = settings.getString("delay", "")
         %}
         <div class="hh-form-section">

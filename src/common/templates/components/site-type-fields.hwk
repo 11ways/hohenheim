@@ -18,6 +18,7 @@
                 apiKeys={% apiKeys %}
                 nodeVersions={% nodeVersions %}
                 systemUsers={% systemUsers %}
+                waitForReadyDefault={% selectedType{:} == "hohenheim:alchemy" %}
             ></hh-node-settings>
         {% elseif selectedType{:} == "hohenheim:command" %}
             <hh-command-settings
