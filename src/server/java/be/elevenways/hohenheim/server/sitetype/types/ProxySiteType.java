@@ -3,15 +3,20 @@ package be.elevenways.hohenheim.server.sitetype.types;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
+import be.elevenways.hohenheim.server.sitetype.UnixSocketBridgeConnection;
+import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
 import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
+import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -61,19 +66,30 @@ public class ProxySiteType implements SiteTypeHandler {
 
     @Override
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
-        String socketPath = (String) settings.get("socket");
-        String scheme = (String) settings.getOrDefault("forward_scheme", "http");
+        String socketSetting = (String) settings.get("socket");
+        String socket = socketSetting != null && !socketSetting.isEmpty() ? socketSetting : null;
         String host = (String) settings.get("forward_host");
-        Object portObj = settings.get("forward_port");
-        int defaultPort = "https".equals(scheme) ? 443 : 80;
-        int port = portObj instanceof Integer i ? i : defaultPort;
+        boolean websocketEnabled = Boolean.TRUE.equals(settings.get("websocket_upgrade"));
+        boolean ignoreCertificates = Boolean.TRUE.equals(settings.get("ignore_certificates"));
 
-        if ((host == null || host.isEmpty()) && (socketPath == null || socketPath.isEmpty())) {
+        if (socket == null && (host == null || host.isEmpty())) {
             return (exchange, forwarder) -> {
                 exchange.setStatusCode(502);
                 exchange.getResponseSender().send("No upstream configured");
             };
         }
+
+        // Socket mode takes precedence over url mode (matching the Node implementation). The unix
+        // socket is reached through a loopback bridge held by the handler and reused across requests.
+        if (socket != null) {
+            boolean hasPlaceholders = PLACEHOLDER.matcher(socket).find();
+            return new ProxySocketHandler(socket, hasPlaceholders, ignoreCertificates, websocketEnabled);
+        }
+
+        String scheme = (String) settings.getOrDefault("forward_scheme", "http");
+        Object portObj = settings.get("forward_port");
+        int defaultPort = "https".equals(scheme) ? 443 : 80;
+        int port = portObj instanceof Integer i ? i : defaultPort;
 
         URI upstream;
         try {
@@ -85,11 +101,6 @@ public class ProxySiteType implements SiteTypeHandler {
             };
         }
 
-        boolean websocketEnabled = Boolean.TRUE.equals(settings.get("websocket_upgrade"));
-        boolean ignoreCertificates = Boolean.TRUE.equals(settings.get("ignore_certificates"));
-        String socket = socketPath != null && !socketPath.isEmpty() ? socketPath : null;
-        boolean socketHasPlaceholders = socket != null && PLACEHOLDER.matcher(socket).find();
-
         return (exchange, forwarder) -> {
             if (!websocketEnabled
                     && "websocket".equalsIgnoreCase(
@@ -98,13 +109,82 @@ public class ProxySiteType implements SiteTypeHandler {
                 exchange.getResponseSender().send("WebSocket upgrades disabled for this site");
                 return;
             }
-            String resolvedSocket = socket;
-            if (socketHasPlaceholders) {
-                Map<String, String> groups = exchange.getAttachment(SiteDispatcher.MATCHED_GROUPS);
-                resolvedSocket = substitutePlaceholders(socket, groups);
-            }
-            forwarder.forwardTo(new UpstreamTarget(upstream, ignoreCertificates, resolvedSocket));
+            forwarder.forwardTo(new UpstreamTarget(upstream, ignoreCertificates));
         };
+    }
+
+    /**
+     * Handles a unix-socket proxy upstream. Each distinct resolved socket path (placeholders are
+     * substituted from regex-host capture groups per request) gets its own long-lived loopback
+     * bridge, cached here and closed on {@link #destroy()}.
+     */
+    private static final class ProxySocketHandler implements SiteRequestHandler {
+
+        private final String socketTemplate;
+        private final boolean hasPlaceholders;
+        private final boolean ignoreCertificates;
+        private final boolean websocketEnabled;
+        private final Map<String, UnixSocketBridgeConnection> bridges = new ConcurrentHashMap<>();
+
+        ProxySocketHandler(String socketTemplate, boolean hasPlaceholders,
+                           boolean ignoreCertificates, boolean websocketEnabled) {
+            this.socketTemplate = socketTemplate;
+            this.hasPlaceholders = hasPlaceholders;
+            this.ignoreCertificates = ignoreCertificates;
+            this.websocketEnabled = websocketEnabled;
+        }
+
+        @Override
+        public void handleRequest(HttpServerExchange exchange, UpstreamForwarder forwarder) {
+            if (!websocketEnabled
+                    && "websocket".equalsIgnoreCase(
+                        exchange.getRequestHeaders().getFirst(Headers.UPGRADE))) {
+                exchange.setStatusCode(403);
+                exchange.getResponseSender().send("WebSocket upgrades disabled for this site");
+                return;
+            }
+
+            String resolvedSocket = socketTemplate;
+            if (hasPlaceholders) {
+                Map<String, String> groups = exchange.getAttachment(SiteDispatcher.MATCHED_GROUPS);
+                resolvedSocket = substitutePlaceholders(socketTemplate, groups);
+            }
+
+            UnixSocketBridgeConnection conn;
+            try {
+                conn = bridgeFor(resolvedSocket);
+            } catch (IOException e) {
+                exchange.setStatusCode(502);
+                exchange.getResponseSender().send("Cannot reach socket upstream: " + e.getMessage());
+                return;
+            }
+            forwarder.forwardTo(new UpstreamTarget(conn.connectUri(), conn.ignoreCertificates()));
+        }
+
+        private UnixSocketBridgeConnection bridgeFor(String socketPath) throws IOException {
+            UnixSocketBridgeConnection existing = bridges.get(socketPath);
+            if (existing != null) {
+                return existing;
+            }
+            // computeIfAbsent can't propagate the checked IOException, so guard the create explicitly.
+            synchronized (bridges) {
+                existing = bridges.get(socketPath);
+                if (existing != null) {
+                    return existing;
+                }
+                UnixSocketBridgeConnection created = new UnixSocketBridgeConnection(socketPath, ignoreCertificates);
+                bridges.put(socketPath, created);
+                return created;
+            }
+        }
+
+        @Override
+        public void destroy() {
+            for (UnixSocketBridgeConnection conn : bridges.values()) {
+                conn.close();
+            }
+            bridges.clear();
+        }
     }
 
     /** {name} or {0} placeholders resolved against regex-host capture groups. */

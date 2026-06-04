@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.process.ChildWrapper;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.PortAllocator;
 import be.elevenways.hohenheim.server.process.ProcessMonitor;
+import be.elevenways.hohenheim.server.process.SocketAllocator;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -72,10 +73,12 @@ public class NodeSiteType implements SiteTypeHandler {
 
     // Shared infrastructure (singleton per server)
     private static PortAllocator portAllocator;
+    private static SocketAllocator socketAllocator;
     private static ProcessMonitor processMonitor;
 
     public static void initSharedInfrastructure() {
         portAllocator = new PortAllocator();
+        socketAllocator = new SocketAllocator();
         processMonitor = new ProcessMonitor();
         processMonitor.start();
     }
@@ -85,6 +88,7 @@ public class NodeSiteType implements SiteTypeHandler {
     }
 
     public static PortAllocator getPortAllocator() { return portAllocator; }
+    public static SocketAllocator getSocketAllocator() { return socketAllocator; }
     public static ProcessMonitor getProcessMonitor() { return processMonitor; }
 
     @Override
@@ -168,7 +172,7 @@ public class NodeSiteType implements SiteTypeHandler {
         }
 
         @Override
-        protected List<String> buildCommand(int port) {
+        protected List<String> buildCommand(String listenTarget) {
             List<String> cmd = new ArrayList<>();
             cmd.add(nodePath != null && !nodePath.isEmpty() ? nodePath : "node");
             if (useChildWrapper) {
@@ -179,13 +183,24 @@ public class NodeSiteType implements SiteTypeHandler {
                 cmd.add("--hh-exec");
             }
             cmd.add(script);
-            cmd.add("--port=" + port);
+            // listenTarget is a TCP port number or, when use_ports=false, the unix socket path.
+            cmd.add("--port=" + listenTarget);
 
             // Add a marker arg so processes can identify themselves
             cmd.add("hohenchild");
 
             cmd.addAll(defaultArgs);
             return cmd;
+        }
+
+        @Override
+        protected String allocateSocketPath() {
+            return socketAllocator.allocate(siteId);
+        }
+
+        @Override
+        protected void releaseSocketPath(String socketPath) {
+            socketAllocator.release(socketPath);
         }
 
         @Override
