@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.process;
 
+import be.elevenways.hohenheim.server.sitetype.UpstreamConnection;
+
 import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -35,6 +37,10 @@ public class ManagedProcess {
 
     // Startup diagnostics
     private volatile boolean addressInUse;
+
+    // Upstream transport (TCP to the process port, or a unix-socket bridge). Set once the process
+    // survives the startup grace; closed on exit/destroy.
+    private volatile UpstreamConnection connection;
 
     // Fingerprint cache: fingerprint string -> true (with idle expiry managed externally)
     private final ConcurrentHashMap<String, Long> fingerprints = new ConcurrentHashMap<>();
@@ -79,6 +85,9 @@ public class ManagedProcess {
 
     public boolean hasAddressInUse() { return addressInUse; }
     public void markAddressInUse() { this.addressInUse = true; }
+
+    public UpstreamConnection connection() { return connection; }
+    public void setConnection(UpstreamConnection connection) { this.connection = connection; }
 
     public ConcurrentHashMap<String, Long> fingerprints() { return fingerprints; }
 

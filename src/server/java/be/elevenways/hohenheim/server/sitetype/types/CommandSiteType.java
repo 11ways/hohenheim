@@ -101,15 +101,17 @@ public class CommandSiteType implements SiteTypeHandler {
         }
 
         @Override
-        protected List<String> buildCommand(int port) {
+        protected List<String> buildCommand(String listenTarget) {
             List<String> cmd = new ArrayList<>();
 
             // Split command by whitespace (simple tokenization)
             String[] parts = startCommand.split("\\s+");
             Collections.addAll(cmd, parts);
 
+            // Command sites stay on TCP ports (they don't opt into socket transport), so
+            // listenTarget is always the port number here.
             if (portArgument != null && !portArgument.isEmpty()) {
-                cmd.add(portArgument + "=" + port);
+                cmd.add(portArgument + "=" + listenTarget);
             }
 
             return cmd;

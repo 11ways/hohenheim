@@ -5,7 +5,11 @@ import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.hohenheim.server.sitetype.TcpUpstreamConnection;
+import be.elevenways.hohenheim.server.sitetype.UnixSocketBridgeConnection;
+import be.elevenways.hohenheim.server.sitetype.UpstreamConnection;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
+import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.protoblast.common.Blast;
@@ -43,6 +47,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     protected final int minProcesses;
     protected final int maxProcesses;
     protected final boolean waitForReady;
+    protected final boolean usePorts;
     protected final Map<String, String> environmentVariables;
     protected final Set<String> apiKeys;
 
@@ -91,6 +96,21 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     private static final int SCALE_DOWN_CPU_THRESHOLD = 0;
     private static final int ROUTING_CPU_CEILING = 92;
 
+    /**
+     * Whether a managed process is held out of the routing pool until it sends a ready signal
+     * when the site settings don't specify {@code wait_for_ready}. Overridden by Alchemy (which
+     * always signals readiness via janeway) to return true. Must return a constant -- it is
+     * called during construction.
+     */
+    protected boolean defaultWaitForReady() {
+        return false;
+    }
+
+    /** Whether managed processes are held out of the routing pool until they signal ready. */
+    public boolean isWaitForReady() {
+        return waitForReady;
+    }
+
     protected ManagedProcessSiteHandler(int siteId, String siteName, Map<String, Object> settings,
                                          PortAllocator portAllocator, ProcessMonitor monitor) {
         this.siteId = siteId;
@@ -102,7 +122,11 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         this.minProcesses = minObj instanceof Integer i && i > 0 ? i : 1;
         Object maxObj = settings.get("maximum_processes");
         this.maxProcesses = maxObj instanceof Integer i && i > 0 ? i : SCALE_UP_HARD_CAP;
-        this.waitForReady = Boolean.TRUE.equals(settings.get("wait_for_ready"));
+        this.waitForReady = settings.containsKey("wait_for_ready")
+            ? Boolean.TRUE.equals(settings.get("wait_for_ready"))
+            : defaultWaitForReady();
+        // use_ports=false routes through a unix socket instead of a loopback TCP port (default true).
+        this.usePorts = !Boolean.FALSE.equals(settings.get("use_ports"));
 
         // Parse API keys (stored as a JSON list of strings)
         this.apiKeys = new LinkedHashSet<>();
@@ -129,7 +153,20 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
      * Build the command to execute (e.g., ["node", "app.js", "--port=3000"]).
      * The port is already allocated and passed as a parameter.
      */
-    protected abstract List<String> buildCommand(int port);
+    protected abstract List<String> buildCommand(String listenTarget);
+
+    /**
+     * Allocate a unix socket path for a child when {@code use_ports=false}, or null if this handler
+     * does not support socket transport (port mode is then used). Resolved before spawn so it can be
+     * passed to the child via env.
+     */
+    protected String allocateSocketPath() {
+        return null;
+    }
+
+    /** Release a socket path previously returned by {@link #allocateSocketPath()}. */
+    protected void releaseSocketPath(String socketPath) {
+    }
 
     /**
      * Build additional environment variables specific to the runtime.
@@ -196,18 +233,28 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     }
 
     private ManagedProcess startProcessOnce() {
-        int port;
-        try {
-            port = portAllocator.allocate(siteId);
-        } catch (Exception e) {
-            Blast.log("PROCESS: failed to allocate port for", siteName, "-", e.getMessage());
-            return null;
-        }
+        // use_ports=false routes through a unix socket; otherwise a loopback TCP port. The listen
+        // target (a port number or socket path) is passed to the child as PORT, --port=<x>, and,
+        // for sockets, PATH_TO_SOCKET (matching the Node Hohenheim child contract).
+        String socketPath = usePorts ? null : allocateSocketPath();
+        boolean socketMode = socketPath != null;
 
-        List<String> command = buildCommand(port);
+        int port = 0;
+        if (!socketMode) {
+            try {
+                port = portAllocator.allocate(siteId);
+            } catch (Exception e) {
+                Blast.log("PROCESS: failed to allocate port for", siteName, "-", e.getMessage());
+                return null;
+            }
+        }
+        String listenTarget = socketMode ? socketPath : String.valueOf(port);
+
+        List<String> command = buildCommand(listenTarget);
         File workDir = getWorkingDirectory();
 
         IpcChannel ipc = null;
+        UpstreamConnection connection = null;
         try {
             // Create IPC channel before spawning so the port is ready
             ipc = new IpcChannel();
@@ -220,7 +267,10 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             pb.redirectErrorStream(false);
 
             Map<String, String> env = pb.environment();
-            env.put("PORT", String.valueOf(port));
+            env.put("PORT", listenTarget);
+            if (socketMode) {
+                env.put("PATH_TO_SOCKET", socketPath);
+            }
             env.put("HOHENHEIM_IPC_PORT", String.valueOf(ipc.getPort()));
             env.putAll(environmentVariables);
             env.putAll(buildRuntimeEnvironment(port));
@@ -237,22 +287,32 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             }
 
             Process process = pb.start();
-            ManagedProcess managed = new ManagedProcess(process, port, null, siteId);
+            ManagedProcess managed = new ManagedProcess(process, port, socketPath, siteId);
             captureProcessOutput(managed);
 
             if (process.waitFor(STARTUP_GRACE_MS, TimeUnit.MILLISECONDS)) {
                 ipc.close();
-                portAllocator.release(port);
+                releaseUpstream(port, socketPath, null);
 
                 if (managed.hasAddressInUse()) {
-                    Blast.log("PROCESS: retrying", siteName, "after EADDRINUSE on port=" + port);
+                    Blast.log("PROCESS: retrying", siteName, "after EADDRINUSE on", listenTarget);
                 } else {
                     Blast.log("PROCESS: failed to start", siteName,
-                        "exit=" + process.exitValue(), "port=" + port);
+                        "exit=" + process.exitValue(), "target=" + listenTarget);
                 }
 
                 return null;
             }
+
+            // Survived the grace window: open the upstream transport. For socket mode this stands up
+            // the loopback bridge, whose connect retry covers the child still binding its socket.
+            if (socketMode) {
+                connection = new UnixSocketBridgeConnection(socketPath, false);
+            } else {
+                connection = new TcpUpstreamConnection(
+                    new URI("http", null, "127.0.0.1", port, "/", null, null), false);
+            }
+            managed.setConnection(connection);
 
             // Wire up IPC message handler
             IpcChannel finalIpc = ipc;
@@ -269,14 +329,27 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             monitor.register(managed);
             process.onExit().thenAccept(p -> processExit(managed));
 
-            Blast.log("PROCESS: started", siteName, "pid=" + process.pid(), "port=" + port);
+            Blast.log("PROCESS: started", siteName, "pid=" + process.pid(), "target=" + listenTarget);
             return managed;
 
         } catch (Exception e) {
             if (ipc != null) ipc.close();
-            portAllocator.release(port);
+            releaseUpstream(port, socketPath, connection);
             Blast.log("PROCESS: failed to start", siteName, "-", e.getMessage());
             return null;
+        }
+    }
+
+    /** Release a process's upstream resources: TCP port, socket file, and bridge connection. */
+    private void releaseUpstream(int port, String socketPath, UpstreamConnection connection) {
+        if (port > 0) {
+            portAllocator.release(port);
+        }
+        if (socketPath != null) {
+            releaseSocketPath(socketPath);
+        }
+        if (connection != null) {
+            connection.close();
         }
     }
 
@@ -389,7 +462,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
         // Cleanup
         monitor.unregister(pid);
-        portAllocator.release(port);
+        releaseUpstream(port, managed.socketPath(), managed.connection());
         processMap.remove(pid);
         processList.remove(managed);
 
@@ -512,16 +585,13 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             return;
         }
 
-        URI upstream;
-        try {
-            upstream = new URI("http", null, "127.0.0.1", target.port(), "/", null, null);
-        } catch (Exception e) {
+        UpstreamConnection conn = target.connection();
+        if (conn == null) {
             exchange.setStatusCode(502);
             exchange.getResponseSender().send("Internal routing error");
             return;
         }
-
-        forwarder.forwardTo(upstream);
+        forwarder.forwardTo(new UpstreamTarget(conn.connectUri(), conn.ignoreCertificates()));
     }
 
     private ManagedProcess selectProcess(HttpServerExchange exchange) {
@@ -644,6 +714,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         remoteCache.clear();
         for (ManagedProcess proc : processMap.values()) {
             proc.kill();
+            releaseUpstream(proc.port(), proc.socketPath(), proc.connection());
         }
         processMap.clear();
         processList.clear();
