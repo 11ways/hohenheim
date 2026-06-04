@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
-import be.elevenways.zenit.common.orm.migration.MigrationRunner;
+import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import org.junit.jupiter.api.BeforeAll;

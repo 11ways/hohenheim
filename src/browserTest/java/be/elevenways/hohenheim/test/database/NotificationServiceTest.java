@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.migration.M019_CreateNotificationChannels;
 import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
-import be.elevenways.zenit.common.orm.migration.MigrationRunner;
+import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
