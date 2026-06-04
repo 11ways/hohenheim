@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.stats.StatsCollector;
 import be.elevenways.zenit.auth.server.AuthRegistry;
@@ -27,8 +28,10 @@ public class ServerMain {
     private static TaskService taskService;
 
     public static void main(String[] args) {
-        // Register site types first (before SiteModel's RegistryEnumField is used)
+        // Register site types and auth-provider types first (before the models'
+        // RegistryEnumFields are used and before the proxy loads its routes).
         SiteTypes.register();
+        SiteAuthProviders.register();
 
         // init() loads ServerSettings from default.dry / local.dry, fires the
         // BlastAutoLoadInit force-loader (materializing HohenheimSettings'
