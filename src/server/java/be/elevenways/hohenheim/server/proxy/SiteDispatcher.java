@@ -475,11 +475,20 @@ public class SiteDispatcher implements HttpHandler {
             final String gatedHostname = hostname;
             final String gatedClientIp = clientIp;
             exchange.dispatch(() -> {
-                SiteAuthDecision decision = gate.evaluate(exchange);
-                if (decision != null) {
-                    applySiteAuthDecision(exchange, decision);
-                } else {
-                    continueAfterAuth(gatedEntry, exchange, gatedHostname, gatedClientIp);
+                try {
+                    SiteAuthDecision decision = gate.evaluate(exchange);
+                    if (decision != null) {
+                        applySiteAuthDecision(exchange, decision);
+                    } else {
+                        continueAfterAuth(gatedEntry, exchange, gatedHostname, gatedClientIp);
+                    }
+                } catch (Exception e) {
+                    // A gate must never leave the exchange hanging: fail closed.
+                    Blast.log("SiteDispatcher: auth gate error for site", gatedEntry.siteName,
+                        "-", e.getMessage());
+                    if (!exchange.isResponseStarted()) {
+                        applySiteAuthDecision(exchange, SiteAuthDecision.deny(502, "Authentication error"));
+                    }
                 }
             });
             return;

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.auth.SiteAuthProviderTypeRegistry;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
+import be.elevenways.hohenheim.server.auth.types.ProteusAuthProviderType;
 import be.elevenways.protoblast.common.registry.Identifier;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -20,6 +21,7 @@ public final class SiteAuthProviders {
     private static final Map<Identifier, SiteAuthProviderTypeHandler> HANDLERS = new HashMap<>();
 
     public static void register() {
+        registerType(ProteusAuthProviderType.ID, new ProteusAuthProviderType());
         registerType(BasicAuthProviderType.ID, new BasicAuthProviderType());
     }
 
