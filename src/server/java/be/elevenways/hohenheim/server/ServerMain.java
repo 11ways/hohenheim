@@ -5,13 +5,6 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.stats.StatsCollector;
-import be.elevenways.hohenheim.server.task.BackupDatabases;
-import be.elevenways.hohenheim.server.task.CleanOldAuditLogs;
-import be.elevenways.hohenheim.server.task.CleanOldProclogs;
-import be.elevenways.hohenheim.server.task.TaskScheduler;
-import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
-import be.elevenways.hohenheim.server.task.UpdateNodeVersions;
-import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
 import be.elevenways.zenit.auth.server.AuthRegistry;
 import be.elevenways.zenit.auth.server.AuthRequirement;
 import be.elevenways.zenit.auth.server.ZenitAuth;
@@ -21,6 +14,8 @@ import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusIdentityProvider;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.server.task.TaskBootstrap;
+import be.elevenways.zenit.server.task.TaskService;
 
 /**
  * Server entry point for Hohenheim.
@@ -29,6 +24,7 @@ public class ServerMain {
 
     private static ProxyServer proxyServer;
     private static StatsCollector statsCollector;
+    private static TaskService taskService;
 
     public static void main(String[] args) {
         // Register site types first (before SiteModel's RegistryEnumField is used)
@@ -67,27 +63,13 @@ public class ServerMain {
         proxyServer = new ProxyServer();
         proxyServer.start();
 
-        // Start scheduled maintenance tasks
-        TaskScheduler taskScheduler = new TaskScheduler();
-        var ipTask = new UpdateSystemIpAddresses();
-        var userTask = new UpdateSystemUsers();
-        var nodeTask = new UpdateNodeVersions();
-
-        // Run discovery tasks immediately, then hourly
-        ipTask.run();
-        userTask.run();
-        nodeTask.run();
-        taskScheduler.schedule("UpdateSystemIpAddresses", ipTask, 60, 60);
-        taskScheduler.schedule("UpdateSystemUsers", userTask, 60, 60);
-        taskScheduler.schedule("UpdateNodeVersions", nodeTask, 60, 60);
-
-        // Cleanup tasks: run every 6 hours after a 5-minute initial delay
-        // (session expiry is owned by zenit-auth's session store)
-        taskScheduler.schedule("CleanOldAuditLogs", new CleanOldAuditLogs(), 5, 360);
-        taskScheduler.schedule("CleanOldProclogs", new CleanOldProclogs(), 5, 360);
-
-        // Managed-database backups: daily, after a 10-minute initial delay
-        taskScheduler.schedule("BackupDatabases", new BackupDatabases(), 10, 1440);
+        // Scheduled maintenance via zenit's TaskService: discovery tasks (IP / users / node
+        // versions) declare BOOT_AND_CRON so they run once now and hourly; cleanup and backup
+        // tasks declare daily FALLBACK schedules. Each task's schedule lives on the task class
+        // (defaultSchedules()) and is reconciled into system_task on boot. (Session expiry is
+        // owned by zenit-auth's session store.)
+        taskService = TaskBootstrap.start(
+            HohenheimDatabase.datasource(), "be.elevenways.hohenheim.server.task");
     }
 
     // zenit-auth is not default-deny, so each admin area is gated explicitly; everything not
@@ -127,5 +109,9 @@ public class ServerMain {
 
     public static StatsCollector getStatsCollector() {
         return statsCollector;
+    }
+
+    public static TaskService getTaskService() {
+        return taskService;
     }
 }

@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
-import be.elevenways.zenit.common.orm.migration.MigrationRunner;
+import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import org.junit.jupiter.api.Test;
 
@@ -64,7 +64,7 @@ class BackupDatabasesTaskTest {
             Files.writeString(dbDir.resolve("20200101-000001.sql"), "old1");
             Files.writeString(dbDir.resolve("20200101-000002.sql"), "old2");
 
-            new BackupDatabases(service).run();
+            BackupDatabases.backupAll(service);
 
             List<Path> dumps;
             try (Stream<Path> files = Files.list(dbDir)) {

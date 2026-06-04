@@ -2,23 +2,30 @@ package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.NodeVersionModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.task.ScheduleDeclaration;
+import be.elevenways.zenit.common.task.ScheduledTask;
+import be.elevenways.zenit.common.task.TaskContext;
 
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
- * Discovers installed Node.js versions from common locations and reconciles them
- * with the node_versions table. Removed binaries get marked obsolete rather than
- * deleted so existing site references still resolve.
+ * Discovers installed Node.js versions from common locations and reconciles them with the
+ * node_versions table, once at boot and hourly. Removed binaries get marked obsolete rather
+ * than deleted so existing site references still resolve.
  */
-public class UpdateNodeVersions implements Runnable {
+public class UpdateNodeVersions extends ScheduledTask {
+
+    public static final String STATIC_DESCRIPTION = "Discover Node.js versions";
 
     /** Record used while scanning the filesystem — flushed to the DB at the end. */
     private record ParsedVersion(String version, String path, String source) {}
@@ -29,8 +36,17 @@ public class UpdateNodeVersions implements Runnable {
         "/usr/bin/nodejs"
     };
 
+    public static List<ScheduleDeclaration> defaultSchedules() {
+        return List.of(ScheduleDeclaration.bootAndCron("14 * * * *"));
+    }
+
     @Override
-    public void run() {
+    public void executor(TaskContext ctx) {
+        reconcile();
+    }
+
+    /** Scan known locations for node binaries and reconcile the node_versions table. */
+    public static void reconcile() {
         List<ParsedVersion> parsed = discoverAll();
 
         NodeVersionModel model = Models.get(NodeVersionModel.class);
@@ -69,7 +85,7 @@ public class UpdateNodeVersions implements Runnable {
         Blast.log("TASK: UpdateNodeVersions reconciled", parsed.size(), "versions");
     }
 
-    private List<ParsedVersion> discoverAll() {
+    private static List<ParsedVersion> discoverAll() {
         List<ParsedVersion> versions = new ArrayList<>();
         Set<String> dedup = new HashSet<>();
 
@@ -93,8 +109,8 @@ public class UpdateNodeVersions implements Runnable {
         return versions;
     }
 
-    private void discoverFromDirectory(Path dir, String source,
-                                       List<ParsedVersion> versions, Set<String> dedup) {
+    private static void discoverFromDirectory(Path dir, String source,
+                                              List<ParsedVersion> versions, Set<String> dedup) {
         if (!Files.isDirectory(dir)) return;
         try (Stream<Path> entries = Files.list(dir)) {
             entries.filter(Files::isDirectory).forEach(versionDir -> {
@@ -111,7 +127,7 @@ public class UpdateNodeVersions implements Runnable {
         }
     }
 
-    private String queryVersion(String nodePath) {
+    private static String queryVersion(String nodePath) {
         try {
             Process proc = new ProcessBuilder(nodePath, "--version")
                 .redirectErrorStream(true)

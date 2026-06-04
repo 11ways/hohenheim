@@ -3,6 +3,9 @@ package be.elevenways.hohenheim.server.task;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.task.ScheduleDeclaration;
+import be.elevenways.zenit.common.task.ScheduledTask;
+import be.elevenways.zenit.common.task.TaskContext;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -17,25 +20,26 @@ import java.util.stream.Stream;
 /**
  * Scheduled task that dumps each running, text-dumpable managed database to a timestamped file
  * under the backup directory, then prunes old dumps per the retention setting. Redis/Mongo and
- * stopped databases are skipped (no text dump available / nothing to connect to).
+ * stopped databases are skipped (no text dump available / nothing to connect to). Runs daily.
  */
-public class BackupDatabases implements Runnable {
+public class BackupDatabases extends ScheduledTask {
+
+    public static final String STATIC_DESCRIPTION = "Back up managed databases";
 
     private static final DateTimeFormatter STAMP =
         DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
 
-    private final DatabaseService databaseService;
-
-    public BackupDatabases() {
-        this(new DatabaseService());
-    }
-
-    public BackupDatabases(DatabaseService databaseService) {
-        this.databaseService = databaseService;
+    public static List<ScheduleDeclaration> defaultSchedules() {
+        return List.of(ScheduleDeclaration.fallback("0 3 * * *"));
     }
 
     @Override
-    public void run() {
+    public void executor(TaskContext ctx) {
+        backupAll(new DatabaseService());
+    }
+
+    /** Dump every running, text-dumpable managed database, then prune old dumps. */
+    public static void backupAll(DatabaseService databaseService) {
         Path backupRoot = Path.of(HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.BACKUP_PATH));
         int retention = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION);
 
