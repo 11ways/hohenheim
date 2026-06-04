@@ -2,10 +2,16 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.auth.SiteAuthDecision;
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.auth.SiteAuthContext;
+import be.elevenways.hohenheim.server.auth.SiteAuthGate;
+import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
+import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -65,6 +71,8 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 /**
  * Routes incoming proxy requests to site-type handlers based on hostname matching.
  * Handles loop detection, request header injection, HSTS, force-SSL, custom headers,
@@ -118,6 +126,11 @@ public class SiteDispatcher implements HttpHandler {
 
     private static final String ACME_CHALLENGE_PREFIX = "/.well-known/acme-challenge/";
 
+    // Used when a site's configured auth provider can't be resolved/built: deny everything rather
+    // than silently exposing an upstream that was meant to be protected.
+    private static final SiteAuthGate FAIL_CLOSED_GATE =
+        exchange -> SiteAuthDecision.deny(503, "Authentication unavailable");
+
     // Shared proxy handler for proxy-type sites
     private final ProxyHandler proxyHandler;
 
@@ -146,6 +159,10 @@ public class SiteDispatcher implements HttpHandler {
         final List<HeaderRule> customHeaders;
         final List<String> listenOnAddresses;
 
+        // Per-site auth provider gate (identity-level; null when the site has no provider).
+        final @Nullable SiteAuthGate authGate;
+        final @Nullable String authProviderName;
+
         // Access list enforcement
         final String[] allowedIps;
         final String[] deniedIps;
@@ -154,9 +171,12 @@ public class SiteDispatcher implements HttpHandler {
         final String accessListSatisfy;
 
         RouteEntry(SiteRequestHandler handler, String siteName, Row domain, Row accessList,
-                   Map<String, Object> siteSettings) {
+                   Map<String, Object> siteSettings, @Nullable SiteAuthGate authGate,
+                   @Nullable String authProviderName) {
             this.handler = handler;
             this.siteName = siteName;
+            this.authGate = authGate;
+            this.authProviderName = authProviderName;
 
             String p = domain != null ? domain.get(SiteDomainModel.PATH) : null;
             this.path = (p != null && !p.isEmpty()) ? p : null;
@@ -245,6 +265,7 @@ public class SiteDispatcher implements HttpHandler {
         var siteModel = Models.get(SiteModel.class);
         var domainModel = Models.get(SiteDomainModel.class);
         var accessListModel = Models.get(AccessListModel.class);
+        var authProviderModel = Models.get(SiteAuthProviderModel.class);
 
         // Build new route maps first, then swap atomically
         Map<String, RouteEntry> newExact = new HashMap<>();
@@ -271,6 +292,43 @@ public class SiteDispatcher implements HttpHandler {
             // Load access list if assigned
             Integer accessListId = site.get(SiteModel.ACCESS_LIST_ID);
             Row accessList = accessListId != null ? accessListModel.findById(accessListId) : null;
+
+            // Build the per-site auth gate (shared across all of this site's domains). Built once
+            // here, not per-domain, since auth_provider_id is a site-level concern.
+            SiteAuthGate authGate = null;
+            String authProviderName = null;
+            Integer authProviderId = site.get(SiteModel.AUTH_PROVIDER_ID);
+            if (authProviderId != null) {
+                Row providerRow = authProviderModel.findById(authProviderId);
+                if (providerRow == null) {
+                    // Site wants auth but the provider record is gone: fail closed, never expose.
+                    Blast.log("SiteDispatcher: auth provider", authProviderId, "missing for site", siteName);
+                    authGate = FAIL_CLOSED_GATE;
+                    authProviderName = "(missing provider)";
+                } else {
+                    String providerType = providerRow.get(SiteAuthProviderModel.PROVIDER_TYPE);
+                    SiteAuthProviderTypeHandler providerHandler = SiteAuthProviders.getHandler(providerType);
+                    if (providerHandler == null) {
+                        Blast.log("SiteDispatcher: unknown auth provider type", providerType,
+                            "for site", siteName);
+                        authGate = FAIL_CLOSED_GATE;
+                        authProviderName = "(unknown type)";
+                    } else {
+                        try {
+                            String requiredPermission = providerRow.get(SiteAuthProviderModel.REQUIRED_PERMISSION);
+                            authGate = providerHandler.createGate(new SiteAuthContext(
+                                providerRow, requiredPermission, proxySessionStore, siteId, providerType));
+                            authProviderName = providerRow.get(SiteAuthProviderModel.NAME);
+                        } catch (Exception e) {
+                            // createGate must be pure; if it throws anyway, fail closed.
+                            Blast.log("SiteDispatcher: failed to build auth gate for site", siteName,
+                                "-", e.getMessage());
+                            authGate = FAIL_CLOSED_GATE;
+                            authProviderName = "(misconfigured)";
+                        }
+                    }
+                }
+            }
 
             // Check for git provisioning. Isolate per-site handler creation so one
             // misconfigured site (e.g. a dangling system_user_id, which now fails
@@ -300,7 +358,8 @@ public class SiteDispatcher implements HttpHandler {
                 String matchType = domain.get(SiteDomainModel.MATCH_TYPE);
                 if (hostname == null || hostname.isEmpty()) continue;
 
-                RouteEntry entry = new RouteEntry(requestHandler, siteName, domain, accessList, settings);
+                RouteEntry entry = new RouteEntry(requestHandler, siteName, domain, accessList,
+                    settings, authGate, authProviderName);
 
                 if ("regex".equals(matchType)) {
                     Pattern pattern = compileHostnameRegex(hostname);
@@ -406,6 +465,36 @@ public class SiteDispatcher implements HttpHandler {
             return;
         }
 
+        // --- Per-site auth provider gate (identity-level; coexists with the IP/basic access list,
+        //     which still runs afterwards). The gate may block (Argon2 verify, Proteus HTTP), so
+        //     run it -- and the rest of the forwarding pipeline -- on a worker thread, off the I/O
+        //     thread. Sites with no provider keep the zero-overhead inline path. ---
+        SiteAuthGate gate = entry.authGate;
+        if (gate != null) {
+            final RouteEntry gatedEntry = entry;
+            final String gatedHostname = hostname;
+            final String gatedClientIp = clientIp;
+            exchange.dispatch(() -> {
+                SiteAuthDecision decision = gate.evaluate(exchange);
+                if (decision != null) {
+                    applySiteAuthDecision(exchange, decision);
+                } else {
+                    continueAfterAuth(gatedEntry, exchange, gatedHostname, gatedClientIp);
+                }
+            });
+            return;
+        }
+
+        continueAfterAuth(entry, exchange, hostname, clientIp);
+    }
+
+    /**
+     * The request pipeline after the auth gate: access list, path matching, header injection,
+     * HSTS, access logging, upstream dispatch. Runs on a worker thread when a gate is present.
+     */
+    private void continueAfterAuth(RouteEntry entry, HttpServerExchange exchange,
+                                   String hostname, String clientIp) {
+
         // --- Access list enforcement ---
         if (entry.hasAccessList() && !checkAccessList(exchange, entry, clientIp)) {
             return;
@@ -470,6 +559,18 @@ public class SiteDispatcher implements HttpHandler {
         accessLog.logAccess(exchange, hostname, clientIp);
 
         dispatchToRoute(entry, exchange);
+    }
+
+    /** Apply a non-null gate decision: redirect the browser, or deny with a status + body. */
+    private void applySiteAuthDecision(HttpServerExchange exchange, SiteAuthDecision decision) {
+        if (decision instanceof SiteAuthDecision.Redirect redirect) {
+            exchange.setStatusCode(302);
+            exchange.getResponseHeaders().put(Headers.LOCATION, redirect.url());
+            exchange.endExchange();
+        } else if (decision instanceof SiteAuthDecision.Deny deny) {
+            exchange.setStatusCode(deny.statusCode());
+            exchange.getResponseSender().send(deny.body());
+        }
     }
 
     private static final AttachmentKey<UpstreamTarget> UPSTREAM_URI =
@@ -884,17 +985,24 @@ public class SiteDispatcher implements HttpHandler {
     private void destroyHandlers() {
         RouteTable rt = this.routes;
         Set<SiteRequestHandler> handlers = Collections.newSetFromMap(new IdentityHashMap<>());
+        Set<SiteAuthGate> gates = Collections.newSetFromMap(new IdentityHashMap<>());
         for (RouteEntry entry : rt.exactRoutes.values()) {
             handlers.add(entry.handler);
+            if (entry.authGate != null) gates.add(entry.authGate);
         }
         for (RouteEntry entry : rt.wildcardRoutes.values()) {
             handlers.add(entry.handler);
+            if (entry.authGate != null) gates.add(entry.authGate);
         }
         for (RegexRoute route : rt.regexRoutes) {
             handlers.add(route.entry().handler);
+            if (route.entry().authGate != null) gates.add(route.entry().authGate);
         }
         for (SiteRequestHandler handler : handlers) {
             handler.destroy();
+        }
+        for (SiteAuthGate gate : gates) {
+            gate.destroy();
         }
     }
 
