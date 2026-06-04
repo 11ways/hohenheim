@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
-import be.elevenways.zenit.common.orm.migration.MigrationRunner;
+import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import org.junit.jupiter.api.Test;
 
