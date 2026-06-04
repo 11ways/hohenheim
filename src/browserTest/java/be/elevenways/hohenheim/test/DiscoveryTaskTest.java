@@ -47,7 +47,7 @@ class DiscoveryTaskTest {
     @Test
     @Order(1)
     void updateSystemUsersPopulatesTable() {
-        new UpdateSystemUsers().run();
+        UpdateSystemUsers.reconcile();
 
         var model = Models.get(SystemUserModel.class);
         long count = model.find().count();
@@ -77,7 +77,7 @@ class DiscoveryTaskTest {
         ghost.set(SystemUserModel.LAST_SEEN_AT, Instant.now());
         model.save(ghost);
 
-        new UpdateSystemUsers().run();
+        UpdateSystemUsers.reconcile();
 
         Row reloaded = model.find()
             .where(SystemUserModel.NAME.eq("hh-phantom-user-does-not-exist"))
@@ -100,7 +100,7 @@ class DiscoveryTaskTest {
         ghost.set(NodeVersionModel.LAST_SEEN_AT, Instant.now());
         model.save(ghost);
 
-        new UpdateNodeVersions().run();
+        UpdateNodeVersions.reconcile();
 
         Row reloaded = model.find()
             .where(NodeVersionModel.PATH.eq("/nonexistent/bin/node-phantom"))

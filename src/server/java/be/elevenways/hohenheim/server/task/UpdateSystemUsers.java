@@ -2,27 +2,43 @@ package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SystemUserModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.task.ScheduleDeclaration;
+import be.elevenways.zenit.common.task.ScheduledTask;
+import be.elevenways.zenit.common.task.TaskContext;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
- * Discovers system users from /etc/passwd and reconciles them with the
- * system_users table. Users that disappear from /etc/passwd get marked obsolete
- * instead of deleted so in-flight site references don't silently break.
+ * Discovers system users from /etc/passwd and reconciles them with the system_users table,
+ * once at boot and hourly. Users that disappear from /etc/passwd get marked obsolete instead
+ * of deleted so in-flight site references don't silently break.
  */
-public class UpdateSystemUsers implements Runnable {
+public class UpdateSystemUsers extends ScheduledTask {
+
+    public static final String STATIC_DESCRIPTION = "Discover system users";
 
     /** Record used when parsing /etc/passwd before we hit the DB. */
     private record ParsedUser(String name, int uid, int gid, String home, String gecos) {}
 
+    public static List<ScheduleDeclaration> defaultSchedules() {
+        return List.of(ScheduleDeclaration.bootAndCron("11 * * * *"));
+    }
+
     @Override
-    public void run() {
+    public void executor(TaskContext ctx) {
+        reconcile();
+    }
+
+    /** Parse /etc/passwd and reconcile the system_users table. */
+    public static void reconcile() {
         List<ParsedUser> parsed = parsePasswdFile();
 
         SystemUserModel model = Models.get(SystemUserModel.class);
@@ -66,7 +82,7 @@ public class UpdateSystemUsers implements Runnable {
         Blast.log("TASK: UpdateSystemUsers reconciled", parsed.size(), "users");
     }
 
-    private List<ParsedUser> parsePasswdFile() {
+    private static List<ParsedUser> parsePasswdFile() {
         List<ParsedUser> result = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader("/etc/passwd"))) {
             String line;
