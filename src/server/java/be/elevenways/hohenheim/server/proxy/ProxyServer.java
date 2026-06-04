@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.session.InMemorySessionStore;
+import be.elevenways.zenit.common.session.SessionStore;
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.handlers.encoding.ContentEncodingRepository;
@@ -36,6 +38,10 @@ public class ProxyServer {
     private final CertificateStore certificateStore;
     private final AcmeService acmeService;
 
+    // Proxy-auth sessions: a dedicated store, fully separate from the admin Zenit.SESSION_STORE.
+    // In-memory by default; a DbSessionStore (backed by site_sessions) is a drop-in here.
+    private final SessionStore proxySessionStore;
+
     private Undertow httpServer;
     private Undertow httpsServer;
 
@@ -49,7 +55,9 @@ public class ProxyServer {
     public ProxyServer() {
         this.certificateStore = new CertificateStore();
         this.acmeService = new AcmeService(certificateStore);
-        this.dispatcher = new SiteDispatcher(acmeService);
+        long sessionTtl = HohenheimSettings.VALUES.getValue(HohenheimSettings.ProxyAuth.SESSION_TTL_SECONDS);
+        this.proxySessionStore = new InMemorySessionStore(sessionTtl);
+        this.dispatcher = new SiteDispatcher(acmeService, proxySessionStore);
 
         // Wrap dispatcher with gzip/deflate compression
         this.handler = new EncodingHandler(dispatcher,
@@ -189,6 +197,7 @@ public class ProxyServer {
     public void stop() {
         acmeService.stop();
         dispatcher.shutdown();
+        proxySessionStore.deleteExpired();
         if (httpServer != null) {
             httpServer.stop();
             httpServer = null;

@@ -184,4 +184,19 @@ public class HohenheimSettings {
             .description("Proteus authenticator slug")
             .build();
     }
+
+    // --- Per-site proxy auth (gating proxied upstreams behind a provider) ---
+    public abstract class ProxyAuth {
+        public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("proxy_auth");
+
+        public static final SettingDefinition<Long> SESSION_TTL_SECONDS = GROUP.buildSetting("session_ttl_seconds", Long.class)
+            .defaultValue(86400L)
+            .description("Lifetime of a proxy-auth session (seconds)")
+            .build();
+
+        public static final SettingDefinition<Long> PERSISTENT_TTL_SECONDS = GROUP.buildSetting("persistent_ttl_seconds", Long.class)
+            .defaultValue(1209600L)
+            .description("Lifetime of a proxy-auth persistent (remember-me) cookie (seconds)")
+            .build();
+    }
 }

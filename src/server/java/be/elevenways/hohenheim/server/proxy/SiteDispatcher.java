@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.session.SessionStore;
 import io.undertow.client.ClientCallback;
 import io.undertow.client.ClientConnection;
 import io.undertow.client.UndertowClient;
@@ -125,6 +126,9 @@ public class SiteDispatcher implements HttpHandler {
     // ACME service for Let's Encrypt challenge responses (nullable)
     private final AcmeService acmeService;
 
+    // Proxy-auth session store (owned by ProxyServer), threaded into per-site auth gates.
+    private final SessionStore proxySessionStore;
+
     private volatile boolean httpsAvailable;
 
     /**
@@ -215,8 +219,9 @@ public class SiteDispatcher implements HttpHandler {
 
     private record RouteMatch(RouteEntry entry, Map<String, String> groups) {}
 
-    public SiteDispatcher(AcmeService acmeService) {
+    public SiteDispatcher(AcmeService acmeService, SessionStore proxySessionStore) {
         this.acmeService = acmeService;
+        this.proxySessionStore = proxySessionStore;
         this.delayScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "site-dispatch-delay");
             thread.setDaemon(true);
@@ -845,6 +850,11 @@ public class SiteDispatcher implements HttpHandler {
 
     public void setHttpsAvailable(boolean httpsAvailable) {
         this.httpsAvailable = httpsAvailable;
+    }
+
+    /** The proxy-auth session store, shared with every per-site auth gate. */
+    SessionStore proxySessionStore() {
+        return this.proxySessionStore;
     }
 
     private void redirectToHttps(HttpServerExchange exchange, String hostname) {
