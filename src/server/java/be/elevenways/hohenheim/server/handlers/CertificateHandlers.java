@@ -3,7 +3,9 @@ package be.elevenways.hohenheim.server.handlers;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -179,6 +181,26 @@ public final class CertificateHandlers {
                 if (!d.isEmpty()) hostnames.add(d);
             }
 
+            // Immediate UI feedback instead of a doomed CA round-trip.
+            List<String> invalid = AcmeService.invalidHostnames(hostnames);
+            if (!invalid.isEmpty()) {
+                return HandlerSupport.renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/certificates/request"),
+                    Map.of("error", "Invalid hostnames: " + String.join(", ", invalid))
+                );
+            }
+
+            // Domains explicitly excluded from Let's Encrypt must not be submitted.
+            // Reject (rather than silently dropping) so the user resubmits deliberately.
+            List<String> excluded = excludedFromLetsencrypt(hostnames);
+            if (!excluded.isEmpty()) {
+                return HandlerSupport.renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/certificates/request"),
+                    Map.of("error", "Excluded from Let's Encrypt by their domain settings: "
+                        + String.join(", ", excluded))
+                );
+            }
+
             int certId = proxy.getAcmeService().requestCertificate(hostnames, niceName);
 
             if (certId < 0) {
@@ -232,5 +254,21 @@ public final class CertificateHandlers {
             HandlerSupport.reloadProxy();
             return HandlerSupport.redirectUntyped("/certificates");
         });
+    }
+
+    /** The subset of hostnames whose domain record opted out of Let's Encrypt. */
+    private static List<String> excludedFromLetsencrypt(List<String> hostnames) {
+        var domainModel = Models.get(SiteDomainModel.class);
+        List<String> excluded = new ArrayList<>();
+        for (String hostname : hostnames) {
+            Row domain = domainModel.find()
+                .where(SiteDomainModel.HOSTNAME.eq(hostname))
+                .where(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.eq(true))
+                .first();
+            if (domain != null) {
+                excluded.add(hostname);
+            }
+        }
+        return excluded;
     }
 }

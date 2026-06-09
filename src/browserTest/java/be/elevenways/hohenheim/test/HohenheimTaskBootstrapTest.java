@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.server.task.CleanOldAuditLogs;
 import be.elevenways.hohenheim.server.task.CleanOldProclogs;
+import be.elevenways.hohenheim.server.task.CleanOrphanCertificates;
 import be.elevenways.hohenheim.server.task.UpdateNodeVersions;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
@@ -24,9 +25,9 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * End-to-end verification of {@code ServerMain}'s {@link TaskBootstrap} wiring: the six
+ * End-to-end verification of {@code ServerMain}'s {@link TaskBootstrap} wiring: the seven
  * Hohenheim maintenance tasks are discovered and reconciled into {@code system_task}, the three
- * BOOT_AND_CRON discovery tasks fire once at startup, and the three FALLBACK cleanup/backup tasks
+ * BOOT_AND_CRON discovery tasks fire once at startup, and the four FALLBACK cleanup/backup tasks
  * do not fire at boot (they wait for their daily cron).
  */
 class HohenheimTaskBootstrapTest {
@@ -54,7 +55,7 @@ class HohenheimTaskBootstrapTest {
     }
 
     @Test
-    void allSixTasksAreReconciledIntoSystemTask() {
+    void allSevenTasksAreReconciledIntoSystemTask() {
         List<String> types = service.taskModel().findAllSystemRows().stream()
             .map(r -> (String) r.get(SystemTaskModel.TYPE))
             .toList();
@@ -64,7 +65,8 @@ class HohenheimTaskBootstrapTest {
             UpdateNodeVersions.class.getName(),
             BackupDatabases.class.getName(),
             CleanOldProclogs.class.getName(),
-            CleanOldAuditLogs.class.getName());
+            CleanOldAuditLogs.class.getName(),
+            CleanOrphanCertificates.class.getName());
     }
 
     @Test
@@ -84,7 +86,8 @@ class HohenheimTaskBootstrapTest {
         for (String type : List.of(
                 BackupDatabases.class.getName(),
                 CleanOldProclogs.class.getName(),
-                CleanOldAuditLogs.class.getName())) {
+                CleanOldAuditLogs.class.getName(),
+                CleanOrphanCertificates.class.getName())) {
             assertThat(service.historyModel().findRecentForType(type, 5))
                 .as("FALLBACK task must NOT fire at boot: " + type)
                 .isEmpty();

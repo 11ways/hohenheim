@@ -21,7 +21,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 /**
  * Manages Let's Encrypt certificate issuance and renewal via ACME protocol.
@@ -100,8 +102,8 @@ public class AcmeService {
 
         Row certRow = certModel.createEmptyRow();
         certRow.set(CertificateModel.NICE_NAME, niceName);
-        certRow.set(CertificateModel.PROVIDER, "letsencrypt");
-        certRow.set(CertificateModel.STATUS, "pending");
+        certRow.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
+        certRow.set(CertificateModel.STATUS, CertificateModel.STATUS_PENDING);
         certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
         certModel.save(certRow);
         int certId = certRow.get(CertificateModel.ID);
@@ -111,10 +113,9 @@ public class AcmeService {
 
             certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
             certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem);
-            certRow.set(CertificateModel.STATUS, "active");
             certRow.set(CertificateModel.EXPIRES_ON, result.expiresAt);
             certRow.set(CertificateModel.ISSUED_ON, Instant.now());
-            certRow.set(CertificateModel.RENEWAL_ERROR, null);
+            markRenewalSuccess(certRow);
             certModel.save(certRow);
 
             certificateStore.loadFromDatabase();
@@ -124,40 +125,98 @@ public class AcmeService {
         } catch (Exception e) {
             Blast.log("ACME: certificate request failed for", String.join(", ", hostnames), "-", e.getMessage());
 
-            certRow.set(CertificateModel.STATUS, "error");
-            certRow.set(CertificateModel.RENEWAL_ERROR, e.getMessage());
+            recordRenewalFailure(certRow, e.getMessage());
             certModel.save(certRow);
 
             return -1;
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Hostname validation
+    // -----------------------------------------------------------------------
+
+    private static final Pattern HOSTNAME_LABEL =
+        Pattern.compile("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?");
+
     /**
-     * Check all Let's Encrypt certificates for upcoming expiry and renew them.
+     * RFC-1123 hostname check. Wildcards are rejected: HTTP-01 cannot validate them.
+     */
+    public static boolean isValidHostname(String hostname) {
+        if (hostname == null) return false;
+        String h = hostname.trim().toLowerCase();
+        if (h.isEmpty() || h.length() > 253 || !h.contains(".")) return false;
+        for (String label : h.split("\\.", -1)) {
+            if (!HOSTNAME_LABEL.matcher(label).matches()) return false;
+        }
+        return true;
+    }
+
+    /** @return the subset of hostnames that fail {@link #isValidHostname} */
+    public static List<String> invalidHostnames(List<String> hostnames) {
+        List<String> invalid = new ArrayList<>();
+        for (String hostname : hostnames) {
+            if (!isValidHostname(hostname)) {
+                invalid.add(hostname);
+            }
+        }
+        return invalid;
+    }
+
+    /**
+     * Check all Let's Encrypt certificates for upcoming expiry (plus errored ones whose
+     * backoff elapsed) and renew them.
      */
     private void checkRenewals() {
         try {
             var ds = HohenheimDatabase.datasource();
             var certModel = Models.get(CertificateModel.class);
 
-            Instant cutoff = Instant.now().plus(RENEWAL_THRESHOLD_DAYS, ChronoUnit.DAYS);
-            List<Row> expiring = certModel.find()
-                .where(CertificateModel.PROVIDER.eq("letsencrypt"))
-                .where(CertificateModel.STATUS.eq("active"))
-                .where(CertificateModel.AUTO_RENEW.eq(true))
-                .where(CertificateModel.EXPIRES_ON.lte(cutoff))
-                .all();
+            List<Row> due = findRenewalCandidates(certModel, Instant.now());
+            if (due.isEmpty()) return;
 
-            if (expiring.isEmpty()) return;
+            Blast.log("ACME: found", due.size(), "certificates due for renewal");
 
-            Blast.log("ACME: found", expiring.size(), "certificates due for renewal");
+            // Stagger: randomize order so a fleet of instances doesn't hammer the CA
+            // with the same sequence every sweep.
+            Collections.shuffle(due);
 
-            for (Row cert : expiring) {
+            for (Row cert : due) {
                 renewCertificate(cert, certModel);
             }
         } catch (Exception e) {
             Blast.log("ACME: renewal check failed:", e.getMessage());
         }
+    }
+
+    /**
+     * Active certificates nearing expiry, plus errored certificates whose retry backoff
+     * has elapsed (errored certs used to be filtered out forever).
+     */
+    public static List<Row> findRenewalCandidates(CertificateModel certModel, Instant now) {
+        List<Row> due = new ArrayList<>();
+
+        Instant cutoff = now.plus(RENEWAL_THRESHOLD_DAYS, ChronoUnit.DAYS);
+        due.addAll(certModel.find()
+            .where(CertificateModel.PROVIDER.eq(CertificateModel.PROVIDER_LETSENCRYPT))
+            .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_ACTIVE))
+            .where(CertificateModel.AUTO_RENEW.eq(true))
+            .where(CertificateModel.EXPIRES_ON.lte(cutoff))
+            .all());
+
+        List<Row> errored = certModel.find()
+            .where(CertificateModel.PROVIDER.eq(CertificateModel.PROVIDER_LETSENCRYPT))
+            .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_ERROR))
+            .where(CertificateModel.AUTO_RENEW.eq(true))
+            .all();
+        for (Row cert : errored) {
+            Instant nextAttempt = cert.get(CertificateModel.NEXT_ATTEMPT_AT);
+            if (nextAttempt == null || !nextAttempt.isAfter(now)) {
+                due.add(cert);
+            }
+        }
+
+        return due;
     }
 
     private void renewCertificate(Row certRow, CertificateModel certModel) {
@@ -172,10 +231,9 @@ public class AcmeService {
 
             certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
             certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem);
-            certRow.set(CertificateModel.STATUS, "active");
             certRow.set(CertificateModel.EXPIRES_ON, result.expiresAt);
             certRow.set(CertificateModel.ISSUED_ON, Instant.now());
-            certRow.set(CertificateModel.RENEWAL_ERROR, null);
+            markRenewalSuccess(certRow);
             certModel.save(certRow);
 
             certificateStore.loadFromDatabase();
@@ -183,10 +241,38 @@ public class AcmeService {
 
         } catch (Exception e) {
             Blast.log("ACME: renewal failed for", niceName, "-", e.getMessage());
-            certRow.set(CertificateModel.STATUS, "error");
-            certRow.set(CertificateModel.RENEWAL_ERROR, e.getMessage());
+            recordRenewalFailure(certRow, e.getMessage());
             certModel.save(certRow);
         }
+    }
+
+    /** Reset error/backoff state after a successful issuance or renewal. */
+    public static void markRenewalSuccess(Row certRow) {
+        certRow.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
+        certRow.set(CertificateModel.RENEWAL_ERROR, null);
+        certRow.set(CertificateModel.ERROR_COUNT, 0);
+        certRow.set(CertificateModel.NEXT_ATTEMPT_AT, null);
+    }
+
+    /** Record a failed issuance/renewal: escalate the error count and schedule the retry. */
+    public static void recordRenewalFailure(Row certRow, String message) {
+        Integer previous = certRow.get(CertificateModel.ERROR_COUNT);
+        int errorCount = (previous != null ? previous : 0) + 1;
+
+        certRow.set(CertificateModel.STATUS, CertificateModel.STATUS_ERROR);
+        certRow.set(CertificateModel.RENEWAL_ERROR, message);
+        certRow.set(CertificateModel.ERROR_COUNT, errorCount);
+        certRow.set(CertificateModel.NEXT_ATTEMPT_AT, computeNextAttempt(errorCount, Instant.now()));
+    }
+
+    /**
+     * Escalating backoff: 15min * 2^min(count,7) with +/-20% jitter, so repeated CA failures
+     * back off from ~30 minutes up to ~32 hours instead of retrying every sweep.
+     */
+    public static Instant computeNextAttempt(int errorCount, Instant now) {
+        long baseSeconds = 15L * 60L * (1L << Math.min(errorCount, 7));
+        double jitter = 0.8 + ThreadLocalRandom.current().nextDouble() * 0.4;
+        return now.plusSeconds((long) (baseSeconds * jitter));
     }
 
     // -----------------------------------------------------------------------
@@ -194,6 +280,11 @@ public class AcmeService {
     // -----------------------------------------------------------------------
 
     private OrderResult performAcmeOrder(List<String> hostnames) throws Exception {
+        List<String> invalid = invalidHostnames(hostnames);
+        if (!invalid.isEmpty()) {
+            throw new IllegalArgumentException("Invalid hostnames: " + String.join(", ", invalid));
+        }
+
         ensureAccount();
 
         KeyPair domainKeyPair = KeyPairUtils.createKeyPair(2048);

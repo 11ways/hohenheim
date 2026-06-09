@@ -19,8 +19,20 @@ public class CertificateModel extends Model {
     /** {@link #STATUS} value for an active certificate. */
     public static final String STATUS_ACTIVE = "active";
 
+    /** {@link #STATUS} value for a certificate whose last issuance or renewal failed. */
+    public static final String STATUS_ERROR = "error";
+
+    /** {@link #STATUS} value for a certificate order that has not completed yet. */
+    public static final String STATUS_PENDING = "pending";
+
     /** {@link #PROVIDER} value for the internal ACME account key row (excluded from listings). */
     public static final String PROVIDER_ACME_ACCOUNT = "acme_account";
+
+    /** {@link #PROVIDER} value for ACME-issued certificates. */
+    public static final String PROVIDER_LETSENCRYPT = "letsencrypt";
+
+    /** {@link #PROVIDER} value for user-uploaded certificates (never auto-managed). */
+    public static final String PROVIDER_CUSTOM = "custom";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NICE_NAME = SCHEMA.addField(StringField.builder().name("nice_name").build());
@@ -35,6 +47,8 @@ public class CertificateModel extends Model {
     public static final StringField STATUS = SCHEMA.addField(StringField.builder().name("status").build());
     public static final DateTimeField ISSUED_ON = SCHEMA.addField(DateTimeField.builder().name("issued_on").build());
     public static final StringField RENEWAL_ERROR = SCHEMA.addField(StringField.builder().name("renewal_error").build());
+    public static final IntegerField ERROR_COUNT = SCHEMA.addField(IntegerField.builder().name("error_count").build());
+    public static final DateTimeField NEXT_ATTEMPT_AT = SCHEMA.addField(DateTimeField.builder().name("next_attempt_at").build());
     public static final StringField DOMAIN_NAMES_TEXT = SCHEMA.addField(StringField.builder().name("domain_names_text").build());
     public static final SchemaField META = SCHEMA.addField(SchemaField.builder("meta").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
