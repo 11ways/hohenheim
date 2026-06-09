@@ -11,6 +11,7 @@
     public environmentVariables: List = null
     public apiKeys: List = null
     public servers: List = null
+    public authProviders: List = null
 
     template {
         <hh-form-shell
@@ -32,6 +33,8 @@
                 environmentVariables={% environmentVariables %}
                 apiKeys={% apiKeys %}
                 servers={% servers %}
+                authProviders={% authProviders %}
+                authProviderId={% "" %}
                 siteSlug={% "" %}></hh-site-form-fields>
 
             <pl-separator></pl-separator>
@@ -57,8 +60,9 @@
     {% declare environmentVariables: List %}
     {% declare apiKeys: List %}
     {% declare servers: List %}
+    {% declare authProviders: List %}
 
     <hh-page title={% "Create Site" %}>
-        <hh-site-create error={% error{:} %} siteTypes={% siteTypes %} settings={% settings %} source={% source %} sourceSettings={% sourceSettings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %} servers={% servers %}></hh-site-create>
+        <hh-site-create error={% error{:} %} siteTypes={% siteTypes %} settings={% settings %} source={% source %} sourceSettings={% sourceSettings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %} servers={% servers %} authProviders={% authProviders %}></hh-site-create>
     </hh-page>
 {% /block %}

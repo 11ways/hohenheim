@@ -11,6 +11,8 @@
     public environmentVariables: List = null
     public apiKeys: List = null
     public servers: List = null
+    public authProviders: List = null
+    public authProviderId: String = ""
     public siteSlug: String = ""
 
     template {
@@ -46,6 +48,20 @@
             <pl-separator></pl-separator>
             <hh-git-source-settings sourceSettings={% sourceSettings %} siteSlug={% siteSlug %}></hh-git-source-settings>
         {% /if %}
+
+        <div class="hh-form-group">
+            <pl-label target="auth-provider">Auth Provider</pl-label>
+            <pl-select id="auth-provider" name="auth_provider_id" bind:value={% authProviderId{:} %}>
+                <pl-select-trigger placeholder="None"></pl-select-trigger>
+                <pl-select-content>
+                    <pl-select-item value="" label="None">None - no identity gate</pl-select-item>
+                    {% each authProviders as index, ap %}
+                        <pl-select-item value={% ap.get("value") %} label={% ap.get("label") %}>{{ ap.get("label") }}</pl-select-item>
+                    {% /each %}
+                </pl-select-content>
+            </pl-select>
+            <p class="hh-form-hint">Gate every request to this site behind an auth provider before it reaches the upstream.</p>
+        </div>
 
         <pl-separator></pl-separator>
 

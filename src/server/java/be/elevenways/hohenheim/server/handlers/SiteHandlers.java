@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.handlers;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.model.NodeVersionModel;
+import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
@@ -73,6 +74,7 @@ public final class SiteHandlers {
             ServerService serverService = new ServerService();
             serverService.ensureLocal();
             vars.put("servers", serverService.names());
+            vars.put("authProviders", getAuthProviderOptions());
             return new RenderTemplateResult(
                 Identifier.of("hohenheim", "hohenheim/sites/create"), vars);
         });
@@ -102,6 +104,7 @@ public final class SiteHandlers {
             row.set(SiteModel.SITE_TYPE, siteType);
             row.set(SiteModel.SETTINGS, settings);
             row.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+            row.set(SiteModel.AUTH_PROVIDER_ID, parseAuthProviderId(form));
 
             // Git source provisioning
             if (SiteModel.SOURCE_GIT.equals(source)) {
@@ -174,6 +177,7 @@ public final class SiteHandlers {
             site.set(SiteModel.SITE_TYPE, siteType);
             site.set(SiteModel.SETTINGS, settings);
             site.set(SiteModel.ENABLED, enabled);
+            site.set(SiteModel.AUTH_PROVIDER_ID, parseAuthProviderId(form));
 
             // Git source provisioning
             if (SiteModel.SOURCE_GIT.equals(source)) {
@@ -469,6 +473,9 @@ public final class SiteHandlers {
         ServerService serverService = new ServerService();
         serverService.ensureLocal();
         vars.put("servers", serverService.names());
+        vars.put("authProviders", getAuthProviderOptions());
+        Integer authProviderId = site.get(SiteModel.AUTH_PROVIDER_ID);
+        vars.put("authProviderId", authProviderId != null ? authProviderId.toString() : "");
         vars.put("error", error);
 
         // Process data for managed site types
@@ -484,6 +491,36 @@ public final class SiteHandlers {
         });
 
         return vars;
+    }
+
+    /**
+     * Auth-provider options for the site form dropdown ("" = no gate).
+     */
+    private static List<Map<String, Object>> getAuthProviderOptions() {
+        var model = Models.get(SiteAuthProviderModel.class);
+        List<Map<String, Object>> options = new ArrayList<>();
+        for (Row row : model.findAllOrdered()) {
+            Map<String, Object> option = new HashMap<>();
+            option.put("value", String.valueOf((Integer) row.get(SiteAuthProviderModel.ID)));
+            option.put("label", row.get(SiteAuthProviderModel.NAME));
+            options.add(option);
+        }
+        return options;
+    }
+
+    /**
+     * @return the submitted auth_provider_id, or null for blank/invalid (= no gate)
+     */
+    private static Integer parseAuthProviderId(Map<String, String> form) {
+        String raw = form.getOrDefault("auth_provider_id", "").trim();
+        if (raw.isEmpty()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**
