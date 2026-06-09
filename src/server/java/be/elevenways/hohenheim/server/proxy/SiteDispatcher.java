@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
+import be.elevenways.hohenheim.server.sitetype.ResponseMutator;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
@@ -46,6 +47,7 @@ import org.xnio.ssl.XnioSsl;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -157,6 +159,7 @@ public class SiteDispatcher implements HttpHandler {
         final boolean hstsEnabled;
         final boolean hstsSubdomains;
         final List<HeaderRule> customHeaders;
+        final List<HeaderRule> responseHeaders;
         final List<String> listenOnAddresses;
 
         // Per-site auth provider gate (identity-level; null when the site has no provider).
@@ -186,6 +189,7 @@ public class SiteDispatcher implements HttpHandler {
             this.hstsEnabled = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_ENABLED));
             this.hstsSubdomains = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
             this.customHeaders = parseHeaderRules(domain != null ? domain.get(SiteDomainModel.CUSTOM_HEADERS) : null);
+            this.responseHeaders = parseHeaderRules(domain != null ? domain.get(SiteDomainModel.RESPONSE_HEADERS) : null);
             this.listenOnAddresses = parseListenOnAddresses(domain != null ? domain.get(SiteDomainModel.LISTEN_ON) : null);
 
             if (accessList != null) {
@@ -589,6 +593,10 @@ public class SiteDispatcher implements HttpHandler {
     public static final AttachmentKey<Map<String, String>> MATCHED_GROUPS =
         AttachmentKey.create(Map.class);
 
+    /** Set by site types that want upstream Location redirects rewritten to the public host. */
+    public static final AttachmentKey<Boolean> REWRITE_LOCATION =
+        AttachmentKey.create(Boolean.class);
+
     // -----------------------------------------------------------------------
     // Resolution
     // -----------------------------------------------------------------------
@@ -930,6 +938,8 @@ public class SiteDispatcher implements HttpHandler {
     }
 
     private void dispatchToRoute(RouteEntry entry, HttpServerExchange exchange) {
+        exchange.addResponseCommitListener(ex -> applyResponseMutations(entry, ex));
+
         Runnable dispatch = () -> entry.handler.handleRequest(exchange, upstream -> {
             exchange.putAttachment(UPSTREAM_URI, upstream);
             try {
@@ -950,6 +960,92 @@ public class SiteDispatcher implements HttpHandler {
                 exchange.dispatch(dispatch);
             }
         }, entry.requestDelayMs, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Applied just before response headers commit: domain response-header rules, upstream
+     * Location rewrite, then the handler's optional {@link ResponseMutator} seam.
+     */
+    private void applyResponseMutations(RouteEntry entry, HttpServerExchange exchange) {
+        HeaderMap headers = exchange.getResponseHeaders();
+
+        for (HeaderRule rule : entry.responseHeaders) {
+            HttpString name = new HttpString(rule.name());
+            if (rule.value() == null || rule.value().isBlank()) {
+                headers.remove(name);
+            } else {
+                headers.put(name, rule.value());
+            }
+        }
+
+        UpstreamTarget upstream = exchange.getAttachment(UPSTREAM_URI);
+        if (upstream != null && Boolean.TRUE.equals(exchange.getAttachment(REWRITE_LOCATION))) {
+            String location = headers.getFirst(Headers.LOCATION);
+            if (location != null) {
+                String rewritten = rewriteLocation(location, upstream.uri(), exchange);
+                if (rewritten != null) {
+                    headers.put(Headers.LOCATION, rewritten);
+                }
+            }
+        }
+
+        ResponseMutator mutator = entry.handler.mutateResponse(exchange);
+        if (mutator != null) {
+            mutator.mutate(exchange);
+        }
+    }
+
+    /**
+     * Rewrite an upstream redirect to the public scheme + authority so backend host:port never
+     * leaks. Only absolute Locations whose host:port match the upstream are touched.
+     *
+     * AIDEV-NOTE: The public authority comes from the live request's Host header, NOT the route's
+     * configured hostname -- wildcard/regex routes match many hostnames and the pattern itself
+     * would produce a broken URL.
+     *
+     * @return the rewritten Location, or null when no rewrite applies
+     */
+    private static String rewriteLocation(String location, URI upstream, HttpServerExchange exchange) {
+        URI parsed;
+        try {
+            parsed = new URI(location);
+        } catch (URISyntaxException e) {
+            return null;
+        }
+
+        // Relative redirects never leak the backend.
+        if (!parsed.isAbsolute() || parsed.getHost() == null) {
+            return null;
+        }
+        if (!parsed.getHost().equalsIgnoreCase(upstream.getHost())
+                || effectivePort(parsed) != effectivePort(upstream)) {
+            return null;
+        }
+
+        String authority = exchange.getRequestHeaders().getFirst(HOST);
+        if (authority == null || authority.isBlank()) {
+            return null;
+        }
+
+        StringBuilder rewritten = new StringBuilder(exchange.getRequestScheme())
+            .append("://").append(authority);
+        if (parsed.getRawPath() != null) {
+            rewritten.append(parsed.getRawPath());
+        }
+        if (parsed.getRawQuery() != null) {
+            rewritten.append('?').append(parsed.getRawQuery());
+        }
+        if (parsed.getRawFragment() != null) {
+            rewritten.append('#').append(parsed.getRawFragment());
+        }
+        return rewritten.toString();
+    }
+
+    private static int effectivePort(URI uri) {
+        if (uri.getPort() != -1) {
+            return uri.getPort();
+        }
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
     }
 
     private boolean shouldForceHttpsGlobally(HttpServerExchange exchange) {

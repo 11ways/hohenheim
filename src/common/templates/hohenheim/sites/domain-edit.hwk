@@ -18,6 +18,7 @@
     {% declare certificateId: String %}
     {% declare certificates: List %}
     {% declare customHeaders: List %}
+    {% declare responseHeaders: List %}
     {% declare error: String %}
 
     <hh-page title={% "Edit Domain" %} subtitle={% hostname + " on " + siteName %}>
@@ -118,6 +119,12 @@
                         <pl-label>Upstream Header Overrides</pl-label>
                         <hh-key-value-editor initialPairs={% customHeaders %} namePrefix={% "header" %} namePlaceholder={% "Header-Name" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
                         <p class="hh-form-hint">Leave the value empty to remove a header from upstream requests.</p>
+                    </div>
+
+                    <div class="hh-form-group">
+                        <pl-label>Response Header Overrides</pl-label>
+                        <hh-key-value-editor initialPairs={% responseHeaders %} namePrefix={% "response_header" %} namePlaceholder={% "Header-Name" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
+                        <p class="hh-form-hint">Applied to the outgoing response. Leave the value empty to remove a header.</p>
                     </div>
                 </pl-collapsible-content>
             </pl-collapsible>

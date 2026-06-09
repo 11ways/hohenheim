@@ -128,6 +128,9 @@ public final class DomainHandlers {
             List<Map<String, String>> customHeaders = HandlerSupport.extractIndexedPairs(form, "header");
             domain.set(SiteDomainModel.CUSTOM_HEADERS, customHeaders.isEmpty() ? null : customHeaders);
 
+            List<Map<String, String>> responseHeaders = HandlerSupport.extractIndexedPairs(form, "response_header");
+            domain.set(SiteDomainModel.RESPONSE_HEADERS, responseHeaders.isEmpty() ? null : responseHeaders);
+
             String portStr = form.getOrDefault("port", "").trim();
             if (!portStr.isEmpty()) {
                 try {
@@ -194,6 +197,7 @@ public final class DomainHandlers {
         Integer certId = domain.get(SiteDomainModel.CERTIFICATE_ID);
         vars.put("certificateId", certId != null ? String.valueOf(certId) : "");
         vars.put("customHeaders", HandlerSupport.nameValuePairs(domain.get(SiteDomainModel.CUSTOM_HEADERS)));
+        vars.put("responseHeaders", HandlerSupport.nameValuePairs(domain.get(SiteDomainModel.RESPONSE_HEADERS)));
 
         // Build certificate list for dropdown (excludes the internal ACME account row)
         var certModel = Models.get(CertificateModel.class);

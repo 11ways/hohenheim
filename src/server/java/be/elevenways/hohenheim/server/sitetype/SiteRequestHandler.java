@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.sitetype;
 
 import io.undertow.server.HttpServerExchange;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Handles incoming requests for a specific site instance.
@@ -26,6 +27,15 @@ public interface SiteRequestHandler {
      */
     default SiteHealth getHealth() {
         return SiteHealth.UP;
+    }
+
+    /**
+     * Optional response mutation, applied just before response headers commit.
+     *
+     * @return a mutator for this exchange, or null for no mutation
+     */
+    default @Nullable ResponseMutator mutateResponse(HttpServerExchange exchange) {
+        return null;
     }
 
     /**

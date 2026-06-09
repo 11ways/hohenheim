@@ -92,6 +92,7 @@ class ProxyDispatchTest {
                     case "hsts_enabled" -> domain.set(SiteDomainModel.HSTS_ENABLED, (Boolean) entry.getValue());
                     case "hsts_subdomains" -> domain.set(SiteDomainModel.HSTS_SUBDOMAINS, (Boolean) entry.getValue());
                     case "custom_headers" -> domain.set(SiteDomainModel.CUSTOM_HEADERS, entry.getValue());
+                    case "response_headers" -> domain.set(SiteDomainModel.RESPONSE_HEADERS, entry.getValue());
                     case "match_type" -> domain.set(SiteDomainModel.MATCH_TYPE, (String) entry.getValue());
                     case "listen_on" -> domain.set(SiteDomainModel.LISTEN_ON, (String) entry.getValue());
                 }
@@ -403,6 +404,146 @@ class ProxyDispatchTest {
 
         assertThat(upstreamHit.await(3, TimeUnit.SECONDS)).isTrue();
         assertThat(seenHost.get()).isEqualTo("alpha.regex.test");
+
+        proxy.stop();
+        proxy = null;
+        upstream.stop(0);
+    }
+
+    /** Raw HTTP exchange against the proxy; returns the full response (headers + body). */
+    private static String rawRequest(int port, String host, String path) throws Exception {
+        try (Socket socket = new Socket("127.0.0.1", port)) {
+            socket.setSoTimeout(3000);
+            OutputStream out = socket.getOutputStream();
+            out.write(("GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n")
+                .getBytes(StandardCharsets.UTF_8));
+            out.flush();
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                response.append(line).append("\n");
+            }
+            return response.toString();
+        }
+    }
+
+    @Test
+    @Order(8)
+    void locationHeaderRewrittenToPublicHost() throws Exception {
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
+        HohenheimDatabase.init();
+
+        HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        int upstreamPort = upstream.getAddress().getPort();
+        upstream.createContext("/", ex -> {
+            String location = "/other".equals(ex.getRequestURI().getPath())
+                ? "http://elsewhere.example/keep"                          // foreign host: untouched
+                : "http://127.0.0.1:" + upstreamPort + "/after?x=1";       // backend host: rewritten
+            ex.getResponseHeaders().add("Location", location);
+            ex.sendResponseHeaders(302, -1);
+            ex.close();
+        });
+        upstream.start();
+
+        setupSiteWithDomain("rewrite.test",
+            Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort),
+            Map.of("force_ssl", false));
+
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        proxy = new ProxyServer();
+        proxy.start();
+        httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
+
+        String response = rawRequest(httpPort, "rewrite.test", "/");
+        assertThat(response).contains("Location: http://rewrite.test/after?x=1");
+        assertThat(response).doesNotContain("127.0.0.1:" + upstreamPort);
+
+        String foreign = rawRequest(httpPort, "rewrite.test", "/other");
+        assertThat(foreign).contains("Location: http://elsewhere.example/keep");
+
+        proxy.stop();
+        proxy = null;
+        upstream.stop(0);
+    }
+
+    @Test
+    @Order(9)
+    void locationRewriteCanBeDisabled() throws Exception {
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
+        HohenheimDatabase.init();
+
+        HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        int upstreamPort = upstream.getAddress().getPort();
+        upstream.createContext("/", ex -> {
+            ex.getResponseHeaders().add("Location", "http://127.0.0.1:" + upstreamPort + "/after");
+            ex.sendResponseHeaders(302, -1);
+            ex.close();
+        });
+        upstream.start();
+
+        setupSiteWithDomain("norewrite.test",
+            Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort,
+                "rewrite_location", false),
+            Map.of("force_ssl", false));
+
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        proxy = new ProxyServer();
+        proxy.start();
+        httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
+
+        String response = rawRequest(httpPort, "norewrite.test", "/");
+        assertThat(response).contains("Location: http://127.0.0.1:" + upstreamPort + "/after");
+
+        proxy.stop();
+        proxy = null;
+        upstream.stop(0);
+    }
+
+    @Test
+    @Order(10)
+    void responseHeadersInjectedAndRemoved() throws Exception {
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
+        HohenheimDatabase.init();
+
+        HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        upstream.createContext("/", ex -> {
+            ex.getResponseHeaders().add("X-Strip-Me", "secret");
+            byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+        });
+        upstream.start();
+
+        List<Map<String, String>> responseHeaders = List.of(
+            Map.of("name", "X-Injected", "value", "hello"),
+            Map.of("name", "X-Strip-Me", "value", "")
+        );
+
+        setupSiteWithDomain("respheaders.test",
+            Map.of("forward_host", "127.0.0.1", "forward_port", upstream.getAddress().getPort()),
+            Map.of("response_headers", responseHeaders, "force_ssl", false));
+
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        proxy = new ProxyServer();
+        proxy.start();
+        httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
+
+        String response = rawRequest(httpPort, "respheaders.test", "/");
+        assertThat(response).contains("200");
+        assertThat(response).contains("X-Injected: hello");
+        assertThat(response).doesNotContain("X-Strip-Me");
 
         proxy.stop();
         proxy = null;
