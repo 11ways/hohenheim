@@ -195,9 +195,13 @@ Most-useful keys:
 
     // Security / fail2ban
     "security": {
-        "log_domain_misses":        true,
-        "domain_miss_threshold":    5,
-        "domain_misses_log_path":   "/var/log/hohenheim/domain-misses.log"
+        "log_domain_misses":          true,
+        "domain_miss_threshold":      5,
+        "domain_misses_log_path":     "/var/log/hohenheim/domain-misses.log",
+        "domain_miss_window_seconds": 300,
+        "domain_miss_ban_threshold":  25,
+        "domain_miss_decay_per_hit":  2,
+        "log_path_and_ua":            true
     },
 
     // Access & stats logging
@@ -287,11 +291,18 @@ Webhooks: `POST /webhook/git/<site-id>` triggers a pull-and-rebuild.
 Hohenheim logs unmatched-domain scans (bot hunting for `admin.`, `wp-login.`,
 etc.) in a format fail2ban can digest.
 
-Log line:
+Log line (the `path=`/`ua=` detail follows `misses=`, so the filter regex below
+keeps matching; disable it with `log_path_and_ua`):
 
 ```
-2026-04-12T14:30:45.123Z DOMAIN_MISS ip=192.168.1.100 domain=unknown.example.com misses=7
+2026-04-12T14:30:45.123Z DOMAIN_MISS ip=192.168.1.100 domain=unknown.example.com misses=7 path=/wp-login.php ua="Mozilla/5.0 zgrab/0.x"
 ```
+
+Misses are counted in a sliding window and decayed by successful requests:
+an IP is banned at the proxy (HTTP 403; HTTPS is refused at the TLS
+handshake) once it exceeds `domain_miss_ban_threshold` misses inside
+`domain_miss_window_seconds`, and every real route hit forgives
+`domain_miss_decay_per_hit` of its oldest misses.
 
 Settings:
 
@@ -299,7 +310,11 @@ Settings:
 "security": {
     "log_domain_misses": true,
     "domain_miss_threshold": 5,
-    "domain_misses_log_path": "/var/log/hohenheim/domain-misses.log"
+    "domain_misses_log_path": "/var/log/hohenheim/domain-misses.log",
+    "domain_miss_window_seconds": 300,
+    "domain_miss_ban_threshold": 25,
+    "domain_miss_decay_per_hit": 2,
+    "log_path_and_ua": true
 }
 ```
 

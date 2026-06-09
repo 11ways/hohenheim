@@ -156,6 +156,26 @@ public class HohenheimSettings {
             .defaultValue("/var/log/hohenheim/domain-misses.log")
             .description("Path for domain miss log file (fail2ban)")
             .build();
+
+        public static final SettingDefinition<Integer> DOMAIN_MISS_WINDOW_SECONDS = GROUP.buildSetting("domain_miss_window_seconds", Integer.class)
+            .defaultValue(300)
+            .description("Sliding window for counting domain misses towards a ban")
+            .build();
+
+        public static final SettingDefinition<Integer> DOMAIN_MISS_BAN_THRESHOLD = GROUP.buildSetting("domain_miss_ban_threshold", Integer.class)
+            .defaultValue(25)
+            .description("In-window domain misses before an IP is banned")
+            .build();
+
+        public static final SettingDefinition<Integer> DOMAIN_MISS_DECAY_PER_HIT = GROUP.buildSetting("domain_miss_decay_per_hit", Integer.class)
+            .defaultValue(2)
+            .description("Misses forgiven for each successful route hit")
+            .build();
+
+        public static final SettingDefinition<Boolean> LOG_PATH_AND_UA = GROUP.buildSetting("log_path_and_ua", Boolean.class)
+            .defaultValue(true)
+            .description("Append request path and user agent to domain miss log lines")
+            .build();
     }
 
     // --- Proteus SSO (optional; password login is always available) ---

@@ -57,23 +57,32 @@ public final class AccessLog {
     }
 
     /** Append a CRLF-stripped domain-miss line to the fail2ban log once the IP crosses the threshold. */
-    public void logDomainMiss(String ip, String hostname, int misses) {
+    public void logDomainMiss(String ip, String hostname, String path, String userAgent, int misses) {
         boolean logEnabled = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.LOG_DOMAIN_MISSES);
         int threshold = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD);
         if (!logEnabled || misses < threshold) {
             return;
         }
 
-        // Strip newlines to prevent log injection
-        String safeHost = hostname.replace("\n", "").replace("\r", "");
-        String safeIp = ip.replace("\n", "").replace("\r", "");
-        String line = Instant.now() + " DOMAIN_MISS ip=" + safeIp + " domain=" + safeHost + " misses=" + misses;
+        // The fail2ban filter regex matches up to misses=; path/ua detail follows it,
+        // so the documented filter keeps working.
+        String line = Instant.now() + " DOMAIN_MISS ip=" + sanitize(ip)
+            + " domain=" + sanitize(hostname) + " misses=" + misses;
+        if (Boolean.TRUE.equals(HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.LOG_PATH_AND_UA))) {
+            line += " path=" + sanitize(path != null && !path.isEmpty() ? path : "-")
+                + " ua=\"" + sanitize(userAgent != null ? userAgent : "-") + "\"";
+        }
         Blast.log(line);
 
         String logPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISSES_LOG_PATH);
         if (logPath != null && !logPath.isEmpty()) {
             appendToLogFile(logPath, line);
         }
+    }
+
+    /** Strip CR/LF to prevent log injection. */
+    private static String sanitize(String value) {
+        return value.replace("\n", "").replace("\r", "");
     }
 
     private static void appendToLogFile(String logPath, String line) {
