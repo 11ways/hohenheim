@@ -10,6 +10,7 @@
             let proxySocket = settings.getString("socket", "")
             let websocketUpgrade = settings.getBoolean("websocket_upgrade", true)
             let ignoreCertificates = settings.getBoolean("ignore_certificates", false)
+            let rewriteLocation = settings.getBoolean("rewrite_location", true)
             let proxyDelay = settings.getString("delay", "")
         %}
         <div class="hh-form-section">
@@ -47,6 +48,11 @@
                 <pl-checkbox inputId="ignore_certificates" name="ignore_certificates" checked={% ignoreCertificates %}></pl-checkbox>
                 <pl-label target="ignore_certificates">Ignore upstream TLS errors</pl-label>
                 <p class="hh-form-hint">Skip certificate verification when proxying to HTTPS upstreams.</p>
+            </div>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="rewrite_location" name="rewrite_location" checked={% rewriteLocation %}></pl-checkbox>
+                <pl-label target="rewrite_location">Rewrite redirect Location headers</pl-label>
+                <p class="hh-form-hint">Replace the upstream host in redirects with the public hostname so the backend address never leaks.</p>
             </div>
             <pl-field>
                 <pl-label>Request Delay (ms)</pl-label>

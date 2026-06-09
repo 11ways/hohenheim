@@ -46,6 +46,9 @@ public class ProxySiteType implements SiteTypeHandler {
     public static final BooleanField IGNORE_CERTIFICATES = SETTINGS_SCHEMA.addField(
         BooleanField.builder("ignore_certificates").defaultValue(false).build());
 
+    public static final BooleanField REWRITE_LOCATION = SETTINGS_SCHEMA.addField(
+        BooleanField.builder("rewrite_location").defaultValue(true).build());
+
     public static final StringField SOCKET = SETTINGS_SCHEMA.addField(
         StringField.builder().name("socket").build());
 
@@ -71,6 +74,8 @@ public class ProxySiteType implements SiteTypeHandler {
         String host = (String) settings.get("forward_host");
         boolean websocketEnabled = Boolean.TRUE.equals(settings.get("websocket_upgrade"));
         boolean ignoreCertificates = Boolean.TRUE.equals(settings.get("ignore_certificates"));
+        // Default true when absent: sites created before the field existed keep rewriting.
+        boolean rewriteLocation = !Boolean.FALSE.equals(settings.get("rewrite_location"));
 
         if (socket == null && (host == null || host.isEmpty())) {
             return (exchange, forwarder) -> {
@@ -83,7 +88,8 @@ public class ProxySiteType implements SiteTypeHandler {
         // socket is reached through a loopback bridge held by the handler and reused across requests.
         if (socket != null) {
             boolean hasPlaceholders = PLACEHOLDER.matcher(socket).find();
-            return new ProxySocketHandler(socket, hasPlaceholders, ignoreCertificates, websocketEnabled);
+            return new ProxySocketHandler(socket, hasPlaceholders, ignoreCertificates,
+                websocketEnabled, rewriteLocation);
         }
 
         String scheme = (String) settings.getOrDefault("forward_scheme", "http");
@@ -109,6 +115,9 @@ public class ProxySiteType implements SiteTypeHandler {
                 exchange.getResponseSender().send("WebSocket upgrades disabled for this site");
                 return;
             }
+            if (rewriteLocation) {
+                exchange.putAttachment(SiteDispatcher.REWRITE_LOCATION, Boolean.TRUE);
+            }
             forwarder.forwardTo(new UpstreamTarget(upstream, ignoreCertificates));
         };
     }
@@ -124,14 +133,17 @@ public class ProxySiteType implements SiteTypeHandler {
         private final boolean hasPlaceholders;
         private final boolean ignoreCertificates;
         private final boolean websocketEnabled;
+        private final boolean rewriteLocation;
         private final Map<String, UnixSocketBridgeConnection> bridges = new ConcurrentHashMap<>();
 
         ProxySocketHandler(String socketTemplate, boolean hasPlaceholders,
-                           boolean ignoreCertificates, boolean websocketEnabled) {
+                           boolean ignoreCertificates, boolean websocketEnabled,
+                           boolean rewriteLocation) {
             this.socketTemplate = socketTemplate;
             this.hasPlaceholders = hasPlaceholders;
             this.ignoreCertificates = ignoreCertificates;
             this.websocketEnabled = websocketEnabled;
+            this.rewriteLocation = rewriteLocation;
         }
 
         @Override
@@ -157,6 +169,9 @@ public class ProxySiteType implements SiteTypeHandler {
                 exchange.setStatusCode(502);
                 exchange.getResponseSender().send("Cannot reach socket upstream: " + e.getMessage());
                 return;
+            }
+            if (rewriteLocation) {
+                exchange.putAttachment(SiteDispatcher.REWRITE_LOCATION, Boolean.TRUE);
             }
             forwarder.forwardTo(new UpstreamTarget(conn.connectUri(), conn.ignoreCertificates()));
         }
