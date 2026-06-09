@@ -447,7 +447,9 @@ public class SiteDispatcher implements HttpHandler {
         if (entry != null) {
             ipReputation.recordHit(clientIp);
         } else {
-            accessLog.logDomainMiss(clientIp, hostname, ipReputation.recordMiss(clientIp));
+            String userAgent = exchange.getRequestHeaders().getFirst(Headers.USER_AGENT);
+            accessLog.logDomainMiss(clientIp, hostname, exchange.getRelativePath(),
+                userAgent, ipReputation.recordMiss(clientIp));
         }
 
         // --- Default fallback ---
