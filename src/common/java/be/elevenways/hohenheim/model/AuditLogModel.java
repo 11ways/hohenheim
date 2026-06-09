@@ -33,6 +33,7 @@ public class AuditLogModel extends Model {
     public static final String RESOURCE_DOMAIN = "domain";
     public static final String RESOURCE_CERTIFICATE = "certificate";
     public static final String RESOURCE_ACCESS_LIST = "access_list";
+    public static final String RESOURCE_AUTH_PROVIDER = "auth_provider";
     public static final String RESOURCE_DATABASE = "database";
     public static final String RESOURCE_SERVER = "server";
     public static final String RESOURCE_NOTIFICATION_CHANNEL = "notification_channel";

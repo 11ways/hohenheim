@@ -1,0 +1,21 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    {% declare error: String %}
+    {% declare authProviderTypes: List %}
+    {% declare selectedType: String %}
+
+    <hh-page title={% "Create Auth Provider" %}>
+        <hh-form-shell
+            action={% "/auth-providers/create" %}
+            title={% "Auth Provider" %}
+            description={% "A reusable identity gate for proxied sites." %}
+            submitLabel={% "Create Auth Provider" %}
+            cancelHref={% "/auth-providers" %}
+            error={% error %}>
+            <hh-auth-provider-fields
+                selectedType={% selectedType %}
+                authProviderTypes={% authProviderTypes %}></hh-auth-provider-fields>
+        </hh-form-shell>
+    </hh-page>
+{% /block %}

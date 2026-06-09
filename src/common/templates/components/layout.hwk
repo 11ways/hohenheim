@@ -18,6 +18,7 @@
                     <pl-nav-item href="/sites">Sites</pl-nav-item>
                     <pl-nav-item href="/certificates">Certificates</pl-nav-item>
                     <pl-nav-item href="/access-lists">Access Lists</pl-nav-item>
+                    <pl-nav-item href="/auth-providers">Auth Providers</pl-nav-item>
                     <pl-nav-item href="/databases">Databases</pl-nav-item>
                     <pl-nav-item href="/servers">Servers</pl-nav-item>
                     <pl-nav-item href="/notifications">Notifications</pl-nav-item>

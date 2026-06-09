@@ -190,6 +190,48 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("delete").build())
         .build();
 
+    // --- Auth Providers ---
+    public static final ParameterDefinition<Integer> AUTH_PROVIDER_ID = ParameterDefinition.builder(Integer.class)
+        .name("authProviderId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
+    public static final PageEndpoint AUTH_PROVIDERS = Endpoint.pageBuilder()
+        .identifier(Identifier.of("hohenheim", "auth_providers"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("auth-providers").build())
+        .build();
+
+    public static final PageEndpoint AUTH_PROVIDERS_CREATE_FORM = Endpoint.pageBuilder()
+        .identifier(Identifier.of("hohenheim", "auth_providers_create_form"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("auth-providers").addDelimiter().addStatic("create").build())
+        .build();
+
+    public static final Endpoint<Object> AUTH_PROVIDERS_CREATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "auth_providers_create"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("auth-providers").addDelimiter().addStatic("create").build())
+        .build();
+
+    public static final Endpoint<Object> AUTH_PROVIDERS_EDIT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "auth_providers_edit"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("auth-providers").addDelimiter().addParameter(AUTH_PROVIDER_ID).build())
+        .build();
+
+    public static final Endpoint<Object> AUTH_PROVIDERS_UPDATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "auth_providers_update"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("auth-providers").addDelimiter().addParameter(AUTH_PROVIDER_ID).build())
+        .build();
+
+    public static final Endpoint<Object> AUTH_PROVIDERS_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "auth_providers_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("auth-providers").addDelimiter().addParameter(AUTH_PROVIDER_ID)
+            .addDelimiter().addStatic("delete").build())
+        .build();
+
     // --- Databases ---
     public static final ParameterDefinition<String> DATABASE_NAME = ParameterDefinition.builder(String.class)
         .name("databaseName")
