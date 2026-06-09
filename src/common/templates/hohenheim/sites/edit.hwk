@@ -13,6 +13,8 @@
     public nodeVersions: List = null
     public systemUsers: List = null
     public servers: List = null
+    public authProviders: List = null
+    public authProviderId: String = ""
     public siteSlug: String = ""
     public error: String = ""
 
@@ -36,6 +38,8 @@
                 environmentVariables={% environmentVariables %}
                 apiKeys={% apiKeys %}
                 servers={% servers %}
+                authProviders={% authProviders %}
+                authProviderId={% authProviderId %}
                 siteSlug={% siteSlug %}></hh-site-form-fields>
 
             <div class="hh-form-group hh-checkbox-field">
@@ -60,6 +64,8 @@
     {% declare nodeVersions: List %}
     {% declare systemUsers: List %}
     {% declare servers: List %}
+    {% declare authProviders: List %}
+    {% declare authProviderId: String = "" %}
     {% declare error: String %}
     {% declare processes: List = null %}
     {% declare isManaged: Boolean = false %}
@@ -79,6 +85,8 @@
             nodeVersions={% nodeVersions %}
             systemUsers={% systemUsers %}
             servers={% servers %}
+            authProviders={% authProviders %}
+            authProviderId={% authProviderId %}
             siteSlug={% site.get("slug") != null ? site.get("slug") : "" %}
             error={% error %}
         ></hh-site-edit>
