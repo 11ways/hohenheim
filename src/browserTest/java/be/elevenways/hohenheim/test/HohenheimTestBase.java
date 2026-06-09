@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimHandlers;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -53,6 +54,7 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         }
 
         SiteTypes.register();
+        SiteAuthProviders.register();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
 

@@ -80,7 +80,7 @@ public class ServerMain {
     public static void installAuthBaselines() {
         AuthRegistry.registerPublicPrefix("/api/health");
         for (String prefix : new String[]{
-            "/", "/sites", "/certificates", "/access-lists", "/databases",
+            "/", "/sites", "/certificates", "/access-lists", "/auth-providers", "/databases",
             "/servers", "/notifications", "/settings", "/audit", "/ws"
         }) {
             AuthRegistry.baseline(prefix, AuthRequirement.requiresLogin());

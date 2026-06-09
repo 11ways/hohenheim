@@ -20,7 +20,13 @@ public final class SiteAuthProviders {
 
     private static final Map<Identifier, SiteAuthProviderTypeHandler> HANDLERS = new HashMap<>();
 
-    public static void register() {
+    private static boolean registered = false;
+
+    public static synchronized void register() {
+        if (registered) {
+            return;
+        }
+        registered = true;
         registerType(ProteusAuthProviderType.ID, new ProteusAuthProviderType());
         registerType(BasicAuthProviderType.ID, new BasicAuthProviderType());
     }

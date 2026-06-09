@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.server.handlers.AccessListHandlers;
 import be.elevenways.hohenheim.server.handlers.AuditLogHandlers;
+import be.elevenways.hohenheim.server.handlers.AuthProviderHandlers;
 import be.elevenways.hohenheim.server.handlers.CertificateHandlers;
 import be.elevenways.hohenheim.server.handlers.DashboardHandlers;
 import be.elevenways.hohenheim.server.handlers.DatabaseHandlers;
@@ -28,6 +29,7 @@ public class HohenheimHandlers {
         SettingsHandlers.init();
         AuditLogHandlers.init();
         AccessListHandlers.init();
+        AuthProviderHandlers.init();
         DatabaseHandlers.init();
         ServerHandlers.init();
         NotificationHandlers.init();

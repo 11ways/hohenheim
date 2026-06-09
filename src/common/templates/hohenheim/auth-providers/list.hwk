@@ -1,0 +1,42 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    {% declare authProviders: List %}
+
+    <hh-page title={% "Auth Providers" %}>
+        <hh-page-actions description={% "Reusable authentication providers (Proteus realms, Basic credentials) that gate proxied sites." %}>
+            <a use:Zenit.route={% Zenit.Endpoints.hohenheim.auth_providers_create_form %} class="hh-button-link"><pl-button variant={% "primary" %}>Create Auth Provider</pl-button></a>
+        </hh-page-actions>
+
+        <hh-table-card>
+            <pl-table-header><pl-table-row>
+                <pl-table-head>Name</pl-table-head>
+                <pl-table-head>Type</pl-table-head>
+                <pl-table-head>Required Permission</pl-table-head>
+                <pl-table-head></pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                <hh-empty-row count={% authProviders |> Array.length %} colspan={% "4" %} message={% "No auth providers yet." %}></hh-empty-row>
+                {% each authProviders as index, item %}
+                <pl-table-row>
+                    <pl-table-cell>
+                        <a href={% item.get("editUrl") %} class="hh-site-link">{{ item.get("name") }}</a>
+                    </pl-table-cell>
+                    <pl-table-cell>
+                        <pl-badge variant={% "secondary" %}>{{ item.get("type") }}</pl-badge>
+                    </pl-table-cell>
+                    <pl-table-cell>{{ item.get("requiredPermission") }}</pl-table-cell>
+                    <pl-table-cell>
+                        <div class="hh-table-actions">
+                            <a href={% item.get("editUrl") %} class="hh-button-link">
+                                <pl-button variant={% "ghost" %} size={% "sm" %}>Edit</pl-button>
+                            </a>
+                            <hh-post-action action={% item.get("deleteUrl") %} label={% "Delete" %}></hh-post-action>
+                        </div>
+                    </pl-table-cell>
+                </pl-table-row>
+                {% /each %}
+            </pl-table-body>
+        </hh-table-card>
+    </hh-page>
+{% /block %}

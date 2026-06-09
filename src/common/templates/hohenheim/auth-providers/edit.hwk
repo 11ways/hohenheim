@@ -1,0 +1,35 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    {% declare error: String %}
+    {% declare authProviderTypes: List %}
+    {% declare id: Integer %}
+    {% declare name: String %}
+    {% declare selectedType: String %}
+    {% declare requiredPermission: String %}
+    {% declare endpoint: String %}
+    {% declare realmClient: String %}
+    {% declare accessKey: String %}
+    {% declare authenticator: String %}
+    {% declare credentials: List %}
+
+    <hh-page title={% "Edit Auth Provider" %}>
+        <hh-form-shell
+            action={% "/auth-providers/" + id %}
+            title={% name %}
+            submitLabel={% "Save Auth Provider" %}
+            cancelHref={% "/auth-providers" %}
+            error={% error %}>
+            <hh-auth-provider-fields
+                name={% name %}
+                selectedType={% selectedType %}
+                authProviderTypes={% authProviderTypes %}
+                requiredPermission={% requiredPermission %}
+                endpoint={% endpoint %}
+                realmClient={% realmClient %}
+                accessKey={% accessKey %}
+                authenticator={% authenticator %}
+                credentials={% credentials %}></hh-auth-provider-fields>
+        </hh-form-shell>
+    </hh-page>
+{% /block %}

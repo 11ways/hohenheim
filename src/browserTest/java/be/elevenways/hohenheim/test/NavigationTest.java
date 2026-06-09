@@ -88,7 +88,7 @@ class NavigationTest extends HohenheimTestBase {
         waitForTitle("Sites");
 
         assertThat(page.locator(".hh-brand").textContent()).isEqualTo("Hohenheim");
-        assertThat(page.locator("pl-app-sidebar a").count()).isEqualTo(9);
+        assertThat(page.locator("pl-app-sidebar a").count()).isEqualTo(10);
     }
 
     @Test
