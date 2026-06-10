@@ -1,0 +1,188 @@
+package be.elevenways.hohenheim.test;
+
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.ProclogModel;
+import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.process.ManagedProcess;
+import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
+import be.elevenways.hohenheim.server.process.PortAllocator;
+import be.elevenways.hohenheim.server.process.ProcessMonitor;
+import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
+import be.elevenways.hohenheim.server.sitetype.SiteHealth;
+import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Process-management hardening tests: requested-capacity budgeting, fail-fast validation,
+ * proclog UPSERT flushing, and the re-armable ready latch. Uses real (idle) child processes.
+ */
+class ManagedProcessSiteHandlerTest {
+
+    private static ProcessMonitor monitor;
+    private static PortAllocator portAllocator;
+
+    private final List<ManagedProcessSiteHandler> handlers = new ArrayList<>();
+
+    @BeforeAll
+    static void boot() throws Exception {
+        File db = File.createTempFile("hohenheim-procmgmt", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
+
+        SiteTypes.register();
+        HohenheimEndpoints.init();
+        HohenheimDatabase.init();
+        HohenheimTestRuntime.ensureBooted();
+
+        monitor = new ProcessMonitor();
+        portAllocator = new PortAllocator();
+    }
+
+    @AfterEach
+    void reapHandlers() {
+        for (ManagedProcessSiteHandler handler : handlers) {
+            handler.destroy();
+        }
+        handlers.clear();
+    }
+
+    /** A managed handler that spawns an inert sleeping child. */
+    private final class SleepHandler extends ManagedProcessSiteHandler {
+
+        SleepHandler(int siteId, Map<String, Object> settings) {
+            super(siteId, "proc-test-" + siteId, settings, portAllocator, monitor);
+            handlers.add(this);
+        }
+
+        @Override
+        protected List<String> buildCommand(String listenTarget) {
+            return List.of("sh", "-c", "echo hello-from-child; sleep 600");
+        }
+
+        @Override
+        protected Map<String, String> buildRuntimeEnvironment(int port) {
+            return Map.of();
+        }
+
+        @Override
+        protected File getWorkingDirectory() {
+            return new File(System.getProperty("java.io.tmpdir"));
+        }
+    }
+
+    private static Map<String, Object> settings(boolean waitForReady, int minProcesses) {
+        Map<String, Object> settings = new HashMap<>();
+        settings.put("wait_for_ready", waitForReady);
+        settings.put("minimum_processes", minProcesses);
+        return settings;
+    }
+
+    private static void awaitCondition(String what, java.util.function.BooleanSupplier condition)
+            throws InterruptedException {
+        for (int i = 0; i < 100; i++) {
+            if (condition.getAsBoolean()) return;
+            Thread.sleep(100);
+        }
+        throw new AssertionError("Timed out waiting for: " + what);
+    }
+
+    @Test
+    void repeatStartCallsDoNotOverstartWhileChildrenBoot() throws Exception {
+        // wait_for_ready children never signal, so they stay "requested" forever:
+        // a second start call past the debounce window must see that capacity.
+        SleepHandler handler = new SleepHandler(9101, settings(true, 2));
+        handler.startMinimumServers();
+        assertThat(handler.runningProcessCount()).isEqualTo(2);
+        assertThat(handler.requestedProcessCount()).isEqualTo(2);
+
+        Thread.sleep(600);  // past the 500ms debounce
+        handler.startMinimumServers();
+        Thread.sleep(200);
+
+        assertThat(handler.runningProcessCount())
+            .as("booting (not yet ready) children count toward the minimum")
+            .isEqualTo(2);
+    }
+
+    @Test
+    void faultedHandlerForBlankAndMissingScript() {
+        NodeSiteType type = new NodeSiteType();
+        Row site = Models.get(SiteModel.class).createEmptyRow();
+        site.set(SiteModel.ID, 9102);
+        site.set(SiteModel.NAME, "faulted-test");
+
+        SiteRequestHandler blank = type.createHandler(site, Map.of());
+        assertThat(blank).isInstanceOf(FaultedSiteHandler.class);
+        assertThat(((FaultedSiteHandler) blank).reason()).contains("no script");
+        assertThat(blank.getHealth()).isEqualTo(SiteHealth.DOWN);
+
+        SiteRequestHandler missing = type.createHandler(site,
+            Map.of("script", "/nonexistent/path/app.js"));
+        assertThat(missing).isInstanceOf(FaultedSiteHandler.class);
+        assertThat(((FaultedSiteHandler) missing).reason()).contains("does not exist");
+    }
+
+    @Test
+    void proclogFlushUpsertsOneRowPerProcess() throws Exception {
+        var model = Models.get(ProclogModel.class);
+        SleepHandler handler = new SleepHandler(9103, settings(false, 1));
+        handler.startMinimumServers();
+
+        awaitCondition("child output captured", () -> {
+            List<ManagedProcess> procs = handler.getProcesses();
+            return !procs.isEmpty() && procs.get(0).getLogText().contains("hello-from-child");
+        });
+
+        // First flush inserts the row...
+        handler.flushProclogsNow();
+        List<Row> afterFirst = model.find().where(ProclogModel.SITE_ID.eq(9103)).all();
+        assertThat(afterFirst).hasSize(1);
+        Integer rowId = afterFirst.get(0).get(ProclogModel.ID);
+        assertThat((Integer) afterFirst.get(0).get(ProclogModel.LINE_COUNT)).isGreaterThanOrEqualTo(1);
+
+        // ...and every later flush (and the exit persist) updates the SAME row.
+        handler.flushProclogsNow();
+        ManagedProcess proc = handler.getProcesses().get(0);
+        proc.kill();
+        // persistProclog runs at the start of processExit, before list cleanup.
+        awaitCondition("exit cleanup ran", () -> handler.getProcesses().isEmpty());
+
+        List<Row> afterExit = model.find().where(ProclogModel.SITE_ID.eq(9103)).all();
+        assertThat(afterExit).as("flushes + exit persist must UPSERT one row").hasSize(1);
+        assertThat((Integer) afterExit.get(0).get(ProclogModel.ID)).isEqualTo(rowId);
+        assertThat((Object) afterExit.get(0).get(ProclogModel.SAVED_AT)).isNotNull();
+    }
+
+    @Test
+    void readyLatchReArmsAfterFullOutage() throws Exception {
+        SleepHandler handler = new SleepHandler(9104, settings(false, 1));
+        handler.startMinimumServers();
+        awaitCondition("first child ready", () -> handler.getHealth() == SiteHealth.UP);
+
+        // Kill the only child: full outage must re-arm the startup queue.
+        handler.getProcesses().get(0).kill();
+        awaitCondition("outage observed", () -> handler.getHealth() != SiteHealth.UP);
+
+        // Crash recovery (or a fresh start call) brings a new child up, and readiness
+        // counts down the RE-ARMED latch — health returns to UP.
+        awaitCondition("replacement child ready", () -> handler.getHealth() == SiteHealth.UP);
+        assertThat(handler.requestedProcessCount()).isEqualTo(0);
+    }
+}

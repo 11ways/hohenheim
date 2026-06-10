@@ -15,6 +15,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -69,8 +72,31 @@ class AlchemyWaitForReadyTest {
         Row site = Models.get(SiteModel.class).createEmptyRow();
         site.set(SiteModel.ID, 1);
         site.set(SiteModel.NAME, "wfr-test");
-        // No script -> startMinimumServers is skipped, so no child process is spawned.
-        SiteRequestHandler handler = type.createHandler(site, settings);
-        return ((ManagedProcessSiteHandler) handler).isWaitForReady();
+
+        // Fail-fast validation requires a real script, so construction spawns a real
+        // (idle) node child; destroy() reaps it once the flag has been read.
+        Map<String, Object> withScript = new HashMap<>(settings);
+        withScript.put("script", idleScript().getAbsolutePath());
+
+        SiteRequestHandler handler = type.createHandler(site, withScript);
+        assertThat(handler)
+            .as("a valid script must not produce a faulted handler")
+            .isInstanceOf(ManagedProcessSiteHandler.class);
+        try {
+            return ((ManagedProcessSiteHandler) handler).isWaitForReady();
+        } finally {
+            handler.destroy();
+        }
+    }
+
+    private static File idleScript() {
+        try {
+            File script = File.createTempFile("hohenheim-wfr-idle", ".js");
+            script.deleteOnExit();
+            Files.writeString(script.toPath(), "setInterval(function () {}, 1 << 30);\n");
+            return script;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to write idle test script", e);
+        }
     }
 }

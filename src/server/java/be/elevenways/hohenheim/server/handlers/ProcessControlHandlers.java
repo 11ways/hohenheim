@@ -2,7 +2,13 @@ package be.elevenways.hohenheim.server.handlers;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.AuditLogModel;
+import be.elevenways.hohenheim.model.ProclogModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -93,5 +99,63 @@ public final class ProcessControlHandlers {
 
             return HandlerSupport.redirectUntyped("/sites/" + siteId);
         });
+
+        // GET /sites/:id/proclogs - Stored process log history
+        HohenheimEndpoints.SITES_PROCLOGS.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            Row site = Models.get(SiteModel.class).findById(siteId);
+            if (site == null) {
+                return HandlerSupport.redirectUntyped("/sites");
+            }
+
+            List<Map<String, Object>> logs = new ArrayList<>();
+            for (Row row : Models.get(ProclogModel.class).find()
+                    .where(ProclogModel.SITE_ID.eq(siteId))
+                    .orderBy(ProclogModel.CREATED_AT, SortOrder.DESC)
+                    .limit(100)
+                    .all()) {
+                logs.add(proclogToMap(siteId, row));
+            }
+
+            Map<String, Object> vars = new HashMap<>();
+            vars.put("siteId", siteId);
+            vars.put("siteName", site.get(SiteModel.NAME));
+            vars.put("proclogs", logs);
+            return HandlerSupport.renderUntyped(
+                Identifier.of("hohenheim", "hohenheim/sites/proclog-list"), vars);
+        });
+
+        // GET /sites/:id/proclogs/:proclogId - Single stored log, rendered in a terminal
+        HohenheimEndpoints.SITES_PROCLOG_DETAIL.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            Integer proclogId = conduit.getParameter(HohenheimEndpoints.PROCLOG_ID);
+
+            Row site = Models.get(SiteModel.class).findById(siteId);
+            Row log = Models.get(ProclogModel.class).findById(proclogId);
+            // Ownership guard: a proclog id from another site must not render here.
+            if (site == null || log == null || !siteId.equals(log.get(ProclogModel.SITE_ID))) {
+                return HandlerSupport.redirectUntyped("/sites/" + siteId + "/proclogs");
+            }
+
+            Map<String, Object> vars = proclogToMap(siteId, log);
+            vars.put("siteName", site.get(SiteModel.NAME));
+            String content = log.get(ProclogModel.LOG_HTML);
+            vars.put("content", content != null ? content : "");
+            return HandlerSupport.renderUntyped(
+                Identifier.of("hohenheim", "hohenheim/sites/proclog-detail"), vars);
+        });
+    }
+
+    /** Listing fields for one stored proclog row. */
+    private static Map<String, Object> proclogToMap(int siteId, Row row) {
+        Integer id = row.get(ProclogModel.ID);
+        Map<String, Object> item = new HashMap<>();
+        item.put("id", id);
+        item.put("siteId", siteId);
+        item.put("pid", row.get(ProclogModel.PID));
+        item.put("lineCount", HandlerSupport.valueOrEmpty(row.get(ProclogModel.LINE_COUNT)));
+        item.put("createdAt", HandlerSupport.valueOrEmpty(row.get(ProclogModel.CREATED_AT)));
+        item.put("savedAt", HandlerSupport.valueOrEmpty(row.get(ProclogModel.SAVED_AT)));
+        return item;
     }
 }

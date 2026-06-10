@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -40,11 +41,16 @@ public class AlchemySiteType extends NodeSiteType {
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
         int siteId = site.get(SiteModel.ID);
         String siteName = site.get(SiteModel.NAME);
-        return new NodeProcessHandler(siteId, siteName, settings, getDefaultArgs(), useChildWrapper()) {
-            @Override
-            protected boolean defaultWaitForReady() {
-                return true;
-            }
-        };
+        try {
+            return new NodeProcessHandler(siteId, siteName, settings, getDefaultArgs(), useChildWrapper()) {
+                @Override
+                protected boolean defaultWaitForReady() {
+                    return true;
+                }
+            };
+        } catch (IllegalArgumentException e) {
+            // Fail fast: a misconfigured site serves an explicit 503 instead of half-starting.
+            return new FaultedSiteHandler(siteId, e.getMessage());
+        }
     }
 }

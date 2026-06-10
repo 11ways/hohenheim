@@ -42,6 +42,10 @@ public class ManagedProcess {
     // survives the startup grace; closed on exit/destroy.
     private volatile UpstreamConnection connection;
 
+    // Database row id of this process's proclog entry (set by the first periodic flush,
+    // reused by later flushes and the exit persist as an UPSERT key).
+    private volatile Integer proclogRowId;
+
     // Fingerprint cache: fingerprint string -> true (with idle expiry managed externally)
     private final ConcurrentHashMap<String, Long> fingerprints = new ConcurrentHashMap<>();
 
@@ -88,6 +92,9 @@ public class ManagedProcess {
 
     public UpstreamConnection connection() { return connection; }
     public void setConnection(UpstreamConnection connection) { this.connection = connection; }
+
+    public Integer proclogRowId() { return proclogRowId; }
+    public void setProclogRowId(Integer proclogRowId) { this.proclogRowId = proclogRowId; }
 
     public ConcurrentHashMap<String, Long> fingerprints() { return fingerprints; }
 

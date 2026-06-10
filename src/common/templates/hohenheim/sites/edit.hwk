@@ -142,7 +142,7 @@
         <pl-card class="hh-domains-card">
             <pl-card-header>
                 <pl-card-title>Processes</pl-card-title>
-                <pl-card-description>Running child processes for this site.</pl-card-description>
+                <pl-card-description>Running child processes for this site. <a href={% "/sites/" + site.get("id") + "/proclogs" %} id="proclog-history-link">View stored process logs</a>.</pl-card-description>
             </pl-card-header>
             <pl-card-content>
                 <pl-table>
