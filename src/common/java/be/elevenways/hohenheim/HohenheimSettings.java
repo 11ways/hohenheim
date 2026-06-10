@@ -59,6 +59,11 @@ public class HohenheimSettings {
             .defaultValue("The upstream server is not responding.")
             .description("Error message for unreachable upstreams")
             .build();
+
+        public static final SettingDefinition<Integer> FIRST_PORT = GROUP.buildSetting("first_port", Integer.class)
+            .defaultValue(4748)
+            .description("First TCP port assigned to managed child processes")
+            .build();
     }
 
     // --- SSL/TLS ---
