@@ -379,6 +379,26 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("isolate").build())
         .build();
 
+    // --- Stored process logs ---
+    public static final ParameterDefinition<Integer> PROCLOG_ID = ParameterDefinition.builder(Integer.class)
+        .name("proclogId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
+    public static final Endpoint<Object> SITES_PROCLOGS = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_proclogs"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("proclogs").build())
+        .build();
+
+    public static final Endpoint<Object> SITES_PROCLOG_DETAIL = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_proclog_detail"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("proclogs").addDelimiter().addParameter(PROCLOG_ID).build())
+        .build();
+
     // --- Certificate Let's Encrypt request ---
     public static final PageEndpoint CERTIFICATES_REQUEST_FORM = Endpoint.pageBuilder()
         .identifier(Identifier.of("hohenheim", "certificates_request_form"))

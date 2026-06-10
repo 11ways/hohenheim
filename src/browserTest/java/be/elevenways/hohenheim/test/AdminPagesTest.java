@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.test;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
@@ -176,5 +179,24 @@ class AdminPagesTest extends HohenheimTestBase {
         waitForTitle("Upload Certificate");
 
         assertThat(page.url()).endsWith("/certificates/upload");
+    }
+
+    @Test
+    @Order(22)
+    void proclogHistoryPageRenders() {
+        // Reuse the site created by auditLogRecordsCreation (same JVM fork).
+        Row site = Models.get(SiteModel.class).find()
+            .where(SiteModel.NAME.eq("Audit Test Site"))
+            .first();
+        assertThat(site).isNotNull();
+        Integer siteId = site.get(SiteModel.ID);
+
+        navigateToApp("/sites/" + siteId + "/proclogs");
+        waitForHydration();
+
+        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Process Logs");
+        String content = page.locator(".hh-content").textContent();
+        assertThat(content).contains("No process logs captured yet.");
+        assertThat(page.locator("pl-table").count()).isEqualTo(1);
     }
 }

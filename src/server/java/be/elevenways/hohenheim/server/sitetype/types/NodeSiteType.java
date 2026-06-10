@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.PortAllocator;
 import be.elevenways.hohenheim.server.process.ProcessMonitor;
 import be.elevenways.hohenheim.server.process.SocketAllocator;
+import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -108,7 +109,12 @@ public class NodeSiteType implements SiteTypeHandler {
         int siteId = site.get(SiteModel.ID);
         String siteName = site.get(SiteModel.NAME);
 
-        return new NodeProcessHandler(siteId, siteName, settings, getDefaultArgs(), useChildWrapper());
+        try {
+            return new NodeProcessHandler(siteId, siteName, settings, getDefaultArgs(), useChildWrapper());
+        } catch (IllegalArgumentException e) {
+            // Fail fast: a misconfigured site serves an explicit 503 instead of half-starting.
+            return new FaultedSiteHandler(siteId, e.getMessage());
+        }
     }
 
     /**
@@ -149,9 +155,28 @@ public class NodeSiteType implements SiteTypeHandler {
             this.defaultArgs = defaultArgs;
             this.useChildWrapper = useChildWrapper;
 
-            // Start minimum servers on creation
-            if (!script.isEmpty()) {
-                startMinimumServers();
+            validatePreconditions();
+
+            startMinimumServers();
+        }
+
+        /**
+         * Fail-fast checks before any spawn attempt.
+         *
+         * @throws IllegalArgumentException naming the problem; the site type turns it into a
+         *                                  FaultedSiteHandler (explicit 503)
+         */
+        private void validatePreconditions() {
+            if (script.isBlank()) {
+                throw new IllegalArgumentException("no script configured");
+            }
+            File scriptFile = new File(script);
+            if (!scriptFile.isFile()) {
+                throw new IllegalArgumentException("script does not exist: " + script);
+            }
+            File workDir = scriptFile.getParentFile();
+            if (workDir == null || !workDir.isDirectory()) {
+                throw new IllegalArgumentException("working directory does not exist for: " + script);
             }
         }
 

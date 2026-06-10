@@ -21,6 +21,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,6 +58,12 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     private final AtomicInteger readyCount = new AtomicInteger(0);
     private final AtomicInteger runningCount = new AtomicInteger(0);
 
+    // Processes requested but not yet ready: counted from spawn entry until the child
+    // signals ready (or dies first). startMinimumServers subtracts it from its deficit so
+    // neither overlapping calls nor repeat calls while wait_for_ready children boot can
+    // over-start past the minimum.
+    private final AtomicInteger requestedCount = new AtomicInteger(0);
+
     // Port allocation
     private final PortAllocator portAllocator;
 
@@ -85,8 +92,24 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     // Debounce
     private final AtomicLong lastStartMinimumServers = new AtomicLong(0);
 
-    // Startup queue: requests waiting for the first process to be ready
-    private final CountDownLatch firstReadyLatch = new CountDownLatch(1);
+    // Startup queue: requests waiting for a process to become ready. Re-armable: a fresh
+    // latch is installed when the last ready process exits, so requests arriving during a
+    // later full outage queue again instead of hitting a permanently-open latch.
+    // Readers snapshot the field once and await that instance.
+    private volatile CountDownLatch readyLatch = new CountDownLatch(1);
+
+    // Periodic proclog flush so a hard crash (kill -9, OOM) loses at most one interval of
+    // output. AIDEV-NOTE: This per-process maintenance is a process-lifecycle concern and
+    // deliberately stays on the handler's own executor — it is NOT a site-wide scheduled
+    // job, so it does not belong in the zenit TaskService that replaced TaskScheduler.
+    private static final long PROCLOG_FLUSH_SECONDS = 30;
+    private static final ScheduledExecutorService proclogFlushScheduler =
+        Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "proclog-flush");
+            t.setDaemon(true);
+            return t;
+        });
+    private volatile ScheduledFuture<?> proclogFlushTask;
 
     // Scaling constants
     private static final int SCALE_UP_CPU_THRESHOLD = 50;
@@ -143,6 +166,21 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         this.environmentVariables = EnvVars.toMap(settings.get("environment_variables"));
 
         monitor.addListener(siteId, this);
+
+        this.proclogFlushTask = proclogFlushScheduler.scheduleAtFixedRate(
+            this::flushProclogs, PROCLOG_FLUSH_SECONDS, PROCLOG_FLUSH_SECONDS, TimeUnit.SECONDS);
+    }
+
+    /** Periodic flush: persist every live process's rolling log so a hard crash loses little. */
+    private void flushProclogs() {
+        for (ManagedProcess managed : processMap.values()) {
+            try {
+                persistProclog(managed);
+            } catch (Exception e) {
+                Blast.log("PROCESS: proclog flush failed for", siteName,
+                    "pid=" + managed.pid(), "-", e.getMessage());
+            }
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -189,47 +227,63 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     // -----------------------------------------------------------------------
 
     /**
-     * Start the minimum number of processes.
+     * Start the minimum number of processes. The deficit subtracts {@link #requestedCount}
+     * (spawns requested but not yet ready), so neither overlapping calls nor repeat calls
+     * while wait_for_ready children boot can over-start past the minimum. The debounce CAS
+     * serializes truly concurrent callers.
      */
     public void startMinimumServers() {
         long now = System.currentTimeMillis();
         long prev = lastStartMinimumServers.get();
         if (now - prev < 500 || !lastStartMinimumServers.compareAndSet(prev, now)) return;
 
-        int active = activeProcessCount();
-        for (int i = active; i < minProcesses; i++) {
+        int deficit = minProcesses - activeProcessCount() - requestedCount.get();
+        for (int i = 0; i < deficit; i++) {
             startProcess();
         }
     }
 
     /**
-     * Spawn a single new child process.
+     * Spawn a single new child process. The spawn is counted in {@link #requestedCount}
+     * from entry until the child becomes ready or dies, so capacity that is still booting
+     * is visible to startMinimumServers.
      */
     public ManagedProcess startProcess() {
         long backoffMs = 150;
+        requestedCount.incrementAndGet();
 
-        for (int attempt = 1; attempt <= MAX_EADDRINUSE_RETRIES; attempt++) {
-            ManagedProcess managed = startProcessOnce();
+        boolean spawned = false;
+        try {
+            for (int attempt = 1; attempt <= MAX_EADDRINUSE_RETRIES; attempt++) {
+                ManagedProcess managed = startProcessOnce();
 
-            if (managed != null) {
-                return managed;
+                if (managed != null) {
+                    spawned = true;
+                    return managed;
+                }
+
+                if (attempt == MAX_EADDRINUSE_RETRIES) {
+                    return null;
+                }
+
+                try {
+                    Thread.sleep(backoffMs);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                    return null;
+                }
+
+                backoffMs = Math.min(backoffMs * 2, 5_000);
             }
 
-            if (attempt == MAX_EADDRINUSE_RETRIES) {
-                return null;
+            return null;
+        } finally {
+            if (!spawned) {
+                requestedCount.updateAndGet(v -> Math.max(0, v - 1));
             }
-
-            try {
-                Thread.sleep(backoffMs);
-            } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-                return null;
-            }
-
-            backoffMs = Math.min(backoffMs * 2, 5_000);
+            // On success the slot stays reserved until markProcessReady() or a
+            // pre-ready processExit() releases it.
         }
-
-        return null;
     }
 
     private ManagedProcess startProcessOnce() {
@@ -385,7 +439,8 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         managed.setReady(true);
         processList.add(managed);
         readyCount.incrementAndGet();
-        firstReadyLatch.countDown();
+        requestedCount.updateAndGet(v -> Math.max(0, v - 1));
+        readyLatch.countDown();
     }
 
     // -----------------------------------------------------------------------
@@ -469,7 +524,15 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         runningCount.updateAndGet(v -> Math.max(0, v - 1));
 
         if (managed.isReady()) {
-            readyCount.updateAndGet(v -> Math.max(0, v - 1));
+            int remaining = readyCount.updateAndGet(v -> Math.max(0, v - 1));
+            if (remaining == 0) {
+                // Full outage: re-arm so requests queue for the next ready process
+                // instead of racing a permanently-open latch.
+                readyLatch = new CountDownLatch(1);
+            }
+        } else {
+            // Died while booting: release its requested-capacity slot.
+            requestedCount.updateAndGet(v -> Math.max(0, v - 1));
         }
 
         // Track exit for crash detection
@@ -562,11 +625,14 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             }
         }
 
-        // Wait for at least one process to be ready
+        // Wait for at least one process to be ready. Snapshot the latch before awaiting:
+        // processExit may swap in a fresh latch concurrently, and awaiting the snapshot
+        // pairs with the markProcessReady countdown for the same outage window.
         if (readyCount.get() == 0) {
+            CountDownLatch latch = this.readyLatch;
             startMinimumServers();
             try {
-                if (!firstReadyLatch.await(60, TimeUnit.SECONDS)) {
+                if (readyCount.get() == 0 && !latch.await(60, TimeUnit.SECONDS)) {
                     exchange.setStatusCode(503);
                     exchange.getResponseSender().send("Service starting up - please retry");
                     return;
@@ -655,6 +721,21 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         return count;
     }
 
+    /** All spawned, still-running children (ready or not, isolated or not). */
+    public int runningProcessCount() {
+        return runningCount.get();
+    }
+
+    /** Spawns requested but not yet concluded ready-or-dead (capacity still booting). */
+    public int requestedProcessCount() {
+        return requestedCount.get();
+    }
+
+    /** Persist every live process's rolling log immediately (the periodic flush, on demand). */
+    public void flushProclogsNow() {
+        flushProclogs();
+    }
+
     public List<ManagedProcess> getProcesses() {
         return Collections.unmodifiableList(new ArrayList<>(processList));
     }
@@ -684,6 +765,10 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         exchange.getResponseSender().send("OK");
     }
 
+    /**
+     * UPSERT this process's rolling log: the first call inserts the row and stores its id on
+     * the process; later calls (periodic flush, exit persist) update that same row.
+     */
     private void persistProclog(ManagedProcess managed) {
         try {
             String logText = managed.getLogText();
@@ -691,21 +776,45 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
             var ds = HohenheimDatabase.datasource();
             var model = Models.get(ProclogModel.class);
-            Row row = model.createEmptyRow();
-            row.set(ProclogModel.SITE_ID, siteId);
-            row.set(ProclogModel.PID, (int) managed.pid());
+
+            Row row = null;
+            Integer rowId = managed.proclogRowId();
+            if (rowId != null) {
+                row = model.findById(rowId);
+            }
+            if (row == null) {
+                row = model.createEmptyRow();
+                row.set(ProclogModel.SITE_ID, siteId);
+                row.set(ProclogModel.PID, (int) managed.pid());
+                row.set(ProclogModel.CREATED_AT, managed.startTime());
+            }
+
             // Column is still LOG_HTML but the payload is raw ANSI text; the
             // proclog viewer feeds it through ghostty-web just like the live view.
             row.set(ProclogModel.LOG_HTML, logText);
-            row.set(ProclogModel.CREATED_AT, managed.startTime());
+            row.set(ProclogModel.LINE_COUNT, countLines(logText));
+            row.set(ProclogModel.SAVED_AT, Instant.now());
             model.save(row);
+            managed.setProclogRowId(row.get(ProclogModel.ID));
         } catch (Exception e) {
             Blast.log("PROCESS: failed to persist proclog for", siteName, "pid=" + managed.pid(), "-", e.getMessage());
         }
     }
 
+    private static int countLines(String text) {
+        int lines = 1;
+        for (int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) == '\n') lines++;
+        }
+        return lines;
+    }
+
     @Override
     public void destroy() {
+        ScheduledFuture<?> flushTask = this.proclogFlushTask;
+        if (flushTask != null) {
+            flushTask.cancel(false);
+        }
         monitor.removeListener(siteId, this);
         for (IpcChannel ipc : ipcChannels.values()) {
             ipc.close();

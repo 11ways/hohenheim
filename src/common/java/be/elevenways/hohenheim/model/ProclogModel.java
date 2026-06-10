@@ -18,6 +18,7 @@ public class ProclogModel extends Model {
     public static final IntegerField PID = SCHEMA.addField(IntegerField.builder().name("pid").build());
     public static final StringField LOG_HTML = SCHEMA.addField(StringField.builder().name("log_html").build());
     public static final IntegerField LINE_COUNT = SCHEMA.addField(IntegerField.builder().name("line_count").build());
+    public static final DateTimeField SAVED_AT = SCHEMA.addField(DateTimeField.builder().name("saved_at").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
