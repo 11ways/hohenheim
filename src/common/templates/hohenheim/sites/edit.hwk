@@ -139,6 +139,16 @@
         </pl-card>
 
         {% if isManaged %}
+        {#
+            DESIGN NOTE (hh-site-control, not yet implemented): this card is a server-rendered
+            snapshot. The Node original's richer behavior needs a custom element that owns the
+            card: 15s auto-refresh of the process list from a JSON endpoint, a start-button
+            state machine (idle -> starting -> disabled while booting), a per-row collapsible
+            pl-terminal streaming the live proclog keyed by pid, and fingerprint/uptime columns.
+            Shape: a HhSiteControl tag with a siteId property, client-side polling via
+            JobRunner, reusing the proclog detail endpoint for terminal content. Separate,
+            larger effort -- the static table below is not a regression.
+        #}
         <pl-card class="hh-domains-card">
             <pl-card-header>
                 <pl-card-title>Processes</pl-card-title>

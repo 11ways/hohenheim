@@ -175,7 +175,10 @@ Most-useful keys:
         "https_port": 443,                 // public HTTPS
         "force_https": true,               // redirect HTTP to HTTPS globally
         "fallback_address": "http://localhost:8081",  // tried when no site matches
-        "ipv6_address": ""                 // optional extra listener
+        "ipv6_address": "",                // optional extra listener
+        "first_port": 4748,                // first port handed to managed child processes
+        "trusted_proxy_keys": ""           // comma-delimited X-Hohenheim-Key values; a request
+                                           // carrying one may pass the real client IP in X-Real-IP
     },
 
     // Let's Encrypt
@@ -239,7 +242,9 @@ Two paths:
 - **Let's Encrypt (automatic).** Enable with `ssl.letsencrypt_enabled = true`
   and set `ssl.letsencrypt_email`. Certificates are obtained via ACME (acme4j)
   and stored in the SQLite DB. Renewal happens automatically in a scheduled
-  task.
+  task. The request form accepts an optional per-certificate account email;
+  each distinct email gets its own ACME account (and key pair), with the
+  global email as the default.
 
 - **Upload your own.** Use the Certificates page in the admin UI. Paste PEM
   fullchain + private key, then assign the certificate to a domain. No
@@ -264,8 +269,8 @@ Built-in types, registered via `SiteTypeRegistry`:
 | `alchemy`  | Extends `node` with `--stream-janeway` and a fork-wrapper that gives older alchemy installs a native `process.on('message')` IPC channel. |
 | `command`  | Managed arbitrary process (shell command).                 |
 | `proxy`    | Transparent reverse proxy to a TCP address or unix socket. Regex host captures can be substituted into the socket path, e.g. `/run/{project}.sock`. |
-| `static`   | Static-file server, optionally git-provisioned.            |
-| `redirect` | 30x redirect.                                              |
+| `static`   | Static-file server, optionally git-provisioned. Directory listings (autoindex) are ON by default since 0.1.0, matching the Node original; untick "Show directory listing" to disable. |
+| `redirect` | 30x redirect, with an optional per-request delay.          |
 | `dead`     | Returns an error page; for sites temporarily disabled.     |
 
 See `docs/architecture-site-types.md` for the plugin contract.
