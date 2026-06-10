@@ -6,6 +6,7 @@
         {%
             let targetUrl = settings.getString("target_url", "")
             let httpStatus = settings.getString("http_status", "302")
+            let redirectDelay = settings.getString("delay", "")
         %}
         <div class="hh-form-section">
             <pl-field>
@@ -23,6 +24,10 @@
                         <pl-select-item value="308" label="308 Permanent Redirect">308 Permanent Redirect</pl-select-item>
                     </pl-select-content>
                 </pl-select>
+            </pl-field>
+            <pl-field>
+                <pl-label>Request Delay (ms)</pl-label>
+                <pl-input type={% "number" %} name={% "delay" %} value={% redirectDelay %} placeholder={% "0" %}></pl-input>
             </pl-field>
         </div>
     }
