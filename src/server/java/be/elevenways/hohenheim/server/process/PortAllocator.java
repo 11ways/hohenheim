@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.process;
 
+import be.elevenways.hohenheim.HohenheimSettings;
+
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.util.concurrent.ConcurrentHashMap;
@@ -57,9 +59,13 @@ public class PortAllocator {
         }
     }
 
+    /** Privileged or missing values fall back to 4748. */
     private int getFirstPort() {
-        // Could be configurable via settings in the future
-        return 4748;
+        Integer configured = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FIRST_PORT);
+        if (configured == null || configured <= 1024) {
+            return 4748;
+        }
+        return configured;
     }
 
     public int getReservedCount() {
