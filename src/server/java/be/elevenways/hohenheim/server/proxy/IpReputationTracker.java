@@ -30,7 +30,9 @@ public final class IpReputationTracker {
     private final IntSupplier decayPerHitSource;
 
     // Settings snapshot, refreshed at most every SETTINGS_TTL_MS (read on the hot path).
-    private volatile long settingsReadAt = Long.MIN_VALUE;
+    // AIDEV-NOTE: initial readAt must be 0, not Long.MIN_VALUE -- "now - MIN_VALUE" overflows
+    // negative, the staleness check never fires, and settings changes are silently ignored.
+    private volatile long settingsReadAt = 0;
     private volatile int windowSeconds = 300;
     private volatile int banThreshold = 25;
     private volatile int decayPerHit = 2;
