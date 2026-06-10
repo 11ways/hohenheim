@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.shredzone.acme4j.*;
 import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.util.CSRBuilder;
@@ -45,8 +46,9 @@ public class AcmeService {
      */
     private final ConcurrentHashMap<String, ChallengeEntry> pendingChallenges = new ConcurrentHashMap<>();
 
-    private Account account;
-    private KeyPair accountKeyPair;
+    // ACME account sessions keyed by normalized override email ("" = the global account),
+    // each with its own persisted key pair. Guarded by the synchronized ensureAccount.
+    private final Map<String, Account> accounts = new HashMap<>();
 
     private record ChallengeEntry(String authorization, Set<String> validHostnames) {}
 
@@ -96,7 +98,7 @@ public class AcmeService {
      *
      * @return the certificate database row ID, or -1 on failure
      */
-    public int requestCertificate(List<String> hostnames, String niceName) {
+    public int requestCertificate(List<String> hostnames, String niceName, @Nullable String email) {
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
 
@@ -105,11 +107,14 @@ public class AcmeService {
         certRow.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
         certRow.set(CertificateModel.STATUS, CertificateModel.STATUS_PENDING);
         certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
+        if (email != null && !email.isBlank()) {
+            certRow.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
+        }
         certModel.save(certRow);
         int certId = certRow.get(CertificateModel.ID);
 
         try {
-            OrderResult result = performAcmeOrder(hostnames);
+            OrderResult result = performAcmeOrder(hostnames, email);
 
             certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
             certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem);
@@ -227,7 +232,8 @@ public class AcmeService {
         List<String> hostnames = Arrays.asList(domainsText.split(","));
 
         try {
-            OrderResult result = performAcmeOrder(hostnames);
+            OrderResult result = performAcmeOrder(hostnames,
+                certRow.get(CertificateModel.LETSENCRYPT_EMAIL));
 
             certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
             certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem);
@@ -279,13 +285,13 @@ public class AcmeService {
     // Core ACME order flow (shared by request and renewal)
     // -----------------------------------------------------------------------
 
-    private OrderResult performAcmeOrder(List<String> hostnames) throws Exception {
+    private OrderResult performAcmeOrder(List<String> hostnames, @Nullable String email) throws Exception {
         List<String> invalid = invalidHostnames(hostnames);
         if (!invalid.isEmpty()) {
             throw new IllegalArgumentException("Invalid hostnames: " + String.join(", ", invalid));
         }
 
-        ensureAccount();
+        Account account = ensureAccount(normalizeAccountEmail(email));
 
         KeyPair domainKeyPair = KeyPairUtils.createKeyPair(2048);
 
@@ -367,10 +373,25 @@ public class AcmeService {
     // ACME account
     // -----------------------------------------------------------------------
 
-    private synchronized void ensureAccount() throws Exception {
-        if (account != null) return;
+    /**
+     * Map an override email to its account key: "" for null, blank, or the global
+     * setting's own email (no point registering a duplicate account for it).
+     */
+    public static String normalizeAccountEmail(@Nullable String email) {
+        if (email == null) return "";
+        String normalized = email.trim().toLowerCase();
+        if (normalized.isEmpty()) return "";
 
-        String email = HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL);
+        String global = HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL);
+        if (global != null && normalized.equals(global.trim().toLowerCase())) return "";
+
+        return normalized;
+    }
+
+    private synchronized Account ensureAccount(String normalizedEmail) throws Exception {
+        Account existing = accounts.get(normalizedEmail);
+        if (existing != null) return existing;
+
         boolean staging = Boolean.TRUE.equals(
             HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_STAGING));
 
@@ -378,31 +399,47 @@ public class AcmeService {
             ? "acme://letsencrypt.org/staging"
             : "acme://letsencrypt.org";
 
-        accountKeyPair = loadOrCreateAccountKeyPair();
+        String email = normalizedEmail.isEmpty()
+            ? HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL)
+            : normalizedEmail;
+
+        KeyPair keyPair = loadOrCreateAccountKeyPair(normalizedEmail);
 
         Session session = new Session(serverUri);
         AccountBuilder builder = new AccountBuilder()
             .agreeToTermsOfService()
-            .useKeyPair(accountKeyPair);
+            .useKeyPair(keyPair);
 
         if (email != null && !email.isEmpty()) {
             builder.addEmail(email);
         }
 
-        account = builder.create(session);
-        Blast.log("ACME: account ready (" + (staging ? "staging" : "production") + ")");
+        Account account = builder.create(session);
+        accounts.put(normalizedEmail, account);
+        Blast.log("ACME: account ready",
+            normalizedEmail.isEmpty() ? "(global," : "(" + normalizedEmail + ",",
+            staging ? "staging)" : "production)");
+        return account;
     }
 
-    private KeyPair loadOrCreateAccountKeyPair() throws Exception {
+    /**
+     * Each account key is its own provider='acme_account' row; the pre-existing global
+     * row has letsencrypt_email NULL, per-email rows carry their email.
+     */
+    KeyPair loadOrCreateAccountKeyPair(String normalizedEmail) throws Exception {
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
 
-        Row accountRow = certModel.find()
-            .where(CertificateModel.PROVIDER.eq("acme_account"))
-            .first();
+        // A handful of rows at most; match the email key in Java since NULL marks the global row.
+        List<Row> accountRows = certModel.find()
+            .where(CertificateModel.PROVIDER.eq(CertificateModel.PROVIDER_ACME_ACCOUNT))
+            .all();
+        for (Row row : accountRows) {
+            String rowEmail = row.get(CertificateModel.LETSENCRYPT_EMAIL);
+            String rowKey = rowEmail == null ? "" : rowEmail.trim().toLowerCase();
+            if (!rowKey.equals(normalizedEmail)) continue;
 
-        if (accountRow != null) {
-            String keyPem = accountRow.get(CertificateModel.PRIVATE_KEY_PEM);
+            String keyPem = row.get(CertificateModel.PRIVATE_KEY_PEM);
             if (keyPem != null) {
                 try (var reader = new StringReader(keyPem)) {
                     return KeyPairUtils.readKeyPair(reader);
@@ -415,10 +452,15 @@ public class AcmeService {
         KeyPairUtils.writeKeyPair(keyPair, sw);
 
         Row newRow = certModel.createEmptyRow();
-        newRow.set(CertificateModel.NICE_NAME, "ACME Account Key");
-        newRow.set(CertificateModel.PROVIDER, "acme_account");
+        newRow.set(CertificateModel.NICE_NAME, normalizedEmail.isEmpty()
+            ? "ACME Account Key"
+            : "ACME Account Key (" + normalizedEmail + ")");
+        newRow.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_ACME_ACCOUNT);
         newRow.set(CertificateModel.PRIVATE_KEY_PEM, sw.toString());
-        newRow.set(CertificateModel.STATUS, "active");
+        newRow.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
+        if (!normalizedEmail.isEmpty()) {
+            newRow.set(CertificateModel.LETSENCRYPT_EMAIL, normalizedEmail);
+        }
         certModel.save(newRow);
 
         return keyPair;
