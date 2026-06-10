@@ -20,6 +20,11 @@
                 <pl-textarea id="domains" name={% "domains" %} placeholder={% "example.com\nwww.example.com" %} required={% true %}></pl-textarea>
                 <p class="hh-form-hint">One domain per line. All domains must point to this server.</p>
             </div>
+            <div class="hh-form-group">
+                <pl-label target="letsencrypt-email">Account Email (optional)</pl-label>
+                <pl-input id="letsencrypt-email" type={% "email" %} name={% "letsencrypt_email" %} placeholder={% "certs@example.com" %}></pl-input>
+                <p class="hh-form-hint">Overrides the global Let's Encrypt account email for this certificate.</p>
+            </div>
         </hh-form-shell>
     </hh-page>
 {% /block %}

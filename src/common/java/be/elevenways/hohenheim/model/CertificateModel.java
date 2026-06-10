@@ -50,6 +50,9 @@ public class CertificateModel extends Model {
     public static final IntegerField ERROR_COUNT = SCHEMA.addField(IntegerField.builder().name("error_count").build());
     public static final DateTimeField NEXT_ATTEMPT_AT = SCHEMA.addField(DateTimeField.builder().name("next_attempt_at").build());
     public static final StringField DOMAIN_NAMES_TEXT = SCHEMA.addField(StringField.builder().name("domain_names_text").build());
+
+    /** Per-cert ACME account email override; null means the global account. */
+    public static final StringField LETSENCRYPT_EMAIL = SCHEMA.addField(StringField.builder().name("letsencrypt_email").build());
     public static final SchemaField META = SCHEMA.addField(SchemaField.builder("meta").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

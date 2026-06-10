@@ -155,6 +155,14 @@ public final class CertificateHandlers {
 
             String domains = form.getOrDefault("domains", "").trim();
             String niceName = form.getOrDefault("nice_name", "").trim();
+            String email = form.getOrDefault("letsencrypt_email", "").trim();
+
+            if (!email.isEmpty() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+                return HandlerSupport.renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/certificates/request"),
+                    Map.of("error", "Invalid account email: " + email)
+                );
+            }
 
             if (domains.isEmpty()) {
                 return HandlerSupport.renderUntyped(
@@ -201,7 +209,8 @@ public final class CertificateHandlers {
                 );
             }
 
-            int certId = proxy.getAcmeService().requestCertificate(hostnames, niceName);
+            int certId = proxy.getAcmeService().requestCertificate(hostnames, niceName,
+                email.isEmpty() ? null : email);
 
             if (certId < 0) {
                 // Lookup the specific cert row to get the error message
