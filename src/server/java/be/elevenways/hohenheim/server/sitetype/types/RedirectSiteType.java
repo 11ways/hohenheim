@@ -32,6 +32,10 @@ public class RedirectSiteType implements SiteTypeHandler {
     public static final BooleanField PRESERVE_PATH = SETTINGS_SCHEMA.addField(
         BooleanField.builder("preserve_path").defaultValue(false).build());
 
+    // Honored generically by SiteDispatcher's per-route delay scheduler.
+    public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
+        IntegerField.builder().name("delay").build());
+
     @Override
     public String getDisplayName() { return "Redirect"; }
 
