@@ -21,8 +21,9 @@ public class StaticSiteType implements SiteTypeHandler {
     public static final StringField ROOT_PATH = SETTINGS_SCHEMA.addField(
         StringField.builder().name("root_path").build());
 
+    // Default true matches the Node original (ecstatic showed listings out of the box).
     public static final BooleanField AUTOINDEX = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("autoindex").defaultValue(false).build());
+        BooleanField.builder("autoindex").defaultValue(true).build());
 
     public static final BooleanField INDEXES = SETTINGS_SCHEMA.addField(
         BooleanField.builder("indexes").defaultValue(true).build());
@@ -52,14 +53,15 @@ public class StaticSiteType implements SiteTypeHandler {
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
         String rootPathStr = (String) settings.get("root_path");
         String fallbackFile = (String) settings.get("fallback_file");
-        boolean autoindex = Boolean.TRUE.equals(settings.get("autoindex"));
+        boolean autoindex = !Boolean.FALSE.equals(settings.get("autoindex"));
         boolean indexes = !Boolean.FALSE.equals(settings.get("indexes"));
         boolean showHidden = Boolean.TRUE.equals(settings.get("show_hidden_files"));
 
         if (rootPathStr == null || rootPathStr.isEmpty()) {
+            // Empty 200 like Node ecstatic with no root: the site exists but serves nothing.
             return (exchange, forwarder) -> {
-                exchange.setStatusCode(502);
-                exchange.getResponseSender().send("No root path configured");
+                exchange.setStatusCode(200);
+                exchange.endExchange();
             };
         }
 

@@ -7,7 +7,7 @@
             let rootPath = settings.getString("root_path", "")
             let fallbackFile = settings.getString("fallback_file", "")
             let indexes = settings.getBoolean("indexes", true)
-            let autoindex = settings.getBoolean("autoindex", false)
+            let autoindex = settings.getBoolean("autoindex", true)
             let showHiddenFiles = settings.getBoolean("show_hidden_files", false)
             let staticDelay = settings.getString("delay", "")
         %}
