@@ -64,6 +64,10 @@ public class HohenheimSettings {
             .defaultValue(4748)
             .description("First TCP port assigned to managed child processes")
             .build();
+
+        public static final SettingDefinition<String> TRUSTED_PROXY_KEYS = GROUP.buildSetting("trusted_proxy_keys", String.class)
+            .description("Comma-delimited X-Hohenheim-Key values from trusted upstream proxies")
+            .build();
     }
 
     // --- SSL/TLS ---
