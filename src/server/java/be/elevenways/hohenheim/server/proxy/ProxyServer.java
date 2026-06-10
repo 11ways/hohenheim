@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.session.InMemorySessionStore;
 import be.elevenways.zenit.common.session.SessionStore;
 import io.undertow.Undertow;
+import io.undertow.UndertowOptions;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.handlers.encoding.ContentEncodingRepository;
 import io.undertow.server.handlers.encoding.EncodingHandler;
@@ -124,6 +125,7 @@ public class ProxyServer {
         try {
             Undertow.Builder builder = Undertow.builder()
                 .addHttpListener(httpPort, "0.0.0.0")
+                .setServerOption(UndertowOptions.ENABLE_HTTP2, true)
                 .setIoThreads(IO_THREADS)
                 .setHandler(handler);
 
@@ -160,8 +162,10 @@ public class ProxyServer {
             SniKeyManager sniKeyManager = new SniKeyManager(certificateStore, dispatcher::isBanned);
             sslContext.init(new KeyManager[]{sniKeyManager}, null, null);
 
+            // h2 toward clients only; Undertow's ProxyHandler talks HTTP/1.1 to upstreams.
             Undertow.Builder builder = Undertow.builder()
                 .addHttpsListener(httpsPort, "0.0.0.0", sslContext)
+                .setServerOption(UndertowOptions.ENABLE_HTTP2, true)
                 .setIoThreads(IO_THREADS)
                 .setHandler(handler);
 

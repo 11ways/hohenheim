@@ -551,6 +551,60 @@ class ProxyDispatchTest {
     }
 
     @Test
+    @Order(11)
+    void httpsListenerNegotiatesH2() throws Exception {
+        File db = File.createTempFile("hohenheim-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
+        HohenheimDatabase.init();
+
+        var certModel = Models.get(CertificateModel.class);
+        KeyPair keyPair = TlsCertificateTest.generateKeyPair();
+        X509Certificate cert = TlsCertificateTest.generateSelfSignedCert(keyPair, "h2.test");
+        Row certRow = certModel.createEmptyRow();
+        certRow.set(CertificateModel.NICE_NAME, "H2 Test");
+        certRow.set(CertificateModel.PROVIDER, "custom");
+        certRow.set(CertificateModel.STATUS, "active");
+        certRow.set(CertificateModel.CERTIFICATE_PEM, TlsCertificateTest.certToPem(cert));
+        certRow.set(CertificateModel.PRIVATE_KEY_PEM, TlsCertificateTest.keyToPem(keyPair));
+        certModel.save(certRow);
+
+        setupSiteWithDomain("h2.test",
+            Map.of("forward_host", "127.0.0.1", "forward_port", 9999),
+            Map.of("force_ssl", false));
+
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+        proxy = new ProxyServer();
+        proxy.start();
+
+        int httpsPort = ((InetSocketAddress) proxy.getHttpsListenerInfo().getAddress()).getPort();
+
+        javax.net.ssl.SSLContext tls = javax.net.ssl.SSLContext.getInstance("TLS");
+        tls.init(null, new javax.net.ssl.TrustManager[]{ new javax.net.ssl.X509TrustManager() {
+            public void checkClientTrusted(X509Certificate[] c, String a) {}
+            public void checkServerTrusted(X509Certificate[] c, String a) {}
+            public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+        }}, null);
+
+        try (javax.net.ssl.SSLSocket socket = (javax.net.ssl.SSLSocket)
+                tls.getSocketFactory().createSocket("127.0.0.1", httpsPort)) {
+            javax.net.ssl.SSLParameters params = socket.getSSLParameters();
+            params.setServerNames(List.of(new javax.net.ssl.SNIHostName("h2.test")));
+            params.setApplicationProtocols(new String[]{"h2", "http/1.1"});
+            socket.setSSLParameters(params);
+            socket.setSoTimeout(3000);
+            socket.startHandshake();
+
+            assertThat(socket.getApplicationProtocol()).isEqualTo("h2");
+        }
+
+        proxy.stop();
+        proxy = null;
+    }
+
+    @Test
     @Order(7)
     void listenOnBlocksMismatchedListenerAddress() throws Exception {
         File db = File.createTempFile("hohenheim-test", ".db");
