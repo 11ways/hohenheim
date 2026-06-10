@@ -57,6 +57,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,6 +90,11 @@ public class SiteDispatcher implements HttpHandler {
     private static final HttpString X_REAL_IP = new HttpString("X-Real-IP");
     private static final HttpString STRICT_TRANSPORT_SECURITY = new HttpString("Strict-Transport-Security");
 
+    // Trusted-remote-proxy authentication. Deliberately a dispatcher-level constant, distinct
+    // from the managed-process control key on ManagedProcessSiteHandler: that one authorizes
+    // process-control actions, this one authorizes client-IP propagation.
+    private static final HttpString X_HOHENHEIM_KEY = new HttpString("X-Hohenheim-Key");
+
     private final String instanceId = UUID.randomUUID().toString().substring(0, 8);
 
     /**
@@ -97,10 +103,10 @@ public class SiteDispatcher implements HttpHandler {
      */
     private static final class RouteTable {
         final Map<String, RouteEntry> exactRoutes;
-        final Map<String, RouteEntry> wildcardRoutes;
+        final Map<String, WildcardRoute> wildcardRoutes;
         final List<RegexRoute> regexRoutes;
 
-        RouteTable(Map<String, RouteEntry> exact, Map<String, RouteEntry> wildcard,
+        RouteTable(Map<String, RouteEntry> exact, Map<String, WildcardRoute> wildcard,
                    List<RegexRoute> regex) {
             this.exactRoutes = exact;
             this.wildcardRoutes = wildcard;
@@ -125,6 +131,13 @@ public class SiteDispatcher implements HttpHandler {
     // IP reputation (hostname-scanning ban tracking) and access/domain-miss logging.
     private final IpReputationTracker ipReputation = new IpReputationTracker();
     private final AccessLog accessLog = new AccessLog();
+
+    // Trusted remote-proxy keys, re-parsed from settings at most every 10s (read per request).
+    // AIDEV-NOTE: initial readAt must be 0, not Long.MIN_VALUE -- "now - MIN_VALUE" overflows
+    // negative and the staleness check would never fire.
+    private static final long TRUSTED_KEYS_TTL_MS = 10_000;
+    private volatile long trustedKeysReadAt = 0;
+    private volatile Set<String> trustedProxyKeys = Set.of();
 
     private static final String ACME_CHALLENGE_PREFIX = "/.well-known/acme-challenge/";
 
@@ -236,6 +249,9 @@ public class SiteDispatcher implements HttpHandler {
 
     private record HeaderRule(String name, String value) {}
 
+    /** A glob hostname route with its pattern compiled once at load time. */
+    private record WildcardRoute(Pattern pattern, RouteEntry entry) {}
+
     private record RegexRoute(String hostnamePattern, Pattern pattern, List<String> namedGroups,
                               RouteEntry entry) {}
 
@@ -252,12 +268,14 @@ public class SiteDispatcher implements HttpHandler {
             return thread;
         });
         DispatchingProxyClient proxyClient = new DispatchingProxyClient();
+        // reuseXForwarded: ProxyHandler appends the connected peer to an existing XFF chain
+        // instead of overwriting it -- the dispatcher seeds the chain for trusted remote proxies.
         this.proxyHandler = ProxyHandler.builder()
             .setProxyClient(proxyClient)
             .setMaxRequestTime(30000)
             .setNext(ResponseCodeHandler.HANDLE_404)
             .setRewriteHostHeader(false)
-            .setReuseXForwarded(false)
+            .setReuseXForwarded(true)
             .build();
     }
 
@@ -273,7 +291,7 @@ public class SiteDispatcher implements HttpHandler {
 
         // Build new route maps first, then swap atomically
         Map<String, RouteEntry> newExact = new HashMap<>();
-        Map<String, RouteEntry> newWildcard = new HashMap<>();
+        Map<String, WildcardRoute> newWildcard = new HashMap<>();
         List<RegexRoute> newRegex = new ArrayList<>();
 
         List<Row> sites = siteModel.findEnabled();
@@ -371,8 +389,9 @@ public class SiteDispatcher implements HttpHandler {
                         newRegex.add(new RegexRoute(hostname, pattern,
                             extractNamedGroups(hostname), entry));
                     }
-                } else if ("wildcard".equals(matchType) || hostname.startsWith("*.")) {
-                    newWildcard.put(hostname.toLowerCase(), entry);
+                } else if ("wildcard".equals(matchType) || WildcardHostname.isWildcard(hostname)) {
+                    String glob = hostname.toLowerCase();
+                    newWildcard.put(glob, new WildcardRoute(WildcardHostname.compile(glob), entry));
                 } else {
                     newExact.put(hostname.toLowerCase(), entry);
                 }
@@ -393,8 +412,9 @@ public class SiteDispatcher implements HttpHandler {
     public void handleRequest(HttpServerExchange exchange) throws Exception {
 
         // --- IP reputation enforcement: reject known-bad IPs early (plain HTTP; HTTPS is
-        //     rejected earlier still, at the TLS handshake, via SniKeyManager) ---
-        String earlyIp = exchange.getSourceAddress().getAddress().getHostAddress();
+        //     rejected earlier still, at the TLS handshake, via SniKeyManager). Uses the
+        //     effective client IP so bans follow real clients through a trusted remote proxy. ---
+        String earlyIp = getClientIp(exchange);
         if (isBanned(earlyIp)) {
             exchange.setStatusCode(403);
             exchange.endExchange();
@@ -535,18 +555,30 @@ public class SiteDispatcher implements HttpHandler {
         HeaderMap requestHeaders = exchange.getRequestHeaders();
         requestHeaders.put(X_PROXIED_BY, instanceId);
 
-        if (!requestHeaders.contains(X_FORWARDED_FOR)) {
+        String sourceIp = exchange.getSourceAddress().getAddress().getHostAddress();
+
+        // AIDEV-NOTE: X-Forwarded-For is owned by Undertow's ProxyHandler (reuseXForwarded=true):
+        // it appends the connected peer to an existing chain, or seeds the chain with the peer.
+        // Anything written here that ISN'T an existing chain gets overwritten, so the dispatcher
+        // only seeds the resolved real client when a trusted remote proxy supplied one.
+        if (!clientIp.equals(sourceIp) && !requestHeaders.contains(X_FORWARDED_FOR)) {
             requestHeaders.put(X_FORWARDED_FOR, clientIp);
-        } else {
-            String existing = requestHeaders.getFirst(X_FORWARDED_FOR);
-            requestHeaders.put(X_FORWARDED_FOR, existing + ", " + clientIp);
         }
         if (!requestHeaders.contains(X_FORWARDED_PROTO)) {
             requestHeaders.put(X_FORWARDED_PROTO, exchange.getRequestScheme());
         }
-        if (!requestHeaders.contains(X_REAL_IP)) {
-            requestHeaders.put(X_REAL_IP, clientIp);
+
+        // AIDEV-NOTE: X-Real-IP is overwritten for untrusted peers (Node parity) -- keeping a
+        // client-supplied value would let anyone spoof their IP to the upstream. Only a trusted
+        // remote proxy's value survives, and clientIp already IS that value then.
+        if (isTrustedRemoteProxy(exchange)) {
+            if (!requestHeaders.contains(X_REAL_IP)) {
+                requestHeaders.put(X_REAL_IP, clientIp);
+            }
+        } else {
+            requestHeaders.put(X_REAL_IP, sourceIp);
         }
+
         if (!requestHeaders.contains(X_FORWARDED_HOST)) {
             requestHeaders.put(X_FORWARDED_HOST, hostname);
         }
@@ -633,10 +665,10 @@ public class SiteDispatcher implements HttpHandler {
         if (entry != null && entry.acceptsListener(listenerIp)) return new RouteMatch(entry, null);
 
         // 2. Wildcard match
-        for (Map.Entry<String, RouteEntry> e : rt.wildcardRoutes.entrySet()) {
-            RouteEntry wildcardEntry = e.getValue();
-            if (wildcardEntry.acceptsListener(listenerIp) && matchesWildcard(hostname, e.getKey())) {
-                return new RouteMatch(wildcardEntry, null);
+        for (WildcardRoute wildcardRoute : rt.wildcardRoutes.values()) {
+            if (wildcardRoute.entry().acceptsListener(listenerIp)
+                    && wildcardRoute.pattern().matcher(hostname).matches()) {
+                return new RouteMatch(wildcardRoute.entry(), null);
             }
         }
 
@@ -789,12 +821,6 @@ public class SiteDispatcher implements HttpHandler {
         exchange.setStatusCode(401);
         exchange.getResponseHeaders().put(new HttpString("WWW-Authenticate"), "Basic realm=\"Restricted\"");
         exchange.getResponseSender().send("Unauthorized");
-    }
-
-    private boolean matchesWildcard(String hostname, String pattern) {
-        if (!pattern.startsWith("*.")) return false;
-        String suffix = pattern.substring(1);
-        return hostname.endsWith(suffix) && hostname.length() > suffix.length();
     }
 
     private Pattern compileHostnameRegex(String hostname) {
@@ -1097,9 +1123,9 @@ public class SiteDispatcher implements HttpHandler {
             handlers.add(entry.handler);
             if (entry.authGate != null) gates.add(entry.authGate);
         }
-        for (RouteEntry entry : rt.wildcardRoutes.values()) {
-            handlers.add(entry.handler);
-            if (entry.authGate != null) gates.add(entry.authGate);
+        for (WildcardRoute route : rt.wildcardRoutes.values()) {
+            handlers.add(route.entry().handler);
+            if (route.entry().authGate != null) gates.add(route.entry().authGate);
         }
         for (RegexRoute route : rt.regexRoutes) {
             handlers.add(route.entry().handler);
@@ -1117,8 +1143,44 @@ public class SiteDispatcher implements HttpHandler {
     // IP reputation
     // -----------------------------------------------------------------------
 
+    /**
+     * The effective client IP: the socket peer, unless a trusted remote proxy (valid
+     * X-Hohenheim-Key) forwarded the original client in X-Real-IP.
+     */
     private String getClientIp(HttpServerExchange exchange) {
-        return exchange.getSourceAddress().getAddress().getHostAddress();
+        String sourceIp = exchange.getSourceAddress().getAddress().getHostAddress();
+        if (isTrustedRemoteProxy(exchange)) {
+            String realIp = exchange.getRequestHeaders().getFirst(X_REAL_IP);
+            if (realIp != null && !realIp.isBlank()) {
+                return realIp.trim();
+            }
+        }
+        return sourceIp;
+    }
+
+    private boolean isTrustedRemoteProxy(HttpServerExchange exchange) {
+        String key = exchange.getRequestHeaders().getFirst(X_HOHENHEIM_KEY);
+        return key != null && trustedProxyKeys().contains(key);
+    }
+
+    private Set<String> trustedProxyKeys() {
+        long now = System.currentTimeMillis();
+        if (now - trustedKeysReadAt >= TRUSTED_KEYS_TTL_MS) {
+            trustedKeysReadAt = now;
+            String raw = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS);
+            if (raw == null || raw.isBlank()) {
+                trustedProxyKeys = Set.of();
+            } else {
+                Set<String> keys = new HashSet<>();
+                for (String part : raw.split(",")) {
+                    if (!part.isBlank()) {
+                        keys.add(part.trim());
+                    }
+                }
+                trustedProxyKeys = Set.copyOf(keys);
+            }
+        }
+        return trustedProxyKeys;
     }
 
     /**
@@ -1231,8 +1293,8 @@ public class SiteDispatcher implements HttpHandler {
         for (RouteEntry entry : rt.exactRoutes.values()) {
             if (entry.handler.getSiteId() == siteId) return entry.handler;
         }
-        for (RouteEntry entry : rt.wildcardRoutes.values()) {
-            if (entry.handler.getSiteId() == siteId) return entry.handler;
+        for (WildcardRoute route : rt.wildcardRoutes.values()) {
+            if (route.entry().handler.getSiteId() == siteId) return route.entry().handler;
         }
         for (RegexRoute route : rt.regexRoutes) {
             if (route.entry().handler.getSiteId() == siteId) return route.entry().handler;
