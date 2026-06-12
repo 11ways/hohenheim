@@ -1,99 +1,33 @@
-{% tag HhSiteEdit {
-
-    public siteId: Integer = 0
-    public siteName: String = ""
-    public siteType: String = "hohenheim:proxy"
-    public siteEnabled: Boolean = true
-    public siteTypes: List = null
-    public source: String = ""
-    public sourceSettings: Map = null
-    public settings: Map = null
-    public environmentVariables: List = null
-    public apiKeys: List = null
-    public nodeVersions: List = null
-    public systemUsers: List = null
-    public servers: List = null
-    public authProviders: List = null
-    public authProviderId: String = ""
-    public siteSlug: String = ""
-    public buildEnvironmentVariables: List = null
-    public error: String = ""
-
-    template {
-        <hh-form-shell
-            action={% "/sites/" + siteId %}
-            title={% "Site Settings" %}
-            description={% "Update the configuration for this site." %}
-            submitLabel={% "Save Changes" %}
-            cancelHref={% "/sites" %}
-            error={% error{:} %}>
-            <hh-site-form-fields
-                siteName={% siteName %}
-                selectedType={% &siteType{:} %}
-                source={% &source{:} %}
-                siteTypes={% siteTypes %}
-                settings={% settings %}
-                sourceSettings={% sourceSettings %}
-                nodeVersions={% nodeVersions %}
-                systemUsers={% systemUsers %}
-                environmentVariables={% environmentVariables %}
-                apiKeys={% apiKeys %}
-                servers={% servers %}
-                authProviders={% authProviders %}
-                authProviderId={% authProviderId %}
-                siteSlug={% siteSlug %}
-                buildEnvironmentVariables={% buildEnvironmentVariables %}></hh-site-form-fields>
-
-            <div class="hh-form-group hh-checkbox-field">
-                <pl-checkbox inputId="enabled" name="enabled" checked={% siteEnabled %}></pl-checkbox>
-                <pl-label target="enabled">Enabled</pl-label>
-            </div>
-        </hh-form-shell>
-    }
-} %}
-
 {% extend "hohenheim:hohenheim/base" %}
 
 {% block "main" %}
     {% declare site: Map %}
-    {% declare settings: Map %}
+    {% declare form: SiteFormData %}
     {% declare source: String = "" %}
-    {% declare sourceSettings: Map = null %}
     {% declare domains: List %}
-    {% declare siteTypes: List %}
-    {% declare environmentVariables: List %}
-    {% declare apiKeys: List %}
-    {% declare nodeVersions: List %}
-    {% declare systemUsers: List %}
-    {% declare servers: List %}
-    {% declare authProviders: List %}
-    {% declare authProviderId: String = "" %}
-    {% declare buildEnvironmentVariables: List = null %}
     {% declare error: String %}
     {% declare processes: List = null %}
     {% declare isManaged: Boolean = false %}
+    {%
+        let selectedType = site.get("siteType") != null ? site.get("siteType") : "hohenheim:proxy"
+        let selectedSource = source != null ? source : ""
+    %}
 
     <hh-page title={% site.get("name") %}>
-        <hh-site-edit
-            siteId={% site.get("id") %}
-            siteName={% site.get("name") %}
-            siteType={% site.get("siteType") != null ? site.get("siteType") : "hohenheim:proxy" %}
-            siteEnabled={% site.get("enabled") != null ? site.get("enabled") : true %}
-            source={% source != null ? source : "" %}
-            sourceSettings={% sourceSettings %}
-            siteTypes={% siteTypes %}
-            settings={% settings %}
-            environmentVariables={% environmentVariables %}
-            apiKeys={% apiKeys %}
-            nodeVersions={% nodeVersions %}
-            systemUsers={% systemUsers %}
-            servers={% servers %}
-            authProviders={% authProviders %}
-            authProviderId={% authProviderId %}
-            siteSlug={% site.get("slug") != null ? site.get("slug") : "" %}
-            buildEnvironmentVariables={% buildEnvironmentVariables %}
-            error={% error %}
-        ></hh-site-edit>
+        <hh-form-shell
+            action={% "/sites/" + site.get("id") %}
+            title={% "Site Settings" %}
+            description={% "Update the configuration for this site." %}
+            submitLabel={% "Save Changes" %}
+            cancelHref={% "/sites" %}
+            error={% error %}>
+            <hh-site-form-fields form={% form %} selectedType={% &selectedType{:} %} source={% &selectedSource{:} %}></hh-site-form-fields>
+
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="enabled" name="enabled" checked={% site.get("enabled") != null ? site.get("enabled") : true %}></pl-checkbox>
+                <pl-label target="enabled">Enabled</pl-label>
+            </div>
+        </hh-form-shell>
 
         <pl-card class="hh-domains-card">
             <pl-card-header>

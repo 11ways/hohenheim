@@ -1,25 +1,13 @@
 {% tag HhSiteFormFields {
 
-    public siteName: String = ""
+    public form: SiteFormData = null
     public selectedType: String = "hohenheim:proxy"
     public source: String = ""
-    public siteTypes: List = null
-    public settings: Map = null
-    public sourceSettings: Map = null
-    public nodeVersions: List = null
-    public systemUsers: List = null
-    public environmentVariables: List = null
-    public apiKeys: List = null
-    public servers: List = null
-    public authProviders: List = null
-    public authProviderId: String = ""
-    public siteSlug: String = ""
-    public buildEnvironmentVariables: List = null
 
     template {
         <div class="hh-form-group">
             <pl-label target="site-name">Site Name</pl-label>
-            <pl-input id="site-name" type={% "text" %} name={% "name" %} value={% siteName %} placeholder={% "My Website" %} required={% true %}></pl-input>
+            <pl-input id="site-name" type={% "text" %} name={% "name" %} value={% form.siteName %} placeholder={% "My Website" %} required={% true %}></pl-input>
         </div>
 
         <div class="hh-form-group">
@@ -27,7 +15,7 @@
             <pl-select id="site-type" name="site_type" bind:value={% selectedType{:} %}>
                 <pl-select-trigger placeholder="Select type"></pl-select-trigger>
                 <pl-select-content>
-                    {% each siteTypes as index, st %}
+                    {% each form.siteTypes as index, st %}
                         <pl-select-item value={% st.get("value") %} label={% st.get("label") %}>{{ st.get("label") }}{% if st.get("description") != null %} - {{ st.get("description") }}{% /if %}</pl-select-item>
                     {% /each %}
                 </pl-select-content>
@@ -47,16 +35,16 @@
 
         {% if source{:} == "git" %}
             <pl-separator></pl-separator>
-            <hh-git-source-settings sourceSettings={% sourceSettings %} siteSlug={% siteSlug %} buildEnvironmentVariables={% buildEnvironmentVariables %}></hh-git-source-settings>
+            <hh-git-source-settings form={% form %}></hh-git-source-settings>
         {% /if %}
 
         <div class="hh-form-group">
             <pl-label target="auth-provider">Auth Provider</pl-label>
-            <pl-select id="auth-provider" name="auth_provider_id" bind:value={% authProviderId{:} %}>
+            <pl-select id="auth-provider" name="auth_provider_id" value={% form.authProviderId %}>
                 <pl-select-trigger placeholder="None"></pl-select-trigger>
                 <pl-select-content>
                     <pl-select-item value="" label="None">None - no identity gate</pl-select-item>
-                    {% each authProviders as index, ap %}
+                    {% each form.authProviders as index, ap %}
                         <pl-select-item value={% ap.get("value") %} label={% ap.get("label") %}>{{ ap.get("label") }}</pl-select-item>
                     {% /each %}
                 </pl-select-content>
@@ -64,8 +52,22 @@
             <p class="hh-form-hint">Gate every request to this site behind an auth provider before it reaches the upstream.</p>
         </div>
 
+        <div class="hh-form-group">
+            <pl-label target="access-list">Access List</pl-label>
+            <pl-select id="access-list" name="access_list_id" value={% form.accessListId %}>
+                <pl-select-trigger placeholder="None"></pl-select-trigger>
+                <pl-select-content>
+                    <pl-select-item value="" label="None">None - no IP restrictions</pl-select-item>
+                    {% each form.accessLists as index, al %}
+                        <pl-select-item value={% al.get("value") %} label={% al.get("label") %}>{{ al.get("label") }}</pl-select-item>
+                    {% /each %}
+                </pl-select-content>
+            </pl-select>
+            <p class="hh-form-hint">Apply an IP allow/deny list (with optional basic auth) to every request.</p>
+        </div>
+
         <pl-separator></pl-separator>
 
-        <hh-site-type-fields selectedType={% &selectedType{:} %} settings={% settings %} nodeVersions={% nodeVersions %} systemUsers={% systemUsers %} environmentVariables={% environmentVariables %} apiKeys={% apiKeys %} servers={% servers %}></hh-site-type-fields>
+        <hh-site-type-fields form={% form %} selectedType={% &selectedType{:} %}></hh-site-type-fields>
     }
 } %}

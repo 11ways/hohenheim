@@ -1,9 +1,10 @@
 {% tag HhStaticSettings {
 
-    public settings: Map = null
+    public form: SiteFormData = null
 
     template {
         {%
+            let settings = form.settings
             let rootPath = settings.getString("root_path", "")
             let fallbackFile = settings.getString("fallback_file", "")
             let indexes = settings.getBoolean("indexes", true)

@@ -1,9 +1,10 @@
 {% tag HhProxySettings {
 
-    public settings: Map = null
+    public form: SiteFormData = null
 
     template {
         {%
+            let settings = form.settings
             let forwardScheme = settings.getString("forward_scheme", "http")
             let forwardHost = settings.getString("forward_host", "")
             let forwardPort = settings.getString("forward_port", "")

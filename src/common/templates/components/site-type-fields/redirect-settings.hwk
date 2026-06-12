@@ -1,9 +1,10 @@
 {% tag HhRedirectSettings {
 
-    public settings: Map = null
+    public form: SiteFormData = null
 
     template {
         {%
+            let settings = form.settings
             let targetUrl = settings.getString("target_url", "")
             let httpStatus = settings.getString("http_status", "302")
             let preservePath = settings.getBoolean("preserve_path", false)
