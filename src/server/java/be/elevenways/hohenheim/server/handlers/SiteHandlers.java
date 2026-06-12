@@ -1,12 +1,14 @@
 package be.elevenways.hohenheim.server.handlers;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.model.NodeVersionModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.hohenheim.render.SiteFormData;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
@@ -61,23 +63,9 @@ public final class SiteHandlers {
 
         // Site create form (GET)
         HohenheimEndpoints.SITES_CREATE_FORM.setHandler(conduit -> {
-            Map<String, Object> vars = new HashMap<>();
-            vars.put("error", "");
-            vars.put("siteTypes", getSiteTypeOptions());
-            vars.put("settings", Map.of());
-            vars.put("source", "");
-            vars.put("sourceSettings", Map.of());
-            vars.put("nodeVersions", getNodeVersionOptions());
-            vars.put("systemUsers", getSystemUserOptions());
-            vars.put("environmentVariables", List.of());
-            vars.put("apiKeys", List.of());
-            vars.put("buildEnvironmentVariables", List.of());
-            ServerService serverService = new ServerService();
-            serverService.ensureLocal();
-            vars.put("servers", serverService.names());
-            vars.put("authProviders", getAuthProviderOptions());
             return new RenderTemplateResult(
-                Identifier.of("hohenheim", "hohenheim/sites/create"), vars);
+                Identifier.of("hohenheim", "hohenheim/sites/create"),
+                Map.of("error", "", "form", blankFormData()));
         });
 
         // Site create (POST)
@@ -90,7 +78,7 @@ public final class SiteHandlers {
             if (name.isEmpty()) {
                 return HandlerSupport.renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/sites/create"),
-                    Map.of("error", "Name is required")
+                    Map.of("error", "Name is required", "form", blankFormData())
                 );
             }
 
@@ -105,7 +93,8 @@ public final class SiteHandlers {
             row.set(SiteModel.SITE_TYPE, siteType);
             row.set(SiteModel.SETTINGS, settings);
             row.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
-            row.set(SiteModel.AUTH_PROVIDER_ID, parseAuthProviderId(form));
+            row.set(SiteModel.AUTH_PROVIDER_ID, parseOptionalId(form, "auth_provider_id"));
+            row.set(SiteModel.ACCESS_LIST_ID, parseOptionalId(form, "access_list_id"));
 
             // Git source provisioning
             if (SiteModel.SOURCE_GIT.equals(source)) {
@@ -178,7 +167,8 @@ public final class SiteHandlers {
             site.set(SiteModel.SITE_TYPE, siteType);
             site.set(SiteModel.SETTINGS, settings);
             site.set(SiteModel.ENABLED, enabled);
-            site.set(SiteModel.AUTH_PROVIDER_ID, parseAuthProviderId(form));
+            site.set(SiteModel.AUTH_PROVIDER_ID, parseOptionalId(form, "auth_provider_id"));
+            site.set(SiteModel.ACCESS_LIST_ID, parseOptionalId(form, "access_list_id"));
 
             // Git source provisioning
             if (SiteModel.SOURCE_GIT.equals(source)) {
@@ -454,31 +444,36 @@ public final class SiteHandlers {
         Map<String, Object> vars = new HashMap<>();
         vars.put("site", siteToMap(site));
         vars.put("domains", domains);
-        vars.put("siteTypes", getSiteTypeOptions());
-        @SuppressWarnings("unchecked")
-        Map<String, Object> settings = (Map<String, Object>) site.get(SiteModel.SETTINGS);
-        vars.put("settings", settings != null ? settings : Map.of());
 
-        // Source provisioning data
         String source = site.get(SiteModel.SOURCE);
         vars.put("source", source != null ? source : "");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> settings = (Map<String, Object>) site.get(SiteModel.SETTINGS);
         @SuppressWarnings("unchecked")
         Map<String, Object> sourceSettings = (Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS);
-        vars.put("sourceSettings", sourceSettings != null ? sourceSettings : Map.of());
-
-        vars.put("nodeVersions", getNodeVersionOptions());
-        vars.put("systemUsers", getSystemUserOptions());
-        vars.put("environmentVariables",
-            HandlerSupport.nameValuePairs(settings != null ? settings.get("environment_variables") : null));
-        vars.put("apiKeys", extractApiKeysList(settings));
-        vars.put("buildEnvironmentVariables", HandlerSupport.nameValuePairs(
-            sourceSettings != null ? sourceSettings.get("build_environment_variables") : null));
-        ServerService serverService = new ServerService();
-        serverService.ensureLocal();
-        vars.put("servers", serverService.names());
-        vars.put("authProviders", getAuthProviderOptions());
         Integer authProviderId = site.get(SiteModel.AUTH_PROVIDER_ID);
-        vars.put("authProviderId", authProviderId != null ? authProviderId.toString() : "");
+        Integer accessListId = site.get(SiteModel.ACCESS_LIST_ID);
+        String name = site.get(SiteModel.NAME);
+        String slug = site.get(SiteModel.SLUG);
+
+        vars.put("form", new SiteFormData(
+            name != null ? name : "",
+            slug != null ? slug : "",
+            getSiteTypeOptions(),
+            settings != null ? settings : Map.of(),
+            sourceSettings != null ? sourceSettings : Map.of(),
+            getNodeVersionOptions(),
+            getSystemUserOptions(),
+            HandlerSupport.nameValuePairs(settings != null ? settings.get("environment_variables") : null),
+            extractApiKeysList(settings),
+            HandlerSupport.nameValuePairs(
+                sourceSettings != null ? sourceSettings.get("build_environment_variables") : null),
+            serverNames(),
+            getAuthProviderOptions(),
+            authProviderId != null ? authProviderId.toString() : "",
+            getAccessListOptions(),
+            accessListId != null ? accessListId.toString() : ""));
         vars.put("error", error);
 
         // Process data for managed site types
@@ -494,6 +489,19 @@ public final class SiteHandlers {
         });
 
         return vars;
+    }
+
+    /** An empty form-state for the create page. */
+    private static SiteFormData blankFormData() {
+        return new SiteFormData("", "", getSiteTypeOptions(), Map.of(), Map.of(),
+            getNodeVersionOptions(), getSystemUserOptions(), List.of(), List.of(), List.of(),
+            serverNames(), getAuthProviderOptions(), "", getAccessListOptions(), "");
+    }
+
+    private static List<String> serverNames() {
+        ServerService serverService = new ServerService();
+        serverService.ensureLocal();
+        return serverService.names();
     }
 
     /**
@@ -512,10 +520,25 @@ public final class SiteHandlers {
     }
 
     /**
-     * @return the submitted auth_provider_id, or null for blank/invalid (= no gate)
+     * Access-list options for the site form dropdown ("" = no restriction).
      */
-    private static Integer parseAuthProviderId(Map<String, String> form) {
-        String raw = form.getOrDefault("auth_provider_id", "").trim();
+    private static List<Map<String, Object>> getAccessListOptions() {
+        var model = Models.get(AccessListModel.class);
+        List<Map<String, Object>> options = new ArrayList<>();
+        for (Row row : model.find().orderBy(AccessListModel.NAME, SortOrder.ASC).all()) {
+            Map<String, Object> option = new HashMap<>();
+            option.put("value", String.valueOf((Integer) row.get(AccessListModel.ID)));
+            option.put("label", row.get(AccessListModel.NAME));
+            options.add(option);
+        }
+        return options;
+    }
+
+    /**
+     * @return the submitted id under {@code key}, or null for blank/invalid (= none)
+     */
+    private static Integer parseOptionalId(Map<String, String> form, String key) {
+        String raw = form.getOrDefault(key, "").trim();
         if (raw.isEmpty()) {
             return null;
         }

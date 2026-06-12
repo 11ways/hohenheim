@@ -1,14 +1,11 @@
 {% tag HhNodeSettings {
 
-    public settings: Map = null
-    public environmentVariables: List = null
-    public apiKeys: List = null
-    public nodeVersions: List = null
-    public systemUsers: List = null
+    public form: SiteFormData = null
     public waitForReadyDefault: Boolean = false
 
     template {
         {%
+            let settings = form.settings
             let script = settings.getString("script", "")
             let nodeVersionId = settings.getString("node_version_id", "")
             let systemUserId = settings.getString("system_user_id", "")
@@ -30,7 +27,7 @@
                     <pl-select-trigger placeholder="System default"></pl-select-trigger>
                     <pl-select-content>
                         <pl-select-item value="" label="System default">System default (node)</pl-select-item>
-                        {% each nodeVersions as index, nv %}
+                        {% each form.nodeVersions as index, nv %}
                             <pl-select-item value={% nv.get("id") + "" %} label={% "Node " + nv.get("version") %}>Node {{ nv.get("version") }} ({{ nv.get("path") }})</pl-select-item>
                         {% /each %}
                     </pl-select-content>
@@ -42,7 +39,7 @@
                     <pl-select-trigger placeholder="Current user"></pl-select-trigger>
                     <pl-select-content>
                         <pl-select-item value="" label="Current user">Current user</pl-select-item>
-                        {% each systemUsers as index, su %}
+                        {% each form.systemUsers as index, su %}
                             <pl-select-item value={% su.get("id") + "" %} label={% su.get("name") %}>{{ su.get("name") }} (uid {{ su.get("uid") }})</pl-select-item>
                         {% /each %}
                     </pl-select-content>
@@ -76,11 +73,11 @@
             </div>
             <div class="hh-form-group">
                 <pl-label>Environment Variables</pl-label>
-                <hh-key-value-editor initialPairs={% environmentVariables %} namePrefix={% "environment_variables" %} namePlaceholder={% "NAME" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
+                <hh-key-value-editor initialPairs={% form.environmentVariables %} namePrefix={% "environment_variables" %} namePlaceholder={% "NAME" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
             </div>
             <div class="hh-form-group">
                 <pl-label>API Keys</pl-label>
-                <hh-key-value-editor initialPairs={% apiKeys %} namePrefix={% "api_keys" %} valueOnly={% true %} valuePlaceholder={% "Enter a key" %}></hh-key-value-editor>
+                <hh-key-value-editor initialPairs={% form.apiKeys %} namePrefix={% "api_keys" %} valueOnly={% true %} valuePlaceholder={% "Enter a key" %}></hh-key-value-editor>
                 <p class="hh-form-hint">Keys for X-Hohenheim-Key header control.</p>
             </div>
             <pl-field>

@@ -1,38 +1,24 @@
 {% tag HhSiteTypeFields {
 
+    public form: SiteFormData = null
     public selectedType: String = "hohenheim:proxy"
-    public settings: Map = null
-    public environmentVariables: List = null
-    public apiKeys: List = null
-    public nodeVersions: List = null
-    public systemUsers: List = null
-    public servers: List = null
 
     template {
         {% if selectedType{:} == "hohenheim:proxy" %}
-            <hh-proxy-settings settings={% settings %}></hh-proxy-settings>
+            <hh-proxy-settings form={% form %}></hh-proxy-settings>
         {% elseif selectedType{:} == "hohenheim:node" || selectedType{:} == "hohenheim:alchemy" %}
             <hh-node-settings
-                settings={% settings %}
-                environmentVariables={% environmentVariables %}
-                apiKeys={% apiKeys %}
-                nodeVersions={% nodeVersions %}
-                systemUsers={% systemUsers %}
+                form={% form %}
                 waitForReadyDefault={% selectedType{:} == "hohenheim:alchemy" %}
             ></hh-node-settings>
         {% elseif selectedType{:} == "hohenheim:command" %}
-            <hh-command-settings
-                settings={% settings %}
-                environmentVariables={% environmentVariables %}
-                apiKeys={% apiKeys %}
-                systemUsers={% systemUsers %}
-            ></hh-command-settings>
+            <hh-command-settings form={% form %}></hh-command-settings>
         {% elseif selectedType{:} == "hohenheim:static" %}
-            <hh-static-settings settings={% settings %}></hh-static-settings>
+            <hh-static-settings form={% form %}></hh-static-settings>
         {% elseif selectedType{:} == "hohenheim:redirect" %}
-            <hh-redirect-settings settings={% settings %}></hh-redirect-settings>
+            <hh-redirect-settings form={% form %}></hh-redirect-settings>
         {% elseif selectedType{:} == "hohenheim:docker" %}
-            <hh-docker-settings settings={% settings %} servers={% servers %} environmentVariables={% environmentVariables %}></hh-docker-settings>
+            <hh-docker-settings form={% form %}></hh-docker-settings>
         {% /if %}
     }
 } %}

@@ -1,12 +1,10 @@
 {% tag HhCommandSettings {
 
-    public settings: Map = null
-    public environmentVariables: List = null
-    public apiKeys: List = null
-    public systemUsers: List = null
+    public form: SiteFormData = null
 
     template {
         {%
+            let settings = form.settings
             let startCommand = settings.getString("start_command", "")
             let workingDirectory = settings.getString("working_directory", "")
             let portArgument = settings.getString("port_argument", "")
@@ -37,7 +35,7 @@
                     <pl-select-trigger placeholder="Current user"></pl-select-trigger>
                     <pl-select-content>
                         <pl-select-item value="" label="Current user">Current user</pl-select-item>
-                        {% each systemUsers as index, su %}
+                        {% each form.systemUsers as index, su %}
                             <pl-select-item value={% su.get("id") + "" %} label={% su.get("name") %}>{{ su.get("name") }} (uid {{ su.get("uid") }})</pl-select-item>
                         {% /each %}
                     </pl-select-content>
@@ -61,11 +59,11 @@
             </div>
             <div class="hh-form-group">
                 <pl-label>Environment Variables</pl-label>
-                <hh-key-value-editor initialPairs={% environmentVariables %} namePrefix={% "environment_variables" %} namePlaceholder={% "NAME" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
+                <hh-key-value-editor initialPairs={% form.environmentVariables %} namePrefix={% "environment_variables" %} namePlaceholder={% "NAME" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
             </div>
             <div class="hh-form-group">
                 <pl-label>API Keys</pl-label>
-                <hh-key-value-editor initialPairs={% apiKeys %} namePrefix={% "api_keys" %} valueOnly={% true %} valuePlaceholder={% "Enter a key" %}></hh-key-value-editor>
+                <hh-key-value-editor initialPairs={% form.apiKeys %} namePrefix={% "api_keys" %} valueOnly={% true %} valuePlaceholder={% "Enter a key" %}></hh-key-value-editor>
                 <p class="hh-form-hint">Keys for X-Hohenheim-Key header control.</p>
             </div>
             <pl-field>

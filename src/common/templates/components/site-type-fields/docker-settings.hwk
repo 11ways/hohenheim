@@ -1,11 +1,10 @@
 {% tag HhDockerSettings {
 
-    public settings: Map = null
-    public servers: List = null
-    public environmentVariables: List = null
+    public form: SiteFormData = null
 
     template {
         {%
+            let settings = form.settings
             let image = settings.getString("image", "")
             let imageTag = settings.getString("tag", "")
             let containerPort = settings.getString("container_port", "")
@@ -41,14 +40,14 @@
             </pl-field>
             <div class="hh-form-group">
                 <pl-label>Environment Variables</pl-label>
-                <hh-key-value-editor initialPairs={% environmentVariables %} namePrefix={% "environment_variables" %} namePlaceholder={% "NAME" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
+                <hh-key-value-editor initialPairs={% form.environmentVariables %} namePrefix={% "environment_variables" %} namePlaceholder={% "NAME" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
             </div>
             <pl-field>
                 <pl-label>Server</pl-label>
                 <pl-select name="server" value={% server %}>
                     <pl-select-trigger placeholder="local"></pl-select-trigger>
                     <pl-select-content>
-                        {% each servers as srvIndex, srvName %}
+                        {% each form.servers as srvIndex, srvName %}
                         <pl-select-item value={% srvName %} label={% srvName %}>{{ srvName }}</pl-select-item>
                         {% /each %}
                     </pl-select-content>

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
+import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.common.orm.model.Models;
 
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
@@ -343,5 +346,33 @@ class SiteLifecycleTest extends HohenheimTestBase {
             .isEqualTo("CI");
         assertThat(page.locator("pl-input[name='build_environment_variables[0].value'] input").inputValue())
             .isEqualTo("true");
+    }
+
+    /** The site form can attach an access list, and the choice persists + renders on edit. */
+    @Test
+    @Order(19)
+    void siteFormAttachesAccessList() throws Exception {
+        var response = postForm("/access-lists/create",
+            "name=Office+Only&satisfy=any&allowed_ips=10.0.0.0%2F8");
+        assertThat(response.statusCode()).isEqualTo(302);
+
+        var accessListModel = Models.get(AccessListModel.class);
+        var listRow = accessListModel.find().where(AccessListModel.NAME.eq("Office Only")).first();
+        assertThat(listRow).isNotNull();
+        Integer listId = listRow.get(AccessListModel.ID);
+
+        String href = siteHref("Docker App");
+        response = postForm(href, "name=Docker+App&site_type=hohenheim%3Adocker&image=nginx"
+            + "&access_list_id=" + listId);
+        assertThat(response.statusCode()).isEqualTo(302);
+
+        var siteModel = Models.get(SiteModel.class);
+        var siteRow = siteModel.find().where(SiteModel.NAME.eq("Docker App")).first();
+        assertThat((Integer) siteRow.get(SiteModel.ACCESS_LIST_ID)).isEqualTo(listId);
+
+        navigateToApp(href);
+        waitForHydration();
+        assertThat(page.locator("#access-list").count()).isEqualTo(1);
+        assertThat(page.content()).contains("Office Only");
     }
 }
