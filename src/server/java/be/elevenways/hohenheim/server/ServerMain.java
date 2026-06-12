@@ -75,16 +75,12 @@ public class ServerMain {
             HohenheimDatabase.datasource(), "be.elevenways.hohenheim.server.task");
     }
 
-    // zenit-auth is not default-deny, so each admin area is gated explicitly; everything not
-    // listed (assets, /login, /setup, /api/health) stays public. Public so tests gate identically.
+    // baseline("/") is a catch-all (zenit-auth 620125d): every admin path requires login except
+    // the public prefixes below and zenit-auth's own login/setup/asset paths. Git webhooks are
+    // served by the PROXY listener (SiteDispatcher), not this server, so they stay reachable.
     public static void installAuthBaselines() {
         AuthRegistry.registerPublicPrefix("/api/health");
-        for (String prefix : new String[]{
-            "/", "/sites", "/certificates", "/access-lists", "/auth-providers", "/databases",
-            "/servers", "/notifications", "/settings", "/audit", "/ws"
-        }) {
-            AuthRegistry.baseline(prefix, AuthRequirement.requiresLogin());
-        }
+        AuthRegistry.baseline("/", AuthRequirement.requiresLogin());
     }
 
     // Register the Proteus realm as an SSO option when configured; password login is always available.
