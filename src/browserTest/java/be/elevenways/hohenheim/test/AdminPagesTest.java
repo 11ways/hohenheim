@@ -199,4 +199,26 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(content).contains("No process logs captured yet.");
         assertThat(page.locator("pl-table").count()).isEqualTo(1);
     }
+
+    @Test
+    @Order(23)
+    void settingsSaveRejectsInvalidPortWithoutClaimingSuccess() throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + "/settings"))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .header("X-Csrf-Token", csrfToken)
+            .POST(HttpRequest.BodyPublishers.ofString(
+                "proxy_http_port=not-a-port&proxy_https_port=443&sec_domain_miss_threshold=5"))
+            .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        // Re-renders with the error instead of redirecting to ?saved=true.
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Proxy HTTP port must be a number between 1 and 65535");
+        assertThat(response.body()).doesNotContain("Settings saved");
+    }
 }

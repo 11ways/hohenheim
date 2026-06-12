@@ -18,6 +18,7 @@
     {% declare sslLeEmail: String %}
     {% declare sslLeStaging: Boolean %}
     {% declare saved: String = "" %}
+    {% declare error: String = "" %}
 
     <hh-page title={% "Settings" %}>
 
@@ -26,6 +27,8 @@
                 <pl-alert-description>Settings saved. Some changes require a restart to take effect.</pl-alert-description>
             </pl-alert>
         {% /if %}
+
+        <hh-form-error error={% error %}></hh-form-error>
 
         <form method="POST" action="/settings">
             {% csrf() %}

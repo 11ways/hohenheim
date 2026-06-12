@@ -22,6 +22,16 @@ public final class DomainHandlers {
     private DomainHandlers() {
     }
 
+    /** @return the human message for an inline add-domain error token, or "" for none/unknown */
+    static String addDomainErrorMessage(String token) {
+        if (token == null) return "";
+        return switch (token) {
+            case "required" -> "A hostname is required to add a domain.";
+            case "duplicate" -> "That hostname is already configured for this site.";
+            default -> "";
+        };
+    }
+
     public static void init() {
         SiteModel siteModel = Models.get(SiteModel.class);
         SiteDomainModel domainModel = Models.get(SiteDomainModel.class);
@@ -37,25 +47,28 @@ public final class DomainHandlers {
             String hostname = form.getOrDefault("hostname", "").trim();
             String matchType = form.getOrDefault("match_type", SiteDomainModel.MATCH_EXACT);
 
-            if (!hostname.isEmpty()) {
-                // Check for duplicate hostname on this site
-                Row existing = domainModel.find()
-                    .where(SiteDomainModel.SITE_ID.eq(siteId))
-                    .where(SiteDomainModel.HOSTNAME.eq(hostname))
-                    .first();
-
-                if (existing == null) {
-                    Row domainRow = domainModel.createEmptyRow();
-                    domainRow.set(SiteDomainModel.SITE_ID, siteId);
-                    domainRow.set(SiteDomainModel.HOSTNAME, hostname);
-                    domainRow.set(SiteDomainModel.MATCH_TYPE, matchType);
-                    domainModel.save(domainRow);
-
-                    HandlerSupport.audit(conduit, AuditLogModel.ACTION_CREATED, AuditLogModel.RESOURCE_DOMAIN,
-                        domainRow.get(SiteDomainModel.ID), hostname);
-                    HandlerSupport.reloadProxy();
-                }
+            if (hostname.isEmpty()) {
+                return HandlerSupport.redirectUntyped("/sites/" + siteId + "?domain_error=required");
             }
+
+            // Check for duplicate hostname on this site
+            Row existing = domainModel.find()
+                .where(SiteDomainModel.SITE_ID.eq(siteId))
+                .where(SiteDomainModel.HOSTNAME.eq(hostname))
+                .first();
+            if (existing != null) {
+                return HandlerSupport.redirectUntyped("/sites/" + siteId + "?domain_error=duplicate");
+            }
+
+            Row domainRow = domainModel.createEmptyRow();
+            domainRow.set(SiteDomainModel.SITE_ID, siteId);
+            domainRow.set(SiteDomainModel.HOSTNAME, hostname);
+            domainRow.set(SiteDomainModel.MATCH_TYPE, matchType);
+            domainModel.save(domainRow);
+
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_CREATED, AuditLogModel.RESOURCE_DOMAIN,
+                domainRow.get(SiteDomainModel.ID), hostname);
+            HandlerSupport.reloadProxy();
 
             return HandlerSupport.redirectUntyped("/sites/" + siteId);
         });

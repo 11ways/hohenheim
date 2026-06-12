@@ -173,4 +173,27 @@ class DomainEditTest extends HohenheimTestBase {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Hostname is required");
     }
+
+    @Test
+    @Order(7)
+    void inlineAddDomainSurfacesDuplicateAndEmptyErrors() throws Exception {
+        // Duplicate hostname -> redirect carrying the error token, message on the edit page.
+        var response = postForm("/sites/" + siteId + "/domains",
+            "hostname=edit-test.example.com&match_type=exact");
+        assertThat(response.statusCode()).isEqualTo(302);
+        assertThat(response.headers().firstValue("Location").orElse(""))
+            .isEqualTo("/sites/" + siteId + "?domain_error=duplicate");
+
+        var editPage = getPage("/sites/" + siteId + "?domain_error=duplicate");
+        assertThat(editPage.body()).contains("already configured for this site");
+
+        // Empty hostname -> its own token and message.
+        response = postForm("/sites/" + siteId + "/domains", "hostname=&match_type=exact");
+        assertThat(response.statusCode()).isEqualTo(302);
+        assertThat(response.headers().firstValue("Location").orElse(""))
+            .isEqualTo("/sites/" + siteId + "?domain_error=required");
+
+        editPage = getPage("/sites/" + siteId + "?domain_error=required");
+        assertThat(editPage.body()).contains("hostname is required");
+    }
 }

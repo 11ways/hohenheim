@@ -1,7 +1,13 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import org.junit.jupiter.api.*;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -40,5 +46,39 @@ class NotificationAdminTest extends HohenheimTestBase {
 
         PlaywrightAssertions.assertThat(
             page.locator("pl-app-sidebar a[href='/notifications']")).hasCount(1);
+    }
+
+    @Test
+    @Order(4)
+    void testSendReportsDeliveryFailure() throws Exception {
+        // A channel pointing at a port nothing listens on -> delivery must report failure.
+        var create = postForm("/notifications/create",
+            "name=dead-hook&format=generic&url=http%3A%2F%2F127.0.0.1%3A1%2Fhook");
+        assertThat(create.statusCode()).isEqualTo(302);
+
+        var test = postForm("/notifications/dead-hook/test", "");
+        assertThat(test.statusCode()).isEqualTo(302);
+        assertThat(test.headers().firstValue("Location").orElse(""))
+            .isEqualTo("/notifications?test=failed&channel=dead-hook");
+
+        navigateToApp("/notifications?test=failed&channel=dead-hook");
+        waitForHydration();
+        String body = page.locator("body").textContent();
+        assertThat(body).contains("Test failed");
+        assertThat(body).contains("dead-hook");
+    }
+
+    private HttpResponse<String> postForm(String path, String body) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + path))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .header("X-Csrf-Token", csrfToken)
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

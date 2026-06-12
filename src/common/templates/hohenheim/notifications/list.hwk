@@ -2,8 +2,21 @@
 
 {% block "main" %}
     {% declare channels: List %}
+    {% declare testResult: String = "" %}
+    {% declare testChannel: String = "" %}
 
     <hh-page title={% "Notifications" %}>
+        {% if testResult == "ok" %}
+            <pl-alert variant={% "default" %} class="hh-form-success">
+                <pl-alert-description>Test message delivered to {{ testChannel }}.</pl-alert-description>
+            </pl-alert>
+        {% elseif testResult == "failed" %}
+            <pl-alert variant={% "destructive" %} class="hh-form-error">
+                <pl-alert-title>Test failed</pl-alert-title>
+                <pl-alert-description>Delivery to {{ testChannel }} failed. The webhook did not return a 2xx response; check the URL and the server log.</pl-alert-description>
+            </pl-alert>
+        {% /if %}
+
         <hh-page-actions description={% "Webhook delivery for platform events (Slack, Discord, or a generic JSON receiver)." %}>
             <a href="/notifications/create" class="hh-button-link"><pl-button variant={% "primary" %}>Add Channel</pl-button></a>
         </hh-page-actions>
