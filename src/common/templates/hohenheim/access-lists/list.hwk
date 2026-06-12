@@ -37,7 +37,7 @@
                             <a href={% "/access-lists/" + item.get("id") %} class="hh-button-link">
                                 <pl-button variant={% "ghost" %} size={% "sm" %}>Edit</pl-button>
                             </a>
-                            <hh-post-action action={% "/access-lists/" + item.get("id") + "/delete" %} label={% "Delete" %}></hh-post-action>
+                            <hh-post-action action={% "/access-lists/" + item.get("id") + "/delete" %} label={% "Delete" %} confirm={% "Sites using this list lose their IP restrictions." %}></hh-post-action>
                         </div>
                     </pl-table-cell>
                 </pl-table-row>

@@ -55,7 +55,7 @@
                                 <hh-bool-badge value={% domain.get("forceSsl") %} onLabel={% "Forced" %} offLabel={% "Off" %}></hh-bool-badge>
                             </pl-table-cell>
                             <pl-table-cell>
-                                <hh-post-action action={% "/sites/" + site.get("id") + "/domains/" + domain.get("id") + "/delete" %} label={% "Remove" %} variant={% "ghost" %} size={% "sm" %}></hh-post-action>
+                                <hh-post-action action={% "/sites/" + site.get("id") + "/domains/" + domain.get("id") + "/delete" %} label={% "Remove" %} variant={% "ghost" %} size={% "sm" %} confirm={% "Traffic for this hostname will stop routing to the site." %}></hh-post-action>
                             </pl-table-cell>
                         </pl-table-row>
                         {% /each %}
@@ -126,7 +126,7 @@
                             <pl-table-cell>
                                 <div class="hh-form-row">
                                     <hh-post-action action={% "/sites/" + site.get("id") + "/processes/" + proc.get("pid") + "/isolate" %} label={% proc.get("isolated") == true ? "Unisolate" : "Isolate" %} variant={% "outline" %} size={% "sm" %}></hh-post-action>
-                                    <hh-post-action action={% "/sites/" + site.get("id") + "/processes/" + proc.get("pid") + "/kill" %} label={% "Kill" %} variant={% "destructive" %} size={% "sm" %}></hh-post-action>
+                                    <hh-post-action action={% "/sites/" + site.get("id") + "/processes/" + proc.get("pid") + "/kill" %} label={% "Kill" %} variant={% "destructive" %} size={% "sm" %} confirm={% "The process is terminated immediately." %}></hh-post-action>
                                 </div>
                             </pl-table-cell>
                         </pl-table-row>
@@ -183,7 +183,7 @@
                             <strong>Delete this site</strong>
                             <p class="hh-danger-description">This will soft-delete the site and remove it from the proxy.</p>
                         </div>
-                        <hh-post-action action={% "/sites/" + site.get("id") + "/delete" %} label={% "Delete Site" %} variant={% "destructive" %} size={% "md" %}></hh-post-action>
+                        <hh-post-action action={% "/sites/" + site.get("id") + "/delete" %} label={% "Delete Site" %} variant={% "destructive" %} size={% "md" %} confirm={% "The site is removed from the proxy and soft-deleted." %}></hh-post-action>
                     </div>
                 </pl-card-content>
             </pl-card>

@@ -61,7 +61,7 @@ public final class AccessListHandlers {
             if (name.isEmpty()) {
                 return HandlerSupport.renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/access-lists/create"),
-                    Map.of("error", "Name is required")
+                    HandlerSupport.errorVars("Name is required", form)
                 );
             }
 
@@ -98,10 +98,11 @@ public final class AccessListHandlers {
 
             String name = form.getOrDefault("name", "").trim();
             if (name.isEmpty()) {
+                // Repopulate from the SUBMITTED values, not the pre-edit row state.
+                Map<String, Object> vars = buildAccessListEditVars(row, "Name is required");
+                applySubmittedAccessListValues(vars, form);
                 return HandlerSupport.renderUntyped(
-                    Identifier.of("hohenheim", "hohenheim/access-lists/edit"),
-                    buildAccessListEditVars(row, "Name is required")
-                );
+                    Identifier.of("hohenheim", "hohenheim/access-lists/edit"), vars);
             }
 
             row.set(AccessListModel.NAME, name);
@@ -140,6 +141,15 @@ public final class AccessListHandlers {
         String denied = form.getOrDefault("denied_ips", "").trim();
         row.set(AccessListModel.ALLOWED_IPS, allowed.isEmpty() ? null : allowed);
         row.set(AccessListModel.DENIED_IPS, denied.isEmpty() ? null : denied);
+    }
+
+    private static void applySubmittedAccessListValues(Map<String, Object> vars, Map<String, String> form) {
+        vars.put("name", form.getOrDefault("name", ""));
+        vars.put("satisfy", form.getOrDefault("satisfy", AccessListModel.SATISFY_ANY));
+        vars.put("basicAuthUser", form.getOrDefault("basic_auth_user", ""));
+        vars.put("basicAuthPass", form.getOrDefault("basic_auth_pass", ""));
+        vars.put("allowedIps", form.getOrDefault("allowed_ips", ""));
+        vars.put("deniedIps", form.getOrDefault("denied_ips", ""));
     }
 
     private static Map<String, Object> buildAccessListEditVars(Row row, String error) {

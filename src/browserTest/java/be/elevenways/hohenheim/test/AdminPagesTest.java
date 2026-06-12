@@ -221,4 +221,28 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(response.body()).contains("Proxy HTTP port must be a number between 1 and 65535");
         assertThat(response.body()).doesNotContain("Settings saved");
     }
+
+    @Test
+    @Order(24)
+    void certificateUploadKeepsInputOnValidationError() throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + "/certificates/upload"))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .header("X-Csrf-Token", csrfToken)
+            .POST(HttpRequest.BodyPublishers.ofString(
+                "nice_name=my-bad-cert&certificate_pem=NOT-A-PEM-BODY&private_key_pem=NOT-A-KEY"))
+            .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        // The validation error renders WITH the submitted values still in the form.
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Invalid certificate PEM");
+        assertThat(response.body()).contains("my-bad-cert");
+        assertThat(response.body()).contains("NOT-A-PEM-BODY");
+        assertThat(response.body()).contains("NOT-A-KEY");
+    }
 }

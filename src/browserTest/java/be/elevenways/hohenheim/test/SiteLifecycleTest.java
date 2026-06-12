@@ -375,4 +375,26 @@ class SiteLifecycleTest extends HohenheimTestBase {
         assertThat(page.locator("#access-list").count()).isEqualTo(1);
         assertThat(page.content()).contains("Office Only");
     }
+
+    /** Destructive actions go through the PlAlertDialog; confirming submits the portalled form. */
+    @Test
+    @Order(20)
+    void deleteSiteRequiresDialogConfirmation() {
+        String href = siteHref("Git App");
+        navigateToApp(href);
+        waitForHydration();
+
+        // Clicking the trigger opens the dialog instead of submitting.
+        page.locator(".hh-danger-zone pl-button").first().click();
+        page.waitForSelector(".pl-alertdialog-modal");
+        assertThat(page.locator(".pl-alertdialog-modal").textContent()).contains("soft-deleted");
+
+        // Confirming actually deletes (the submit button lives in the portal, tied via form=).
+        page.locator(".pl-alertdialog-modal pl-button[variant='destructive']").click();
+        page.waitForURL("**/sites");
+        waitForHydration();
+        for (var link : page.locator(".hh-site-link").all()) {
+            assertThat(link.textContent()).isNotEqualTo("Git App");
+        }
+    }
 }

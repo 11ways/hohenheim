@@ -2,6 +2,8 @@
 
 {% block "main" %}
     {% declare error: String %}
+    {% declare values: Map = null %}
+    {% let v = values != null ? values : Map.create() %}
 
     <hh-page title={% "Request Certificate" %}>
         <hh-form-shell
@@ -13,16 +15,16 @@
             error={% error %}>
             <div class="hh-form-group">
                 <pl-label target="nice-name">Certificate Name (optional)</pl-label>
-                <pl-input id="nice-name" type={% "text" %} name={% "nice_name" %} placeholder={% "example.com wildcard" %}></pl-input>
+                <pl-input id="nice-name" type={% "text" %} name={% "nice_name" %} value={% v.getString("nice_name", "") %} placeholder={% "example.com wildcard" %}></pl-input>
             </div>
             <div class="hh-form-group">
                 <pl-label target="domains">Domains</pl-label>
-                <pl-textarea id="domains" name={% "domains" %} placeholder={% "example.com\nwww.example.com" %} required={% true %}></pl-textarea>
+                <pl-textarea id="domains" name={% "domains" %} value={% v.getString("domains", "") %} placeholder={% "example.com\nwww.example.com" %} required={% true %}></pl-textarea>
                 <p class="hh-form-hint">One domain per line. All domains must point to this server.</p>
             </div>
             <div class="hh-form-group">
                 <pl-label target="letsencrypt-email">Account Email (optional)</pl-label>
-                <pl-input id="letsencrypt-email" type={% "email" %} name={% "letsencrypt_email" %} placeholder={% "certs@example.com" %}></pl-input>
+                <pl-input id="letsencrypt-email" type={% "email" %} name={% "letsencrypt_email" %} value={% v.getString("letsencrypt_email", "") %} placeholder={% "certs@example.com" %}></pl-input>
                 <p class="hh-form-hint">Overrides the global Let's Encrypt account email for this certificate.</p>
             </div>
         </hh-form-shell>

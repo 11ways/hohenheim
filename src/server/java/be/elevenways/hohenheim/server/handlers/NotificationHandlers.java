@@ -62,7 +62,7 @@ public final class NotificationHandlers {
             String error = validateNotificationForm(name, format, url);
             if (error != null) {
                 return HandlerSupport.renderUntyped(Identifier.of("hohenheim", "hohenheim/notifications/create"),
-                    Map.of("error", error));
+                    HandlerSupport.errorVars(error, form));
             }
             notifications.add(name, format, url);
             HandlerSupport.audit(conduit, AuditLogModel.ACTION_CREATED,

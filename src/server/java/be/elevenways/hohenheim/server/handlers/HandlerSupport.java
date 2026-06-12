@@ -65,6 +65,17 @@ public final class HandlerSupport {
         return null;
     }
 
+    /**
+     * Render vars for a failed form submit: the error plus the raw submitted values
+     * (exposed as {@code values}) so the form repopulates instead of losing input.
+     */
+    public static Map<String, Object> errorVars(String error, Map<String, String> submitted) {
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("error", error);
+        vars.put("values", submitted);
+        return vars;
+    }
+
     public static Map<String, String> formMap(Conduit conduit) {
         if (conduit instanceof HttpConduit http) {
             return http.getFormData().toStringMap();

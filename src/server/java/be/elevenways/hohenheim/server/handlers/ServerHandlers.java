@@ -73,7 +73,7 @@ public final class ServerHandlers {
             String error = validateServerForm(name, sshTarget);
             if (error != null) {
                 return HandlerSupport.renderUntyped(Identifier.of("hohenheim", "hohenheim/servers/create"),
-                    Map.of("error", error));
+                    HandlerSupport.errorVars(error, form));
             }
             serverService.add(name, sshTarget);
             HandlerSupport.audit(conduit, AuditLogModel.ACTION_CREATED, AuditLogModel.RESOURCE_SERVER, name, name);

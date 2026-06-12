@@ -2,6 +2,8 @@
 
 {% block "main" %}
     {% declare error: String %}
+    {% declare values: Map = null %}
+    {% let v = values != null ? values : Map.create() %}
 
     <hh-page title={% "Add Server" %}>
         <hh-form-shell
@@ -13,12 +15,12 @@
             error={% error %}>
             <div class="hh-form-group">
                 <pl-label target="name">Name</pl-label>
-                <pl-input id="name" type={% "text" %} name={% "name" %} placeholder={% "edge-1" %} required={% true %}></pl-input>
+                <pl-input id="name" type={% "text" %} name={% "name" %} value={% v.getString("name", "") %} placeholder={% "edge-1" %} required={% true %}></pl-input>
                 <p class="hh-form-hint">Lowercase letters, digits, and dashes.</p>
             </div>
             <div class="hh-form-group">
                 <pl-label target="ssh-target">SSH Target</pl-label>
-                <pl-input id="ssh-target" type={% "text" %} name={% "ssh_target" %} placeholder={% "user@host" %} required={% true %}></pl-input>
+                <pl-input id="ssh-target" type={% "text" %} name={% "ssh_target" %} value={% v.getString("ssh_target", "") %} placeholder={% "user@host" %} required={% true %}></pl-input>
                 <p class="hh-form-hint">Connected via ssh and docker system dial-stdio.</p>
             </div>
         </hh-form-shell>

@@ -70,6 +70,7 @@ public final class AuthProviderHandlers {
 
             if (name.isEmpty()) {
                 Map<String, Object> vars = createVars("Name is required");
+                applySubmittedAuthProviderValues(vars, form, providerType);
                 return HandlerSupport.renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/auth-providers/create"), vars);
             }
@@ -107,9 +108,11 @@ public final class AuthProviderHandlers {
             String providerType = form.getOrDefault("provider_type", DEFAULT_TYPE).trim();
 
             if (name.isEmpty()) {
+                // Repopulate from the SUBMITTED values, not the pre-edit row state.
+                Map<String, Object> vars = editVars(row, "Name is required");
+                applySubmittedAuthProviderValues(vars, form, providerType);
                 return HandlerSupport.renderUntyped(
-                    Identifier.of("hohenheim", "hohenheim/auth-providers/edit"),
-                    editVars(row, "Name is required"));
+                    Identifier.of("hohenheim", "hohenheim/auth-providers/edit"), vars);
             }
 
             @SuppressWarnings("unchecked")
@@ -179,6 +182,27 @@ public final class AuthProviderHandlers {
             config.put(BasicAuthProviderType.CREDENTIALS, credentials);
         }
         return config;
+    }
+
+    /** Overlay the raw submitted form values so a failed save repopulates the form. */
+    private static void applySubmittedAuthProviderValues(Map<String, Object> vars,
+                                                         Map<String, String> form,
+                                                         String providerType) {
+        vars.put("selectedType", providerType);
+        vars.put("name", form.getOrDefault("name", ""));
+        vars.put("requiredPermission", form.getOrDefault("required_permission", ""));
+        vars.put("endpoint", form.getOrDefault("endpoint", ""));
+        vars.put("realmClient", form.getOrDefault("realm_client", ""));
+        vars.put("accessKey", form.getOrDefault("access_key", ""));
+        vars.put("authenticator", form.getOrDefault("authenticator", "password"));
+        List<Map<String, Object>> credentials = new ArrayList<>();
+        for (Map<String, String> pair : HandlerSupport.extractIndexedPairs(form, "credentials")) {
+            Map<String, Object> editorPair = new HashMap<>();
+            editorPair.put("name", pair.getOrDefault("name", ""));
+            editorPair.put("value", pair.getOrDefault("value", ""));
+            credentials.add(editorPair);
+        }
+        vars.put("credentials", credentials);
     }
 
     private static Map<String, Object> createVars(String error) {
