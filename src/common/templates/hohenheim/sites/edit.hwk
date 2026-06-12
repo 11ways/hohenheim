@@ -8,6 +8,7 @@
     {% declare error: String %}
     {% declare processes: List = null %}
     {% declare isManaged: Boolean = false %}
+    {% declare domainError: String = "" %}
     {%
         let selectedType = site.get("siteType") != null ? site.get("siteType") : "hohenheim:proxy"
         let selectedSource = source != null ? source : ""
@@ -61,6 +62,7 @@
                     </pl-table-body>
                 </pl-table>
 
+                <hh-form-error error={% domainError %}></hh-form-error>
                 <form method="POST" action={% "/sites/" + site.get("id") + "/domains" %} class="hh-add-domain-form">
                     {% csrf() %}
                     <div class="hh-form-row">

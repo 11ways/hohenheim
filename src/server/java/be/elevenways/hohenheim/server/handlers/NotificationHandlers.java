@@ -34,9 +34,13 @@ public final class NotificationHandlers {
                 item.put("url", row.get(NotificationChannelModel.URL));
                 items.add(item);
             }
+            String test = conduit.getQueryParam("test");
+            String channel = conduit.getQueryParam("channel");
             return new RenderTemplateResult(
                 Identifier.of("hohenheim", "hohenheim/notifications/list"),
-                Map.of("channels", items)
+                Map.of("channels", items,
+                    "testResult", test != null ? test : "",
+                    "testChannel", channel != null ? channel : "")
             );
         });
 
@@ -69,10 +73,12 @@ public final class NotificationHandlers {
         // Test send (POST)
         HohenheimEndpoints.NOTIFICATIONS_TEST.setHandler(conduit -> {
             String name = conduit.getParameter(HohenheimEndpoints.NOTIFICATION_NAME);
-            notifications.sendTo(name, "Hohenheim test", "If you can read this, the channel works.");
+            boolean delivered = notifications.sendTo(name,
+                "Hohenheim test", "If you can read this, the channel works.");
             HandlerSupport.audit(conduit, AuditLogModel.ACTION_TESTED,
                 AuditLogModel.RESOURCE_NOTIFICATION_CHANNEL, name, name);
-            return HandlerSupport.redirectUntyped("/notifications");
+            return HandlerSupport.redirectUntyped(
+                "/notifications?test=" + (delivered ? "ok" : "failed") + "&channel=" + name);
         });
 
         // Delete (POST)

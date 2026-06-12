@@ -136,10 +136,10 @@ public final class SiteHandlers {
                 );
             }
 
+            Map<String, Object> vars = buildEditVars(site, domainModel, "");
+            vars.put("domainError", DomainHandlers.addDomainErrorMessage(conduit.getQueryParam("domain_error")));
             return new RenderTemplateResult(
-                Identifier.of("hohenheim", "hohenheim/sites/edit"),
-                buildEditVars(site, domainModel, "")
-            );
+                Identifier.of("hohenheim", "hohenheim/sites/edit"), vars);
         });
 
         // Site update (POST /sites/:id)

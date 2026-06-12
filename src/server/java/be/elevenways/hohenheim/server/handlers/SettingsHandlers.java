@@ -19,48 +19,43 @@ public final class SettingsHandlers {
 
     public static void init() {
         HohenheimEndpoints.SETTINGS.setHandler(conduit -> {
-            Map<String, Object> vars = new HashMap<>();
             String saved = conduit.getQueryParam("saved");
-            vars.put("saved", saved != null ? saved : "");
-            vars.put("proxyHttpPort", HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT));
-            vars.put("proxyHttpsPort", HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT));
-            vars.put("proxyFallback", HandlerSupport.valueOrEmpty(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS)));
-            vars.put("proxyForceHttps", HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
-            vars.put("proxyIpv6Address", HandlerSupport.valueOrEmpty(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS)));
-            // Read-only: the admin listener is Zenit's HTTP server, whose port
-            // is ServerSettings.Network.PORT. Surfaced here so operators can
-            // see where the admin UI is reachable.
-            vars.put("adminPort", ServerSettings.VALUES.getValue(ServerSettings.Network.PORT));
-            vars.put("dbPath", HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.PATH));
-            vars.put("logAccessToDb", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_TO_DATABASE));
-            vars.put("logAccessToFile", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_TO_FILE));
-            vars.put("logAccessPath", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_PATH));
-            vars.put("logCollectStats", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.COLLECT_STATS));
-            vars.put("secLogDomainMisses", HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.LOG_DOMAIN_MISSES));
-            vars.put("secDomainMissThreshold", HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD));
-            vars.put("sslLeEnabled", HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED));
-            vars.put("sslLeEmail", HandlerSupport.valueOrEmpty(HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL)));
-            vars.put("sslLeStaging", HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_STAGING));
-
             return new RenderTemplateResult(
                 Identifier.of("hohenheim", "hohenheim/settings"),
-                vars
+                buildSettingsVars(saved != null ? saved : "", "")
             );
         });
 
         HohenheimEndpoints.SETTINGS_UPDATE.setHandler(conduit -> {
             Map<String, String> form = HandlerSupport.formMap(conduit);
 
-            // Proxy settings
-            String httpPort = form.get("proxy_http_port");
-            if (httpPort != null) {
-                try { HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, Integer.parseInt(httpPort)); }
-                catch (NumberFormatException ignored) {}
+            // Validate everything before writing anything, so a typo'd value
+            // renders an error instead of silently keeping the old setting.
+            Integer httpPort = parseBoundedInt(form.get("proxy_http_port"), 1, 65535);
+            Integer httpsPort = parseBoundedInt(form.get("proxy_https_port"), 1, 65535);
+            Integer threshold = parseBoundedInt(form.get("sec_domain_miss_threshold"), 1, Integer.MAX_VALUE);
+
+            String error = null;
+            if (form.get("proxy_http_port") != null && httpPort == null) {
+                error = "Proxy HTTP port must be a number between 1 and 65535.";
+            } else if (form.get("proxy_https_port") != null && httpsPort == null) {
+                error = "Proxy HTTPS port must be a number between 1 and 65535.";
+            } else if (form.get("sec_domain_miss_threshold") != null && threshold == null) {
+                error = "Domain-miss ban threshold must be a positive number.";
             }
-            String httpsPort = form.get("proxy_https_port");
+            if (error != null) {
+                return HandlerSupport.renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/settings"),
+                    buildSettingsVars("", error)
+                );
+            }
+
+            // Proxy settings
+            if (httpPort != null) {
+                HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, httpPort);
+            }
             if (httpsPort != null) {
-                try { HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, Integer.parseInt(httpsPort)); }
-                catch (NumberFormatException ignored) {}
+                HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, httpsPort);
             }
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS,
                 form.getOrDefault("proxy_fallback", ""));
@@ -75,17 +70,16 @@ public final class SettingsHandlers {
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Logging.ACCESS_TO_FILE,
                 form.containsKey("log_access_to_file"));
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Logging.ACCESS_PATH,
-                form.getOrDefault("log_access_path", "/var/log/hohenheim/access.log"));
+                form.getOrDefault("log_access_path",
+                    HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_PATH)));
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Logging.COLLECT_STATS,
                 form.containsKey("log_collect_stats"));
 
             // Security settings
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.LOG_DOMAIN_MISSES,
                 form.containsKey("sec_log_domain_misses"));
-            String threshold = form.get("sec_domain_miss_threshold");
             if (threshold != null) {
-                try { HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD, Integer.parseInt(threshold)); }
-                catch (NumberFormatException ignored) {}
+                HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD, threshold);
             }
 
             // SSL settings
@@ -98,5 +92,42 @@ public final class SettingsHandlers {
 
             return HandlerSupport.redirectUntyped("/settings?saved=true");
         });
+    }
+
+    /** @return the parsed value when it lies in [min, max], or null for blank/garbage/out-of-range */
+    private static Integer parseBoundedInt(String raw, int min, int max) {
+        if (raw == null) return null;
+        try {
+            int value = Integer.parseInt(raw.trim());
+            return value >= min && value <= max ? value : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static Map<String, Object> buildSettingsVars(String saved, String error) {
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("saved", saved);
+        vars.put("error", error);
+        vars.put("proxyHttpPort", HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT));
+        vars.put("proxyHttpsPort", HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT));
+        vars.put("proxyFallback", HandlerSupport.valueOrEmpty(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS)));
+        vars.put("proxyForceHttps", HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
+        vars.put("proxyIpv6Address", HandlerSupport.valueOrEmpty(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS)));
+        // Read-only: the admin listener is Zenit's HTTP server, whose port
+        // is ServerSettings.Network.PORT. Surfaced here so operators can
+        // see where the admin UI is reachable.
+        vars.put("adminPort", ServerSettings.VALUES.getValue(ServerSettings.Network.PORT));
+        vars.put("dbPath", HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.PATH));
+        vars.put("logAccessToDb", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_TO_DATABASE));
+        vars.put("logAccessToFile", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_TO_FILE));
+        vars.put("logAccessPath", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_PATH));
+        vars.put("logCollectStats", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.COLLECT_STATS));
+        vars.put("secLogDomainMisses", HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.LOG_DOMAIN_MISSES));
+        vars.put("secDomainMissThreshold", HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD));
+        vars.put("sslLeEnabled", HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED));
+        vars.put("sslLeEmail", HandlerSupport.valueOrEmpty(HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL)));
+        vars.put("sslLeStaging", HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_STAGING));
+        return vars;
     }
 }

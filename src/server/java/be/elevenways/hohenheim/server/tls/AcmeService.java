@@ -4,6 +4,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -249,6 +250,25 @@ public class AcmeService {
             Blast.log("ACME: renewal failed for", niceName, "-", e.getMessage());
             recordRenewalFailure(certRow, e.getMessage());
             certModel.save(certRow);
+            notifyRenewalFailure(certRow, niceName, e.getMessage());
+        }
+    }
+
+    /**
+     * Alert the configured notification channels the FIRST time a certificate's renewal
+     * fails (the count resets on success, so a relapse alerts again). Subsequent retries
+     * back off silently; the certificates page shows the live error state. Delivery is
+     * best-effort -- a notification problem must never break the renewal bookkeeping.
+     */
+    private static void notifyRenewalFailure(Row certRow, String niceName, String message) {
+        Integer errorCount = certRow.get(CertificateModel.ERROR_COUNT);
+        if (errorCount == null || errorCount != 1) return;
+        try {
+            new NotificationService().send("Certificate renewal failing",
+                "Renewal of " + niceName + " failed: " + message
+                    + "\nRetries continue with escalating backoff; see the certificates page.");
+        } catch (Exception e) {
+            Blast.log("ACME: could not send renewal-failure notification -", e.getMessage());
         }
     }
 
