@@ -1,0 +1,28 @@
+{% extend "hohenheim:hohenheim/base" %}
+
+{% block "main" %}
+    {% declare error: String %}
+    {% declare name: String %}
+    {% declare sshTarget: String %}
+
+    <hh-page title={% "Edit Server" %}>
+        <hh-form-shell
+            action={% "/servers/" + name %}
+            title={% name %}
+            description={% "Update the SSH target for this Docker host." %}
+            submitLabel={% "Save Server" %}
+            cancelHref={% "/servers" %}
+            error={% error %}>
+            <div class="hh-form-group">
+                <pl-label>Name</pl-label>
+                <pl-input type={% "text" %} value={% name %} disabled={% true %}></pl-input>
+                <p class="hh-form-hint">The name identifies the server and cannot be changed.</p>
+            </div>
+            <div class="hh-form-group">
+                <pl-label target="ssh-target">SSH Target</pl-label>
+                <pl-input id="ssh-target" type={% "text" %} name={% "ssh_target" %} value={% sshTarget %} placeholder={% "user@host" %} required={% true %}></pl-input>
+                <p class="hh-form-hint">Connected via ssh and docker system dial-stdio.</p>
+            </div>
+        </hh-form-shell>
+    </hh-page>
+{% /block %}

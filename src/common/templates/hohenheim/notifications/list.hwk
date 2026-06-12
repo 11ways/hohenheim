@@ -39,6 +39,9 @@
                     <pl-table-cell>{{ item.get("url") }}</pl-table-cell>
                     <pl-table-cell>
                         <div class="hh-table-actions">
+                            <a href={% item.get("editUrl") %} class="hh-button-link">
+                                <pl-button variant={% "ghost" %} size={% "sm" %}>Edit</pl-button>
+                            </a>
                             <hh-post-action action={% "/notifications/" + item.get("name") + "/test" %} label={% "Send Test" %}></hh-post-action>
                             <hh-post-action action={% "/notifications/" + item.get("name") + "/delete" %} label={% "Delete" %} confirm={% "Alerts will no longer be delivered to this channel." %}></hh-post-action>
                         </div>

@@ -96,6 +96,12 @@ public class ServerService extends DatasourceScoped {
         return new DockerClient(transportFor(row));
     }
 
+    /** @return the stored SSH target for a named remote server, or null for unknown/local */
+    public String sshTarget(String name) {
+        Row row = query(() -> model().findByName(name));
+        return row != null ? row.get(ServerModel.SSH_TARGET) : null;
+    }
+
     /** Register (or update) a remote SSH server. */
     public void add(String name, String sshTarget) {
         exec(() -> {

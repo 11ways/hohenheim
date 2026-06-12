@@ -29,9 +29,12 @@ public final class NotificationHandlers {
             List<Map<String, Object>> items = new ArrayList<>();
             for (Row row : notifications.list()) {
                 Map<String, Object> item = new HashMap<>();
-                item.put("name", row.get(NotificationChannelModel.NAME));
+                String channelName = row.get(NotificationChannelModel.NAME);
+                item.put("name", channelName);
                 item.put("format", row.get(NotificationChannelModel.FORMAT));
                 item.put("url", row.get(NotificationChannelModel.URL));
+                item.put("editUrl", HohenheimEndpoints.NOTIFICATIONS_EDIT
+                    .with(HohenheimEndpoints.NOTIFICATION_NAME, channelName).toUrl());
                 items.add(item);
             }
             String test = conduit.getQueryParam("test");
@@ -70,6 +73,44 @@ public final class NotificationHandlers {
             return HandlerSupport.redirectUntyped("/notifications");
         });
 
+        // Edit form (GET /notifications/:name/edit)
+        HohenheimEndpoints.NOTIFICATIONS_EDIT.setHandler(conduit -> {
+            String name = conduit.getParameter(HohenheimEndpoints.NOTIFICATION_NAME);
+            Row row = notifications.get(name);
+            if (row == null) {
+                return HandlerSupport.redirectUntyped("/notifications");
+            }
+            return HandlerSupport.renderUntyped(
+                Identifier.of("hohenheim", "hohenheim/notifications/edit"),
+                notificationEditVars(name,
+                    HandlerSupport.valueOrEmpty(row.get(NotificationChannelModel.FORMAT)),
+                    HandlerSupport.valueOrEmpty(row.get(NotificationChannelModel.URL)), ""));
+        });
+
+        // Update (POST /notifications/:name)
+        HohenheimEndpoints.NOTIFICATIONS_UPDATE.setHandler(conduit -> {
+            String name = conduit.getParameter(HohenheimEndpoints.NOTIFICATION_NAME);
+            if (notifications.get(name) == null) {
+                return HandlerSupport.redirectUntyped("/notifications");
+            }
+
+            Map<String, String> form = HandlerSupport.formMap(conduit);
+            String format = form.getOrDefault("format", "").trim().toLowerCase();
+            String url = form.getOrDefault("url", "").trim();
+
+            String error = validateNotificationForm(name, format, url);
+            if (error != null) {
+                return HandlerSupport.renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/notifications/edit"),
+                    notificationEditVars(name, format, url, error));
+            }
+
+            notifications.add(name, format, url);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_UPDATED,
+                AuditLogModel.RESOURCE_NOTIFICATION_CHANNEL, name, name);
+            return HandlerSupport.redirectUntyped("/notifications");
+        });
+
         // Test send (POST)
         HohenheimEndpoints.NOTIFICATIONS_TEST.setHandler(conduit -> {
             String name = conduit.getParameter(HohenheimEndpoints.NOTIFICATION_NAME);
@@ -89,6 +130,16 @@ public final class NotificationHandlers {
                 AuditLogModel.RESOURCE_NOTIFICATION_CHANNEL, name, name);
             return HandlerSupport.redirectUntyped("/notifications");
         });
+    }
+
+    private static Map<String, Object> notificationEditVars(String name, String format,
+                                                            String url, String error) {
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("error", error);
+        vars.put("name", name);
+        vars.put("format", format);
+        vars.put("url", url);
+        return vars;
     }
 
     private static String validateNotificationForm(String name, String format, String url) {

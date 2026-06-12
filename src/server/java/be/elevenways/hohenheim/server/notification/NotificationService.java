@@ -54,6 +54,11 @@ public class NotificationService extends DatasourceScoped {
         return query(() -> model().find().all());
     }
 
+    /** @return the channel row by name, or null */
+    public Row get(String name) {
+        return query(() -> model().findByName(name));
+    }
+
     /** Register (or update) a channel. */
     public void add(String name, String format, String url) {
         exec(() -> {
