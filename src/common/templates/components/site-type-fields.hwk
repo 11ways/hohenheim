@@ -32,7 +32,7 @@
         {% elseif selectedType{:} == "hohenheim:redirect" %}
             <hh-redirect-settings settings={% settings %}></hh-redirect-settings>
         {% elseif selectedType{:} == "hohenheim:docker" %}
-            <hh-docker-settings settings={% settings %} servers={% servers %}></hh-docker-settings>
+            <hh-docker-settings settings={% settings %} servers={% servers %} environmentVariables={% environmentVariables %}></hh-docker-settings>
         {% /if %}
     }
 } %}

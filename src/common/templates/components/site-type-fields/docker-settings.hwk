@@ -2,6 +2,7 @@
 
     public settings: Map = null
     public servers: List = null
+    public environmentVariables: List = null
 
     template {
         {%
@@ -38,6 +39,10 @@
                 <pl-input type={% "text" %} name={% "dockerfile" %} value={% dockerfile %} placeholder={% "Dockerfile" %}></pl-input>
                 <pl-field-description>Used only for git-sourced sites (path within the checkout).</pl-field-description>
             </pl-field>
+            <div class="hh-form-group">
+                <pl-label>Environment Variables</pl-label>
+                <hh-key-value-editor initialPairs={% environmentVariables %} namePrefix={% "environment_variables" %} namePlaceholder={% "NAME" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
+            </div>
             <pl-field>
                 <pl-label>Server</pl-label>
                 <pl-select name="server" value={% server %}>
