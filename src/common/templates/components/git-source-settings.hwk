@@ -2,6 +2,7 @@
 
     public sourceSettings: Map = null
     public siteSlug: String = ""
+    public buildEnvironmentVariables: List = null
 
     template {
         {%
@@ -45,6 +46,12 @@
             <div class="hh-form-group">
                 <pl-label target="build-timeout">Build Timeout (seconds)</pl-label>
                 <pl-input id="build-timeout" type={% "number" %} name={% "build_timeout" %} value={% buildTimeout %} placeholder={% "600" %}></pl-input>
+            </div>
+
+            <div class="hh-form-group">
+                <pl-label>Build Environment Variables</pl-label>
+                <hh-key-value-editor initialPairs={% buildEnvironmentVariables %} namePrefix={% "build_environment_variables" %} namePlaceholder={% "NAME" %} valuePlaceholder={% "value" %}></hh-key-value-editor>
+                <p class="hh-form-hint">Only set while the build command runs, not at runtime.</p>
             </div>
 
             <div class="hh-form-row">

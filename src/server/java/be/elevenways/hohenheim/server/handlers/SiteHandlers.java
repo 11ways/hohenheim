@@ -71,6 +71,7 @@ public final class SiteHandlers {
             vars.put("systemUsers", getSystemUserOptions());
             vars.put("environmentVariables", List.of());
             vars.put("apiKeys", List.of());
+            vars.put("buildEnvironmentVariables", List.of());
             ServerService serverService = new ServerService();
             serverService.ensureLocal();
             vars.put("servers", serverService.names());
@@ -470,6 +471,8 @@ public final class SiteHandlers {
         vars.put("environmentVariables",
             HandlerSupport.nameValuePairs(settings != null ? settings.get("environment_variables") : null));
         vars.put("apiKeys", extractApiKeysList(settings));
+        vars.put("buildEnvironmentVariables", HandlerSupport.nameValuePairs(
+            sourceSettings != null ? sourceSettings.get("build_environment_variables") : null));
         ServerService serverService = new ServerService();
         serverService.ensureLocal();
         vars.put("servers", serverService.names());

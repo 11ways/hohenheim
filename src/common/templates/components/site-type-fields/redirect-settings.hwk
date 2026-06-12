@@ -6,6 +6,7 @@
         {%
             let targetUrl = settings.getString("target_url", "")
             let httpStatus = settings.getString("http_status", "302")
+            let preservePath = settings.getBoolean("preserve_path", false)
             let redirectDelay = settings.getString("delay", "")
         %}
         <div class="hh-form-section">
@@ -25,6 +26,11 @@
                     </pl-select-content>
                 </pl-select>
             </pl-field>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="preserve_path" name="preserve_path" checked={% preservePath %}></pl-checkbox>
+                <pl-label target="preserve_path">Preserve Path</pl-label>
+                <p class="hh-form-hint">Append the request path and query string to the target URL.</p>
+            </div>
             <pl-field>
                 <pl-label>Request Delay (ms)</pl-label>
                 <pl-input type={% "number" %} name={% "delay" %} value={% redirectDelay %} placeholder={% "0" %}></pl-input>

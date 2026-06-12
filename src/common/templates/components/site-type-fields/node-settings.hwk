@@ -15,6 +15,7 @@
             let minimumProcesses = settings.getString("minimum_processes", "1")
             let maximumProcesses = settings.getString("maximum_processes", "5")
             let waitForReady = settings.getBoolean("wait_for_ready", waitForReadyDefault)
+            let usePorts = settings.getBoolean("use_ports", true)
             let nodeDelay = settings.getString("delay", "")
         %}
         <div class="hh-form-section">
@@ -67,6 +68,11 @@
                 <pl-checkbox inputId="wait_for_ready" name="wait_for_ready" checked={% waitForReady %}></pl-checkbox>
                 <pl-label target="wait_for_ready">Wait For Ready Signal</pl-label>
                 <p class="hh-form-hint">Only enable this when the child process sends a ready signal.</p>
+            </div>
+            <div class="hh-form-group hh-checkbox-field">
+                <pl-checkbox inputId="use_ports" name="use_ports" checked={% usePorts %}></pl-checkbox>
+                <pl-label target="use_ports">Use TCP Ports</pl-label>
+                <p class="hh-form-hint">Disable to hand child processes a unix socket path instead of a port.</p>
             </div>
             <div class="hh-form-group">
                 <pl-label>Environment Variables</pl-label>

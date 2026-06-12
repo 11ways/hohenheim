@@ -183,7 +183,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
     void createNodeSiteWithEnvVarsAndApiKeys() throws Exception {
         var response = postForm("/sites/create",
             "name=Node+App&site_type=hohenheim%3Anode"
-            + "&script=&node_path=&user="
+            + "&script=&node_path=&user=&use_ports=on"
             + "&environment_variables%5B0%5D.name=NODE_ENV"
             + "&environment_variables%5B0%5D.value=production"
             + "&environment_variables%5B1%5D.name=PORT"
@@ -240,5 +240,108 @@ class SiteLifecycleTest extends HohenheimTestBase {
             .isEqualTo("alpha-key");
         assertThat(page.locator("pl-input[name='api_keys[1]'] input").inputValue())
             .isEqualTo("beta-key");
+    }
+
+    /** Find the edit-page href of the site with the given name in the sites list. */
+    private String siteHref(String name) {
+        navigateToApp("/sites");
+        waitForHydration();
+        for (var link : page.locator(".hh-site-link").all()) {
+            if (name.equals(link.textContent())) {
+                return link.getAttribute("href");
+            }
+        }
+        throw new AssertionError("No site named " + name + " in the list");
+    }
+
+    /**
+     * The node form renders a use_ports control (default-checked) — before it existed, every
+     * save materialized the absent checkbox to false and silently flipped sites to unix sockets.
+     */
+    @Test
+    @Order(14)
+    void nodeSiteEditShowsUsePortsCheckedByDefault() {
+        navigateToApp(siteHref("Node App"));
+        waitForHydration();
+
+        assertThat(page.locator("#use_ports").count()).isEqualTo(1);
+        assertThat(page.locator("#use_ports").isChecked()).isTrue();
+        assertThat(page.locator("#wait_for_ready").isChecked()).isFalse();
+    }
+
+    @Test
+    @Order(15)
+    void nodeSiteUpdateRoundTripsUsePorts() throws Exception {
+        String href = siteHref("Node App");
+
+        // Save without the checkbox -> explicit false, edit page renders it unchecked.
+        var response = postForm(href, "name=Node+App&site_type=hohenheim%3Anode&script=");
+        assertThat(response.statusCode()).isEqualTo(302);
+        navigateToApp(href);
+        waitForHydration();
+        assertThat(page.locator("#use_ports").isChecked()).isFalse();
+
+        // Save with the checkbox -> back to true.
+        response = postForm(href, "name=Node+App&site_type=hohenheim%3Anode&script=&use_ports=on");
+        assertThat(response.statusCode()).isEqualTo(302);
+        navigateToApp(href);
+        waitForHydration();
+        assertThat(page.locator("#use_ports").isChecked()).isTrue();
+    }
+
+    @Test
+    @Order(16)
+    void redirectSiteEditShowsPreservePath() throws Exception {
+        String href = siteHref("Old Domain");
+
+        navigateToApp(href);
+        waitForHydration();
+        assertThat(page.locator("#preserve_path").count()).isEqualTo(1);
+        assertThat(page.locator("#preserve_path").isChecked()).isFalse();
+
+        var response = postForm(href, "name=Old+Domain&site_type=hohenheim%3Aredirect"
+            + "&target_url=https%3A%2F%2Fexample.com&http_status=301&preserve_path=on");
+        assertThat(response.statusCode()).isEqualTo(302);
+
+        navigateToApp(href);
+        waitForHydration();
+        assertThat(page.locator("#preserve_path").isChecked()).isTrue();
+    }
+
+    @Test
+    @Order(17)
+    void dockerSiteEditRoundTripsEnvVars() throws Exception {
+        var response = postForm("/sites/create",
+            "name=Docker+App&site_type=hohenheim%3Adocker&image=nginx"
+            + "&environment_variables%5B0%5D.name=APP_MODE"
+            + "&environment_variables%5B0%5D.value=staging");
+        assertThat(response.statusCode()).isEqualTo(302);
+
+        navigateToApp(siteHref("Docker App"));
+        waitForHydration();
+
+        assertThat(page.locator("pl-input[name='environment_variables[0].name'] input").inputValue())
+            .isEqualTo("APP_MODE");
+        assertThat(page.locator("pl-input[name='environment_variables[0].value'] input").inputValue())
+            .isEqualTo("staging");
+    }
+
+    @Test
+    @Order(18)
+    void gitSourcedSiteEditRoundTripsBuildEnvVars() throws Exception {
+        var response = postForm("/sites/create",
+            "name=Git+App&site_type=hohenheim%3Astatic&root_path=%2Fvar%2Fwww%2Fgitapp"
+            + "&source=git&repository_url=https%3A%2F%2Fexample.com%2Frepo.git"
+            + "&build_environment_variables%5B0%5D.name=CI"
+            + "&build_environment_variables%5B0%5D.value=true");
+        assertThat(response.statusCode()).isEqualTo(302);
+
+        navigateToApp(siteHref("Git App"));
+        waitForHydration();
+
+        assertThat(page.locator("pl-input[name='build_environment_variables[0].name'] input").inputValue())
+            .isEqualTo("CI");
+        assertThat(page.locator("pl-input[name='build_environment_variables[0].value'] input").inputValue())
+            .isEqualTo("true");
     }
 }

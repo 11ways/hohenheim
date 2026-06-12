@@ -14,6 +14,7 @@
     public authProviders: List = null
     public authProviderId: String = ""
     public siteSlug: String = ""
+    public buildEnvironmentVariables: List = null
 
     template {
         <div class="hh-form-group">
@@ -46,7 +47,7 @@
 
         {% if source{:} == "git" %}
             <pl-separator></pl-separator>
-            <hh-git-source-settings sourceSettings={% sourceSettings %} siteSlug={% siteSlug %}></hh-git-source-settings>
+            <hh-git-source-settings sourceSettings={% sourceSettings %} siteSlug={% siteSlug %} buildEnvironmentVariables={% buildEnvironmentVariables %}></hh-git-source-settings>
         {% /if %}
 
         <div class="hh-form-group">
