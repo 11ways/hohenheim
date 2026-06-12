@@ -306,6 +306,19 @@ public class HohenheimEndpoints {
             .addStatic("servers").addDelimiter().addStatic("create").build())
         .build();
 
+    public static final Endpoint<Object> SERVERS_EDIT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "servers_edit"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("servers").addDelimiter().addParameter(SERVER_NAME)
+            .addDelimiter().addStatic("edit").build())
+        .build();
+
+    public static final Endpoint<Object> SERVERS_UPDATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "servers_update"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("servers").addDelimiter().addParameter(SERVER_NAME).build())
+        .build();
+
     public static final Endpoint<Object> SERVERS_DELETE = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "servers_delete"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
@@ -334,6 +347,19 @@ public class HohenheimEndpoints {
         .identifier(Identifier.of("hohenheim", "notifications_create"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("notifications").addDelimiter().addStatic("create").build())
+        .build();
+
+    public static final Endpoint<Object> NOTIFICATIONS_EDIT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "notifications_edit"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("notifications").addDelimiter().addParameter(NOTIFICATION_NAME)
+            .addDelimiter().addStatic("edit").build())
+        .build();
+
+    public static final Endpoint<Object> NOTIFICATIONS_UPDATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "notifications_update"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("notifications").addDelimiter().addParameter(NOTIFICATION_NAME).build())
         .build();
 
     public static final Endpoint<Object> NOTIFICATIONS_TEST = Endpoint.<Object>builder()

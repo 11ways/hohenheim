@@ -42,6 +42,8 @@ public final class ServerHandlers {
                 item.put("sshTarget", summary.sshTarget());
                 item.put("reachable", up);
                 item.put("removable", !ServerService.LOCAL.equals(summary.name()));
+                item.put("editUrl", HohenheimEndpoints.SERVERS_EDIT
+                    .with(HohenheimEndpoints.SERVER_NAME, summary.name()).toUrl());
                 item.put("cpus", up ? String.valueOf(summary.cpus()) : "-");
                 item.put("memory", up
                     ? String.format("%.1f GB", summary.memoryBytes() / 1_000_000_000.0) : "-");
@@ -80,6 +82,39 @@ public final class ServerHandlers {
             return HandlerSupport.redirectUntyped("/servers");
         });
 
+        // Edit form (GET /servers/:name/edit)
+        HohenheimEndpoints.SERVERS_EDIT.setHandler(conduit -> {
+            String name = conduit.getParameter(HohenheimEndpoints.SERVER_NAME);
+            String sshTarget = serverService.sshTarget(name);
+            if (ServerService.LOCAL.equals(name) || sshTarget == null) {
+                return HandlerSupport.redirectUntyped("/servers");
+            }
+            return HandlerSupport.renderUntyped(
+                Identifier.of("hohenheim", "hohenheim/servers/edit"),
+                serverEditVars(name, sshTarget, ""));
+        });
+
+        // Update (POST /servers/:name)
+        HohenheimEndpoints.SERVERS_UPDATE.setHandler(conduit -> {
+            String name = conduit.getParameter(HohenheimEndpoints.SERVER_NAME);
+            if (ServerService.LOCAL.equals(name) || serverService.sshTarget(name) == null) {
+                return HandlerSupport.redirectUntyped("/servers");
+            }
+
+            Map<String, String> form = HandlerSupport.formMap(conduit);
+            String sshTarget = form.getOrDefault("ssh_target", "").trim();
+            String error = validateSshTarget(sshTarget);
+            if (error != null) {
+                return HandlerSupport.renderUntyped(
+                    Identifier.of("hohenheim", "hohenheim/servers/edit"),
+                    serverEditVars(name, sshTarget, error));
+            }
+
+            serverService.add(name, sshTarget);
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_UPDATED, AuditLogModel.RESOURCE_SERVER, name, name);
+            return HandlerSupport.redirectUntyped("/servers");
+        });
+
         // Delete (POST)
         HohenheimEndpoints.SERVERS_DELETE.setHandler(conduit -> {
             String name = conduit.getParameter(HohenheimEndpoints.SERVER_NAME);
@@ -93,8 +128,20 @@ public final class ServerHandlers {
         String nameError = HandlerSupport.validateName(name);
         if (nameError != null) return nameError;
         if (ServerService.LOCAL.equals(name)) return "'local' is reserved for this host";
+        return validateSshTarget(sshTarget);
+    }
+
+    private static String validateSshTarget(String sshTarget) {
         if (sshTarget.isEmpty()) return "SSH target is required (e.g. user@host)";
         if (!SSH_TARGET.matcher(sshTarget).matches()) return "SSH target must be a plain [user@]host[:port]";
         return null;
+    }
+
+    private static Map<String, Object> serverEditVars(String name, String sshTarget, String error) {
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("error", error);
+        vars.put("name", name);
+        vars.put("sshTarget", sshTarget);
+        return vars;
     }
 }

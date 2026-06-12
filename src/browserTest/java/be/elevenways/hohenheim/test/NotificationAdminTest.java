@@ -50,6 +50,29 @@ class NotificationAdminTest extends HohenheimTestBase {
 
     @Test
     @Order(4)
+    void channelEditRoundTrips() throws Exception {
+        var create = postForm("/notifications/create",
+            "name=ops-room&format=slack&url=https%3A%2F%2Fhooks.example%2Fold");
+        assertThat(create.statusCode()).isEqualTo(302);
+
+        navigateToApp("/notifications/ops-room/edit");
+        waitForHydration();
+        assertThat(page.locator("pl-input[name='url'] input").inputValue())
+            .isEqualTo("https://hooks.example/old");
+
+        var update = postForm("/notifications/ops-room",
+            "format=discord&url=https%3A%2F%2Fhooks.example%2Fnew");
+        assertThat(update.statusCode()).isEqualTo(302);
+
+        navigateToApp("/notifications");
+        waitForHydration();
+        String body = page.locator("body").textContent();
+        assertThat(body).contains("https://hooks.example/new");
+        assertThat(body).contains("discord");
+    }
+
+    @Test
+    @Order(5)
     void testSendReportsDeliveryFailure() throws Exception {
         // A channel pointing at a port nothing listens on -> delivery must report failure.
         var create = postForm("/notifications/create",
