@@ -269,6 +269,13 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("backup").build())
         .build();
 
+    public static final Endpoint<Object> DATABASES_RESTORE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "databases_restore"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME)
+            .addDelimiter().addStatic("restore").build())
+        .build();
+
     public static final Endpoint<Object> DATABASES_DELETE = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "databases_delete"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)

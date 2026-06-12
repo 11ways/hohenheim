@@ -66,7 +66,7 @@ public class ManagedDatabase {
                 case MYSQL -> List.of("mysqldump", "--no-tablespaces", "--single-transaction",
                     "-u", user, database);
                 case REDIS, MONGO -> throw new UnsupportedOperationException(
-                    this + " backup needs binary streaming, not a text dump (follow-up)");
+                    this + " has no text dump; use backupToFile for its binary dump");
             };
         }
 
@@ -89,6 +89,14 @@ public class ManagedDatabase {
             };
         }
 
+        /** MIME type of this engine's dump artifact. */
+        public String dumpContentType() {
+            return switch (this) {
+                case POSTGRES, MYSQL -> "application/sql";
+                case REDIS, MONGO -> "application/octet-stream";
+            };
+        }
+
         /** The tool + args that load a dump file (already inside the container) back in. */
         List<String> restoreCommand(String user, String password, String database, String filePath) {
             return switch (this) {
@@ -101,7 +109,7 @@ public class ManagedDatabase {
                 case MONGO -> List.of("mongorestore", "--username", user, "--password", password,
                     "--authenticationDatabase", "admin", "--drop", "--archive=" + filePath);
                 case REDIS -> throw new UnsupportedOperationException(
-                    "redis restore loads the RDB only at container startup; live restore is not supported");
+                    "redis restore goes through restoreFromFile (RDB swap + restart), not a client command");
             };
         }
 
@@ -127,20 +135,6 @@ public class ManagedDatabase {
             return this == MYSQL ? List.of("MYSQL_PWD=" + password) : List.of();
         }
 
-        /** Whether this engine can produce a downloadable text dump (the others need binary streaming). */
-        public boolean supportsBackup() {
-            return this == POSTGRES || this == MYSQL;
-        }
-
-        /** Backup support keyed by engine token (e.g. "postgres"); false for unknown engines. */
-        public static boolean supportsBackup(String engine) {
-            if (engine == null) return false;
-            try {
-                return valueOf(engine.toUpperCase()).supportsBackup();
-            } catch (IllegalArgumentException e) {
-                return false;
-            }
-        }
     }
 
     /** Connection details for a provisioned database. */
@@ -300,8 +294,7 @@ public class ManagedDatabase {
      * with the engine's client. The dump must match the engine (e.g. {@code pg_dump} output for
      * Postgres). Restoring into a non-empty database may conflict; restore into a fresh one.
      *
-     * @throws IOException                   if the upload or load command fails
-     * @throws UnsupportedOperationException if the engine has no text restore (Redis/Mongo)
+     * @throws IOException if the upload or load command fails
      */
     public void restore(String name, Engine engine, String user, String password,
                         String database, String dump) throws IOException {
@@ -317,11 +310,17 @@ public class ManagedDatabase {
     /**
      * Restore a dump file into a provisioned database: push it into the container and load it with
      * the engine's client (binary-safe, so it handles SQL text and the Mongo archive alike).
+     * Redis is restored by swapping its RDB and restarting the container.
      *
-     * @throws UnsupportedOperationException for Redis (its RDB loads only at startup)
+     * @throws UnsupportedOperationException for an ephemeral Redis (its tmpfs data dir is wiped
+     *                                       by the restart the restore requires)
      */
     public void restoreFromFile(String name, Engine engine, String user, String password,
                                 String database, Path source) throws IOException {
+        if (engine == Engine.REDIS) {
+            restoreRedis(name, user, password, database, source);
+            return;
+        }
         String containerName = "hohenheim-db-" + name;
         String fileName = "hohenheim-restore." + engine.dumpExtension();
         // Resolve the restore command first so an unsupported engine fails before any upload.
@@ -341,6 +340,88 @@ public class ManagedDatabase {
             Files.deleteIfExists(tempDir.resolve(fileName));
             Files.deleteIfExists(tempDir);
         }
+    }
+
+    /** ASCII magic at the start of every RDB file ("REDIS" + 4-digit version). */
+    private static final String REDIS_RDB_MAGIC = "REDIS";
+
+    // AIDEV-NOTE: Redis only reads its RDB at startup, so there is no live restore. Instead the
+    // dump is copied into the data volume (via exec -- the archive API cannot write into mounts)
+    // and the server is restarted around it: SHUTDOWN NOSAVE stops the container without saving
+    // over the new file, and the restart loads it. A scheduled bgsave between the copy and the
+    // shutdown could still overwrite it; that window is milliseconds and a retry recovers.
+    private void restoreRedis(String name, String user, String password, String database,
+                              Path source) throws IOException {
+        byte[] header = new byte[REDIS_RDB_MAGIC.length()];
+        try (var in = Files.newInputStream(source)) {
+            if (in.read(header) != header.length
+                || !REDIS_RDB_MAGIC.equals(new String(header, StandardCharsets.US_ASCII))) {
+                throw new IOException("Not a redis RDB dump (missing REDIS magic): " + source);
+            }
+        }
+
+        String containerName = "hohenheim-db-" + name;
+        requirePersistentData(containerName, Engine.REDIS.dataPath);
+
+        String fileName = "hohenheim-restore.rdb";
+        Path tempDir = Files.createTempDirectory("hohenheim-restore");
+        try {
+            Files.copy(source, tempDir.resolve(fileName));
+            docker.putArchiveFromDirectory(containerName, "/tmp", tempDir);
+        } finally {
+            Files.deleteIfExists(tempDir.resolve(fileName));
+            Files.deleteIfExists(tempDir);
+        }
+
+        // "dump.rdb" in the data dir is the stock image's dbfilename/dir.
+        DockerClient.ExecResult copy = docker.exec(containerName,
+            List.of("cp", "/tmp/" + fileName, Engine.REDIS.dataPath + "/dump.rdb"));
+        if (copy.exitCode() != 0) {
+            throw new IOException("redis restore of '" + name + "' failed copying the RDB into place: "
+                + copy.stderr().trim());
+        }
+
+        // The server exits without replying, so the exec result is unreliable; the stopped-state
+        // poll below is the real confirmation.
+        docker.exec(containerName, List.of("redis-cli", "SHUTDOWN", "NOSAVE"));
+        waitForStopped(containerName, 10_000);
+        docker.startContainer(containerName);
+        waitForReady(containerName, Engine.REDIS, user, password, database, 60_000);
+    }
+
+    /** Reject restore-by-restart when the data dir is a tmpfs mount (wiped on restart). */
+    private void requirePersistentData(String containerName, String dataPath) throws IOException {
+        Object mounts = docker.inspectContainer(containerName).get("Mounts");
+        if (mounts instanceof List<?> list) {
+            for (Object mount : list) {
+                if (mount instanceof Map<?, ?> m && dataPath.equals(m.get("Destination"))) {
+                    if ("tmpfs".equals(m.get("Type"))) {
+                        throw new UnsupportedOperationException("redis restore needs a persistent data"
+                            + " volume; an ephemeral (tmpfs) data dir is wiped by the required restart");
+                    }
+                    return;
+                }
+            }
+        }
+        throw new UnsupportedOperationException(
+            "redis restore needs a persistent data volume; none is mounted at " + dataPath);
+    }
+
+    private void waitForStopped(String containerName, long timeoutMillis) throws IOException {
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (System.currentTimeMillis() < deadline) {
+            Object state = docker.inspectContainer(containerName).get("State");
+            if (state instanceof Map<?, ?> s && !Boolean.TRUE.equals(s.get("Running"))) {
+                return;
+            }
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted waiting for '" + containerName + "' to stop");
+            }
+        }
+        throw new IOException("Timed out waiting for '" + containerName + "' to stop for restore");
     }
 
     /** Size cap for an ephemeral (tmpfs) data mount: 1 GiB -- generous for tests and small

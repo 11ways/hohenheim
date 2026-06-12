@@ -221,15 +221,6 @@ public class DatabaseService extends DatasourceScoped {
         return server != null ? server : ServerService.LOCAL;   // records predating the server column
     }
 
-    /** Back up a persisted database by name, using its stored engine and credentials. */
-    public String backup(String name) throws IOException {
-        Row row = require(name);
-        String user = row.get(DatabaseModel.DB_USER);
-        String password = row.get(DatabaseModel.DB_PASSWORD);
-        String database = row.get(DatabaseModel.DB_NAME);
-        return managedFor.apply(serverOf(row)).backup(name, engineOf(row), user, password, database);
-    }
-
     /**
      * Back up a persisted database into {@code directory}, naming the file {@code baseName} plus
      * the engine's dump extension, and return the written path. Handles text (SQL) and binary
@@ -246,13 +237,29 @@ public class DatabaseService extends DatasourceScoped {
         return target;
     }
 
-    /** Restore a dump into a persisted database by name. */
-    public void restore(String name, String dump) throws IOException {
+    /** A dump ready to stream to the browser: filename, MIME type, and the dump bytes. */
+    public record BackupDownload(String filename, String contentType, byte[] content) {}
+
+    /**
+     * Back up a persisted database by name into a downloadable artifact (SQL text or the engine's
+     * native binary dump). The whole dump is held in memory; streaming is a follow-up for large
+     * databases.
+     */
+    public BackupDownload backupDownload(String name) throws IOException {
         Row row = require(name);
-        String user = row.get(DatabaseModel.DB_USER);
-        String password = row.get(DatabaseModel.DB_PASSWORD);
-        String database = row.get(DatabaseModel.DB_NAME);
-        managedFor.apply(serverOf(row)).restore(name, engineOf(row), user, password, database, dump);
+        ManagedDatabase.Engine engine = engineOf(row);
+        Path directory = Files.createTempDirectory("hohenheim-backup");
+        Path dump = directory.resolve(name + "." + engine.dumpExtension());
+        try {
+            managedFor.apply(serverOf(row)).backupToFile(name, engine,
+                row.get(DatabaseModel.DB_USER), row.get(DatabaseModel.DB_PASSWORD),
+                row.get(DatabaseModel.DB_NAME), dump);
+            return new BackupDownload(dump.getFileName().toString(), engine.dumpContentType(),
+                Files.readAllBytes(dump));
+        } finally {
+            Files.deleteIfExists(dump);
+            Files.deleteIfExists(directory);
+        }
     }
 
     /** Restore a dump file (text or binary) into a persisted database by name. */

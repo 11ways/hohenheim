@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import org.junit.jupiter.api.*;
@@ -75,6 +74,9 @@ class DatabaseAdminTest extends HohenheimTestBase {
             assertThat(body).contains("Connection");
             assertThat(body).contains("detailuser");
             assertThat(body).contains("detaildb");
+            assertThat(body).contains("Restore Backup");
+            PlaywrightAssertions.assertThat(page.locator(
+                "form[action='/databases/" + name + "/restore'] input[type='file']")).hasCount(1);
         } finally {
             model.find().where(DatabaseModel.NAME.eq(name)).delete();
         }

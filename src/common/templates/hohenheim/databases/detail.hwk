@@ -12,7 +12,8 @@
     {% declare port: Integer %}
     {% declare running: Boolean %}
     {% declare ephemeral: Boolean %}
-    {% declare canBackup: Boolean %}
+    {% declare notice: String %}
+    {% declare error: String %}
 
     <hh-page title={% name %}>
         <hh-page-actions>
@@ -23,6 +24,13 @@
             </div>
             <a href="/databases" class="hh-button-link"><pl-button variant={% "outline" %}>Back</pl-button></a>
         </hh-page-actions>
+
+        {% if notice != "" %}
+            <pl-alert>
+                <pl-alert-description>{{ notice }}</pl-alert-description>
+            </pl-alert>
+        {% /if %}
+        <hh-form-error error={% error %}></hh-form-error>
 
         <pl-card>
             <pl-card-header>
@@ -67,10 +75,22 @@
             </pl-card-content>
         </pl-card>
 
+        <pl-card>
+            <pl-card-header>
+                <pl-card-title>Restore</pl-card-title>
+                <pl-card-description>Load a previously downloaded backup into this database. Existing data may be replaced.</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <form method="POST" action={% "/databases/" + name + "/restore" %} enctype="multipart/form-data" class="hh-restore-form">
+                    {% csrf() %}
+                    <input type="file" name="dump" required>
+                    <pl-button variant={% "outline" %} size={% "md" %} type={% "submit" %}>Restore Backup</pl-button>
+                </form>
+            </pl-card-content>
+        </pl-card>
+
         <div class="hh-form-actions">
-            {% if canBackup == true %}
             <hh-post-action action={% "/databases/" + name + "/backup" %} label={% "Download Backup" %} variant={% "outline" %} size={% "md" %}></hh-post-action>
-            {% /if %}
             <hh-post-action action={% "/databases/" + name + "/delete" %} label={% "Delete" %} variant={% "destructive" %} size={% "md" %}></hh-post-action>
         </div>
     </hh-page>

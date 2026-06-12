@@ -169,6 +169,12 @@ hh-key-value-editor .hh-kv-row > pl-input:first-child {
     margin-top: var(--pl-space-xl);
 }
 
+.hh-restore-form {
+    display: flex;
+    align-items: center;
+    gap: var(--pl-space-sm);
+}
+
 .hh-select {
     padding: var(--pl-space-sm) var(--pl-space-md);
     border: 1px solid var(--pl-color-border);

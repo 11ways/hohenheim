@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.server.http.HttpConduit;
 import be.elevenways.zenit.server.http.RedirectResult;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -84,12 +85,17 @@ public final class HandlerSupport {
 
     /** Stream a string body as a downloadable attachment with a sanitized filename. */
     public static void download(Conduit conduit, String contentType, String filename, String body) {
+        download(conduit, contentType, filename, body.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Stream a binary body as a downloadable attachment with a sanitized filename. */
+    public static void download(Conduit conduit, String contentType, String filename, byte[] body) {
         if (conduit instanceof HttpConduit http) {
             String safeName = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
             http.setResponseHeader("Content-Type", contentType);
             http.setResponseHeader("Content-Disposition", "attachment; filename=\"" + safeName + "\"");
         }
-        conduit.endWithContentType(contentType, body);
+        conduit.endWithBytes(contentType, body);
     }
 
     public static void audit(Conduit conduit, String action, String resourceType,

@@ -38,9 +38,7 @@
                     </pl-table-cell>
                     <pl-table-cell>
                         <div class="hh-table-actions">
-                            {% if item.get("canBackup") == true %}
                             <hh-post-action action={% "/databases/" + item.get("name") + "/backup" %} label={% "Backup" %}></hh-post-action>
-                            {% /if %}
                             <hh-post-action action={% "/databases/" + item.get("name") + "/delete" %} label={% "Delete" %}></hh-post-action>
                         </div>
                     </pl-table-cell>

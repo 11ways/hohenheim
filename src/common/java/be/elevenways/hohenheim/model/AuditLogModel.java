@@ -22,6 +22,7 @@ public class AuditLogModel extends Model {
     public static final String ACTION_ENABLED = "enabled";
     public static final String ACTION_DISABLED = "disabled";
     public static final String ACTION_UPLOADED = "uploaded";
+    public static final String ACTION_RESTORED = "restored";
     public static final String ACTION_REQUESTED = "requested";
     public static final String ACTION_TESTED = "tested";
     public static final String ACTION_STARTED_PROCESS = "started_process";
