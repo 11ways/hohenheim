@@ -57,7 +57,7 @@ public final class DatabaseHandlers {
         // Create form
         HohenheimEndpoints.DATABASES_CREATE_FORM.setHandler(conduit ->
             new RenderTemplateResult(Identifier.of("hohenheim", "hohenheim/databases/create"),
-                databaseCreateVars(serverService, "")));
+                databaseCreateVars(serverService, "", Map.of())));
 
         // Detail (connection info)
         HohenheimEndpoints.DATABASES_DETAIL.setHandler(conduit -> {
@@ -111,7 +111,7 @@ public final class DatabaseHandlers {
             String error = validateDatabaseForm(name, engineToken, database);
             if (error != null) {
                 return HandlerSupport.renderUntyped(Identifier.of("hohenheim", "hohenheim/databases/create"),
-                    databaseCreateVars(serverService, error));
+                    databaseCreateVars(serverService, error, form));
             }
 
             // Provision in the background on the chosen host; the detail page shows the status.
@@ -190,9 +190,11 @@ public final class DatabaseHandlers {
         };
     }
 
-    private static Map<String, Object> databaseCreateVars(ServerService serverService, String error) {
+    private static Map<String, Object> databaseCreateVars(ServerService serverService, String error,
+                                                          Map<String, String> values) {
         Map<String, Object> vars = new HashMap<>();
         vars.put("error", error);
+        vars.put("values", values);
         vars.put("servers", serverService.names());   // names only -- no reachability probe on the form
         return vars;
     }

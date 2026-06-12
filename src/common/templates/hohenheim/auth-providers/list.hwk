@@ -31,7 +31,7 @@
                             <a href={% item.get("editUrl") %} class="hh-button-link">
                                 <pl-button variant={% "ghost" %} size={% "sm" %}>Edit</pl-button>
                             </a>
-                            <hh-post-action action={% item.get("deleteUrl") %} label={% "Delete" %}></hh-post-action>
+                            <hh-post-action action={% item.get("deleteUrl") %} label={% "Delete" %} confirm={% "Sites using this provider lose their login gate." %}></hh-post-action>
                         </div>
                     </pl-table-cell>
                 </pl-table-row>

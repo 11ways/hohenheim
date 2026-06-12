@@ -3,6 +3,8 @@
 {% block "main" %}
     {% declare error: String %}
     {% declare servers: List %}
+    {% declare values: Map = null %}
+    {% let v = values != null ? values : Map.create() %}
 
     <hh-page title={% "Create Database" %}>
         <hh-form-shell
@@ -14,13 +16,13 @@
             error={% error %}>
             <div class="hh-form-group">
                 <pl-label target="name">Name</pl-label>
-                <pl-input id="name" type={% "text" %} name={% "name" %} placeholder={% "blog-db" %} required={% true %}></pl-input>
+                <pl-input id="name" type={% "text" %} name={% "name" %} value={% v.getString("name", "") %} placeholder={% "blog-db" %} required={% true %}></pl-input>
                 <p class="hh-form-hint">Lowercase letters, digits, and dashes; used for the container name.</p>
             </div>
 
             <div class="hh-form-group">
                 <pl-label target="engine">Engine</pl-label>
-                <pl-select id="engine" name="engine" value="postgres">
+                <pl-select id="engine" name="engine" value={% v.getString("engine", "postgres") %}>
                     <pl-select-trigger placeholder="Engine"></pl-select-trigger>
                     <pl-select-content>
                         <pl-select-item value="postgres" label="PostgreSQL">PostgreSQL</pl-select-item>
@@ -33,7 +35,7 @@
 
             <div class="hh-form-group">
                 <pl-label target="server">Server</pl-label>
-                <pl-select id="server" name="server" value="local">
+                <pl-select id="server" name="server" value={% v.getString("server", "local") %}>
                     <pl-select-trigger placeholder="Server"></pl-select-trigger>
                     <pl-select-content>
                         {% each servers as serverIndex, serverName %}
@@ -46,7 +48,7 @@
 
             <div class="hh-form-group">
                 <pl-label target="image">Image</pl-label>
-                <pl-input id="image" type={% "text" %} name={% "image" %} placeholder={% "(engine default)" %}></pl-input>
+                <pl-input id="image" type={% "text" %} name={% "image" %} value={% v.getString("image", "") %} placeholder={% "(engine default)" %}></pl-input>
                 <p class="hh-form-hint">Override the default image, or leave empty.</p>
             </div>
 
@@ -54,12 +56,12 @@
 
             <div class="hh-form-group">
                 <pl-label target="database">Database Name</pl-label>
-                <pl-input id="database" type={% "text" %} name={% "database" %} placeholder={% "appdb" %} required={% true %}></pl-input>
+                <pl-input id="database" type={% "text" %} name={% "database" %} value={% v.getString("database", "") %} placeholder={% "appdb" %} required={% true %}></pl-input>
             </div>
 
             <div class="hh-form-group">
                 <pl-label target="db-user">User</pl-label>
-                <pl-input id="db-user" type={% "text" %} name={% "db_user" %} placeholder={% "appuser" %}></pl-input>
+                <pl-input id="db-user" type={% "text" %} name={% "db_user" %} value={% v.getString("db_user", "") %} placeholder={% "appuser" %}></pl-input>
                 <p class="hh-form-hint">Leave blank to use appuser.</p>
             </div>
 
@@ -72,7 +74,7 @@
             <pl-separator></pl-separator>
 
             <div class="hh-form-group hh-checkbox-field">
-                <pl-checkbox inputId="ephemeral" name="ephemeral"></pl-checkbox>
+                <pl-checkbox inputId="ephemeral" name="ephemeral" checked={% v.getString("ephemeral", "") != "" %}></pl-checkbox>
                 <pl-label target="ephemeral">Ephemeral Storage</pl-label>
                 <p class="hh-form-hint">Data lives in RAM and is lost when the container is removed (previews/CI). Unchecked keeps a persistent volume.</p>
             </div>

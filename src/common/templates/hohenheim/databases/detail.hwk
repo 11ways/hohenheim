@@ -81,17 +81,34 @@
                 <pl-card-description>Load a previously downloaded backup into this database. Existing data may be replaced.</pl-card-description>
             </pl-card-header>
             <pl-card-content>
-                <form method="POST" action={% "/databases/" + name + "/restore" %} enctype="multipart/form-data" class="hh-restore-form">
+                <form method="POST" action={% "/databases/" + name + "/restore" %} enctype="multipart/form-data" class="hh-restore-form" attr:id={% "hh-restore-" + name %}>
                     {% csrf() %}
                     <input type="file" name="dump" required>
-                    <pl-button variant={% "outline" %} size={% "md" %} type={% "submit" %}>Restore Backup</pl-button>
+                    <pl-alert-dialog>
+                        <pl-alert-dialog-trigger>
+                            <pl-button variant={% "outline" %} size={% "md" %} type={% "button" %}>Restore Backup</pl-button>
+                        </pl-alert-dialog-trigger>
+                        <pl-alert-dialog-content>
+                            <pl-alert-dialog-header>
+                                <pl-alert-dialog-title>Restore this backup?</pl-alert-dialog-title>
+                                <pl-alert-dialog-description>The uploaded dump replaces the database's current contents.</pl-alert-dialog-description>
+                            </pl-alert-dialog-header>
+                            <pl-alert-dialog-footer>
+                                <pl-alert-dialog-cancel>
+                                    <pl-button variant={% "outline" %} type={% "button" %}>Cancel</pl-button>
+                                </pl-alert-dialog-cancel>
+                                {# Not pl-alert-dialog-action: closing on click detaches the button before it submits. #}
+                                <pl-button variant={% "destructive" %} type={% "submit" %} form={% "hh-restore-" + name %}>Restore Backup</pl-button>
+                            </pl-alert-dialog-footer>
+                        </pl-alert-dialog-content>
+                    </pl-alert-dialog>
                 </form>
             </pl-card-content>
         </pl-card>
 
         <div class="hh-form-actions">
             <hh-post-action action={% "/databases/" + name + "/backup" %} label={% "Download Backup" %} variant={% "outline" %} size={% "md" %}></hh-post-action>
-            <hh-post-action action={% "/databases/" + name + "/delete" %} label={% "Delete" %} variant={% "destructive" %} size={% "md" %}></hh-post-action>
+            <hh-post-action action={% "/databases/" + name + "/delete" %} label={% "Delete" %} variant={% "destructive" %} size={% "md" %} confirm={% "This destroys the database container AND its stored data." %}></hh-post-action>
         </div>
     </hh-page>
 {% /block %}

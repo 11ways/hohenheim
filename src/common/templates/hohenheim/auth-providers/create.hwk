@@ -4,6 +4,13 @@
     {% declare error: String %}
     {% declare authProviderTypes: List %}
     {% declare selectedType: String %}
+    {% declare name: String = "" %}
+    {% declare requiredPermission: String = "" %}
+    {% declare endpoint: String = "" %}
+    {% declare realmClient: String = "" %}
+    {% declare accessKey: String = "" %}
+    {% declare authenticator: String = "password" %}
+    {% declare credentials: List = null %}
 
     <hh-page title={% "Create Auth Provider" %}>
         <hh-form-shell
@@ -15,7 +22,14 @@
             error={% error %}>
             <hh-auth-provider-fields
                 selectedType={% selectedType %}
-                authProviderTypes={% authProviderTypes %}></hh-auth-provider-fields>
+                authProviderTypes={% authProviderTypes %}
+                name={% name %}
+                requiredPermission={% requiredPermission %}
+                endpoint={% endpoint %}
+                realmClient={% realmClient %}
+                accessKey={% accessKey %}
+                authenticator={% authenticator %}
+                credentials={% credentials %}></hh-auth-provider-fields>
         </hh-form-shell>
     </hh-page>
 {% /block %}

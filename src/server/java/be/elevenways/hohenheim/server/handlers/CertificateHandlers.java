@@ -103,7 +103,7 @@ public final class CertificateHandlers {
             if (niceName.isEmpty() || certPem.isEmpty() || keyPem.isEmpty()) {
                 return HandlerSupport.renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/certificates/upload"),
-                    Map.of("error", "Name, certificate, and private key are required")
+                    HandlerSupport.errorVars("Name, certificate, and private key are required", form)
                 );
             }
 
@@ -114,7 +114,7 @@ public final class CertificateHandlers {
             } catch (Exception e) {
                 return HandlerSupport.renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/certificates/upload"),
-                    Map.of("error", "Invalid certificate PEM: " + e.getMessage())
+                    HandlerSupport.errorVars("Invalid certificate PEM: " + e.getMessage(), form)
                 );
             }
 
@@ -123,7 +123,7 @@ public final class CertificateHandlers {
             } catch (Exception e) {
                 return HandlerSupport.renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/certificates/upload"),
-                    Map.of("error", "Invalid private key PEM: " + e.getMessage())
+                    HandlerSupport.errorVars("Invalid private key PEM: " + e.getMessage(), form)
                 );
             }
 
@@ -160,14 +160,14 @@ public final class CertificateHandlers {
             if (!email.isEmpty() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
                 return HandlerSupport.renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/certificates/request"),
-                    Map.of("error", "Invalid account email: " + email)
+                    HandlerSupport.errorVars("Invalid account email: " + email, form)
                 );
             }
 
             if (domains.isEmpty()) {
                 return HandlerSupport.renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/certificates/request"),
-                    Map.of("error", "At least one domain is required")
+                    HandlerSupport.errorVars("At least one domain is required", form)
                 );
             }
 
@@ -179,7 +179,7 @@ public final class CertificateHandlers {
             if (proxy == null) {
                 return HandlerSupport.renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/certificates/request"),
-                    Map.of("error", "Proxy server not initialized")
+                    HandlerSupport.errorVars("Proxy server not initialized", form)
                 );
             }
 
@@ -194,7 +194,7 @@ public final class CertificateHandlers {
             if (!invalid.isEmpty()) {
                 return HandlerSupport.renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/certificates/request"),
-                    Map.of("error", "Invalid hostnames: " + String.join(", ", invalid))
+                    HandlerSupport.errorVars("Invalid hostnames: " + String.join(", ", invalid), form)
                 );
             }
 
@@ -204,8 +204,8 @@ public final class CertificateHandlers {
             if (!excluded.isEmpty()) {
                 return HandlerSupport.renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/certificates/request"),
-                    Map.of("error", "Excluded from Let's Encrypt by their domain settings: "
-                        + String.join(", ", excluded))
+                    HandlerSupport.errorVars("Excluded from Let's Encrypt by their domain settings: "
+                        + String.join(", ", excluded), form)
                 );
             }
 
@@ -222,7 +222,7 @@ public final class CertificateHandlers {
                 String error = failed != null ? failed.get(CertificateModel.RENEWAL_ERROR) : "Unknown error";
                 return HandlerSupport.renderUntyped(
                     Identifier.of("hohenheim", "hohenheim/certificates/request"),
-                    Map.of("error", "Certificate request failed: " + (error != null ? error : "Unknown"))
+                    HandlerSupport.errorVars("Certificate request failed: " + (error != null ? error : "Unknown"), form)
                 );
             }
 

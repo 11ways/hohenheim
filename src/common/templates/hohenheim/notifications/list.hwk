@@ -40,7 +40,7 @@
                     <pl-table-cell>
                         <div class="hh-table-actions">
                             <hh-post-action action={% "/notifications/" + item.get("name") + "/test" %} label={% "Send Test" %}></hh-post-action>
-                            <hh-post-action action={% "/notifications/" + item.get("name") + "/delete" %} label={% "Delete" %}></hh-post-action>
+                            <hh-post-action action={% "/notifications/" + item.get("name") + "/delete" %} label={% "Delete" %} confirm={% "Alerts will no longer be delivered to this channel." %}></hh-post-action>
                         </div>
                     </pl-table-cell>
                 </pl-table-row>

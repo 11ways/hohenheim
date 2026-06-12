@@ -2,6 +2,8 @@
 
 {% block "main" %}
     {% declare error: String %}
+    {% declare values: Map = null %}
+    {% let v = values != null ? values : Map.create() %}
 
     <hh-page title={% "Create Access List" %}>
         <hh-form-shell
@@ -11,7 +13,13 @@
             submitLabel={% "Create Access List" %}
             cancelHref={% "/access-lists" %}
             error={% error %}>
-            <hh-access-list-fields></hh-access-list-fields>
+            <hh-access-list-fields
+                name={% v.getString("name", "") %}
+                satisfy={% v.getString("satisfy", "any") %}
+                basicAuthUser={% v.getString("basic_auth_user", "") %}
+                basicAuthPass={% v.getString("basic_auth_pass", "") %}
+                allowedIps={% v.getString("allowed_ips", "") %}
+                deniedIps={% v.getString("denied_ips", "") %}></hh-access-list-fields>
         </hh-form-shell>
     </hh-page>
 {% /block %}
