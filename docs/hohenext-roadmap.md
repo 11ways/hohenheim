@@ -119,16 +119,24 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
       `mongodump --archive`) from the container's `/tmp` (writable layer; the archive API can't
       read tmpfs/volume mounts). All four engines back up; the scheduled task covers them all.
 - [x] **Mongo restore** — `mongorestore --archive --drop`, binary-safe round-trip tested.
-- [ ] **Redis restore** — an RDB loads only at container startup, so live restore into a running
-      container isn't possible (rejected up-front). Needs container-recreate-with-RDB orchestration.
+- [x] **Redis restore** — an RDB loads only at container startup, so the restore swaps the RDB
+      into the data volume (exec `cp`; the archive API can't write into mounts) and restarts the
+      server around it (`SHUTDOWN NOSAVE` + container start). Persistent databases only: a tmpfs
+      data dir is wiped by the restart, so ephemeral redis rejects restore up-front. RDB magic is
+      validated before anything destructive. Round-trip tested.
 - [x] **Async provisioning** — create persists the record as "provisioning" and provisions in a
       background pool (`DatabaseService.createAsync`), so the request returns immediately; status
       (provisioning/active/failed) is tracked (M016) and shown in the list and detail pages.
-- [ ] Follow-up: surface binary-backup download + a restore action in the admin UI (today the UI
-      Backup button is text engines only; restore is API/task-level).
+- [x] **Binary backup download in the admin UI** — the Backup button covers all four engines via
+      `DatabaseService.backupDownload` (SQL text or native binary dump, correct MIME/extension),
+      on a new binary-safe response path (`Conduit.endWithBytes`, added to Zenit).
+- [x] **Restore upload in the admin UI** — the detail page has a Restore card (multipart file
+      upload to `/databases/:name/restore`); outcome is surfaced back on the detail page via
+      query-string tokens. Audit-logged as `restored`. End-to-end tested against a live container.
 
-Phase 3 is effectively complete: provision, persistence, orchestration, admin UI, scheduled
-backups, and backup for all four engines + restore for the SQL engines and Mongo.
+Phase 3 is complete: provision, persistence, orchestration, admin UI (backup download + restore
+upload), scheduled backups, and backup + restore for all four engines (redis restore: persistent
+only).
 
 ## Phase 4 — Multi-server ← COMPLETE (SSH-transport remote half untestable locally)
 

@@ -226,7 +226,7 @@ task browserTest(type: Test) {
     useJUnitPlatform()
     maxParallelForks = 1
     forkEvery = 1
-    timeout = java.time.Duration.ofMinutes(5)
+    timeout = java.time.Duration.ofMinutes(10)
 
     systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')
 

@@ -6,11 +6,14 @@ import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.domino.common.DominoFile;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -43,7 +46,6 @@ public final class DatabaseHandlers {
                 item.put("status", summary.status());
                 item.put("running", summary.running());
                 item.put("port", summary.port() != null ? summary.port() : 0);
-                item.put("canBackup", ManagedDatabase.Engine.supportsBackup(summary.engine()));
                 items.add(item);
             }
             return new RenderTemplateResult(
@@ -76,7 +78,9 @@ public final class DatabaseHandlers {
             vars.put("status", detail.status());
             vars.put("running", detail.running());
             vars.put("port", detail.port() != null ? detail.port() : 0);
-            vars.put("canBackup", ManagedDatabase.Engine.supportsBackup(detail.engine()));
+            vars.put("notice", "1".equals(conduit.getQueryParam("restored"))
+                ? "Backup restored into '" + detail.database() + "'." : "");
+            vars.put("error", restoreErrorMessage(conduit.getQueryParam("error")));
             return HandlerSupport.renderUntyped(Identifier.of("hohenheim", "hohenheim/databases/detail"), vars);
         });
 
@@ -118,18 +122,44 @@ public final class DatabaseHandlers {
             return HandlerSupport.redirectUntyped("/databases/" + name);   // detail page shows status + connection info
         });
 
-        // Backup (POST) -- download a SQL dump
+        // Backup (POST) -- download the engine's dump (SQL text or native binary)
         HohenheimEndpoints.DATABASES_BACKUP.setHandler(conduit -> {
             String name = conduit.getParameter(HohenheimEndpoints.DATABASE_NAME);
-            String dump;
+            DatabaseService.BackupDownload dump;
             try {
-                dump = databaseService.backup(name);
+                dump = databaseService.backupDownload(name);
             } catch (IOException e) {
                 Blast.log("DB: backup of", name, "failed -", e.getMessage());
                 return HandlerSupport.redirectUntyped("/databases?error=backup_failed");
             }
-            HandlerSupport.download(conduit, "application/sql", name + ".sql", dump);
+            HandlerSupport.download(conduit, dump.contentType(), dump.filename(), dump.content());
             return null;
+        });
+
+        // Restore (POST) -- upload a dump file and load it into the running database
+        HohenheimEndpoints.DATABASES_RESTORE.setHandler(conduit -> {
+            String name = conduit.getParameter(HohenheimEndpoints.DATABASE_NAME);
+            if (!(conduit.getFormData().get("dump") instanceof DominoFile file) || file.getSize() == 0) {
+                return HandlerSupport.redirectUntyped("/databases/" + name + "?error=restore_no_file");
+            }
+            try {
+                Path temp = Files.createTempFile("hohenheim-restore-upload", null);
+                try {
+                    Files.write(temp, file.getBytes());
+                    databaseService.restoreFromFile(name, temp);
+                } finally {
+                    Files.deleteIfExists(temp);
+                }
+            } catch (UnsupportedOperationException e) {
+                Blast.log("DB: restore of", name, "rejected -", e.getMessage());
+                return HandlerSupport.redirectUntyped("/databases/" + name + "?error=restore_unsupported");
+            } catch (IOException e) {
+                Blast.log("DB: restore of", name, "failed -", e.getMessage());
+                return HandlerSupport.redirectUntyped("/databases/" + name + "?error=restore_failed");
+            }
+            HandlerSupport.audit(conduit, AuditLogModel.ACTION_RESTORED, AuditLogModel.RESOURCE_DATABASE,
+                name, name);
+            return HandlerSupport.redirectUntyped("/databases/" + name + "?restored=1");
         });
 
         // Delete (POST)
@@ -146,6 +176,18 @@ public final class DatabaseHandlers {
             }
             return HandlerSupport.redirectUntyped("/databases");
         });
+    }
+
+    /** Human-readable message for a restore error token in the detail-page query string. */
+    private static String restoreErrorMessage(String token) {
+        if (token == null) return "";
+        return switch (token) {
+            case "restore_no_file" -> "Pick a dump file to restore.";
+            case "restore_unsupported" -> "This database does not support restore"
+                + " (ephemeral redis data is wiped by the restart a restore requires).";
+            case "restore_failed" -> "Restore failed; see the server log for details.";
+            default -> "";
+        };
     }
 
     private static Map<String, Object> databaseCreateVars(ServerService serverService, String error) {

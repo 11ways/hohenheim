@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -57,12 +58,14 @@ class DatabaseServiceTest {
             assertThat((Boolean) all.get(0).get(DatabaseModel.EPHEMERAL)).isTrue();
             assertThat((String) all.get(0).get(DatabaseModel.SERVER_NAME)).isEqualTo("local");   // default host
 
-            // backup(name) resolves engine + credentials from the record (caller passes no params).
+            // backupDownload(name) resolves engine + credentials from the record (caller passes no params).
             DockerClient.ExecResult seed = docker.exec(containerName,
                 List.of("psql", "-U", "appuser", "-d", "appdb", "-c", "CREATE TABLE t (id int);"),
                 List.of("PGPASSWORD=secret123"));
             assertThat(seed.exitCode()).withFailMessage("seed failed: %s", seed.stderr()).isZero();
-            assertThat(service.backup(name)).contains("CREATE TABLE");
+            DatabaseService.BackupDownload download = service.backupDownload(name);
+            assertThat(new String(download.content(), StandardCharsets.UTF_8))
+                .contains("CREATE TABLE");
 
             service.destroy(name, true);
             assertThat(service.list()).isEmpty();              // record gone
