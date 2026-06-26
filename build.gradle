@@ -5,13 +5,14 @@ import org.teavm.gradle.tasks.GenerateJavaScriptTask
 
 plugins {
     id 'java-library'
-    id 'org.teavm' version '0.13.1'
-    id 'com.gradleup.shadow' version '8.3.0'
-    id 'org.checkerframework' version '0.6.40'
+    id 'org.teavm' version '0.15.0'
+    id 'com.gradleup.shadow' version '9.4.2'
     id 'be.elevenways.protoblast' version '0.1.0-SNAPSHOT'
 }
 
-apply plugin: 'org.checkerframework'
+// AIDEV-NOTE: the org.checkerframework Gradle plugin was removed during the Java 25 / Gradle 9
+// migration (it dropped checker-qual from custom source sets and ran no checkers anyway); the
+// checker-qual annotation artifact is declared directly on every source set below instead.
 
 group = 'be.elevenways'
 version = '0.1.0-SNAPSHOT'
@@ -22,8 +23,8 @@ repositories {
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_22
-    targetCompatibility = JavaVersion.VERSION_22
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 // --- Source Sets ---
@@ -80,6 +81,14 @@ configurations {
 
     browserTestImplementation.extendsFrom testImplementation
     browserTestRuntimeOnly.extendsFrom testRuntimeOnly
+
+    // AIDEV-NOTE: janeway is the server-only TUI developer console; zenit declares it runtimeOnly,
+    // and because zenit's :client classifier shares zenit's POM, janeway (and its transitive
+    // protoblast :server, which is JVM-only — Executors, java.net.http) leaks onto the client/TeaVM
+    // classpath. It has no place in the browser bundle, so exclude it from the client configuration.
+    clientImplementation {
+        exclude group: 'be.elevenways', module: 'janeway'
+    }
 }
 
 // --- Compile Tasks ---
@@ -119,9 +128,9 @@ dependencies {
     serverImplementation ('be.elevenways:zenit-auth:0.1.0-SNAPSHOT:server-lib') { changing = true }
     serverImplementation ('be.elevenways:plumage:0.1.0-SNAPSHOT:server') { changing = true }
 
-    commonImplementation 'org.checkerframework:checker-qual:3.42.0'
-    clientImplementation 'org.checkerframework:checker-qual:3.42.0'
-    serverImplementation 'org.checkerframework:checker-qual:3.42.0'
+    commonImplementation 'org.checkerframework:checker-qual:4.2.0'
+    clientImplementation 'org.checkerframework:checker-qual:4.2.0'
+    serverImplementation 'org.checkerframework:checker-qual:4.2.0'
 
     // Database
     serverImplementation 'org.xerial:sqlite-jdbc:3.45.1.0'
@@ -135,6 +144,11 @@ dependencies {
     // Browser tests
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    // Gradle 9 no longer auto-provides the JUnit Platform launcher (propagates to browserTest
+    // via extendsFrom). Java 25 needs checker-qual on the test classpaths too (the removed
+    // checkerframework plugin used to supply it).
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.checkerframework:checker-qual:4.2.0'
     browserTestImplementation platform('org.junit:junit-bom:5.10.0')
     browserTestImplementation 'org.junit.jupiter:junit-jupiter'
     browserTestImplementation 'com.microsoft.playwright:playwright:1.48.0'
@@ -153,17 +167,18 @@ dependencies {
     browserTestImplementation 'org.shredzone.acme4j:acme4j-client:3.4.0'
 
     // TeaVM libraries
-    teavmLibs 'org.teavm:teavm-classlib:0.13.1'
-    teavmLibs 'org.teavm:teavm-jso-apis:0.13.1'
-    teavmLibs 'org.teavm:teavm-jso-impl:0.13.1'
-    teavmLibs 'org.teavm:teavm-platform:0.13.1'
-    teavmLibs 'org.teavm:teavm-metaprogramming-impl:0.13.1'
+    teavmLibs 'org.teavm:teavm-classlib:0.15.0'
+    teavmLibs 'org.teavm:teavm-jso-apis:0.15.0'
+    teavmLibs 'org.teavm:teavm-jso-impl:0.15.0'
+    teavmLibs 'org.teavm:teavm-platform:0.15.0'
+    teavmLibs 'org.teavm:teavm-metaprogramming-impl:0.15.0'
 }
 
 // --- JAR Tasks ---
 task serverJar(type: ShadowJar) {
     archiveClassifier = 'server'
-    configurations = [project.configurations.serverRuntimeClasspath]
+    // Shadow 9 requires the lazy provider form for `configurations`.
+    configurations = project.configurations.named('serverRuntimeClasspath').map { [it] }
     from sourceSets.server.output
     from sourceSets.common.output
     mergeServiceFiles()
@@ -182,9 +197,17 @@ task serverJar(type: ShadowJar) {
 task browserJar(type: ShadowJar) {
     description = 'Fat JAR for TeaVM compilation'
     archiveClassifier = 'browser'
-    configurations = [project.configurations.clientRuntimeClasspath]
+    configurations = project.configurations.named('clientRuntimeClasspath').map { [it] }
     from(sourceSets.client.output)
     from(sourceSets.common.output)
+    // AIDEV-NOTE: INCLUDE is required so mergeServiceFiles() actually MERGES every
+    // META-INF/services/...Template file. Without it, the default duplicate handling drops the
+    // dependency-jar template entries (e.g. plumage's Tpl_ComponentsCard / pl-card), so those
+    // template tags are never compiled into the TeaVM bundle and client-side rendering throws
+    // "Unknown custom element". failOnDuplicateEntries=false: INCLUDE keeps duplicate class
+    // entries that Shadow 9 would otherwise reject.
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    failOnDuplicateEntries = false
     mergeServiceFiles()
 }
 
