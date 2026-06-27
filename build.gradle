@@ -81,14 +81,6 @@ configurations {
 
     browserTestImplementation.extendsFrom testImplementation
     browserTestRuntimeOnly.extendsFrom testRuntimeOnly
-
-    // AIDEV-NOTE: janeway is the server-only TUI developer console; zenit declares it runtimeOnly,
-    // and because zenit's :client classifier shares zenit's POM, janeway (and its transitive
-    // protoblast :server, which is JVM-only — Executors, java.net.http) leaks onto the client/TeaVM
-    // classpath. It has no place in the browser bundle, so exclude it from the client configuration.
-    clientImplementation {
-        exclude group: 'be.elevenways', module: 'janeway'
-    }
 }
 
 // --- Compile Tasks ---
@@ -106,27 +98,27 @@ tasks.named('compileClientJava') {
 dependencies {
     // Common (compile-only since client/server each pull their own variant)
     commonCompileOnly teavm.libs.jsoApis
-    commonCompileOnly ('be.elevenways:protoblast:0.1.0-SNAPSHOT:client') { changing = true }
-    commonCompileOnly ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:common') { changing = true }
-    commonCompileOnly ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:browser') { changing = true }
-    commonCompileOnly ('be.elevenways:zenit:0.1.0-SNAPSHOT:common') { changing = true }
-    commonCompileOnly ('be.elevenways:plumage:0.1.0-SNAPSHOT:common') { changing = true }
+    commonCompileOnly ('be.elevenways:protoblast-client:0.1.0-SNAPSHOT') { changing = true }
+    commonCompileOnly ('be.elevenways:hawkeye-common:0.1.0-SNAPSHOT') { changing = true }
+    commonCompileOnly ('be.elevenways:hawkeye-client:0.1.0-SNAPSHOT') { changing = true }
+    commonCompileOnly ('be.elevenways:zenit-common:0.1.0-SNAPSHOT') { changing = true }
+    commonCompileOnly ('be.elevenways:plumage-common:0.1.0-SNAPSHOT') { changing = true }
 
     // Client (TeaVM-compiled browser code)
     clientImplementation sourceSets.common.output
     clientImplementation teavm.libs.jsoApis
-    clientImplementation ('be.elevenways:protoblast:0.1.0-SNAPSHOT:client') { changing = true }
-    clientImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:browser') { changing = true }
-    clientImplementation ('be.elevenways:zenit:0.1.0-SNAPSHOT:client') { changing = true }
-    clientImplementation ('be.elevenways:plumage:0.1.0-SNAPSHOT:client') { changing = true }
+    clientImplementation ('be.elevenways:protoblast-client:0.1.0-SNAPSHOT') { changing = true }
+    clientImplementation ('be.elevenways:hawkeye-client:0.1.0-SNAPSHOT') { changing = true }
+    clientImplementation ('be.elevenways:zenit-client:0.1.0-SNAPSHOT') { changing = true }
+    clientImplementation ('be.elevenways:plumage-client:0.1.0-SNAPSHOT') { changing = true }
 
     // Server
     serverImplementation sourceSets.common.output
-    serverImplementation ('be.elevenways:protoblast:0.1.0-SNAPSHOT:server') { changing = true }
-    serverImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:server') { changing = true }
-    serverImplementation ('be.elevenways:zenit:0.1.0-SNAPSHOT:server') { changing = true }
-    serverImplementation ('be.elevenways:zenit-auth:0.1.0-SNAPSHOT:server-lib') { changing = true }
-    serverImplementation ('be.elevenways:plumage:0.1.0-SNAPSHOT:server') { changing = true }
+    serverImplementation ('be.elevenways:protoblast-server:0.1.0-SNAPSHOT') { changing = true }
+    serverImplementation ('be.elevenways:hawkeye-server:0.1.0-SNAPSHOT') { changing = true }
+    serverImplementation ('be.elevenways:zenit-server:0.1.0-SNAPSHOT') { changing = true }
+    serverImplementation ('be.elevenways:zenit-auth-server:0.1.0-SNAPSHOT') { changing = true }
+    serverImplementation ('be.elevenways:plumage-server:0.1.0-SNAPSHOT') { changing = true }
 
     commonImplementation 'org.checkerframework:checker-qual:4.2.0'
     clientImplementation 'org.checkerframework:checker-qual:4.2.0'
@@ -156,12 +148,12 @@ dependencies {
     browserTestImplementation sourceSets.common.output
     browserTestImplementation sourceSets.client.output
     browserTestImplementation sourceSets.server.output
-    browserTestImplementation ('be.elevenways:protoblast:0.1.0-SNAPSHOT:server') { changing = true }
-    browserTestImplementation ('be.elevenways:zenit:0.1.0-SNAPSHOT:server') { changing = true }
-    browserTestImplementation ('be.elevenways:zenit-auth:0.1.0-SNAPSHOT:server-lib') { changing = true }
-    browserTestImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:server') { changing = true }
-    browserTestImplementation ('be.elevenways:hawkeye:0.1.0-SNAPSHOT:test-support') { changing = true }
-    browserTestImplementation ('be.elevenways:plumage:0.1.0-SNAPSHOT:server') { changing = true }
+    browserTestImplementation ('be.elevenways:protoblast-server:0.1.0-SNAPSHOT') { changing = true }
+    browserTestImplementation ('be.elevenways:zenit-server:0.1.0-SNAPSHOT') { changing = true }
+    browserTestImplementation ('be.elevenways:zenit-auth-server:0.1.0-SNAPSHOT') { changing = true }
+    browserTestImplementation ('be.elevenways:hawkeye-server:0.1.0-SNAPSHOT') { changing = true }
+    browserTestImplementation ('be.elevenways:hawkeye-test-support:0.1.0-SNAPSHOT') { changing = true }
+    browserTestImplementation ('be.elevenways:plumage-server:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation 'org.xerial:sqlite-jdbc:3.45.1.0'
     browserTestImplementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
     browserTestImplementation 'org.shredzone.acme4j:acme4j-client:3.4.0'
@@ -197,9 +189,21 @@ task serverJar(type: ShadowJar) {
 task browserJar(type: ShadowJar) {
     description = 'Fat JAR for TeaVM compilation'
     archiveClassifier = 'browser'
-    configurations = project.configurations.named('clientRuntimeClasspath').map { [it] }
+    // AIDEV-NOTE: every source set AND every dependency jar ships its own
+    // be.elevenways.protoblast.generated.BlastAutoLoadInit at the SAME FQN, but each is the
+    // @*AutoLoad union of ITS OWN classpath (partial/empty bodies). TeaVM can resolve only ONE
+    // class per FQN; if an incomplete one wins, @*AutoLoad <clinit> registrations (settings,
+    // custom-element registrations, DRY revivers) silently drop and hydration breaks. The COMPLETE
+    // client-side union lives in the leaf 'client' source set (it holds the TeaVM mainClass
+    // ClientMain and its compile classpath covers common + all client deps), so keep ONLY its
+    // loader and exclude it from every other source set and from every dependency jar. Deps are
+    // bundled via zipTree(...) so the per-source 'exclude' can reach into them.
+    def autoLoadInit = 'be/elevenways/protoblast/generated/BlastAutoLoadInit.class'
     from(sourceSets.client.output)
-    from(sourceSets.common.output)
+    from(sourceSets.common.output) { exclude autoLoadInit }
+    from({
+        project.configurations.clientRuntimeClasspath.findAll { it.isFile() }.collect { zipTree(it) }
+    }) { exclude autoLoadInit }
     // AIDEV-NOTE: INCLUDE is required so mergeServiceFiles() actually MERGES every
     // META-INF/services/...Template file. Without it, the default duplicate handling drops the
     // dependency-jar template entries (e.g. plumage's Tpl_ComponentsCard / pl-card), so those
