@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -28,8 +29,8 @@ public final class AuthProviderResource extends HohenheimRowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(SiteAuthProviderModel.NAME)
-        .add(SiteAuthProviderModel.PROVIDER_TYPE)
-        .add(SiteAuthProviderModel.CONFIG)
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteAuthProviderModel.PROVIDER_TYPE))
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteAuthProviderModel.CONFIG))
         .add(SiteAuthProviderModel.REQUIRED_PERMISSION)
         .build();
 
