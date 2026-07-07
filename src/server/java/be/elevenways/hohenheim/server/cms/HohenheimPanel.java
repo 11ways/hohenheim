@@ -5,6 +5,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.resource.ActivityResource;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
 
@@ -45,7 +46,7 @@ public final class HohenheimPanel extends Panel {
         peers.add(new DatabaseResource());
         peers.add(new ServerResource());
         peers.add(new NotificationChannelResource());
-        peers.add(new AuditLogResource());
+        peers.add(new ActivityResource());
         peers.add(new SettingsPage());
         peers.add(new CertificateRequestPage());
         return peers;

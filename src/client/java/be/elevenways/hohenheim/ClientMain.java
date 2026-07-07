@@ -11,14 +11,13 @@ import be.elevenways.zenit.common.Zenit;
 
 /**
  * Browser entry point for Hohenheim. TeaVM compiles this to /cms.js.
- * The browser has no MODELS/MODULES boot stage, so models and record
- * sources MUST register before the runtime hydrates.
+ * Models register at class-load (generated BlastAutoLoadInit) and record
+ * sources via the HohenheimSources module, which ClientZenitRuntime inits
+ * pre-hydration -- no manual registration here.
  */
 public class ClientMain {
 
     public static void main(String[] args) throws Exception {
-        HohenheimModels.registerAll();
-        HohenheimSources.register();
         // Plumage browser bridges: a missing bridge is silent (terminal never
         // connects, sortable never dispatches reorder), so install them all.
         TerminalFunctions.setBridge(new BrowserTerminalBridge());

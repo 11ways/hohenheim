@@ -1,43 +1,23 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.render.panel.RecordTabState;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
-import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.security.Principal;
+import java.util.Map;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * Shared helpers for the CMS resources: audit-log writes and proxy reload.
+ * Shared helpers for the CMS resources: proxy reload and record-tab strips.
+ * Audit writes moved to the framework activity log; mutation-driven reloads
+ * ride {@code ProxyReloadHooks}.
  */
 public final class CmsSupport {
 
     private CmsSupport() {
-    }
-
-    /** Write an audit-log entry attributed to the acting principal. */
-    public static void audit(@NonNull AccessContext access, @NonNull String action,
-                             @NonNull String resourceType, @Nullable Object resourceId,
-                             @Nullable String resourceName) {
-        AuditLogModel model = Models.get(AuditLogModel.class);
-        Row row = model.createEmptyRow();
-        Principal principal = access.principal();
-        if (principal != null && !principal.isAnonymous()) {
-            row.set(AuditLogModel.USER_ID, (int) principal.id());
-            row.set(AuditLogModel.USER_LABEL, principal.displayName());
-        }
-        row.set(AuditLogModel.ACTION, action);
-        row.set(AuditLogModel.RESOURCE_TYPE, resourceType);
-        row.set(AuditLogModel.RESOURCE_ID, resourceId != null ? String.valueOf(resourceId) : null);
-        row.set(AuditLogModel.RESOURCE_NAME, resourceName);
-        model.save(row);
     }
 
     /** Rebuild the proxy routing table from the current configuration. */
@@ -46,6 +26,11 @@ public final class CmsSupport {
         if (proxy != null) {
             proxy.reload();
         }
+    }
+
+    /** The coerced maps the CMS hands to persist/update are immutable; copy before staging values. */
+    public static @NonNull Map<String, Object> mutable(@NonNull Map<String, Object> coerced) {
+        return new LinkedHashMap<>(coerced);
     }
 
     /** The record-tab strip for a site: edit form + domains + processes. */

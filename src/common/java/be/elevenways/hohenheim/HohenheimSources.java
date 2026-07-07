@@ -1,13 +1,13 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.ZenitModule;
 import be.elevenways.zenit.common.data.RecordSource;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
@@ -60,10 +60,10 @@ public final class HohenheimSources implements ZenitModule {
             .build());
 
         // Feeds the admin dashboard's recent-activity records widget.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(AuditLogModel.class)
-            .project(AuditLogModel.ACTION, AuditLogModel.RESOURCE_TYPE,
-                AuditLogModel.RESOURCE_NAME, AuditLogModel.USER_LABEL, AuditLogModel.CREATED_AT)
-            .sortable(AuditLogModel.CREATED_AT)
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(ActivityModel.class)
+            .project(ActivityModel.ACTION, ActivityModel.MODEL,
+                ActivityModel.DETAIL, ActivityModel.ACTOR_LABEL, ActivityModel.CREATED_AT)
+            .sortable(ActivityModel.CREATED_AT)
             .build());
 
         Stylesheets.register(Identifier.of("hohenheim", "app"), "/hohenheim.css", Stylesheets.WEIGHT_APP);

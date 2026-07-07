@@ -31,12 +31,15 @@ Use `zenit-dev` for all build/test/run cycles. Do not invoke `./gradlew` directl
 
 - The admin UI is a zenit-cms panel served at `/admin` (`server/cms/HohenheimPanel`):
   typed `RowResource` peers for sites/domains/certificates/access lists/auth
-  providers/databases/servers/notification channels, a readonly audit-log
-  resource, a settings `PanelPage` (persists via zenit's `DrySettingsWriter`
-  into `settings/local.dry`), and `RecordScopedPage` tabs on sites (Domains,
-  Processes incl. terminal + proclogs) and databases (Restore). Every resource
-  mutation writes an audit entry and reloads the proxy
-  (`HohenheimRowResource`). Host-declared endpoints beside the panel
+  providers/databases/servers/notification channels, zenit-cms's readonly
+  `ActivityResource` over the framework activity log, a settings `PanelPage`
+  (persists via zenit's `DrySettingsWriter` into `settings/local.dry`), and
+  `RecordScopedPage` tabs on sites (Domains, Processes incl. terminal +
+  proclogs) and databases (Restore). Mutations are recorded by zenit's
+  `ActivityLog` (enabled in `settings/default.dry`; behaviour verbs via
+  `ActivityLog.withAction`) and routing-relevant writes rebuild the proxy via
+  `ProxyReloadHooks` on the global model-hook tier -- there is no per-resource
+  audit/reload plumbing. Host-declared endpoints beside the panel
   (downloads, uploads, process control, terminal WS, settings POST) live in
   `HohenheimEndpoints` + `HohenheimHandlers`.
 - Site types are registered via `SiteTypeRegistry`. Each type declares its schema (which drives the type-discriminated settings sub-form in the CMS) and its request handler. Adding a type means implementing one class and registering it — no edits to existing dispatch code. See `docs/architecture-site-types.md`.

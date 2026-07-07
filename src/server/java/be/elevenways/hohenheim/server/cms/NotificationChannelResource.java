@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.model.AuditLogModel;
+
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -8,10 +8,12 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -27,7 +29,7 @@ import java.util.Map;
  * Webhook notification channels (Slack, Discord, generic JSON) with a
  * test-send row action.
  */
-public final class NotificationChannelResource extends HohenheimRowResource {
+public final class NotificationChannelResource extends RowResource {
 
     private static final List<FieldOption<String>> FORMAT_OPTIONS = List.of(
         FieldOption.of(NotificationService.FORMAT_SLACK, "Slack"),
@@ -51,7 +53,6 @@ public final class NotificationChannelResource extends HohenheimRowResource {
     @Override public int navOrder() { return 30; }
     @Override public @NonNull Icon icon() { return Icon.of("bell"); }
 
-    @Override protected @NonNull String auditResourceType() { return AuditLogModel.RESOURCE_NOTIFICATION_CHANNEL; }
 
     /** kind is staged by persist/update but is not a form entry; stamp it here. */
     @Override
@@ -70,12 +71,11 @@ public final class NotificationChannelResource extends HohenheimRowResource {
             row.set(NotificationChannelModel.KIND, kind);
         }
     }
-    @Override protected boolean reloadsProxy() { return false; }
 
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        Map<String, Object> values = mutable(coerced);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values);
         values.put("kind", NotificationService.KIND_WEBHOOK);
         return super.persistRow(values, accessContext);
@@ -84,7 +84,7 @@ public final class NotificationChannelResource extends HohenheimRowResource {
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        Map<String, Object> values = mutable(coerced);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values);
         values.put("kind", NotificationService.KIND_WEBHOOK);
         super.updateRow(existing, values, accessContext);
@@ -108,8 +108,7 @@ public final class NotificationChannelResource extends HohenheimRowResource {
                 String name = row.get(NotificationChannelModel.NAME);
                 boolean delivered = this.notifications.sendTo(name,
                     "Hohenheim test", "If you can read this, the channel works.");
-                CmsSupport.audit(ctx.access(), AuditLogModel.ACTION_TESTED,
-                    AuditLogModel.RESOURCE_NOTIFICATION_CHANNEL, name, name);
+                ActivityLog.record(this.model(), row.get(NotificationChannelModel.ID), "tested", name);
                 return delivered
                     ? CmsActionResult.refreshWithToast(Microcopy.of("hohenheim.notification_channel.test_ok"))
                     : CmsActionResult.errorToast(Microcopy.of("hohenheim.notification_channel.test_failed"));

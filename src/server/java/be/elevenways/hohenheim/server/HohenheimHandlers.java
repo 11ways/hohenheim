@@ -2,10 +2,10 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.AuditLogModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.process.IpcChannel;
@@ -16,13 +16,12 @@ import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.domino.common.DominoFile;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.conduit.ConduitAttributes;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.JsonResult;
-import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.server.http.HttpConduit;
 import be.elevenways.zenit.server.http.RedirectResult;
 import be.elevenways.zenit.server.setting.DrySettingsWriter;
@@ -215,9 +214,7 @@ public final class HohenheimHandlers {
                     + (reason != null ? reason : "Unknown"));
             }
 
-            audit(conduit, AuditLogModel.ACTION_REQUESTED, AuditLogModel.RESOURCE_CERTIFICATE,
-                certId, niceName);
-            CmsSupport.reloadProxy();
+            ActivityLog.record(certModel, certId, "requested", niceName);
             return redirectUntyped("/admin/certificates");
         });
 
@@ -303,7 +300,7 @@ public final class HohenheimHandlers {
                 return redirectUntyped(restorePage + "?error="
                     + URLEncoder.encode("Restore failed; see the server log for details.", StandardCharsets.UTF_8));
             }
-            audit(conduit, AuditLogModel.ACTION_RESTORED, AuditLogModel.RESOURCE_DATABASE, name, name);
+            ActivityLog.record(Models.get(DatabaseModel.class), name, ActivityLog.ACTION_RESTORE, name);
             return redirectUntyped(restorePage + "?restored=1");
         });
     }
@@ -356,8 +353,7 @@ public final class HohenheimHandlers {
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
             managedHandler(siteId).ifPresent(managed -> {
                 managed.startProcess();
-                audit(conduit, AuditLogModel.ACTION_STARTED_PROCESS,
-                    AuditLogModel.RESOURCE_SITE, siteId, null);
+                ActivityLog.record(Models.get(SiteModel.class), siteId, "started_process", null);
             });
             return redirectUntyped(processesPageUrl(siteId));
         });
@@ -369,8 +365,7 @@ public final class HohenheimHandlers {
                 ManagedProcess proc = managed.getProcess(pid);
                 if (proc != null) {
                     proc.kill();
-                    audit(conduit, AuditLogModel.ACTION_KILLED_PROCESS,
-                        AuditLogModel.RESOURCE_SITE, siteId, "PID " + pid);
+                    ActivityLog.record(Models.get(SiteModel.class), siteId, "killed_process", "PID " + pid);
                 }
             });
             return redirectUntyped(processesPageUrl(siteId));
@@ -383,8 +378,7 @@ public final class HohenheimHandlers {
                 ManagedProcess proc = managed.getProcess(pid);
                 if (proc != null) {
                     proc.setIsolated(!proc.isIsolated());
-                    audit(conduit, AuditLogModel.ACTION_ISOLATED_PROCESS,
-                        AuditLogModel.RESOURCE_SITE, siteId, "PID " + pid);
+                    ActivityLog.record(Models.get(SiteModel.class), siteId, "isolated_process", "PID " + pid);
                 }
             });
             return redirectUntyped(processesPageUrl(siteId));
@@ -454,21 +448,6 @@ public final class HohenheimHandlers {
         conduit.endWithBytes(contentType, body);
     }
 
-    private static void audit(Conduit conduit, String action, String resourceType,
-                              Object resourceId, String resourceName) {
-        AuditLogModel model = Models.get(AuditLogModel.class);
-        Principal principal = conduit.getAttribute(ConduitAttributes.PRINCIPAL);
-        Row row = model.createEmptyRow();
-        if (principal != null && !principal.isAnonymous()) {
-            row.set(AuditLogModel.USER_ID, (int) principal.id());
-            row.set(AuditLogModel.USER_LABEL, principal.displayName());
-        }
-        row.set(AuditLogModel.ACTION, action);
-        row.set(AuditLogModel.RESOURCE_TYPE, resourceType);
-        row.set(AuditLogModel.RESOURCE_ID, resourceId != null ? String.valueOf(resourceId) : null);
-        row.set(AuditLogModel.RESOURCE_NAME, resourceName);
-        model.save(row);
-    }
 
     @SuppressWarnings("unchecked")
     private static ActionResult<Object> jsonUntyped(Map<String, Object> data) {

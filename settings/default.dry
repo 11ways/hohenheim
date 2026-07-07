@@ -1,10 +1,16 @@
 {
     "name": "Hohenheim",
+    "activity": {
+        "enabled": true
+    },
     "content": {
         "locales": "en"
     },
     "brand": {
         "name": "Hohenheim",
+    "activity": {
+        "enabled": true
+    },
         "seed_color": "#b45309"
     }
 }

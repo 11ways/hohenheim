@@ -18,7 +18,7 @@ import java.util.Map;
 
 /**
  * The /admin landing dashboard: entity-count stat tiles plus the most
- * recent audit-log activity.
+ * recent activity-log entries.
  */
 public final class AdminDashboard extends DashboardPanelPeer {
 
@@ -40,7 +40,7 @@ public final class AdminDashboard extends DashboardPanelPeer {
         return new WidgetTree(List.of(
             new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 3), stats),
             new WidgetInstance(RecordsWidget.ID, Map.of(
-                "source", "hohenheim.audit_log",
+                "source", "zenit.activity",
                 "sort", "created_at",
                 "descending", true,
                 "limit", 10))));

@@ -1,11 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.model.AuditLogModel;
+
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
@@ -27,7 +28,7 @@ import java.util.regex.Pattern;
  * Multi-server Docker host inventory. The implicit {@code local} host always
  * exists and cannot be edited or removed; remote hosts are reached over SSH.
  */
-public final class ServerResource extends HohenheimRowResource {
+public final class ServerResource extends RowResource {
 
     // AIDEV-NOTE: SSH target must be a bare [user@]host[:port] that never starts with '-', so it
     // cannot be parsed as an ssh option (e.g. -oProxyCommand=...) when passed to the ssh argv.
@@ -58,7 +59,6 @@ public final class ServerResource extends HohenheimRowResource {
     @Override public int navOrder() { return 20; }
     @Override public @NonNull Icon icon() { return Icon.of("server"); }
 
-    @Override protected @NonNull String auditResourceType() { return AuditLogModel.RESOURCE_SERVER; }
 
     /** mode is staged by persist/update but is not a form entry; stamp it here. */
     @Override
@@ -77,7 +77,6 @@ public final class ServerResource extends HohenheimRowResource {
             row.set(ServerModel.MODE, mode);
         }
     }
-    @Override protected boolean reloadsProxy() { return false; }
 
     @Override
     public @NonNull List<Row> listRows(TableView.Applied<Row> applied,
@@ -115,7 +114,7 @@ public final class ServerResource extends HohenheimRowResource {
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        Map<String, Object> values = mutable(coerced);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, null);
         values.put("mode", ServerService.MODE_SSH);
         return super.persistRow(values, accessContext);
@@ -124,7 +123,7 @@ public final class ServerResource extends HohenheimRowResource {
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        Map<String, Object> values = mutable(coerced);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, existing);
         values.put("mode", ServerService.MODE_SSH);
         super.updateRow(existing, values, accessContext);
