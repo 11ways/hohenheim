@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.model.AuditLogModel;
+
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -12,6 +12,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -40,7 +41,7 @@ import java.util.Map;
  * the background; records are immutable afterwards (all fields read-only on
  * edit) with backup/restore/destroy as actions.
  */
-public final class DatabaseResource extends HohenheimRowResource {
+public final class DatabaseResource extends RowResource {
 
     private static final List<FieldOption<String>> ENGINE_OPTIONS = List.of(
         FieldOption.of("postgres", "PostgreSQL"),
@@ -93,13 +94,6 @@ public final class DatabaseResource extends HohenheimRowResource {
     @Override public int navOrder() { return 10; }
     @Override public @NonNull Icon icon() { return Icon.of("database"); }
 
-    @Override protected @NonNull String auditResourceType() { return AuditLogModel.RESOURCE_DATABASE; }
-    @Override protected boolean reloadsProxy() { return false; }
-
-    @Override
-    protected @Nullable String auditName(@NonNull Row row) {
-        return row.get(DatabaseModel.NAME);
-    }
 
     /** Records are provisioned containers: no field is editable after create. */
     @Override
@@ -146,8 +140,6 @@ public final class DatabaseResource extends HohenheimRowResource {
         this.databaseService.createAsync(name, engine, image.isEmpty() ? null : image,
             user, password, database, ephemeral, server);
 
-        CmsSupport.audit(accessContext, AuditLogModel.ACTION_CREATED,
-            AuditLogModel.RESOURCE_DATABASE, name, name);
 
         Row created = this.model().find().where(DatabaseModel.NAME.eq(name)).first();
         if (created == null) {
@@ -170,8 +162,6 @@ public final class DatabaseResource extends HohenheimRowResource {
         } catch (IOException e) {
             throw new UncheckedIOException("Destroy of '" + name + "' failed", e);
         }
-        CmsSupport.audit(accessContext, AuditLogModel.ACTION_DELETED,
-            AuditLogModel.RESOURCE_DATABASE, name, name);
     }
 
     @Override

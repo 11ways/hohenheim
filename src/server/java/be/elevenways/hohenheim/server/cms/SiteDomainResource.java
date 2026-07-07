@@ -1,12 +1,13 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.model.AuditLogModel;
+
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
@@ -31,7 +32,7 @@ import java.util.Map;
  * headers and certificate pinning. Hidden from the sidebar -- reached
  * through a site's Domains tab.
  */
-public final class SiteDomainResource extends HohenheimRowResource {
+public final class SiteDomainResource extends RowResource {
 
     private static final List<FieldOption<String>> MATCH_OPTIONS = List.of(
         FieldOption.of(SiteDomainModel.MATCH_EXACT, "Exact"),
@@ -74,12 +75,6 @@ public final class SiteDomainResource extends HohenheimRowResource {
     @Override public @NonNull Icon icon() { return Icon.of("at"); }
     @Override public boolean showInNav() { return false; }
 
-    @Override protected @NonNull String auditResourceType() { return AuditLogModel.RESOURCE_DOMAIN; }
-
-    @Override
-    protected @Nullable String auditName(@NonNull Row row) {
-        return row.get(SiteDomainModel.HOSTNAME);
-    }
 
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,

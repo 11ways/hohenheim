@@ -39,7 +39,7 @@ class CmsAdminSmokeTest extends HohenheimTestBase {
         assertThat(sidebar).contains("Databases");
         assertThat(sidebar).contains("Servers");
         assertThat(sidebar).contains("Notification Channels");
-        assertThat(sidebar).contains("Audit Log");
+        assertThat(sidebar).contains("Activity");
         assertThat(sidebar).contains("Settings");
     }
 

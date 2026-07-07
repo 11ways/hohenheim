@@ -95,12 +95,12 @@ class AdminPagesTest extends HohenheimTestBase {
     }
 
     // -----------------------------------------------------------------------
-    // Audit Log
+    // Activity log
     // -----------------------------------------------------------------------
 
     @Test
     @Order(10)
-    void auditLogRecordsCreation() throws Exception {
+    void activityLogRecordsCreation() throws Exception {
         var createResponse = post("/admin/sites/new",
             "name=Audit+Test+Site&site_type=hohenheim%3Adead&source=local");
         assertThat(createResponse.statusCode()).isIn(200, 302, 303);
@@ -109,12 +109,12 @@ class AdminPagesTest extends HohenheimTestBase {
             .where(SiteModel.NAME.eq("Audit Test Site")).first();
         assertThat(site).isNotNull();
 
-        navigateToApp("/admin/audit");
+        navigateToApp("/admin/activity");
         waitForHydration();
 
         String content = page.locator("body").textContent();
-        assertThat(content).contains("created");
-        assertThat(content).contains("Audit Test Site");
+        assertThat(content).contains("create");
+        assertThat(content).contains("hohenheim:site");
     }
 
     // -----------------------------------------------------------------------

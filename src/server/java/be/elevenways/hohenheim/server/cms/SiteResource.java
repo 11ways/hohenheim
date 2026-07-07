@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.AuditLogModel;
+
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -15,6 +15,8 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
@@ -45,7 +47,7 @@ import java.util.UUID;
  * picks to auth providers and access lists, clone/toggle row actions, and a
  * soft delete that also removes a git-provisioned checkout.
  */
-public final class SiteResource extends HohenheimRowResource {
+public final class SiteResource extends RowResource {
 
     private static final List<FieldOption<String>> SOURCE_OPTIONS = List.of(
         FieldOption.of("local", "Local files"),
@@ -82,7 +84,6 @@ public final class SiteResource extends HohenheimRowResource {
     @Override public int navOrder() { return 10; }
     @Override public @NonNull Icon icon() { return Icon.of("globe"); }
 
-    @Override protected @NonNull String auditResourceType() { return AuditLogModel.RESOURCE_SITE; }
 
     /** slug/status are staged by persistRow but are not form entries; stamp them here. */
     @Override
@@ -106,7 +107,7 @@ public final class SiteResource extends HohenheimRowResource {
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        Map<String, Object> values = mutable(coerced);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
         String name = trimmed(values.get("name"));
         if (name.isEmpty()) {
             throw new IllegalStateException("Name is required");
@@ -120,7 +121,7 @@ public final class SiteResource extends HohenheimRowResource {
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        Map<String, Object> values = mutable(coerced);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
         String name = trimmed(values.get("name"));
         if (name.isEmpty()) {
             throw new IllegalStateException("Name is required");
@@ -162,15 +163,12 @@ public final class SiteResource extends HohenheimRowResource {
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
         Integer siteId = existing.get(SiteModel.ID);
-        String name = existing.get(SiteModel.NAME);
         existing.set(SiteModel.DELETED_AT, Instant.now());
-        this.model().save(existing);
+        ActivityLog.withAction(ActivityLog.ACTION_DELETE, "soft-delete",
+            () -> this.model().save(existing));
         if (SiteModel.SOURCE_GIT.equals(existing.get(SiteModel.SOURCE))) {
             GitProvisioner.deleteSiteDirectory(siteId);
         }
-        CmsSupport.audit(accessContext, AuditLogModel.ACTION_DELETED,
-            AuditLogModel.RESOURCE_SITE, siteId, name);
-        CmsSupport.reloadProxy();
     }
 
     @Override
@@ -183,11 +181,8 @@ public final class SiteResource extends HohenheimRowResource {
             .handler((row, ctx) -> {
                 boolean current = Boolean.TRUE.equals(row.get(SiteModel.ENABLED));
                 row.set(SiteModel.ENABLED, !current);
-                this.model().save(row);
-                CmsSupport.audit(ctx.access(),
-                    current ? AuditLogModel.ACTION_DISABLED : AuditLogModel.ACTION_ENABLED,
-                    AuditLogModel.RESOURCE_SITE, row.get(SiteModel.ID), row.get(SiteModel.NAME));
-                CmsSupport.reloadProxy();
+                ActivityLog.withAction(current ? "disabled" : "enabled", null,
+                    () -> this.model().save(row));
                 return CmsActionResult.refreshWithToast(Microcopy.of(
                     current ? "hohenheim.site.disabled" : "hohenheim.site.enabled"));
             })
@@ -230,7 +225,8 @@ public final class SiteResource extends HohenheimRowResource {
         clone.set(SiteModel.ENABLED, false);
         clone.set(SiteModel.AUTH_PROVIDER_ID, site.get(SiteModel.AUTH_PROVIDER_ID));
         clone.set(SiteModel.ACCESS_LIST_ID, site.get(SiteModel.ACCESS_LIST_ID));
-        siteModel.save(clone);
+        ActivityLog.withAction("cloned", "of site #" + site.get(SiteModel.ID),
+            () -> siteModel.save(clone));
 
         int newSiteId = clone.get(SiteModel.ID);
         for (Row domain : domainModel.findBySiteId(site.get(SiteModel.ID))) {
@@ -253,8 +249,6 @@ public final class SiteResource extends HohenheimRowResource {
             domainModel.save(domainClone);
         }
 
-        CmsSupport.audit(access, AuditLogModel.ACTION_CLONED,
-            AuditLogModel.RESOURCE_SITE, newSiteId, name);
         return CmsActionResult.redirect(new be.elevenways.protoblast.common.http.Uri(
             "/admin/sites/" + newSiteId));
     }

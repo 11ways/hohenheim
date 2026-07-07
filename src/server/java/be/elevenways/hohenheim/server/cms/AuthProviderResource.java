@@ -1,12 +1,13 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.model.AuditLogModel;
+
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -25,7 +26,7 @@ import java.util.Map;
  * normalizeConfigForSave, which hashes secrets and carries unchanged ones
  * forward -- an unknown type fails loudly so plaintext never persists.
  */
-public final class AuthProviderResource extends HohenheimRowResource {
+public final class AuthProviderResource extends RowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(SiteAuthProviderModel.NAME)
@@ -43,12 +44,11 @@ public final class AuthProviderResource extends HohenheimRowResource {
     @Override public int navOrder() { return 50; }
     @Override public @NonNull Icon icon() { return Icon.of("key"); }
 
-    @Override protected @NonNull String auditResourceType() { return AuditLogModel.RESOURCE_AUTH_PROVIDER; }
 
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        Map<String, Object> values = mutable(coerced);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
         normalizeConfig(values, null);
         return super.persistRow(values, accessContext);
     }
@@ -58,7 +58,7 @@ public final class AuthProviderResource extends HohenheimRowResource {
                           @NonNull AccessContext accessContext) {
         @SuppressWarnings("unchecked")
         Map<String, Object> existingConfig = (Map<String, Object>) existing.get(SiteAuthProviderModel.CONFIG);
-        Map<String, Object> values = mutable(coerced);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
         normalizeConfig(values, existingConfig);
         super.updateRow(existing, values, accessContext);
     }

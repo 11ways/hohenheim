@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.model.AuditLogModel;
+
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -11,6 +11,7 @@ import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -39,7 +40,7 @@ import java.util.Map;
  * request page linked from the header). The internal ACME account row is
  * scoped out of every list/load.
  */
-public final class CertificateResource extends HohenheimRowResource {
+public final class CertificateResource extends RowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(CertificateModel.NICE_NAME)
@@ -68,12 +69,6 @@ public final class CertificateResource extends HohenheimRowResource {
     @Override public int navOrder() { return 30; }
     @Override public @NonNull Icon icon() { return Icon.of("certificate"); }
 
-    @Override protected @NonNull String auditResourceType() { return AuditLogModel.RESOURCE_CERTIFICATE; }
-
-    @Override
-    protected @Nullable String auditName(@NonNull Row row) {
-        return row.get(CertificateModel.NICE_NAME);
-    }
 
     /** provider/status are staged by persistRow but are not form entries; stamp them here. */
     @Override
@@ -99,7 +94,7 @@ public final class CertificateResource extends HohenheimRowResource {
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        Map<String, Object> values = mutable(coerced);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
         validatePems(values);
         values.put("provider", "custom");
         values.put("status", CertificateModel.STATUS_ACTIVE);

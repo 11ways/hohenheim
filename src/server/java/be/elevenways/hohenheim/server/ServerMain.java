@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
@@ -66,6 +67,7 @@ public class ServerMain {
 
         proxyServer = new ProxyServer();
         proxyServer.start();
+        ProxyReloadHooks.install();
 
         // Scheduled maintenance via zenit's TaskService: discovery tasks (IP / users / node
         // versions) declare BOOT_AND_CRON so they run once now and hourly; cleanup and backup

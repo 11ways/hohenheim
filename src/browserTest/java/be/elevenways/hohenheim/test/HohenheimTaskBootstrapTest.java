@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
-import be.elevenways.hohenheim.server.task.CleanOldAuditLogs;
+import be.elevenways.hohenheim.server.task.CleanOldActivity;
 import be.elevenways.hohenheim.server.task.CleanOldProclogs;
 import be.elevenways.hohenheim.server.task.CleanOrphanCertificates;
 import be.elevenways.hohenheim.server.task.UpdateNodeVersions;
@@ -65,7 +65,7 @@ class HohenheimTaskBootstrapTest {
             UpdateNodeVersions.class.getName(),
             BackupDatabases.class.getName(),
             CleanOldProclogs.class.getName(),
-            CleanOldAuditLogs.class.getName(),
+            CleanOldActivity.class.getName(),
             CleanOrphanCertificates.class.getName());
     }
 
@@ -86,7 +86,7 @@ class HohenheimTaskBootstrapTest {
         for (String type : List.of(
                 BackupDatabases.class.getName(),
                 CleanOldProclogs.class.getName(),
-                CleanOldAuditLogs.class.getName(),
+                CleanOldActivity.class.getName(),
                 CleanOrphanCertificates.class.getName())) {
             assertThat(service.historyModel().findRecentForType(type, 5))
                 .as("FALLBACK task must NOT fire at boot: " + type)

@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.AuditLogModel;
+
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
@@ -19,7 +20,7 @@ import java.util.List;
 /**
  * IP allow/deny lists plus optional single-credential basic auth, attachable to sites.
  */
-public final class AccessListResource extends HohenheimRowResource {
+public final class AccessListResource extends RowResource {
 
     private static final List<FieldOption<String>> SATISFY_OPTIONS = List.of(
         FieldOption.of(AccessListModel.SATISFY_ANY, "Any (IP or Auth)"),
@@ -43,5 +44,4 @@ public final class AccessListResource extends HohenheimRowResource {
     @Override public int navOrder() { return 40; }
     @Override public @NonNull Icon icon() { return Icon.of("shield-halved"); }
 
-    @Override protected @NonNull String auditResourceType() { return AuditLogModel.RESOURCE_ACCESS_LIST; }
 }
