@@ -100,8 +100,10 @@ class SiteLifecycleTest extends HohenheimTestBase {
             + "&settings.environment_variables.0.value=production"
             + "&settings.environment_variables.1.key=APP_PORT"
             + "&settings.environment_variables.1.value=3000"
-            + "&settings.api_keys.0=alpha-key"
-            + "&settings.api_keys.1=beta-key");
+            // Arrays post as repeated same-name fields (the array-item partial
+            // renders every item input with the entry path, unindexed).
+            + "&settings.api_keys=alpha-key"
+            + "&settings.api_keys=beta-key");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Map<String, Object> settings = settingsOf("Node App");

@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.test;
 
-import com.microsoft.playwright.Locator;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -13,17 +12,19 @@ import static org.assertj.core.api.Assertions.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SiteTypeTest extends HohenheimTestBase {
 
-    /**
-     * Select a value in the site_type pl-select: click the trigger, then the
-     * portalled option, then flush cascading reactive updates.
-     */
-    private void selectSiteType(String value) {
-        var trigger = page.locator("pl-select[name='site_type'] pl-select-trigger button");
-        trigger.click();
+    /** The one open pl-select popup (closed popups stay mounted but hidden). */
+    private static final String OPEN_SELECT_POPUP = "he-bottom .pl-select-popup[data-open]";
 
-        var item = page.locator("div[role='option'][data-value='" + value + "']");
-        item.scrollIntoViewIfNeeded(new Locator.ScrollIntoViewIfNeededOptions().setTimeout(5000));
-        item.click();
+    /** Opens a pl-select via its field control and waits for its portalled popup. */
+    private void openPlSelect(String hostSelector) {
+        page.click(hostSelector + " .pl-select-field");
+        page.waitForSelector(OPEN_SELECT_POPUP);
+    }
+
+    /** Select a value in the site_type pl-select, then flush reactive updates. */
+    private void selectSiteType(String value) {
+        openPlSelect("pl-select[name='site_type']");
+        page.click(OPEN_SELECT_POPUP + " div[role='option'][data-value='" + value + "']");
 
         waitForReactiveIdle();
         waitForReactiveIdle();
@@ -35,9 +36,9 @@ class SiteTypeTest extends HohenheimTestBase {
         navigateToApp("/admin/sites/new");
         waitForHydration();
 
-        page.locator("pl-select[name='site_type'] pl-select-trigger button").click();
+        openPlSelect("pl-select[name='site_type']");
 
-        var items = page.locator("div[role='option'][data-value^='hohenheim:']");
+        var items = page.locator(OPEN_SELECT_POPUP + " div[role='option'][data-value^='hohenheim:']");
         assertThat(items.count()).isEqualTo(8);
 
         String allText = items.allTextContents().toString();

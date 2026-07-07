@@ -43,8 +43,10 @@
         </pl-table-body>
     </pl-table>
     {% else %}
-    <pl-empty-state icon="at" heading="No domains configured"
-        description="Add a hostname so traffic routes to this site."></pl-empty-state>
+    <pl-empty-state icon="at">
+        <pl-empty-state-title>No domains configured</pl-empty-state-title>
+        <pl-empty-state-description>Add a hostname so traffic routes to this site.</pl-empty-state-description>
+    </pl-empty-state>
     {% /if %}
 </section>
 {% /block %}
