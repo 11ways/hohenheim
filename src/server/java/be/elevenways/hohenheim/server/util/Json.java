@@ -7,9 +7,8 @@ import java.util.Map;
  * used where DRY's {@code stringify} can't be (it emits DRY's extended, non-JSON syntax), e.g.
  * Docker request bodies and webhook payloads.
  *
- * AIDEV-NOTE: IpcChannel and DashboardWebSocketHandler intentionally keep their own JSON writers:
- * the former pairs with a parser shared with the Node child (a wire contract), the latter uses
- * bespoke fixed-precision number formatting. Don't fold those into this utility.
+ * AIDEV-NOTE: IpcChannel intentionally keeps its own JSON writer: it pairs with a parser
+ * shared with the Node child (a wire contract). Don't fold it into this utility.
  *
  * @author  Jelle De Loecker
  * @since   0.1.0

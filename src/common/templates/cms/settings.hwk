@@ -3,6 +3,7 @@
 {% declare title: String %}
 {% declare saved: String = "" %}
 {% declare error: String = "" %}
+{% declare restartRequired: String = "" %}
 {% declare proxyHttpPort: Integer %}
 {% declare proxyHttpsPort: Integer %}
 {% declare proxyFallback: String = "" %}
@@ -10,7 +11,6 @@
 {% declare proxyIpv6Address: String = "" %}
 {% declare adminPort: Integer %}
 {% declare dbPath: String %}
-{% declare logAccessToDb: Boolean %}
 {% declare logAccessToFile: Boolean %}
 {% declare logAccessPath: String %}
 {% declare secLogDomainMisses: Boolean %}
@@ -29,6 +29,9 @@
 
     {% if saved != "" %}
     <pl-alert variant="success">Settings saved to settings/local.dry.</pl-alert>
+    {% /if %}
+    {% if restartRequired != "" %}
+    <pl-alert variant="warning">The proxy listener ports changed. They are only read at startup, so restart Hohenheim to apply them.</pl-alert>
     {% /if %}
     {% if error != "" %}
     <pl-alert variant="destructive">{{ error }}</pl-alert>
@@ -72,10 +75,6 @@
         <pl-card>
             <pl-card-header><pl-card-title>Logging</pl-card-title></pl-card-header>
             <pl-card-content>
-                <pl-field>
-                    <pl-checkbox inputId="log_access_to_db" name="log_access_to_db" checked={% logAccessToDb %}></pl-checkbox>
-                    <pl-label target="log_access_to_db">Log access requests to database</pl-label>
-                </pl-field>
                 <pl-field>
                     <pl-checkbox inputId="log_access_to_file" name="log_access_to_file" checked={% logAccessToFile %}></pl-checkbox>
                     <pl-label target="log_access_to_file">Log access requests to file</pl-label>

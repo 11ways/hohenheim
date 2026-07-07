@@ -104,6 +104,22 @@ class ManagedProcessSiteHandlerTest {
     }
 
     @Test
+    void destroyReapsTheChildOsProcess() throws Exception {
+        // The JVM shutdown hook funnels into handler.destroy(); this pins that a
+        // destroy actually kills the spawned OS process instead of orphaning it.
+        SleepHandler handler = new SleepHandler(9105, settings(false, 1));
+        handler.startMinimumServers();
+        awaitCondition("child spawned", () -> handler.runningProcessCount() == 1);
+
+        long pid = handler.getProcesses().get(0).pid();
+        assertThat(ProcessHandle.of(pid)).as("child alive before destroy").isPresent();
+
+        handler.destroy();
+        awaitCondition("child reaped",
+            () -> ProcessHandle.of(pid).map(p -> !p.isAlive()).orElse(true));
+    }
+
+    @Test
     void repeatStartCallsDoNotOverstartWhileChildrenBoot() throws Exception {
         // wait_for_ready children never signal, so they stay "requested" forever:
         // a second start call past the debounce window must see that capacity.

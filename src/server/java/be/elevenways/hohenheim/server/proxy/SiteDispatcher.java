@@ -1346,7 +1346,12 @@ public class SiteDispatcher implements HttpHandler {
     /**
      * Shut down internal executors. Called from ProxyServer.stop().
      */
+    /**
+     * Full teardown: destroys every routed handler (reaping managed child processes)
+     * before stopping the internal schedulers.
+     */
     public void shutdown() {
+        destroyHandlers();
         delayScheduler.shutdownNow();
     }
 }

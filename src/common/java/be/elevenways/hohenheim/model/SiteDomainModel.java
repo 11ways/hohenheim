@@ -20,15 +20,12 @@ public class SiteDomainModel extends Model {
     public static final StringField HOSTNAME = SCHEMA.addField(StringField.builder().name("hostname").build());
     public static final StringField MATCH_TYPE = SCHEMA.addField(StringField.builder().name("match_type").build());
     public static final StringField LISTEN_ON = SCHEMA.addField(StringField.builder().name("listen_on").build());
-    public static final IntegerField PORT = SCHEMA.addField(IntegerField.builder().name("port").build());
     public static final StringField PATH = SCHEMA.addField(StringField.builder().name("path").build());
     public static final BooleanField STRIP_PATH = SCHEMA.addField(BooleanField.builder("strip_path").defaultValue(false).build());
     public static final BooleanField FORCE_SSL = SCHEMA.addField(BooleanField.builder("force_ssl").defaultValue(true).build());
     public static final IntegerField CERTIFICATE_ID = SCHEMA.addField(IntegerField.builder().name("certificate_id").build());
-    public static final StringField CERTIFICATE_TYPE = SCHEMA.addField(StringField.builder().name("certificate_type").build());
     public static final BooleanField HSTS_ENABLED = SCHEMA.addField(BooleanField.builder("hsts_enabled").defaultValue(false).build());
     public static final BooleanField HSTS_SUBDOMAINS = SCHEMA.addField(BooleanField.builder("hsts_subdomains").defaultValue(false).build());
-    public static final BooleanField HTTP2_SUPPORT = SCHEMA.addField(BooleanField.builder("http2_support").defaultValue(true).build());
     // Ordered header-name -> value maps (empty value = delete the header on forward).
     public static final StringMapField CUSTOM_HEADERS = SCHEMA.addField(StringMapField.builder("custom_headers").build());
     public static final StringMapField RESPONSE_HEADERS = SCHEMA.addField(StringMapField.builder("response_headers").build());

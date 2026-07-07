@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -22,6 +23,13 @@ import static org.assertj.core.api.Assertions.*;
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DomainEditTest extends HohenheimTestBase {
+
+    @BeforeAll
+    static void discoverListenAddresses() {
+        // The listen_on select validates against discovered addresses; the boot
+        // task that populates them does not run in the test JVM.
+        UpdateSystemIpAddresses.discover();
+    }
 
     private static Integer siteId;
     private static Integer domainId;
@@ -89,8 +97,8 @@ class DomainEditTest extends HohenheimTestBase {
     void updateDomainSettingsIncludingHeaderMaps() throws Exception {
         var response = postForm("/admin/domains/" + domainId,
             "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=wildcard"
-            + "&force_ssl=true&hsts_enabled=true&http2_support=false"
-            + "&path=%2Fapp&strip_path=true&port=8443"
+            + "&force_ssl=true&hsts_enabled=true"
+            + "&path=%2Fapp&strip_path=true&listen_on=127.0.0.1"
             + "&custom_headers.0.key=X-Injected&custom_headers.0.value=yes"
             + "&response_headers.0.key=X-Strip-Me&response_headers.0.value=");
         assertThat(response.statusCode()).isIn(200, 302, 303);
@@ -99,9 +107,8 @@ class DomainEditTest extends HohenheimTestBase {
         assertThat((String) domain.get(SiteDomainModel.MATCH_TYPE)).isEqualTo("wildcard");
         assertThat((Boolean) domain.get(SiteDomainModel.FORCE_SSL)).isEqualTo(true);
         assertThat((Boolean) domain.get(SiteDomainModel.HSTS_ENABLED)).isEqualTo(true);
-        assertThat((Boolean) domain.get(SiteDomainModel.HTTP2_SUPPORT)).isEqualTo(false);
         assertThat((String) domain.get(SiteDomainModel.PATH)).isEqualTo("/app");
-        assertThat((Integer) domain.get(SiteDomainModel.PORT)).isEqualTo(8443);
+        assertThat((String) domain.get(SiteDomainModel.LISTEN_ON)).isEqualTo("127.0.0.1");
 
         Map<String, String> headers = domain.get(SiteDomainModel.CUSTOM_HEADERS);
         assertThat(headers).containsEntry("X-Injected", "yes");

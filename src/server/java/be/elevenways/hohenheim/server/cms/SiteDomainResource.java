@@ -4,6 +4,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -24,6 +25,7 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -39,19 +41,28 @@ public final class SiteDomainResource extends RowResource {
         FieldOption.of("wildcard", "Wildcard (* and ?)"),
         FieldOption.of("regex", "Regular expression"));
 
+    /** Discovered local addresses (refreshed hourly by UpdateSystemIpAddresses); blank = all interfaces. */
+    private static List<FieldOption<String>> listenOnOptions() {
+        List<FieldOption<String>> options = new ArrayList<>();
+        for (String address : UpdateSystemIpAddresses.getLocalAddresses()) {
+            options.add(FieldOption.of(address, address));
+        }
+        return options;
+    }
+
     private final FormSpec formSpec = FormSpec.builder()
         .add(RelationPick.of(SiteDomainModel.SITE_ID, SiteModel.MODEL_ID).build())
         .add(SiteDomainModel.HOSTNAME)
         .add(Select.of(SiteDomainModel.MATCH_TYPE).options(OptionSource.of(MATCH_OPTIONS)).build())
-        .add(SiteDomainModel.LISTEN_ON)
-        .add(SiteDomainModel.PORT)
+        .add(Select.of(SiteDomainModel.LISTEN_ON)
+            .options(OptionSource.dynamic(ctx -> listenOnOptions()))
+            .build())
         .add(SiteDomainModel.PATH)
         .add(SiteDomainModel.STRIP_PATH)
         .add(SiteDomainModel.FORCE_SSL)
         .add(RelationPick.of(SiteDomainModel.CERTIFICATE_ID, CertificateModel.MODEL_ID).build())
         .add(SiteDomainModel.HSTS_ENABLED)
         .add(SiteDomainModel.HSTS_SUBDOMAINS)
-        .add(SiteDomainModel.HTTP2_SUPPORT)
         .add(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteDomainModel.CUSTOM_HEADERS))
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteDomainModel.RESPONSE_HEADERS))

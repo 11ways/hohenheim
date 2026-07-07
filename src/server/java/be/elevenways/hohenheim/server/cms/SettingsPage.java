@@ -33,8 +33,11 @@ public final class SettingsPage extends PanelPage {
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext) {
         String saved = conduit.getQueryParam("saved");
         String error = conduit.getQueryParam("error");
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/settings"),
-            buildSettingsVars(saved != null ? saved : "", error != null ? error : ""));
+        String restartRequired = conduit.getQueryParam("restart_required");
+        Map<String, Object> vars = buildSettingsVars(
+            saved != null ? saved : "", error != null ? error : "");
+        vars.put("restartRequired", restartRequired != null ? restartRequired : "");
+        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/settings"), vars);
     }
 
     /** Current values for the settings form (also used by the POST handler on rerender). */
@@ -51,7 +54,6 @@ public final class SettingsPage extends PanelPage {
         // Read-only: the admin listener is Zenit's HTTP server.
         vars.put("adminPort", ServerSettings.VALUES.getValue(ServerSettings.Network.PORT));
         vars.put("dbPath", HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.PATH));
-        vars.put("logAccessToDb", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_TO_DATABASE));
         vars.put("logAccessToFile", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_TO_FILE));
         vars.put("logAccessPath", HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_PATH));
         vars.put("secLogDomainMisses", HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.LOG_DOMAIN_MISSES));

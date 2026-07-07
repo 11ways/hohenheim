@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Provisions database engines as managed Docker containers (Phase 3). Each database
@@ -53,8 +54,16 @@ public class ManagedDatabase {
                     "MONGO_INITDB_ROOT_USERNAME", user,
                     "MONGO_INITDB_ROOT_PASSWORD", password,
                     "MONGO_INITDB_DATABASE", database);
-                case REDIS -> Map.of();   // first slice: no auth (follow-up: --requirepass)
+                case REDIS -> Map.of();   // redis takes its password via containerCommand
             };
+        }
+
+        /** Container command override, or null to keep the image's default. */
+        @Nullable List<String> containerCommand(String password) {
+            if (this == REDIS && password != null && !password.isBlank()) {
+                return List.of("redis-server", "--requirepass", password);
+            }
+            return null;
         }
 
         /** The tool + args that dump this engine to stdout as text (SQL). */
@@ -132,7 +141,14 @@ public class ManagedDatabase {
 
         /** Env for {@link #readyCommand} (auth where the probe requires it). */
         List<String> readyEnv(String password) {
-            return this == MYSQL ? List.of("MYSQL_PWD=" + password) : List.of();
+            return switch (this) {
+                case MYSQL -> List.of("MYSQL_PWD=" + password);
+                // redis-cli exits non-zero on a NOAUTH error reply, so the probe only
+                // passes once the authenticated server is really up.
+                case REDIS -> password != null && !password.isBlank()
+                    ? List.of("REDISCLI_AUTH=" + password) : List.of();
+                default -> List.of();
+            };
         }
 
     }
@@ -178,7 +194,8 @@ public class ManagedDatabase {
         }
 
         String id = docker.createContainer(containerName,
-            buildSpec(engine, imageRef, volumeName, engine.env(user, password, database), ephemeral));
+            buildSpec(engine, imageRef, volumeName, engine.env(user, password, database),
+                engine.containerCommand(password), ephemeral));
         docker.startContainer(id);
 
         waitForReady(id, engine, user, password, database, 60_000);
@@ -270,7 +287,7 @@ public class ManagedDatabase {
             case REDIS -> {
                 String rdbPath = "/tmp/hohenheim-dump.rdb";
                 DockerClient.ExecResult save = docker.exec(containerName,
-                    List.of("redis-cli", "--rdb", rdbPath));
+                    List.of("redis-cli", "--rdb", rdbPath), engine.readyEnv(password));
                 if (save.exitCode() != 0) {
                     throw new IOException("redis dump failed for '" + name + "': " + save.stderr().trim());
                 }
@@ -383,7 +400,8 @@ public class ManagedDatabase {
 
         // The server exits without replying, so the exec result is unreliable; the stopped-state
         // poll below is the real confirmation.
-        docker.exec(containerName, List.of("redis-cli", "SHUTDOWN", "NOSAVE"));
+        docker.exec(containerName, List.of("redis-cli", "SHUTDOWN", "NOSAVE"),
+            Engine.REDIS.readyEnv(password));
         waitForStopped(containerName, 10_000);
         docker.startContainer(containerName);
         waitForReady(containerName, Engine.REDIS, user, password, database, 60_000);
@@ -429,7 +447,8 @@ public class ManagedDatabase {
     private static final long EPHEMERAL_DATA_SIZE_BYTES = 1024L * 1024 * 1024;
 
     private static Map<String, Object> buildSpec(Engine engine, String imageRef, String volumeName,
-                                                 Map<String, String> env, boolean ephemeral) {
+                                                 Map<String, String> env, @Nullable List<String> command,
+                                                 boolean ephemeral) {
         String portKey = engine.port + "/tcp";
         List<String> envList = new ArrayList<>();
         env.forEach((key, value) -> envList.add(key + "=" + value));
@@ -446,6 +465,9 @@ public class ManagedDatabase {
         spec.put("Image", imageRef);
         if (!envList.isEmpty()) {
             spec.put("Env", envList);
+        }
+        if (command != null) {
+            spec.put("Cmd", command);
         }
         spec.put("ExposedPorts", Map.of(portKey, Map.of()));
         spec.put("HostConfig", Map.of(
