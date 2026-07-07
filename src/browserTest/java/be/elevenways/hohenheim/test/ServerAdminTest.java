@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import org.junit.jupiter.api.*;
 
@@ -12,8 +15,8 @@ import java.net.http.HttpResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Render-level test for the server inventory admin UI: the list shows the seeded local host, the
- * add form exposes the SSH target field, and the sidebar links to it.
+ * Server inventory through the zenit-cms resource routes: the seeded local
+ * host, SSH-target validation, and the local-host edit/delete guards.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ServerAdminTest extends HohenheimTestBase {
@@ -21,59 +24,71 @@ class ServerAdminTest extends HohenheimTestBase {
     @Test
     @Order(1)
     void serversListShowsLocalHost() {
-        navigateToApp("/servers");
+        navigateToApp("/admin/servers");
         waitForHydration();
 
         String body = page.locator("body").textContent();
         assertThat(body).contains("Servers");
         assertThat(body).contains("local");        // ensureLocal() seeded the implicit host
-        assertThat(body).contains("Add Server");
     }
 
     @Test
     @Order(2)
-    void addFormShowsSshTargetField() {
-        navigateToApp("/servers/create");
+    void sidebarLinksToServers() {
+        navigateToApp("/admin");
         waitForHydration();
 
-        String form = page.locator("form[action='/servers/create']").textContent();
-        assertThat(form).contains("SSH Target");
-        assertThat(form).contains("Name");
+        PlaywrightAssertions.assertThat(
+            page.locator("pl-app-sidebar a[href='/admin/servers']")).hasCount(1);
     }
 
     @Test
     @Order(3)
-    void sidebarLinksToServers() {
-        navigateToApp("/");
-        waitForHydration();
+    void serverCreateAndEditRoundTrips() throws Exception {
+        var create = postForm("/admin/servers/new", "name=edge-9&ssh_target=deploy%40edge9.example");
+        assertThat(create.statusCode()).isIn(200, 302, 303);
 
-        PlaywrightAssertions.assertThat(
-            page.locator("pl-app-sidebar a[href='/servers']")).hasCount(1);
+        Row row = Models.get(ServerModel.class).find()
+            .where(ServerModel.NAME.eq("edge-9")).first();
+        assertThat(row).isNotNull();
+        assertThat((String) row.get(ServerModel.SSH_TARGET)).isEqualTo("deploy@edge9.example");
+        assertThat((String) row.get(ServerModel.MODE)).isEqualTo("ssh");
+        Integer id = row.get(ServerModel.ID);
+
+        var update = postForm("/admin/servers/" + id, "name=edge-9&ssh_target=ops%40edge9.example");
+        assertThat(update.statusCode()).isIn(200, 302, 303);
+
+        Row updated = Models.get(ServerModel.class).findById(id);
+        assertThat((String) updated.get(ServerModel.SSH_TARGET)).isEqualTo("ops@edge9.example");
     }
 
     @Test
     @Order(4)
-    void serverEditRoundTrips() throws Exception {
-        var create = postForm("/servers/create", "name=edge-9&ssh_target=deploy%40edge9.example");
-        assertThat(create.statusCode()).isEqualTo(302);
+    void sshTargetIsValidated() throws Exception {
+        postForm("/admin/servers/new", "name=evil&ssh_target=-oProxyCommand%3Dcalc");
+        Row row = Models.get(ServerModel.class).find()
+            .where(ServerModel.NAME.eq("evil")).first();
+        assertThat(row).isNull();
+    }
 
-        navigateToApp("/servers/edge-9/edit");
-        waitForHydration();
-        assertThat(page.locator("pl-input[name='ssh_target'] input").inputValue())
-            .isEqualTo("deploy@edge9.example");
+    @Test
+    @Order(5)
+    void localHostCannotBeEditedOrDeleted() throws Exception {
+        Row local = Models.get(ServerModel.class).find()
+            .where(ServerModel.NAME.eq("local")).first();
+        assertThat(local).isNotNull();
+        Integer id = local.get(ServerModel.ID);
 
-        var update = postForm("/servers/edge-9", "ssh_target=ops%40edge9.example");
-        assertThat(update.statusCode()).isEqualTo(302);
+        postForm("/admin/servers/" + id, "name=local&ssh_target=evil%40host");
+        Row after = Models.get(ServerModel.class).findById(id);
+        assertThat((Object) after.get(ServerModel.SSH_TARGET))
+            .as("the implicit local host must not accept an SSH target")
+            .isNull();
 
-        navigateToApp("/servers/edge-9/edit");
-        waitForHydration();
-        assertThat(page.locator("pl-input[name='ssh_target'] input").inputValue())
-            .isEqualTo("ops@edge9.example");
-
-        // The implicit local host has no edit page.
-        var local = postForm("/servers/local", "ssh_target=evil%40host");
-        assertThat(local.statusCode()).isEqualTo(302);
-        assertThat(local.headers().firstValue("Location").orElse("")).isEqualTo("/servers");
+        postForm("/admin/servers/" + id + "/delete", "");
+        assertThat(Models.get(ServerModel.class).findById(id))
+            .as("the implicit local host must not be deletable")
+            .isNotNull();
     }
 
     private HttpResponse<String> postForm(String path, String body) throws Exception {

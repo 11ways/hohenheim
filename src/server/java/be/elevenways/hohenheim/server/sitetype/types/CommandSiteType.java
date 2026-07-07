@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
@@ -42,21 +43,18 @@ public class CommandSiteType implements SiteTypeHandler {
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("delay").build());
 
-    // Reuse the same env var sub-schema pattern as NodeSiteType
-    public static final Schema ENV_VAR_SCHEMA = new Schema();
-    static {
-        ENV_VAR_SCHEMA.addField(StringField.builder().name("name").build());
-        ENV_VAR_SCHEMA.addField(StringField.builder().name("value").build());
-    }
-
-    public static final SchemaField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
-        SchemaField.builder("environment_variables").subSchema(ENV_VAR_SCHEMA).build());
+    // Environment variables as an ordered name -> value map
+    public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
+        StringMapField.builder("environment_variables").build());
 
     public static final ListField<String> API_KEYS = SETTINGS_SCHEMA.addField(
         ListField.<String>builder(StringField.builder().name("api_key").build()).name("api_keys").build());
 
-    public static final IntegerField SYSTEM_USER_ID = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("system_user_id").build());
+    // Discovered system user ("hohenheim:<username>" registry key); null = current user.
+    public static final EnumField USER = SETTINGS_SCHEMA.addField(
+        RegistryEnumField.builder("user")
+            .registry(SystemUserOptions.REGISTRY)
+            .build());
 
     @Override
     public String getDisplayName() { return "Command"; }
@@ -93,7 +91,7 @@ public class CommandSiteType implements SiteTypeHandler {
             this.startCommand = (String) settings.getOrDefault("start_command", "");
             this.workingDirectory = (String) settings.get("working_directory");
             this.portArgument = (String) settings.get("port_argument");
-            this.resolvedUid = SystemUsers.resolveUid(settings.get("system_user_id"));
+            this.resolvedUid = SystemUsers.resolveUid(settings.get("user"));
 
             if (!startCommand.isEmpty()) {
                 startMinimumServers();

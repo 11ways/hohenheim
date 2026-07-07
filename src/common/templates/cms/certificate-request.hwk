@@ -1,0 +1,44 @@
+{#- Let's Encrypt certificate request form; the POST is the host-declared
+    /admin/certificates-request endpoint. -#}
+{% declare title: String %}
+{% declare error: String = "" %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-form-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ title }}</h1>
+    </header>
+
+    {% if error != "" %}
+    <pl-alert variant="destructive">{{ error }}</pl-alert>
+    {% /if %}
+
+    <form method="POST" action="/admin/certificates-request">
+        {% csrf() %}
+        <pl-card>
+            <pl-card-content>
+                <pl-field>
+                    <pl-label target="nice_name">Name</pl-label>
+                    <pl-input inputId="nice_name" type={% "text" %} name={% "nice_name" %} placeholder={% "Defaults to the first domain" %}></pl-input>
+                </pl-field>
+                <pl-field>
+                    <pl-label target="domains">Domains</pl-label>
+                    <pl-textarea inputId="domains" name={% "domains" %} placeholder={% "example.com www.example.com" %}></pl-textarea>
+                    <pl-field-description>Comma or whitespace separated. Each domain must already route to this proxy for the HTTP-01 challenge.</pl-field-description>
+                </pl-field>
+                <pl-field>
+                    <pl-label target="letsencrypt_email">Account email (optional)</pl-label>
+                    <pl-input inputId="letsencrypt_email" type={% "email" %} name={% "letsencrypt_email" %}></pl-input>
+                    <pl-field-description>Overrides the global Let's Encrypt account email for this certificate.</pl-field-description>
+                </pl-field>
+            </pl-card-content>
+        </pl-card>
+        <div class="cms-form-actions">
+            <pl-button variant={% "primary" %} type={% "submit" %}>Request Certificate</pl-button>
+            <a href="/admin/certificates">Cancel</a>
+        </div>
+    </form>
+</section>
+{% /block %}

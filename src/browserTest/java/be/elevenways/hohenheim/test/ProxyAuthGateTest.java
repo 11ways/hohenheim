@@ -60,7 +60,7 @@ class ProxyAuthGateTest {
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
         HohenheimTestRuntime.ensureBooted();
-        Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
+        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
 
     @AfterAll
@@ -87,7 +87,7 @@ class ProxyAuthGateTest {
         provider.set(SiteAuthProviderModel.NAME, "Basic Gate");
         provider.set(SiteAuthProviderModel.PROVIDER_TYPE, "hohenheim:basic");
         provider.set(SiteAuthProviderModel.CONFIG, new BasicAuthProviderType().normalizeConfigForSave(
-            Map.of("credentials", List.of(Map.of("username", "alice", "password", "s3cret"))), null));
+            Map.of("credentials", Map.of("alice", "s3cret")), null));
         providerModel.save(provider);
         int providerId = provider.get(SiteAuthProviderModel.ID);
 

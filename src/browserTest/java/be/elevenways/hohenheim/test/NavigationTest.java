@@ -3,110 +3,90 @@ package be.elevenways.hohenheim.test;
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
+/**
+ * Navigation through the zenit-cms admin shell: sidebar links, soft
+ * navigation, back button, and shell layout.
+ */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class NavigationTest extends HohenheimTestBase {
 
-    private void waitForTitle(String expected) {
+    private void waitForHeading(String expected) {
         page.waitForCondition(() -> {
-            var el = page.querySelector(".hh-header__title");
-            return el != null && expected.equals(el.textContent());
+            var el = page.querySelector("h1");
+            return el != null && el.textContent().contains(expected);
         });
     }
 
     @Test
     @Order(1)
     void dashboardLoads() {
-        navigateToApp("/");
+        navigateToApp("/admin");
         waitForHydration();
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Dashboard");
+        assertThat(page.locator("pl-app-sidebar").count()).isEqualTo(1);
+        assertThat(page.content()).contains("Sites");
     }
 
     @Test
     @Order(2)
     void sitesPageLoads() {
-        navigateToApp("/sites");
+        navigateToApp("/admin/sites");
         waitForHydration();
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Sites");
+        assertThat(page.locator("h1").first().textContent()).contains("Sites");
     }
 
     @Test
     @Order(3)
     void certificatesPageLoads() {
-        navigateToApp("/certificates");
+        navigateToApp("/admin/certificates");
         waitForHydration();
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Certificates");
+        assertThat(page.locator("h1").first().textContent()).contains("Certificates");
     }
 
     @Test
     @Order(4)
-    void softNavFromDashboardToSites() {
-        navigateToApp("/");
+    void softNavFromSitesToCertificates() {
+        navigateToApp("/admin/sites");
         waitForHydration();
 
-        page.locator("pl-app-sidebar a[href='/sites']").click();
-        waitForTitle("Sites");
+        page.locator("pl-app-sidebar a[href='/admin/certificates']").click();
+        waitForHeading("Certificates");
 
-        assertThat(page.url()).endsWith("/sites");
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Sites");
+        assertThat(page.url()).endsWith("/admin/certificates");
     }
 
     @Test
     @Order(5)
-    void softNavFromSitesToCertificates() {
-        navigateToApp("/sites");
+    void sidebarPersistsAcrossSoftNav() {
+        navigateToApp("/admin/sites");
         waitForHydration();
 
-        page.locator("pl-app-sidebar a[href='/certificates']").click();
-        waitForTitle("Certificates");
+        String brand = page.locator(".cms-brand").textContent();
+        assertThat(brand).contains("Hohenheim");
 
-        assertThat(page.url()).endsWith("/certificates");
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Certificates");
+        page.locator("pl-app-sidebar a[href='/admin/certificates']").click();
+        waitForHeading("Certificates");
+
+        assertThat(page.locator(".cms-brand").textContent()).contains("Hohenheim");
+        // Every declared resource plus dashboard/settings renders a sidebar entry.
+        assertThat(page.locator("pl-app-sidebar a").count()).isGreaterThanOrEqualTo(10);
     }
 
     @Test
     @Order(6)
-    void softNavFromCertificatesToDashboard() {
-        navigateToApp("/certificates");
-        waitForHydration();
-
-        page.locator("pl-app-sidebar a[href='/']").click();
-        waitForTitle("Dashboard");
-
-        assertThat(page.url()).endsWith("/");
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Dashboard");
-    }
-
-    @Test
-    @Order(7)
-    void sidebarPersistsAcrossSoftNav() {
-        navigateToApp("/");
-        waitForHydration();
-
-        assertThat(page.locator(".hh-brand").textContent()).isEqualTo("Hohenheim");
-
-        page.locator("pl-app-sidebar a[href='/sites']").click();
-        waitForTitle("Sites");
-
-        assertThat(page.locator(".hh-brand").textContent()).isEqualTo("Hohenheim");
-        assertThat(page.locator("pl-app-sidebar a").count()).isEqualTo(10);
-    }
-
-    @Test
-    @Order(8)
     void settingsPageLoads() {
-        navigateToApp("/settings");
+        navigateToApp("/admin/settings");
         waitForHydration();
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Settings");
+        assertThat(page.locator("h1").first().textContent()).contains("Settings");
         assertThat(page.content()).contains("Proxy");
         assertThat(page.content()).contains("Security");
     }
 
     @Test
-    @Order(9)
+    @Order(7)
     void sidebarIsLeftOfMainContent() {
         // The pl-app-shell grid places the sidebar to the left of the content
         // (grid-areas "sidebar content"), so they sit on the same row.
-        navigateToApp("/");
+        navigateToApp("/admin");
         waitForHydration();
 
         var sidebar = page.locator("pl-app-sidebar").boundingBox();
@@ -123,17 +103,17 @@ class NavigationTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(10)
+    @Order(8)
     void browserBackButtonWorks() {
-        navigateToApp("/");
+        navigateToApp("/admin/sites");
         waitForHydration();
 
-        page.locator("pl-app-sidebar a[href='/sites']").click();
-        waitForTitle("Sites");
+        page.locator("pl-app-sidebar a[href='/admin/certificates']").click();
+        waitForHeading("Certificates");
 
         page.goBack();
-        waitForTitle("Dashboard");
+        waitForHeading("Sites");
 
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Dashboard");
+        assertThat(page.locator("h1").first().textContent()).contains("Sites");
     }
 }

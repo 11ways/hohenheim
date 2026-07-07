@@ -1,199 +1,143 @@
 package be.elevenways.hohenheim.test;
-import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.*;
-import static org.assertj.core.api.Assertions.*;
 
+import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.URI;
-import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.*;
 
 /**
- * Tests domain editing: navigation, form fields, save, and advanced settings.
+ * Domain CRUD through the (nav-hidden) zenit-cms domain resource: relation
+ * pick to the site, header maps, uniqueness validation, and the site's
+ * Domains tab.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DomainEditTest extends HohenheimTestBase {
 
-    private static String siteId;
-    private static String domainId;
-
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
+    private static Integer siteId;
+    private static Integer domainId;
 
     private HttpResponse<String> postForm(String path, String body) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)
             .build();
-
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
+            .uri(URI.create("http://localhost:" + getServerPort() + path))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
             .header("X-Csrf-Token", csrfToken)
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .build();
-
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> getPage(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .GET()
-            .build();
-
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     @Test
     @Order(1)
-    void createSiteWithDomain() throws Exception {
-        var response = postForm("/sites/create",
-            "name=Domain+Test+Site&site_type=hohenheim%3Aproxy"
-            + "&forward_host=127.0.0.1&forward_port=9090&hostname=edit-test.example.com");
-        assertThat(response.statusCode()).isEqualTo(302);
+    void createSiteAndDomain() throws Exception {
+        var siteResponse = postForm("/admin/sites/new",
+            "name=Domain+Test+Site&site_type=hohenheim%3Aproxy&source=local"
+            + "&settings.forward_host=127.0.0.1&settings.forward_port=9090");
+        assertThat(siteResponse.statusCode()).isIn(200, 302, 303);
 
-        // Query the database directly for the IDs
-        var ds = HohenheimDatabase.datasource();
-        var siteModel = Models.get(SiteModel.class);
-        var domainModel = Models.get(SiteDomainModel.class);
-
-        Row site = siteModel.find().where(SiteModel.NAME.eq("Domain Test Site")).first();
+        Row site = Models.get(SiteModel.class).find()
+            .where(SiteModel.NAME.eq("Domain Test Site")).first();
         assertThat(site).isNotNull();
-        siteId = String.valueOf(site.get(SiteModel.ID));
+        siteId = site.get(SiteModel.ID);
 
-        List<Row> domains = domainModel.findBySiteId(site.get(SiteModel.ID));
-        assertThat(domains).isNotEmpty();
-        domainId = String.valueOf(domains.get(0).get(SiteDomainModel.ID));
+        var domainResponse = postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=exact");
+        assertThat(domainResponse.statusCode()).isIn(200, 302, 303);
+
+        Row domain = Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.HOSTNAME.eq("edit-test.example.com")).first();
+        assertThat(domain).isNotNull();
+        assertThat((Integer) domain.get(SiteDomainModel.SITE_ID)).isEqualTo(siteId);
+        domainId = domain.get(SiteDomainModel.ID);
     }
 
     @Test
     @Order(2)
-    void domainHostnameLinksToEditPage() {
-        navigateToApp("/sites");
+    void domainAppearsOnSiteDomainsTab() {
+        navigateToApp("/admin/sites/" + siteId + "/page/domains");
         waitForHydration();
 
-        page.locator(".hh-site-link").first().click();
-        page.waitForCondition(() -> {
-            var el = page.querySelector(".hh-header__title");
-            return el != null && "Domain Test Site".equals(el.textContent());
-        });
-
-        // The hostname should be a link now
-        var domainLink = page.locator("pl-table-cell a").first();
-        assertThat(domainLink.textContent()).isEqualTo("edit-test.example.com");
-
-        String href = domainLink.getAttribute("href");
-        assertThat(href).contains("/domains/");
+        assertThat(page.locator("body").textContent()).contains("edit-test.example.com");
+        assertThat(page.locator("a[href='/admin/domains/" + domainId + "']").count()).isEqualTo(1);
     }
 
     @Test
     @Order(3)
-    void domainEditPageLoads() {
-        navigateToApp("/sites");
+    void editFormRendersTheDomain() {
+        navigateToApp("/admin/domains/" + domainId);
         waitForHydration();
 
-        page.locator(".hh-site-link").first().click();
-        page.waitForCondition(() -> {
-            var el = page.querySelector(".hh-header__title");
-            return el != null && "Domain Test Site".equals(el.textContent());
-        });
-
-        // Click the domain link
-        page.locator("pl-table-cell a").first().click();
-        page.waitForCondition(() -> {
-            var el = page.querySelector(".hh-header__title");
-            return el != null && "Edit Domain".equals(el.textContent());
-        });
-
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Edit Domain");
-        assertThat(page.locator(".hh-header__subtitle").textContent()).contains("edit-test.example.com");
+        assertThat(page.content()).contains("edit-test.example.com");
+        assertThat(page.locator("form").count()).isGreaterThan(0);
     }
 
     @Test
     @Order(4)
-    void domainEditFormShowsAllFields() {
-        // Navigate directly via full page load
-        navigateToApp("/sites/" + siteId + "/domains/" + domainId);
-        waitForHydration();
+    void updateDomainSettingsIncludingHeaderMaps() throws Exception {
+        var response = postForm("/admin/domains/" + domainId,
+            "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=wildcard"
+            + "&force_ssl=true&hsts_enabled=true&http2_support=false"
+            + "&path=%2Fapp&strip_path=true&port=8443"
+            + "&custom_headers.0.key=X-Injected&custom_headers.0.value=yes"
+            + "&response_headers.0.key=X-Strip-Me&response_headers.0.value=");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        // Verify the page loaded
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Edit Domain");
+        Row domain = Models.get(SiteDomainModel.class).findById(domainId);
+        assertThat((String) domain.get(SiteDomainModel.MATCH_TYPE)).isEqualTo("wildcard");
+        assertThat((Boolean) domain.get(SiteDomainModel.FORCE_SSL)).isEqualTo(true);
+        assertThat((Boolean) domain.get(SiteDomainModel.HSTS_ENABLED)).isEqualTo(true);
+        assertThat((Boolean) domain.get(SiteDomainModel.HTTP2_SUPPORT)).isEqualTo(false);
+        assertThat((String) domain.get(SiteDomainModel.PATH)).isEqualTo("/app");
+        assertThat((Integer) domain.get(SiteDomainModel.PORT)).isEqualTo(8443);
 
-        // Basic fields present
-        assertThat(page.locator("pl-checkbox[name='force_ssl']").count()).isEqualTo(1);
-        assertThat(page.locator("pl-checkbox[name='hsts_enabled']").count()).isEqualTo(1);
-        assertThat(page.locator("pl-checkbox[name='hsts_subdomains']").count()).isEqualTo(1);
-        assertThat(page.locator("pl-select[name='match_type']").count()).isEqualTo(1);
-
-        // Advanced section exists
-        assertThat(page.locator("pl-collapsible").count()).isEqualTo(1);
-        assertThat(page.content()).contains("Advanced Settings");
-        assertThat(page.content()).contains("Path Prefix");
+        Map<String, String> headers = domain.get(SiteDomainModel.CUSTOM_HEADERS);
+        assertThat(headers).containsEntry("X-Injected", "yes");
+        Map<String, String> responseHeaders = domain.get(SiteDomainModel.RESPONSE_HEADERS);
+        assertThat(responseHeaders).containsEntry("X-Strip-Me", "");
     }
 
     @Test
     @Order(5)
-    void updateDomainSettings() throws Exception {
-        var response = postForm("/sites/" + siteId + "/domains/" + domainId,
-            "hostname=edit-test.example.com&match_type=exact&force_ssl=on&hsts_enabled=on&path=%2Fapi&strip_path=on");
+    void blankHostnameIsRejected() throws Exception {
+        postForm("/admin/domains/" + domainId,
+            "site_id=" + siteId + "&hostname=&match_type=exact");
 
-        assertThat(response.statusCode()).isEqualTo(302);
-
-        // Verify the updated domain by loading the edit page again
-        var editAfter = getPage("/sites/" + siteId + "/domains/" + domainId);
-        assertThat(editAfter.statusCode()).isEqualTo(200);
-        String afterBody = editAfter.body();
-        assertThat(afterBody).contains("edit-test.example.com");
-        assertThat(afterBody).contains("hsts_enabled");
+        Row domain = Models.get(SiteDomainModel.class).findById(domainId);
+        assertThat((String) domain.get(SiteDomainModel.HOSTNAME))
+            .as("a blank hostname must not overwrite the stored one")
+            .isEqualTo("edit-test.example.com");
     }
 
     @Test
     @Order(6)
-    void updateDomainRequiresHostname() throws Exception {
-        // Submit with empty hostname
-        var response = postForm("/sites/" + siteId + "/domains/" + domainId,
-            "hostname=&match_type=exact");
+    void duplicateHostnameOnSameSiteIsRejected() throws Exception {
+        postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=exact");
 
-        // Should re-render with error, not redirect
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("Hostname is required");
+        long count = Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.HOSTNAME.eq("edit-test.example.com"))
+            .count();
+        assertThat(count).isEqualTo(1);
     }
 
     @Test
     @Order(7)
-    void inlineAddDomainSurfacesDuplicateAndEmptyErrors() throws Exception {
-        // Duplicate hostname -> redirect carrying the error token, message on the edit page.
-        var response = postForm("/sites/" + siteId + "/domains",
-            "hostname=edit-test.example.com&match_type=exact");
-        assertThat(response.statusCode()).isEqualTo(302);
-        assertThat(response.headers().firstValue("Location").orElse(""))
-            .isEqualTo("/sites/" + siteId + "?domain_error=duplicate");
-
-        var editPage = getPage("/sites/" + siteId + "?domain_error=duplicate");
-        assertThat(editPage.body()).contains("already configured for this site");
-
-        // Empty hostname -> its own token and message.
-        response = postForm("/sites/" + siteId + "/domains", "hostname=&match_type=exact");
-        assertThat(response.statusCode()).isEqualTo(302);
-        assertThat(response.headers().firstValue("Location").orElse(""))
-            .isEqualTo("/sites/" + siteId + "?domain_error=required");
-
-        editPage = getPage("/sites/" + siteId + "?domain_error=required");
-        assertThat(editPage.body()).contains("hostname is required");
+    void deleteRemovesTheDomain() throws Exception {
+        var response = postForm("/admin/domains/" + domainId + "/delete", "");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+        assertThat(Models.get(SiteDomainModel.class).findById(domainId)).isNull();
     }
 }

@@ -48,6 +48,7 @@ public class SiteModel extends Model {
     public static final SchemaField SOURCE_SETTINGS = SCHEMA.addField(
         SchemaField.builder("source_settings")
             .subSchema(GitSourceSchema.SCHEMA)
+            .embedded()
             .build());
 
     public static final StringField DESCRIPTION = SCHEMA.addField(StringField.builder().name("description").build());

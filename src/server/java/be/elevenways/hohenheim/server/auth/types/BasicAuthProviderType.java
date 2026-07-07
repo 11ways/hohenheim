@@ -5,20 +5,18 @@ import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.PasswordHasher;
-import be.elevenways.zenit.common.orm.field.SchemaField;
-import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * HTTP Basic Auth provider: a repeatable username + password credential list. Passwords are hashed
+ * HTTP Basic Auth provider: a username -> password credential map. Passwords are hashed
  * with Argon2id at save time so no plaintext is ever stored; the gate verifies once per session.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
@@ -28,21 +26,18 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
 
     public static final Identifier ID = Identifier.of("hohenheim", "basic");
 
-    /** Config key holding the repeatable credential list. */
+    /** Config key holding the username -> password-hash map. */
     public static final String CREDENTIALS = "credentials";
-    public static final String USERNAME = "username";
-    public static final String PASSWORD = "password";           // submitted (plaintext) only
-    public static final String PASSWORD_HASH = "password_hash";  // persisted
 
-    public static final Schema CREDENTIAL_SCHEMA = new Schema();
-    static {
-        CREDENTIAL_SCHEMA.addField(StringField.builder().name(USERNAME).build());
-        CREDENTIAL_SCHEMA.addField(StringField.builder().name(PASSWORD).build());
-    }
+    // Legacy list-shape keys, still read by credentialHashes for pre-migration rows.
+    public static final String USERNAME = "username";
+    public static final String PASSWORD_HASH = "password_hash";
+
+    private static final String ARGON2_PREFIX = "$argon2";
 
     public static final Schema CONFIG_SCHEMA = new Schema();
     static {
-        CONFIG_SCHEMA.addField(SchemaField.builder(CREDENTIALS).subSchema(CREDENTIAL_SCHEMA).build());
+        CONFIG_SCHEMA.addField(StringMapField.builder(CREDENTIALS).build());
     }
 
     @Override
@@ -71,46 +66,52 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
         return new BasicAuthGate(context);
     }
 
+    /**
+     * Normalize the submitted username -> password map for storage. A plaintext value is
+     * hashed; a blank value carries the user's existing hash forward (edit semantics); a
+     * value that already IS an Argon2 hash round-trips untouched, so redisplayed hashes
+     * never get double-hashed.
+     */
     @Override
     public Map<String, Object> normalizeConfigForSave(Map<String, Object> submitted,
                                                       @Nullable Map<String, Object> existing) {
-        Map<String, String> existingHashes = existingHashes(existing);
-        List<Map<String, Object>> out = new ArrayList<>();
+        Map<String, String> existingHashes = credentialHashes(existing);
+        Map<String, String> out = new LinkedHashMap<>();
 
-        for (Map<String, Object> cred : credentialList(submitted)) {
-            String username = str(cred.get(USERNAME));
-            if (username == null || username.isBlank()) {
-                continue;
-            }
-
-            String password = str(cred.get(PASSWORD));
-            String hash;
-            if (password != null && !password.isEmpty()) {
-                hash = PasswordHasher.hash(password);
-            } else {
-                hash = existingHashes.get(username);  // edit left blank: carry the existing hash
-                if (hash == null) {
-                    continue;  // no new password and no prior hash: nothing to store
+        Object rawSubmitted = submitted != null ? submitted.get(CREDENTIALS) : null;
+        if (rawSubmitted instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                String username = str(entry.getKey());
+                if (username == null || username.isBlank()) {
+                    continue;
                 }
+                String password = str(entry.getValue());
+                String hash;
+                if (password == null || password.isEmpty()) {
+                    hash = existingHashes.get(username);  // edit left blank: carry the existing hash
+                    if (hash == null) {
+                        continue;  // no new password and no prior hash: nothing to store
+                    }
+                } else if (password.startsWith(ARGON2_PREFIX)) {
+                    hash = password;  // redisplayed stored hash resubmitted unchanged
+                } else {
+                    hash = PasswordHasher.hash(password);
+                }
+                out.put(username, hash);
             }
-
-            Map<String, Object> stored = new HashMap<>();
-            stored.put(USERNAME, username);
-            stored.put(PASSWORD_HASH, hash);
-            out.add(stored);
         }
 
-        Map<String, Object> result = new HashMap<>();
+        Map<String, Object> result = new LinkedHashMap<>();
         result.put(CREDENTIALS, out);
         return result;
     }
 
     /**
-     * Verify a {@code Authorization: Basic} header against the stored credential list.
+     * Verify a {@code Authorization: Basic} header against the stored credential map.
      *
      * @return the matching username, or null if the header is absent/malformed or no credential matches
      */
-    public static @Nullable String verify(@Nullable String authHeader, List<Map<String, Object>> credentials) {
+    public static @Nullable String verify(@Nullable String authHeader, Map<String, String> credentials) {
         if (authHeader == null || !authHeader.startsWith("Basic ")) {
             return null;
         }
@@ -129,42 +130,40 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
             return null;
         }
 
-        for (Map<String, Object> cred : credentials) {
-            if (user.equals(str(cred.get(USERNAME)))) {
-                String hash = str(cred.get(PASSWORD_HASH));
-                if (hash != null && PasswordHasher.verify(pass, hash)) {
-                    return user;
-                }
-            }
+        String hash = credentials.get(user);
+        if (hash != null && PasswordHasher.verify(pass, hash)) {
+            return user;
         }
         return null;
     }
 
-    static Map<String, String> existingHashes(@Nullable Map<String, Object> existing) {
-        Map<String, String> map = new HashMap<>();
-        for (Map<String, Object> cred : credentialList(existing)) {
-            String username = str(cred.get(USERNAME));
-            String hash = str(cred.get(PASSWORD_HASH));
-            if (username != null && hash != null) {
-                map.put(username, hash);
-            }
-        }
-        return map;
-    }
-
-    @SuppressWarnings("unchecked")
-    public static List<Map<String, Object>> credentialList(@Nullable Map<String, Object> config) {
+    /**
+     * Stored username -> hash map from a provider config. Reads the canonical map shape
+     * and the legacy pre-migration list-of-{username,password_hash} shape.
+     */
+    public static Map<String, String> credentialHashes(@Nullable Map<String, Object> config) {
+        Map<String, String> result = new LinkedHashMap<>();
         if (config == null) {
-            return List.of();
+            return result;
         }
         Object raw = config.get(CREDENTIALS);
-        if (!(raw instanceof List<?> list)) {
-            return List.of();
-        }
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Object item : list) {
-            if (item instanceof Map<?, ?> map) {
-                result.add((Map<String, Object>) map);
+        if (raw instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                String username = str(entry.getKey());
+                String hash = str(entry.getValue());
+                if (username != null && hash != null) {
+                    result.put(username, hash);
+                }
+            }
+        } else if (raw instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> cred) {
+                    String username = str(cred.get(USERNAME));
+                    String hash = str(cred.get(PASSWORD_HASH));
+                    if (username != null && hash != null) {
+                        result.put(username, hash);
+                    }
+                }
             }
         }
         return result;

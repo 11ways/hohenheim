@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
@@ -79,6 +80,7 @@ public class UpdateSystemUsers extends ScheduledTask {
             }
         }
 
+        SystemUserOptions.refresh();
         Blast.log("TASK: UpdateSystemUsers reconciled", parsed.size(), "users");
     }
 

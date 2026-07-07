@@ -4,10 +4,11 @@ build/
 bin/
 
 # Generated artifacts
-public/hohenheim.js
-public/hohenheim.js.map
+public/cms.js
+public/cms.js.map
 public/hohenheim.css
 public/plumage.css
+public/cms.css
 
 # Database
 *.db
@@ -21,6 +22,10 @@ settings/local.dry
 # storage.data_path to somewhere outside the repo, add that path to
 # .git/info/exclude.
 /data/
+
+# Local agent/dev-tool state
+.playwright-mcp/
+.swarm/
 
 # IDE
 .classpath

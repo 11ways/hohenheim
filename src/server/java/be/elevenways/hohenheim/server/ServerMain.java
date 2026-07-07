@@ -2,10 +2,11 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
-import be.elevenways.hohenheim.server.stats.StatsCollector;
+import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.auth.server.AuthRegistry;
 import be.elevenways.zenit.auth.server.AuthRequirement;
 import be.elevenways.zenit.auth.server.ZenitAuth;
@@ -24,7 +25,6 @@ import be.elevenways.zenit.server.task.TaskService;
 public class ServerMain {
 
     private static ProxyServer proxyServer;
-    private static StatsCollector statsCollector;
     private static TaskService taskService;
 
     public static void main(String[] args) {
@@ -45,6 +45,8 @@ public class ServerMain {
         HohenheimSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
 
         HohenheimEndpoints.init();
+        // Force-load the zenit-cms panel routes (all /{panel}/... endpoints).
+        Object cmsRoutes = ResourcePageEndpoints.LIST;
         HohenheimDatabase.init();   // also registers the SQLite datasource as the framework default
 
         // Install zenit-auth (session store, CSRF, middleware, /login + /setup + /account + /admin).
@@ -55,13 +57,12 @@ public class ServerMain {
 
         // main() does the HTTP-server side of startup; init() is idempotent.
         ServerZenitRuntime.main(args);
-        Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
+        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
 
-        // Register handlers after the runtime is ready
+        // Register handlers + the admin panel after the runtime is ready
+        // (the panel's resources resolve model singletons from the MODELS stage).
         HohenheimHandlers.init();
-
-        statsCollector = new StatsCollector();
-        statsCollector.start();
+        new HohenheimPanel();
 
         proxyServer = new ProxyServer();
         proxyServer.start();
@@ -81,6 +82,7 @@ public class ServerMain {
     public static void installAuthBaselines() {
         AuthRegistry.registerPublicPrefix("/api/health");
         AuthRegistry.baseline("/", AuthRequirement.requiresLogin());
+        AuthRegistry.registerPermissions("hohenheim", HohenheimPanel.ACCESS.value());
     }
 
     // Register the Proteus realm as an SSO option when configured; password login is always available.
@@ -104,10 +106,6 @@ public class ServerMain {
 
     public static ProxyServer getProxyServer() {
         return proxyServer;
-    }
-
-    public static StatsCollector getStatsCollector() {
-        return statsCollector;
     }
 
     public static TaskService getTaskService() {

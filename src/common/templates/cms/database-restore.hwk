@@ -1,0 +1,80 @@
+{#- Restore tab on a managed database: connection info plus the dump-upload
+    form posting to the host-declared restore endpoint. -#}
+{% declare title: String %}
+{% declare name: String %}
+{% declare engine: String %}
+{% declare status: String %}
+{% declare dbUser: String %}
+{% declare dbPassword: String %}
+{% declare dbName: String %}
+{% declare restoreUrl: String %}
+{% declare error: String = "" %}
+{% declare restored: Boolean = false %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-form-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ title }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if restored %}
+    <pl-alert variant="success">Backup restored into '{{ dbName }}'.</pl-alert>
+    {% /if %}
+    {% if error != "" %}
+    <pl-alert variant="destructive">{{ error }}</pl-alert>
+    {% /if %}
+
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>Connection</pl-card-title>
+            <pl-card-description>Status: {{ status }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <pl-table>
+                <pl-table-body>
+                    <pl-table-row>
+                        <pl-table-cell>Engine</pl-table-cell>
+                        <pl-table-cell>{{ engine }}</pl-table-cell>
+                    </pl-table-row>
+                    <pl-table-row>
+                        <pl-table-cell>Database</pl-table-cell>
+                        <pl-table-cell>{{ dbName }}</pl-table-cell>
+                    </pl-table-row>
+                    <pl-table-row>
+                        <pl-table-cell>User</pl-table-cell>
+                        <pl-table-cell>{{ dbUser }}</pl-table-cell>
+                    </pl-table-row>
+                    <pl-table-row>
+                        <pl-table-cell>Password</pl-table-cell>
+                        <pl-table-cell>{{ dbPassword }}</pl-table-cell>
+                    </pl-table-row>
+                </pl-table-body>
+            </pl-table>
+        </pl-card-content>
+    </pl-card>
+
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>Restore from dump</pl-card-title>
+            <pl-card-description>Uploads a dump file and loads it into the running database.</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <form method="POST" action={% restoreUrl %} enctype="multipart/form-data">
+                {% csrf() %}
+                <pl-field>
+                    <pl-label target="dump">Dump file</pl-label>
+                    <input id="dump" type="file" name="dump" required>
+                </pl-field>
+                <div class="cms-form-actions">
+                    <pl-button variant={% "destructive" %} type={% "submit" %}>Restore</pl-button>
+                </div>
+            </form>
+        </pl-card-content>
+    </pl-card>
+</section>
+{% /block %}

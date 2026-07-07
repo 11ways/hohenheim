@@ -1,0 +1,197 @@
+package be.elevenways.hohenheim.server.cms;
+
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.AuditLogModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.server.Secrets;
+import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.protoblast.common.http.Uri;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
+import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.edit.FieldAccess;
+import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.OptionSource;
+import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.ui.Icon;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Docker-provisioned managed databases. Create provisions the container in
+ * the background; records are immutable afterwards (all fields read-only on
+ * edit) with backup/restore/destroy as actions.
+ */
+public final class DatabaseResource extends HohenheimRowResource {
+
+    private static final List<FieldOption<String>> ENGINE_OPTIONS = List.of(
+        FieldOption.of("postgres", "PostgreSQL"),
+        FieldOption.of("mysql", "MySQL"),
+        FieldOption.of("redis", "Redis"),
+        FieldOption.of("mongo", "MongoDB"));
+
+    private final DatabaseService databaseService = new DatabaseService();
+    private final ServerService serverService = new ServerService();
+
+    private final FormSpec formSpec = FormSpec.builder()
+        .add(DatabaseModel.NAME)
+        .add(Select.of(DatabaseModel.ENGINE).options(OptionSource.of(ENGINE_OPTIONS)).build())
+        .add(DatabaseModel.DB_NAME)
+        .add(DatabaseModel.DB_USER)
+        .add(DatabaseModel.DB_PASSWORD)
+        .add(DatabaseModel.IMAGE)
+        .add(DatabaseModel.EPHEMERAL)
+        .add(Select.of(DatabaseModel.SERVER_NAME)
+            .options(OptionSource.dynamic(ctx -> serverOptions()))
+            .build())
+        .add(DatabaseModel.STATUS)
+        .build();
+
+    private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
+        .column(ColumnSpec.fromField(DatabaseModel.NAME).build())
+        .column(ColumnSpec.fromField(DatabaseModel.ENGINE).build())
+        .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).build())
+        .column(ColumnSpec.fromField(DatabaseModel.SERVER_NAME).build())
+        .column(ColumnSpec.fromField(DatabaseModel.EPHEMERAL).build())
+        .column(ColumnSpec.fromField(DatabaseModel.STATUS).build())
+        .build();
+
+    private @NonNull List<FieldOption<String>> serverOptions() {
+        this.serverService.ensureLocal();
+        List<FieldOption<String>> options = new ArrayList<>();
+        for (String name : this.serverService.names()) {
+            options.add(FieldOption.of(name, name));
+        }
+        return options;
+    }
+
+    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "database"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.database.plural"); }
+    @Override public @NonNull String slug() { return "databases"; }
+    @Override public @NonNull Model model() { return Models.get(DatabaseModel.class); }
+    @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
+    @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
+    @Override public int navOrder() { return 10; }
+    @Override public @NonNull Icon icon() { return Icon.of("database"); }
+
+    @Override protected @NonNull String auditResourceType() { return AuditLogModel.RESOURCE_DATABASE; }
+    @Override protected boolean reloadsProxy() { return false; }
+
+    @Override
+    protected @Nullable String auditName(@NonNull Row row) {
+        return row.get(DatabaseModel.NAME);
+    }
+
+    /** Records are provisioned containers: no field is editable after create. */
+    @Override
+    public @NonNull List<ResourceFieldBinding> fieldBindings() {
+        // STATUS is service-owned even on create.
+        return List.of(ResourceFieldBinding.of(DatabaseModel.STATUS.getName(), FieldAccess.alwaysReadonly()));
+    }
+
+    @Override
+    public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
+                                      @NonNull AccessContext accessContext) {
+        String name = trimmed(coerced.get("name"));
+        if (!name.matches("[a-z0-9][a-z0-9-]*")) {
+            throw new IllegalStateException("Name must be lowercase letters, digits, and dashes");
+        }
+        String engineToken = trimmed(coerced.get("engine")).toLowerCase();
+        ManagedDatabase.Engine engine;
+        try {
+            engine = ManagedDatabase.Engine.valueOf(engineToken.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("Unknown engine: " + engineToken);
+        }
+        String database = trimmed(coerced.get("db_name"));
+        if (database.isEmpty()) {
+            throw new IllegalStateException("Database name is required");
+        }
+        String user = trimmed(coerced.get("db_user"));
+        if (user.isEmpty()) {
+            user = "appuser";
+        }
+        String password = trimmed(coerced.get("db_password"));
+        if (password.isEmpty()) {
+            password = Secrets.generatePassword();
+        }
+        String image = trimmed(coerced.get("image"));
+        boolean ephemeral = Boolean.TRUE.equals(coerced.get("ephemeral"));
+        String server = trimmed(coerced.get("server_name"));
+        if (server.isEmpty()) {
+            server = ServerService.LOCAL;
+        }
+
+        // The service persists the record itself (status=provisioning) and
+        // provisions the container in the background.
+        this.databaseService.createAsync(name, engine, image.isEmpty() ? null : image,
+            user, password, database, ephemeral, server);
+
+        CmsSupport.audit(accessContext, AuditLogModel.ACTION_CREATED,
+            AuditLogModel.RESOURCE_DATABASE, name, name);
+
+        Row created = this.model().find().where(DatabaseModel.NAME.eq(name)).first();
+        if (created == null) {
+            throw new IllegalStateException("Provisioning did not create a record for '" + name + "'");
+        }
+        return rowKey(created);
+    }
+
+    @Override
+    public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
+                          @NonNull AccessContext accessContext) {
+        throw new IllegalStateException("Managed databases cannot be edited; destroy and recreate instead");
+    }
+
+    @Override
+    public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
+        String name = existing.get(DatabaseModel.NAME);
+        try {
+            this.databaseService.destroy(name, true);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Destroy of '" + name + "' failed", e);
+        }
+        CmsSupport.audit(accessContext, AuditLogModel.ACTION_DELETED,
+            AuditLogModel.RESOURCE_DATABASE, name, name);
+    }
+
+    @Override
+    public @NonNull List<RowAction<Row>> rowActions() {
+        List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
+        actions.add(RowAction.Url.<Row>builder(Identifier.of("hohenheim", "backup_database"))
+            .label("hohenheim.database.backup")
+            .icon(Icon.of("download"))
+            .url(row -> new Uri(HohenheimEndpoints.DATABASES_BACKUP
+                .with(HohenheimEndpoints.DATABASE_NAME, row.get(DatabaseModel.NAME)).toUrl()))
+            .build());
+        return actions;
+    }
+
+    @Override
+    public @NonNull List<RecordScopedPage<Row>> subpages() {
+        return List.of(new DatabaseRestorePage());
+    }
+
+    private static @NonNull String trimmed(@Nullable Object value) {
+        return value != null ? String.valueOf(value).trim() : "";
+    }
+}

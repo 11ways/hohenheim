@@ -4,12 +4,13 @@ import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.routing.EndpointRoute;
-import be.elevenways.zenit.common.routing.PageEndpoint;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.WebSocketEndpoint;
 
 /**
- * HTTP endpoint definitions for the Hohenheim admin interface.
+ * Host-declared endpoints that complement the zenit-cms panel routes: file
+ * downloads/uploads, process control, the terminal WebSocket, the settings
+ * write path, and the health check. Regular admin CRUD is owned by zenit-cms.
  */
 public class HohenheimEndpoints {
 
@@ -19,102 +20,9 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
-    public static final ParameterDefinition<Integer> DOMAIN_ID = ParameterDefinition.builder(Integer.class)
-        .name("domainId")
-        .stringResolver(Integer::parseInt)
-        .build();
-
-    // --- Dashboard ---
-    public static final PageEndpoint DASHBOARD = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "dashboard"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).build())
-        .build();
-
-    // --- Sites ---
-    public static final PageEndpoint SITES_LIST = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "sites_list"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("sites").build())
-        .build();
-
-    public static final PageEndpoint SITES_CREATE_FORM = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "sites_create_form"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("sites").addDelimiter().addStatic("create").build())
-        .build();
-
-    // POST returns either RenderTemplateResult or RedirectResult (incompatible generic types)
-    public static final Endpoint<Object> SITES_CREATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_create"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("sites").addDelimiter().addStatic("create").build())
-        .build();
-
-    public static final PageEndpoint SITES_EDIT = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "sites_edit"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("sites").addDelimiter().addParameter(SITE_ID).build())
-        .build();
-
-    public static final Endpoint<Object> SITES_UPDATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_update"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("sites").addDelimiter().addParameter(SITE_ID).build())
-        .build();
-
-    public static final Endpoint<Object> SITES_TOGGLE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_toggle"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("toggle").build())
-        .build();
-
-    public static final Endpoint<Object> SITES_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_delete"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("sites").addDelimiter().addParameter(SITE_ID).addDelimiter().addStatic("delete").build())
-        .build();
-
-    // --- Site Domains ---
-    public static final Endpoint<Object> SITES_ADD_DOMAIN = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_add_domain"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("domains").build())
-        .build();
-
-    public static final Endpoint<Object> SITES_EDIT_DOMAIN = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_edit_domain"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("domains").addDelimiter().addParameter(DOMAIN_ID)
-            .build())
-        .build();
-
-    public static final Endpoint<Object> SITES_UPDATE_DOMAIN = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_update_domain"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("domains").addDelimiter().addParameter(DOMAIN_ID)
-            .build())
-        .build();
-
-    public static final Endpoint<Object> SITES_DELETE_DOMAIN = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_delete_domain"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("domains").addDelimiter().addParameter(DOMAIN_ID)
-            .addDelimiter().addStatic("delete").build())
-        .build();
-
-    // --- Certificates ---
-    public static final PageEndpoint CERTIFICATES_LIST = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "certificates_list"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("certificates").build())
-        .build();
-
-    public static final PageEndpoint CERTIFICATES_UPLOAD_FORM = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "certificates_upload_form"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("certificates").addDelimiter().addStatic("upload").build())
-        .build();
-
-    public static final Endpoint<Object> CERTIFICATES_UPLOAD = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "certificates_upload"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("certificates").addDelimiter().addStatic("upload").build())
+    public static final ParameterDefinition<Long> PID = ParameterDefinition.builder(Long.class)
+        .name("pid")
+        .stringResolver(Long::parseLong)
         .build();
 
     public static final ParameterDefinition<Integer> CERT_ID = ParameterDefinition.builder(Integer.class)
@@ -122,149 +30,38 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
-    public static final Endpoint<Object> CERTIFICATES_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "certificates_delete"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("certificates").addDelimiter().addParameter(CERT_ID)
-            .addDelimiter().addStatic("delete").build())
-        .build();
-
-    // --- Settings ---
-    public static final PageEndpoint SETTINGS = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "settings"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("settings").build())
-        .build();
-
-    public static final Endpoint<Object> SETTINGS_UPDATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "settings_update"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("settings").build())
-        .build();
-
-    // --- Audit Log ---
-    public static final PageEndpoint AUDIT_LOG = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "audit_log"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("audit").build())
-        .build();
-
-    // Auth (/login, /setup, /logout, /account, /admin) is owned by zenit-auth.
-
-    // --- Access Lists ---
-    public static final ParameterDefinition<Integer> ACCESS_LIST_ID = ParameterDefinition.builder(Integer.class)
-        .name("accessListId")
-        .stringResolver(Integer::parseInt)
-        .build();
-
-    public static final PageEndpoint ACCESS_LISTS = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "access_lists"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("access-lists").build())
-        .build();
-
-    public static final PageEndpoint ACCESS_LISTS_CREATE_FORM = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "access_lists_create_form"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("access-lists").addDelimiter().addStatic("create").build())
-        .build();
-
-    public static final Endpoint<Object> ACCESS_LISTS_CREATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "access_lists_create"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("access-lists").addDelimiter().addStatic("create").build())
-        .build();
-
-    public static final Endpoint<Object> ACCESS_LISTS_EDIT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "access_lists_edit"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("access-lists").addDelimiter().addParameter(ACCESS_LIST_ID).build())
-        .build();
-
-    public static final Endpoint<Object> ACCESS_LISTS_UPDATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "access_lists_update"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("access-lists").addDelimiter().addParameter(ACCESS_LIST_ID).build())
-        .build();
-
-    public static final Endpoint<Object> ACCESS_LISTS_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "access_lists_delete"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("access-lists").addDelimiter().addParameter(ACCESS_LIST_ID)
-            .addDelimiter().addStatic("delete").build())
-        .build();
-
-    // --- Auth Providers ---
-    public static final ParameterDefinition<Integer> AUTH_PROVIDER_ID = ParameterDefinition.builder(Integer.class)
-        .name("authProviderId")
-        .stringResolver(Integer::parseInt)
-        .build();
-
-    public static final PageEndpoint AUTH_PROVIDERS = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "auth_providers"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("auth-providers").build())
-        .build();
-
-    public static final PageEndpoint AUTH_PROVIDERS_CREATE_FORM = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "auth_providers_create_form"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("auth-providers").addDelimiter().addStatic("create").build())
-        .build();
-
-    public static final Endpoint<Object> AUTH_PROVIDERS_CREATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "auth_providers_create"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("auth-providers").addDelimiter().addStatic("create").build())
-        .build();
-
-    public static final Endpoint<Object> AUTH_PROVIDERS_EDIT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "auth_providers_edit"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("auth-providers").addDelimiter().addParameter(AUTH_PROVIDER_ID).build())
-        .build();
-
-    public static final Endpoint<Object> AUTH_PROVIDERS_UPDATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "auth_providers_update"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("auth-providers").addDelimiter().addParameter(AUTH_PROVIDER_ID).build())
-        .build();
-
-    public static final Endpoint<Object> AUTH_PROVIDERS_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "auth_providers_delete"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("auth-providers").addDelimiter().addParameter(AUTH_PROVIDER_ID)
-            .addDelimiter().addStatic("delete").build())
-        .build();
-
-    // --- Databases ---
     public static final ParameterDefinition<String> DATABASE_NAME = ParameterDefinition.builder(String.class)
         .name("databaseName")
         .stringResolver(value -> value)
         .build();
 
-    public static final PageEndpoint DATABASES = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "databases"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("databases").build())
-        .build();
-
-    public static final PageEndpoint DATABASES_CREATE_FORM = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "databases_create_form"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("databases").addDelimiter().addStatic("create").build())
-        .build();
-
-    // Endpoint<Object> (not PageEndpoint) so the handler can render or redirect (not-found).
-    public static final Endpoint<Object> DATABASES_DETAIL = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "databases_detail"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME).build())
-        .build();
-
-    public static final Endpoint<Object> DATABASES_CREATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "databases_create"))
+    // --- Settings write path (static route: wins precedence over the panel's
+    // dynamic POST /{panel}/{resource} singleton-submit route) ---
+    public static final Endpoint<Object> SETTINGS_UPDATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "settings_update"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("databases").addDelimiter().addStatic("create").build())
+            .addStatic("admin").addDelimiter().addStatic("settings").build())
         .build();
 
+    // --- Let's Encrypt request (POST for the CMS certificate-request page) ---
+    public static final Endpoint<Object> CERTIFICATES_REQUEST = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "certificates_request"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("admin").addDelimiter().addStatic("certificates-request").build())
+        .build();
+
+    // --- Certificate PEM bundle download ---
+    public static final Endpoint<Object> CERTIFICATES_DOWNLOAD = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "certificates_download"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("certificates").addDelimiter().addParameter(CERT_ID)
+            .addDelimiter().addStatic("download").build())
+        .build();
+
+    // --- Managed database dump download / restore upload ---
     public static final Endpoint<Object> DATABASES_BACKUP = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "databases_backup"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME)
             .addDelimiter().addStatic("backup").build())
         .build();
@@ -276,112 +73,7 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("restore").build())
         .build();
 
-    public static final Endpoint<Object> DATABASES_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "databases_delete"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME)
-            .addDelimiter().addStatic("delete").build())
-        .build();
-
-    // --- Servers (multi-server inventory) ---
-    public static final ParameterDefinition<String> SERVER_NAME = ParameterDefinition.builder(String.class)
-        .name("serverName")
-        .stringResolver(value -> value)
-        .build();
-
-    public static final PageEndpoint SERVERS = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "servers"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("servers").build())
-        .build();
-
-    public static final PageEndpoint SERVERS_CREATE_FORM = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "servers_create_form"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("servers").addDelimiter().addStatic("create").build())
-        .build();
-
-    public static final Endpoint<Object> SERVERS_CREATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "servers_create"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("servers").addDelimiter().addStatic("create").build())
-        .build();
-
-    public static final Endpoint<Object> SERVERS_EDIT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "servers_edit"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("servers").addDelimiter().addParameter(SERVER_NAME)
-            .addDelimiter().addStatic("edit").build())
-        .build();
-
-    public static final Endpoint<Object> SERVERS_UPDATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "servers_update"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("servers").addDelimiter().addParameter(SERVER_NAME).build())
-        .build();
-
-    public static final Endpoint<Object> SERVERS_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "servers_delete"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("servers").addDelimiter().addParameter(SERVER_NAME)
-            .addDelimiter().addStatic("delete").build())
-        .build();
-
-    // --- Notifications ---
-    public static final ParameterDefinition<String> NOTIFICATION_NAME = ParameterDefinition.builder(String.class)
-        .name("notificationName")
-        .stringResolver(value -> value)
-        .build();
-
-    public static final PageEndpoint NOTIFICATIONS = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "notifications"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("notifications").build())
-        .build();
-
-    public static final PageEndpoint NOTIFICATIONS_CREATE_FORM = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "notifications_create_form"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("notifications").addDelimiter().addStatic("create").build())
-        .build();
-
-    public static final Endpoint<Object> NOTIFICATIONS_CREATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "notifications_create"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("notifications").addDelimiter().addStatic("create").build())
-        .build();
-
-    public static final Endpoint<Object> NOTIFICATIONS_EDIT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "notifications_edit"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("notifications").addDelimiter().addParameter(NOTIFICATION_NAME)
-            .addDelimiter().addStatic("edit").build())
-        .build();
-
-    public static final Endpoint<Object> NOTIFICATIONS_UPDATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "notifications_update"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("notifications").addDelimiter().addParameter(NOTIFICATION_NAME).build())
-        .build();
-
-    public static final Endpoint<Object> NOTIFICATIONS_TEST = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "notifications_test"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("notifications").addDelimiter().addParameter(NOTIFICATION_NAME)
-            .addDelimiter().addStatic("test").build())
-        .build();
-
-    public static final Endpoint<Object> NOTIFICATIONS_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "notifications_delete"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("notifications").addDelimiter().addParameter(NOTIFICATION_NAME)
-            .addDelimiter().addStatic("delete").build())
-        .build();
-
-    // --- Process control ---
-    public static final ParameterDefinition<Long> PID = ParameterDefinition.builder(Long.class)
-        .name("pid")
-        .stringResolver(Long::parseLong)
-        .build();
-
+    // --- Process control (forms on the site Processes tab) ---
     public static final Endpoint<Object> SITES_PROCESSES = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "sites_processes"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
@@ -412,35 +104,10 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("isolate").build())
         .build();
 
-    // --- Stored process logs ---
-    public static final ParameterDefinition<Integer> PROCLOG_ID = ParameterDefinition.builder(Integer.class)
-        .name("proclogId")
-        .stringResolver(Integer::parseInt)
-        .build();
-
-    public static final Endpoint<Object> SITES_PROCLOGS = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_proclogs"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("proclogs").build())
-        .build();
-
-    public static final Endpoint<Object> SITES_PROCLOG_DETAIL = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_proclog_detail"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("proclogs").addDelimiter().addParameter(PROCLOG_ID).build())
-        .build();
-
-    // --- Certificate Let's Encrypt request ---
-    public static final PageEndpoint CERTIFICATES_REQUEST_FORM = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "certificates_request_form"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).addStatic("certificates").addDelimiter().addStatic("request").build())
-        .build();
-
-    public static final Endpoint<Object> CERTIFICATES_REQUEST = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "certificates_request"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST).addStatic("certificates").addDelimiter().addStatic("request").build())
+    // --- Root: the admin panel IS the app, so / lands on it ---
+    public static final Endpoint<Object> ROOT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "root"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).build())
         .build();
 
     // --- Health check ---
@@ -450,30 +117,7 @@ public class HohenheimEndpoints {
             .addStatic("api").addDelimiter().addStatic("health").build())
         .build();
 
-    // --- Site clone ---
-    public static final Endpoint<Object> SITES_CLONE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_clone"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("clone").build())
-        .build();
-
-    // --- Certificate download ---
-    public static final Endpoint<Object> CERTIFICATES_DOWNLOAD = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "certificates_download"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("certificates").addDelimiter().addParameter(CERT_ID)
-            .addDelimiter().addStatic("download").build())
-        .build();
-
-    // --- WebSocket endpoints ---
-    public static final WebSocketEndpoint DASHBOARD_LIVE = WebSocketEndpoint.builder()
-        .identifier(Identifier.of("hohenheim", "dashboard_live"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("ws").addDelimiter().addStatic("dashboard").build())
-        .handler(session -> null) // Placeholder: set in HohenheimHandlers.init()
-        .build();
-
+    // --- Interactive process terminal ---
     public static final WebSocketEndpoint PROCESS_TERMINAL = WebSocketEndpoint.builder()
         .identifier(Identifier.of("hohenheim", "process_terminal"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
@@ -481,13 +125,6 @@ public class HohenheimEndpoints {
             .addDelimiter().addParameter(SITE_ID)
             .addDelimiter().addParameter(PID).build())
         .handler(session -> null) // Placeholder: set in HohenheimHandlers.init()
-        .build();
-
-    // --- Test-only endpoint (throws to verify error handling) ---
-    public static final PageEndpoint TEST_ERROR = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheim", "test_error"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("_test").addDelimiter().addStatic("error").build())
         .build();
 
     public static void init() {

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
 /**
@@ -17,23 +18,34 @@ public final class SystemUsers {
     private SystemUsers() {}
 
     /**
-     * @param systemUserIdObj the site's {@code system_user_id} setting (an Integer, or null/0 when unset)
+     * @param userKeyObj the site's {@code user} setting (a {@code hohenheim:<username>} registry
+     *                   key; a legacy Integer id is still honored), or null when unset
      * @return the numeric uid, or 0 when no user is configured (run as the current user)
      * @throws IllegalStateException when a user IS configured but cannot be resolved -- fail closed,
      *         so a dangling reference can't silently escalate an intended-sandboxed process back to
      *         the privileged Hohenheim user (callers isolate this per-site)
      */
-    public static int resolveUid(Object systemUserIdObj) {
-        if (!(systemUserIdObj instanceof Integer id) || id <= 0) {
+    public static int resolveUid(Object userKeyObj) {
+        Row row;
+        if (userKeyObj instanceof Integer id) {
+            if (id <= 0) {
+                return 0;
+            }
+            row = Models.get(SystemUserModel.class).findById(id);
+        } else if (userKeyObj instanceof String key && !key.isBlank()) {
+            String username = SystemUserOptions.usernameFromKey(key);
+            row = Models.get(SystemUserModel.class).find()
+                .where(SystemUserModel.NAME.eq(username))
+                .first();
+        } else {
             return 0;
         }
-        Row row = Models.get(SystemUserModel.class).findById(id);
         if (row == null) {
-            throw new IllegalStateException("Configured system_user_id " + id + " does not exist");
+            throw new IllegalStateException("Configured system user '" + userKeyObj + "' does not exist");
         }
         Integer uid = row.get(SystemUserModel.UID);
         if (uid == null) {
-            throw new IllegalStateException("System user " + id + " has no uid");
+            throw new IllegalStateException("System user '" + userKeyObj + "' has no uid");
         }
         return uid;
     }

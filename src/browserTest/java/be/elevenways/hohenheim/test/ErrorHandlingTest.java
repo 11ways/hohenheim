@@ -1,6 +1,11 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.protoblast.common.http.HttpMethod;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.common.routing.Endpoint;
+import be.elevenways.zenit.common.routing.EndpointRoute;
+import be.elevenways.zenit.common.routing.PageEndpoint;
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
@@ -10,11 +15,26 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 /**
- * Tests that server-side exceptions produce visible, useful errors
- * instead of silent failures or vague messages.
+ * Tests that server-side exceptions produce visible, useful errors instead of
+ * silent failures. The throwing endpoint is registered by THIS test class --
+ * production no longer ships a /_test/error route.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ErrorHandlingTest extends HohenheimTestBase {
+
+    /** Test-owned deliberately-throwing endpoint; self-registers at class load. */
+    static final PageEndpoint TEST_ERROR = Endpoint.pageBuilder()
+        .identifier(Identifier.of("hohenheimtest", "test_error"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("_test").addDelimiter().addStatic("error").build())
+        .build();
+
+    @BeforeAll
+    static void registerErrorEndpoint() {
+        TEST_ERROR.setHandler(conduit -> {
+            throw new RuntimeException("Deliberate test error");
+        });
+    }
 
     private String baseUrl() {
         return "http://localhost:" + getServerPort();
@@ -57,7 +77,7 @@ class ErrorHandlingTest extends HohenheimTestBase {
     @Test
     @Order(2)
     void softNavErrorShowsActualErrorMessage() {
-        navigateToApp("/");
+        navigateToApp("/admin");
         waitForHydration();
 
         softNavToError();
@@ -74,14 +94,14 @@ class ErrorHandlingTest extends HohenheimTestBase {
     @Test
     @Order(3)
     void sidebarSurvivesErrorDuringSoftNav() {
-        navigateToApp("/");
+        navigateToApp("/admin");
         waitForHydration();
 
         softNavToError();
 
         // Sidebar should still be intact -- the layout wasn't destroyed
         assertThat(page.locator("pl-app-sidebar").count()).isEqualTo(1);
-        assertThat(page.locator(".hh-brand").textContent()).isEqualTo("Hohenheim");
+        assertThat(page.locator(".cms-brand").textContent()).contains("Hohenheim");
 
         getCollectedErrors().clear();
     }
@@ -89,16 +109,16 @@ class ErrorHandlingTest extends HohenheimTestBase {
     @Test
     @Order(4)
     void canRecoverFromErrorViaFullNavigation() {
-        navigateToApp("/");
+        navigateToApp("/admin");
         waitForHydration();
 
         softNavToError();
         getCollectedErrors().clear();
 
         // After an error, a full page navigation should still work
-        navigateToApp("/sites");
+        navigateToApp("/admin/sites");
         waitForHydration();
 
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Sites");
+        assertThat(page.locator("h1").first().textContent()).contains("Sites");
     }
 }

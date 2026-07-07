@@ -1,0 +1,144 @@
+{#- Processes tab on a managed site: the live process table with
+    start/kill/isolate forms, the interactive terminal, and the stored
+    process-log history. -#}
+{% declare title: String %}
+{% declare siteId: Integer %}
+{% declare siteName: String %}
+{% declare isManaged: Boolean = false %}
+{% declare processes: List %}
+{% declare proclogs: List %}
+{% declare selectedLogHtml: String = "" %}
+{% declare selectedLogTitle: String = "" %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ siteName }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if isManaged %}
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>Processes</pl-card-title>
+            <pl-card-description>Running child processes for this site.</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            {% if processes %}
+            <pl-table>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>PID</pl-table-head>
+                    <pl-table-head>Port</pl-table-head>
+                    <pl-table-head>Clients</pl-table-head>
+                    <pl-table-head>CPU</pl-table-head>
+                    <pl-table-head>Memory</pl-table-head>
+                    <pl-table-head>Status</pl-table-head>
+                    <pl-table-head></pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each processes as index, proc %}
+                    <pl-table-row>
+                        <pl-table-cell>{{ proc.get("pid") }}</pl-table-cell>
+                        <pl-table-cell>{{ proc.get("port") }}</pl-table-cell>
+                        <pl-table-cell>{{ proc.get("fingerprints") }}</pl-table-cell>
+                        <pl-table-cell>{{ proc.get("cpu") }}%</pl-table-cell>
+                        <pl-table-cell>{{ proc.get("memoryMb") }} MB</pl-table-cell>
+                        <pl-table-cell>
+                            {% if proc.get("isolated") == true %}
+                            <pl-badge variant={% "destructive" %}>Isolated</pl-badge>
+                            {% else %}
+                                {% if proc.get("ready") == true %}
+                                <pl-badge variant={% "default" %}>Ready</pl-badge>
+                                {% else %}
+                                <pl-badge variant={% "secondary" %}>Starting</pl-badge>
+                                {% /if %}
+                            {% /if %}
+                        </pl-table-cell>
+                        <pl-table-cell>
+                            <form method="POST" action={% "/sites/" + siteId + "/processes/" + proc.get("pid") + "/isolate" %} style="display:inline">
+                                {% csrf() %}
+                                <pl-button variant={% "outline" %} size={% "sm" %} type={% "submit" %}>{% if proc.get("isolated") == true %}Unisolate{% else %}Isolate{% /if %}</pl-button>
+                            </form>
+                            <form method="POST" action={% "/sites/" + siteId + "/processes/" + proc.get("pid") + "/kill" %} style="display:inline" data-confirm="The process is terminated immediately.">
+                                {% csrf() %}
+                                <pl-button variant={% "destructive" %} size={% "sm" %} type={% "submit" %}>Kill</pl-button>
+                            </form>
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% else %}
+            <p>No processes running.</p>
+            {% /if %}
+            <form method="POST" action={% "/sites/" + siteId + "/processes/start" %}>
+                {% csrf() %}
+                <pl-button variant={% "outline" %} type={% "submit" %}>Start Process</pl-button>
+            </form>
+        </pl-card-content>
+    </pl-card>
+
+    {% if processes %}
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>Terminal</pl-card-title>
+            <pl-card-description>Live stdout/stderr for pid {{ processes.get(0).get("pid") }}. Keystrokes are sent to the process's stdin.</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <pl-terminal
+                rows={% 24{:} %}
+                cols={% 100{:} %}
+                wsUrl={% "/ws/terminal/" + siteId + "/" + processes.get(0).get("pid") %}>
+            </pl-terminal>
+        </pl-card-content>
+    </pl-card>
+    {% /if %}
+    {% else %}
+    <pl-empty-state icon="microchip" heading="Not a managed site"
+        description="Only node, alchemy, command and docker sites run managed processes."></pl-empty-state>
+    {% /if %}
+
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>Stored process logs</pl-card-title>
+        </pl-card-header>
+        <pl-card-content>
+            {% if proclogs %}
+            <pl-table>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>PID</pl-table-head>
+                    <pl-table-head>Lines</pl-table-head>
+                    <pl-table-head>Captured</pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each proclogs as index, log %}
+                    <pl-table-row>
+                        <pl-table-cell><a href={% "/admin/sites/" + siteId + "/page/processes?log=" + log.get("id") %}>PID {{ log.get("pid") }}</a></pl-table-cell>
+                        <pl-table-cell>{{ log.get("lineCount") }}</pl-table-cell>
+                        <pl-table-cell>{{ log.get("createdAt") }}</pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% else %}
+            <p>No stored logs yet.</p>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+
+    {% if selectedLogHtml != "" %}
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>Stored log {{ selectedLogTitle }}</pl-card-title>
+        </pl-card-header>
+        <pl-card-content>
+            <div class="hh-proclog-content">{%= selectedLogHtml %}</div>
+        </pl-card-content>
+    </pl-card>
+    {% /if %}
+</section>
+{% /block %}

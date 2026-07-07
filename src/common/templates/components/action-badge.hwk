@@ -1,8 +1,0 @@
-{% tag HhActionBadge {
-
-    public action: String = ""
-
-    template {
-        <pl-badge variant={% action == "created" ? "default" : action == "deleted" ? "destructive" : "secondary" %}>{{ action }}</pl-badge>
-    }
-} %}

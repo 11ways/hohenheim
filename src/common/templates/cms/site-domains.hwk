@@ -1,0 +1,50 @@
+{#- Domains tab on a site: hostnames routed to it, linking into the
+    (nav-hidden) domain resource forms. -#}
+{% declare title: String %}
+{% declare siteId: Integer %}
+{% declare siteName: String %}
+{% declare domains: List %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ siteName }}</h1>
+        <a href="/admin/domains/new" id="add-domain-link">
+            <pl-button variant={% "primary" %}>Add Domain</pl-button>
+        </a>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if domains %}
+    <pl-table>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>Hostname</pl-table-head>
+            <pl-table-head>Match Type</pl-table-head>
+            <pl-table-head>SSL</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each domains as index, domain %}
+            <pl-table-row>
+                <pl-table-cell><a href={% domain.get("editUrl") %}>{{ domain.get("hostname") }}</a></pl-table-cell>
+                <pl-table-cell><pl-badge variant={% "secondary" %}>{{ domain.get("matchType") }}</pl-badge></pl-table-cell>
+                <pl-table-cell>
+                    {% if domain.get("forceSsl") == true %}
+                    <pl-badge variant={% "default" %}>Forced</pl-badge>
+                    {% else %}
+                    <pl-badge variant={% "secondary" %}>Off</pl-badge>
+                    {% /if %}
+                </pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="at" heading="No domains configured"
+        description="Add a hostname so traffic routes to this site."></pl-empty-state>
+    {% /if %}
+</section>
+{% /block %}

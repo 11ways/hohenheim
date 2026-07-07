@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.NodeVersionModel;
+import be.elevenways.hohenheim.server.options.NodeVersionOptions;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
@@ -82,6 +83,7 @@ public class UpdateNodeVersions extends ScheduledTask {
             }
         }
 
+        NodeVersionOptions.refresh();
         Blast.log("TASK: UpdateNodeVersions reconciled", parsed.size(), "versions");
     }
 

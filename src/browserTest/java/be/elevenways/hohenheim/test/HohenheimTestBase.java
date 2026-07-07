@@ -7,9 +7,12 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimHandlers;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
+import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.ZenitAuth;
@@ -43,12 +46,18 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
             return port;
         }
 
-        // Use a temp file for the test database so we never pollute the working directory
+        // Use temp files for the test database and the settings write-back so
+        // tests never pollute the working directory or the developer's local.dry.
         try {
             File db = File.createTempFile("hohenheim-test", ".db");
             db.delete();
             db.deleteOnExit();
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
+
+            File localDry = File.createTempFile("hohenheim-test-local", ".dry");
+            localDry.delete();
+            localDry.deleteOnExit();
+            System.setProperty("hohenheim.local_settings", localDry.getAbsolutePath());
         } catch (IOException e) {
             throw new RuntimeException("Failed to create temp database file", e);
         }
@@ -56,17 +65,20 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         SiteTypes.register();
         SiteAuthProviders.register();
         HohenheimEndpoints.init();
+        // Force-load the zenit-cms panel routes (all /{panel}/... endpoints).
+        Object cmsRoutes = ResourcePageEndpoints.LIST;
         HohenheimDatabase.init();
 
         // Run the real boot path (MODELS discovery registers the model singletons); HTTP auto-start
         // is disabled inside ensureBooted() since this base binds its own server below.
         HohenheimTestRuntime.ensureBooted();
-        Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
+        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
 
         // Install auth exactly as production does, then seed a logged-in admin for the tests.
         ZenitAuth.init(HohenheimDatabase.datasource());
         ServerMain.installAuthBaselines();
         HohenheimHandlers.init();
+        new HohenheimPanel();
 
         sessionToken = seedAuthenticatedAdmin();
 
@@ -88,6 +100,15 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         user.set(UserModel.UPDATED_AT, Instant.now());
         AuthModels.users().save(user);
         ZenitAuth.markSeeded();   // a user exists, so the setup gate must not redirect
+
+        // Grant everything (the /setup admin's shape) so the CMS panel's
+        // hohenheim.admin.access permission check passes.
+        Row grant = AuthModels.grants().createEmptyRow();
+        grant.set(GrantModel.SUBJECT_TYPE, "user");
+        grant.set(GrantModel.SUBJECT_ID, user.get(UserModel.ID));
+        grant.set(GrantModel.PERMISSION, "*");
+        grant.set(GrantModel.VALUE, true);
+        AuthModels.grants().save(grant);
 
         Session session = Zenit.getSessionStore().create();
         session.set(AuthKeys.USER_ID, ((Integer) user.get(UserModel.ID)).longValue());

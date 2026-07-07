@@ -681,18 +681,33 @@ public class SiteDispatcher implements HttpHandler {
             regexMatchCache.remove(cacheKey);
         }
 
-        for (RegexRoute regexRoute : rt.regexRoutes) {
-            if (!regexRoute.entry().acceptsListener(listenerIp)) {
-                continue;
-            }
+        if (!rt.regexRoutes.isEmpty() && !isSuspiciousRegexHostname(hostname)) {
+            int hostnameDots = countChar(hostname, '.');
+            for (RegexRoute regexRoute : rt.regexRoutes) {
+                if (!regexRoute.entry().acceptsListener(listenerIp)) {
+                    continue;
+                }
 
-            Matcher matcher = regexRoute.pattern().matcher(hostname);
-            if (matcher.matches()) {
-                Map<String, String> groups = extractRegexGroups(matcher, regexRoute.namedGroups());
-                CachedRegexMatch positiveMatch = new CachedRegexMatch(regexRoute.entry(), groups,
-                    System.currentTimeMillis());
-                regexMatchCache.put(cacheKey, positiveMatch);
-                return new RouteMatch(regexRoute.entry(), groups);
+                // A hostname with more dots than the pattern accounts for means the
+                // regex is being probed with extra subdomain levels — too broad a match.
+                if (countChar(regexRoute.hostnamePattern(), '.') + 1 < hostnameDots) {
+                    continue;
+                }
+
+                Matcher matcher = regexRoute.pattern().matcher(hostname);
+                if (matcher.matches()) {
+                    Map<String, String> groups = extractRegexGroups(matcher, regexRoute.namedGroups());
+                    // Brute-force protection (faithful to the Node original): a dotted
+                    // "project" capture means the pattern swallowed a subdomain boundary.
+                    String project = groups != null ? groups.get("project") : null;
+                    if (project != null && project.indexOf('.') > -1) {
+                        break;
+                    }
+                    CachedRegexMatch positiveMatch = new CachedRegexMatch(regexRoute.entry(), groups,
+                        System.currentTimeMillis());
+                    regexMatchCache.put(cacheKey, positiveMatch);
+                    return new RouteMatch(regexRoute.entry(), groups);
+                }
             }
         }
 
@@ -701,6 +716,28 @@ public class SiteDispatcher implements HttpHandler {
             negativeCache.put(cacheKey, System.currentTimeMillis());
         }
         return null;
+    }
+
+    /**
+     * Hostnames that only ever appear in brute-force probes never match a
+     * regex route (faithful to the Node original's guards): git/gitlab
+     * subdomains, doubled/garbled www levels, and "notexist" scanners.
+     */
+    public static boolean isSuspiciousRegexHostname(String hostname) {
+        return hostname.contains("git.")
+            || hostname.contains("gitlab.")
+            || hostname.contains("www.www.")
+            || hostname.contains("notexist")
+            || hostname.contains(".www")
+            || hostname.contains("wwww");
+    }
+
+    private static int countChar(String value, char c) {
+        int count = 0;
+        for (int i = 0; i < value.length(); i++) {
+            if (value.charAt(i) == c) count++;
+        }
+        return count;
     }
 
     /**
@@ -722,14 +759,14 @@ public class SiteDispatcher implements HttpHandler {
                 return false;
             }
             if (hasAuth && !authPassed) {
-                sendAuthChallenge(exchange);
+                sendAuthChallenge(exchange, entry);
                 return false;
             }
         } else {
             // "any": pass if either passes (or if only one is configured)
             if (hasIpRules && hasAuth) {
                 if (!ipAllowed && !authPassed) {
-                    sendAuthChallenge(exchange);
+                    sendAuthChallenge(exchange, entry);
                     return false;
                 }
             } else if (hasIpRules && !ipAllowed) {
@@ -737,7 +774,7 @@ public class SiteDispatcher implements HttpHandler {
                 exchange.getResponseSender().send("Forbidden");
                 return false;
             } else if (hasAuth && !authPassed) {
-                sendAuthChallenge(exchange);
+                sendAuthChallenge(exchange, entry);
                 return false;
             }
         }
@@ -817,9 +854,12 @@ public class SiteDispatcher implements HttpHandler {
         }
     }
 
-    private void sendAuthChallenge(HttpServerExchange exchange) {
+    private void sendAuthChallenge(HttpServerExchange exchange, RouteEntry entry) {
+        String realm = entry.siteName != null && !entry.siteName.isBlank()
+            ? entry.siteName.replace("\"", "")
+            : "Restricted";
         exchange.setStatusCode(401);
-        exchange.getResponseHeaders().put(new HttpString("WWW-Authenticate"), "Basic realm=\"Restricted\"");
+        exchange.getResponseHeaders().put(new HttpString("WWW-Authenticate"), "Basic realm=\"" + realm + "\"");
         exchange.getResponseSender().send("Unauthorized");
     }
 
