@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.model;
 import be.elevenways.hohenheim.sitetype.SiteTypeRegistry;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.behaviour.RevisionableBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -59,6 +60,10 @@ public class SiteModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
 
+    // Sites are the proxy's central config records: keep full snapshots so
+    // admins can diff and restore them from the CMS history tab.
+    public static final RevisionableBehaviour REVISIONABLE =
+        SCHEMA.addBehaviour(RevisionableBehaviour.create(50));
 
     public List<Row> findEnabled() {
         return find()

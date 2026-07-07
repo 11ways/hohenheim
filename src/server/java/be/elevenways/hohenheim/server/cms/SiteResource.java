@@ -255,7 +255,10 @@ public final class SiteResource extends RowResource {
 
     @Override
     public @NonNull List<RecordScopedPage<Row>> subpages() {
-        return List.of(new SiteDomainsPage(), new SiteProcessesPage());
+        List<RecordScopedPage<Row>> pages = new ArrayList<>(
+            List.of(new SiteDomainsPage(), new SiteProcessesPage()));
+        pages.addAll(this.frameworkSubpages());
+        return pages;
     }
 
     private static @NonNull String slugify(@NonNull String name) {
