@@ -13,6 +13,7 @@ import io.undertow.util.Headers;
 import java.io.File;
 import java.util.Map;
 import java.util.concurrent.*;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Wraps an inner SiteRequestHandler with git provisioning lifecycle.
@@ -28,7 +29,7 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
     private final File siteDir;
     private final GitRepository gitRepo;
     private final GitDeploymentQueue queue;
-    private final int uid;
+    private final @Nullable Integer uid;
 
     private volatile SiteRequestHandler innerHandler;
     private volatile String currentCommit;
@@ -53,6 +54,11 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
         // Drop git ops + build to the site's system user when configured, so a
         // compromised repo can't run as the (sudo-capable) Hohenheim user.
         this.uid = SystemUsers.resolveUid(typeSettings.get("system_user_id"));
+        if (uid == null && SystemUsers.daemonRunsAsRoot()) {
+            Blast.log("GIT: site", siteId, "has no system user configured;",
+                "clone and build commands run as the root daemon user.",
+                "Configure a system user for this site to drop privileges.");
+        }
         this.gitRepo = new GitRepository(repoUrl, branch, shallow, submodules, uid);
 
         // Create the deploy queue with deploy action

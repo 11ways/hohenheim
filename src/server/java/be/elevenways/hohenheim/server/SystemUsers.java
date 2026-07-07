@@ -4,6 +4,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Resolves a site's configured {@code system_user_id} to the numeric unix uid used
@@ -20,16 +21,18 @@ public final class SystemUsers {
     /**
      * @param userKeyObj the site's {@code user} setting (a {@code hohenheim:<username>} registry
      *                   key; a legacy Integer id is still honored), or null when unset
-     * @return the numeric uid, or 0 when no user is configured (run as the current user)
-     * @throws IllegalStateException when a user IS configured but cannot be resolved -- fail closed,
-     *         so a dangling reference can't silently escalate an intended-sandboxed process back to
-     *         the privileged Hohenheim user (callers isolate this per-site)
+     * @return the numeric uid, or null when no user is configured (the child then inherits
+     *         the daemon's own user)
+     * @throws IllegalStateException when a user IS configured but cannot be resolved, or resolves
+     *         to uid 0 -- fail closed, so a dangling reference can't silently escalate an
+     *         intended-sandboxed process back to the privileged Hohenheim user, and no site can
+     *         be explicitly configured to run as root (callers isolate this per-site)
      */
-    public static int resolveUid(Object userKeyObj) {
+    public static @Nullable Integer resolveUid(Object userKeyObj) {
         Row row;
         if (userKeyObj instanceof Integer id) {
             if (id <= 0) {
-                return 0;
+                return null;
             }
             row = Models.get(SystemUserModel.class).findById(id);
         } else if (userKeyObj instanceof String key && !key.isBlank()) {
@@ -38,7 +41,7 @@ public final class SystemUsers {
                 .where(SystemUserModel.NAME.eq(username))
                 .first();
         } else {
-            return 0;
+            return null;
         }
         if (row == null) {
             throw new IllegalStateException("Configured system user '" + userKeyObj + "' does not exist");
@@ -47,6 +50,17 @@ public final class SystemUsers {
         if (uid == null) {
             throw new IllegalStateException("System user '" + userKeyObj + "' has no uid");
         }
+        if (uid == 0) {
+            throw new IllegalStateException("System user '" + userKeyObj + "' is root (uid 0); refusing to run site processes as root");
+        }
         return uid;
+    }
+
+    /**
+     * @return true when the Hohenheim daemon itself runs as root, so children of sites
+     *         without a configured system user would inherit root
+     */
+    public static boolean daemonRunsAsRoot() {
+        return "root".equals(System.getProperty("user.name"));
     }
 }

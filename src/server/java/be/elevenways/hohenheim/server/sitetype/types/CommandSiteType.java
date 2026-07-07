@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 
 import java.io.File;
 import java.util.*;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Runs an arbitrary command as a managed process.
@@ -82,7 +83,7 @@ public class CommandSiteType implements SiteTypeHandler {
         private final String startCommand;
         private final String workingDirectory;
         private final String portArgument;
-        private final int resolvedUid;
+        private final @Nullable Integer resolvedUid;
 
         CommandProcessHandler(int siteId, String siteName, Map<String, Object> settings) {
             super(siteId, siteName, settings,
@@ -121,7 +122,7 @@ public class CommandSiteType implements SiteTypeHandler {
         }
 
         @Override
-        protected int getUid() {
+        protected @Nullable Integer getUid() {
             return resolvedUid;
         }
 
