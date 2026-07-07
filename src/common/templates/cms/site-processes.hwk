@@ -98,8 +98,10 @@
     </pl-card>
     {% /if %}
     {% else %}
-    <pl-empty-state icon="microchip" heading="Not a managed site"
-        description="Only node, alchemy, command and docker sites run managed processes."></pl-empty-state>
+    <pl-empty-state icon="microchip">
+        <pl-empty-state-title>Not a managed site</pl-empty-state-title>
+        <pl-empty-state-description>Only node, alchemy, command and docker sites run managed processes.</pl-empty-state-description>
+    </pl-empty-state>
     {% /if %}
 
     <pl-card>
