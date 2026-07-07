@@ -7,6 +7,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 /**
  * Per-site serial deployment queue with coalescing.
@@ -26,9 +27,9 @@ public class GitDeploymentQueue {
     private volatile GitDeploymentResult lastResult = null;
     private volatile boolean cancelled = false;
 
-    private final Runnable deployAction;
+    private final Consumer<String> deployAction;
 
-    public GitDeploymentQueue(int siteId, Runnable deployAction) {
+    public GitDeploymentQueue(int siteId, Consumer<String> deployAction) {
         this.siteId = siteId;
         this.deployAction = deployAction;
         this.executor = Executors.newSingleThreadExecutor(r -> {
@@ -67,7 +68,7 @@ public class GitDeploymentQueue {
             try {
                 if (Thread.interrupted()) return;
                 Blast.log("GIT: deploying site", siteId, "reason:", reason);
-                deployAction.run();
+                deployAction.accept(reason);
                 long duration = System.currentTimeMillis() - start;
                 lastResult = new GitDeploymentResult(true, duration, reason, null);
                 Blast.log("GIT: deploy succeeded for site", siteId, "in", duration + "ms");
@@ -94,6 +95,22 @@ public class GitDeploymentQueue {
                 }
             }
         }
+    }
+
+    /**
+     * Cancel only the in-flight deploy (and drop the coalesced pending one) without
+     * poisoning the queue: later triggers still deploy.
+     *
+     * @return true when a running deploy was interrupted
+     */
+    public synchronized boolean cancelCurrent() {
+        pendingReason.set(null);
+        Thread current = deployThread;
+        if (current != null) {
+            current.interrupt();
+            return true;
+        }
+        return false;
     }
 
     /**

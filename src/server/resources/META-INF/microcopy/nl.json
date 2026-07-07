@@ -20,6 +20,7 @@
     "hohenheim.settings.title": "Instellingen",
     "hohenheim.site.clone": "Dupliceren",
     "hohenheim.site.clone.confirm": "Een kopie maken met dezelfde instellingen en domeinen (standaard uitgeschakeld)?",
+    "hohenheim.site.deployments": "Deployments",
     "hohenheim.site.disabled": "Site uitgeschakeld",
     "hohenheim.site.domains": "Domeinen",
     "hohenheim.site.enabled": "Site ingeschakeld",

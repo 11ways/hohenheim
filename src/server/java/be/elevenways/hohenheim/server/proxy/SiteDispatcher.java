@@ -352,6 +352,19 @@ public class SiteDispatcher implements HttpHandler {
                 }
             }
 
+            // A site without domains never enters the route table; creating its
+            // handler anyway would spawn processes nothing routes to and nothing
+            // ever destroys (destroyHandlers only walks route entries).
+            List<Row> domains = domainModel.findBySiteId(siteId);
+            boolean hasRoutableDomain = domains.stream().anyMatch(domain -> {
+                String hostname = domain.get(SiteDomainModel.HOSTNAME);
+                return hostname != null && !hostname.isEmpty();
+            });
+            if (!hasRoutableDomain) {
+                Blast.log("SiteDispatcher: site", siteName, "has no routable domain; skipping");
+                continue;
+            }
+
             // Check for git provisioning. Isolate per-site handler creation so one
             // misconfigured site (e.g. a dangling system_user_id, which now fails
             // closed) is skipped with a log line instead of aborting the whole load.
@@ -373,7 +386,6 @@ public class SiteDispatcher implements HttpHandler {
                 Blast.log("SiteDispatcher: failed to create handler for site", siteName, "-", e.getMessage());
                 continue;
             }
-            List<Row> domains = domainModel.findBySiteId(siteId);
 
             for (Row domain : domains) {
                 String hostname = domain.get(SiteDomainModel.HOSTNAME);
@@ -1344,11 +1356,8 @@ public class SiteDispatcher implements HttpHandler {
     }
 
     /**
-     * Shut down internal executors. Called from ProxyServer.stop().
-     */
-    /**
-     * Full teardown: destroys every routed handler (reaping managed child processes)
-     * before stopping the internal schedulers.
+     * Full teardown, called from ProxyServer.stop(): destroys every routed handler
+     * (reaping managed child processes) before stopping the internal schedulers.
      */
     public void shutdown() {
         destroyHandlers();

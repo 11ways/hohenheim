@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.process.IpcChannel;
 import be.elevenways.hohenheim.server.process.ManagedProcess;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.ProcessTerminalHandler;
+import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.domino.common.DominoFile;
 import be.elevenways.protoblast.common.Blast;
@@ -58,6 +59,7 @@ public final class HohenheimHandlers {
         initCertificates();
         initDatabases();
         initProcessControl();
+        initDeployControl();
         initTerminal();
     }
 
@@ -363,6 +365,44 @@ public final class HohenheimHandlers {
         return "/admin/sites/" + siteId + "/page/processes";
     }
 
+    // -----------------------------------------------------------------------
+    // Deploy control (forms on the site's Deployments tab).
+    // -----------------------------------------------------------------------
+
+    private static void initDeployControl() {
+        HohenheimEndpoints.SITES_DEPLOY.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            gitHandler(siteId).ifPresent(git -> {
+                git.enqueueDeploy("manual");
+                ActivityLog.record(Models.get(SiteModel.class), siteId, "deploy_triggered", null);
+            });
+            return redirectUntyped(deploymentsPageUrl(siteId));
+        });
+
+        HohenheimEndpoints.SITES_DEPLOY_CANCEL.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            gitHandler(siteId).ifPresent(git -> {
+                if (git.cancelCurrentDeploy()) {
+                    ActivityLog.record(Models.get(SiteModel.class), siteId, "deploy_cancelled", null);
+                }
+            });
+            return redirectUntyped(deploymentsPageUrl(siteId));
+        });
+
+        HohenheimEndpoints.SITES_ROLLBACK.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            gitHandler(siteId).ifPresent(git -> {
+                git.enqueueRollback();
+                ActivityLog.record(Models.get(SiteModel.class), siteId, "rollback_triggered", null);
+            });
+            return redirectUntyped(deploymentsPageUrl(siteId));
+        });
+    }
+
+    private static String deploymentsPageUrl(Integer siteId) {
+        return "/admin/sites/" + siteId + "/page/deployments";
+    }
+
     private static void initTerminal() {
         HohenheimEndpoints.PROCESS_TERMINAL.setHandlerFactory(session -> {
             Integer siteId = session.getParameter(HohenheimEndpoints.SITE_ID);
@@ -387,9 +427,23 @@ public final class HohenheimHandlers {
         var proxy = ServerMain.getProxyServer();
         if (proxy != null && siteId != null) {
             var handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
+            // Git-sourced sites wrap their process handler; unwrap so process
+            // control works for them too.
+            if (handler instanceof GitSiteRequestHandler git) {
+                handler = git.innerHandler();
+            }
             if (handler instanceof ManagedProcessSiteHandler managed) {
                 return Optional.of(managed);
             }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<GitSiteRequestHandler> gitHandler(Integer siteId) {
+        var proxy = ServerMain.getProxyServer();
+        if (proxy != null && siteId != null
+            && proxy.getDispatcher().findHandlerBySiteId(siteId) instanceof GitSiteRequestHandler git) {
+            return Optional.of(git);
         }
         return Optional.empty();
     }

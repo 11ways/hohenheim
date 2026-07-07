@@ -1,0 +1,105 @@
+{#- Deployments tab on a git-sourced site: deploy history with captured build
+    logs, plus deploy-now / cancel / rollback controls. -#}
+{% declare title: String %}
+{% declare siteId: Integer %}
+{% declare siteName: String %}
+{% declare isDeploying: Boolean = false %}
+{% declare canRollback: Boolean = false %}
+{% declare currentCommit: String = "" %}
+{% declare deployments: List %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare timeWording: RelativeTimeWording %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ siteName }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>Deployments</pl-card-title>
+            {% if currentCommit != "" %}
+            <pl-card-description>Currently serving commit {{ currentCommit }}.</pl-card-description>
+            {% /if %}
+        </pl-card-header>
+        <pl-card-content>
+            <div class="cms-form-actions">
+                <form method="POST" action={% "/sites/" + siteId + "/deploy" %}>
+                    {% csrf() %}
+                    <pl-button variant={% "primary" %} type={% "submit" %} disabled={% isDeploying %}>Deploy now</pl-button>
+                </form>
+                {% if isDeploying %}
+                <form method="POST" action={% "/sites/" + siteId + "/deploy/cancel" %}>
+                    {% csrf() %}
+                    <pl-button variant={% "outline" %} type={% "submit" %}>Cancel deploy</pl-button>
+                </form>
+                {% /if %}
+                {% if canRollback %}
+                <form method="POST" action={% "/sites/" + siteId + "/rollback" %} data-confirm="Activate the previous deploy slot? The current version stops serving.">
+                    {% csrf() %}
+                    <pl-button variant={% "destructive" %} type={% "submit" %}>Roll back</pl-button>
+                </form>
+                {% /if %}
+            </div>
+
+            {% if deployments %}
+            <pl-table>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>Status</pl-table-head>
+                    <pl-table-head>Trigger</pl-table-head>
+                    <pl-table-head>Commit</pl-table-head>
+                    <pl-table-head>Duration</pl-table-head>
+                    <pl-table-head>Started</pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each deployments as index, deploy %}
+                    <pl-table-row>
+                        <pl-table-cell>
+                            <pl-badge variant={% deploy.get("statusVariant") %}>{{ deploy.get("status") }}</pl-badge>
+                        </pl-table-cell>
+                        <pl-table-cell>{{ deploy.get("reason") }}</pl-table-cell>
+                        <pl-table-cell><code>{{ deploy.get("commit") }}</code></pl-table-cell>
+                        <pl-table-cell>{{ deploy.get("duration") }}</pl-table-cell>
+                        <pl-table-cell>
+                            {% if deploy.get("startedAtIso") != "" %}
+                            <pl-relative-time datetime={% deploy.get("startedAtIso") %} wording={% timeWording %} title={% deploy.get("startedAtIso") %}></pl-relative-time>
+                            {% /if %}
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% if deploy.get("error") != "" or deploy.get("hasLog") == true %}
+                    <pl-table-row>
+                        <pl-table-cell colspan="5">
+                            {% if deploy.get("error") != "" %}
+                            <pl-alert variant="destructive">{{ deploy.get("error") }}</pl-alert>
+                            {% /if %}
+                            {% if deploy.get("hasLog") == true %}
+                            <pl-collapsible>
+                                <pl-collapsible-trigger>
+                                    <pl-button variant={% "ghost" %}>Build log</pl-button>
+                                </pl-collapsible-trigger>
+                                <pl-collapsible-content>
+                                    <pre class="hh-deploy-log">{{ deploy.get("log") }}</pre>
+                                </pl-collapsible-content>
+                            </pl-collapsible>
+                            {% /if %}
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /if %}
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% else %}
+            <pl-empty-state icon="rocket">
+                <pl-empty-state-title>No deployments yet</pl-empty-state-title>
+                <pl-empty-state-description>Webhook, poll or manual deploys of this site will show up here.</pl-empty-state-description>
+            </pl-empty-state>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+</section>
+{% /block %}

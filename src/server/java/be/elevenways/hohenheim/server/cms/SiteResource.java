@@ -254,7 +254,7 @@ public final class SiteResource extends RowResource {
     @Override
     public @NonNull List<RecordScopedPage<Row>> subpages() {
         List<RecordScopedPage<Row>> pages = new ArrayList<>(
-            List.of(new SiteDomainsPage(), new SiteProcessesPage()));
+            List.of(new SiteDomainsPage(), new SiteProcessesPage(), new SiteDeploymentsPage()));
         pages.addAll(this.frameworkSubpages());
         return pages;
     }
