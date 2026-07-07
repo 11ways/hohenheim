@@ -41,9 +41,6 @@ public class CertificateModel extends Model {
     public static final StringField PRIVATE_KEY_PEM = SCHEMA.addField(StringField.builder().name("private_key_pem").build());
     public static final DateTimeField EXPIRES_ON = SCHEMA.addField(DateTimeField.builder().name("expires_on").build());
     public static final BooleanField AUTO_RENEW = SCHEMA.addField(BooleanField.builder("auto_renew").defaultValue(true).build());
-    public static final StringField DNS_PROVIDER = SCHEMA.addField(StringField.builder().name("dns_provider").build());
-    public static final StringField DNS_CREDENTIALS = SCHEMA.addField(StringField.builder().name("dns_credentials").build());
-    public static final StringField ACME_SERVER = SCHEMA.addField(StringField.builder().name("acme_server").build());
     public static final StringField STATUS = SCHEMA.addField(StringField.builder().name("status").build());
     public static final DateTimeField ISSUED_ON = SCHEMA.addField(DateTimeField.builder().name("issued_on").build());
     public static final StringField RENEWAL_ERROR = SCHEMA.addField(StringField.builder().name("renewal_error").build());
@@ -53,7 +50,6 @@ public class CertificateModel extends Model {
 
     /** Per-cert ACME account email override; null means the global account. */
     public static final StringField LETSENCRYPT_EMAIL = SCHEMA.addField(StringField.builder().name("letsencrypt_email").build());
-    public static final SchemaField META = SCHEMA.addField(SchemaField.builder("meta").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

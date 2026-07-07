@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
 import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.auth.server.AuthRegistry;
 import be.elevenways.zenit.auth.server.AuthRequirement;
@@ -68,6 +69,13 @@ public class ServerMain {
         proxyServer = new ProxyServer();
         proxyServer.start();
         ProxyReloadHooks.install();
+
+        // Reap managed child processes on daemon exit (SIGTERM/SIGINT); without this an
+        // abrupt stop leaves every spawned site process running as an orphan.
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            proxyServer.stop();
+            NodeSiteType.shutdownSharedInfrastructure();
+        }, "hohenheim-shutdown"));
 
         // Scheduled maintenance via zenit's TaskService: discovery tasks (IP / users / node
         // versions) declare BOOT_AND_CRON so they run once now and hourly; cleanup and backup

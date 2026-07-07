@@ -95,11 +95,16 @@ public final class HohenheimHandlers {
             DrySettingsWriter writer = new DrySettingsWriter(localSettingsFile());
             var values = HohenheimSettings.VALUES;
 
+            // Listener ports are only read at proxy start; a change persists but
+            // needs a restart, and the operator must be told so.
+            boolean restartRequired = false;
             if (httpPort != null) {
+                restartRequired |= !httpPort.equals(values.getValue(HohenheimSettings.Proxy.HTTP_PORT));
                 values.setValue(HohenheimSettings.Proxy.HTTP_PORT, httpPort);
                 writer.set(HohenheimSettings.Proxy.HTTP_PORT, httpPort);
             }
             if (httpsPort != null) {
+                restartRequired |= !httpsPort.equals(values.getValue(HohenheimSettings.Proxy.HTTPS_PORT));
                 values.setValue(HohenheimSettings.Proxy.HTTPS_PORT, httpsPort);
                 writer.set(HohenheimSettings.Proxy.HTTPS_PORT, httpsPort);
             }
@@ -115,10 +120,6 @@ public final class HohenheimHandlers {
             String ipv6 = form.getOrDefault("proxy_ipv6_address", "").trim();
             values.setValue(HohenheimSettings.Proxy.IPV6_ADDRESS, ipv6);
             writer.set(HohenheimSettings.Proxy.IPV6_ADDRESS, ipv6);
-
-            boolean logToDb = form.containsKey("log_access_to_db");
-            values.setValue(HohenheimSettings.Logging.ACCESS_TO_DATABASE, logToDb);
-            writer.set(HohenheimSettings.Logging.ACCESS_TO_DATABASE, logToDb);
 
             boolean logToFile = form.containsKey("log_access_to_file");
             values.setValue(HohenheimSettings.Logging.ACCESS_TO_FILE, logToFile);
@@ -151,7 +152,9 @@ public final class HohenheimHandlers {
             writer.set(HohenheimSettings.Ssl.LETSENCRYPT_STAGING, leStaging);
 
             writer.persist();
-            return redirectUntyped("/admin/settings?saved=true");
+            ActivityLog.record("hohenheim:settings", "global", "settings_updated", null);
+            return redirectUntyped("/admin/settings?saved=true"
+                + (restartRequired ? "&restart_required=true" : ""));
         });
     }
 
@@ -273,6 +276,7 @@ public final class HohenheimHandlers {
                 Blast.log("DB: backup of", name, "failed -", e.getMessage());
                 return redirectUntyped("/admin/databases");
             }
+            ActivityLog.record(Models.get(DatabaseModel.class), name, "backup_downloaded", name);
             download(conduit, dump.contentType(), dump.filename(), dump.content());
             return null;
         });
@@ -319,36 +323,6 @@ public final class HohenheimHandlers {
     // -----------------------------------------------------------------------
 
     private static void initProcessControl() {
-        HohenheimEndpoints.SITES_PROCESSES.setHandler(conduit -> {
-            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
-            Map<String, Object> result = new HashMap<>();
-            boolean proxyUp = ServerMain.getProxyServer() != null;
-            managedHandler(siteId).ifPresentOrElse(managed -> {
-                List<Map<String, Object>> processes = new ArrayList<>();
-                for (var proc : managed.getProcesses()) {
-                    Map<String, Object> info = new HashMap<>();
-                    info.put("pid", proc.pid());
-                    info.put("port", proc.port());
-                    info.put("cpu", proc.cpuPercent());
-                    info.put("isolated", proc.isIsolated());
-                    info.put("ready", proc.isReady());
-                    info.put("fingerprints", proc.activeFingerprintCount());
-                    info.put("memory", proc.memoryKb());
-                    info.put("startTime", proc.startTime().toString());
-                    processes.add(info);
-                }
-                result.put("running", !processes.isEmpty());
-                result.put("processes", processes);
-            }, () -> {
-                if (proxyUp) {
-                    result.put("running", false);
-                    result.put("processes", List.of());
-                    result.put("type", "not_managed");
-                }
-            });
-            return jsonUntyped(result);
-        });
-
         HohenheimEndpoints.SITES_PROCESS_START.setHandler(conduit -> {
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
             managedHandler(siteId).ifPresent(managed -> {

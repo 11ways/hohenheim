@@ -239,11 +239,9 @@ public final class SiteResource extends RowResource {
             domainClone.set(SiteDomainModel.HSTS_SUBDOMAINS, domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
             domainClone.set(SiteDomainModel.PATH, domain.get(SiteDomainModel.PATH));
             domainClone.set(SiteDomainModel.STRIP_PATH, domain.get(SiteDomainModel.STRIP_PATH));
-            domainClone.set(SiteDomainModel.HTTP2_SUPPORT, domain.get(SiteDomainModel.HTTP2_SUPPORT));
             domainClone.set(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT,
                 domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT));
             domainClone.set(SiteDomainModel.LISTEN_ON, domain.get(SiteDomainModel.LISTEN_ON));
-            domainClone.set(SiteDomainModel.PORT, domain.get(SiteDomainModel.PORT));
             domainClone.set(SiteDomainModel.CUSTOM_HEADERS, domain.get(SiteDomainModel.CUSTOM_HEADERS));
             domainClone.set(SiteDomainModel.RESPONSE_HEADERS, domain.get(SiteDomainModel.RESPONSE_HEADERS));
             domainModel.save(domainClone);

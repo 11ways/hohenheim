@@ -96,11 +96,6 @@ public class HohenheimSettings {
     public abstract class Logging {
         public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("logging");
 
-        public static final SettingDefinition<Boolean> ACCESS_TO_DATABASE = GROUP.buildSetting("access_to_database", Boolean.class)
-            .defaultValue(false)
-            .description("Log access requests to database")
-            .build();
-
         public static final SettingDefinition<Boolean> ACCESS_TO_FILE = GROUP.buildSetting("access_to_file", Boolean.class)
             .defaultValue(true)
             .description("Log access requests to file")
@@ -109,11 +104,6 @@ public class HohenheimSettings {
         public static final SettingDefinition<String> ACCESS_PATH = GROUP.buildSetting("access_path", String.class)
             .defaultValue("/var/log/hohenheim/access.log")
             .description("Access log file path")
-            .build();
-
-        public static final SettingDefinition<Boolean> COLLECT_STATS = GROUP.buildSetting("collect_stats", Boolean.class)
-            .defaultValue(true)
-            .description("Collect per-site traffic statistics")
             .build();
     }
 

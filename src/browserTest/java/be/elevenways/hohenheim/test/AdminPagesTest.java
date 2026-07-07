@@ -69,8 +69,9 @@ class AdminPagesTest extends HohenheimTestBase {
             + "&sec_log_domain_misses=on&sec_domain_miss_threshold=7"
             + "&ssl_le_email=admin%40example.com");
         assertThat(response.statusCode()).isEqualTo(302);
+        // The port differs from the boot value, so the redirect carries the restart hint.
         assertThat(response.headers().firstValue("Location").orElse(""))
-            .isEqualTo("/admin/settings?saved=true");
+            .startsWith("/admin/settings?saved=true");
 
         // The write-back landed in the (test-redirected) local.dry file.
         Path localDry = Path.of(System.getProperty("hohenheim.local_settings"));

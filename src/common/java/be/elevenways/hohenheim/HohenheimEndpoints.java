@@ -74,13 +74,6 @@ public class HohenheimEndpoints {
         .build();
 
     // --- Process control (forms on the site Processes tab) ---
-    public static final Endpoint<Object> SITES_PROCESSES = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_processes"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("processes").build())
-        .build();
-
     public static final Endpoint<Object> SITES_PROCESS_START = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "sites_process_start"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
