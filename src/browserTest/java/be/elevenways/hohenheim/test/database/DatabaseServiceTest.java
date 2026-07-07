@@ -3,10 +3,13 @@ package be.elevenways.hohenheim.test.database;
 import be.elevenways.hohenheim.migration.M015_CreateManagedDatabases;
 import be.elevenways.hohenheim.migration.M016_AddDatabaseStatus;
 import be.elevenways.hohenheim.migration.M018_AddDatabaseServer;
+import be.elevenways.hohenheim.migration.M029_AddDatabaseLimits;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
@@ -36,6 +39,7 @@ class DatabaseServiceTest {
     private static final String PG_IMAGE = "postgres:17-alpine";
 
     @Test
+    @SuppressWarnings("unchecked")
     void createPersistsProvisionsBackupByNameAndDestroyRemovesRecord() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         DockerClient docker = new DockerClient();
@@ -48,7 +52,8 @@ class DatabaseServiceTest {
         String containerName = "hohenheim-db-" + name;
         try {
             ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
-                PG_IMAGE, "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs, no btrfs I/O
+                PG_IMAGE, "appuser", "secret123", "appdb",
+                true, ServerService.LOCAL, ResourceLimits.of(256, 1.0));   // ephemeral: tmpfs, no btrfs I/O
             assertThat(conn.port()).isGreaterThan(0);
 
             // create() persisted exactly one record with the right config.
@@ -57,6 +62,14 @@ class DatabaseServiceTest {
             assertThat((String) all.get(0).get(DatabaseModel.ENGINE)).isEqualTo("postgres");
             assertThat((Boolean) all.get(0).get(DatabaseModel.EPHEMERAL)).isTrue();
             assertThat((String) all.get(0).get(DatabaseModel.SERVER_NAME)).isEqualTo("local");   // default host
+            assertThat((Integer) all.get(0).get(DatabaseModel.MEMORY_LIMIT_MB)).isEqualTo(256);
+            assertThat((Double) all.get(0).get(DatabaseModel.CPU_LIMIT)).isEqualTo(1.0);
+
+            // The caps reach the container's HostConfig.
+            Map<String, Object> hostConfig =
+                (Map<String, Object>) docker.inspectContainer(containerName).get("HostConfig");
+            assertThat(((Number) hostConfig.get("Memory")).longValue()).isEqualTo(256L * 1024 * 1024);
+            assertThat(((Number) hostConfig.get("NanoCpus")).longValue()).isEqualTo(1_000_000_000L);
 
             // backupDownload(name) resolves engine + credentials from the record (caller passes no params).
             DockerClient.ExecResult seed = docker.exec(containerName,
@@ -121,7 +134,7 @@ class DatabaseServiceTest {
         SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner((MigrationCapableDatasource) ds,
             List.of(M015_CreateManagedDatabases::new, M016_AddDatabaseStatus::new,
-                M018_AddDatabaseServer::new)).migrate();
+                M018_AddDatabaseServer::new, M029_AddDatabaseLimits::new)).migrate();
         HohenheimTestRuntime.ensureBooted();
         return ds;
     }

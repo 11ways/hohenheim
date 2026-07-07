@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.database;
 import be.elevenways.hohenheim.migration.M015_CreateManagedDatabases;
 import be.elevenways.hohenheim.migration.M016_AddDatabaseStatus;
 import be.elevenways.hohenheim.migration.M018_AddDatabaseServer;
+import be.elevenways.hohenheim.migration.M029_AddDatabaseLimits;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -36,7 +37,7 @@ class DatabaseModelTest {
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner((MigrationCapableDatasource) datasource,
             List.of(M015_CreateManagedDatabases::new, M016_AddDatabaseStatus::new,
-                M018_AddDatabaseServer::new)).migrate();
+                M018_AddDatabaseServer::new, M029_AddDatabaseLimits::new)).migrate();
         HohenheimTestRuntime.ensureBooted();
     }
 

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.ResourceLimits;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -180,6 +181,13 @@ public class ManagedDatabase {
     public Connection provision(String name, Engine engine, String image,
                                 String user, String password, String database,
                                 boolean ephemeral) throws IOException {
+        return provision(name, engine, image, user, password, database, ephemeral, ResourceLimits.none());
+    }
+
+    /** Provision with optional container resource caps. */
+    public Connection provision(String name, Engine engine, String image,
+                                String user, String password, String database,
+                                boolean ephemeral, ResourceLimits limits) throws IOException {
         String containerName = "hohenheim-db-" + name;
         String volumeName = containerName + "-data";
         String imageRef = (image == null || image.isBlank()) ? engine.defaultImage : image;
@@ -195,7 +203,7 @@ public class ManagedDatabase {
 
         String id = docker.createContainer(containerName,
             buildSpec(engine, imageRef, volumeName, engine.env(user, password, database),
-                engine.containerCommand(password), ephemeral));
+                engine.containerCommand(password), ephemeral, limits));
         docker.startContainer(id);
 
         waitForReady(id, engine, user, password, database, 60_000);
@@ -448,7 +456,7 @@ public class ManagedDatabase {
 
     private static Map<String, Object> buildSpec(Engine engine, String imageRef, String volumeName,
                                                  Map<String, String> env, @Nullable List<String> command,
-                                                 boolean ephemeral) {
+                                                 boolean ephemeral, ResourceLimits limits) {
         String portKey = engine.port + "/tcp";
         List<String> envList = new ArrayList<>();
         env.forEach((key, value) -> envList.add(key + "=" + value));
@@ -470,10 +478,11 @@ public class ManagedDatabase {
             spec.put("Cmd", command);
         }
         spec.put("ExposedPorts", Map.of(portKey, Map.of()));
-        spec.put("HostConfig", Map.of(
-            "PortBindings", Map.of(portKey, List.of(Map.of("HostIp", "127.0.0.1", "HostPort", ""))),
-            "Mounts", List.of(dataMount)
-        ));
+        Map<String, Object> hostConfig = new LinkedHashMap<>();
+        hostConfig.put("PortBindings", Map.of(portKey, List.of(Map.of("HostIp", "127.0.0.1", "HostPort", ""))));
+        hostConfig.put("Mounts", List.of(dataMount));
+        limits.applyTo(hostConfig);
+        spec.put("HostConfig", hostConfig);
         return spec;
     }
 

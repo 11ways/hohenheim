@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -60,6 +61,8 @@ public final class DatabaseResource extends RowResource {
         .add(DatabaseModel.DB_PASSWORD)
         .add(DatabaseModel.IMAGE)
         .add(DatabaseModel.EPHEMERAL)
+        .add(DatabaseModel.MEMORY_LIMIT_MB)
+        .add(DatabaseModel.CPU_LIMIT)
         .add(Select.of(DatabaseModel.SERVER_NAME)
             .options(OptionSource.dynamic(ctx -> serverOptions()))
             .build())
@@ -135,10 +138,14 @@ public final class DatabaseResource extends RowResource {
             server = ServerService.LOCAL;
         }
 
+        ResourceLimits limits = ResourceLimits.of(
+            coerced.get("memory_limit_mb") instanceof Integer mb ? mb : null,
+            coerced.get("cpu_limit") instanceof Double cpus ? cpus : null);
+
         // The service persists the record itself (status=provisioning) and
         // provisions the container in the background.
         this.databaseService.createAsync(name, engine, image.isEmpty() ? null : image,
-            user, password, database, ephemeral, server);
+            user, password, database, ephemeral, server, limits);
 
 
         Row created = this.model().find().where(DatabaseModel.NAME.eq(name)).first();
