@@ -19,6 +19,7 @@ import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.OptionSource;
@@ -52,14 +53,14 @@ public final class SiteResource extends HohenheimRowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(SiteModel.NAME)
-        .add(SiteModel.SITE_TYPE)
-        .add(SiteModel.SETTINGS)
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SITE_TYPE))
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SETTINGS))
         .add(SiteModel.ENABLED)
         .add(SiteModel.DESCRIPTION)
         .add(RelationPick.of(SiteModel.AUTH_PROVIDER_ID, SiteAuthProviderModel.MODEL_ID).build())
         .add(RelationPick.of(SiteModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID).build())
         .add(Select.of(SiteModel.SOURCE).options(OptionSource.of(SOURCE_OPTIONS)).build())
-        .add(SiteModel.SOURCE_SETTINGS)
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SOURCE_SETTINGS))
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()

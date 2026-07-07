@@ -9,6 +9,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
@@ -51,8 +52,8 @@ public final class SiteDomainResource extends HohenheimRowResource {
         .add(SiteDomainModel.HSTS_SUBDOMAINS)
         .add(SiteDomainModel.HTTP2_SUPPORT)
         .add(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT)
-        .add(SiteDomainModel.CUSTOM_HEADERS)
-        .add(SiteDomainModel.RESPONSE_HEADERS)
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteDomainModel.CUSTOM_HEADERS))
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteDomainModel.RESPONSE_HEADERS))
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
