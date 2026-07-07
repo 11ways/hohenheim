@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.ZenitModule;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -13,7 +12,6 @@ import be.elevenways.zenit.common.orm.activity.ActivityPolicy;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
-import be.elevenways.zenit.common.ui.Stylesheets;
 
 /**
  * Record sources for the Hohenheim models plus the app stylesheet
@@ -67,8 +65,6 @@ public final class HohenheimSources implements ZenitModule {
                 ActivityModel.DETAIL, ActivityModel.ACTOR_LABEL, ActivityModel.CREATED_AT)
             .sortable(ActivityModel.CREATED_AT)
             .build());
-
-        Stylesheets.register(Identifier.of("hohenheim", "app"), "/hohenheim.css", Stylesheets.WEIGHT_APP);
 
         // Sites carry field-level deltas in the activity log (the CMS history
         // tab renders them); every other model stays on the default tier.
