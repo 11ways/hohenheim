@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.process;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.TcpUpstreamConnection;
@@ -14,6 +15,7 @@ import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.protoblast.common.Blast;
 import io.undertow.server.HttpServerExchange;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
 
@@ -24,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -91,6 +94,9 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
     // Debounce
     private final AtomicLong lastStartMinimumServers = new AtomicLong(0);
+
+    // One warning per handler when children silently inherit a root daemon user
+    private final AtomicBoolean warnedRootInherit = new AtomicBoolean(false);
 
     // Startup queue: requests waiting for a process to become ready. Re-armable: a fresh
     // latch is installed when the last ready process exits, so requests arriving during a
@@ -218,9 +224,9 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     protected abstract File getWorkingDirectory();
 
     /**
-     * Optional: UID to run the process as (0 = current user).
+     * Optional: UID to run the process as, or null to inherit the daemon's own user.
      */
-    protected int getUid() { return 0; }
+    protected @Nullable Integer getUid() { return null; }
 
     // -----------------------------------------------------------------------
     // Lifecycle
@@ -286,6 +292,15 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         }
     }
 
+    /** Warn once per handler when children of a root daemon spawn without a privilege drop. */
+    private void warnIfInheritingRoot() {
+        if (SystemUsers.daemonRunsAsRoot() && warnedRootInherit.compareAndSet(false, true)) {
+            Blast.log("PROCESS: site", siteName, "has no system user configured;",
+                "its child processes inherit the root daemon user.",
+                "Configure a system user for this site to drop privileges.");
+        }
+    }
+
     private ManagedProcess startProcessOnce() {
         // use_ports=false routes through a unix socket; otherwise a loopback TCP port. The listen
         // target (a port number or socket path) is passed to the child as PORT, --port=<x>, and,
@@ -329,8 +344,8 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             env.putAll(environmentVariables);
             env.putAll(buildRuntimeEnvironment(port));
 
-            int uid = getUid();
-            if (uid > 0) {
+            Integer uid = getUid();
+            if (uid != null) {
                 List<String> suCommand = new ArrayList<>();
                 suCommand.add("sudo");
                 suCommand.add("-u");
@@ -338,6 +353,8 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
                 suCommand.add("--");
                 suCommand.addAll(command);
                 pb.command(suCommand);
+            } else {
+                warnIfInheritingRoot();
             }
 
             Process process = pb.start();

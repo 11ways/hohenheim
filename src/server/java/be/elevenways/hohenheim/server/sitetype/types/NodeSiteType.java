@@ -19,6 +19,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 
 import java.io.File;
 import java.util.*;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Manages Node.js child processes.
@@ -138,7 +139,7 @@ public class NodeSiteType implements SiteTypeHandler {
 
         private final String script;
         private final String nodePath;
-        private final int resolvedUid;
+        private final @Nullable Integer resolvedUid;
         private final List<String> defaultArgs;
         private final boolean useChildWrapper;
 
@@ -216,7 +217,7 @@ public class NodeSiteType implements SiteTypeHandler {
         }
 
         @Override
-        protected int getUid() {
+        protected @Nullable Integer getUid() {
             return resolvedUid;
         }
 

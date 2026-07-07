@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Thin wrapper around the git CLI.
@@ -17,10 +18,10 @@ public class GitRepository {
     private final String branch;
     private final boolean shallow;
     private final boolean submodules;
-    private final int uid;
+    private final @Nullable Integer uid;
 
     public GitRepository(String repositoryUrl, String branch, boolean shallow,
-                         boolean submodules, int uid) {
+                         boolean submodules, @Nullable Integer uid) {
         this.repositoryUrl = repositoryUrl;
         this.branch = branch != null && !branch.isEmpty() ? branch : "main";
         this.shallow = shallow;
@@ -125,7 +126,7 @@ public class GitRepository {
     private GitResult execute(List<String> command, File workDir,
                               Map<String, String> extraEnv) throws InterruptedException {
         List<String> fullCmd;
-        if (uid > 0) {
+        if (uid != null) {
             fullCmd = new ArrayList<>();
             fullCmd.add("sudo");
             fullCmd.add("-u");

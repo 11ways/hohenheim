@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Orchestrates a single deploy attempt using the dual-slot strategy.
@@ -32,11 +33,11 @@ public class GitDeployment {
     private final Map<String, Object> sourceSettings;
     private final GitRepository gitRepo;
     private final File siteDir;
-    private final int uid;
+    private final @Nullable Integer uid;
 
     public GitDeployment(int siteId, Row site, SiteTypeHandler typeHandler,
                          Map<String, Object> typeSettings, Map<String, Object> sourceSettings,
-                         GitRepository gitRepo, File siteDir, int uid) {
+                         GitRepository gitRepo, File siteDir, @Nullable Integer uid) {
         this.siteId = siteId;
         this.site = site;
         this.typeHandler = typeHandler;
@@ -155,7 +156,7 @@ public class GitDeployment {
 
     private boolean freshClone(File targetDir) throws InterruptedException {
         targetDir.getParentFile().mkdirs();
-        if (uid > 0) {
+        if (uid != null) {
             // Create the slot dir as Hohenheim (which owns the parent siteDir), then
             // hand ownership to the site user so the uid-dropped clone/build can write
             // into it. See docs/hohenext-roadmap.md for the slot-ownership model.
@@ -191,7 +192,7 @@ public class GitDeployment {
             // would run as the (sudo-capable) Hohenheim user. The "--" terminates sudo
             // option parsing so the shell invocation can't be read as sudo flags.
             List<String> cmd = new ArrayList<>();
-            if (uid > 0) {
+            if (uid != null) {
                 cmd.add("sudo");
                 cmd.add("-u");
                 cmd.add("#" + uid);
@@ -340,7 +341,7 @@ public class GitDeployment {
 
     private void deleteDirectory(File dir) {
         if (dir == null || !dir.exists()) return;
-        if (uid > 0) {
+        if (uid != null) {
             // Slot contents may be owned by the site user; clear those as that user.
             // deleteTree() then removes whatever remains (Hohenheim-owned leftovers and
             // the now-empty slot dir, which Hohenheim can remove via parent-dir write).
