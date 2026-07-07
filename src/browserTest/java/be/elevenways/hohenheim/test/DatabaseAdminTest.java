@@ -9,9 +9,9 @@ import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Render-level test for the database admin UI: list page, create form fields, and the sidebar
- * link. Provisioning itself is covered by DatabaseServiceTest; this stays fast and Docker-free
- * (the list is empty on a fresh test DB, so no container inspection happens).
+ * Render-level test for the database admin resource: list page, create form,
+ * sidebar link, and the restore tab. Provisioning itself is covered by
+ * DatabaseServiceTest; this stays fast and Docker-free.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DatabaseAdminTest extends HohenheimTestBase {
@@ -19,42 +19,39 @@ class DatabaseAdminTest extends HohenheimTestBase {
     @Test
     @Order(1)
     void databasesListRendersEmptyState() {
-        navigateToApp("/databases");
+        navigateToApp("/admin/databases");
         waitForHydration();
 
         String body = page.locator("body").textContent();
         assertThat(body).contains("Databases");
-        assertThat(body).contains("Create Database");
-        assertThat(body).contains("No databases yet");
     }
 
     @Test
     @Order(2)
     void createFormShowsEngineAndStorageFields() {
-        navigateToApp("/databases/create");
+        navigateToApp("/admin/databases/new");
         waitForHydration();
 
-        String form = page.locator("form[action='/databases/create']").textContent();
-        assertThat(form).contains("Engine");
-        assertThat(form).contains("Database Name");
-        assertThat(form).contains("Ephemeral Storage");
+        String content = page.content();
+        assertThat(content).contains("engine");
+        assertThat(content).contains("db_name");
+        assertThat(content).contains("ephemeral");
     }
 
     @Test
     @Order(3)
     void sidebarLinksToDatabases() {
-        navigateToApp("/");
+        navigateToApp("/admin");
         waitForHydration();
 
         PlaywrightAssertions.assertThat(
-            page.locator("pl-app-sidebar a[href='/databases']")).hasCount(1);
+            page.locator("pl-app-sidebar a[href='/admin/databases']")).hasCount(1);
     }
 
     @Test
     @Order(4)
-    void detailPageShowsConnectionInfo() {
-        // Insert a record directly (no real container) so the render test stays fast; the detail
-        // handler's live-status probe is best-effort and resolves to "stopped" without one.
+    void restoreTabShowsConnectionInfoAndUploadForm() {
+        // Insert a record directly (no real container) so the render test stays fast.
         DatabaseModel model = Models.get(DatabaseModel.class);
         String name = "detailtest";
         Row row = model.createEmptyRow();
@@ -66,15 +63,15 @@ class DatabaseAdminTest extends HohenheimTestBase {
         row.set(DatabaseModel.DB_NAME, "detaildb");
         row.set(DatabaseModel.EPHEMERAL, false);
         model.save(row);
+        Integer id = row.get(DatabaseModel.ID);
         try {
-            navigateToApp("/databases/" + name);
+            navigateToApp("/admin/databases/" + id + "/page/restore");
             waitForHydration();
 
             String body = page.locator("body").textContent();
             assertThat(body).contains("Connection");
             assertThat(body).contains("detailuser");
             assertThat(body).contains("detaildb");
-            assertThat(body).contains("Restore Backup");
             PlaywrightAssertions.assertThat(page.locator(
                 "form[action='/databases/" + name + "/restore'] input[type='file']")).hasCount(1);
         } finally {

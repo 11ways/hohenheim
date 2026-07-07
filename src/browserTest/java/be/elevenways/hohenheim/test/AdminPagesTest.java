@@ -1,19 +1,26 @@
 package be.elevenways.hohenheim.test;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.*;
-import static org.assertj.core.api.Assertions.*;
 
+import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.*;
 
 /**
- * Tests settings, audit log, and certificate pages.
+ * Settings persistence, audit log, and certificate pages through the
+ * zenit-cms admin.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class AdminPagesTest extends HohenheimTestBase {
@@ -22,27 +29,18 @@ class AdminPagesTest extends HohenheimTestBase {
         return "http://localhost:" + getServerPort();
     }
 
-    private void waitForTitle(String expected) {
-        page.waitForCondition(() -> {
-            var el = page.querySelector(".hh-header__title");
-            return el != null && expected.equals(el.textContent());
-        });
-    }
-
-    // -----------------------------------------------------------------------
-    // Proxy state
-    // -----------------------------------------------------------------------
-
-    @Test
-    @Order(0)
-    void dashboardShowsProxyStateAccurately() {
-        // In tests, the proxy server is not started -- ServerMain.getProxyServer() returns null
-        navigateToApp("/");
-        waitForHydration();
-
-        String content = page.locator(".hh-stat-grid").textContent();
-        // Should show "Not initialized" or "Stopped" -- never "Running"
-        assertThat(content).doesNotContain("Running");
+    private HttpResponse<String> post(String path, String body) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + path))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .header("X-Csrf-Token", csrfToken)
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     // -----------------------------------------------------------------------
@@ -52,38 +50,48 @@ class AdminPagesTest extends HohenheimTestBase {
     @Test
     @Order(1)
     void settingsPageShowsAllGroups() {
-        navigateToApp("/settings");
+        navigateToApp("/admin/settings");
         waitForHydration();
 
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Settings");
         String content = page.content();
         assertThat(content).contains("Proxy");
         assertThat(content).contains("Logging");
         assertThat(content).contains("Security");
-        assertThat(content).contains("Admin");
+        assertThat(content).contains("Let's Encrypt");
     }
 
     @Test
     @Order(2)
-    void settingsPageHasEditableFields() {
-        navigateToApp("/settings");
-        waitForHydration();
+    void settingsSavePersistsToLocalDry() throws Exception {
+        var response = post("/admin/settings",
+            "proxy_http_port=8085&proxy_https_port=8443&proxy_fallback=http%3A%2F%2F127.0.0.1%3A9999"
+            + "&proxy_force_https=on&log_access_path=%2Ftmp%2Faccess.log"
+            + "&sec_log_domain_misses=on&sec_domain_miss_threshold=7"
+            + "&ssl_le_email=admin%40example.com");
+        assertThat(response.statusCode()).isEqualTo(302);
+        assertThat(response.headers().firstValue("Location").orElse(""))
+            .isEqualTo("/admin/settings?saved=true");
 
-        assertThat(page.locator("pl-input").count()).isGreaterThanOrEqualTo(3);
-        assertThat(page.locator("pl-checkbox").count()).isGreaterThanOrEqualTo(3);
-        assertThat(page.locator("form[action='/settings'] pl-button[type='submit']").count()).isEqualTo(1);
+        // The write-back landed in the (test-redirected) local.dry file.
+        Path localDry = Path.of(System.getProperty("hohenheim.local_settings"));
+        assertThat(Files.isRegularFile(localDry)).isTrue();
+        Map<?, ?> parsed = (Map<?, ?>) Zenit.DRY.parse(Files.readString(localDry));
+        Map<?, ?> proxy = (Map<?, ?>) parsed.get("proxy");
+        assertThat(((Number) proxy.get("http_port")).intValue()).isEqualTo(8085);
+        Map<?, ?> security = (Map<?, ?>) parsed.get("security");
+        assertThat(((Number) security.get("domain_miss_threshold")).intValue()).isEqualTo(7);
     }
 
     @Test
     @Order(3)
-    void softNavFromDashboardToSettings() {
-        navigateToApp("/");
-        waitForHydration();
+    void settingsSaveRejectsInvalidPortWithoutClaimingSuccess() throws Exception {
+        var response = post("/admin/settings",
+            "proxy_http_port=not-a-port&proxy_https_port=443&sec_domain_miss_threshold=5");
 
-        page.locator("pl-app-sidebar a[href='/settings']").click();
-        waitForTitle("Settings");
-
-        assertThat(page.url()).endsWith("/settings");
+        assertThat(response.statusCode()).isEqualTo(302);
+        String location = response.headers().firstValue("Location").orElse("");
+        assertThat(location).startsWith("/admin/settings?error=");
+        assertThat(location).doesNotContain("saved=true");
     }
 
     // -----------------------------------------------------------------------
@@ -92,54 +100,21 @@ class AdminPagesTest extends HohenheimTestBase {
 
     @Test
     @Order(10)
-    void auditLogPageRendersTable() {
-        navigateToApp("/audit");
-        waitForHydration();
-
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Audit Log");
-        assertThat(page.locator("pl-table").count()).isEqualTo(1);
-        assertThat(page.locator("pl-table-head").count()).isEqualTo(4);
-    }
-
-    @Test
-    @Order(11)
     void auditLogRecordsCreation() throws Exception {
-        // Create a site first (within same JVM fork)
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
+        var createResponse = post("/admin/sites/new",
+            "name=Audit+Test+Site&site_type=hohenheim%3Adead&source=local");
+        assertThat(createResponse.statusCode()).isIn(200, 302, 303);
 
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + "/sites/create"))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString("name=Audit+Test+Site&site_type=hohenheim%3Adead"))
-            .build();
+        Row site = Models.get(SiteModel.class).find()
+            .where(SiteModel.NAME.eq("Audit Test Site")).first();
+        assertThat(site).isNotNull();
 
-        HttpResponse<String> createResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
-        assertThat(createResponse.statusCode()).isEqualTo(302);
-
-        // Now check audit log page shows the creation entry
-        navigateToApp("/audit");
+        navigateToApp("/admin/audit");
         waitForHydration();
 
-        // Use page content since pl-table-body custom element content may not be in textContent
-        String content = page.locator(".hh-content").textContent();
+        String content = page.locator("body").textContent();
         assertThat(content).contains("created");
-        assertThat(content).contains("site");
-    }
-
-    @Test
-    @Order(12)
-    void softNavFromDashboardToAudit() {
-        navigateToApp("/");
-        waitForHydration();
-
-        page.locator("pl-app-sidebar a[href='/audit']").click();
-        waitForTitle("Audit Log");
-
-        assertThat(page.url()).endsWith("/audit");
+        assertThat(content).contains("Audit Test Site");
     }
 
     // -----------------------------------------------------------------------
@@ -149,100 +124,62 @@ class AdminPagesTest extends HohenheimTestBase {
     @Test
     @Order(19)
     void certificateRequestFormLoads() {
-        navigateToApp("/certificates/request");
+        navigateToApp("/admin/certificates-request");
         waitForHydration();
 
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Request Certificate");
-        assertThat(page.locator("pl-textarea").count()).isGreaterThanOrEqualTo(1);
-        assertThat(page.content()).contains("Let's Encrypt");
+        String content = page.content();
+        assertThat(content).contains("Let's Encrypt");
+        assertThat(content).contains("domains");
     }
 
     @Test
     @Order(20)
-    void certificateUploadFormRendersPlumageComponents() {
-        navigateToApp("/certificates/upload");
-        waitForHydration();
+    void certificateUploadValidatesPems() throws Exception {
+        post("/admin/certificates/new",
+            "nice_name=my-bad-cert&certificate_pem=NOT-A-PEM-BODY&private_key_pem=NOT-A-KEY");
 
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Upload Certificate");
-        assertThat(page.locator("pl-input").count()).isGreaterThanOrEqualTo(1);
-        assertThat(page.locator("pl-textarea").count()).isEqualTo(2);
-        assertThat(page.locator("pl-button").count()).isGreaterThanOrEqualTo(1);
+        Row cert = Models.get(CertificateModel.class).find()
+            .where(CertificateModel.NICE_NAME.eq("my-bad-cert")).first();
+        assertThat(cert)
+            .as("an invalid PEM must not be stored")
+            .isNull();
     }
 
     @Test
     @Order(21)
-    void softNavFromCertificatesListToUpload() {
-        navigateToApp("/certificates");
+    void certificatesListLinksToRequestPage() {
+        navigateToApp("/admin/certificates");
         waitForHydration();
 
-        page.locator("a[href='/certificates/upload']").click();
-        waitForTitle("Upload Certificate");
-
-        assertThat(page.url()).endsWith("/certificates/upload");
+        assertThat(page.locator("a[href='/admin/certificates-request']").count())
+            .isGreaterThanOrEqualTo(1);
     }
 
     @Test
     @Order(22)
-    void proclogHistoryPageRenders() {
-        // Reuse the site created by auditLogRecordsCreation (same JVM fork).
+    void processesTabRendersForASite() throws Exception {
         Row site = Models.get(SiteModel.class).find()
-            .where(SiteModel.NAME.eq("Audit Test Site"))
-            .first();
+            .where(SiteModel.NAME.eq("Audit Test Site")).first();
         assertThat(site).isNotNull();
-        Integer siteId = site.get(SiteModel.ID);
 
-        navigateToApp("/sites/" + siteId + "/proclogs");
+        navigateToApp("/admin/sites/" + site.get(SiteModel.ID) + "/page/processes");
         waitForHydration();
 
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Process Logs");
-        String content = page.locator(".hh-content").textContent();
-        assertThat(content).contains("No process logs captured yet.");
-        assertThat(page.locator("pl-table").count()).isEqualTo(1);
+        String content = page.locator("body").textContent();
+        assertThat(content).contains("Stored process logs");
     }
 
     @Test
     @Order(23)
-    void settingsSaveRejectsInvalidPortWithoutClaimingSuccess() throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + "/settings"))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(
-                "proxy_http_port=not-a-port&proxy_https_port=443&sec_domain_miss_threshold=5"))
-            .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+    void domainsTabRendersForASite() throws Exception {
+        Row site = Models.get(SiteModel.class).find()
+            .where(SiteModel.NAME.eq("Audit Test Site")).first();
+        assertThat(site).isNotNull();
 
-        // Re-renders with the error instead of redirecting to ?saved=true.
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("Proxy HTTP port must be a number between 1 and 65535");
-        assertThat(response.body()).doesNotContain("Settings saved");
-    }
+        navigateToApp("/admin/sites/" + site.get(SiteModel.ID) + "/page/domains");
+        waitForHydration();
 
-    @Test
-    @Order(24)
-    void certificateUploadKeepsInputOnValidationError() throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + "/certificates/upload"))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(
-                "nice_name=my-bad-cert&certificate_pem=NOT-A-PEM-BODY&private_key_pem=NOT-A-KEY"))
-            .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-        // The validation error renders WITH the submitted values still in the form.
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("Invalid certificate PEM");
-        assertThat(response.body()).contains("my-bad-cert");
-        assertThat(response.body()).contains("NOT-A-PEM-BODY");
-        assertThat(response.body()).contains("NOT-A-KEY");
+        String content = page.locator("body").textContent();
+        assertThat(content).contains("No domains configured");
     }
 }

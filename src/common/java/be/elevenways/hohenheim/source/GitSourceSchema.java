@@ -40,15 +40,7 @@ public class GitSourceSchema {
     public static final BooleanField SUBMODULES = SCHEMA.addField(
         BooleanField.builder("submodules").defaultValue(false).build());
 
-    // Sub-schema for build-only environment variables
-    public static final Schema BUILD_ENV_VAR_SCHEMA = new Schema();
-    static {
-        BUILD_ENV_VAR_SCHEMA.addField(StringField.builder().name("name").build());
-        BUILD_ENV_VAR_SCHEMA.addField(StringField.builder().name("value").build());
-    }
-
-    public static final SchemaField BUILD_ENVIRONMENT_VARIABLES = SCHEMA.addField(
-        SchemaField.builder("build_environment_variables")
-            .subSchema(BUILD_ENV_VAR_SCHEMA)
-            .build());
+    // Build-only environment variables as an ordered name -> value map.
+    public static final StringMapField BUILD_ENVIRONMENT_VARIABLES = SCHEMA.addField(
+        StringMapField.builder("build_environment_variables").build());
 }

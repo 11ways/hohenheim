@@ -103,6 +103,11 @@ dependencies {
     commonCompileOnly ('be.elevenways:hawkeye-client:0.1.0-SNAPSHOT') { changing = true }
     commonCompileOnly ('be.elevenways:zenit-common:0.1.0-SNAPSHOT') { changing = true }
     commonCompileOnly ('be.elevenways:plumage-common:0.1.0-SNAPSHOT') { changing = true }
+    commonCompileOnly ('be.elevenways:zenit-forms-common:0.1.0-SNAPSHOT') { changing = true }
+    commonCompileOnly ('be.elevenways:zenit-microcopy-common:0.1.0-SNAPSHOT') { changing = true }
+    commonCompileOnly ('be.elevenways:zenit-auth-common:0.1.0-SNAPSHOT') { changing = true }
+    commonCompileOnly ('be.elevenways:zenit-cms-common:0.1.0-SNAPSHOT') { changing = true }
+    commonCompileOnly ('be.elevenways:zenit-widget-common:0.1.0-SNAPSHOT') { changing = true }
 
     // Client (TeaVM-compiled browser code)
     clientImplementation sourceSets.common.output
@@ -111,6 +116,9 @@ dependencies {
     clientImplementation ('be.elevenways:hawkeye-client:0.1.0-SNAPSHOT') { changing = true }
     clientImplementation ('be.elevenways:zenit-client:0.1.0-SNAPSHOT') { changing = true }
     clientImplementation ('be.elevenways:plumage-client:0.1.0-SNAPSHOT') { changing = true }
+    clientImplementation ('be.elevenways:zenit-forms-client:0.1.0-SNAPSHOT') { changing = true }
+    clientImplementation ('be.elevenways:zenit-microcopy-client:0.1.0-SNAPSHOT') { changing = true }
+    clientImplementation ('be.elevenways:zenit-cms-client:0.1.0-SNAPSHOT') { changing = true }
 
     // Server
     serverImplementation sourceSets.common.output
@@ -119,6 +127,11 @@ dependencies {
     serverImplementation ('be.elevenways:zenit-server:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:zenit-auth-server:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:plumage-server:0.1.0-SNAPSHOT') { changing = true }
+    serverImplementation ('be.elevenways:plumage-common:0.1.0-SNAPSHOT') { changing = true }
+    serverImplementation ('be.elevenways:zenit-forms-common:0.1.0-SNAPSHOT') { changing = true }
+    serverImplementation ('be.elevenways:zenit-forms-server:0.1.0-SNAPSHOT') { changing = true }
+    serverImplementation ('be.elevenways:zenit-microcopy-server:0.1.0-SNAPSHOT') { changing = true }
+    serverImplementation ('be.elevenways:zenit-cms-server:0.1.0-SNAPSHOT') { changing = true }
 
     commonImplementation 'org.checkerframework:checker-qual:4.2.0'
     clientImplementation 'org.checkerframework:checker-qual:4.2.0'
@@ -154,6 +167,9 @@ dependencies {
     browserTestImplementation ('be.elevenways:hawkeye-server:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:hawkeye-test-support:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:plumage-server:0.1.0-SNAPSHOT') { changing = true }
+    browserTestImplementation ('be.elevenways:zenit-forms-server:0.1.0-SNAPSHOT') { changing = true }
+    browserTestImplementation ('be.elevenways:zenit-microcopy-server:0.1.0-SNAPSHOT') { changing = true }
+    browserTestImplementation ('be.elevenways:zenit-cms-server:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation 'org.xerial:sqlite-jdbc:3.45.1.0'
     browserTestImplementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
     browserTestImplementation 'org.shredzone.acme4j:acme4j-client:3.4.0'
@@ -229,7 +245,9 @@ teavm {
         sourceFilePolicy = SourceFilePolicy.LINK_LOCAL_FILES
         optimization = OptimizationLevel.NONE
         mainClass = "be.elevenways.hohenheim.ClientMain"
-        targetFileName = "hohenheim.js"
+        // The zenit-cms shell hardcodes <script src="/cms.js">, so the bundle
+        // must land at public/cms.js.
+        targetFileName = "cms.js"
     }
 }
 
@@ -282,7 +300,7 @@ tasks.named('clean') {
     doFirst {
         delete(layout.buildDirectory.dir('generated-sources/hawkeye'))
         delete(layout.buildDirectory.dir('generated/teavm'))
-        delete('public/hohenheim.js')
+        delete('public/cms.js')
         delete('public/hohenheim.css')
     }
 }

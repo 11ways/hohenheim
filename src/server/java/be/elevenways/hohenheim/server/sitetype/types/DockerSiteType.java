@@ -39,15 +39,9 @@ public class DockerSiteType implements SiteTypeHandler {
     public static final StringField SERVER = SETTINGS_SCHEMA.addField(
         StringField.builder().name("server").build());
 
-    // Reuse the same env-var sub-schema shape as the node/command site types.
-    public static final Schema ENV_VAR_SCHEMA = new Schema();
-    static {
-        ENV_VAR_SCHEMA.addField(StringField.builder().name("name").build());
-        ENV_VAR_SCHEMA.addField(StringField.builder().name("value").build());
-    }
-
-    public static final SchemaField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
-        SchemaField.builder("environment_variables").subSchema(ENV_VAR_SCHEMA).build());
+    // Environment variables as an ordered name -> value map
+    public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
+        StringMapField.builder("environment_variables").build());
 
     @Override
     public String getDisplayName() { return "Docker"; }

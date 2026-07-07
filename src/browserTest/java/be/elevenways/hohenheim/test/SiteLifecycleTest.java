@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.test;
+
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 
 import org.junit.jupiter.api.*;
@@ -11,22 +13,19 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.URI;
+import java.util.List;
+import java.util.Map;
 
 /**
- * Tests the full site lifecycle: create, view in list, edit, delete.
+ * Full site lifecycle through the zenit-cms resource routes: create with
+ * type-discriminated settings, nested env-var/api-key transports, git source
+ * settings with webhook-secret generation, relation picks, and soft delete.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SiteLifecycleTest extends HohenheimTestBase {
 
     private String baseUrl() {
         return "http://localhost:" + getServerPort();
-    }
-
-    private void waitForTitle(String expected) {
-        page.waitForCondition(() -> {
-            var el = page.querySelector(".hh-header__title");
-            return el != null && expected.equals(el.textContent());
-        });
     }
 
     private HttpResponse<String> postForm(String path, String body) throws Exception {
@@ -45,356 +44,217 @@ class SiteLifecycleTest extends HohenheimTestBase {
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    private Row site(String name) {
+        return Models.get(SiteModel.class).find().where(SiteModel.NAME.eq(name)).first();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> settingsOf(String name) {
+        Row row = site(name);
+        assertThat(row).isNotNull();
+        Object settings = row.get(SiteModel.SETTINGS);
+        return settings instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+    }
+
     @Test
     @Order(1)
-    void createProxySite() throws Exception {
-        var response = postForm("/sites/create",
-            "name=Test+Backend&site_type=hohenheim%3Aproxy"
-            + "&forward_host=127.0.0.1&forward_port=8080&hostname=test.example.com");
+    void createProxySiteWithNestedSettings() throws Exception {
+        var response = postForm("/admin/sites/new",
+            "name=Test+Backend&site_type=hohenheim%3Aproxy&source=local"
+            + "&settings.forward_host=127.0.0.1&settings.forward_port=8080");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        assertThat(response.statusCode())
-            .describedAs("POST returned %d, body: %s", response.statusCode(),
-                response.body().substring(0, Math.min(500, response.body().length())))
-            .isEqualTo(302);
+        Map<String, Object> settings = settingsOf("Test Backend");
+        assertThat(settings.get("forward_host")).isEqualTo("127.0.0.1");
+        assertThat(String.valueOf(settings.get("forward_port"))).isEqualTo("8080");
     }
 
     @Test
     @Order(2)
     void siteAppearsInList() {
-        navigateToApp("/sites");
+        navigateToApp("/admin/sites");
         waitForHydration();
-
-        assertThat(page.locator(".hh-site-link").count()).isGreaterThan(0);
-        assertThat(page.locator(".hh-site-link").first().textContent()).isEqualTo("Test Backend");
+        assertThat(page.content()).contains("Test Backend");
     }
 
     @Test
     @Order(3)
-    void dashboardShowsSiteCount() {
-        navigateToApp("/");
+    void editPageRendersTheSite() {
+        Row row = site("Test Backend");
+        navigateToApp("/admin/sites/" + row.get(SiteModel.ID));
         waitForHydration();
 
-        String content = page.locator(".hh-stat-grid").textContent();
-        assertThat(content).contains("Sites");
+        assertThat(page.locator("form").count()).isGreaterThan(0);
+        assertThat(page.content()).contains("Test Backend");
+        assertThat(page.content()).contains("127.0.0.1");
     }
 
     @Test
     @Order(4)
-    void navigateToEditPage() {
-        navigateToApp("/sites");
-        waitForHydration();
+    void createNodeSiteWithEnvVarsAndApiKeys() throws Exception {
+        var response = postForm("/admin/sites/new",
+            "name=Node+App&site_type=hohenheim%3Anode&source=local"
+            + "&settings.script="
+            + "&settings.use_ports=true"
+            + "&settings.environment_variables.0.key=NODE_ENV"
+            + "&settings.environment_variables.0.value=production"
+            + "&settings.environment_variables.1.key=APP_PORT"
+            + "&settings.environment_variables.1.value=3000"
+            + "&settings.api_keys.0=alpha-key"
+            + "&settings.api_keys.1=beta-key");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        page.locator(".hh-site-link").first().click();
+        Map<String, Object> settings = settingsOf("Node App");
 
-        page.waitForCondition(() -> {
-            var el = page.querySelector(".hh-header__title");
-            return el != null && "Test Backend".equals(el.textContent());
-        });
+        @SuppressWarnings("unchecked")
+        Map<String, String> env = (Map<String, String>) settings.get("environment_variables");
+        assertThat(env)
+            .containsEntry("NODE_ENV", "production")
+            .containsEntry("APP_PORT", "3000");
 
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Test Backend");
+        @SuppressWarnings("unchecked")
+        List<String> apiKeys = (List<String>) settings.get("api_keys");
+        assertThat(apiKeys).containsExactly("alpha-key", "beta-key");
+        assertThat(settings.get("use_ports")).isEqualTo(true);
     }
 
     @Test
     @Order(5)
-    void editPageShowsDomainAndDangerZone() {
-        navigateToApp("/sites");
+    void nodeSiteEditRendersEnvVarEditor() {
+        Row row = site("Node App");
+        navigateToApp("/admin/sites/" + row.get(SiteModel.ID));
         waitForHydration();
 
-        page.locator(".hh-site-link").first().click();
-        page.waitForCondition(() -> {
-            var el = page.querySelector(".hh-header__title");
-            return el != null && "Test Backend".equals(el.textContent());
-        });
-
-        assertThat(page.locator("pl-card").count()).isGreaterThan(0);
-        assertThat(page.locator("form").count()).isGreaterThan(0);
-
         String content = page.content();
-        assertThat(content).contains("test.example.com");
-        assertThat(content).contains("Danger Zone");
+        assertThat(content).contains("environment_variables");
+        assertThat(content).contains("NODE_ENV");
+        assertThat(content).contains("production");
+        assertThat(content).contains("alpha-key");
     }
 
     @Test
     @Order(6)
-    void createStaticSite() throws Exception {
-        var response = postForm("/sites/create",
-            "name=Static+Files&site_type=hohenheim%3Astatic&root_path=%2Fvar%2Fwww%2Fstatic");
+    void nodeSiteUpdateRoundTripsUsePorts() throws Exception {
+        Row row = site("Node App");
+        String path = "/admin/sites/" + row.get(SiteModel.ID);
 
-        assertThat(response.statusCode()).isEqualTo(302);
+        var response = postForm(path,
+            "name=Node+App&site_type=hohenheim%3Anode&source=local&settings.use_ports=false");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+        assertThat(settingsOf("Node App").get("use_ports")).isEqualTo(false);
+
+        response = postForm(path,
+            "name=Node+App&site_type=hohenheim%3Anode&source=local&settings.use_ports=true");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+        assertThat(settingsOf("Node App").get("use_ports")).isEqualTo(true);
     }
 
     @Test
     @Order(7)
-    void listShowsBothSites() {
-        navigateToApp("/sites");
-        waitForHydration();
+    void createRedirectSite() throws Exception {
+        var response = postForm("/admin/sites/new",
+            "name=Old+Domain&site_type=hohenheim%3Aredirect&source=local"
+            + "&settings.target_url=https%3A%2F%2Fexample.com&settings.http_status=301");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        assertThat(page.locator(".hh-site-link").count()).isEqualTo(2);
+        Map<String, Object> settings = settingsOf("Old Domain");
+        assertThat(settings.get("target_url")).isEqualTo("https://example.com");
     }
 
     @Test
     @Order(8)
-    void deleteSite() throws Exception {
-        navigateToApp("/sites");
-        waitForHydration();
+    void gitSourcedSiteGetsAWebhookSecret() throws Exception {
+        var response = postForm("/admin/sites/new",
+            "name=Git+App&site_type=hohenheim%3Astatic&source=git"
+            + "&settings.root_path=%2Fvar%2Fwww%2Fgitapp"
+            + "&source_settings.repository_url=https%3A%2F%2Fexample.com%2Frepo.git"
+            + "&source_settings.build_environment_variables.0.key=CI"
+            + "&source_settings.build_environment_variables.0.value=true");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        // Get the site link's href to extract the ID
-        String href = page.locator(".hh-site-link").first().getAttribute("href");
-        assertThat(href).startsWith("/sites/");
+        Row row = site("Git App");
+        assertThat(row).isNotNull();
+        assertThat((String) row.get(SiteModel.SOURCE)).isEqualTo(SiteModel.SOURCE_GIT);
 
-        var response = postForm(href + "/delete", "");
-        assertThat(response.statusCode()).isEqualTo(302);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sourceSettings = (Map<String, Object>) row.get(SiteModel.SOURCE_SETTINGS);
+        assertThat(sourceSettings.get("repository_url")).isEqualTo("https://example.com/repo.git");
+        assertThat(String.valueOf(sourceSettings.get("webhook_secret")))
+            .as("a webhook secret is auto-generated on first save")
+            .isNotBlank();
+
+        @SuppressWarnings("unchecked")
+        Map<String, String> buildEnv = (Map<String, String>) sourceSettings.get("build_environment_variables");
+        assertThat(buildEnv).containsEntry("CI", "true");
     }
 
     @Test
     @Order(9)
-    void listShowsOneLessSiteAfterDelete() {
-        navigateToApp("/sites");
-        waitForHydration();
+    void siteFormAttachesAccessList() throws Exception {
+        var response = postForm("/admin/access-lists/new",
+            "name=Office+Only&satisfy=any&allowed_ips=10.0.0.0%2F8");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        assertThat(page.locator(".hh-site-link").count()).isEqualTo(1);
+        Row listRow = Models.get(AccessListModel.class).find()
+            .where(AccessListModel.NAME.eq("Office Only")).first();
+        assertThat(listRow).isNotNull();
+        Integer listId = listRow.get(AccessListModel.ID);
+
+        Row row = site("Old Domain");
+        response = postForm("/admin/sites/" + row.get(SiteModel.ID),
+            "name=Old+Domain&site_type=hohenheim%3Aredirect&source=local"
+            + "&settings.target_url=https%3A%2F%2Fexample.com"
+            + "&access_list_id=" + listId);
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+
+        Row updated = site("Old Domain");
+        assertThat((Integer) updated.get(SiteModel.ACCESS_LIST_ID)).isEqualTo(listId);
     }
 
     @Test
     @Order(10)
-    void createRedirectSite() throws Exception {
-        var response = postForm("/sites/create",
-            "name=Old+Domain&site_type=hohenheim%3Aredirect"
-            + "&target_url=https%3A%2F%2Fexample.com&http_status=301"
-            + "&hostname=old.example.com");
+    void toggleActionDisablesAndEnables() throws Exception {
+        Row row = site("Old Domain");
+        Integer id = row.get(SiteModel.ID);
+        assertThat((Boolean) row.get(SiteModel.ENABLED)).isNotEqualTo(Boolean.FALSE);
 
-        assertThat(response.statusCode()).isEqualTo(302);
+        postForm("/admin/sites/" + id + "/action/toggle_site", "");
+        assertThat((Boolean) Models.get(SiteModel.class).findById(id).get(SiteModel.ENABLED))
+            .isEqualTo(false);
+
+        postForm("/admin/sites/" + id + "/action/toggle_site", "");
+        assertThat((Boolean) Models.get(SiteModel.class).findById(id).get(SiteModel.ENABLED))
+            .isEqualTo(true);
     }
 
     @Test
     @Order(11)
-    void listShowsAllTypes() {
-        navigateToApp("/sites");
-        waitForHydration();
+    void cloneActionCopiesTheSite() throws Exception {
+        Row row = site("Old Domain");
+        var response = postForm("/admin/sites/" + row.get(SiteModel.ID) + "/action/clone_site", "");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        // 1 remaining (static) + 1 new (redirect) = 2
-        assertThat(page.locator(".hh-site-link").count()).isEqualTo(2);
+        Row clone = site("Old Domain (copy)");
+        assertThat(clone).isNotNull();
+        assertThat((Boolean) clone.get(SiteModel.ENABLED))
+            .as("clones start disabled")
+            .isEqualTo(false);
     }
 
-    /**
-     * Exercises the schema-driven form extraction for nested sub-schemas (environment_variables
-     * as List<Map>) and flat lists (api_keys as List<String>). The script field is left empty
-     * so no child process is actually spawned.
-     */
     @Test
     @Order(12)
-    void createNodeSiteWithEnvVarsAndApiKeys() throws Exception {
-        var response = postForm("/sites/create",
-            "name=Node+App&site_type=hohenheim%3Anode"
-            + "&script=&node_path=&user=&use_ports=on"
-            + "&environment_variables%5B0%5D.name=NODE_ENV"
-            + "&environment_variables%5B0%5D.value=production"
-            + "&environment_variables%5B1%5D.name=PORT"
-            + "&environment_variables%5B1%5D.value=3000"
-            + "&api_keys%5B0%5D=alpha-key"
-            + "&api_keys%5B1%5D=beta-key");
+    void deleteSoftDeletesAndHidesFromList() throws Exception {
+        Row row = site("Git App");
+        Integer id = row.get(SiteModel.ID);
 
-        assertThat(response.statusCode())
-            .describedAs("POST returned %d, body: %s", response.statusCode(),
-                response.body().substring(0, Math.min(500, response.body().length())))
-            .isEqualTo(302);
-    }
+        var response = postForm("/admin/sites/" + id + "/delete", "");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
 
-    @Test
-    @Order(13)
-    void nodeSiteEditShowsRoundTrippedEnvVarsAndApiKeys() {
-        navigateToApp("/sites");
+        Row after = Models.get(SiteModel.class).findById(id);
+        assertThat((Object) after.get(SiteModel.DELETED_AT)).isNotNull();
+
+        navigateToApp("/admin/sites");
         waitForHydration();
-
-        // Find the Node App row and click it
-        var links = page.locator(".hh-site-link").all();
-        String targetHref = null;
-        for (var link : links) {
-            if ("Node App".equals(link.textContent())) {
-                targetHref = link.getAttribute("href");
-                break;
-            }
-        }
-        assertThat(targetHref).describedAs("Node App link should exist").isNotNull();
-
-        navigateToApp(targetHref);
-        waitForHydration();
-
-        // The key-value editor should render one row per stored env var, with the
-        // correct indexed form names. Use the name attribute to target them.
-        String content = page.content();
-        assertThat(content).contains("environment_variables[0].name");
-        assertThat(content).contains("environment_variables[0].value");
-        assertThat(content).contains("environment_variables[1].name");
-        assertThat(content).contains("environment_variables[1].value");
-        assertThat(content).contains("api_keys[0]");
-        assertThat(content).contains("api_keys[1]");
-
-        // And the values themselves should be present in the rendered inputs
-        assertThat(page.locator("pl-input[name='environment_variables[0].name'] input").inputValue())
-            .isEqualTo("NODE_ENV");
-        assertThat(page.locator("pl-input[name='environment_variables[0].value'] input").inputValue())
-            .isEqualTo("production");
-        assertThat(page.locator("pl-input[name='environment_variables[1].name'] input").inputValue())
-            .isEqualTo("PORT");
-        assertThat(page.locator("pl-input[name='environment_variables[1].value'] input").inputValue())
-            .isEqualTo("3000");
-        assertThat(page.locator("pl-input[name='api_keys[0]'] input").inputValue())
-            .isEqualTo("alpha-key");
-        assertThat(page.locator("pl-input[name='api_keys[1]'] input").inputValue())
-            .isEqualTo("beta-key");
-    }
-
-    /** Find the edit-page href of the site with the given name in the sites list. */
-    private String siteHref(String name) {
-        navigateToApp("/sites");
-        waitForHydration();
-        for (var link : page.locator(".hh-site-link").all()) {
-            if (name.equals(link.textContent())) {
-                return link.getAttribute("href");
-            }
-        }
-        throw new AssertionError("No site named " + name + " in the list");
-    }
-
-    /**
-     * The node form renders a use_ports control (default-checked) — before it existed, every
-     * save materialized the absent checkbox to false and silently flipped sites to unix sockets.
-     */
-    @Test
-    @Order(14)
-    void nodeSiteEditShowsUsePortsCheckedByDefault() {
-        navigateToApp(siteHref("Node App"));
-        waitForHydration();
-
-        assertThat(page.locator("#use_ports").count()).isEqualTo(1);
-        assertThat(page.locator("#use_ports").isChecked()).isTrue();
-        assertThat(page.locator("#wait_for_ready").isChecked()).isFalse();
-    }
-
-    @Test
-    @Order(15)
-    void nodeSiteUpdateRoundTripsUsePorts() throws Exception {
-        String href = siteHref("Node App");
-
-        // Save without the checkbox -> explicit false, edit page renders it unchecked.
-        var response = postForm(href, "name=Node+App&site_type=hohenheim%3Anode&script=");
-        assertThat(response.statusCode()).isEqualTo(302);
-        navigateToApp(href);
-        waitForHydration();
-        assertThat(page.locator("#use_ports").isChecked()).isFalse();
-
-        // Save with the checkbox -> back to true.
-        response = postForm(href, "name=Node+App&site_type=hohenheim%3Anode&script=&use_ports=on");
-        assertThat(response.statusCode()).isEqualTo(302);
-        navigateToApp(href);
-        waitForHydration();
-        assertThat(page.locator("#use_ports").isChecked()).isTrue();
-    }
-
-    @Test
-    @Order(16)
-    void redirectSiteEditShowsPreservePath() throws Exception {
-        String href = siteHref("Old Domain");
-
-        navigateToApp(href);
-        waitForHydration();
-        assertThat(page.locator("#preserve_path").count()).isEqualTo(1);
-        assertThat(page.locator("#preserve_path").isChecked()).isFalse();
-
-        var response = postForm(href, "name=Old+Domain&site_type=hohenheim%3Aredirect"
-            + "&target_url=https%3A%2F%2Fexample.com&http_status=301&preserve_path=on");
-        assertThat(response.statusCode()).isEqualTo(302);
-
-        navigateToApp(href);
-        waitForHydration();
-        assertThat(page.locator("#preserve_path").isChecked()).isTrue();
-    }
-
-    @Test
-    @Order(17)
-    void dockerSiteEditRoundTripsEnvVars() throws Exception {
-        var response = postForm("/sites/create",
-            "name=Docker+App&site_type=hohenheim%3Adocker&image=nginx"
-            + "&environment_variables%5B0%5D.name=APP_MODE"
-            + "&environment_variables%5B0%5D.value=staging");
-        assertThat(response.statusCode()).isEqualTo(302);
-
-        navigateToApp(siteHref("Docker App"));
-        waitForHydration();
-
-        assertThat(page.locator("pl-input[name='environment_variables[0].name'] input").inputValue())
-            .isEqualTo("APP_MODE");
-        assertThat(page.locator("pl-input[name='environment_variables[0].value'] input").inputValue())
-            .isEqualTo("staging");
-    }
-
-    @Test
-    @Order(18)
-    void gitSourcedSiteEditRoundTripsBuildEnvVars() throws Exception {
-        var response = postForm("/sites/create",
-            "name=Git+App&site_type=hohenheim%3Astatic&root_path=%2Fvar%2Fwww%2Fgitapp"
-            + "&source=git&repository_url=https%3A%2F%2Fexample.com%2Frepo.git"
-            + "&build_environment_variables%5B0%5D.name=CI"
-            + "&build_environment_variables%5B0%5D.value=true");
-        assertThat(response.statusCode()).isEqualTo(302);
-
-        navigateToApp(siteHref("Git App"));
-        waitForHydration();
-
-        assertThat(page.locator("pl-input[name='build_environment_variables[0].name'] input").inputValue())
-            .isEqualTo("CI");
-        assertThat(page.locator("pl-input[name='build_environment_variables[0].value'] input").inputValue())
-            .isEqualTo("true");
-    }
-
-    /** The site form can attach an access list, and the choice persists + renders on edit. */
-    @Test
-    @Order(19)
-    void siteFormAttachesAccessList() throws Exception {
-        var response = postForm("/access-lists/create",
-            "name=Office+Only&satisfy=any&allowed_ips=10.0.0.0%2F8");
-        assertThat(response.statusCode()).isEqualTo(302);
-
-        var accessListModel = Models.get(AccessListModel.class);
-        var listRow = accessListModel.find().where(AccessListModel.NAME.eq("Office Only")).first();
-        assertThat(listRow).isNotNull();
-        Integer listId = listRow.get(AccessListModel.ID);
-
-        String href = siteHref("Docker App");
-        response = postForm(href, "name=Docker+App&site_type=hohenheim%3Adocker&image=nginx"
-            + "&access_list_id=" + listId);
-        assertThat(response.statusCode()).isEqualTo(302);
-
-        var siteModel = Models.get(SiteModel.class);
-        var siteRow = siteModel.find().where(SiteModel.NAME.eq("Docker App")).first();
-        assertThat((Integer) siteRow.get(SiteModel.ACCESS_LIST_ID)).isEqualTo(listId);
-
-        navigateToApp(href);
-        waitForHydration();
-        assertThat(page.locator("#access-list").count()).isEqualTo(1);
-        assertThat(page.content()).contains("Office Only");
-    }
-
-    /** Destructive actions go through the PlAlertDialog; confirming submits the portalled form. */
-    @Test
-    @Order(20)
-    void deleteSiteRequiresDialogConfirmation() {
-        String href = siteHref("Git App");
-        navigateToApp(href);
-        waitForHydration();
-
-        // Clicking the trigger opens the dialog instead of submitting.
-        page.locator(".hh-danger-zone pl-button").first().click();
-        page.waitForSelector(".pl-alertdialog-modal");
-        assertThat(page.locator(".pl-alertdialog-modal").textContent()).contains("soft-deleted");
-
-        // Confirming actually deletes (the submit button lives in the portal, tied via form=).
-        page.locator(".pl-alertdialog-modal pl-button[variant='destructive']").click();
-        page.waitForURL("**/sites");
-        waitForHydration();
-        for (var link : page.locator(".hh-site-link").all()) {
-            assertThat(link.textContent()).isNotEqualTo("Git App");
-        }
+        assertThat(page.content()).doesNotContain("Git App");
     }
 }

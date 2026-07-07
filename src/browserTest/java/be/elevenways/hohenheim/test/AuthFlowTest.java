@@ -46,9 +46,10 @@ class AuthFlowTest extends HohenheimTestBase {
     @Test
     @Order(3)
     void authenticatedDashboardAccessWorks() {
-        navigateToApp("/");
+        // "/" redirects to the /admin panel, which lands on the dashboard.
+        navigateToApp("/admin");
         waitForHydration();
-        assertThat(page.locator(".hh-header__title").textContent()).isEqualTo("Dashboard");
+        assertThat(page.locator("pl-app-sidebar").count()).isEqualTo(1);
     }
 
     @Test

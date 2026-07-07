@@ -1,0 +1,10 @@
+{
+    "name": "Hohenheim",
+    "content": {
+        "locales": "en"
+    },
+    "brand": {
+        "name": "Hohenheim",
+        "seed_color": "#b45309"
+    }
+}

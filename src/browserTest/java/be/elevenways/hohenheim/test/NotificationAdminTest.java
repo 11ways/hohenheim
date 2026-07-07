@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import org.junit.jupiter.api.*;
 
@@ -11,84 +14,85 @@ import java.net.http.HttpResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Render-level test for the notifications admin UI. */
+/**
+ * Notification-channel CRUD through the zenit-cms resource routes plus the
+ * test-send row action.
+ */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class NotificationAdminTest extends HohenheimTestBase {
 
     @Test
     @Order(1)
     void notificationsListRendersEmptyState() {
-        navigateToApp("/notifications");
+        navigateToApp("/admin/notifications");
         waitForHydration();
 
         String body = page.locator("body").textContent();
-        assertThat(body).contains("Notifications");
-        assertThat(body).contains("Add Channel");
-        assertThat(body).contains("No channels yet");
+        assertThat(body).contains("Notification Channels");
     }
 
     @Test
     @Order(2)
-    void addFormShowsFormatAndUrlFields() {
-        navigateToApp("/notifications/create");
+    void sidebarLinksToNotifications() {
+        navigateToApp("/admin");
         waitForHydration();
 
-        String form = page.locator("form[action='/notifications/create']").textContent();
-        assertThat(form).contains("Format");
-        assertThat(form).contains("URL");
+        PlaywrightAssertions.assertThat(
+            page.locator("pl-app-sidebar a[href='/admin/notifications']")).hasCount(1);
     }
 
     @Test
     @Order(3)
-    void sidebarLinksToNotifications() {
-        navigateToApp("/");
-        waitForHydration();
+    void channelCreateAndEditRoundTrips() throws Exception {
+        var create = postForm("/admin/notifications/new",
+            "name=ops-room&format=slack&url=https%3A%2F%2Fhooks.example%2Fold");
+        assertThat(create.statusCode()).isIn(200, 302, 303);
 
-        PlaywrightAssertions.assertThat(
-            page.locator("pl-app-sidebar a[href='/notifications']")).hasCount(1);
+        Row row = Models.get(NotificationChannelModel.class).find()
+            .where(NotificationChannelModel.NAME.eq("ops-room")).first();
+        assertThat(row).isNotNull();
+        assertThat((String) row.get(NotificationChannelModel.URL)).isEqualTo("https://hooks.example/old");
+        assertThat((String) row.get(NotificationChannelModel.KIND)).isEqualTo("webhook");
+        Integer id = row.get(NotificationChannelModel.ID);
+
+        var update = postForm("/admin/notifications/" + id,
+            "name=ops-room&format=discord&url=https%3A%2F%2Fhooks.example%2Fnew");
+        assertThat(update.statusCode()).isIn(200, 302, 303);
+
+        Row updated = Models.get(NotificationChannelModel.class).findById(id);
+        assertThat((String) updated.get(NotificationChannelModel.URL)).isEqualTo("https://hooks.example/new");
+        assertThat((String) updated.get(NotificationChannelModel.FORMAT)).isEqualTo("discord");
     }
 
     @Test
     @Order(4)
-    void channelEditRoundTrips() throws Exception {
-        var create = postForm("/notifications/create",
-            "name=ops-room&format=slack&url=https%3A%2F%2Fhooks.example%2Fold");
-        assertThat(create.statusCode()).isEqualTo(302);
-
-        navigateToApp("/notifications/ops-room/edit");
-        waitForHydration();
-        assertThat(page.locator("pl-input[name='url'] input").inputValue())
-            .isEqualTo("https://hooks.example/old");
-
-        var update = postForm("/notifications/ops-room",
-            "format=discord&url=https%3A%2F%2Fhooks.example%2Fnew");
-        assertThat(update.statusCode()).isEqualTo(302);
-
-        navigateToApp("/notifications");
-        waitForHydration();
-        String body = page.locator("body").textContent();
-        assertThat(body).contains("https://hooks.example/new");
-        assertThat(body).contains("discord");
+    void invalidUrlIsRejected() throws Exception {
+        var create = postForm("/admin/notifications/new",
+            "name=bad-hook&format=slack&url=ftp%3A%2F%2Fnope");
+        // Save fails: the resource rerenders the form with a violation.
+        Row row = Models.get(NotificationChannelModel.class).find()
+            .where(NotificationChannelModel.NAME.eq("bad-hook")).first();
+        assertThat(row).isNull();
     }
 
     @Test
     @Order(5)
-    void testSendReportsDeliveryFailure() throws Exception {
+    void testSendActionReportsDeliveryFailure() throws Exception {
         // A channel pointing at a port nothing listens on -> delivery must report failure.
-        var create = postForm("/notifications/create",
+        var create = postForm("/admin/notifications/new",
             "name=dead-hook&format=generic&url=http%3A%2F%2F127.0.0.1%3A1%2Fhook");
-        assertThat(create.statusCode()).isEqualTo(302);
+        assertThat(create.statusCode()).isIn(200, 302, 303);
 
-        var test = postForm("/notifications/dead-hook/test", "");
-        assertThat(test.statusCode()).isEqualTo(302);
-        assertThat(test.headers().firstValue("Location").orElse(""))
-            .isEqualTo("/notifications?test=failed&channel=dead-hook");
+        Row row = Models.get(NotificationChannelModel.class).find()
+            .where(NotificationChannelModel.NAME.eq("dead-hook")).first();
+        assertThat(row).isNotNull();
+        Integer id = row.get(NotificationChannelModel.ID);
 
-        navigateToApp("/notifications?test=failed&channel=dead-hook");
-        waitForHydration();
-        String body = page.locator("body").textContent();
-        assertThat(body).contains("Test failed");
-        assertThat(body).contains("dead-hook");
+        var test = postForm("/admin/notifications/" + id + "/action/test_channel", "");
+        assertThat(test.statusCode()).isIn(200, 302, 303);
+        // Failure surfaces as an error-toast flash on the redirect target.
+        String location = test.headers().firstValue("Location").orElse("");
+        assertThat(location).contains("_flash=");
     }
 
     private HttpResponse<String> postForm(String path, String body) throws Exception {

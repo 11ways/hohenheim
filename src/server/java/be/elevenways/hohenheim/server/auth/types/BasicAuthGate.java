@@ -2,6 +2,9 @@ package be.elevenways.hohenheim.server.auth.types;
 
 import be.elevenways.hohenheim.auth.SiteAuthDecision;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.server.auth.SiteAuthContext;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthKeys;
@@ -13,7 +16,6 @@ import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -27,18 +29,29 @@ import java.util.Map;
 public class BasicAuthGate implements SiteAuthGate {
 
     private static final HttpString WWW_AUTHENTICATE = new HttpString("WWW-Authenticate");
-    private static final String CHALLENGE = "Basic realm=\"Restricted\"";
 
     private final SessionStore store;
     private final int siteId;
     private final String providerSlug;
-    private final List<Map<String, Object>> credentials;
+    private final Map<String, String> credentials;
+    private final String challenge;
 
     BasicAuthGate(SiteAuthContext context) {
         this.store = context.sessionStore();
         this.siteId = context.siteId();
         this.providerSlug = context.providerSlug();
-        this.credentials = BasicAuthProviderType.credentialList(configMap(context));
+        this.credentials = BasicAuthProviderType.credentialHashes(configMap(context));
+        this.challenge = "Basic realm=\"" + realmName(this.siteId) + "\"";
+    }
+
+    /** The site's name as the Basic realm (quotes stripped); falls back to "Restricted". */
+    private static String realmName(int siteId) {
+        Row site = Models.get(SiteModel.class).findById(siteId);
+        String name = site != null ? site.get(SiteModel.NAME) : null;
+        if (name == null || name.isBlank()) {
+            return "Restricted";
+        }
+        return name.replace("\"", "");
     }
 
     @SuppressWarnings("unchecked")
@@ -57,7 +70,7 @@ public class BasicAuthGate implements SiteAuthGate {
         String header = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
         String username = BasicAuthProviderType.verify(header, credentials);
         if (username == null) {
-            exchange.getResponseHeaders().put(WWW_AUTHENTICATE, CHALLENGE);
+            exchange.getResponseHeaders().put(WWW_AUTHENTICATE, challenge);
             return SiteAuthDecision.deny(401, "Unauthorized");
         }
 

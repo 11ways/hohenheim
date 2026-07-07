@@ -4,9 +4,11 @@ Reverse proxy / app manager. Starts and supervises backend processes (node, stat
 
 ## Stack
 
-- Java 22, Gradle (source sets: `common`, `client`, `server`, `browserTest`)
-- Zenit (web framework), Hawkeye (templates), Protoblast (utilities), Plumage (UI components)
-- TeaVM compiles `client` + `common` to JS for the browser
+- Java 25, Gradle (source sets: `common`, `client`, `server`, `browserTest`)
+- Zenit (web framework), zenit-cms (admin panel), zenit-forms, zenit-auth,
+  Hawkeye (templates), Protoblast (utilities), Plumage (UI components)
+- TeaVM compiles `client` + `common` to `public/cms.js` (the zenit-cms shell
+  hardcodes `<script src="/cms.js">`)
 - SQLite via `sqlite-jdbc` (file: `hohenheim.db`)
 - acme4j for Let's Encrypt, BouncyCastle for PEM
 - Playwright for browser tests
@@ -27,10 +29,25 @@ Use `zenit-dev` for all build/test/run cycles. Do not invoke `./gradlew` directl
 
 ## Architecture notes
 
-- Site types are registered via `SiteTypeRegistry`. Each type declares its schema, admin form, and request handler. Adding a type means implementing one class and registering it — no edits to existing dispatch code. See `docs/architecture-site-types.md`.
-- Current types in `src/server/java/be/elevenways/hohenheim/server/sitetype/types/`: `AlchemySiteType`, `CommandSiteType`, `DeadSiteType`, `NodeSiteType`, `ProxySiteType`, `RedirectSiteType`, `StaticSiteType`.
-- Common vs server split: `SiteTypeInfo` lives in `common` (drives admin UI and schema), `SiteTypeHandler` factories live on the server (drive the proxy engine).
+- The admin UI is a zenit-cms panel served at `/admin` (`server/cms/HohenheimPanel`):
+  typed `RowResource` peers for sites/domains/certificates/access lists/auth
+  providers/databases/servers/notification channels, a readonly audit-log
+  resource, a settings `PanelPage` (persists via zenit's `DrySettingsWriter`
+  into `settings/local.dry`), and `RecordScopedPage` tabs on sites (Domains,
+  Processes incl. terminal + proclogs) and databases (Restore). Every resource
+  mutation writes an audit entry and reloads the proxy
+  (`HohenheimRowResource`). Host-declared endpoints beside the panel
+  (downloads, uploads, process control, terminal WS, settings POST) live in
+  `HohenheimEndpoints` + `HohenheimHandlers`.
+- Site types are registered via `SiteTypeRegistry`. Each type declares its schema (which drives the type-discriminated settings sub-form in the CMS) and its request handler. Adding a type means implementing one class and registering it — no edits to existing dispatch code. See `docs/architecture-site-types.md`.
+- Current types in `src/server/java/be/elevenways/hohenheim/server/sitetype/types/`: `AlchemySiteType`, `CommandSiteType`, `DeadSiteType`, `DockerSiteType`, `NodeSiteType`, `ProxySiteType`, `RedirectSiteType`, `StaticSiteType`.
+- Site-type settings store env vars/headers/credentials as `StringMapField`
+  maps and reference discovered users/node versions via `RegistryEnumField`
+  keys (`hohenheim:<username>` / `hohenheim:<version>`, registries refreshed
+  by the discovery tasks). M025 migrated the legacy list/id shapes; readers
+  stay tolerant of both.
 - Handlers are long-lived: created when a site loads, updated on config change, destroyed on removal. Not per-request.
+- ClientMain MUST call `HohenheimModels.registerAll()` + `HohenheimSources.register()` before `ClientZenitRuntime.main` (the browser has no MODELS/MODULES boot stage).
 
 ## Conventions
 

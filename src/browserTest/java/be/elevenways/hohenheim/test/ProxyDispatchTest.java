@@ -52,7 +52,7 @@ class ProxyDispatchTest {
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
         HohenheimTestRuntime.ensureBooted();
-        Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
+        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
 
     @AfterAll
@@ -91,8 +91,8 @@ class ProxyDispatchTest {
                     case "force_ssl" -> domain.set(SiteDomainModel.FORCE_SSL, (Boolean) entry.getValue());
                     case "hsts_enabled" -> domain.set(SiteDomainModel.HSTS_ENABLED, (Boolean) entry.getValue());
                     case "hsts_subdomains" -> domain.set(SiteDomainModel.HSTS_SUBDOMAINS, (Boolean) entry.getValue());
-                    case "custom_headers" -> domain.set(SiteDomainModel.CUSTOM_HEADERS, entry.getValue());
-                    case "response_headers" -> domain.set(SiteDomainModel.RESPONSE_HEADERS, entry.getValue());
+                    case "custom_headers" -> domain.set(SiteDomainModel.CUSTOM_HEADERS, castHeaderMap(entry.getValue()));
+                    case "response_headers" -> domain.set(SiteDomainModel.RESPONSE_HEADERS, castHeaderMap(entry.getValue()));
                     case "match_type" -> domain.set(SiteDomainModel.MATCH_TYPE, (String) entry.getValue());
                     case "listen_on" -> domain.set(SiteDomainModel.LISTEN_ON, (String) entry.getValue());
                 }
@@ -128,10 +128,9 @@ class ProxyDispatchTest {
         });
         upstream.start();
 
-        List<Map<String, String>> headers = List.of(
-            Map.of("name", "X-Test-Header", "value", "expected-value"),
-            Map.of("name", "X-Remove-Me", "value", "")
-        );
+        Map<String, String> headers = new java.util.LinkedHashMap<>();
+        headers.put("X-Test-Header", "expected-value");
+        headers.put("X-Remove-Me", "");
 
         setupSiteWithDomain("headers.test", Map.of(
                 "forward_host", "127.0.0.1",
@@ -526,10 +525,9 @@ class ProxyDispatchTest {
         });
         upstream.start();
 
-        List<Map<String, String>> responseHeaders = List.of(
-            Map.of("name", "X-Injected", "value", "hello"),
-            Map.of("name", "X-Strip-Me", "value", "")
-        );
+        Map<String, String> responseHeaders = new java.util.LinkedHashMap<>();
+        responseHeaders.put("X-Injected", "hello");
+        responseHeaders.put("X-Strip-Me", "");
 
         setupSiteWithDomain("respheaders.test",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstream.getAddress().getPort()),
@@ -635,5 +633,11 @@ class ProxyDispatchTest {
 
         proxy.stop();
         proxy = null;
+    }
+
+    /** The map shape StringMapField expects (tests build heterogeneous Map.of literals). */
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> castHeaderMap(Object value) {
+        return (Map<String, String>) value;
     }
 }

@@ -35,7 +35,7 @@ class ProxyServerStateTest {
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
         ServerZenitRuntime.init();
-        Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
+        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
 
     @Test

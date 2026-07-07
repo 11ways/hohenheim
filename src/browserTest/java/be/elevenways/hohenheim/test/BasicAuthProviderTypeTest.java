@@ -13,8 +13,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Pure-logic tests for the Basic auth provider: save-time hashing and header verification. The
- * full gate (session establishment, 401 challenge) is exercised by the proxy integration tests.
+ * Pure-logic tests for the Basic auth provider: save-time hashing over the
+ * username -> password map shape and header verification. The full gate
+ * (session establishment, 401 challenge) is exercised by the proxy
+ * integration tests.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
@@ -30,26 +32,23 @@ public class BasicAuthProviderTypeTest {
     }
 
     private static Map<String, Object> submitted(String user, String pass) {
-        return Map.of(BasicAuthProviderType.CREDENTIALS,
-            List.of(Map.of(BasicAuthProviderType.USERNAME, user, BasicAuthProviderType.PASSWORD, pass)));
+        return Map.of(BasicAuthProviderType.CREDENTIALS, Map.of(user, pass));
     }
 
     @Test
     void savedConfigHashesPasswordAndNeverStoresPlaintext() {
         Map<String, Object> stored = type.normalizeConfigForSave(submitted("alice", "s3cret"), null);
 
-        List<Map<String, Object>> creds = BasicAuthProviderType.credentialList(stored);
+        Map<String, String> creds = BasicAuthProviderType.credentialHashes(stored);
         assertEquals(1, creds.size());
-        assertEquals("alice", creds.get(0).get(BasicAuthProviderType.USERNAME));
-        assertNull(creds.get(0).get(BasicAuthProviderType.PASSWORD), "plaintext must not be stored");
-        String hash = (String) creds.get(0).get(BasicAuthProviderType.PASSWORD_HASH);
+        String hash = creds.get("alice");
         assertTrue(hash != null && hash.startsWith("$argon2"), "password must be Argon2-hashed");
     }
 
     @Test
     void verifyAcceptsCorrectCredentialAndRejectsWrongOnes() {
         Map<String, Object> stored = type.normalizeConfigForSave(submitted("alice", "s3cret"), null);
-        List<Map<String, Object>> creds = BasicAuthProviderType.credentialList(stored);
+        Map<String, String> creds = BasicAuthProviderType.credentialHashes(stored);
 
         assertEquals("alice", BasicAuthProviderType.verify(basicHeader("alice", "s3cret"), creds));
         assertNull(BasicAuthProviderType.verify(basicHeader("alice", "wrong"), creds));
@@ -64,25 +63,38 @@ public class BasicAuthProviderTypeTest {
         Map<String, Object> existing = type.normalizeConfigForSave(submitted("alice", "s3cret"), null);
 
         // Re-submit alice with a blank password: the prior hash must be preserved.
-        Map<String, Object> reSubmitted = Map.of(BasicAuthProviderType.CREDENTIALS,
-            List.of(Map.of(BasicAuthProviderType.USERNAME, "alice", BasicAuthProviderType.PASSWORD, "")));
-        Map<String, Object> updated = type.normalizeConfigForSave(reSubmitted, existing);
+        Map<String, Object> updated = type.normalizeConfigForSave(submitted("alice", ""), existing);
 
-        List<Map<String, Object>> creds = BasicAuthProviderType.credentialList(updated);
+        Map<String, String> creds = BasicAuthProviderType.credentialHashes(updated);
         assertEquals(1, creds.size());
-        assertEquals(BasicAuthProviderType.credentialList(existing).get(0).get(BasicAuthProviderType.PASSWORD_HASH),
-            creds.get(0).get(BasicAuthProviderType.PASSWORD_HASH));
+        assertEquals(BasicAuthProviderType.credentialHashes(existing).get("alice"), creds.get("alice"));
         assertEquals("alice", BasicAuthProviderType.verify(basicHeader("alice", "s3cret"), creds));
     }
 
     @Test
-    void blankPasswordWithoutExistingHashIsDropped() {
-        Map<String, Object> reSubmitted = Map.of(BasicAuthProviderType.CREDENTIALS,
-            List.of(Map.of(BasicAuthProviderType.USERNAME, "ghost", BasicAuthProviderType.PASSWORD, "")));
-        Map<String, Object> stored = type.normalizeConfigForSave(reSubmitted, null);
+    void resubmittedStoredHashRoundTripsUnchanged() {
+        Map<String, Object> existing = type.normalizeConfigForSave(submitted("alice", "s3cret"), null);
+        String hash = BasicAuthProviderType.credentialHashes(existing).get("alice");
 
-        assertFalse(BasicAuthProviderType.credentialList(stored).stream()
-            .anyMatch(c -> "ghost".equals(c.get(BasicAuthProviderType.USERNAME))));
+        // The KeyValue editor redisplays the stored hash; resubmitting it must not re-hash it.
+        Map<String, Object> updated = type.normalizeConfigForSave(submitted("alice", hash), existing);
+
+        assertEquals(hash, BasicAuthProviderType.credentialHashes(updated).get("alice"));
+        assertEquals("alice", BasicAuthProviderType.verify(basicHeader("alice", "s3cret"),
+            BasicAuthProviderType.credentialHashes(updated)));
+    }
+
+    @Test
+    void blankPasswordWithoutExistingHashIsDropped() {
+        Map<String, Object> stored = type.normalizeConfigForSave(submitted("ghost", ""), null);
+        assertFalse(BasicAuthProviderType.credentialHashes(stored).containsKey("ghost"));
+    }
+
+    @Test
+    void legacyListShapeIsStillReadable() {
+        Map<String, Object> legacy = Map.of(BasicAuthProviderType.CREDENTIALS, List.of(
+            Map.of(BasicAuthProviderType.USERNAME, "old", BasicAuthProviderType.PASSWORD_HASH, "$argon2fake")));
+        assertEquals("$argon2fake", BasicAuthProviderType.credentialHashes(legacy).get("old"));
     }
 
     @Test

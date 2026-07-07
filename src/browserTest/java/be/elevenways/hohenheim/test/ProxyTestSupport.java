@@ -36,7 +36,7 @@ final class ProxyTestSupport {
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
         HohenheimTestRuntime.ensureBooted();
-        Zenit.getHawkeye().setClientScriptLocation("/hohenheim.js");
+        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
 
     /** Point the runtime at a fresh temp SQLite file and re-init. */
