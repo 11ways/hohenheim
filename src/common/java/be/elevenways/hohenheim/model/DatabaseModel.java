@@ -26,6 +26,9 @@ public class DatabaseModel extends Model {
     public static final StringField DB_PASSWORD = SCHEMA.addField(StringField.builder().name("db_password").build());
     public static final StringField DB_NAME = SCHEMA.addField(StringField.builder().name("db_name").build());
     public static final BooleanField EPHEMERAL = SCHEMA.addField(BooleanField.builder("ephemeral").defaultValue(false).build());
+    // Optional container resource caps (null = unlimited).
+    public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(IntegerField.builder().name("memory_limit_mb").build());
+    public static final DoubleField CPU_LIMIT = SCHEMA.addField(DoubleField.builder().name("cpu_limit").build());
     public static final StringField STATUS = SCHEMA.addField(StringField.builder().name("status").build());
     public static final StringField SERVER_NAME = SCHEMA.addField(StringField.builder().name("server_name").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.protoblast.common.Blast;
@@ -75,9 +76,19 @@ public class DatabaseService extends DatasourceScoped {
     public ManagedDatabase.Connection create(String name, ManagedDatabase.Engine engine, String image,
                                              String user, String password, String database,
                                              boolean ephemeral, String serverName) throws IOException {
-        ManagedDatabase.Connection connection =
-            managedFor.apply(serverName).provision(name, engine, image, user, password, database, ephemeral);
-        upsertRecord(name, engine, image, user, password, database, ephemeral, serverName, STATUS_ACTIVE);
+        return create(name, engine, image, user, password, database, ephemeral, serverName,
+            ResourceLimits.none());
+    }
+
+    /** Synchronous create with optional container resource caps. */
+    public ManagedDatabase.Connection create(String name, ManagedDatabase.Engine engine, String image,
+                                             String user, String password, String database,
+                                             boolean ephemeral, String serverName,
+                                             ResourceLimits limits) throws IOException {
+        ManagedDatabase.Connection connection = managedFor.apply(serverName)
+            .provision(name, engine, image, user, password, database, ephemeral, limits);
+        upsertRecord(name, engine, image, user, password, database, ephemeral, serverName,
+            limits, STATUS_ACTIVE);
         return connection;
     }
 
@@ -95,10 +106,20 @@ public class DatabaseService extends DatasourceScoped {
     public void createAsync(String name, ManagedDatabase.Engine engine, String image,
                             String user, String password, String database, boolean ephemeral,
                             String serverName) {
-        upsertRecord(name, engine, image, user, password, database, ephemeral, serverName, STATUS_PROVISIONING);
+        createAsync(name, engine, image, user, password, database, ephemeral, serverName,
+            ResourceLimits.none());
+    }
+
+    /** Async create with optional container resource caps. */
+    public void createAsync(String name, ManagedDatabase.Engine engine, String image,
+                            String user, String password, String database, boolean ephemeral,
+                            String serverName, ResourceLimits limits) {
+        upsertRecord(name, engine, image, user, password, database, ephemeral, serverName,
+            limits, STATUS_PROVISIONING);
         PROVISION_EXECUTOR.submit(() -> {
             try {
-                managedFor.apply(serverName).provision(name, engine, image, user, password, database, ephemeral);
+                managedFor.apply(serverName)
+                    .provision(name, engine, image, user, password, database, ephemeral, limits);
                 setStatus(name, STATUS_ACTIVE);
             } catch (Exception e) {
                 setStatus(name, STATUS_FAILED);
@@ -109,7 +130,7 @@ public class DatabaseService extends DatasourceScoped {
 
     private void upsertRecord(String name, ManagedDatabase.Engine engine, String image, String user,
                               String password, String database, boolean ephemeral, String serverName,
-                              String status) {
+                              ResourceLimits limits, String status) {
         exec(() -> {
             DatabaseModel model = model();
             Row row = model.findByName(name);
@@ -123,6 +144,8 @@ public class DatabaseService extends DatasourceScoped {
             row.set(DatabaseModel.DB_PASSWORD, password);
             row.set(DatabaseModel.DB_NAME, database);
             row.set(DatabaseModel.EPHEMERAL, ephemeral);
+            row.set(DatabaseModel.MEMORY_LIMIT_MB, limits.memoryMb());
+            row.set(DatabaseModel.CPU_LIMIT, limits.cpus());
             row.set(DatabaseModel.STATUS, status);
             row.set(DatabaseModel.SERVER_NAME, serverName);
             model.save(row);

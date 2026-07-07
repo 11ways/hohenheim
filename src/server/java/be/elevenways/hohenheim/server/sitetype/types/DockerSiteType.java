@@ -43,6 +43,18 @@ public class DockerSiteType implements SiteTypeHandler {
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
         StringMapField.builder("environment_variables").build());
 
+    // Persistent named volumes: logical name -> container path. Each entry mounts the
+    // named volume hohenheim-site-{id}-vol-{name}, which survives redeploys.
+    public static final StringMapField VOLUMES = SETTINGS_SCHEMA.addField(
+        StringMapField.builder("volumes").build());
+
+    // Optional resource caps (blank = unlimited).
+    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(
+        IntegerField.builder().name("memory_limit_mb").build());
+
+    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
+        DoubleField.builder().name("cpu_limit").build());
+
     @Override
     public String getDisplayName() { return "Docker"; }
 

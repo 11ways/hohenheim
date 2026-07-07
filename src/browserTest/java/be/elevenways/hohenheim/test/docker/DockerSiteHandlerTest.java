@@ -69,6 +69,47 @@ class DockerSiteHandlerTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void volumesAndResourceLimitsReachTheContainer() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+
+        int siteId = 999_003;
+        String volumeName = "hohenheim-site-" + siteId + "-vol-data";
+        DockerSiteRequestHandler handler = new DockerSiteRequestHandler(siteId, Map.of(
+            "image", "alpine",
+            "tag", "latest",
+            "container_port", 8080,
+            "command", "sleep 3600",
+            "volumes", Map.of("data", "/data"),
+            "memory_limit_mb", 128,
+            "cpu_limit", 0.5
+        ));
+
+        try {
+            Map<String, Object> info = docker.inspectContainer("hohenheim-site-" + siteId);
+            Map<String, Object> hostConfig = (Map<String, Object>) info.get("HostConfig");
+            assertThat(((Number) hostConfig.get("Memory")).longValue()).isEqualTo(128L * 1024 * 1024);
+            assertThat(((Number) hostConfig.get("NanoCpus")).longValue()).isEqualTo(500_000_000L);
+
+            List<?> mounts = (List<?>) info.get("Mounts");
+            boolean mounted = mounts.stream().anyMatch(mount ->
+                mount instanceof Map<?, ?> m
+                    && volumeName.equals(m.get("Name"))
+                    && "/data".equals(m.get("Destination")));
+            assertThat(mounted).as("named volume mounted at /data").isTrue();
+        } finally {
+            handler.destroy();
+            try {
+                docker.removeVolume(volumeName, true);
+            } catch (IOException ignored) {
+                // best effort cleanup
+            }
+        }
+    }
+
+    @Test
     void buildsImageFromContextAndRuns() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         DockerClient docker = new DockerClient();

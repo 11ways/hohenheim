@@ -73,7 +73,7 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
 
             removeExisting();   // clean up a leftover container from a previous run
             // Record the id before starting so a failed start/upstream-resolve is torn down by destroy().
-            this.containerId = docker.createContainer(containerName, buildSpec(imageRef, port, settings));
+            this.containerId = docker.createContainer(containerName, buildSpec(siteId, imageRef, port, settings));
             docker.startContainer(this.containerId);
             this.upstream = resolveUpstream(this.containerId, port);
         } catch (IOException e) {
@@ -156,7 +156,7 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
         }
     }
 
-    private static Map<String, Object> buildSpec(String imageRef, int port,
+    private static Map<String, Object> buildSpec(int siteId, String imageRef, int port,
                                                  Map<String, Object> settings) {
         String portKey = port + "/tcp";
         Map<String, Object> spec = new LinkedHashMap<>();
@@ -173,9 +173,28 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
         }
 
         spec.put("ExposedPorts", Map.of(portKey, Map.of()));
-        spec.put("HostConfig", Map.of(
-            "PortBindings", Map.of(portKey, List.of(Map.of("HostIp", "127.0.0.1", "HostPort", "")))
-        ));
+
+        Map<String, Object> hostConfig = new LinkedHashMap<>();
+        hostConfig.put("PortBindings", Map.of(portKey, List.of(Map.of("HostIp", "127.0.0.1", "HostPort", ""))));
+
+        // Persistent named volumes (logical name -> container path); the stable volume
+        // name keys on the site id, so data survives redeploys and container swaps.
+        List<Map<String, Object>> mounts = new ArrayList<>();
+        EnvVars.toMap(settings.get("volumes")).forEach((name, containerPath) -> {
+            if (containerPath == null || containerPath.isBlank()) {
+                return;
+            }
+            mounts.add(Map.of(
+                "Type", "volume",
+                "Source", "hohenheim-site-" + siteId + "-vol-" + name,
+                "Target", containerPath.trim()));
+        });
+        if (!mounts.isEmpty()) {
+            hostConfig.put("Mounts", mounts);
+        }
+
+        ResourceLimits.fromSettings(settings).applyTo(hostConfig);
+        spec.put("HostConfig", hostConfig);
         return spec;
     }
 
