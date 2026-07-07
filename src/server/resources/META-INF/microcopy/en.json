@@ -20,6 +20,7 @@
     "hohenheim.settings.title": "Settings",
     "hohenheim.site.clone": "Clone",
     "hohenheim.site.clone.confirm": "Create a copy with the same settings and domains (disabled by default)?",
+    "hohenheim.site.deployments": "Deployments",
     "hohenheim.site.disabled": "Site disabled",
     "hohenheim.site.domains": "Domains",
     "hohenheim.site.enabled": "Site enabled",

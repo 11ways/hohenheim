@@ -35,6 +35,10 @@ public class GitDeployment {
     private final File siteDir;
     private final @Nullable Integer uid;
 
+    /** Step + build output captured for the deployment record (capped). */
+    private final StringBuilder deployLog = new StringBuilder();
+    private static final int DEPLOY_LOG_CAP = 200_000;
+
     public GitDeployment(int siteId, Row site, SiteTypeHandler typeHandler,
                          Map<String, Object> typeSettings, Map<String, Object> sourceSettings,
                          GitRepository gitRepo, File siteDir, @Nullable Integer uid) {
@@ -61,6 +65,7 @@ public class GitDeployment {
 
             Blast.log("GIT: site", siteId, "deploying to slot", targetSlot,
                 "(active:", activeSlot + ")");
+            log("Deploying to slot " + targetSlot + " (active: " + activeSlot + ")");
 
             // Step 1: Prepare standby slot
             if (Thread.interrupted()) throw new InterruptedException();
@@ -71,6 +76,7 @@ public class GitDeployment {
             // Step 2: Record commit SHA
             String commitSha = gitRepo.getCurrentCommit(targetDir);
             Blast.log("GIT: site", siteId, "at commit", commitSha);
+            log("Checked out commit " + commitSha);
 
             // Step 3: Run build command
             if (Thread.interrupted()) throw new InterruptedException();
@@ -85,37 +91,81 @@ public class GitDeployment {
             if (Thread.interrupted()) throw new InterruptedException();
             Map<String, Object> adjustedSettings = adjustPaths(targetDir);
             SiteRequestHandler newHandler = typeHandler.createHandler(site, adjustedSettings);
-
-            // Step 4b: Wait for process modes to become healthy before swapping
-            if (newHandler.getHealth() != SiteHealth.UP) {
-                Blast.log("GIT: site", siteId, "waiting for new handler to become healthy");
-                long deadline = System.currentTimeMillis() + 60_000; // 60s max wait
-                while (newHandler.getHealth() != SiteHealth.UP) {
-                    if (Thread.interrupted()) {
-                        newHandler.destroy();
-                        throw new InterruptedException();
-                    }
-                    if (System.currentTimeMillis() > deadline) {
-                        Blast.log("GIT: site", siteId, "new handler did not become healthy in 60s");
-                        newHandler.destroy();
-                        return DeployResult.failure("New handler did not become healthy within 60 seconds");
-                    }
-                    Thread.sleep(500);
-                }
-            }
-
-            // Step 5: Flip symlink atomically BEFORE returning
-            flipSymlink(targetSlot);
-
-            return DeployResult.success(newHandler, commitSha, targetSlot);
+            return activate(newHandler, targetSlot, commitSha);
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            log("Deploy cancelled");
             return DeployResult.failure("Deploy cancelled");
         } catch (Exception e) {
             Blast.log("GIT: deploy error for site", siteId, "-", e.getMessage());
+            log("Deploy error: " + e.getMessage());
             return DeployResult.failure(e.getMessage());
         }
+    }
+
+    /**
+     * Activate an existing slot without cloning or building: create its handler and,
+     * once healthy, flip the active symlink. Used by deploys and by rollback.
+     */
+    public DeployResult activateSlot(String slot) {
+        try {
+            File slotDir = new File(siteDir, slot);
+            if (!slotDir.isDirectory() || !gitRepo.isMatchingRepo(slotDir)) {
+                return DeployResult.failure("Slot " + slot + " has no matching checkout to roll back to");
+            }
+            String commitSha = gitRepo.getCurrentCommit(slotDir);
+            log("Rolling back to slot " + slot + " at commit " + commitSha);
+            Map<String, Object> adjustedSettings = adjustPaths(slotDir);
+            SiteRequestHandler newHandler = typeHandler.createHandler(site, adjustedSettings);
+            return activate(newHandler, slot, commitSha);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log("Rollback cancelled");
+            return DeployResult.failure("Rollback cancelled");
+        } catch (Exception e) {
+            Blast.log("GIT: rollback error for site", siteId, "-", e.getMessage());
+            log("Rollback error: " + e.getMessage());
+            return DeployResult.failure(e.getMessage());
+        }
+    }
+
+    /** Health-gate the new handler, then atomically flip the active symlink to its slot. */
+    private DeployResult activate(SiteRequestHandler newHandler, String targetSlot, String commitSha)
+            throws InterruptedException {
+        if (newHandler.getHealth() != SiteHealth.UP) {
+            Blast.log("GIT: site", siteId, "waiting for new handler to become healthy");
+            log("Waiting for the new handler to become healthy");
+            long deadline = System.currentTimeMillis() + 60_000; // 60s max wait
+            while (newHandler.getHealth() != SiteHealth.UP) {
+                if (Thread.interrupted()) {
+                    newHandler.destroy();
+                    throw new InterruptedException();
+                }
+                if (System.currentTimeMillis() > deadline) {
+                    Blast.log("GIT: site", siteId, "new handler did not become healthy in 60s");
+                    newHandler.destroy();
+                    return DeployResult.failure("New handler did not become healthy within 60 seconds");
+                }
+                Thread.sleep(500);
+            }
+        }
+
+        flipSymlink(targetSlot);
+        log("Activated slot " + targetSlot);
+        return DeployResult.success(newHandler, commitSha, targetSlot);
+    }
+
+    /** Append a line to the captured deploy log (silently capped). */
+    private void log(String line) {
+        if (deployLog.length() < DEPLOY_LOG_CAP) {
+            deployLog.append(line).append('\n');
+        }
+    }
+
+    /** The captured step + build output of this deploy attempt. */
+    public String getLog() {
+        return deployLog.toString();
     }
 
     /**
@@ -140,9 +190,11 @@ public class GitDeployment {
         if (targetDir.isDirectory() && gitRepo.isMatchingRepo(targetDir)) {
             // Existing matching repo: fetch + reset
             Blast.log("GIT: site", siteId, "updating existing slot", targetDir.getName());
+            log("Updating existing slot " + targetDir.getName() + " (fetch + reset)");
             GitRepository.GitResult result = gitRepo.fetchAndReset(targetDir);
             if (!result.success()) {
                 Blast.log("GIT: fetch+reset failed, trying fresh clone:", result.output());
+                log("Fetch + reset failed, retrying with a fresh clone: " + result.output());
                 deleteDirectory(targetDir);
                 return freshClone(targetDir);
             }
@@ -166,9 +218,11 @@ public class GitDeployment {
                 return false;
             }
         }
+        log("Cloning repository into slot " + targetDir.getName());
         GitRepository.GitResult result = gitRepo.clone(targetDir);
         if (!result.success()) {
             Blast.log("GIT: clone failed for site", siteId, "-", result.output());
+            log("Clone failed: " + result.output());
             return false;
         }
         return true;
@@ -227,15 +281,21 @@ public class GitDeployment {
             }
 
             boolean finished = process.waitFor(timeoutSec, TimeUnit.SECONDS);
+
+            log("Build: " + buildCommand);
+            log(output.toString());
+
             if (!finished) {
                 process.destroyForcibly();
                 Blast.log("GIT: build timed out after", timeoutSec, "seconds for site", siteId);
+                log("Build timed out after " + timeoutSec + " seconds");
                 return false;
             }
 
             int exitCode = process.exitValue();
             if (exitCode != 0) {
                 Blast.log("GIT: build failed (exit", exitCode + ") for site", siteId);
+                log("Build failed (exit " + exitCode + ")");
                 // Log last 50 lines of output
                 String[] lines = output.toString().split("\n");
                 int start = Math.max(0, lines.length - 50);

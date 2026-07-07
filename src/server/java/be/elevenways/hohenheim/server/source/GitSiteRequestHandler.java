@@ -140,18 +140,42 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
         return currentCommit;
     }
 
+    /** The handler currently serving traffic (a process/static/docker handler), or null mid-deploy. */
+    public @Nullable SiteRequestHandler innerHandler() {
+        return innerHandler;
+    }
+
+    /** Whether the inactive slot holds a matching checkout a rollback could activate. */
+    public boolean hasPreviousSlot() {
+        String active = GitDeployment.activeSlotName(siteDir);
+        String previous = "a".equals(active) ? "b" : "a";
+        File previousDir = new File(siteDir, previous);
+        return previousDir.isDirectory() && gitRepo.isMatchingRepo(previousDir);
+    }
+
     // -----------------------------------------------------------------------
     // Deploy execution (called by GitDeploymentQueue on its thread)
     // -----------------------------------------------------------------------
 
-    private void executeDeploy() {
+    /** Queue reason that activates the previous slot instead of building a new one. */
+    public static final String REASON_ROLLBACK = "rollback";
+
+    private void executeDeploy(String reason) {
         GitDeployment deployment = createDeployment();
         SiteRequestHandler oldHandler = innerHandler;
+        Integer recordId = DeploymentRecords.started(siteId, reason);
 
-        GitDeployment.DeployResult result = deployment.execute(oldHandler);
+        GitDeployment.DeployResult result;
+        if (REASON_ROLLBACK.equals(reason)) {
+            String active = GitDeployment.activeSlotName(siteDir);
+            String previous = "a".equals(active) ? "b" : "a";
+            result = deployment.activateSlot(previous);
+        } else {
+            result = deployment.execute(oldHandler);
+        }
 
         if (result.success()) {
-            // Symlink was already flipped inside GitDeployment.execute()
+            // Symlink was already flipped inside GitDeployment
             // Now swap the volatile handler reference
             innerHandler = result.handler();
             currentCommit = result.commitSha();
@@ -166,6 +190,29 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
             Blast.log("GIT: deploy failed for site", siteId, "-", result.error());
             // Old handler (if any) keeps serving
         }
+
+        DeploymentRecords.finished(recordId, result, deployment.getLog());
+    }
+
+    /**
+     * Roll back to the previous slot: enqueued through the same serial queue as
+     * deploys, so it can never race an in-flight build.
+     */
+    public void enqueueRollback() {
+        queue.enqueue(REASON_ROLLBACK);
+    }
+
+    /**
+     * Cancel the in-flight deploy (if any) without disabling future deploys.
+     *
+     * @return true when a running deploy was interrupted
+     */
+    public boolean cancelCurrentDeploy() {
+        return queue.cancelCurrent();
+    }
+
+    public boolean isDeploying() {
+        return queue.isDeploying();
     }
 
     private GitDeployment createDeployment() {

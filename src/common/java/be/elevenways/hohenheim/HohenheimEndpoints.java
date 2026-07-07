@@ -73,6 +73,28 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("restore").build())
         .build();
 
+    // --- Deploy control (forms on the site Deployments tab) ---
+    public static final Endpoint<Object> SITES_DEPLOY = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_deploy"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("deploy").build())
+        .build();
+
+    public static final Endpoint<Object> SITES_DEPLOY_CANCEL = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_deploy_cancel"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("deploy").addDelimiter().addStatic("cancel").build())
+        .build();
+
+    public static final Endpoint<Object> SITES_ROLLBACK = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_rollback"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("rollback").build())
+        .build();
+
     // --- Process control (forms on the site Processes tab) ---
     public static final Endpoint<Object> SITES_PROCESS_START = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "sites_process_start"))

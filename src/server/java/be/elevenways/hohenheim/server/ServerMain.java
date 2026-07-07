@@ -118,6 +118,11 @@ public class ServerMain {
         return proxyServer;
     }
 
+    /** Test/embedding seam: adopt an externally constructed proxy server (null detaches). */
+    public static void adoptProxyServer(ProxyServer server) {
+        proxyServer = server;
+    }
+
     public static TaskService getTaskService() {
         return taskService;
     }

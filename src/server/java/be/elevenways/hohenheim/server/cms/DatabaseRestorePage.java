@@ -46,7 +46,7 @@ public final class DatabaseRestorePage implements RecordScopedPage<Row> {
         String error = conduit.getQueryParam("error");
         vars.put("error", error != null ? error : "");
         vars.put("restored", "1".equals(conduit.getQueryParam("restored")));
-        vars.put("recordTabs", CmsSupport.databaseTabs(record.get(DatabaseModel.ID), "restore"));
+        vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/database-restore"), vars);
     }
 }

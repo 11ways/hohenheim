@@ -2,6 +2,8 @@ package be.elevenways.hohenheim;
 
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DeploymentModel;
+import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.common.ZenitModule;
@@ -69,5 +71,11 @@ public final class HohenheimSources implements ZenitModule {
         // Sites carry field-level deltas in the activity log (the CMS history
         // tab renders them); every other model stays on the default tier.
         ActivityLog.setPolicy(SiteModel.MODEL_ID, ActivityPolicy.ALL);
+
+        // Bookkeeping tables whose writes are machine-generated churn, not user
+        // actions: proclogs flush every 30s per process and deployments carry
+        // their own history UI. Tracking them would flood zenit_activity.
+        ActivityLog.setPolicy(ProclogModel.MODEL_ID, ActivityPolicy.NONE);
+        ActivityLog.setPolicy(DeploymentModel.MODEL_ID, ActivityPolicy.NONE);
     }
 }
