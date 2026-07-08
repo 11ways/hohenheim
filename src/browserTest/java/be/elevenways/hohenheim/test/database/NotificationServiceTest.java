@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.migration.M019_CreateNotificationChannels;
+import be.elevenways.hohenheim.migration.M030_AddNotificationEvents;
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
@@ -61,13 +63,33 @@ class NotificationServiceTest {
         }
     }
 
+    @Test
+    void eventRoutingRespectsChannelSubscriptions() throws Exception {
+        Receiver receiver = Receiver.start();
+        try {
+            NotificationService service = freshService();
+            service.add("everything", NotificationService.FORMAT_GENERIC, receiver.url("/all"));
+            service.add("deploys-only", NotificationService.FORMAT_GENERIC, receiver.url("/deploys"),
+                List.of(NotificationEvents.DEPLOY_FAILED));
+
+            // A backup event reaches only the unsubscribed (receive-all) channel.
+            assertThat(service.send(NotificationEvents.BACKUP_FAILED, "Backup", "boom")).isEqualTo(1);
+            assertThat(receiver.lastPath.get()).isEqualTo("/all");
+
+            // A deploy event reaches both.
+            assertThat(service.send(NotificationEvents.DEPLOY_FAILED, "Deploy", "boom")).isEqualTo(2);
+        } finally {
+            receiver.stop();
+        }
+    }
+
     private static NotificationService freshService() throws IOException {
         File db = File.createTempFile("hohenheim-notify-test", ".db");
         db.delete();
         db.deleteOnExit();
         SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner((MigrationCapableDatasource) ds,
-            List.of(M019_CreateNotificationChannels::new)).migrate();
+            List.of(M019_CreateNotificationChannels::new, M030_AddNotificationEvents::new)).migrate();
         HohenheimTestRuntime.ensureBooted();
         return new NotificationService(ds);
     }

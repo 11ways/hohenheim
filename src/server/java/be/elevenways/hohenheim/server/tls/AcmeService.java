@@ -4,6 +4,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -178,6 +179,8 @@ public class AcmeService {
             var ds = HohenheimDatabase.datasource();
             var certModel = Models.get(CertificateModel.class);
 
+            checkExpiryAlerts(certModel, Instant.now());
+
             List<Row> due = findRenewalCandidates(certModel, Instant.now());
             if (due.isEmpty()) return;
 
@@ -192,6 +195,39 @@ public class AcmeService {
             }
         } catch (Exception e) {
             Blast.log("ACME: renewal check failed:", e.getMessage());
+        }
+    }
+
+    /** Days before expiry at which the expiring-soon alert fires. */
+    static final int EXPIRY_ALERT_DAYS = 14;
+
+    /**
+     * Alert once per expiry cycle for certificates expiring soon: custom uploads never
+     * auto-renew, and a Let's Encrypt cert this close to expiry means renewal is stuck.
+     * The dedup stamp self-re-arms -- a successful renewal moves expires_on forward,
+     * which makes the stamp older than the new alert window.
+     */
+    public static void checkExpiryAlerts(CertificateModel certModel, java.time.Instant now) {
+        java.time.Instant cutoff = now.plus(EXPIRY_ALERT_DAYS, ChronoUnit.DAYS);
+        for (Row cert : certModel.findExpiringSoon(cutoff)) {
+            java.time.Instant expiresOn = cert.get(CertificateModel.EXPIRES_ON);
+            if (expiresOn == null) continue;
+            java.time.Instant notifiedAt = cert.get(CertificateModel.EXPIRY_NOTIFIED_AT);
+            java.time.Instant alertWindowStart = expiresOn.minus(EXPIRY_ALERT_DAYS, ChronoUnit.DAYS);
+            if (notifiedAt != null && !notifiedAt.isBefore(alertWindowStart)) {
+                continue;   // already alerted for this expiry cycle
+            }
+            String niceName = cert.get(CertificateModel.NICE_NAME);
+            try {
+                new NotificationService().send(NotificationEvents.CERT_EXPIRING,
+                    "Certificate expiring soon",
+                    "Certificate '" + niceName + "' expires on " + expiresOn
+                        + ". Renew or replace it before then.");
+            } catch (Exception e) {
+                Blast.log("ACME: could not send expiry notification -", e.getMessage());
+            }
+            cert.set(CertificateModel.EXPIRY_NOTIFIED_AT, now);
+            certModel.save(cert);
         }
     }
 
@@ -264,7 +300,8 @@ public class AcmeService {
         Integer errorCount = certRow.get(CertificateModel.ERROR_COUNT);
         if (errorCount == null || errorCount != 1) return;
         try {
-            new NotificationService().send("Certificate renewal failing",
+            new NotificationService().send(NotificationEvents.CERT_RENEWAL_FAILED,
+                "Certificate renewal failing",
                 "Renewal of " + niceName + " failed: " + message
                     + "\nRetries continue with escalating backoff; see the certificates page.");
         } catch (Exception e) {

@@ -21,6 +21,9 @@ public class NotificationChannelModel extends Model {
     public static final StringField KIND = SCHEMA.addField(StringField.builder().name("kind").build());
     public static final StringField FORMAT = SCHEMA.addField(StringField.builder().name("format").build());
     public static final StringField URL = SCHEMA.addField(StringField.builder().name("url").build());
+    // Subscribed event tokens; empty/null = receive every event.
+    public static final ListField<String> EVENTS = SCHEMA.addField(
+        ListField.<String>builder(StringField.builder().name("event").build()).name("events").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

@@ -50,14 +50,17 @@ public class CertificateModel extends Model {
 
     /** Per-cert ACME account email override; null means the global account. */
     public static final StringField LETSENCRYPT_EMAIL = SCHEMA.addField(StringField.builder().name("letsencrypt_email").build());
+
+    /** Dedup stamp for the expiring-soon alert; a renewal moves expires_on forward, re-arming it. */
+    public static final DateTimeField EXPIRY_NOTIFIED_AT = SCHEMA.addField(DateTimeField.builder().name("expiry_notified_at").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
 
-    public List<Row> findExpiringSoon(int days) {
-        Instant cutoff = Instant.now().plus(days, ChronoUnit.DAYS);
+    /** Real certificates (never the ACME account row) expiring on or before the cutoff. */
+    public List<Row> findExpiringSoon(Instant cutoff) {
         return find()
-            .where(AUTO_RENEW.eq(true))
+            .where(PROVIDER.ne(PROVIDER_ACME_ACCOUNT))
             .and(EXPIRES_ON.lte(cutoff))
             .orderBy(EXPIRES_ON, SortOrder.ASC)
             .all();
