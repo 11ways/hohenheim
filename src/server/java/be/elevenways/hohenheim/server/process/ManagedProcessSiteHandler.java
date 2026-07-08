@@ -4,6 +4,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.TcpUpstreamConnection;
@@ -97,6 +99,10 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
     // One warning per handler when children silently inherit a root daemon user
     private final AtomicBoolean warnedRootInherit = new AtomicBoolean(false);
+
+    // Rate limit for the crash-loop notification (one alert per episode, not per exit)
+    private static final long CRASH_NOTIFY_INTERVAL_MS = 10 * 60 * 1000;
+    private final AtomicLong lastCrashLoopNotified = new AtomicLong(0);
 
     // Startup queue: requests waiting for a process to become ready. Re-armable: a fresh
     // latch is installed when the last ready process exits, so requests arriving during a
@@ -289,6 +295,23 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             }
             // On success the slot stays reserved until markProcessReady() or a
             // pre-ready processExit() releases it.
+        }
+    }
+
+    /** Alert the notification channels about a crash loop, at most once per interval. */
+    private void notifyCrashLoop(long now) {
+        long previous = lastCrashLoopNotified.get();
+        if (now - previous < CRASH_NOTIFY_INTERVAL_MS
+            || !lastCrashLoopNotified.compareAndSet(previous, now)) {
+            return;
+        }
+        try {
+            new NotificationService().send(NotificationEvents.PROCESS_CRASH_LOOP,
+                "Crash loop: " + siteName,
+                "Processes of site '" + siteName + "' keep exiting shortly after start;"
+                    + " restarts are being throttled. Check the process logs.");
+        } catch (Exception e) {
+            Blast.log("PROCESS: could not send crash-loop notification -", e.getMessage());
         }
     }
 
@@ -567,6 +590,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
                 if (windowMs < threshold) {
                     Blast.log("PROCESS: crash loop detected for", siteName,
                               "- scheduling delayed restart in", CRASH_BACKOFF_MS, "ms");
+                    notifyCrashLoop(now);
                     crashRecoveryScheduler.schedule(this::startMinimumServers,
                         CRASH_BACKOFF_MS, TimeUnit.MILLISECONDS);
                     return;

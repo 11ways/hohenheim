@@ -7,6 +7,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -59,8 +60,13 @@ public class NotificationService extends DatasourceScoped {
         return query(() -> model().findByName(name));
     }
 
-    /** Register (or update) a channel. */
+    /** Register (or update) a channel that receives every event. */
     public void add(String name, String format, String url) {
+        add(name, format, url, null);
+    }
+
+    /** Register (or update) a channel; a null/empty event list subscribes to everything. */
+    public void add(String name, String format, String url, @Nullable List<String> events) {
         exec(() -> {
             NotificationChannelModel model = model();
             Row row = model.findByName(name);
@@ -71,6 +77,7 @@ public class NotificationService extends DatasourceScoped {
             row.set(NotificationChannelModel.KIND, KIND_WEBHOOK);
             row.set(NotificationChannelModel.FORMAT, format);
             row.set(NotificationChannelModel.URL, url);
+            row.set(NotificationChannelModel.EVENTS, events);
             model.save(row);
         });
     }
@@ -81,13 +88,34 @@ public class NotificationService extends DatasourceScoped {
 
     /** Send to every channel best-effort; returns the number of channels successfully delivered to. */
     public int send(String subject, String message) {
+        return send(null, subject, message);
+    }
+
+    /**
+     * Send an event to every subscribed channel best-effort (a channel with no
+     * subscription list receives everything; a null event bypasses filtering).
+     *
+     * @return the number of channels successfully delivered to
+     */
+    public int send(@Nullable String event, String subject, String message) {
         int delivered = 0;
         for (Row row : query(() -> model().find().all())) {
+            if (!subscribes(row, event)) {
+                continue;
+            }
             if (sendOne(row, subject, message)) {
                 delivered++;
             }
         }
         return delivered;
+    }
+
+    private static boolean subscribes(Row channel, @Nullable String event) {
+        if (event == null) {
+            return true;
+        }
+        List<String> events = channel.get(NotificationChannelModel.EVENTS);
+        return events == null || events.isEmpty() || events.contains(event);
     }
 
     /** Send to a single channel by name; returns true if delivered (HTTP 2xx). */

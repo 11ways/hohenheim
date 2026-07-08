@@ -2,7 +2,9 @@ package be.elevenways.hohenheim.server.cms;
 
 
 import be.elevenways.hohenheim.model.NotificationChannelModel;
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.NotificationService;
+import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -42,6 +44,7 @@ public final class NotificationChannelResource extends RowResource {
         .add(NotificationChannelModel.NAME)
         .add(Select.of(NotificationChannelModel.FORMAT).options(OptionSource.of(FORMAT_OPTIONS)).build())
         .add(NotificationChannelModel.URL)
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(NotificationChannelModel.EVENTS))
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "notification_channel"); }
@@ -95,6 +98,14 @@ public final class NotificationChannelResource extends RowResource {
         String url = urlValue != null ? String.valueOf(urlValue).trim() : "";
         if (url.isEmpty() || !(url.startsWith("http://") || url.startsWith("https://"))) {
             throw new IllegalStateException("URL must start with http:// or https://");
+        }
+        if (coerced.get("events") instanceof List<?> events) {
+            for (Object event : events) {
+                if (!NotificationEvents.isKnown(String.valueOf(event))) {
+                    throw new IllegalStateException("Unknown event '" + event
+                        + "'; valid events: " + String.join(", ", NotificationEvents.ALL));
+                }
+            }
         }
     }
 
