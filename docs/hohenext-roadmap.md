@@ -20,17 +20,16 @@ reputation rejection (`SniKeyManager` refuses a cert to a banned peer).
 
 Remaining parity items, roughly in value order:
 
-- **Unix-socket upstreams/transport are inert config (decide: wire up or remove).** ProxySite's
-  `socket_path` is parsed + placeholder-substituted but `DispatchingProxyClient` never dials it;
-  `SocketAllocator` exists but Node sites are always TCP (`socketPath=null`). The config fields
-  silently no-op today.
-- **Per-site traffic stats are inert (decide: wire up or remove).** `StatsCollector.recordHit/
-  recordBytes/recordConnection` are never called, so the dashboard streams zeros. Node's live
-  stats dashboard was a headline feature.
-- **TOTP/2FA is a schema stub.** `users.totp_secret/totp_enabled` exist but no code verifies a
-  code. Implement (with zenit-auth) or drop the columns until built.
-- Stale-cert cleanup task (Node `CleanupGreenlockDomains`); brute-force hostname guards in regex
-  matching; SNI cache staggered refresh / backoff / in-flight dedup (optimization).
+- ~~Unix-socket upstreams/transport~~ WIRED: `use_ports=false` allocates a socket,
+  children get `PATH_TO_SOCKET`, ProxySite `socket` upstreams (with regex placeholders) dial
+  through `UnixSocketBridge`. Test-pinned.
+- ~~Per-site traffic stats~~ DECIDED: statistics are out of scope (owner call, 2026-07);
+  the `StatsCollector` scaffolding was deleted rather than wired.
+- ~~TOTP/2FA~~ DONE in zenit-auth (2026-07-08): RFC 6238 enrollment/login gate/backup codes,
+  `auth_totp` table; available on /account for every consumer app.
+- ~~Stale-cert cleanup~~ DONE (`CleanOrphanCertificates`); ~~brute-force hostname guards~~
+  DONE (`RegexHostnameGuardTest`). Still open: SNI cache staggered refresh / backoff /
+  in-flight dedup (optimization).
 - Persistent remember-me cookies + SSO — see Phase 5 (belongs in `zenit-auth`, not this app).
 
 Deliberately deferred (owner): per-request DB hit logging (was not performant in Node; revisit later).
