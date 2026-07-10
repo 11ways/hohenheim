@@ -24,7 +24,7 @@ public class HohenheimDatabase {
         // Migrations are auto-discovered from the classpath: every public Migration subclass with a
         // public no-arg ctor whose datasource identifier matches, ordered by declared dependencies.
         // This covers Hohenheim's M0xx plus zenit-auth (auth_*) and zenit (system_task*) migrations.
-        new MigrationRunner((MigrationCapableDatasource) datasource).migrate();
+        new MigrationRunner((MigrationCapableDatasource) datasource).migrate().requireSuccess();
     }
 
     public static SqliteDatasource datasource() {
