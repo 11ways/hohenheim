@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
+import be.elevenways.zenit.common.orm.datasource.ColumnType;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
@@ -20,6 +21,16 @@ public class M026_MigrateAuditLogToActivity extends Migration {
 
     @Override
     public void up(MigrationBuilder schema) {
+        // Installs that predate the migration system carry the original audit_log
+        // shape (user_email, no user_label). Normalize both shapes first so the
+        // one copy statement below parses everywhere.
+        schema.alterTable("audit_log", table -> {
+            table.addColumn("user_label", ColumnType.STRING,
+                col -> col.maxLength(255).nullable(true).ifNotExists());
+            table.addColumn("user_email", ColumnType.STRING,
+                col -> col.maxLength(255).nullable(true).ifNotExists());
+        });
+
         schema.execute("""
             INSERT INTO zenit_activity
                 (model, record_id, action, actor, actor_label, origin, detail, created_at)
@@ -36,7 +47,7 @@ public class M026_MigrateAuditLogToActivity extends Migration {
                     WHEN 'restored' THEN 'restore'
                     ELSE action END,
                 CASE WHEN user_id IS NULL THEN NULL ELSE CAST(user_id AS TEXT) END,
-                user_label,
+                coalesce(user_label, user_email),
                 'web',
                 resource_name,
                 created_at
