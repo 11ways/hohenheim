@@ -16,9 +16,18 @@ public class ServerModel extends Model {
     public static final Identifier MODEL_ID = Identifier.of("hohenheim", "server");
     public static final Schema SCHEMA = new Schema();
 
+    /** {@link #MODE} value for the implicit local Docker daemon. */
+    public static final String MODE_LOCAL = "local";
+
+    /** {@link #MODE} value for a remote daemon reached over SSH. */
+    public static final String MODE_SSH = "ssh";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
-    public static final StringField MODE = SCHEMA.addField(StringField.builder().name("mode").build());
+    public static final EnumField MODE = SCHEMA.addField(EnumField.builder("mode")
+        .value(MODE_LOCAL, v -> v.displayName("Local").icon("house").color("teal"))
+        .value(MODE_SSH, v -> v.displayName("SSH").icon("terminal").color("indigo"))
+        .build());
     public static final StringField SSH_TARGET = SCHEMA.addField(StringField.builder().name("ssh_target").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

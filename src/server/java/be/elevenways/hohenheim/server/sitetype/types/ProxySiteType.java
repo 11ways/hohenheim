@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import be.elevenways.zenit.common.ui.Icon;
 
 /**
  * Forwards requests to an upstream HTTP/HTTPS server.
@@ -56,13 +57,19 @@ public class ProxySiteType implements SiteTypeHandler {
         IntegerField.builder().name("delay").build());
 
     @Override
+    public Identifier typeId() { return ID; }
+
+    @Override
     public String getDisplayName() { return "Proxy"; }
 
     @Override
     public String getDescription() { return "Forward requests to an upstream server"; }
 
     @Override
-    public String getIcon() { return "arrow-right"; }
+    public Icon getIcon() { return Icon.of("arrow-right"); }
+
+    @Override
+    public String getColor() { return "violet"; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

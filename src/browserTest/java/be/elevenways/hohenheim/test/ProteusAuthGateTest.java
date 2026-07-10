@@ -58,8 +58,7 @@ class ProteusAuthGateTest {
         db.deleteOnExit();
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
 
-        SiteTypes.register();
-        SiteAuthProviders.register();
+        SiteTypes.boot();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
         HohenheimTestRuntime.ensureBooted();

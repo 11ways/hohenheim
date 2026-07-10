@@ -20,9 +20,10 @@ import java.util.Map;
  */
 public class ServerService extends DatasourceScoped {
 
-    public static final String LOCAL = "local";
-    public static final String MODE_LOCAL = "local";
-    public static final String MODE_SSH = "ssh";
+    // The mode vocabulary is owned by the model's EnumField declaration.
+    public static final String LOCAL = ServerModel.MODE_LOCAL;
+    public static final String MODE_LOCAL = ServerModel.MODE_LOCAL;
+    public static final String MODE_SSH = ServerModel.MODE_SSH;
 
     // Short deadline for the list's reachability probe so a down remote can't hang the page long.
     private static final long PING_TIMEOUT_MS = 8000;

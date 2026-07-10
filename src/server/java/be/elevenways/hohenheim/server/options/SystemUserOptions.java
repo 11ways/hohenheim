@@ -9,8 +9,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.Map;
-
 /**
  * Live registry of discovered system users, driving the run-as dropdown in
  * the node/command site-type settings. Refreshed by the UpdateSystemUsers
@@ -53,6 +51,5 @@ public final class SystemUserOptions {
             return uid != null ? name + " (uid " + uid + ")" : name;
         }
         @Override public @Nullable Schema getSchema() { return null; }
-        @Override public Map<String, Object> getProperties() { return Map.of(); }
     }
 }

@@ -32,7 +32,7 @@ final class ProxyTestSupport {
     /** One-time runtime boot for a test class; pair with a per-class initialized guard. */
     static void bootRuntime() throws Exception {
         resetDatabase();
-        SiteTypes.register();
+        SiteTypes.boot();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
         HohenheimTestRuntime.ensureBooted();

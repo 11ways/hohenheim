@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.util.List;
 import java.util.Map;
+import be.elevenways.zenit.common.ui.Icon;
 
 /**
  * Manages Alchemy (Node.js framework) child processes.
@@ -17,13 +18,19 @@ public class AlchemySiteType extends NodeSiteType {
     public static final Identifier ID = Identifier.of("hohenheim", "alchemy");
 
     @Override
+    public Identifier typeId() { return ID; }
+
+    @Override
     public String getDisplayName() { return "Alchemy"; }
 
     @Override
     public String getDescription() { return "Manage Alchemy framework applications"; }
 
     @Override
-    public String getIcon() { return "flask"; }
+    public Icon getIcon() { return Icon.of("flask"); }
+
+    @Override
+    public String getColor() { return "purple"; }
 
     @Override
     protected List<String> getDefaultArgs() {

@@ -36,12 +36,20 @@ public class CertificateModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NICE_NAME = SCHEMA.addField(StringField.builder().name("nice_name").build());
-    public static final StringField PROVIDER = SCHEMA.addField(StringField.builder().name("provider").build());
+    public static final EnumField PROVIDER = SCHEMA.addField(EnumField.builder("provider")
+        .value(PROVIDER_LETSENCRYPT, v -> v.displayName("Let's Encrypt").icon("lock").color("green"))
+        .value(PROVIDER_CUSTOM, v -> v.displayName("Custom").icon("file-import").color("blue"))
+        .value(PROVIDER_ACME_ACCOUNT, v -> v.displayName("ACME account").color("gray"))
+        .build());
     public static final StringField CERTIFICATE_PEM = SCHEMA.addField(StringField.builder().name("certificate_pem").build());
-    public static final StringField PRIVATE_KEY_PEM = SCHEMA.addField(StringField.builder().name("private_key_pem").build());
+    public static final StringField PRIVATE_KEY_PEM = SCHEMA.addField(StringField.builder().name("private_key_pem").secret().build());
     public static final DateTimeField EXPIRES_ON = SCHEMA.addField(DateTimeField.builder().name("expires_on").build());
     public static final BooleanField AUTO_RENEW = SCHEMA.addField(BooleanField.builder("auto_renew").defaultValue(true).build());
-    public static final StringField STATUS = SCHEMA.addField(StringField.builder().name("status").build());
+    public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
+        .value(STATUS_ACTIVE, v -> v.displayName("Active").icon("circle-check").color("success"))
+        .value(STATUS_PENDING, v -> v.displayName("Pending").icon("clock").color("warning"))
+        .value(STATUS_ERROR, v -> v.displayName("Error").icon("triangle-exclamation").color("destructive"))
+        .build());
     public static final DateTimeField ISSUED_ON = SCHEMA.addField(DateTimeField.builder().name("issued_on").build());
     public static final StringField RENEWAL_ERROR = SCHEMA.addField(StringField.builder().name("renewal_error").build());
     public static final IntegerField ERROR_COUNT = SCHEMA.addField(IntegerField.builder().name("error_count").build());

@@ -11,10 +11,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
-import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
-import be.elevenways.zenit.common.edit.OptionSource;
-import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -33,16 +30,11 @@ import java.util.Map;
  */
 public final class NotificationChannelResource extends RowResource {
 
-    private static final List<FieldOption<String>> FORMAT_OPTIONS = List.of(
-        FieldOption.of(NotificationService.FORMAT_SLACK, "Slack"),
-        FieldOption.of(NotificationService.FORMAT_DISCORD, "Discord"),
-        FieldOption.of(NotificationService.FORMAT_GENERIC, "Generic JSON"));
-
     private final NotificationService notifications = new NotificationService();
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(NotificationChannelModel.NAME)
-        .add(Select.of(NotificationChannelModel.FORMAT).options(OptionSource.of(FORMAT_OPTIONS)).build())
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(NotificationChannelModel.FORMAT))
         .add(NotificationChannelModel.URL)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(NotificationChannelModel.EVENTS))
         .build();

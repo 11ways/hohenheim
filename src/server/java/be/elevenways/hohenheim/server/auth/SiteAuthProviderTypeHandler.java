@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.auth.SiteAuthProviderType;
+import be.elevenways.protoblast.common.annotation.BlastDiscoverable;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
@@ -8,10 +9,12 @@ import java.util.Map;
 /**
  * Server-side extension of SiteAuthProviderType that builds the actual gate. Lives in src/server
  * because the gate depends on Undertow. Parallel to SiteTypeHandler extends SiteTypeInfo.
+ * Implementations are discovered at compile time and self-register via {@code typeId()}.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
  */
+@BlastDiscoverable(registrar = "be.elevenways.hohenheim.server.auth.SiteAuthProviders#register")
 public interface SiteAuthProviderTypeHandler extends SiteAuthProviderType {
 
     /**

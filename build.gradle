@@ -277,7 +277,9 @@ task browserTest(type: Test) {
     useJUnitPlatform()
     maxParallelForks = 1
     forkEvery = 1
-    timeout = java.time.Duration.ofMinutes(10)
+    // The full suite takes ~6 min on an idle machine but 2x+ under load
+    // (concurrent chain builds); keep headroom so a slow run isn't killed mid-suite.
+    timeout = java.time.Duration.ofMinutes(30)
 
     systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')
 

@@ -1,8 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.auth.SiteAuthProviderTypeRegistry;
-import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
-import be.elevenways.hohenheim.server.auth.types.ProteusAuthProviderType;
 import be.elevenways.protoblast.common.registry.Identifier;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -10,8 +8,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Registers all built-in per-site auth-provider types and maintains the server-side handler map
- * (parallel to SiteTypes). Call register() once at boot, before the proxy loads its routes.
+ * Registration hook for the compile-time-discovered per-site auth-provider
+ * types plus the server-side handler map (parallel to SiteTypes). Concrete
+ * SiteAuthProviderTypeHandler implementations arrive via the generated
+ * BlastAutoLoadInit; nothing is registered manually.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
@@ -20,18 +20,19 @@ public final class SiteAuthProviders {
 
     private static final Map<Identifier, SiteAuthProviderTypeHandler> HANDLERS = new HashMap<>();
 
-    private static boolean registered = false;
+    /**
+     * Entries arrive via the generated BlastAutoLoadInit; force it so lookups
+     * work regardless of which class the JVM touched first. MUST be the LAST
+     * static field: the loader re-enters register() while this class is mid
+     * init and needs HANDLERS assigned.
+     */
+    @SuppressWarnings("unused")
+    private static final Object AUTO_LOAD_TRIGGER =
+            be.elevenways.protoblast.generated.BlastAutoLoadInit.loaded;
 
-    public static synchronized void register() {
-        if (registered) {
-            return;
-        }
-        registered = true;
-        registerType(ProteusAuthProviderType.ID, new ProteusAuthProviderType());
-        registerType(BasicAuthProviderType.ID, new BasicAuthProviderType());
-    }
-
-    public static void registerType(Identifier id, SiteAuthProviderTypeHandler handler) {
+    /** Compile-time discovery hook (BlastAutoLoadInit). */
+    public static void register(SiteAuthProviderTypeHandler handler) {
+        Identifier id = handler.typeId();
         SiteAuthProviderTypeRegistry.REGISTRY.add(id, handler);
         HANDLERS.put(id, handler);
     }

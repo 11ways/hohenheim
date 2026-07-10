@@ -62,8 +62,7 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
             throw new RuntimeException("Failed to create temp database file", e);
         }
 
-        SiteTypes.register();
-        SiteAuthProviders.register();
+        SiteTypes.boot();
         HohenheimEndpoints.init();
         // Force-load the zenit-cms panel routes (all /{panel}/... endpoints).
         Object cmsRoutes = ResourcePageEndpoints.LIST;

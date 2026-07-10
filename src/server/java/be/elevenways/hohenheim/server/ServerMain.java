@@ -30,10 +30,10 @@ public class ServerMain {
     private static TaskService taskService;
 
     public static void main(String[] args) {
-        // Register site types and auth-provider types first (before the models'
-        // RegistryEnumFields are used and before the proxy loads its routes).
-        SiteTypes.register();
-        SiteAuthProviders.register();
+        // Site types and auth-provider types self-register through compile-time
+        // discovery (BlastAutoLoadInit); only the shared process infrastructure
+        // needs an explicit boot before the proxy loads its routes.
+        SiteTypes.boot();
 
         // init() loads ServerSettings from default.dry / local.dry, fires the
         // BlastAutoLoadInit force-loader (materializing HohenheimSettings'

@@ -19,6 +19,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
+import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
@@ -44,18 +45,12 @@ import java.util.Map;
  */
 public final class DatabaseResource extends RowResource {
 
-    private static final List<FieldOption<String>> ENGINE_OPTIONS = List.of(
-        FieldOption.of("postgres", "PostgreSQL"),
-        FieldOption.of("mysql", "MySQL"),
-        FieldOption.of("redis", "Redis"),
-        FieldOption.of("mongo", "MongoDB"));
-
     private final DatabaseService databaseService = new DatabaseService();
     private final ServerService serverService = new ServerService();
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(DatabaseModel.NAME)
-        .add(Select.of(DatabaseModel.ENGINE).options(OptionSource.of(ENGINE_OPTIONS)).build())
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(DatabaseModel.ENGINE))
         .add(DatabaseModel.DB_NAME)
         .add(DatabaseModel.DB_USER)
         .add(DatabaseModel.DB_PASSWORD)

@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.auth;
 
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.TypeDefinition;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * Common metadata for a per-site auth-provider type, used by the SiteAuthProviderModel's
@@ -11,6 +13,9 @@ import be.elevenways.zenit.common.orm.field.TypeDefinition;
  * @since 0.1.0
  */
 public interface SiteAuthProviderType extends TypeDefinition {
+
+    /** @return the registry identifier; its string form is the stored column value */
+    @NonNull Identifier typeId();
 
     /**
      * Whether the provider record's {@code required_permission} column is meaningful. True for

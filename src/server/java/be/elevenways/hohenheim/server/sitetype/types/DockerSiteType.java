@@ -10,6 +10,7 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
 
 import java.util.Map;
+import be.elevenways.zenit.common.ui.Icon;
 
 /**
  * Runs a container image as a managed site, reverse-proxied via a published port.
@@ -56,13 +57,19 @@ public class DockerSiteType implements SiteTypeHandler {
         DoubleField.builder().name("cpu_limit").build());
 
     @Override
+    public Identifier typeId() { return ID; }
+
+    @Override
     public String getDisplayName() { return "Docker"; }
 
     @Override
     public String getDescription() { return "Run a container image as a managed site"; }
 
     @Override
-    public String getIcon() { return "box"; }
+    public Icon getIcon() { return Icon.of("box"); }
+
+    @Override
+    public String getColor() { return "blue"; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
