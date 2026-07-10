@@ -191,10 +191,22 @@ dependencies {
 // --- JAR Tasks ---
 task serverJar(type: ShadowJar) {
     archiveClassifier = 'server'
-    // Shadow 9 requires the lazy provider form for `configurations`.
-    configurations = project.configurations.named('serverRuntimeClasspath').map { [it] }
-    from sourceSets.server.output
-    from sourceSets.common.output
+    // AIDEV-NOTE: mirrors browserJar. INCLUDE is required so mergeServiceFiles() actually
+    // MERGES every META-INF/services file -- without it the dependency-jar template
+    // registrations vanish and the booted server 500s with "Template not found:
+    // zenitauth:auth/login". And exactly like the TeaVM bundle, only the SERVER source
+    // set's BlastAutoLoadInit (the complete server-side union) may survive: with INCLUDE
+    // the last duplicate class wins, so a dependency's partial loader would silently
+    // shadow it and no models/settings register at boot. Deps are bundled via zipTree so
+    // the per-source exclude can reach into them.
+    def autoLoadInit = 'be/elevenways/protoblast/generated/BlastAutoLoadInit.class'
+    from(sourceSets.server.output)
+    from(sourceSets.common.output) { exclude autoLoadInit }
+    from({
+        project.configurations.serverRuntimeClasspath.findAll { it.isFile() }.collect { zipTree(it) }
+    }) { exclude autoLoadInit }
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    failOnDuplicateEntries = false
     mergeServiceFiles()
     exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
 
