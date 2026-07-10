@@ -4,6 +4,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.NotificationService;
+import be.elevenways.zenit.common.edit.Array;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -36,7 +37,7 @@ public final class NotificationChannelResource extends RowResource {
         .add(NotificationChannelModel.NAME)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(NotificationChannelModel.FORMAT))
         .add(NotificationChannelModel.URL)
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(NotificationChannelModel.EVENTS))
+        .add(Array.of(NotificationChannelModel.EVENTS, NotificationChannelModel.EVENTS.getItemField()).tags().build())
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "notification_channel"); }
