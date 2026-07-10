@@ -90,9 +90,14 @@ class NotificationAdminTest extends HohenheimTestBase {
 
         var test = postForm("/admin/notifications/" + id + "/action/test_channel", "");
         assertThat(test.statusCode()).isIn(200, 302, 303);
-        // Failure surfaces as an error-toast flash on the redirect target.
+        // The failure toast rides the SESSION (popped on the next render); the
+        // redirect URL stays clean.
         String location = test.headers().firstValue("Location").orElse("");
-        assertThat(location).contains("_flash=");
+        assertThat(location).doesNotContain("_flash=");
+
+        navigateToApp("/admin/notifications/" + id);
+        waitForHydration();
+        assertThat(page.content()).contains("Test delivery failed");
     }
 
     private HttpResponse<String> postForm(String path, String body) throws Exception {

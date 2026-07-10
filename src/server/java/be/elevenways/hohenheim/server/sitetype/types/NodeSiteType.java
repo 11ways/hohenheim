@@ -16,6 +16,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.Icon;
 
 import java.io.File;
 import java.util.*;
@@ -90,13 +91,19 @@ public class NodeSiteType implements SiteTypeHandler {
     public static ProcessMonitor getProcessMonitor() { return processMonitor; }
 
     @Override
+    public Identifier typeId() { return ID; }
+
+    @Override
     public String getDisplayName() { return "Node.js"; }
 
     @Override
     public String getDescription() { return "Manage Node.js child processes"; }
 
     @Override
-    public String getIcon() { return "terminal"; }
+    public Icon getIcon() { return Icon.of("terminal"); }
+
+    @Override
+    public String getColor() { return "green"; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

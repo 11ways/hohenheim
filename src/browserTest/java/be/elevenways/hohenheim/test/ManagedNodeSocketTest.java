@@ -47,7 +47,7 @@ class ManagedNodeSocketTest {
         db.deleteOnExit();
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
 
-        SiteTypes.register();
+        SiteTypes.boot();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();
         HohenheimTestRuntime.ensureBooted();

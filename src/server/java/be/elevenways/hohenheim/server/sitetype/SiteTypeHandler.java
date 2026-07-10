@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.sitetype;
 
 import be.elevenways.hohenheim.sitetype.SiteTypeInfo;
+import be.elevenways.protoblast.common.annotation.BlastDiscoverable;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.util.Map;
@@ -8,7 +9,11 @@ import java.util.Map;
 /**
  * Server-side extension of SiteTypeInfo that adds handler lifecycle management.
  * Lives in src/server because it depends on Undertow (via SiteRequestHandler).
+ * Implementations are discovered at compile time and register themselves via
+ * their {@code typeId()} -- adding a site type ships one class, registered
+ * nowhere manually.
  */
+@BlastDiscoverable(registrar = "be.elevenways.hohenheim.server.sitetype.SiteTypes#register")
 public interface SiteTypeHandler extends SiteTypeInfo {
 
     /**

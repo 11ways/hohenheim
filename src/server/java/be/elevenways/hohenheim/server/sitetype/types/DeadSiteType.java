@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import io.undertow.util.Headers;
 
 import java.util.Map;
+import be.elevenways.zenit.common.ui.Icon;
 
 /**
  * Returns a 404 response for all requests. Useful for parking domains.
@@ -24,13 +25,19 @@ public class DeadSiteType implements SiteTypeHandler {
         + "<body><h1>404</h1></body></html>";
 
     @Override
+    public Identifier typeId() { return ID; }
+
+    @Override
     public String getDisplayName() { return "Dead"; }
 
     @Override
     public String getDescription() { return "Return 404 for all requests (park domain)"; }
 
     @Override
-    public String getIcon() { return "x-circle"; }
+    public Icon getIcon() { return Icon.of("circle-xmark"); }
+
+    @Override
+    public String getColor() { return "gray"; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

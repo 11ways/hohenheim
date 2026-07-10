@@ -9,6 +9,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.Icon;
 
 import java.util.Map;
 
@@ -32,9 +33,12 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
     static {
         CONFIG_SCHEMA.addField(StringField.builder().name(ENDPOINT).build());
         CONFIG_SCHEMA.addField(StringField.builder().name(REALM_CLIENT).build());
-        CONFIG_SCHEMA.addField(StringField.builder().name(ACCESS_KEY).build());
+        CONFIG_SCHEMA.addField(StringField.builder().name(ACCESS_KEY).secret().build());
         CONFIG_SCHEMA.addField(StringField.builder().name(AUTHENTICATOR).build());
     }
+
+    @Override
+    public Identifier typeId() { return ID; }
 
     @Override
     public String getDisplayName() {
@@ -47,9 +51,13 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
     }
 
     @Override
-    public Map<String, Object> getProperties() {
-        return Map.of("description", "Authenticate proxied upstreams against a Proteus realm",
-            "icon", "shield");
+    public Icon getIcon() {
+        return Icon.of("shield-halved");
+    }
+
+    @Override
+    public String getColor() {
+        return "indigo";
     }
 
     @Override

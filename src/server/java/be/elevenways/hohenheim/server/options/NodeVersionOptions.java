@@ -10,8 +10,6 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.Map;
-
 /**
  * Live registry of discovered node versions, driving the node-version
  * dropdown in the node site-type settings. Refreshed by the
@@ -71,6 +69,5 @@ public final class NodeVersionOptions {
             return "Node " + version;
         }
         @Override public @Nullable Schema getSchema() { return null; }
-        @Override public Map<String, Object> getProperties() { return Map.of(); }
     }
 }

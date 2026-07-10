@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 
 import java.nio.file.Path;
 import java.util.Map;
+import be.elevenways.zenit.common.ui.Icon;
 
 /**
  * Serves static files from a directory.
@@ -38,13 +39,19 @@ public class StaticSiteType implements SiteTypeHandler {
         StringField.builder().name("fallback_file").build());
 
     @Override
+    public Identifier typeId() { return ID; }
+
+    @Override
     public String getDisplayName() { return "Static"; }
 
     @Override
     public String getDescription() { return "Serve static files from a directory"; }
 
     @Override
-    public String getIcon() { return "folder"; }
+    public Icon getIcon() { return Icon.of("folder"); }
+
+    @Override
+    public String getColor() { return "teal"; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

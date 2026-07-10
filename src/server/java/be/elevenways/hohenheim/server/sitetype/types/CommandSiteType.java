@@ -14,6 +14,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import java.io.File;
 import java.util.*;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import be.elevenways.zenit.common.ui.Icon;
 
 /**
  * Runs an arbitrary command as a managed process.
@@ -58,13 +59,19 @@ public class CommandSiteType implements SiteTypeHandler {
             .build());
 
     @Override
+    public Identifier typeId() { return ID; }
+
+    @Override
     public String getDisplayName() { return "Command"; }
 
     @Override
     public String getDescription() { return "Run an arbitrary command as a managed process"; }
 
     @Override
-    public String getIcon() { return "terminal"; }
+    public Icon getIcon() { return Icon.of("terminal"); }
+
+    @Override
+    public String getColor() { return "orange"; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

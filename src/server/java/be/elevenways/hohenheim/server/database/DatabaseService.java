@@ -29,9 +29,10 @@ import java.util.function.Function;
  */
 public class DatabaseService extends DatasourceScoped {
 
-    public static final String STATUS_PROVISIONING = "provisioning";
-    public static final String STATUS_ACTIVE = "active";
-    public static final String STATUS_FAILED = "failed";
+    // The status vocabulary is owned by the model's EnumField declaration.
+    public static final String STATUS_PROVISIONING = DatabaseModel.STATUS_PROVISIONING;
+    public static final String STATUS_ACTIVE = DatabaseModel.STATUS_ACTIVE;
+    public static final String STATUS_FAILED = DatabaseModel.STATUS_FAILED;
 
     // Background pool for provisioning (image pull + container start can take tens of seconds);
     // shared because handlers construct DatabaseService per request. Bounded to limit load.

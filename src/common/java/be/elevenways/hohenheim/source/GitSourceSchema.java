@@ -32,7 +32,7 @@ public class GitSourceSchema {
         IntegerField.builder().name("poll_interval").build());
 
     public static final StringField WEBHOOK_SECRET = SCHEMA.addField(
-        StringField.builder().name("webhook_secret").build());
+        StringField.builder().name("webhook_secret").secret().build());
 
     public static final BooleanField SHALLOW_CLONE = SCHEMA.addField(
         BooleanField.builder("shallow_clone").defaultValue(true).build());

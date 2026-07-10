@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import io.undertow.util.Headers;
 
 import java.util.Map;
+import be.elevenways.zenit.common.ui.Icon;
 
 /**
  * Sends an HTTP redirect to a target URL.
@@ -37,13 +38,19 @@ public class RedirectSiteType implements SiteTypeHandler {
         IntegerField.builder().name("delay").build());
 
     @Override
+    public Identifier typeId() { return ID; }
+
+    @Override
     public String getDisplayName() { return "Redirect"; }
 
     @Override
     public String getDescription() { return "Redirect requests to another URL"; }
 
     @Override
-    public String getIcon() { return "external-link"; }
+    public Icon getIcon() { return Icon.of("up-right-from-square"); }
+
+    @Override
+    public String getColor() { return "cyan"; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

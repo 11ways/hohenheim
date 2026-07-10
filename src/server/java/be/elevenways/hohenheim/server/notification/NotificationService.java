@@ -29,10 +29,11 @@ import java.util.Map;
  */
 public class NotificationService extends DatasourceScoped {
 
-    public static final String KIND_WEBHOOK = "webhook";
-    public static final String FORMAT_SLACK = "slack";
-    public static final String FORMAT_DISCORD = "discord";
-    public static final String FORMAT_GENERIC = "generic";
+    // The kind/format vocabulary is owned by the model's EnumField declaration.
+    public static final String KIND_WEBHOOK = NotificationChannelModel.KIND_WEBHOOK;
+    public static final String FORMAT_SLACK = NotificationChannelModel.FORMAT_SLACK;
+    public static final String FORMAT_DISCORD = NotificationChannelModel.FORMAT_DISCORD;
+    public static final String FORMAT_GENERIC = NotificationChannelModel.FORMAT_GENERIC;
 
     private static final HttpClient HTTP = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10)).build();

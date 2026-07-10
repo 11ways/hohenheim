@@ -1,13 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype;
 
-import be.elevenways.hohenheim.server.sitetype.types.AlchemySiteType;
-import be.elevenways.hohenheim.server.sitetype.types.CommandSiteType;
-import be.elevenways.hohenheim.server.sitetype.types.DeadSiteType;
-import be.elevenways.hohenheim.server.sitetype.types.DockerSiteType;
 import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
-import be.elevenways.hohenheim.server.sitetype.types.ProxySiteType;
-import be.elevenways.hohenheim.server.sitetype.types.RedirectSiteType;
-import be.elevenways.hohenheim.server.sitetype.types.StaticSiteType;
 import be.elevenways.hohenheim.sitetype.SiteTypeRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
 
@@ -15,29 +8,35 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Registers all built-in site types and maintains the server-side handler map.
+ * Registration hook for the compile-time-discovered site types plus the
+ * server-side handler map. Concrete SiteTypeHandler implementations arrive
+ * via the generated BlastAutoLoadInit (see the @BlastDiscoverable on the
+ * interface); nothing is registered manually.
  */
 public class SiteTypes {
 
     private static final Map<Identifier, SiteTypeHandler> HANDLERS = new HashMap<>();
 
-    public static void register() {
-        registerType(ProxySiteType.ID, new ProxySiteType());
-        registerType(StaticSiteType.ID, new StaticSiteType());
-        registerType(RedirectSiteType.ID, new RedirectSiteType());
-        registerType(DeadSiteType.ID, new DeadSiteType());
-        registerType(NodeSiteType.ID, new NodeSiteType());
-        registerType(AlchemySiteType.ID, new AlchemySiteType());
-        registerType(CommandSiteType.ID, new CommandSiteType());
-        registerType(DockerSiteType.ID, new DockerSiteType());
+    /**
+     * Entries arrive via the generated BlastAutoLoadInit; force it so lookups
+     * work regardless of which class the JVM touched first. MUST be the LAST
+     * static field: the loader re-enters register() while this class is mid
+     * init and needs HANDLERS assigned.
+     */
+    @SuppressWarnings("unused")
+    private static final Object AUTO_LOAD_TRIGGER =
+            be.elevenways.protoblast.generated.BlastAutoLoadInit.loaded;
 
-        // Initialize shared process management infrastructure
-        NodeSiteType.initSharedInfrastructure();
-    }
-
-    private static void registerType(Identifier id, SiteTypeHandler handler) {
+    /** Compile-time discovery hook (BlastAutoLoadInit). */
+    public static void register(SiteTypeHandler handler) {
+        Identifier id = handler.typeId();
         SiteTypeRegistry.REGISTRY.add(id, handler);
         HANDLERS.put(id, handler);
+    }
+
+    /** One-time boot of the shared process-management infrastructure. */
+    public static void boot() {
+        NodeSiteType.initSharedInfrastructure();
     }
 
     public static SiteTypeHandler getHandler(String typeIdentifier) {

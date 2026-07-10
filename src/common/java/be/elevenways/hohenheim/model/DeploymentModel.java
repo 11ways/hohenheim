@@ -25,7 +25,12 @@ public class DeploymentModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());
-    public static final StringField STATUS = SCHEMA.addField(StringField.builder().name("status").build());
+    public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
+        .value(STATUS_RUNNING, v -> v.displayName("Running").icon("rotate").color("info"))
+        .value(STATUS_SUCCESS, v -> v.displayName("Success").icon("check").color("success"))
+        .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-xmark").color("destructive"))
+        .value(STATUS_CANCELLED, v -> v.displayName("Cancelled").icon("ban").color("secondary"))
+        .build());
     public static final StringField REASON = SCHEMA.addField(StringField.builder().name("reason").build());
     public static final StringField COMMIT_SHA = SCHEMA.addField(StringField.builder().name("commit_sha").build());
     public static final StringField SLOT = SCHEMA.addField(StringField.builder().name("slot").build());

@@ -41,7 +41,7 @@ class HohenheimTaskBootstrapTest {
         db.deleteOnExit();
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
 
-        SiteTypes.register();
+        SiteTypes.boot();
         HohenheimEndpoints.init();
         HohenheimDatabase.init();   // auto-discovery creates system_task + the M0xx tables
 

@@ -7,6 +7,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.PasswordHasher;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.nio.charset.StandardCharsets;
@@ -41,6 +42,9 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
     }
 
     @Override
+    public Identifier typeId() { return ID; }
+
+    @Override
     public String getDisplayName() {
         return "HTTP Basic Auth";
     }
@@ -56,9 +60,13 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
     }
 
     @Override
-    public Map<String, Object> getProperties() {
-        return Map.of("description", "Username + password credentials checked on the proxy",
-            "icon", "lock");
+    public Icon getIcon() {
+        return Icon.LOCK;
+    }
+
+    @Override
+    public String getColor() {
+        return "amber";
     }
 
     @Override

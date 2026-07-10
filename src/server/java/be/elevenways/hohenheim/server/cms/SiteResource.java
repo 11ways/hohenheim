@@ -114,7 +114,7 @@ public final class SiteResource extends RowResource {
         }
         values.put("slug", slugify(name));
         values.put("status", SiteModel.STATUS_ACTIVE);
-        normalizeSource(values, null);
+        normalizeSource(values);
         return super.persistRow(values, accessContext);
     }
 
@@ -126,16 +126,17 @@ public final class SiteResource extends RowResource {
         if (name.isEmpty()) {
             throw new IllegalStateException("Name is required");
         }
-        normalizeSource(values, existing);
+        normalizeSource(values);
         super.updateRow(existing, values, accessContext);
     }
 
     /**
      * Normalize the source discriminator: "local" stores as null and clears
-     * the git settings; "git" keeps them and guarantees a webhook secret
-     * (preserving an existing one when the form leaves it blank).
+     * the git settings; "git" keeps them and mints a webhook secret when none
+     * exists yet (keep-on-blank for an existing secret is the framework's
+     * FormSecrets contract -- webhook_secret is a .secret() field).
      */
-    private static void normalizeSource(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
+    private static void normalizeSource(@NonNull Map<String, Object> coerced) {
         String source = trimmed(coerced.get("source"));
         if (!SiteModel.SOURCE_GIT.equals(source)) {
             coerced.put("source", null);
@@ -148,13 +149,7 @@ public final class SiteResource extends RowResource {
             ? new HashMap<>((Map<String, Object>) map)
             : new HashMap<>();
         if (isBlank(sourceSettings.get("webhook_secret"))) {
-            String preserved = null;
-            if (existing != null
-                && existing.get(SiteModel.SOURCE_SETTINGS) instanceof Map<?, ?> existingSettings
-                && !isBlank(existingSettings.get("webhook_secret"))) {
-                preserved = String.valueOf(existingSettings.get("webhook_secret"));
-            }
-            sourceSettings.put("webhook_secret", preserved != null ? preserved : UUID.randomUUID().toString());
+            sourceSettings.put("webhook_secret", UUID.randomUUID().toString());
         }
         coerced.put("source_settings", sourceSettings);
     }

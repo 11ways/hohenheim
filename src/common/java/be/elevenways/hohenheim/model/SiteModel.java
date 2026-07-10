@@ -53,7 +53,9 @@ public class SiteModel extends Model {
             .build());
 
     public static final StringField DESCRIPTION = SCHEMA.addField(StringField.builder().name("description").build());
-    public static final StringField STATUS = SCHEMA.addField(StringField.builder().name("status").build());
+    public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
+        .value(STATUS_ACTIVE, v -> v.displayName("Active").icon("circle-check").color("success"))
+        .build());
     public static final IntegerField ACCESS_LIST_ID = SCHEMA.addField(IntegerField.builder().name("access_list_id").build());
     public static final IntegerField AUTH_PROVIDER_ID = SCHEMA.addField(IntegerField.builder().name("auth_provider_id").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
