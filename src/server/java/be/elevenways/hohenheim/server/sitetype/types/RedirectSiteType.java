@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -20,7 +21,8 @@ public class RedirectSiteType implements SiteTypeHandler {
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField TARGET_URL = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("target_url").build());
+        StringField.builder().name("target_url").label(HohenheimFormCopy.label("target_url"))
+            .help(HohenheimFormCopy.help("target_url")).build());
 
     public static final EnumField HTTP_STATUS = SETTINGS_SCHEMA.addField(
         EnumField.builder("http_status")
@@ -28,14 +30,18 @@ public class RedirectSiteType implements SiteTypeHandler {
             .value("302", "302 Found")
             .value("307", "307 Temporary Redirect")
             .value("308", "308 Permanent Redirect")
+            .label(HohenheimFormCopy.label("redirect_status"))
+            .help(HohenheimFormCopy.help("redirect_status"))
             .build());
 
     public static final BooleanField PRESERVE_PATH = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("preserve_path").defaultValue(false).build());
+        BooleanField.builder("preserve_path").defaultValue(false)
+            .label(HohenheimFormCopy.label("preserve_path")).help(HohenheimFormCopy.help("preserve_path")).build());
 
     // Honored generically by SiteDispatcher's per-route delay scheduler.
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").build());
+        IntegerField.builder().name("delay").label(HohenheimFormCopy.label("delay"))
+            .help(HohenheimFormCopy.help("delay")).build());
 
     @Override
     public Identifier typeId() { return ID; }

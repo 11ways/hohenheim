@@ -1,11 +1,14 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
+import be.elevenways.hawkeye.common.render.RenderContext;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -36,8 +39,22 @@ public final class AttentionItems {
         returnType = List.class,
         returnsReference = false
     )
-    public static @NonNull List<Map<String, Object>> attentionItems() {
+    public static @NonNull List<Map<String, Object>> attentionItems(RenderContext context) {
         Supplier<List<Map<String, Object>>> current = provider;
-        return current != null ? current.get() : List.of();
+        if (current == null) {
+            return List.of();
+        }
+        return current.get().stream().map(item -> {
+            Map<String, Object> resolved = new LinkedHashMap<>(item);
+            resolveCopy(resolved, "title", context);
+            resolveCopy(resolved, "detail", context);
+            return resolved;
+        }).toList();
+    }
+
+    private static void resolveCopy(Map<String, Object> item, String key, RenderContext context) {
+        if (item.get(key) instanceof Microcopy copy) {
+            item.put(key, copy.resolve(context.getLocales(), context.getMessageResolver()));
+        }
     }
 }

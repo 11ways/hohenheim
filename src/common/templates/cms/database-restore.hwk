@@ -24,7 +24,7 @@
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
     {% if restored %}
-    <pl-alert variant="success">Backup restored into '{{ dbName }}'.</pl-alert>
+    <pl-alert variant="success">{{ t("restored", scope: "database_tab", name: dbName) }}</pl-alert>
     {% /if %}
     {% if error != "" %}
     <pl-alert variant="destructive">{{ error }}</pl-alert>
@@ -32,34 +32,34 @@
 
     <pl-card>
         <pl-card-header>
-            <pl-card-title>Connection</pl-card-title>
-            <pl-card-description>Status: {{ status }}</pl-card-description>
+            <pl-card-title>{{ t("connection", scope: "database_tab") }}</pl-card-title>
+            <pl-card-description>{{ t("status", scope: "database_tab", status: status) }}</pl-card-description>
         </pl-card-header>
         <pl-card-content>
             <pl-table>
                 <pl-table-body>
                     <pl-table-row>
-                        <pl-table-cell>Engine</pl-table-cell>
+                        <pl-table-cell>{{ t("engine", scope: "database_tab") }}</pl-table-cell>
                         <pl-table-cell>{{ engine }}</pl-table-cell>
                     </pl-table-row>
                     <pl-table-row>
-                        <pl-table-cell>Database</pl-table-cell>
+                        <pl-table-cell>{{ t("database", scope: "database_tab") }}</pl-table-cell>
                         <pl-table-cell>{{ dbName }}</pl-table-cell>
                     </pl-table-row>
                     <pl-table-row>
-                        <pl-table-cell>User</pl-table-cell>
+                        <pl-table-cell>{{ t("user", scope: "database_tab") }}</pl-table-cell>
                         <pl-table-cell>{{ dbUser }}</pl-table-cell>
                     </pl-table-row>
                     <pl-table-row>
-                        <pl-table-cell>Password</pl-table-cell>
+                        <pl-table-cell>{{ t("password", scope: "database_tab") }}</pl-table-cell>
                         <pl-table-cell>
                             <code>{{ dbPassword }}</code>
-                            <pl-copy-button value={% dbPassword %} ariaLabel="Copy password"></pl-copy-button>
+                            <pl-copy-button value={% dbPassword %} ariaLabel={% t("copy_password", scope: "database_tab") %}></pl-copy-button>
                         </pl-table-cell>
                     </pl-table-row>
                     {% if usedBy %}
                     <pl-table-row>
-                        <pl-table-cell>Used by</pl-table-cell>
+                        <pl-table-cell>{{ t("used_by", scope: "database_tab") }}</pl-table-cell>
                         <pl-table-cell>
                             {% each usedBy as index, site %}
                             <a href={% site.get("url") %}><pl-badge variant={% "secondary" %}>{{ site.get("name") }}</pl-badge></a>
@@ -74,18 +74,18 @@
 
     <pl-card>
         <pl-card-header>
-            <pl-card-title>Restore from dump</pl-card-title>
-            <pl-card-description>Uploads a dump file and loads it into the running database.</pl-card-description>
+            <pl-card-title>{{ t("restore_dump", scope: "database_tab") }}</pl-card-title>
+            <pl-card-description>{{ t("restore_description", scope: "database_tab") }}</pl-card-description>
         </pl-card-header>
         <pl-card-content>
             <form method="POST" action={% restoreUrl %} enctype="multipart/form-data">
                 {% csrf() %}
                 <pl-field>
-                    <pl-label target="dump">Dump file</pl-label>
+                    <pl-label target="dump">{{ t("dump_file", scope: "database_tab") }}</pl-label>
                     <input id="dump" type="file" name="dump" required>
                 </pl-field>
                 <div class="cms-form-actions">
-                    <pl-button variant={% "destructive" %} type={% "submit" %}>Restore</pl-button>
+                    <pl-button variant={% "destructive" %} type={% "submit" %}>{{ t("restore", scope: "database_tab") }}</pl-button>
                 </div>
             </form>
         </pl-card-content>

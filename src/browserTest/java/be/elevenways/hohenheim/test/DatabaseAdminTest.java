@@ -78,4 +78,27 @@ class DatabaseAdminTest extends HohenheimTestBase {
             model.find().where(DatabaseModel.NAME.eq(name)).delete();
         }
     }
+
+    @Test
+    @Order(5)
+    void existingDatabaseIsAReadonlyDetailWithDeleteStillAvailable() {
+        DatabaseModel model = Models.get(DatabaseModel.class);
+        Row row = model.createEmptyRow();
+        row.set(DatabaseModel.NAME, "readonlydb");
+        row.set(DatabaseModel.ENGINE, "postgres");
+        row.set(DatabaseModel.DB_USER, "readonlyuser");
+        row.set(DatabaseModel.DB_PASSWORD, "readonlypass");
+        row.set(DatabaseModel.DB_NAME, "readonlydb");
+        model.save(row);
+        try {
+            navigateToApp("/admin/databases/" + row.get(DatabaseModel.ID));
+            waitForHydration();
+
+            assertThat(page.locator(".cms-form-actions pl-button[type='submit']").count()).isZero();
+            assertThat(page.locator("form.cms-delete-form pl-button").count()).isEqualTo(1);
+            assertThat(page.locator("input[name='name']").count()).isZero();
+        } finally {
+            model.delete(row);
+        }
+    }
 }

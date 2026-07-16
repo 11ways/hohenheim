@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.hohenheim.server.docker.DockerSiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
@@ -21,40 +23,50 @@ public class DockerSiteType implements SiteTypeHandler {
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField IMAGE = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("image").build());
+        StringField.builder().name("image").label(HohenheimFormCopy.label("image"))
+            .help(HohenheimFormCopy.help("image")).build());
 
     public static final StringField TAG = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("tag").build());
+        StringField.builder().name("tag").label(HohenheimFormCopy.label("image_tag"))
+            .help(HohenheimFormCopy.help("image_tag")).build());
 
     public static final IntegerField CONTAINER_PORT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("container_port").build());
+        IntegerField.builder().name("container_port").label(HohenheimFormCopy.label("container_port"))
+            .help(HohenheimFormCopy.help("container_port")).build());
 
     public static final StringField COMMAND = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("command").build());
+        StringField.builder().name("command").label(HohenheimFormCopy.label("container_command"))
+            .help(HohenheimFormCopy.help("container_command")).build());
 
     // Used only for git-sourced sites: path to the Dockerfile within the checkout.
     public static final StringField DOCKERFILE = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("dockerfile").build());
+        StringField.builder().name("dockerfile").label(HohenheimFormCopy.label("dockerfile"))
+            .help(HohenheimFormCopy.help("dockerfile")).build());
 
     // Target server (servers.name); blank/local runs on the local daemon, else a remote host over SSH.
-    public static final StringField SERVER = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("server").build());
+    public static final EnumField SERVER = SETTINGS_SCHEMA.addField(
+        RegistryEnumField.builder("server").registry(ServerOptions.REGISTRY)
+            .label(HohenheimFormCopy.label("server")).help(HohenheimFormCopy.help("server")).build());
 
     // Environment variables as an ordered name -> value map
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
-        StringMapField.builder("environment_variables").build());
+        StringMapField.builder("environment_variables").label(HohenheimFormCopy.label("environment_variables"))
+            .help(HohenheimFormCopy.help("environment_variables")).build());
 
     // Persistent named volumes: logical name -> container path. Each entry mounts the
     // named volume hohenheim-site-{id}-vol-{name}, which survives redeploys.
     public static final StringMapField VOLUMES = SETTINGS_SCHEMA.addField(
-        StringMapField.builder("volumes").build());
+        StringMapField.builder("volumes").label(HohenheimFormCopy.label("volumes"))
+            .help(HohenheimFormCopy.help("volumes")).build());
 
     // Optional resource caps (blank = unlimited).
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("memory_limit_mb").build());
+        IntegerField.builder().name("memory_limit_mb").label(HohenheimFormCopy.label("memory_limit"))
+            .help(HohenheimFormCopy.help("memory_limit")).build());
 
     public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
-        DoubleField.builder().name("cpu_limit").build());
+        DoubleField.builder().name("cpu_limit").label(HohenheimFormCopy.label("cpu_limit"))
+            .help(HohenheimFormCopy.help("cpu_limit")).build());
 
     @Override
     public Identifier typeId() { return ID; }
@@ -72,10 +84,15 @@ public class DockerSiteType implements SiteTypeHandler {
     public String getColor() { return "blue"; }
 
     @Override
-    public Schema getSchema() { return SETTINGS_SCHEMA; }
+    public Schema getSchema() {
+        ServerOptions.refresh();
+        return SETTINGS_SCHEMA;
+    }
 
     @Override
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
-        return new DockerSiteRequestHandler(site.get(SiteModel.ID), settings);
+        Map<String, Object> resolved = new java.util.LinkedHashMap<>(settings);
+        resolved.put("server", ServerOptions.nameFromKey(settings.get("server")));
+        return new DockerSiteRequestHandler(site.get(SiteModel.ID), resolved);
     }
 }

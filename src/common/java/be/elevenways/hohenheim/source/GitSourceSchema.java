@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.source;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
 
@@ -11,36 +12,48 @@ public class GitSourceSchema {
     public static final Schema SCHEMA = new Schema();
 
     public static final StringField REPOSITORY_URL = SCHEMA.addField(
-        StringField.builder().name("repository_url").build());
+        StringField.builder().name("repository_url").label(HohenheimFormCopy.label("repository_url"))
+            .help(HohenheimFormCopy.help("repository_url")).build());
 
     public static final StringField BRANCH = SCHEMA.addField(
-        StringField.builder().name("branch").build());
+        StringField.builder().name("branch").label(HohenheimFormCopy.label("branch"))
+            .help(HohenheimFormCopy.help("branch")).build());
 
     public static final StringField BUILD_COMMAND = SCHEMA.addField(
-        StringField.builder().name("build_command").build());
+        StringField.builder().name("build_command").label(HohenheimFormCopy.label("build_command"))
+            .help(HohenheimFormCopy.help("build_command")).build());
 
     public static final StringField BUILD_DIRECTORY = SCHEMA.addField(
-        StringField.builder().name("build_directory").build());
+        StringField.builder().name("build_directory").label(HohenheimFormCopy.label("build_directory"))
+            .help(HohenheimFormCopy.help("build_directory")).build());
 
     public static final IntegerField BUILD_TIMEOUT = SCHEMA.addField(
-        IntegerField.builder().name("build_timeout").build());
+        IntegerField.builder().name("build_timeout").label(HohenheimFormCopy.label("build_timeout"))
+            .help(HohenheimFormCopy.help("build_timeout")).build());
 
     public static final BooleanField AUTO_DEPLOY = SCHEMA.addField(
-        BooleanField.builder("auto_deploy").defaultValue(true).build());
+        BooleanField.builder("auto_deploy").defaultValue(true).label(HohenheimFormCopy.label("auto_deploy"))
+            .help(HohenheimFormCopy.help("auto_deploy")).build());
 
     public static final IntegerField POLL_INTERVAL = SCHEMA.addField(
-        IntegerField.builder().name("poll_interval").build());
+        IntegerField.builder().name("poll_interval").label(HohenheimFormCopy.label("poll_interval"))
+            .help(HohenheimFormCopy.help("poll_interval")).build());
 
     public static final StringField WEBHOOK_SECRET = SCHEMA.addField(
-        StringField.builder().name("webhook_secret").secret().build());
+        StringField.builder().name("webhook_secret").secret().label(HohenheimFormCopy.label("webhook_secret"))
+            .help(HohenheimFormCopy.help("webhook_secret")).build());
 
     public static final BooleanField SHALLOW_CLONE = SCHEMA.addField(
-        BooleanField.builder("shallow_clone").defaultValue(true).build());
+        BooleanField.builder("shallow_clone").defaultValue(true).label(HohenheimFormCopy.label("shallow_clone"))
+            .help(HohenheimFormCopy.help("shallow_clone")).build());
 
     public static final BooleanField SUBMODULES = SCHEMA.addField(
-        BooleanField.builder("submodules").defaultValue(false).build());
+        BooleanField.builder("submodules").defaultValue(false).label(HohenheimFormCopy.label("submodules"))
+            .help(HohenheimFormCopy.help("submodules")).build());
 
     // Build-only environment variables as an ordered name -> value map.
     public static final StringMapField BUILD_ENVIRONMENT_VARIABLES = SCHEMA.addField(
-        StringMapField.builder("build_environment_variables").build());
+        StringMapField.builder("build_environment_variables")
+            .label(HohenheimFormCopy.label("build_environment_variables"))
+            .help(HohenheimFormCopy.help("build_environment_variables")).build());
 }

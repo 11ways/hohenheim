@@ -108,6 +108,7 @@ public final class DatabaseResource extends RowResource {
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
     @Override public int navOrder() { return 10; }
     @Override public @NonNull Icon icon() { return Icon.of("database"); }
+    @Override public boolean updatable() { return false; }
 
 
     /** Records are provisioned containers: no field is editable after create. */
@@ -167,12 +168,6 @@ public final class DatabaseResource extends RowResource {
             throw new IllegalStateException("Provisioning did not create a record for '" + name + "'");
         }
         return rowKey(created);
-    }
-
-    @Override
-    public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
-                          @NonNull AccessContext accessContext) {
-        throw Violations.ofForm(CmsSupport.violationText("database_immutable"));
     }
 
     /** Refuses while live sites still depend on the database's injected credentials. */

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
@@ -25,37 +26,48 @@ public class CommandSiteType implements SiteTypeHandler {
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField START_COMMAND = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("start_command").build());
+        StringField.builder().name("start_command").label(HohenheimFormCopy.label("start_command"))
+            .help(HohenheimFormCopy.help("start_command")).build());
 
     public static final StringField WORKING_DIRECTORY = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("working_directory").build());
+        StringField.builder().name("working_directory").label(HohenheimFormCopy.label("working_directory"))
+            .help(HohenheimFormCopy.help("working_directory")).build());
 
     public static final StringField PORT_ARGUMENT = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("port_argument").build());
+        StringField.builder().name("port_argument").label(HohenheimFormCopy.label("port_argument"))
+            .help(HohenheimFormCopy.help("port_argument")).build());
 
     public static final BooleanField WAIT_FOR_READY = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("wait_for_ready").defaultValue(false).build());
+        BooleanField.builder("wait_for_ready").defaultValue(false)
+            .label(HohenheimFormCopy.label("wait_for_ready")).help(HohenheimFormCopy.help("wait_for_ready")).build());
 
     public static final IntegerField MINIMUM_PROCESSES = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("minimum_processes").build());
+        IntegerField.builder().name("minimum_processes").label(HohenheimFormCopy.label("minimum_processes"))
+            .help(HohenheimFormCopy.help("minimum_processes")).build());
 
     public static final IntegerField MAXIMUM_PROCESSES = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("maximum_processes").build());
+        IntegerField.builder().name("maximum_processes").label(HohenheimFormCopy.label("maximum_processes"))
+            .help(HohenheimFormCopy.help("maximum_processes")).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").build());
+        IntegerField.builder().name("delay").label(HohenheimFormCopy.label("delay"))
+            .help(HohenheimFormCopy.help("delay")).build());
 
     // Environment variables as an ordered name -> value map
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
-        StringMapField.builder("environment_variables").build());
+        StringMapField.builder("environment_variables").label(HohenheimFormCopy.label("environment_variables"))
+            .help(HohenheimFormCopy.help("environment_variables")).build());
 
     public static final ListField<String> API_KEYS = SETTINGS_SCHEMA.addField(
-        ListField.<String>builder(StringField.builder().name("api_key").build()).name("api_keys").build());
+        ListField.<String>builder(StringField.builder().name("api_key").build()).name("api_keys")
+            .label(HohenheimFormCopy.label("api_keys")).help(HohenheimFormCopy.help("api_keys")).build());
 
     // Discovered system user ("hohenheim:<username>" registry key); null = current user.
     public static final EnumField USER = SETTINGS_SCHEMA.addField(
         RegistryEnumField.builder("user")
             .registry(SystemUserOptions.REGISTRY)
+            .label(HohenheimFormCopy.label("run_as_user"))
+            .help(HohenheimFormCopy.help("run_as_user"))
             .build());
 
     @Override

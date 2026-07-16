@@ -99,4 +99,31 @@ class SiteTypeTest extends HohenheimTestBase {
         assertThat(content).contains("wait_for_ready");
         assertThat(content).contains("api_keys");
     }
+
+    @Test
+    @Order(5)
+    void gitSettingsOnlyRenderForGitSources() {
+        navigateToApp("/admin/sites/new");
+        waitForHydration();
+
+        assertThat(page.locator("pl-input[name='source_settings.repository_url']").count()).isZero();
+
+        openPlSelect("pl-select[name='source']");
+        page.click(OPEN_SELECT_POPUP + " div[role='option'][data-value='git']");
+        waitForReactiveIdle();
+        page.waitForSelector("pl-input[name='source_settings.repository_url']");
+        assertThat(page.locator("pl-input[name='source_settings.repository_url']").count()).isEqualTo(1);
+    }
+
+    @Test
+    @Order(6)
+    void dockerPlacementUsesTheServerRegistry() {
+        navigateToApp("/admin/sites/new");
+        waitForHydration();
+        selectSiteType("hohenheim:docker");
+
+        openPlSelect("pl-select[name='settings.server']");
+        assertThat(page.locator(OPEN_SELECT_POPUP
+            + " div[role='option'][data-value='hohenheim:local']").count()).isEqualTo(1);
+    }
 }

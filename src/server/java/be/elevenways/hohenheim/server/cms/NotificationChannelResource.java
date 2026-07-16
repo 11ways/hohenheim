@@ -5,7 +5,9 @@ import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.zenit.common.edit.Array;
+import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
+import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -38,7 +40,12 @@ public final class NotificationChannelResource extends RowResource {
         .add(NotificationChannelModel.NAME)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(NotificationChannelModel.FORMAT))
         .add(NotificationChannelModel.URL)
-        .add(Array.of(NotificationChannelModel.EVENTS, NotificationChannelModel.EVENTS.getItemField()).tags().build())
+        .add(Array.of(NotificationChannelModel.EVENTS, NotificationChannelModel.EVENTS.getItemField())
+            .options(OptionSource.of(NotificationEvents.ALL.stream()
+                .map(event -> FieldOption.of(event,
+                    Microcopy.of(event).withFilter("scope", "notification_event")))
+                .toList()))
+            .build())
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "notification_channel"); }

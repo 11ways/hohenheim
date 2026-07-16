@@ -24,19 +24,19 @@
     {% if isManaged %}
     <pl-card>
         <pl-card-header>
-            <pl-card-title>Processes</pl-card-title>
-            <pl-card-description>Running child processes for this site.</pl-card-description>
+            <pl-card-title>{{ t("title", scope: "site_processes") }}</pl-card-title>
+            <pl-card-description>{{ t("description", scope: "site_processes") }}</pl-card-description>
         </pl-card-header>
         <pl-card-content>
             {% if processes %}
             <pl-table>
                 <pl-table-header><pl-table-row>
-                    <pl-table-head>PID</pl-table-head>
-                    <pl-table-head>Port</pl-table-head>
-                    <pl-table-head>Clients</pl-table-head>
-                    <pl-table-head>CPU</pl-table-head>
-                    <pl-table-head>Memory</pl-table-head>
-                    <pl-table-head>Status</pl-table-head>
+                    <pl-table-head>{{ t("pid", scope: "site_processes") }}</pl-table-head>
+                    <pl-table-head>{{ t("port", scope: "site_processes") }}</pl-table-head>
+                    <pl-table-head>{{ t("clients", scope: "site_processes") }}</pl-table-head>
+                    <pl-table-head>{{ t("cpu", scope: "site_processes") }}</pl-table-head>
+                    <pl-table-head>{{ t("memory", scope: "site_processes") }}</pl-table-head>
+                    <pl-table-head>{{ t("status", scope: "site_processes") }}</pl-table-head>
                     <pl-table-head></pl-table-head>
                 </pl-table-row></pl-table-header>
                 <pl-table-body>
@@ -49,23 +49,23 @@
                         <pl-table-cell>{{ proc.get("memoryMb") }} MB</pl-table-cell>
                         <pl-table-cell>
                             {% if proc.get("isolated") == true %}
-                            <pl-badge variant={% "destructive" %}>Isolated</pl-badge>
+                            <pl-badge variant={% "destructive" %}>{{ t("isolated", scope: "site_processes") }}</pl-badge>
                             {% else %}
                                 {% if proc.get("ready") == true %}
-                                <pl-badge variant={% "default" %}>Ready</pl-badge>
+                                <pl-badge variant={% "default" %}>{{ t("ready", scope: "site_processes") }}</pl-badge>
                                 {% else %}
-                                <pl-badge variant={% "secondary" %}>Starting</pl-badge>
+                                <pl-badge variant={% "secondary" %}>{{ t("starting", scope: "site_processes") }}</pl-badge>
                                 {% /if %}
                             {% /if %}
                         </pl-table-cell>
                         <pl-table-cell>
                             <form method="POST" action={% "/sites/" + siteId + "/processes/" + proc.get("pid") + "/isolate" %} style="display:inline">
                                 {% csrf() %}
-                                <pl-button variant={% "outline" %} size={% "sm" %} type={% "submit" %}>{% if proc.get("isolated") == true %}Unisolate{% else %}Isolate{% /if %}</pl-button>
+                                <pl-button variant={% "outline" %} size={% "sm" %} type={% "submit" %}>{% if proc.get("isolated") == true %}{{ t("unisolate", scope: "site_processes") }}{% else %}{{ t("isolate", scope: "site_processes") }}{% /if %}</pl-button>
                             </form>
-                            <form method="POST" action={% "/sites/" + siteId + "/processes/" + proc.get("pid") + "/kill" %} style="display:inline" data-confirm="The process is terminated immediately.">
+                            <form method="POST" action={% "/sites/" + siteId + "/processes/" + proc.get("pid") + "/kill" %} style="display:inline" data-confirm={% t("kill_confirm", scope: "site_processes") %}>
                                 {% csrf() %}
-                                <pl-button variant={% "destructive" %} size={% "sm" %} type={% "submit" %}>Kill</pl-button>
+                                <pl-button variant={% "destructive" %} size={% "sm" %} type={% "submit" %}>{{ t("kill", scope: "site_processes") }}</pl-button>
                             </form>
                         </pl-table-cell>
                     </pl-table-row>
@@ -73,11 +73,11 @@
                 </pl-table-body>
             </pl-table>
             {% else %}
-            <p>No processes running.</p>
+            <p>{{ t("none_running", scope: "site_processes") }}</p>
             {% /if %}
             <form method="POST" action={% "/sites/" + siteId + "/processes/start" %}>
                 {% csrf() %}
-                <pl-button variant={% "outline" %} type={% "submit" %}>Start Process</pl-button>
+                <pl-button variant={% "outline" %} type={% "submit" %}>{{ t("start", scope: "site_processes") }}</pl-button>
             </form>
         </pl-card-content>
     </pl-card>
@@ -85,8 +85,8 @@
     {% if processes %}
     <pl-card>
         <pl-card-header>
-            <pl-card-title>Terminal</pl-card-title>
-            <pl-card-description>Live stdout/stderr for pid {{ processes.get(0).get("pid") }}. Keystrokes are sent to the process's stdin.</pl-card-description>
+            <pl-card-title>{{ t("terminal", scope: "site_processes") }}</pl-card-title>
+            <pl-card-description>{{ t("terminal_description", scope: "site_processes", pid: processes.get(0).get("pid")) }}</pl-card-description>
         </pl-card-header>
         <pl-card-content>
             <pl-terminal
@@ -99,22 +99,22 @@
     {% /if %}
     {% else %}
     <pl-empty-state icon="microchip">
-        <pl-empty-state-title>Not a managed site</pl-empty-state-title>
-        <pl-empty-state-description>Only node, alchemy, command and docker sites run managed processes.</pl-empty-state-description>
+        <pl-empty-state-title>{{ t("unmanaged", scope: "site_processes") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("unmanaged_description", scope: "site_processes") }}</pl-empty-state-description>
     </pl-empty-state>
     {% /if %}
 
     <pl-card>
         <pl-card-header>
-            <pl-card-title>Stored process logs</pl-card-title>
+            <pl-card-title>{{ t("stored_logs", scope: "site_processes") }}</pl-card-title>
         </pl-card-header>
         <pl-card-content>
             {% if proclogs %}
             <pl-table>
                 <pl-table-header><pl-table-row>
-                    <pl-table-head>PID</pl-table-head>
-                    <pl-table-head>Lines</pl-table-head>
-                    <pl-table-head>Captured</pl-table-head>
+                    <pl-table-head>{{ t("pid", scope: "site_processes") }}</pl-table-head>
+                    <pl-table-head>{{ t("lines", scope: "site_processes") }}</pl-table-head>
+                    <pl-table-head>{{ t("captured", scope: "site_processes") }}</pl-table-head>
                 </pl-table-row></pl-table-header>
                 <pl-table-body>
                     {% each proclogs as index, log %}
@@ -127,7 +127,7 @@
                 </pl-table-body>
             </pl-table>
             {% else %}
-            <p>No stored logs yet.</p>
+            <p>{{ t("no_logs", scope: "site_processes") }}</p>
             {% /if %}
         </pl-card-content>
     </pl-card>
@@ -135,7 +135,7 @@
     {% if selectedLogHtml != "" %}
     <pl-card>
         <pl-card-header>
-            <pl-card-title>Stored log {{ selectedLogTitle }}</pl-card-title>
+            <pl-card-title>{{ t("stored_log", scope: "site_processes", title: selectedLogTitle) }}</pl-card-title>
         </pl-card-header>
         <pl-card-content>
             <div class="hh-proclog-content">{%= selectedLogHtml %}</div>

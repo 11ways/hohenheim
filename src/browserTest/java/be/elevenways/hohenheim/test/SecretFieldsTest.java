@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.auth.server.PasswordHasher;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.*;
@@ -170,6 +172,36 @@ class SecretFieldsTest extends HohenheimTestBase {
         String header = "Basic " + java.util.Base64.getEncoder()
             .encodeToString("alice:secret123".getBytes());
         assertThat(BasicAuthProviderType.verify(header, kept)).isEqualTo("alice");
+    }
+
+    @Test
+    @Order(5)
+    void accessListPasswordNeverReachesTheEditPageAndBlankSaveKeepsIt() throws Exception {
+        String password = "access-list-password-4c2a9e";
+        var response = postForm("/admin/access-lists/new",
+            "name=Private+network&satisfy=any&basic_auth_user=operator&basic_auth_pass=" + password
+                + "&allowed_ips=10.0.0.0%2F8&denied_ips=");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+
+        Row row = Models.get(AccessListModel.class).find()
+            .where(AccessListModel.NAME.eq("Private network")).first();
+        assertThat(row).isNotNull();
+        Integer id = row.get(AccessListModel.ID);
+        String storedHash = row.get(AccessListModel.BASIC_AUTH_PASS);
+        assertThat(storedHash).startsWith("$argon2");
+        assertThat(PasswordHasher.verify(password, storedHash)).isTrue();
+
+        navigateToApp("/admin/access-lists/" + id);
+        waitForHydration();
+        assertThat(page.content()).doesNotContain(password);
+
+        response = postForm("/admin/access-lists/" + id,
+            "name=Private+network&satisfy=any&basic_auth_user=operator&basic_auth_pass="
+                + "&allowed_ips=10.0.0.0%2F8&denied_ips=");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+
+        Row stored = Models.get(AccessListModel.class).findById(id);
+        assertThat(stored.get(AccessListModel.BASIC_AUTH_PASS)).isEqualTo(storedHash);
     }
 
     @SuppressWarnings("unchecked")

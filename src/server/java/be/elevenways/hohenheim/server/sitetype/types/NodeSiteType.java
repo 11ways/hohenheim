@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.options.NodeVersionOptions;
 import be.elevenways.hohenheim.server.options.SystemUserOptions;
@@ -31,44 +32,56 @@ public class NodeSiteType implements SiteTypeHandler {
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField SCRIPT = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("script").build());
+        StringField.builder().name("script").label(HohenheimFormCopy.label("script"))
+            .help(HohenheimFormCopy.help("script")).build());
 
     // Discovered node version ("hohenheim:<version>" registry key); null means
     // "node" from PATH. The registry drives the admin dropdown live.
     public static final EnumField NODE = SETTINGS_SCHEMA.addField(
         RegistryEnumField.builder("node")
             .registry(NodeVersionOptions.REGISTRY)
+            .label(HohenheimFormCopy.label("node_runtime"))
+            .help(HohenheimFormCopy.help("node_runtime"))
             .build());
 
     public static final BooleanField WAIT_FOR_READY = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("wait_for_ready").defaultValue(false).build());
+        BooleanField.builder("wait_for_ready").defaultValue(false)
+            .label(HohenheimFormCopy.label("wait_for_ready")).help(HohenheimFormCopy.help("wait_for_ready")).build());
 
     public static final IntegerField MINIMUM_PROCESSES = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("minimum_processes").build());
+        IntegerField.builder().name("minimum_processes").label(HohenheimFormCopy.label("minimum_processes"))
+            .help(HohenheimFormCopy.help("minimum_processes")).build());
 
     public static final IntegerField MAXIMUM_PROCESSES = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("maximum_processes").build());
+        IntegerField.builder().name("maximum_processes").label(HohenheimFormCopy.label("maximum_processes"))
+            .help(HohenheimFormCopy.help("maximum_processes")).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").build());
+        IntegerField.builder().name("delay").label(HohenheimFormCopy.label("delay"))
+            .help(HohenheimFormCopy.help("delay")).build());
 
     // Environment variables as an ordered name -> value map
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
-        StringMapField.builder("environment_variables").build());
+        StringMapField.builder("environment_variables").label(HohenheimFormCopy.label("environment_variables"))
+            .help(HohenheimFormCopy.help("environment_variables")).build());
 
     // API keys for X-Hohenheim-Key header validation — stored as a JSON list of strings
     public static final ListField<String> API_KEYS = SETTINGS_SCHEMA.addField(
-        ListField.<String>builder(StringField.builder().name("api_key").build()).name("api_keys").build());
+        ListField.<String>builder(StringField.builder().name("api_key").build()).name("api_keys")
+            .label(HohenheimFormCopy.label("api_keys")).help(HohenheimFormCopy.help("api_keys")).build());
 
     // Discovered system user ("hohenheim:<username>" registry key); null means
     // "run as the current user". The registry drives the admin dropdown live.
     public static final EnumField USER = SETTINGS_SCHEMA.addField(
         RegistryEnumField.builder("user")
             .registry(SystemUserOptions.REGISTRY)
+            .label(HohenheimFormCopy.label("run_as_user"))
+            .help(HohenheimFormCopy.help("run_as_user"))
             .build());
 
     public static final BooleanField USE_PORTS = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("use_ports").defaultValue(false).build());
+        BooleanField.builder("use_ports").defaultValue(false)
+            .label(HohenheimFormCopy.label("use_ports")).help(HohenheimFormCopy.help("use_ports")).build());
 
     // Shared infrastructure (singleton per server)
     private static PortAllocator portAllocator;
