@@ -133,9 +133,24 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
       upload to `/databases/:name/restore`); outcome is surfaced back on the detail page via
       query-string tokens. Audit-logged as `restored`. End-to-end tested against a live container.
 
+- [x] **Sites ↔ databases: env injection** — `site_databases` join table (M032,
+      `SiteDatabaseModel`: site, database, per-link `env_prefix`); `DatabaseEnvInjection`
+      derives `{PREFIX}_HOST/PORT/USER/PASSWORD/NAME/URL` (plus `DATABASE_URL` for the site's
+      FIRST link) at every process spawn from live Docker state — nothing baked into stored
+      settings, so re-provisioning/rotation is picked up on the next start. Operator-authored
+      env vars override injected ones. Reachability enforced at LINK time (site type must run
+      host processes — `SiteTypeInfo.supportsEnvInjection`; database must be on the local
+      server): docker-site containers can't reach a 127.0.0.1-published host port until
+      shared-network mode lands. Unresolvable links inject NOTHING (loud
+      `hohenheim.db_injection.unresolved` slog + dashboard attention item; an unavailable
+      primary never hands `DATABASE_URL` to another database). Admin: Databases tab on
+      env-capable sites (attach/detach, variable preview), used-by on the restore tab,
+      delete guard on attached databases. End-to-end tested (real container → linked site →
+      spawned child's env).
+
 Phase 3 is complete: provision, persistence, orchestration, admin UI (backup download + restore
-upload), scheduled backups, and backup + restore for all four engines (redis restore: persistent
-only).
+upload), scheduled backups, backup + restore for all four engines (redis restore: persistent
+only), and site attachment with derived-env injection.
 
 ## Phase 4 — Multi-server ← COMPLETE (SSH-transport remote half untestable locally)
 

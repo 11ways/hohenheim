@@ -10,6 +10,7 @@
 {% declare restoreUrl: String %}
 {% declare error: String = "" %}
 {% declare restored: Boolean = false %}
+{% declare usedBy: List = null %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -51,8 +52,21 @@
                     </pl-table-row>
                     <pl-table-row>
                         <pl-table-cell>Password</pl-table-cell>
-                        <pl-table-cell>{{ dbPassword }}</pl-table-cell>
+                        <pl-table-cell>
+                            <code>{{ dbPassword }}</code>
+                            <pl-copy-button value={% dbPassword %} ariaLabel="Copy password"></pl-copy-button>
+                        </pl-table-cell>
                     </pl-table-row>
+                    {% if usedBy %}
+                    <pl-table-row>
+                        <pl-table-cell>Used by</pl-table-cell>
+                        <pl-table-cell>
+                            {% each usedBy as index, site %}
+                            <a href={% site.get("url") %}><pl-badge variant={% "secondary" %}>{{ site.get("name") }}</pl-badge></a>
+                            {% /each %}
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /if %}
                 </pl-table-body>
             </pl-table>
         </pl-card-content>

@@ -47,6 +47,7 @@ public final class HohenheimPanel extends Panel {
         peers.add(new AdminDashboard());
         peers.add(new SiteResource());
         peers.add(new SiteDomainResource());
+        peers.add(new SiteDatabaseResource());
         peers.add(new CertificateResource());
         peers.add(new AccessListResource());
         peers.add(new AuthProviderResource());

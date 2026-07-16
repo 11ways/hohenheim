@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.SiteDatabaseModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -170,14 +172,31 @@ public final class DatabaseResource extends RowResource {
         throw new IllegalStateException("Managed databases cannot be edited; destroy and recreate instead");
     }
 
+    /** Refuses while live sites still depend on the database's injected credentials. */
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
         String name = existing.get(DatabaseModel.NAME);
+        Integer id = existing.get(DatabaseModel.ID);
+        SiteDatabaseModel links = Models.get(SiteDatabaseModel.class);
+        SiteModel sites = Models.get(SiteModel.class);
+        List<String> attachedTo = new ArrayList<>();
+        for (Row link : links.findByDatabaseId(id)) {
+            Row site = sites.find().where(SiteModel.ID.eq(link.get(SiteDatabaseModel.SITE_ID))).first();
+            if (site != null && site.get(SiteModel.DELETED_AT) == null) {
+                attachedTo.add(String.valueOf(site.get(SiteModel.NAME)));
+            }
+        }
+        if (!attachedTo.isEmpty()) {
+            throw new IllegalStateException("Database '" + name + "' is attached to "
+                + String.join(", ", attachedTo) + "; detach it from those sites first");
+        }
         try {
             this.databaseService.destroy(name, true);
         } catch (IOException e) {
             throw new UncheckedIOException("Destroy of '" + name + "' failed", e);
         }
+        // Links to soft-deleted sites are debris once the database is gone.
+        links.find().where(SiteDatabaseModel.DATABASE_ID.eq(id)).delete();
     }
 
     @Override

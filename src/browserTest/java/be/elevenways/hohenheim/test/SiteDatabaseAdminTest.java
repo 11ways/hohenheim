@@ -1,0 +1,167 @@
+package be.elevenways.hohenheim.test;
+
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.SiteDatabaseModel;
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
+import org.junit.jupiter.api.*;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * The site-database attachment surface: attach through the CMS form, the site's
+ * Databases tab (gated to env-injection-capable types), the link-time reachability
+ * refusals, and the database delete guard. No Docker -- records only.
+ */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+class SiteDatabaseAdminTest extends HohenheimTestBase {
+
+    private static Integer nodeSiteId;
+    private static Integer dockerSiteId;
+    private static Integer localDbId;
+    private static Integer remoteDbId;
+
+    private String baseUrl() {
+        return "http://localhost:" + getServerPort();
+    }
+
+    private HttpResponse<String> postForm(String path, String body) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + path))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .header("X-Csrf-Token", csrfToken)
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> get(String path) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + path))
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .GET()
+            .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static Integer site(String name, String type) {
+        SiteModel sites = Models.get(SiteModel.class);
+        Row site = sites.createEmptyRow();
+        site.set(SiteModel.NAME, name);
+        site.set(SiteModel.SLUG, name);
+        site.set(SiteModel.SITE_TYPE, type);
+        site.set(SiteModel.ENABLED, true);
+        sites.save(site);
+        return site.get(SiteModel.ID);
+    }
+
+    private static Integer database(String name, String server) {
+        DatabaseModel databases = Models.get(DatabaseModel.class);
+        Row row = databases.createEmptyRow();
+        row.set(DatabaseModel.NAME, name);
+        row.set(DatabaseModel.ENGINE, "postgres");
+        row.set(DatabaseModel.DB_USER, "appuser");
+        row.set(DatabaseModel.DB_PASSWORD, "linkpass");
+        row.set(DatabaseModel.DB_NAME, "appdb");
+        row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+        row.set(DatabaseModel.SERVER_NAME, server);
+        databases.save(row);
+        return row.get(DatabaseModel.ID);
+    }
+
+    @Test
+    @Order(1)
+    void attachThroughTheCmsFormCreatesTheLink() throws Exception {
+        nodeSiteId = site("linkable", "hohenheim:node");
+        dockerSiteId = site("dockerized", "hohenheim:docker");
+        localDbId = database("linkdb", "local");
+        remoteDbId = database("remotedb", "db-host-2");
+
+        var response = postForm("/admin/site-databases/new",
+            "site_id=" + nodeSiteId + "&database_id=" + localDbId + "&env_prefix=DB");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+
+        List<Row> links = Models.get(SiteDatabaseModel.class).findBySiteId(nodeSiteId);
+        assertThat(links).hasSize(1);
+        assertThat((Integer) links.get(0).get(SiteDatabaseModel.DATABASE_ID)).isEqualTo(localDbId);
+        assertThat((String) links.get(0).get(SiteDatabaseModel.ENV_PREFIX)).isEqualTo("DB");
+    }
+
+    @Test
+    @Order(2)
+    void databasesTabListsTheAttachmentWithInjectedVariablePreview() {
+        navigateToApp("/admin/sites/" + nodeSiteId + "/page/databases");
+        waitForHydration();
+
+        String body = page.locator("body").textContent();
+        assertThat(body).contains("linkdb");
+        assertThat(body).contains("DB_HOST");
+        assertThat(body).contains("DATABASE_URL");
+        assertThat(page.locator("#attach-database-link").count()).isEqualTo(1);
+    }
+
+    @Test
+    @Order(3)
+    void dockerSitesGetNoDatabasesTabAndRefuseLinks() throws Exception {
+        // visibleFor gates the tab AND 404s the route for container-backed sites.
+        var tab = get("/admin/sites/" + dockerSiteId + "/page/databases");
+        assertThat(tab.statusCode()).isEqualTo(404);
+
+        // The refusal rerenders the form (no redirect) and persists nothing.
+        var response = postForm("/admin/site-databases/new",
+            "site_id=" + dockerSiteId + "&database_id=" + localDbId + "&env_prefix=DB");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(Models.get(SiteDatabaseModel.class).findBySiteId(dockerSiteId)).isEmpty();
+    }
+
+    @Test
+    @Order(4)
+    void remoteDatabasesAndDuplicatePrefixesAreRefused() throws Exception {
+        var remote = postForm("/admin/site-databases/new",
+            "site_id=" + nodeSiteId + "&database_id=" + remoteDbId + "&env_prefix=REMOTE");
+        assertThat(remote.statusCode()).isEqualTo(200);
+
+        Integer secondDb = database("seconddb", "local");
+        var dupPrefix = postForm("/admin/site-databases/new",
+            "site_id=" + nodeSiteId + "&database_id=" + secondDb + "&env_prefix=db");
+        assertThat(dupPrefix.statusCode()).isEqualTo(200);
+
+        var dupPair = postForm("/admin/site-databases/new",
+            "site_id=" + nodeSiteId + "&database_id=" + localDbId + "&env_prefix=OTHER");
+        assertThat(dupPair.statusCode()).isEqualTo(200);
+
+        // None of the three refusals persisted anything.
+        assertThat(Models.get(SiteDatabaseModel.class).findBySiteId(nodeSiteId)).hasSize(1);
+    }
+
+    @Test
+    @Order(5)
+    void attachedDatabaseRefusesDeletionUntilDetached() throws Exception {
+        var refused = postForm("/admin/databases/" + localDbId + "/delete", "");
+        assertThat(refused.statusCode()).isEqualTo(200);   // rerender, not the post-delete redirect
+        assertThat(Models.get(DatabaseModel.class).find()
+            .where(DatabaseModel.ID.eq(localDbId)).first()).isNotNull();
+
+        // Detaching clears the guard. (The destroy path needs Docker, so the
+        // guard's pass-through is covered by the unit-level resolver tests;
+        // here we only pin the refusal while a live site depends on it.)
+        Models.get(SiteDatabaseModel.class).find()
+            .where(SiteDatabaseModel.SITE_ID.eq(nodeSiteId)).delete();
+        assertThat(Models.get(SiteDatabaseModel.class).findBySiteId(nodeSiteId)).isEmpty();
+    }
+}

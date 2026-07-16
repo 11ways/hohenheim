@@ -20,6 +20,7 @@
     "hohenheim.server.plural": "Servers",
     "hohenheim.settings.title": "Settings",
     "hohenheim.site.clone": "Clone",
+    "hohenheim.site.databases": "Databases",
     "hohenheim.site.clone.confirm": "Create a copy with the same settings and domains (disabled by default)?",
     "hohenheim.site.deployments": "Deployments",
     "hohenheim.site.disabled": "Site disabled",
@@ -28,6 +29,8 @@
     "hohenheim.site.plural": "Sites",
     "hohenheim.site.processes": "Processes",
     "hohenheim.site.toggle": "Enable/disable",
+    "hohenheim.site_database.env_prefix_help": "Names the injected variable family: DB gives DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME and DB_URL. The site's first attachment also provides DATABASE_URL.",
+    "hohenheim.site_database.plural": "Attached databases",
     "hohenheim.site_domain.plural": "Site Domains",
     "hohenheim.widget.attention": "Needs attention",
     "hohenheim.widget.attention.all_clear": "All clear - nothing needs attention."

@@ -74,6 +74,9 @@ public class CommandSiteType implements SiteTypeHandler {
     public String getColor() { return "orange"; }
 
     @Override
+    public boolean supportsEnvInjection() { return true; }
+
+    @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
 
     @Override

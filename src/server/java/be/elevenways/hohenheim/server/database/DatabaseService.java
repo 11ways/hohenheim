@@ -186,6 +186,11 @@ public class DatabaseService extends DatasourceScoped {
         if (row == null) {
             return null;
         }
+        return detailOf(row);
+    }
+
+    /** Full detail for an already-loaded database row, including live container status. */
+    public Detail detailOf(Row row) {
         ManagedDatabase.Engine engine = engineOf(row);
         ManagedDatabase.LiveStatus live = liveStatus(row, engine);
         String image = row.get(DatabaseModel.IMAGE);

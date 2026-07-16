@@ -2,6 +2,7 @@ package be.elevenways.hohenheim;
 
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DeploymentModel;
 import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
@@ -55,6 +56,11 @@ public final class HohenheimSources implements ZenitModule {
 
         RecordSourceRegistry.INSTANCE.register(RecordSource.of(AccessListModel.class)
             .search(AccessListModel.NAME)
+            .build());
+
+        // Feeds the site-database attachment picker.
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(DatabaseModel.class)
+            .search(DatabaseModel.NAME)
             .build());
 
         RecordSourceRegistry.INSTANCE.register(RecordSource.of(SiteAuthProviderModel.class)
