@@ -122,28 +122,34 @@ class SiteDatabaseAdminTest extends HohenheimTestBase {
         var tab = get("/admin/sites/" + dockerSiteId + "/page/databases");
         assertThat(tab.statusCode()).isEqualTo(404);
 
-        // The refusal rerenders the form (no redirect) and persists nothing.
+        // The refusal rerenders the form with the ACTUAL reason (persist-stage
+        // Violations reach the browser since the pipeline honors them).
         var response = postForm("/admin/site-databases/new",
             "site_id=" + dockerSiteId + "&database_id=" + localDbId + "&env_prefix=DB");
         assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("cannot receive database credentials");
         assertThat(Models.get(SiteDatabaseModel.class).findBySiteId(dockerSiteId)).isEmpty();
     }
 
     @Test
     @Order(4)
     void remoteDatabasesAndDuplicatePrefixesAreRefused() throws Exception {
+        // Each refusal carries its specific message, args resolved ({$server}, {$prefix}).
         var remote = postForm("/admin/site-databases/new",
             "site_id=" + nodeSiteId + "&database_id=" + remoteDbId + "&env_prefix=REMOTE");
         assertThat(remote.statusCode()).isEqualTo(200);
+        assertThat(remote.body()).contains("db-host-2");
 
         Integer secondDb = database("seconddb", "local");
         var dupPrefix = postForm("/admin/site-databases/new",
             "site_id=" + nodeSiteId + "&database_id=" + secondDb + "&env_prefix=db");
         assertThat(dupPrefix.statusCode()).isEqualTo(200);
+        assertThat(dupPrefix.body()).contains("already used by another database");
 
         var dupPair = postForm("/admin/site-databases/new",
             "site_id=" + nodeSiteId + "&database_id=" + localDbId + "&env_prefix=OTHER");
         assertThat(dupPair.statusCode()).isEqualTo(200);
+        assertThat(dupPair.body()).contains("already attached to this site");
 
         // None of the three refusals persisted anything.
         assertThat(Models.get(SiteDatabaseModel.class).findBySiteId(nodeSiteId)).hasSize(1);
@@ -154,6 +160,9 @@ class SiteDatabaseAdminTest extends HohenheimTestBase {
     void attachedDatabaseRefusesDeletionUntilDetached() throws Exception {
         var refused = postForm("/admin/databases/" + localDbId + "/delete", "");
         assertThat(refused.statusCode()).isEqualTo(200);   // rerender, not the post-delete redirect
+        // The refusal names the dependent site ({$sites} arg resolved).
+        assertThat(refused.body()).contains("linkable");
+        assertThat(refused.body()).contains("detach it from those sites first");
         assertThat(Models.get(DatabaseModel.class).find()
             .where(DatabaseModel.ID.eq(localDbId)).first()).isNotNull();
 

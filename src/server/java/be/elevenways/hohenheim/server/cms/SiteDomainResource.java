@@ -24,6 +24,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -129,12 +130,12 @@ public final class SiteDomainResource extends RowResource {
         Object hostnameValue = coerced.get("hostname");
         String hostname = hostnameValue != null ? String.valueOf(hostnameValue).trim() : "";
         if (hostname.isEmpty()) {
-            throw new IllegalStateException("Hostname is required");
+            throw Violations.ofField("hostname", hostname, CmsSupport.violationText("hostname_required"));
         }
         Object siteIdValue = coerced.containsKey("site_id") ? coerced.get("site_id")
             : existing != null ? existing.get(SiteDomainModel.SITE_ID) : null;
         if (!(siteIdValue instanceof Integer siteId)) {
-            throw new IllegalStateException("A site is required");
+            throw Violations.ofField("site_id", siteIdValue, CmsSupport.violationText("site_required"));
         }
         Row duplicate = this.model().find()
             .where(SiteDomainModel.SITE_ID.eq(siteId))
@@ -142,7 +143,7 @@ public final class SiteDomainResource extends RowResource {
             .first();
         if (duplicate != null
             && (existing == null || !duplicate.get(SiteDomainModel.ID).equals(existing.get(SiteDomainModel.ID)))) {
-            throw new IllegalStateException("That hostname is already configured for this site");
+            throw Violations.ofField("hostname", hostname, CmsSupport.violationText("hostname_taken"));
         }
     }
 }

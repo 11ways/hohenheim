@@ -33,6 +33,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -122,7 +123,7 @@ public final class SiteResource extends RowResource {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         String name = trimmed(values.get("name"));
         if (name.isEmpty()) {
-            throw new IllegalStateException("Name is required");
+            throw Violations.ofField("name", name, CmsSupport.violationText("name_required"));
         }
         values.put("slug", slugify(name));
         values.put("status", SiteModel.STATUS_ACTIVE);
@@ -136,7 +137,7 @@ public final class SiteResource extends RowResource {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         String name = trimmed(values.get("name"));
         if (name.isEmpty()) {
-            throw new IllegalStateException("Name is required");
+            throw Violations.ofField("name", name, CmsSupport.violationText("name_required"));
         }
         normalizeSource(values);
         super.updateRow(existing, values, accessContext);

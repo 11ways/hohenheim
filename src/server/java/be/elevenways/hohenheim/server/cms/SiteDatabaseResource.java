@@ -20,6 +20,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -98,42 +99,42 @@ public final class SiteDatabaseResource extends RowResource {
         Integer siteId = intOf(coerced.get("site_id"),
             existing != null ? existing.get(SiteDatabaseModel.SITE_ID) : null);
         if (siteId == null) {
-            throw new IllegalStateException("A site is required");
+            throw Violations.ofField("site_id", null, CmsSupport.violationText("site_required"));
         }
         Row site = Models.get(SiteModel.class).find().where(SiteModel.ID.eq(siteId)).first();
         if (site == null) {
-            throw new IllegalStateException("That site does not exist");
+            throw Violations.ofField("site_id", siteId, CmsSupport.violationText("site_missing"));
         }
         String siteType = site.get(SiteModel.SITE_TYPE);
         SiteTypeInfo typeInfo = SiteTypes.getHandler(siteType);
         if (typeInfo == null || !typeInfo.supportsEnvInjection()) {
-            throw new IllegalStateException("Sites of type '"
-                + (typeInfo != null ? typeInfo.getDisplayName() : siteType)
-                + "' cannot receive database credentials: only host-process site types"
-                + " (Node.js, Alchemy, Command) can reach a managed database");
+            throw Violations.ofField("site_id", siteId,
+                CmsSupport.violationText("site_type_no_injection")
+                    .withArg("type", typeInfo != null ? typeInfo.getDisplayName() : siteType));
         }
 
         Integer databaseId = intOf(coerced.get("database_id"),
             existing != null ? existing.get(SiteDatabaseModel.DATABASE_ID) : null);
         if (databaseId == null) {
-            throw new IllegalStateException("A database is required");
+            throw Violations.ofField("database_id", null, CmsSupport.violationText("database_required"));
         }
         Row database = Models.get(DatabaseModel.class).find()
             .where(DatabaseModel.ID.eq(databaseId)).first();
         if (database == null) {
-            throw new IllegalStateException("That database does not exist");
+            throw Violations.ofField("database_id", databaseId,
+                CmsSupport.violationText("database_missing"));
         }
         String server = database.get(DatabaseModel.SERVER_NAME);
         if (server != null && !server.isBlank() && !ServerService.LOCAL.equals(server)) {
-            throw new IllegalStateException("Database '" + database.get(DatabaseModel.NAME)
-                + "' runs on server '" + server + "': its port is only published on that host's"
-                + " loopback, so sites on this server cannot reach it");
+            throw Violations.ofField("database_id", databaseId,
+                CmsSupport.violationText("database_remote")
+                    .withArg("name", database.get(DatabaseModel.NAME))
+                    .withArg("server", server));
         }
 
         String prefix = prefixOf(coerced, existing);
         if (!prefix.matches(PREFIX_PATTERN)) {
-            throw new IllegalStateException(
-                "Env prefix must start with a letter and contain only letters, digits, and underscores");
+            throw Violations.ofField("env_prefix", prefix, CmsSupport.violationText("prefix_format"));
         }
 
         Integer existingId = existing != null ? existing.get(SiteDatabaseModel.ID) : null;
@@ -142,12 +143,13 @@ public final class SiteDatabaseResource extends RowResource {
                 continue;
             }
             if (databaseId.equals(link.get(SiteDatabaseModel.DATABASE_ID))) {
-                throw new IllegalStateException("That database is already attached to this site");
+                throw Violations.ofField("database_id", databaseId,
+                    CmsSupport.violationText("database_already_attached"));
             }
             String linkPrefix = DatabaseEnvInjection.normalizedPrefix(link.get(SiteDatabaseModel.ENV_PREFIX));
             if (linkPrefix.equalsIgnoreCase(prefix)) {
-                throw new IllegalStateException("Env prefix '" + prefix.toUpperCase()
-                    + "' is already used by another database on this site");
+                throw Violations.ofField("env_prefix", prefix,
+                    CmsSupport.violationText("prefix_taken").withArg("prefix", prefix.toUpperCase()));
             }
         }
     }
