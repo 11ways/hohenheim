@@ -1,13 +1,20 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.cms.common.resource.ActivityResource;
+import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.server.setting.ServerSettings;
+import be.elevenways.zenit.server.setting.SettingsEditor;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,8 +54,45 @@ public final class HohenheimPanel extends Panel {
         peers.add(new ServerResource());
         peers.add(new NotificationChannelResource());
         peers.add(new ActivityResource());
-        peers.add(new SettingsPage());
+        SettingsPage settings = settingsPage();
+        if (settings != null) {
+            peers.add(settings);
+        }
         peers.add(new CertificateRequestPage());
         return peers;
+    }
+
+    /**
+     * The framework settings editor: Hohenheim's own settings file plus
+     * zenit's server settings ({@code settings/local.dry}). Each mount only
+     * appears when this boot actually loaded its editable file, so the panel
+     * never breaks over a missing settings source (test boots load others).
+     * Mounts are subtree-scoped by context ownership, so the framework mount
+     * skips the hohenheim group and vice versa.
+     */
+    private static @Nullable SettingsPage settingsPage() {
+        List<SettingsPage.Mount> mounts = new ArrayList<>();
+        try {
+            SettingsEditor appEditor = SettingsEditor.forFile(
+                HohenheimSettings.VALUES, HohenheimSettingsFiles.settingsFile());
+            mounts.add(new SettingsPage.Mount("app",
+                Microcopy.of("Hohenheim").withFallback("Hohenheim"), appEditor));
+        } catch (IllegalArgumentException notLoaded) {
+            // Boot without the hohenheim settings file: framework mount only.
+        }
+        try {
+            SettingsEditor frameworkEditor = SettingsEditor.forFile(
+                ServerSettings.VALUES, ServerZenitRuntime.PATH_ROOT.resolve("settings/local.dry"));
+            mounts.add(new SettingsPage.Mount("framework",
+                Microcopy.of("framework").withFallback("Framework"), frameworkEditor));
+        } catch (IllegalArgumentException notLoaded) {
+            // Boot without the standard zenit chain: app settings only.
+        }
+        if (mounts.isEmpty()) {
+            return null;
+        }
+        return new SettingsPage(
+            Identifier.of("hohenheim", "settings"), "settings",
+            Microcopy.of("hohenheim.settings.title"), Icon.of("gear"), mounts);
     }
 }

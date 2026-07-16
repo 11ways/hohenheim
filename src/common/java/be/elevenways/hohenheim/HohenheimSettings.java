@@ -12,11 +12,14 @@ import be.elevenways.zenit.common.setting.SettingsContext;
 @ZenitAutoLoad(loadInnerClasses = true)
 public class HohenheimSettings {
 
-    // AIDEV-NOTE: Rooted at Zenit.SETTINGS (like ServerSettings, unlike a typical
-    // consumer that roots at its own subtree) because Hohenheim's groups (proxy,
-    // ssl, ...) are top-level, matching the flat .dry config schema. ServerMain
-    // loads this context from the same default.dry/local.dry sources.
-    public static final SettingsContext VALUES = new SettingsContext(Zenit.SETTINGS);
+    // AIDEV-NOTE: The context roots at hohenheim's OWN group (the standard
+    // consumer shape; only ServerSettings roots at Zenit.SETTINGS). File keys
+    // are RELATIVE to this root, so settings/hohenheim.dry keeps the flat
+    // proxy/ssl/... shape. The server loads it via HohenheimSettingsFiles.
+    public static final SettingGroup HOHENHEIM = Zenit.SETTINGS.createGroup("hohenheim")
+        .label("Hohenheim");
+
+    public static final SettingsContext VALUES = new SettingsContext(HOHENHEIM);
 
     // Nested groups below are force-loaded at compile time via @ZenitAutoLoad
     // (loadInnerClasses=true): Protoblast's Gradle plugin emits a reference to
@@ -25,16 +28,21 @@ public class HohenheimSettings {
 
     // --- Proxy ---
     public abstract class Proxy {
-        public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("proxy");
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("proxy")
+            .label("Proxy")
+            .describe("The reverse-proxy listeners and routing behaviour")
+            .icon("route");
 
         public static final SettingDefinition<Integer> HTTP_PORT = GROUP.buildSetting("http_port", Integer.class)
             .defaultValue(80)
             .description("HTTP proxy listen port")
+            .restartRequired()
             .build();
 
         public static final SettingDefinition<Integer> HTTPS_PORT = GROUP.buildSetting("https_port", Integer.class)
             .defaultValue(443)
             .description("HTTPS proxy listen port")
+            .restartRequired()
             .build();
 
         public static final SettingDefinition<String> FALLBACK_ADDRESS = GROUP.buildSetting("fallback_address", String.class)
@@ -48,31 +56,39 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<String> IPV6_ADDRESS = GROUP.buildSetting("ipv6_address", String.class)
             .description("Optional IPv6 address for dedicated proxy listeners")
+            .restartRequired()
             .build();
 
         public static final SettingDefinition<String> NOT_FOUND_MESSAGE = GROUP.buildSetting("not_found_message", String.class)
             .defaultValue("There is no site configured for this domain.")
             .description("Error message for unmatched domains")
+            .multiline()
             .build();
 
         public static final SettingDefinition<String> UNREACHABLE_MESSAGE = GROUP.buildSetting("unreachable_message", String.class)
             .defaultValue("The upstream server is not responding.")
             .description("Error message for unreachable upstreams")
+            .multiline()
             .build();
 
         public static final SettingDefinition<Integer> FIRST_PORT = GROUP.buildSetting("first_port", Integer.class)
             .defaultValue(4748)
             .description("First TCP port assigned to managed child processes")
+            .restartRequired()
             .build();
 
         public static final SettingDefinition<String> TRUSTED_PROXY_KEYS = GROUP.buildSetting("trusted_proxy_keys", String.class)
             .description("Comma-delimited X-Hohenheim-Key values from trusted upstream proxies")
+            .secret()
             .build();
     }
 
     // --- SSL/TLS ---
     public abstract class Ssl {
-        public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("ssl");
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("ssl")
+            .label("SSL / TLS")
+            .describe("Automatic Let's Encrypt certificate issuance")
+            .icon("lock");
 
         public static final SettingDefinition<Boolean> LETSENCRYPT_ENABLED = GROUP.buildSetting("letsencrypt_enabled", Boolean.class)
             .defaultValue(true)
@@ -94,7 +110,10 @@ public class HohenheimSettings {
     // The previous HohenheimSettings.Admin.PORT was displayed in the UI but
     // wired to nothing, so it was removed to avoid misleading operators.
     public abstract class Logging {
-        public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("logging");
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("logging")
+            .label("Logging")
+            .describe("Access logging for proxied requests")
+            .icon("align-left");
 
         public static final SettingDefinition<Boolean> ACCESS_TO_FILE = GROUP.buildSetting("access_to_file", Boolean.class)
             .defaultValue(true)
@@ -109,21 +128,29 @@ public class HohenheimSettings {
 
     // --- Storage ---
     public abstract class Storage {
-        public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("storage");
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("storage")
+            .label("Storage")
+            .describe("Filesystem locations for persistent data")
+            .icon("folder");
 
         public static final SettingDefinition<String> DATA_PATH = GROUP.buildSetting("data_path", String.class)
             .defaultValue("data")
             .description("Base directory for persistent data (git repos, etc.)")
+            .restartRequired()
             .build();
     }
 
     // --- Database ---
     public abstract class Database {
-        public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("database");
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("database")
+            .label("Database")
+            .describe("Hohenheim's own database and managed-database backups")
+            .icon("database");
 
         public static final SettingDefinition<String> PATH = GROUP.buildSetting("path", String.class)
             .defaultValue("hohenheim.db")
             .description("SQLite database file path")
+            .restartRequired()
             .build();
 
         public static final SettingDefinition<String> BACKUP_PATH = GROUP.buildSetting("backup_path", String.class)
@@ -139,7 +166,10 @@ public class HohenheimSettings {
 
     // --- Security ---
     public abstract class Security {
-        public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("security");
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("security")
+            .label("Security")
+            .describe("Hostname-scan detection, bans and the fail2ban log")
+            .icon("shield");
 
         public static final SettingDefinition<Boolean> LOG_DOMAIN_MISSES = GROUP.buildSetting("log_domain_misses", Boolean.class)
             .defaultValue(true)
@@ -179,23 +209,31 @@ public class HohenheimSettings {
 
     // --- Proteus SSO (optional; password login is always available) ---
     public abstract class AuthProteus {
-        public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("auth_proteus");
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("auth_proteus")
+            .label("Proteus SSO")
+            .describe("Offer Proteus single sign-on next to password login")
+            .icon("user");
 
         public static final SettingDefinition<Boolean> ENABLED = GROUP.buildSetting("enabled", Boolean.class)
             .defaultValue(false)
             .description("Offer Proteus SSO as a login option")
+            .restartRequired()
             .build();
 
         public static final SettingDefinition<String> ENDPOINT = GROUP.buildSetting("endpoint", String.class)
             .description("Proteus realm server URL")
+            .restartRequired()
             .build();
 
         public static final SettingDefinition<String> REALM_CLIENT = GROUP.buildSetting("realm_client", String.class)
             .description("Proteus realm client slug")
+            .restartRequired()
             .build();
 
         public static final SettingDefinition<String> ACCESS_KEY = GROUP.buildSetting("access_key", String.class)
             .description("Proteus realm access key")
+            .secret()
+            .restartRequired()
             .build();
 
         public static final SettingDefinition<String> AUTHENTICATOR = GROUP.buildSetting("authenticator", String.class)
@@ -206,7 +244,10 @@ public class HohenheimSettings {
 
     // --- Per-site proxy auth (gating proxied upstreams behind a provider) ---
     public abstract class ProxyAuth {
-        public static final SettingGroup GROUP = Zenit.SETTINGS.createGroup("proxy_auth");
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("proxy_auth")
+            .label("Proxy auth")
+            .describe("Sessions for auth-provider-gated proxied sites")
+            .icon("id-badge");
 
         public static final SettingDefinition<Long> SESSION_TTL_SECONDS = GROUP.buildSetting("session_ttl_seconds", Long.class)
             .defaultValue(86400L)

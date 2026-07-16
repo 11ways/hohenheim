@@ -10,6 +10,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldOption;
@@ -69,10 +71,16 @@ public final class SiteDomainResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(SiteDomainModel.HOSTNAME).build())
-        .column(ColumnSpec.fromField(SiteDomainModel.MATCH_TYPE).build())
-        .column(ColumnSpec.fromField(SiteDomainModel.FORCE_SSL).build())
+        .column(ColumnSpec.fromField(SiteDomainModel.HOSTNAME).filterable().build())
+        .column(ColumnSpec.fromField(SiteDomainModel.MATCH_TYPE).filterable().build())
+        .column(ColumnSpec.fromField(SiteDomainModel.FORCE_SSL).filterable().build())
         .column(ColumnSpec.fromField(SiteDomainModel.SITE_ID).build())
+        .filter(FilterSpec.forField(SiteDomainModel.HOSTNAME, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(SiteDomainModel.HOSTNAME)).build())
+        .filter(FilterSpec.forField(SiteDomainModel.MATCH_TYPE, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(SiteDomainModel.MATCH_TYPE)).build())
+        .filter(FilterSpec.forField(SiteDomainModel.FORCE_SSL, FilterSpec.Kind.BOOLEAN)
+            .label(FieldLabels.labelFor(SiteDomainModel.FORCE_SSL)).build())
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_domain"); }

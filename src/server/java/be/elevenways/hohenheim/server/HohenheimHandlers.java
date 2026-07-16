@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -25,7 +24,6 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.JsonResult;
 import be.elevenways.zenit.server.http.HttpConduit;
 import be.elevenways.zenit.server.http.RedirectResult;
-import be.elevenways.zenit.server.setting.DrySettingsWriter;
 
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -45,17 +43,11 @@ import java.util.Optional;
  */
 public final class HohenheimHandlers {
 
-    /** Overridable so tests never clobber the developer's real local.dry. */
-    private static Path localSettingsFile() {
-        return Path.of(System.getProperty("hohenheim.local_settings", "settings/local.dry"));
-    }
-
     private HohenheimHandlers() {
     }
 
     public static void init() {
         initHealth();
-        initSettings();
         initCertificates();
         initDatabases();
         initProcessControl();
@@ -67,97 +59,6 @@ public final class HohenheimHandlers {
         HohenheimEndpoints.ROOT.setHandler(conduit -> redirectUntyped("/admin"));
         HohenheimEndpoints.HEALTH.setHandler(conduit ->
             jsonUntyped(Map.of("status", "ok")));
-    }
-
-    // -----------------------------------------------------------------------
-    // Settings: apply to the live context AND persist into settings/local.dry.
-    // -----------------------------------------------------------------------
-
-    private static void initSettings() {
-        HohenheimEndpoints.SETTINGS_UPDATE.setHandler(conduit -> {
-            Map<String, String> form = formMap(conduit);
-
-            Integer httpPort = parseBoundedInt(form.get("proxy_http_port"), 1, 65535);
-            Integer httpsPort = parseBoundedInt(form.get("proxy_https_port"), 1, 65535);
-            Integer threshold = parseBoundedInt(form.get("sec_domain_miss_threshold"), 1, Integer.MAX_VALUE);
-
-            String error = null;
-            if (form.get("proxy_http_port") != null && httpPort == null) {
-                error = "Proxy HTTP port must be a number between 1 and 65535.";
-            } else if (form.get("proxy_https_port") != null && httpsPort == null) {
-                error = "Proxy HTTPS port must be a number between 1 and 65535.";
-            } else if (form.get("sec_domain_miss_threshold") != null && threshold == null) {
-                error = "Domain-miss ban threshold must be a positive number.";
-            }
-            if (error != null) {
-                return redirectUntyped("/admin/settings?error="
-                    + URLEncoder.encode(error, StandardCharsets.UTF_8));
-            }
-
-            DrySettingsWriter writer = new DrySettingsWriter(localSettingsFile());
-            var values = HohenheimSettings.VALUES;
-
-            // Listener ports are only read at proxy start; a change persists but
-            // needs a restart, and the operator must be told so.
-            boolean restartRequired = false;
-            if (httpPort != null) {
-                restartRequired |= !httpPort.equals(values.getValue(HohenheimSettings.Proxy.HTTP_PORT));
-                values.setValue(HohenheimSettings.Proxy.HTTP_PORT, httpPort);
-                writer.set(HohenheimSettings.Proxy.HTTP_PORT, httpPort);
-            }
-            if (httpsPort != null) {
-                restartRequired |= !httpsPort.equals(values.getValue(HohenheimSettings.Proxy.HTTPS_PORT));
-                values.setValue(HohenheimSettings.Proxy.HTTPS_PORT, httpsPort);
-                writer.set(HohenheimSettings.Proxy.HTTPS_PORT, httpsPort);
-            }
-
-            String fallback = form.getOrDefault("proxy_fallback", "");
-            values.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS, fallback);
-            writer.set(HohenheimSettings.Proxy.FALLBACK_ADDRESS, fallback);
-
-            boolean forceHttps = form.containsKey("proxy_force_https");
-            values.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, forceHttps);
-            writer.set(HohenheimSettings.Proxy.FORCE_HTTPS, forceHttps);
-
-            String ipv6 = form.getOrDefault("proxy_ipv6_address", "").trim();
-            values.setValue(HohenheimSettings.Proxy.IPV6_ADDRESS, ipv6);
-            writer.set(HohenheimSettings.Proxy.IPV6_ADDRESS, ipv6);
-
-            boolean logToFile = form.containsKey("log_access_to_file");
-            values.setValue(HohenheimSettings.Logging.ACCESS_TO_FILE, logToFile);
-            writer.set(HohenheimSettings.Logging.ACCESS_TO_FILE, logToFile);
-
-            String accessPath = form.getOrDefault("log_access_path",
-                values.getValue(HohenheimSettings.Logging.ACCESS_PATH));
-            values.setValue(HohenheimSettings.Logging.ACCESS_PATH, accessPath);
-            writer.set(HohenheimSettings.Logging.ACCESS_PATH, accessPath);
-
-            boolean logMisses = form.containsKey("sec_log_domain_misses");
-            values.setValue(HohenheimSettings.Security.LOG_DOMAIN_MISSES, logMisses);
-            writer.set(HohenheimSettings.Security.LOG_DOMAIN_MISSES, logMisses);
-
-            if (threshold != null) {
-                values.setValue(HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD, threshold);
-                writer.set(HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD, threshold);
-            }
-
-            boolean leEnabled = form.containsKey("ssl_le_enabled");
-            values.setValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED, leEnabled);
-            writer.set(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED, leEnabled);
-
-            String leEmail = form.getOrDefault("ssl_le_email", "");
-            values.setValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL, leEmail);
-            writer.set(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL, leEmail);
-
-            boolean leStaging = form.containsKey("ssl_le_staging");
-            values.setValue(HohenheimSettings.Ssl.LETSENCRYPT_STAGING, leStaging);
-            writer.set(HohenheimSettings.Ssl.LETSENCRYPT_STAGING, leStaging);
-
-            writer.persist();
-            ActivityLog.record("hohenheim:settings", "global", "settings_updated", null);
-            return redirectUntyped("/admin/settings?saved=true"
-                + (restartRequired ? "&restart_required=true" : ""));
-        });
     }
 
     // -----------------------------------------------------------------------
@@ -455,16 +356,6 @@ public final class HohenheimHandlers {
         return Map.of();
     }
 
-    /** @return the parsed value when it lies in [min, max], or null for blank/garbage/out-of-range */
-    private static Integer parseBoundedInt(String raw, int min, int max) {
-        if (raw == null) return null;
-        try {
-            int value = Integer.parseInt(raw.trim());
-            return value >= min && value <= max ? value : null;
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
 
     /** Stream a binary body as a downloadable attachment with a sanitized filename. */
     private static void download(Conduit conduit, String contentType, String filename, byte[] body) {

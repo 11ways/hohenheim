@@ -35,14 +35,6 @@ public class HohenheimEndpoints {
         .stringResolver(value -> value)
         .build();
 
-    // --- Settings write path (static route: wins precedence over the panel's
-    // dynamic POST /{panel}/{resource} singleton-submit route) ---
-    public static final Endpoint<Object> SETTINGS_UPDATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "settings_update"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("admin").addDelimiter().addStatic("settings").build())
-        .build();
-
     // --- Let's Encrypt request (POST for the CMS certificate-request page) ---
     public static final Endpoint<Object> CERTIFICATES_REQUEST = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "certificates_request"))

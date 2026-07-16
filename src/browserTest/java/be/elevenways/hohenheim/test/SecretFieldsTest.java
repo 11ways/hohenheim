@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -130,6 +131,45 @@ class SecretFieldsTest extends HohenheimTestBase {
         navigateToApp("/admin/sites/" + site.get(SiteModel.ID));
         waitForHydration();
         assertThat(page.content()).doesNotContain(SITE_SECRET);
+    }
+
+    @Test
+    @Order(4)
+    void basicAuthCredentialHashesAreMaskedAndBlankSaveKeepsThemVerifiable() throws Exception {
+        var response = postForm("/admin/auth-providers/new",
+            "name=Team+gate&provider_type=hohenheim%3Abasic"
+            + "&config.credentials.0.key=alice&config.credentials.0.value=secret123");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+
+        Row row = Models.get(SiteAuthProviderModel.class).find()
+            .where(SiteAuthProviderModel.NAME.eq("Team gate")).first();
+        assertThat(row).isNotNull();
+        Map<String, String> hashes = BasicAuthProviderType.credentialHashes(configOf(row));
+        String storedHash = hashes.get("alice");
+        assertThat(storedHash).startsWith("$argon2");
+        Integer id = row.get(SiteAuthProviderModel.ID);
+
+        // The edit page shows the username but neither the plaintext nor the hash.
+        navigateToApp("/admin/auth-providers/" + id);
+        waitForHydration();
+        String content = page.content();
+        assertThat(content).contains("alice");
+        assertThat(content).doesNotContain("secret123");
+        assertThat(content).doesNotContain("$argon2");
+
+        // A blank password resubmit keeps the stored hash verifiable.
+        response = postForm("/admin/auth-providers/" + id,
+            "name=Team+gate&provider_type=hohenheim%3Abasic"
+            + "&config.credentials.0.key=alice&config.credentials.0.value=");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+
+        Row stored = Models.get(SiteAuthProviderModel.class).find()
+            .where(SiteAuthProviderModel.ID.eq(id)).first();
+        Map<String, String> kept = BasicAuthProviderType.credentialHashes(configOf(stored));
+        assertThat(kept.get("alice")).isEqualTo(storedHash);
+        String header = "Basic " + java.util.Base64.getEncoder()
+            .encodeToString("alice:secret123".getBytes());
+        assertThat(BasicAuthProviderType.verify(header, kept)).isEqualTo("alice");
     }
 
     @SuppressWarnings("unchecked")

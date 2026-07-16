@@ -263,8 +263,8 @@ teavm {
         sourceFilePolicy = SourceFilePolicy.LINK_LOCAL_FILES
         optimization = OptimizationLevel.NONE
         mainClass = "be.elevenways.hohenheim.ClientMain"
-        // The zenit-cms shell hardcodes <script src="/cms.js">, so the bundle
-        // must land at public/cms.js.
+        // The shell auto-injects the bundle from Hawkeye.clientScriptLocation;
+        // ServerMain points that at /cms.js, so the bundle lands there.
         targetFileName = "cms.js"
     }
 }

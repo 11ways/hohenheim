@@ -17,6 +17,8 @@ import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
@@ -65,12 +67,24 @@ public final class DatabaseResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(DatabaseModel.NAME).build())
-        .column(ColumnSpec.fromField(DatabaseModel.ENGINE).build())
-        .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).build())
-        .column(ColumnSpec.fromField(DatabaseModel.SERVER_NAME).build())
-        .column(ColumnSpec.fromField(DatabaseModel.EPHEMERAL).build())
-        .column(ColumnSpec.fromField(DatabaseModel.STATUS).build())
+        .column(ColumnSpec.fromField(DatabaseModel.NAME).filterable().build())
+        .column(ColumnSpec.fromField(DatabaseModel.ENGINE).filterable().build())
+        .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).filterable().build())
+        .column(ColumnSpec.fromField(DatabaseModel.SERVER_NAME).filterable().build())
+        .column(ColumnSpec.fromField(DatabaseModel.EPHEMERAL).filterable().build())
+        .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().build())
+        .filter(FilterSpec.forField(DatabaseModel.NAME, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(DatabaseModel.NAME)).build())
+        .filter(FilterSpec.forField(DatabaseModel.ENGINE, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(DatabaseModel.ENGINE)).build())
+        .filter(FilterSpec.forField(DatabaseModel.DB_NAME, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(DatabaseModel.DB_NAME)).build())
+        .filter(FilterSpec.forField(DatabaseModel.SERVER_NAME, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(DatabaseModel.SERVER_NAME)).build())
+        .filter(FilterSpec.forField(DatabaseModel.EPHEMERAL, FilterSpec.Kind.BOOLEAN)
+            .label(FieldLabels.labelFor(DatabaseModel.EPHEMERAL)).build())
+        .filter(FilterSpec.forField(DatabaseModel.STATUS, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(DatabaseModel.STATUS)).build())
         .build();
 
     private @NonNull List<FieldOption<String>> serverOptions() {

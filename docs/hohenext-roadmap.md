@@ -167,7 +167,9 @@ only via the equivalent local `docker system dial-stdio` (no remote host availab
 
 - [x] Notifications: webhook channels (Slack / Discord / generic JSON), admin UI + test send.
       Distinct kinds (email / Telegram) still open.
-- Background job/queue + real-time logs (WebSocket or SSE) — Zenit capabilities.
+- [x] WebSocket + scheduled tasks are Zenit core capabilities now and consumed here (the
+      process terminal rides `WebSocketEndpoint`; all maintenance tasks extend `ScheduledTask`).
+      Still open as a CONSUMER feature: live-streamed deploy/build logs (stored logs only today).
 - [x] **Auth via `zenit-auth`** — hohenheim's hand-rolled auth is replaced by the framework module.
   Native email/password login plus an optional Proteus SSO provider (registered from
   `auth_proteus.*` settings when enabled). `ZenitAuth.init` installs the session store + CSRF +
@@ -185,8 +187,8 @@ only via the equivalent local `docker system dial-stdio` (no remote host availab
 
 | Need | Home | Notes |
 |------|------|-------|
-| Docker API client | started in-app | promote to Protoblast/Zenit once stable |
-| SSH client | Protoblast | Phase 4 |
-| WebSocket / SSE | Zenit | real-time logs/stats, Phase 1+ |
-| Background job/queue | Zenit | deploys, builds, backups |
+| Docker API client | started in-app | promote once a SECOND consumer exists (likely another hohenext tier) |
+| SSH client | n/a | Docker-over-SSH shells out to `ssh docker system dial-stdio`; no SSH library to promote |
+| WebSocket / SSE | DONE (zenit core) | `WebSocketEndpoint` + `WebSocketHandler`; terminal consumes it |
+| Background job/queue | zenit tasks DONE; deploy queue stays app | `ScheduledTask`/cron in core; the coalescing per-site deploy queue needs a second consumer |
 | Plumage components | Plumage | terminal viewer, data table, toast, stepper, … (see framework-opportunities.md) |
