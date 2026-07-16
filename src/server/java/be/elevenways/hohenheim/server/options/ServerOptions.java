@@ -17,17 +17,27 @@ public final class ServerOptions {
     public static final Registry.Simple<TypeDefinition> REGISTRY =
         new Registry.Simple<>(Identifier.of("hohenheim", "servers"));
 
+    private static volatile boolean populated = false;
+
     private ServerOptions() {}
+
+    /** Fill the registry on first use; mutations call {@link #refresh()} directly. */
+    public static void ensureFresh() {
+        if (!populated) refresh();
+    }
 
     public static synchronized void refresh() {
         new ServerService().ensureLocal();
-        REGISTRY.clear();
+        var entries = new java.util.LinkedHashMap<Identifier, TypeDefinition>();
         for (Row row : Models.get(ServerModel.class).find().all()) {
             String name = row.get(ServerModel.NAME);
             if (name != null && !name.isBlank()) {
-                REGISTRY.add(Identifier.of("hohenheim", name), new ServerEntry(name, row.get(ServerModel.MODE)));
+                entries.put(Identifier.of("hohenheim", name), new ServerEntry(name, row.get(ServerModel.MODE)));
             }
         }
+        REGISTRY.clear();
+        entries.forEach(REGISTRY::add);
+        populated = true;
     }
 
     public static String nameFromKey(@Nullable Object storedKey) {
