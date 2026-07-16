@@ -6,7 +6,9 @@ import java.io.*;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -19,7 +21,7 @@ import java.util.function.Consumer;
  * Uses a TCP loopback socket with newline-delimited JSON messages.
  *
  * Message format (newline-delimited JSON):
- * {"type":"ready"}
+ * {"type":"ready"}                       (legacy envelope {"alchemy":{"ready":true}} also accepted)
  * {"type":"remcache_set","key":"...","value":"...","maxAge":3600}
  * {"type":"remcache_get","id":1,"key":"..."}
  * {"type":"remcache_peek","id":2,"key":"..."}
@@ -38,7 +40,12 @@ public class IpcChannel implements AutoCloseable {
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final CountDownLatch connected = new CountDownLatch(1);
 
-    private Consumer<Map<String, Object>> messageHandler;
+    private volatile Consumer<Map<String, Object>> messageHandler;
+
+    // Messages that arrive before the handler is attached (a fast child can signal
+    // ready during the parent's startup grace window) are buffered, not dropped.
+    private final List<Map<String, Object>> pendingMessages = new ArrayList<>();
+    private static final int PENDING_CAP = 64;
 
     public IpcChannel() throws IOException {
         this.serverSocket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
@@ -50,7 +57,15 @@ public class IpcChannel implements AutoCloseable {
     }
 
     public void setMessageHandler(Consumer<Map<String, Object>> handler) {
-        this.messageHandler = handler;
+        List<Map<String, Object>> replay;
+        synchronized (pendingMessages) {
+            this.messageHandler = handler;
+            replay = new ArrayList<>(pendingMessages);
+            pendingMessages.clear();
+        }
+        for (Map<String, Object> msg : replay) {
+            handler.accept(msg);
+        }
     }
 
     /**
@@ -77,16 +92,24 @@ public class IpcChannel implements AutoCloseable {
         try {
             String line;
             while ((line = reader.readLine()) != null) {
-                if (messageHandler != null) {
-                    try {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> msg = parseJsonLine(line);
-                        if (msg != null) {
-                            messageHandler.accept(msg);
-                        }
-                    } catch (Exception e) {
-                        Blast.log("IPC: message parse error:", e.getMessage());
+                try {
+                    Map<String, Object> msg = parseJsonLine(line);
+                    if (msg == null) {
+                        continue;
                     }
+                    Consumer<Map<String, Object>> handler;
+                    synchronized (pendingMessages) {
+                        handler = messageHandler;
+                        if (handler == null) {
+                            if (pendingMessages.size() < PENDING_CAP) {
+                                pendingMessages.add(msg);
+                            }
+                            continue;
+                        }
+                    }
+                    handler.accept(msg);
+                } catch (Exception e) {
+                    Blast.log("IPC: message parse error:", e.getMessage());
                 }
             }
         } catch (IOException e) {
@@ -132,73 +155,113 @@ public class IpcChannel implements AutoCloseable {
     }
 
     /**
-     * Parse a flat JSON object (no nesting) into a Map.
-     * Handles string, number, boolean, and null values.
+     * Parse a JSON object line into a Map. Handles string, number, boolean, null,
+     * and NESTED OBJECT values -- the nesting matters because legacy children signal
+     * readiness as {@code {"alchemy":{"ready":true}}} (the original Node IPC envelope).
+     * Arrays are not part of the protocol and parse as raw strings.
      */
     private static Map<String, Object> parseJsonLine(String line) {
-        if (line == null || !line.startsWith("{")) return null;
+        if (line == null) return null;
+        line = line.trim();
+        if (!line.startsWith("{")) return null;
+        int[] pos = {0};
+        Object parsed = parseJsonValue(line, pos);
+        if (parsed instanceof Map<?, ?> map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> typed = (Map<String, Object>) map;
+            return typed;
+        }
+        return null;
+    }
+
+    private static Object parseJsonValue(String text, int[] pos) {
+        skipWhitespace(text, pos);
+        if (pos[0] >= text.length()) return null;
+        char c = text.charAt(pos[0]);
+        if (c == '{') {
+            return parseJsonObject(text, pos);
+        }
+        if (c == '"') {
+            return parseJsonString(text, pos);
+        }
+        if (text.startsWith("true", pos[0])) {
+            pos[0] += 4;
+            return Boolean.TRUE;
+        }
+        if (text.startsWith("false", pos[0])) {
+            pos[0] += 5;
+            return Boolean.FALSE;
+        }
+        if (text.startsWith("null", pos[0])) {
+            pos[0] += 4;
+            return null;
+        }
+        // Number (or anything else, kept raw): read until a structural character.
+        int end = pos[0];
+        while (end < text.length() && ",}]".indexOf(text.charAt(end)) < 0) end++;
+        String raw = text.substring(pos[0], end).trim();
+        pos[0] = end;
+        try {
+            return raw.contains(".") ? Double.parseDouble(raw) : Long.parseLong(raw);
+        } catch (NumberFormatException e) {
+            return raw;
+        }
+    }
+
+    private static Map<String, Object> parseJsonObject(String text, int[] pos) {
         Map<String, Object> result = new ConcurrentHashMap<>();
-        // Strip outer braces
-        String inner = line.substring(1, line.length() - 1).trim();
-        if (inner.isEmpty()) return result;
-
-        int i = 0;
-        while (i < inner.length()) {
-            // Find key
-            int keyStart = inner.indexOf('"', i);
-            if (keyStart < 0) break;
-            int keyEnd = inner.indexOf('"', keyStart + 1);
-            if (keyEnd < 0) break;
-            String key = inner.substring(keyStart + 1, keyEnd);
-
-            // Skip colon
-            int colon = inner.indexOf(':', keyEnd + 1);
-            if (colon < 0) break;
-            i = colon + 1;
-            while (i < inner.length() && inner.charAt(i) == ' ') i++;
-
-            // Parse value
-            Object value;
-            if (i < inner.length() && inner.charAt(i) == '"') {
-                // Skip escaped quotes within the string
-                int valEnd = i + 1;
-                while (valEnd < inner.length()) {
-                    char c = inner.charAt(valEnd);
-                    if (c == '\\' && valEnd + 1 < inner.length()) {
-                        valEnd += 2;
-                        continue;
-                    }
-                    if (c == '"') break;
-                    valEnd++;
-                }
-                value = unescapeJson(inner.substring(i + 1, valEnd));
-                i = valEnd + 1;
-            } else if (i < inner.length() && (inner.charAt(i) == 't' || inner.charAt(i) == 'f')) {
-                boolean isTrue = inner.charAt(i) == 't';
-                value = isTrue;
-                i += isTrue ? 4 : 5;
-            } else if (i < inner.length() && inner.charAt(i) == 'n') {
-                value = null;
-                i += 4;
-            } else {
-                // Number
-                int numEnd = i;
-                while (numEnd < inner.length() && inner.charAt(numEnd) != ',' && inner.charAt(numEnd) != '}') numEnd++;
-                String numStr = inner.substring(i, numEnd).trim();
-                try {
-                    value = numStr.contains(".") ? Double.parseDouble(numStr) : Long.parseLong(numStr);
-                } catch (NumberFormatException e) {
-                    value = numStr;
-                }
-                i = numEnd;
+        pos[0]++;   // consume '{'
+        skipWhitespace(text, pos);
+        if (pos[0] < text.length() && text.charAt(pos[0]) == '}') {
+            pos[0]++;
+            return result;
+        }
+        while (pos[0] < text.length()) {
+            skipWhitespace(text, pos);
+            if (pos[0] >= text.length() || text.charAt(pos[0]) != '"') break;
+            String key = parseJsonString(text, pos);
+            skipWhitespace(text, pos);
+            if (pos[0] >= text.length() || text.charAt(pos[0]) != ':') break;
+            pos[0]++;   // consume ':'
+            Object value = parseJsonValue(text, pos);
+            if (value != null) {
+                result.put(key, value);   // ConcurrentHashMap refuses nulls; absent = null
             }
-
-            result.put(key, value);
-
-            // Skip comma
-            while (i < inner.length() && (inner.charAt(i) == ',' || inner.charAt(i) == ' ')) i++;
+            skipWhitespace(text, pos);
+            if (pos[0] < text.length() && text.charAt(pos[0]) == ',') {
+                pos[0]++;
+                continue;
+            }
+            if (pos[0] < text.length() && text.charAt(pos[0]) == '}') {
+                pos[0]++;
+            }
+            break;
         }
         return result;
+    }
+
+    private static String parseJsonString(String text, int[] pos) {
+        pos[0]++;   // consume opening quote
+        StringBuilder raw = new StringBuilder();
+        while (pos[0] < text.length()) {
+            char c = text.charAt(pos[0]);
+            if (c == '\\' && pos[0] + 1 < text.length()) {
+                raw.append(c).append(text.charAt(pos[0] + 1));
+                pos[0] += 2;
+                continue;
+            }
+            if (c == '"') {
+                pos[0]++;
+                break;
+            }
+            raw.append(c);
+            pos[0]++;
+        }
+        return unescapeJson(raw.toString());
+    }
+
+    private static void skipWhitespace(String text, int[] pos) {
+        while (pos[0] < text.length() && Character.isWhitespace(text.charAt(pos[0]))) pos[0]++;
     }
 
     private static String toJsonLine(Map<String, Object> map) {

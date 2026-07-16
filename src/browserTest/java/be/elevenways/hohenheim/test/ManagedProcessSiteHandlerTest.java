@@ -186,6 +186,97 @@ class ManagedProcessSiteHandlerTest {
         assertThat((Object) afterExit.get(0).get(ProclogModel.SAVED_AT)).isNotNull();
     }
 
+    /** Spawns a child that signals ready over the TCP IPC socket in the LEGACY envelope. */
+    private final class LegacyReadyHandler extends ManagedProcessSiteHandler {
+
+        LegacyReadyHandler(int siteId, Map<String, Object> settings) {
+            super(siteId, "legacy-ready-" + siteId, settings, portAllocator, monitor);
+            handlers.add(this);
+        }
+
+        @Override
+        protected List<String> buildCommand(String listenTarget) {
+            // The original Node IPC envelope ({"alchemy":{"ready":true}}) over the TCP
+            // bridge -- exactly what a pre-migration alchemy child would emit.
+            return List.of("node", "-e",
+                "const net=require('net');"
+                    + "const s=net.connect(parseInt(process.env.HOHENHEIM_IPC_PORT),'127.0.0.1');"
+                    + "s.write(JSON.stringify({alchemy:{ready:true}})+'\\n');"
+                    + "setInterval(()=>{},10000);");
+        }
+
+        @Override
+        protected Map<String, String> buildRuntimeEnvironment(int port) {
+            return Map.of();
+        }
+
+        @Override
+        protected File getWorkingDirectory() {
+            return new File(System.getProperty("java.io.tmpdir"));
+        }
+    }
+
+    @Test
+    void legacyNestedReadyEnvelopeMarksTheChildReady() throws Exception {
+        LegacyReadyHandler handler = new LegacyReadyHandler(9106, settings(true, 1));
+        handler.startMinimumServers();
+
+        awaitCondition("legacy ready envelope accepted",
+            () -> handler.getHealth() == SiteHealth.UP);
+        assertThat(handler.requestedProcessCount()).isEqualTo(0);
+    }
+
+    /** A wait_for_ready child that never signals must be killed at the ready timeout. */
+    private final class NeverReadyHandler extends ManagedProcessSiteHandler {
+
+        NeverReadyHandler(int siteId, Map<String, Object> settings) {
+            super(siteId, "never-ready-" + siteId, settings, portAllocator, monitor);
+            handlers.add(this);
+        }
+
+        @Override
+        protected List<String> buildCommand(String listenTarget) {
+            // 601, not 600: distinguishable from SleepHandler children when scanning descendants.
+            return List.of("sh", "-c", "sleep 601");
+        }
+
+        @Override
+        protected long readyTimeoutMs() {
+            return 1_500;
+        }
+
+        @Override
+        protected Map<String, String> buildRuntimeEnvironment(int port) {
+            return Map.of();
+        }
+
+        @Override
+        protected File getWorkingDirectory() {
+            return new File(System.getProperty("java.io.tmpdir"));
+        }
+    }
+
+    @Test
+    void neverReadyChildIsKilledAtTheReadyTimeout() throws Exception {
+        NeverReadyHandler handler = new NeverReadyHandler(9107, settings(true, 1));
+        handler.startMinimumServers();
+
+        // A never-ready child never enters the READY process list, so track the OS
+        // process itself (the distinctive "sleep 601" descendant).
+        awaitCondition("child spawned", () -> findSleep601().isPresent());
+        ProcessHandle child = findSleep601().orElseThrow();
+
+        // The ready timeout (1.5s in this subclass) must reap it. Destroy first so the
+        // crash-recovery respawn doesn't keep replacing what we are watching.
+        awaitCondition("never-ready child reaped", () -> !child.isAlive());
+    }
+
+    private static java.util.Optional<ProcessHandle> findSleep601() {
+        return ProcessHandle.current().descendants()
+            .filter(p -> p.info().commandLine().map(c -> c.contains("sleep 601")).orElse(false))
+            .findFirst();
+    }
+
     @Test
     void readyLatchReArmsAfterFullOutage() throws Exception {
         SleepHandler handler = new SleepHandler(9104, settings(false, 1));

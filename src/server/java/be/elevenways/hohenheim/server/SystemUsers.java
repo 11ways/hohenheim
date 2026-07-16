@@ -29,6 +29,19 @@ public final class SystemUsers {
      *         be explicitly configured to run as root (callers isolate this per-site)
      */
     public static @Nullable Integer resolveUid(Object userKeyObj) {
+        RunAsUser user = resolve(userKeyObj);
+        return user != null ? user.uid() : null;
+    }
+
+    /** The identity a site's child processes run as: uid plus its primary gid and home. */
+    public record RunAsUser(int uid, @Nullable Integer gid, @Nullable String home) {}
+
+    /**
+     * Full run-as identity for a site's configured system user, or null when none is
+     * configured (the child then inherits the daemon's own user). Same fail-closed
+     * contract as {@link #resolveUid}.
+     */
+    public static @Nullable RunAsUser resolve(Object userKeyObj) {
         Row row;
         if (userKeyObj instanceof Integer id) {
             if (id <= 0) {
@@ -53,7 +66,7 @@ public final class SystemUsers {
         if (uid == 0) {
             throw new IllegalStateException("System user '" + userKeyObj + "' is root (uid 0); refusing to run site processes as root");
         }
-        return uid;
+        return new RunAsUser(uid, row.get(SystemUserModel.GID), row.get(SystemUserModel.HOME));
     }
 
     /**

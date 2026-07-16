@@ -93,7 +93,7 @@ public class CommandSiteType implements SiteTypeHandler {
         private final String startCommand;
         private final String workingDirectory;
         private final String portArgument;
-        private final @Nullable Integer resolvedUid;
+        private final SystemUsers.@Nullable RunAsUser runAs;
 
         CommandProcessHandler(int siteId, String siteName, Map<String, Object> settings) {
             super(siteId, siteName, settings,
@@ -102,7 +102,7 @@ public class CommandSiteType implements SiteTypeHandler {
             this.startCommand = (String) settings.getOrDefault("start_command", "");
             this.workingDirectory = (String) settings.get("working_directory");
             this.portArgument = (String) settings.get("port_argument");
-            this.resolvedUid = SystemUsers.resolveUid(settings.get("user"));
+            this.runAs = SystemUsers.resolve(settings.get("user"));
 
             if (!startCommand.isEmpty()) {
                 startMinimumServers();
@@ -132,8 +132,8 @@ public class CommandSiteType implements SiteTypeHandler {
         }
 
         @Override
-        protected @Nullable Integer getUid() {
-            return resolvedUid;
+        protected SystemUsers.@Nullable RunAsUser getRunAsUser() {
+            return runAs;
         }
 
         @Override
