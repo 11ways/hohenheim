@@ -3,8 +3,10 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DeploymentModel;
+import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -40,6 +42,7 @@ public final class AttentionCollector {
         errorCertificates(items);
         unhealthySites(items);
         failedDatabases(items);
+        unavailableAttachedDatabases(items);
         failedDeployments(items);
         failedTasks(items);
         return items;
@@ -91,6 +94,67 @@ public final class AttentionCollector {
                 "Database " + row.get(DatabaseModel.NAME),
                 "Provisioning failed",
                 "/admin/databases/" + row.get(DatabaseModel.ID)));
+        }
+    }
+
+    /**
+     * Sites whose ATTACHED database can't serve its injected credentials right now
+     * (record not active, or container not running). Attached databases are local by
+     * the link-time rule, so the probe is a cheap local docker inspect -- and only
+     * linked databases of live enabled sites are probed. Failed-record databases
+     * already surface above; this frames the SITE impact of a stopped container.
+     */
+    private static void unavailableAttachedDatabases(List<Map<String, Object>> items) {
+        var linkModel = Models.get(SiteDatabaseModel.class);
+        if (linkModel == null) {
+            return;
+        }
+        List<Row> links = linkModel.find().all();
+        if (links.isEmpty()) {
+            return;
+        }
+        var siteModel = Models.get(SiteModel.class);
+        var databaseModel = Models.get(DatabaseModel.class);
+        DatabaseService databases = new DatabaseService();
+        for (Row link : links) {
+            Row site = siteModel.find()
+                .where(SiteModel.ID.eq(link.get(SiteDatabaseModel.SITE_ID)))
+                .first();
+            if (site == null || site.get(SiteModel.DELETED_AT) != null
+                || !Boolean.TRUE.equals(site.get(SiteModel.ENABLED))) {
+                continue;
+            }
+            Row database = databaseModel.find()
+                .where(DatabaseModel.ID.eq(link.get(SiteDatabaseModel.DATABASE_ID)))
+                .first();
+            if (database == null) {
+                continue;   // dangling link; the tab shows it as (deleted)
+            }
+            String status = database.get(DatabaseModel.STATUS);
+            boolean unavailable;
+            String detail;
+            if (!DatabaseModel.STATUS_ACTIVE.equals(status)) {
+                unavailable = true;
+                detail = "Attached database " + database.get(DatabaseModel.NAME) + " is " + status;
+            } else {
+                var live = safeDetail(databases, database);
+                unavailable = live == null || !live.running();
+                detail = "Attached database " + database.get(DatabaseModel.NAME) + " is not running";
+            }
+            if (unavailable) {
+                items.add(item("warning", "database",
+                    "Site " + site.get(SiteModel.NAME),
+                    detail,
+                    "/admin/sites/" + site.get(SiteModel.ID) + "/page/databases"));
+            }
+        }
+    }
+
+    private static DatabaseService.@Nullable Detail safeDetail(DatabaseService databases, Row database) {
+        try {
+            return databases.detailOf(database);
+        } catch (Exception e) {
+            return null;   // unresolvable engine/host: treat as unavailable
         }
     }
 

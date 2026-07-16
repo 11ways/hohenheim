@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
@@ -167,7 +168,7 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
             spec.put("Cmd", List.of(command.trim().split("\\s+")));
         }
 
-        List<String> env = buildEnv(settings.get("environment_variables"));
+        List<String> env = buildEnv(siteId, settings.get("environment_variables"));
         if (!env.isEmpty()) {
             spec.put("Env", env);
         }
@@ -207,8 +208,14 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
         }
     }
 
-    private static List<String> buildEnv(Object envObj) {
+    // Injected database variables come first; docker resolves duplicate Env entries
+    // last-wins, so operator-authored variables override injected ones. (Docker sites
+    // currently can't LINK databases -- a bridge-network container can't reach the
+    // host's 127.0.0.1-published port -- so this resolves empty until shared-network
+    // mode lands; the wiring keeps the mechanism uniform across handler types.)
+    private static List<String> buildEnv(int siteId, Object envObj) {
         List<String> result = new ArrayList<>();
+        DatabaseEnvInjection.envForSite(siteId).forEach((name, value) -> result.add(name + "=" + value));
         EnvVars.toMap(envObj).forEach((name, value) -> result.add(name + "=" + value));
         return result;
     }

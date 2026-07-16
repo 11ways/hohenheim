@@ -18,4 +18,14 @@ public interface SiteTypeInfo extends TypeDefinition {
      * Short description shown in the type selector UI.
      */
     String getDescription();
+
+    /**
+     * Whether sites of this type can receive managed-database connection details as
+     * injected environment variables. True only for types whose runtime is a process
+     * spawned on the host itself: a Docker-site container cannot reach a database's
+     * 127.0.0.1-published host port, and proxy/redirect/static types run no process.
+     */
+    default boolean supportsEnvInjection() {
+        return false;
+    }
 }

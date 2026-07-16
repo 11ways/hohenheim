@@ -106,6 +106,9 @@ public class NodeSiteType implements SiteTypeHandler {
     public String getColor() { return "green"; }
 
     @Override
+    public boolean supportsEnvInjection() { return true; }
+
+    @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
 
     @Override

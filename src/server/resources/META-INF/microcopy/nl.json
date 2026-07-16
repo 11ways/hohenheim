@@ -20,6 +20,7 @@
     "hohenheim.server.plural": "Servers",
     "hohenheim.settings.title": "Instellingen",
     "hohenheim.site.clone": "Dupliceren",
+    "hohenheim.site.databases": "Databanken",
     "hohenheim.site.clone.confirm": "Een kopie maken met dezelfde instellingen en domeinen (standaard uitgeschakeld)?",
     "hohenheim.site.deployments": "Deployments",
     "hohenheim.site.disabled": "Site uitgeschakeld",
@@ -28,6 +29,8 @@
     "hohenheim.site.plural": "Sites",
     "hohenheim.site.processes": "Processen",
     "hohenheim.site.toggle": "In-/uitschakelen",
+    "hohenheim.site_database.env_prefix_help": "Bepaalt de naam van de geinjecteerde variabelen: DB geeft DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME en DB_URL. De eerste koppeling van de site levert ook DATABASE_URL.",
+    "hohenheim.site_database.plural": "Gekoppelde databanken",
     "hohenheim.site_domain.plural": "Sitedomeinen",
     "hohenheim.widget.attention": "Vraagt aandacht",
     "hohenheim.widget.attention.all_clear": "Alles in orde - niets vraagt aandacht."

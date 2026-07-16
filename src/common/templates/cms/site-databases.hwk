@@ -1,0 +1,65 @@
+{#- Databases tab on a site: attached managed databases whose connection
+    details are injected into the site's processes as env variables. -#}
+{% declare title: String %}
+{% declare siteId: Integer %}
+{% declare siteName: String %}
+{% declare links: List %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ siteName }}</h1>
+        <a href={% "/admin/site-databases/new?site_id=" + siteId %} id="attach-database-link">
+            <pl-button variant={% "primary" %}>Attach database</pl-button>
+        </a>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if links %}
+    <pl-table>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>Database</pl-table-head>
+            <pl-table-head>Engine</pl-table-head>
+            <pl-table-head>Status</pl-table-head>
+            <pl-table-head>Env prefix</pl-table-head>
+            <pl-table-head>Injected variables</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each links as index, link %}
+            <pl-table-row>
+                <pl-table-cell>
+                    <a href={% link.get("editUrl") %}>{{ link.get("dbName") }}</a>
+                    {% if link.get("primary") == true %}
+                    <pl-badge variant={% "outline" %}>primary</pl-badge>
+                    {% /if %}
+                </pl-table-cell>
+                <pl-table-cell>{{ link.get("engine") }}</pl-table-cell>
+                <pl-table-cell data-db-status={% link.get("status") %}>
+                    {% if link.get("status") == "active" %}
+                    <a href={% link.get("dbUrl") %}><pl-badge variant={% "success" %}>Active</pl-badge></a>
+                    {% elseif link.get("status") == "failed" %}
+                    <a href={% link.get("dbUrl") %}><pl-badge variant={% "destructive" %}>Failed</pl-badge></a>
+                    {% elseif link.get("status") == "provisioning" %}
+                    <a href={% link.get("dbUrl") %}><pl-badge variant={% "warning" %}>Provisioning</pl-badge></a>
+                    {% else %}
+                    <pl-badge variant={% "secondary" %}>{{ link.get("status") }}</pl-badge>
+                    {% /if %}
+                </pl-table-cell>
+                <pl-table-cell><code>{{ link.get("prefix") }}</code></pl-table-cell>
+                <pl-table-cell><code>{{ link.get("varNames") }}</code></pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="database">
+        <pl-empty-state-title>No databases attached</pl-empty-state-title>
+        <pl-empty-state-description>Attach a managed database and its connection details are injected into this site's processes as environment variables.</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+</section>
+{% /block %}

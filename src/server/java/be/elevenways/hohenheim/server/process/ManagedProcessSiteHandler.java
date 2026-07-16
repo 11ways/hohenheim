@@ -4,6 +4,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
@@ -225,6 +226,14 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     protected abstract Map<String, String> buildRuntimeEnvironment(int port);
 
     /**
+     * Connection variables for the site's attached managed databases, resolved per spawn.
+     * Overridable so handler-level tests can run without the injection tables.
+     */
+    protected Map<String, String> resolveInjectedEnvironment() {
+        return DatabaseEnvInjection.envForSite(siteId);
+    }
+
+    /**
      * The working directory for the child process.
      */
     protected abstract File getWorkingDirectory();
@@ -364,6 +373,9 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
                 env.put("PATH_TO_SOCKET", socketPath);
             }
             env.put("HOHENHEIM_IPC_PORT", String.valueOf(ipc.getPort()));
+            // Attached-database credentials resolve fresh per spawn (live published port);
+            // operator-authored variables come after so an explicit value always wins.
+            env.putAll(resolveInjectedEnvironment());
             env.putAll(environmentVariables);
             env.putAll(buildRuntimeEnvironment(port));
 
