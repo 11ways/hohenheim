@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimHandlers;
+import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
@@ -54,13 +55,17 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
             db.deleteOnExit();
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
 
-            File localDry = File.createTempFile("hohenheim-test-local", ".dry");
-            localDry.delete();
-            localDry.deleteOnExit();
-            System.setProperty("hohenheim.local_settings", localDry.getAbsolutePath());
+            File settingsDry = File.createTempFile("hohenheim-test-settings", ".dry");
+            settingsDry.delete();
+            settingsDry.deleteOnExit();
+            System.setProperty("hohenheim.settings", settingsDry.getAbsolutePath());
         } catch (IOException e) {
             throw new RuntimeException("Failed to create temp database file", e);
         }
+
+        // Load the (empty) test settings file into the context so the panel's
+        // framework SettingsPage can locate its editable DryFileSource.
+        HohenheimSettingsFiles.load();
 
         SiteTypes.boot();
         HohenheimEndpoints.init();

@@ -1,0 +1,8 @@
+{
+    "proxy": {
+        "http_port": 8080
+    },
+    "ssl": {
+        "letsencrypt_enabled": false
+    }
+}

@@ -8,6 +8,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -43,10 +45,16 @@ public final class ServerResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(ServerModel.NAME).build())
-        .column(ColumnSpec.fromField(ServerModel.MODE).build())
-        .column(ColumnSpec.fromField(ServerModel.SSH_TARGET).build())
+        .column(ColumnSpec.fromField(ServerModel.NAME).filterable().build())
+        .column(ColumnSpec.fromField(ServerModel.MODE).filterable().build())
+        .column(ColumnSpec.fromField(ServerModel.SSH_TARGET).filterable().build())
         .column(ColumnSpec.virtual("host_status", Microcopy.of("hohenheim.server.host_status")).build())
+        .filter(FilterSpec.forField(ServerModel.NAME, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(ServerModel.NAME)).build())
+        .filter(FilterSpec.forField(ServerModel.MODE, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(ServerModel.MODE)).build())
+        .filter(FilterSpec.forField(ServerModel.SSH_TARGET, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(ServerModel.SSH_TARGET)).build())
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "server"); }

@@ -19,6 +19,8 @@ import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
@@ -66,11 +68,21 @@ public final class SiteResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(SiteModel.NAME).build())
-        .column(ColumnSpec.fromField(SiteModel.SITE_TYPE).build())
-        .column(ColumnSpec.fromField(SiteModel.ENABLED).build())
-        .column(ColumnSpec.fromField(SiteModel.STATUS).build())
-        .column(ColumnSpec.fromField(SiteModel.CREATED_AT).build())
+        .column(ColumnSpec.fromField(SiteModel.NAME).filterable().build())
+        .column(ColumnSpec.fromField(SiteModel.SITE_TYPE).filterable().build())
+        .column(ColumnSpec.fromField(SiteModel.ENABLED).filterable().build())
+        .column(ColumnSpec.fromField(SiteModel.STATUS).filterable().build())
+        .column(ColumnSpec.fromField(SiteModel.CREATED_AT).filterable().build())
+        .filter(FilterSpec.forField(SiteModel.NAME, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(SiteModel.NAME)).build())
+        .filter(FilterSpec.forField(SiteModel.SITE_TYPE, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(SiteModel.SITE_TYPE)).build())
+        .filter(FilterSpec.forField(SiteModel.ENABLED, FilterSpec.Kind.BOOLEAN)
+            .label(FieldLabels.labelFor(SiteModel.ENABLED)).build())
+        .filter(FilterSpec.forField(SiteModel.STATUS, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(SiteModel.STATUS)).build())
+        .filter(FilterSpec.forField(SiteModel.CREATED_AT, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(SiteModel.CREATED_AT)).build())
         .defaultSort(SortSpec.desc(SiteModel.CREATED_AT.getName()))
         .build();
 

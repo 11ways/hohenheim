@@ -32,15 +32,21 @@ Use `zenit-dev` for all build/test/run cycles. Do not invoke `./gradlew` directl
 - The admin UI is a zenit-cms panel served at `/admin` (`server/cms/HohenheimPanel`):
   typed `RowResource` peers for sites/domains/certificates/access lists/auth
   providers/databases/servers/notification channels, zenit-cms's readonly
-  `ActivityResource` over the framework activity log, a settings `PanelPage`
-  (persists via zenit's `DrySettingsWriter` into `settings/local.dry`), and
-  `RecordScopedPage` tabs on sites (Domains, Processes incl. terminal +
-  proclogs) and databases (Restore). Mutations are recorded by zenit's
-  `ActivityLog` (enabled in `settings/default.dry`; behaviour verbs via
-  `ActivityLog.withAction`) and routing-relevant writes rebuild the proxy via
-  `ProxyReloadHooks` on the global model-hook tier -- there is no per-resource
-  audit/reload plumbing. Host-declared endpoints beside the panel
-  (downloads, uploads, process control, terminal WS, settings POST) live in
+  `ActivityResource` over the framework activity log, the framework
+  `SettingsPage` at `/admin/settings` (two mounts: the hohenheim context
+  editing `settings/hohenheim.dry`, plus zenit's `ServerSettings` editing
+  `settings/local.dry`; DIFF-based save, secrets masked, restartRequired
+  metadata drives the restart toast), and `RecordScopedPage` tabs on sites
+  (Domains, Processes incl. terminal + proclogs, Deployments on git sites)
+  and databases (Restore). `HohenheimSettings` roots at its OWN `hohenheim`
+  group (the standard consumer shape); its file keys stay flat
+  (`proxy.http_port`) because the context root maps the file root. Tests
+  redirect the editable file via `-Dhohenheim.settings`. Mutations are
+  recorded by zenit's `ActivityLog` (enabled in `settings/default.dry`;
+  behaviour verbs via `ActivityLog.withAction`) and routing-relevant writes
+  rebuild the proxy via `ProxyReloadHooks` on the global model-hook tier --
+  there is no per-resource audit/reload plumbing. Host-declared endpoints
+  beside the panel (downloads, uploads, process control, terminal WS) live in
   `HohenheimEndpoints` + `HohenheimHandlers`.
 - Site types are registered via `SiteTypeRegistry`. Each type declares its schema (which drives the type-discriminated settings sub-form in the CMS) and its request handler. Adding a type means implementing one class and registering it — no edits to existing dispatch code. See `docs/architecture-site-types.md`.
 - Current types in `src/server/java/be/elevenways/hohenheim/server/sitetype/types/`: `AlchemySiteType`, `CommandSiteType`, `DeadSiteType`, `DockerSiteType`, `NodeSiteType`, `ProxySiteType`, `RedirectSiteType`, `StaticSiteType`.

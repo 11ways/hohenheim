@@ -13,6 +13,8 @@ import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -50,12 +52,24 @@ public final class CertificateResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).build())
-        .column(ColumnSpec.fromField(CertificateModel.PROVIDER).build())
-        .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).build())
-        .column(ColumnSpec.fromField(CertificateModel.STATUS).build())
-        .column(ColumnSpec.fromField(CertificateModel.EXPIRES_ON).build())
-        .column(ColumnSpec.fromField(CertificateModel.CREATED_AT).build())
+        .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).filterable().build())
+        .column(ColumnSpec.fromField(CertificateModel.PROVIDER).filterable().build())
+        .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).filterable().build())
+        .column(ColumnSpec.fromField(CertificateModel.STATUS).filterable().build())
+        .column(ColumnSpec.fromField(CertificateModel.EXPIRES_ON).filterable().build())
+        .column(ColumnSpec.fromField(CertificateModel.CREATED_AT).filterable().build())
+        .filter(FilterSpec.forField(CertificateModel.NICE_NAME, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(CertificateModel.NICE_NAME)).build())
+        .filter(FilterSpec.forField(CertificateModel.PROVIDER, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(CertificateModel.PROVIDER)).build())
+        .filter(FilterSpec.forField(CertificateModel.DOMAIN_NAMES_TEXT, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(CertificateModel.DOMAIN_NAMES_TEXT)).build())
+        .filter(FilterSpec.forField(CertificateModel.STATUS, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(CertificateModel.STATUS)).build())
+        .filter(FilterSpec.forField(CertificateModel.EXPIRES_ON, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(CertificateModel.EXPIRES_ON)).build())
+        .filter(FilterSpec.forField(CertificateModel.CREATED_AT, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(CertificateModel.CREATED_AT)).build())
         .defaultSort(SortSpec.desc(CertificateModel.CREATED_AT.getName()))
         .build();
 

@@ -30,6 +30,16 @@ public class ServerMain {
     private static TaskService taskService;
 
     public static void main(String[] args) {
+        // Migrate-only invocation (zenit-dev's migration step): settings +
+        // datasource + migrations, then exit WITHOUT booting any server.
+        // Without this early path the migration step used to boot a full
+        // server (both listeners) that only a kill -9 timeout stopped.
+        if (args != null && java.util.Arrays.asList(args).contains("--run-migrations")) {
+            HohenheimSettingsFiles.load();
+            HohenheimDatabase.init();
+            return;
+        }
+
         // Site types and auth-provider types self-register through compile-time
         // discovery (BlastAutoLoadInit); only the shared process infrastructure
         // needs an explicit boot before the proxy loads its routes.
@@ -40,11 +50,11 @@ public class ServerMain {
         // @ZenitAutoLoad groups), and kicks off the boot stages.
         ServerZenitRuntime.init();
 
-        // Load Hohenheim's own settings from the same sources. Its context roots
-        // at Zenit.SETTINGS (groups are top-level), so it loads them the way
-        // ServerSettings does. Boot stages run async and read no Hohenheim
+        // Load Hohenheim's own settings (settings/hohenheim.dry + HOHENHEIM__*
+        // env). The context roots at the hohenheim group, so file keys keep the
+        // flat proxy/ssl/... shape. Boot stages run async and read no Hohenheim
         // setting; the manual startup below sees configured values.
-        HohenheimSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
+        HohenheimSettingsFiles.load();
 
         HohenheimEndpoints.init();
         // Force-load the zenit-cms panel routes (all /{panel}/... endpoints).

@@ -36,9 +36,12 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
 
     private static final String ARGON2_PREFIX = "$argon2";
 
+    // secret(): FormSecrets masks every password value at render (usernames stay
+    // visible, stored hashes never reach the browser) and restores the stored
+    // hash per key on a blank submit BEFORE normalizeConfigForSave runs.
     public static final Schema CONFIG_SCHEMA = new Schema();
     static {
-        CONFIG_SCHEMA.addField(StringMapField.builder(CREDENTIALS).build());
+        CONFIG_SCHEMA.addField(StringMapField.builder(CREDENTIALS).secret().build());
     }
 
     @Override
@@ -76,9 +79,10 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
 
     /**
      * Normalize the submitted username -> password map for storage. A plaintext value is
-     * hashed; a blank value carries the user's existing hash forward (edit semantics); a
-     * value that already IS an Argon2 hash round-trips untouched, so redisplayed hashes
-     * never get double-hashed.
+     * hashed; a value that already IS an Argon2 hash round-trips untouched (the form path
+     * arrives here AFTER FormSecrets restored stored hashes for blank submits, so
+     * untouched entries hit that branch). The blank-carry branch remains for programmatic
+     * callers that bypass the form pipeline.
      */
     @Override
     public Map<String, Object> normalizeConfigForSave(Map<String, Object> submitted,

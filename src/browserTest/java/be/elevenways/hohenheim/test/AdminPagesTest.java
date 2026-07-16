@@ -1,11 +1,14 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.junit.jupiter.api.*;
 
 import java.net.URI;
@@ -54,45 +57,73 @@ class AdminPagesTest extends HohenheimTestBase {
         waitForHydration();
 
         String content = page.content();
+        // Every hohenheim group renders (the old hand-rolled page only covered four).
         assertThat(content).contains("Proxy");
         assertThat(content).contains("Logging");
         assertThat(content).contains("Security");
-        assertThat(content).contains("Let's Encrypt");
+        assertThat(content).contains("SSL / TLS");
+        assertThat(content).contains("Storage");
+        assertThat(content).contains("Proteus SSO");
+        // Secret settings never render their value; the input is a masked password field.
+        assertThat(page.locator(
+            "[data-path='app.auth_proteus.access_key'] input[type='password']").count()).isEqualTo(1);
     }
 
     @Test
     @Order(2)
-    void settingsSavePersistsToLocalDry() throws Exception {
-        var response = post("/admin/settings",
-            "proxy_http_port=8085&proxy_https_port=8443&proxy_fallback=http%3A%2F%2F127.0.0.1%3A9999"
-            + "&proxy_force_https=on&log_access_path=%2Ftmp%2Faccess.log"
-            + "&sec_log_domain_misses=on&sec_domain_miss_threshold=7"
-            + "&ssl_le_email=admin%40example.com");
-        assertThat(response.statusCode()).isEqualTo(302);
-        // The port differs from the boot value, so the redirect carries the restart hint.
-        assertThat(response.headers().firstValue("Location").orElse(""))
-            .startsWith("/admin/settings?saved=true");
+    void settingsSavePersistsToTheHohenheimDryFile() throws Exception {
+        navigateToApp("/admin/settings");
+        waitForHydration();
 
-        // The write-back landed in the (test-redirected) local.dry file.
-        Path localDry = Path.of(System.getProperty("hohenheim.local_settings"));
-        assertThat(Files.isRegularFile(localDry)).isTrue();
-        Map<?, ?> parsed = (Map<?, ?>) Zenit.DRY.parse(Files.readString(localDry));
+        var fallback = page.locator("[data-path='app.proxy.fallback_address'] input");
+        fallback.fill("http://127.0.0.1:9999");
+        var threshold = page.locator("[data-path='app.security.domain_miss_threshold'] input");
+        threshold.fill("7");
+
+        page.click(".cms-settings-actions pl-button");
+        page.waitForCondition(() -> page.locator("pl-toast").count() > 0);
+
+        // The DIFF-based write-back landed in the (test-redirected) settings file
+        // with keys RELATIVE to the hohenheim group.
+        Path settingsDry = Path.of(System.getProperty("hohenheim.settings"));
+        assertThat(Files.isRegularFile(settingsDry)).isTrue();
+        Map<?, ?> parsed = (Map<?, ?>) Zenit.DRY.parse(Files.readString(settingsDry));
         Map<?, ?> proxy = (Map<?, ?>) parsed.get("proxy");
-        assertThat(((Number) proxy.get("http_port")).intValue()).isEqualTo(8085);
+        assertThat(String.valueOf(proxy.get("fallback_address"))).isEqualTo("http://127.0.0.1:9999");
         Map<?, ?> security = (Map<?, ?>) parsed.get("security");
         assertThat(((Number) security.get("domain_miss_threshold")).intValue()).isEqualTo(7);
+
+        // The live context applied the change without a restart.
+        assertThat(HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD)).isEqualTo(7);
+
+        // Settings edits are accountable: the touched keys land in the activity log.
+        Row entry = Models.get(ActivityModel.class).find()
+            .where(ActivityModel.MODEL.eq("zenit:settings"))
+            .orderBy(ActivityModel.ID, SortOrder.DESC)
+            .first();
+        assertThat(entry).isNotNull();
+        assertThat(entry.get(ActivityModel.DETAIL)).contains("security.domain_miss_threshold");
     }
 
     @Test
     @Order(3)
-    void settingsSaveRejectsInvalidPortWithoutClaimingSuccess() throws Exception {
+    void settingsSaveRejectsAnInvalidValueWithoutHalfSaving() throws Exception {
+        // A number input sanitizes garbage client-side, so exercise the server
+        // rejection with a raw POST: an uncoercible port must rerender with a
+        // violation instead of persisting anything.
+        Integer before = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
         var response = post("/admin/settings",
-            "proxy_http_port=not-a-port&proxy_https_port=443&sec_domain_miss_threshold=5");
+            "app.proxy.http_port=not-a-port&app.proxy.http_port__base=" + before);
 
-        assertThat(response.statusCode()).isEqualTo(302);
-        String location = response.headers().firstValue("Location").orElse("");
-        assertThat(location).startsWith("/admin/settings?error=");
-        assertThat(location).doesNotContain("saved=true");
+        // Validation failure rerenders the page (no PRG redirect).
+        assertThat(response.statusCode()).isEqualTo(200);
+
+        Path settingsDry = Path.of(System.getProperty("hohenheim.settings"));
+        String raw = Files.exists(settingsDry) ? Files.readString(settingsDry) : "";
+        assertThat(raw).doesNotContain("not-a-port");
+        assertThat(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT))
+            .isEqualTo(before);
     }
 
     // -----------------------------------------------------------------------
