@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -12,10 +13,7 @@ import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.Map;
 
 /**
@@ -133,51 +131,25 @@ public class GitWebhookHandler {
         // GitHub: X-Hub-Signature-256
         String hubSig = exchange.getRequestHeaders().getFirst(X_HUB_SIGNATURE_256);
         if (hubSig != null) {
-            String expected = "sha256=" + hmacSha256(secret, body);
-            return secureEquals(expected, hubSig);
+            String expected = "sha256=" + SecureTokens.hmacSha256Hex(secret, body);
+            return SecureTokens.constantTimeEquals(expected, hubSig);
         }
 
         // Gitea: X-Gitea-Signature
         String giteaSig = exchange.getRequestHeaders().getFirst(X_GITEA_SIGNATURE);
         if (giteaSig != null) {
-            String expected = hmacSha256(secret, body);
-            return secureEquals(expected, giteaSig);
+            String expected = SecureTokens.hmacSha256Hex(secret, body);
+            return SecureTokens.constantTimeEquals(expected, giteaSig);
         }
 
         // GitLab: X-Gitlab-Token (direct comparison, not HMAC)
         String gitlabToken = exchange.getRequestHeaders().getFirst(X_GITLAB_TOKEN);
         if (gitlabToken != null) {
-            return secureEquals(secret, gitlabToken);
+            return SecureTokens.constantTimeEquals(secret, gitlabToken);
         }
 
         // No recognized signature header -- reject
         return false;
-    }
-
-    private static String hmacSha256(String secret, String data) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] hash = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder();
-            for (byte b : hash) {
-                hex.append(String.format("%02x", b));
-            }
-            return hex.toString();
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    /**
-     * Constant-time string comparison to prevent timing attacks.
-     */
-    private static boolean secureEquals(String a, String b) {
-        if (a == null || b == null) return false;
-        return MessageDigest.isEqual(
-            a.getBytes(StandardCharsets.UTF_8),
-            b.getBytes(StandardCharsets.UTF_8)
-        );
     }
 
     private static void sendJson(HttpServerExchange exchange, int status, String json) {
