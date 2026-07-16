@@ -162,11 +162,6 @@ public final class HohenheimHandlers {
                 niceName = domains.split("[,\\s]+")[0];
             }
 
-            var proxy = ServerMain.getProxyServer();
-            if (proxy == null) {
-                return requestError(conduit, certificateError("proxy_unavailable"));
-            }
-
             List<String> hostnames = new ArrayList<>();
             for (String d : domains.split("[,\\s]+")) {
                 d = d.trim();
@@ -191,6 +186,13 @@ public final class HohenheimHandlers {
             if (!excluded.isEmpty()) {
                 return requestError(conduit, certificateError("excluded_hostnames")
                     .withArg("hostnames", String.join(", ", excluded)));
+            }
+
+            // Input validation first: only a request that could actually be
+            // ordered gets refused on operational grounds.
+            var proxy = ServerMain.getProxyServer();
+            if (proxy == null) {
+                return requestError(conduit, certificateError("proxy_unavailable"));
             }
 
             if (dns && CertificateModel.DNS_PUBLISHER_MANUAL.equals(dnsMode)) {

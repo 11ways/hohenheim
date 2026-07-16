@@ -9,6 +9,8 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.task.CleanOrphanCertificates;
 import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
+import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -256,5 +258,48 @@ class TlsResilienceTest {
         assertThat(certModel.findById((Integer) orphanedCert.get(CertificateModel.ID)))
             .as("a soft-deleted site's cert is orphaned")
             .isNull();
+    }
+
+    @Test
+    @Order(60)
+    @Timeout(30)
+    void verboseDnsHookIsDrainedInsteadOfMisreportedAsTimeout() throws Exception {
+        File hook = File.createTempFile("hh-dns-hook", ".sh");
+        hook.deleteOnExit();
+        // Emits far more than the OS pipe buffer: an undrained stdout would
+        // block the hook forever and surface as a bogus 60s timeout.
+        java.nio.file.Files.writeString(hook.toPath(),
+            "#!/bin/sh\nhead -c 262144 /dev/zero | tr '\\0' 'x'\nexit 0\n");
+        hook.setExecutable(true);
+        String previous = HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, hook.getAbsolutePath());
+        try {
+            new CommandDnsTxtPublisher().publish(
+                new DnsTxtRecord("_acme-challenge.example.com", "verbose-hook-value"));
+        } finally {
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, previous);
+        }
+    }
+
+    @Test
+    @Order(61)
+    @Timeout(30)
+    void failingDnsHookSurfacesItsOutputInTheError() throws Exception {
+        File hook = File.createTempFile("hh-dns-hook-fail", ".sh");
+        hook.deleteOnExit();
+        java.nio.file.Files.writeString(hook.toPath(),
+            "#!/bin/sh\necho 'zone not found'\nexit 3\n");
+        hook.setExecutable(true);
+        String previous = HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, hook.getAbsolutePath());
+        try {
+            new CommandDnsTxtPublisher().publish(
+                new DnsTxtRecord("_acme-challenge.example.com", "failing-hook-value"));
+            org.junit.jupiter.api.Assertions.fail("a non-zero hook exit must throw");
+        } catch (IllegalStateException e) {
+            assertThat(e.getMessage()).contains("exit 3").contains("zone not found");
+        } finally {
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, previous);
+        }
     }
 }

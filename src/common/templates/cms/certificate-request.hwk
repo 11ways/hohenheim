@@ -6,7 +6,7 @@
 {% declare niceName: String = "" %}
 {% declare dnsHookConfigured: Boolean = false %}
 {% declare manualToken: String = "" %}
-{% declare dnsRecords: List<Map<String, Object>> = [] %}
+{% declare dnsRecords: List<Map<String, Object>> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
 
