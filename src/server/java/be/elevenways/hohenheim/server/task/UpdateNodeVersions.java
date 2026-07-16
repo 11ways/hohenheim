@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.NodeVersionModel;
 import be.elevenways.hohenheim.server.options.NodeVersionOptions;
@@ -101,6 +102,16 @@ public class UpdateNodeVersions extends ScheduledTask {
         }
 
         discoverFromDirectory(Path.of("/usr/local/n/versions/node"), "n", versions, dedup);
+
+        String configured = HohenheimSettings.VALUES.getValue(HohenheimSettings.Node.LOCATIONS);
+        if (configured != null) {
+            for (String location : configured.split("[,\\r\\n]+")) {
+                String trimmed = location.trim();
+                if (!trimmed.isEmpty()) {
+                    discoverFromDirectory(Path.of(trimmed), "configured", versions, dedup);
+                }
+            }
+        }
 
         String home = System.getProperty("user.home");
         if (home != null) {

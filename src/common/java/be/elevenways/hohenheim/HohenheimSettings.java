@@ -39,6 +39,17 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
+        public static final SettingDefinition<String> HTTP_SOCKET_PATH = GROUP.buildSetting("http_socket_path", String.class)
+            .description("Optional Unix socket path for the HTTP proxy instead of a public TCP listener")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<String> HTTP_SOCKET_PERMISSIONS = GROUP.buildSetting("http_socket_permissions", String.class)
+            .defaultValue("0660")
+            .description("Octal permissions applied to the HTTP proxy Unix socket")
+            .restartRequired()
+            .build();
+
         public static final SettingDefinition<Integer> HTTPS_PORT = GROUP.buildSetting("https_port", Integer.class)
             .defaultValue(443)
             .description("HTTPS proxy listen port")
@@ -103,6 +114,16 @@ public class HohenheimSettings {
             .defaultValue(false)
             .description("Use Let's Encrypt staging server")
             .build();
+
+        public static final SettingDefinition<String> DNS_HOOK_COMMAND = GROUP.buildSetting("dns_hook_command", String.class)
+            .description("Executable DNS-01 hook; called as: command present|cleanup record-name record-value")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<Integer> DNS_PROPAGATION_SECONDS = GROUP.buildSetting("dns_propagation_seconds", Integer.class)
+            .defaultValue(30)
+            .description("Seconds to wait after publishing DNS-01 TXT records")
+            .build();
     }
 
     // --- Logging ---
@@ -123,6 +144,19 @@ public class HohenheimSettings {
         public static final SettingDefinition<String> ACCESS_PATH = GROUP.buildSetting("access_path", String.class)
             .defaultValue("/var/log/hohenheim/access.log")
             .description("Access log file path")
+            .build();
+    }
+
+    // --- Node.js discovery ---
+    public abstract class Node {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("node")
+            .label("Node.js")
+            .describe("Node.js runtime discovery")
+            .icon("code");
+
+        public static final SettingDefinition<String> LOCATIONS = GROUP.buildSetting("locations", String.class)
+            .description("Additional N-style version directories, separated by commas or new lines")
+            .multiline()
             .build();
     }
 

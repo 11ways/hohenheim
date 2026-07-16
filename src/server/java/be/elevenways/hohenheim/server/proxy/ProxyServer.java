@@ -17,6 +17,8 @@ import io.undertow.server.handlers.encoding.DeflateEncodingProvider;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
+import java.net.InetSocketAddress;
+import java.nio.file.Path;
 
 /**
  * The reverse proxy server that listens on the proxy ports (80/443)
@@ -45,6 +47,7 @@ public class ProxyServer {
 
     private Undertow httpServer;
     private Undertow httpsServer;
+    private UnixSocketListenerBridge httpSocketBridge;
 
     private volatile State httpState = State.STOPPED;
     private volatile State httpsState = State.STOPPED;
@@ -121,28 +124,43 @@ public class ProxyServer {
 
     private void startHttpListener() {
         int httpPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
+        String socketPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_SOCKET_PATH);
+        boolean socketMode = socketPath != null && !socketPath.isBlank();
 
         try {
             Undertow.Builder builder = Undertow.builder()
-                .addHttpListener(httpPort, "0.0.0.0")
+                .addHttpListener(socketMode ? 0 : httpPort, socketMode ? "127.0.0.1" : "0.0.0.0")
                 .setServerOption(UndertowOptions.ENABLE_HTTP2, true)
                 .setIoThreads(IO_THREADS)
                 .setHandler(handler);
 
-            addIpv6Listener(builder, httpPort, null);
+            if (!socketMode) addIpv6Listener(builder, httpPort, null);
             httpServer = builder.build();
 
             httpServer.start();
+            if (socketMode) {
+                int loopbackPort = ((InetSocketAddress) getHttpListenerInfo().getAddress()).getPort();
+                String permissions = HohenheimSettings.VALUES.getValue(
+                    HohenheimSettings.Proxy.HTTP_SOCKET_PERMISSIONS);
+                httpSocketBridge = new UnixSocketListenerBridge(
+                    Path.of(socketPath.trim()), loopbackPort, permissions);
+            }
             httpState = State.RUNNING;
             httpFailureReason = null;
-            Blast.log("Proxy HTTP listening on port", httpPort,
+            Blast.log(socketMode ? "Proxy HTTP listening on Unix socket" : "Proxy HTTP listening on port",
+                      socketMode ? httpSocketBridge.getSocketPath() : httpPort,
                       "(" + dispatcher.getExactRouteCount() + " exact,",
                       dispatcher.getWildcardRouteCount() + " wildcard routes)");
         } catch (Exception e) {
             httpState = State.FAILED;
             httpFailureReason = e.getMessage();
+            if (httpSocketBridge != null) {
+                httpSocketBridge.close();
+                httpSocketBridge = null;
+            }
+            if (httpServer != null) httpServer.stop();
             httpServer = null;
-            Blast.log("PROXY HTTP STARTUP FAILED on port", httpPort + ":", e.getMessage());
+            Blast.log("PROXY HTTP STARTUP FAILED:", e.getMessage());
         }
     }
 
@@ -202,6 +220,10 @@ public class ProxyServer {
         acmeService.stop();
         dispatcher.shutdown();
         proxySessionStore.deleteExpired();
+        if (httpSocketBridge != null) {
+            httpSocketBridge.close();
+            httpSocketBridge = null;
+        }
         if (httpServer != null) {
             httpServer.stop();
             httpServer = null;

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.server.sitetype.UnixSocketBridgeConnection;
+import be.elevenways.hohenheim.server.proxy.UnixSocketListenerBridge;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -16,6 +17,7 @@ import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -69,5 +71,50 @@ class UnixSocketBridgeTest {
             conn.close();
             unixServer.close();
         }
+    }
+
+    @Test
+    @Timeout(15)
+    void bridgesHttpFromAfUnixToLoopbackTcp() throws Exception {
+        Path sockPath = Files.createTempFile("hh-front-bridge-test", ".sock");
+        Files.delete(sockPath);
+
+        String body = "hello-from-loopback";
+        String response = "HTTP/1.1 200 OK\r\nContent-Length: " + body.length()
+            + "\r\nConnection: close\r\n\r\n" + body;
+        ServerSocketChannel tcpServer = ServerSocketChannel.open();
+        tcpServer.bind(new InetSocketAddress("127.0.0.1", 0));
+        int port = ((InetSocketAddress) tcpServer.getLocalAddress()).getPort();
+
+        Thread.ofVirtual().start(() -> {
+            try (SocketChannel conn = tcpServer.accept()) {
+                conn.read(ByteBuffer.allocate(4096));
+                conn.write(ByteBuffer.wrap(response.getBytes(StandardCharsets.UTF_8)));
+            } catch (IOException ignored) {
+            }
+        });
+
+        UnixSocketListenerBridge bridge = new UnixSocketListenerBridge(sockPath, port, "0660");
+        assertThat(Files.getPosixFilePermissions(sockPath)).containsExactlyInAnyOrder(
+            PosixFilePermission.OWNER_READ,
+            PosixFilePermission.OWNER_WRITE,
+            PosixFilePermission.GROUP_READ,
+            PosixFilePermission.GROUP_WRITE);
+        try (SocketChannel client = SocketChannel.open(StandardProtocolFamily.UNIX)) {
+            client.connect(UnixDomainSocketAddress.of(sockPath));
+            client.write(ByteBuffer.wrap(
+                "GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8)));
+            ByteBuffer buffer = ByteBuffer.allocate(4096);
+            while (client.read(buffer) != -1 && buffer.hasRemaining()) {
+                // Read until the bridge closes the connection or the buffer fills.
+            }
+            buffer.flip();
+            String received = StandardCharsets.UTF_8.decode(buffer).toString();
+            assertThat(received).contains("200 OK").contains(body);
+        } finally {
+            bridge.close();
+            tcpServer.close();
+        }
+        assertThat(sockPath).doesNotExist();
     }
 }
