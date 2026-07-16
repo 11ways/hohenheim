@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.DeploymentModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -75,11 +77,40 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
         }
         vars.put("deployments", deployments);
 
+        putWebhookVars(vars, site);
+
         vars.put("recordTabs", recordTabs(conduit));
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
 
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-deployments"), vars);
+    }
+
+    /**
+     * The push URL + secret an operator pastes into their git host. The
+     * webhook endpoint is intercepted before hostname routing, so any
+     * hostname pointing at the proxy works; the site's own first exact
+     * domain is the copy-pastable choice.
+     */
+    private static void putWebhookVars(Map<String, Object> vars, Row site) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> settings = site.get(SiteModel.SOURCE_SETTINGS) instanceof Map<?, ?> map
+            ? (Map<String, Object>) map : Map.of();
+        vars.put("webhookSecret", orEmpty(settings.get(GitSourceSchema.WEBHOOK_SECRET.getName())));
+        vars.put("webhookAutoDeploy",
+            Boolean.TRUE.equals(settings.get(GitSourceSchema.AUTO_DEPLOY.getName())));
+
+        String path = "/api/webhooks/git/" + orEmpty(site.get(SiteModel.SLUG));
+        String url = path;
+        Row domain = Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.SITE_ID.eq(site.get(SiteModel.ID)))
+            .where(SiteDomainModel.MATCH_TYPE.eq(SiteDomainModel.MATCH_EXACT))
+            .first();
+        if (domain != null) {
+            String scheme = Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)) ? "https" : "http";
+            url = scheme + "://" + domain.get(SiteDomainModel.HOSTNAME) + path;
+        }
+        vars.put("webhookUrl", url);
     }
 
     private static @Nullable GitSiteRequestHandler findGitHandler(Integer siteId) {

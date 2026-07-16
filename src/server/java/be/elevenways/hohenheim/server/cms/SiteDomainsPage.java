@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -43,6 +45,7 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             entry.put("matchType", domain.get(SiteDomainModel.MATCH_TYPE));
             entry.put("forceSsl", Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)));
             entry.put("editUrl", "/admin/domains/" + domain.get(SiteDomainModel.ID));
+            putCertCoverage(entry, domain);
             domains.add(entry);
         }
 
@@ -53,5 +56,25 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         vars.put("domains", domains);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-domains"), vars);
+    }
+
+    /**
+     * TLS coverage for exact-match hostnames: which certificate (if any)
+     * covers the domain, and in what state. Wildcard/regex match entries have
+     * no single hostname to check, so they get no coverage verdict.
+     */
+    private static void putCertCoverage(Map<String, Object> entry, Row domain) {
+        if (!SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))) {
+            entry.put("certStatus", "");
+            return;
+        }
+        Row cert = CertificateCoverage.coveringCertificate(domain.get(SiteDomainModel.HOSTNAME));
+        if (cert == null) {
+            entry.put("certStatus", "none");
+            return;
+        }
+        entry.put("certStatus", String.valueOf(cert.get(CertificateModel.STATUS)));
+        entry.put("certName", String.valueOf(cert.get(CertificateModel.NICE_NAME)));
+        entry.put("certUrl", "/admin/certificates/" + cert.get(CertificateModel.ID));
     }
 }

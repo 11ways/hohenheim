@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.model;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -51,9 +52,12 @@ public class CertificateModel extends Model {
         .value(STATUS_ERROR, v -> v.displayName("Error").icon("triangle-exclamation").color("destructive"))
         .build());
     public static final DateTimeField ISSUED_ON = SCHEMA.addField(DateTimeField.builder().name("issued_on").build());
-    public static final StringField RENEWAL_ERROR = SCHEMA.addField(StringField.builder().name("renewal_error").build());
-    public static final IntegerField ERROR_COUNT = SCHEMA.addField(IntegerField.builder().name("error_count").build());
-    public static final DateTimeField NEXT_ATTEMPT_AT = SCHEMA.addField(DateTimeField.builder().name("next_attempt_at").build());
+    public static final StringField RENEWAL_ERROR = SCHEMA.addField(StringField.builder().name("renewal_error")
+        .attribute(FieldAttributes.GROUP, "renewal").build());
+    public static final IntegerField ERROR_COUNT = SCHEMA.addField(IntegerField.builder().name("error_count")
+        .attribute(FieldAttributes.GROUP, "renewal").build());
+    public static final DateTimeField NEXT_ATTEMPT_AT = SCHEMA.addField(DateTimeField.builder().name("next_attempt_at")
+        .attribute(FieldAttributes.GROUP, "renewal").build());
     public static final StringField DOMAIN_NAMES_TEXT = SCHEMA.addField(StringField.builder().name("domain_names_text").build());
 
     /** Per-cert ACME account email override; null means the global account. */

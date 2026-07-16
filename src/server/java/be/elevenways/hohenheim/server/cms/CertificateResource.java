@@ -17,6 +17,9 @@ import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
+import be.elevenways.zenit.common.edit.FieldAccess;
+import be.elevenways.zenit.common.edit.FieldGroup;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -49,6 +52,10 @@ public final class CertificateResource extends RowResource {
         .add(CertificateModel.CERTIFICATE_PEM)
         .add(CertificateModel.PRIVATE_KEY_PEM)
         .add(CertificateModel.AUTO_RENEW)
+        .add(CertificateModel.RENEWAL_ERROR)
+        .add(CertificateModel.ERROR_COUNT)
+        .add(CertificateModel.NEXT_ATTEMPT_AT)
+        .group(FieldGroup.of("renewal", Microcopy.of("hohenheim.certificate.renewal_status")))
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -56,6 +63,9 @@ public final class CertificateResource extends RowResource {
         .column(ColumnSpec.fromField(CertificateModel.PROVIDER).filterable().build())
         .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).filterable().build())
         .column(ColumnSpec.fromField(CertificateModel.STATUS).filterable().build())
+        .column(ColumnSpec.fromField(CertificateModel.RENEWAL_ERROR).filterable().build())
+        .column(ColumnSpec.fromField(CertificateModel.NEXT_ATTEMPT_AT).hidden().build())
+        .column(ColumnSpec.fromField(CertificateModel.ERROR_COUNT).hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.EXPIRES_ON).filterable().build())
         .column(ColumnSpec.fromField(CertificateModel.CREATED_AT).filterable().build())
         .filter(FilterSpec.forField(CertificateModel.NICE_NAME, FilterSpec.Kind.TEXT)
@@ -95,6 +105,15 @@ public final class CertificateResource extends RowResource {
             row.set(CertificateModel.STATUS, status);
         }
         return row;
+    }
+
+    /** Renewal diagnostics are written by the ACME machinery, never by hand. */
+    @Override
+    public @NonNull List<ResourceFieldBinding> fieldBindings() {
+        return List.of(
+            ResourceFieldBinding.of(CertificateModel.RENEWAL_ERROR.getName(), FieldAccess.alwaysReadonly()),
+            ResourceFieldBinding.of(CertificateModel.ERROR_COUNT.getName(), FieldAccess.alwaysReadonly()),
+            ResourceFieldBinding.of(CertificateModel.NEXT_ATTEMPT_AT.getName(), FieldAccess.alwaysReadonly()));
     }
 
     /** Scope out the internal ACME account row everywhere. */

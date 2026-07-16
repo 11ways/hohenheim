@@ -125,6 +125,9 @@ dependencies {
     clientImplementation ('be.elevenways:zenit-forms-client:0.1.0-SNAPSHOT') { changing = true }
     clientImplementation ('be.elevenways:zenit-microcopy-client:0.1.0-SNAPSHOT') { changing = true }
     clientImplementation ('be.elevenways:zenit-cms-client:0.1.0-SNAPSHOT') { changing = true }
+    // The shell user menu (zn-auth-user-menu, contributed by AuthCmsBridge)
+    // must hydrate: the client bundle needs zenit-auth's compiled templates.
+    clientImplementation ('be.elevenways:zenit-auth-common:0.1.0-SNAPSHOT') { changing = true }
 
     // Server
     serverImplementation sourceSets.common.output

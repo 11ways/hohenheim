@@ -1,0 +1,33 @@
+{# Dashboard attention panel: one row per operational state needing an
+   operator, or a quiet all-clear. Items are computed server-side by the
+   installed AttentionItems collector at render time. #}
+{% declare widget: WidgetInstance %}
+
+{% let items = Hohenheim.attentionItems() %}
+<div class="widget widget-attention hh-attention" data-attention-count={% "" + items.size() %}>
+    <h3 class="widget-heading">{{ t("hohenheim.widget.attention") }}</h3>
+    {% if items %}
+    <ul class="hh-attention-list">
+        {% each items as item %}
+        <li class="hh-attention-item" data-severity={% item.get("severity") %}>
+            <pl-icon name={% item.get("icon") %}></pl-icon>
+            <div class="hh-attention-text">
+                {% if item.get("url") != "" %}
+                <a href={% item.get("url") %}>{{ item.get("title") }}</a>
+                {% else %}
+                <span>{{ item.get("title") }}</span>
+                {% /if %}
+                {% if item.get("detail") != "" %}
+                <span class="hh-attention-detail">{{ item.get("detail") }}</span>
+                {% /if %}
+            </div>
+        </li>
+        {% /each %}
+    </ul>
+    {% else %}
+    <p class="hh-attention-clear">
+        <pl-icon name="circle-check"></pl-icon>
+        {{ t("hohenheim.widget.attention.all_clear") }}
+    </p>
+    {% /if %}
+</div>

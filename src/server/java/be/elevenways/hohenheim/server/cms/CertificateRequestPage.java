@@ -1,16 +1,22 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -31,6 +37,40 @@ public final class CertificateRequestPage extends PanelPage {
         String error = conduit.getQueryParam("error");
         vars.put("title", "Request Let's Encrypt certificate");
         vars.put("error", error != null ? error : "");
+        prefillFromSite(conduit, vars);
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/certificate-request"), vars);
+    }
+
+    /** A ?site= link (the site's Domains tab) prefills the LE-eligible exact hostnames. */
+    private static void prefillFromSite(@NonNull Conduit conduit, @NonNull Map<String, Object> vars) {
+        vars.put("domains", "");
+        vars.put("niceName", "");
+        String siteParam = conduit.getQueryParam("site");
+        if (siteParam == null || siteParam.isEmpty()) {
+            return;
+        }
+        int siteId;
+        try {
+            siteId = Integer.parseInt(siteParam);
+        } catch (NumberFormatException invalid) {
+            return;
+        }
+        Row site = Models.get(SiteModel.class).find().where(SiteModel.ID.eq(siteId)).first();
+        if (site == null) {
+            return;
+        }
+        List<String> hostnames = new ArrayList<>();
+        for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(siteId)) {
+            if (!SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))
+                || Boolean.TRUE.equals(domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT))) {
+                continue;
+            }
+            String hostname = domain.get(SiteDomainModel.HOSTNAME);
+            if (hostname != null && !hostname.isEmpty()) {
+                hostnames.add(hostname);
+            }
+        }
+        vars.put("domains", String.join(" ", hostnames));
+        vars.put("niceName", String.valueOf(site.get(SiteModel.NAME)));
     }
 }

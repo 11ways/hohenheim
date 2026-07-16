@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.AttentionWidget;
 import be.elevenways.protoblast.common.i18n.Locale;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -38,6 +39,7 @@ public final class AdminDashboard extends DashboardPanelPeer {
             stat("Access Lists", "hohenheim.access_list")));
 
         return new WidgetTree(List.of(
+            new WidgetInstance(AttentionWidget.ID, Map.of()),
             new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 3), stats),
             new WidgetInstance(RecordsWidget.ID, Map.of(
                 "source", "zenit.activity",

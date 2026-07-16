@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.Zenit;
@@ -188,6 +189,53 @@ class AdminPagesTest extends HohenheimTestBase {
     }
 
     @Test
+    @Order(21)
+    void renewalErrorsAreVisibleInListAndDetail() throws Exception {
+        // A cert whose last renewal failed: the diagnosis must be readable.
+        var certModel = Models.get(CertificateModel.class);
+        Row cert = certModel.createEmptyRow();
+        cert.set(CertificateModel.NICE_NAME, "failing-renewal-cert");
+        cert.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
+        cert.set(CertificateModel.STATUS, CertificateModel.STATUS_ERROR);
+        cert.set(CertificateModel.DOMAIN_NAMES_TEXT, "broken.example.test");
+        cert.set(CertificateModel.RENEWAL_ERROR, "DNS problem: NXDOMAIN looking up A for broken.example.test");
+        cert.set(CertificateModel.ERROR_COUNT, 3);
+        certModel.save(cert);
+
+        try {
+            navigateToApp("/admin/certificates");
+            waitForHydration();
+            assertThat(page.content())
+                .as("the renewal error is a visible list column")
+                .contains("DNS problem: NXDOMAIN");
+
+            navigateToApp("/admin/certificates/" + cert.get(CertificateModel.ID));
+            waitForHydration();
+            String detail = page.content();
+            assertThat(detail).contains("Renewal status");
+            assertThat(detail).contains("DNS problem: NXDOMAIN");
+            // Diagnostics are read-only: no editable input carries the field.
+            assertThat(page.locator("input[name='renewal_error'], textarea[name='renewal_error']").count())
+                .isZero();
+
+            // The dashboard attention panel lists the failing cert with a link.
+            navigateToApp("/admin/dashboard");
+            waitForHydration();
+            var item = page.locator(".hh-attention-item[data-severity='error']");
+            assertThat(item.count()).isGreaterThanOrEqualTo(1);
+            assertThat(page.locator(".hh-attention-item a[href='/admin/certificates/"
+                + cert.get(CertificateModel.ID) + "']").count()).isEqualTo(1);
+        } finally {
+            certModel.delete(cert);
+        }
+
+        // With the failure gone, the panel reports all clear.
+        navigateToApp("/admin/dashboard");
+        waitForHydration();
+        assertThat(page.locator(".hh-attention-clear").count()).isEqualTo(1);
+    }
+
+    @Test
     @Order(22)
     void processesTabRendersForASite() throws Exception {
         Row site = Models.get(SiteModel.class).find()
@@ -213,5 +261,62 @@ class AdminPagesTest extends HohenheimTestBase {
 
         String content = page.locator("body").textContent();
         assertThat(content).contains("No domains configured");
+    }
+
+    @Test
+    @Order(24)
+    void domainsWeaveWithCertificates() throws Exception {
+        Row site = Models.get(SiteModel.class).find()
+            .where(SiteModel.NAME.eq("Audit Test Site")).first();
+        Integer siteId = site.get(SiteModel.ID);
+
+        var domainModel = Models.get(SiteDomainModel.class);
+        Row covered = domainModel.createEmptyRow();
+        covered.set(SiteDomainModel.SITE_ID, siteId);
+        covered.set(SiteDomainModel.HOSTNAME, "weave.example.test");
+        covered.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domainModel.save(covered);
+        Row bare = domainModel.createEmptyRow();
+        bare.set(SiteDomainModel.SITE_ID, siteId);
+        bare.set(SiteDomainModel.HOSTNAME, "bare.example.test");
+        bare.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domainModel.save(bare);
+
+        var certModel = Models.get(CertificateModel.class);
+        Row cert = certModel.createEmptyRow();
+        cert.set(CertificateModel.NICE_NAME, "weave-cert");
+        cert.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
+        cert.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
+        cert.set(CertificateModel.DOMAIN_NAMES_TEXT, "weave.example.test,www.weave.example.test");
+        certModel.save(cert);
+
+        try {
+            // Coverage column: the covered hostname links its cert, the bare one shows None.
+            navigateToApp("/admin/sites/" + siteId + "/page/domains");
+            waitForHydration();
+            assertThat(page.locator("[data-cert-status='active'] a[href='/admin/certificates/"
+                + cert.get(CertificateModel.ID) + "']").count()).isEqualTo(1);
+            assertThat(page.locator("[data-cert-status='none']").count()).isEqualTo(1);
+
+            // The add-domain link preselects this site on the CREATE form.
+            assertThat(page.locator("#add-domain-link").getAttribute("href"))
+                .isEqualTo("/admin/domains/new?site_id=" + siteId);
+            navigateToApp("/admin/domains/new?site_id=" + siteId);
+            waitForHydration();
+            // The pick's value is a Java-side property; the SSR-resolved display
+            // title in the field is the observable prefill.
+            assertThat(page.locator("pl-select[name='site_id'] .pl-select-value").textContent().trim())
+                .isEqualTo("Audit Test Site");
+
+            // The request-certificate link prefills the site's exact hostnames.
+            navigateToApp("/admin/certificates-request?site=" + siteId);
+            waitForHydration();
+            String domainsValue = page.locator("#domains").inputValue();
+            assertThat(domainsValue).contains("weave.example.test").contains("bare.example.test");
+        } finally {
+            certModel.delete(cert);
+            domainModel.delete(covered);
+            domainModel.delete(bare);
+        }
     }
 }

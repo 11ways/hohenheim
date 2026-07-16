@@ -9,6 +9,9 @@
 {% declare deployments: List %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare timeWording: RelativeTimeWording %}
+{% declare webhookUrl: String = "" %}
+{% declare webhookSecret: String = "" %}
+{% declare webhookAutoDeploy: Boolean = false %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
 
@@ -101,5 +104,31 @@
             {% /if %}
         </pl-card-content>
     </pl-card>
+
+    {% if webhookSecret != "" %}
+    <pl-card class="hh-webhook-card">
+        <pl-card-header>
+            <pl-card-title>Push webhook</pl-card-title>
+            <pl-card-description>Configure this URL and secret on your git host (GitHub, GitLab or Gitea) to deploy on every push.</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <dl class="hh-webhook-fields">
+                <dt>Payload URL</dt>
+                <dd>
+                    <code data-webhook-url>{{ webhookUrl }}</code>
+                    <pl-copy-button value={% webhookUrl %} ariaLabel="Copy webhook URL"></pl-copy-button>
+                </dd>
+                <dt>Secret</dt>
+                <dd>
+                    <code data-webhook-secret>{{ webhookSecret }}</code>
+                    <pl-copy-button value={% webhookSecret %} ariaLabel="Copy webhook secret"></pl-copy-button>
+                </dd>
+            </dl>
+            {% if !webhookAutoDeploy %}
+            <pl-alert variant="warning">Auto-deploy is disabled for this site: pushes are acknowledged but not deployed. Enable it in the site's source settings.</pl-alert>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+    {% /if %}
 </section>
 {% /block %}

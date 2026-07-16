@@ -1,5 +1,14 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.auth.server.ZenitAuth;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.security.csrf.CsrfTokens;
+import be.elevenways.zenit.common.session.Session;
 import org.junit.jupiter.api.*;
 
 import java.net.URI;
@@ -54,6 +63,43 @@ class AuthFlowTest extends HohenheimTestBase {
 
     @Test
     @Order(4)
+    void shellUserMenuOffersAccountAndSignOut() {
+        // Sign out on a THROWAWAY session: the class-shared one must survive
+        // for every later test class in this JVM.
+        Row user = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Session throwaway = Zenit.getSessionStore().create();
+        throwaway.set(AuthKeys.USER_ID, ((Integer) user.get(UserModel.ID)).longValue());
+        throwaway.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
+        Zenit.getSessionStore().save(throwaway);
+        context.addCookies(java.util.List.of(new com.microsoft.playwright.options.Cookie(
+            AuthCookieSupport.sessionCookieName(), throwaway.id())
+            .setDomain("localhost").setPath("/")));
+
+        navigateToApp("/admin");
+        waitForHydration();
+
+        // The zenit-auth topbar contribution renders in the shell.
+        assertThat(page.locator("zn-auth-user-menu").count()).isEqualTo(1);
+
+        // Opening it proves the tag HYDRATED (the dropdown is client-driven).
+        // Click the name text: a click landing on the icon SVG has a null
+        // event target (protoblast defect) and never toggles the menu.
+        page.click("zn-auth-user-menu .zn-user-menu-name");
+        page.waitForSelector("he-bottom .pl-dropdown-menu-content__popup a[href='/account']");
+        assertThat(page.locator("he-bottom .pl-dropdown-menu-content__popup [data-user-menu-signout]").count())
+            .isEqualTo(1);
+
+        // Sign out posts /logout with the CSRF token and lands on the login page.
+        page.click("he-bottom .pl-dropdown-menu-content__popup [data-user-menu-signout]");
+        page.waitForURL("**/login**");
+
+        // The session really ended: the admin tree redirects again.
+        page.navigate("http://localhost:" + getServerPort() + "/admin");
+        page.waitForURL("**/login**");
+    }
+
+    @Test
+    @Order(5)
     void staticAssetsAreAccessibleWithoutAuth() throws Exception {
         HttpResponse<String> response = get("/hohenheim.css", true);
         assertThat(response.statusCode()).isEqualTo(200);
