@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.TaskStatus;
@@ -54,7 +55,7 @@ public final class AttentionCollector {
             .all();
         for (Row row : rows) {
             items.add(item("error", "certificate",
-                "Certificate " + row.get(CertificateModel.NICE_NAME),
+                copy("certificate", "attention_title", "name", row.get(CertificateModel.NICE_NAME)),
                 stringOrEmpty(row.get(CertificateModel.RENEWAL_ERROR)),
                 "/admin/certificates/" + row.get(CertificateModel.ID)));
         }
@@ -78,8 +79,8 @@ public final class AttentionCollector {
             SiteHealth health = handler != null ? handler.getHealth() : null;
             if (health == SiteHealth.DOWN || health == SiteHealth.DEGRADED) {
                 items.add(item(health == SiteHealth.DOWN ? "error" : "warning", "globe",
-                    "Site " + site.get(SiteModel.NAME),
-                    health == SiteHealth.DOWN ? "Down" : "Degraded",
+                    copy("site", "attention_title", "name", site.get(SiteModel.NAME)),
+                    copy(health == SiteHealth.DOWN ? "down" : "degraded", "attention_detail"),
                     "/admin/sites/" + siteId));
             }
         }
@@ -91,8 +92,8 @@ public final class AttentionCollector {
             .all();
         for (Row row : rows) {
             items.add(item("error", "database",
-                "Database " + row.get(DatabaseModel.NAME),
-                "Provisioning failed",
+                copy("database", "attention_title", "name", row.get(DatabaseModel.NAME)),
+                copy("provisioning_failed", "attention_detail"),
                 "/admin/databases/" + row.get(DatabaseModel.ID)));
         }
     }
@@ -132,18 +133,20 @@ public final class AttentionCollector {
             }
             String status = database.get(DatabaseModel.STATUS);
             boolean unavailable;
-            String detail;
+            Object detail;
             if (!DatabaseModel.STATUS_ACTIVE.equals(status)) {
                 unavailable = true;
-                detail = "Attached database " + database.get(DatabaseModel.NAME) + " is " + status;
+                detail = copy("database_status", "attention_detail",
+                    "name", database.get(DatabaseModel.NAME), "status", status);
             } else {
                 var live = safeDetail(databases, database);
                 unavailable = live == null || !live.running();
-                detail = "Attached database " + database.get(DatabaseModel.NAME) + " is not running";
+                detail = copy("database_not_running", "attention_detail",
+                    "name", database.get(DatabaseModel.NAME));
             }
             if (unavailable) {
                 items.add(item("warning", "database",
-                    "Site " + site.get(SiteModel.NAME),
+                    copy("site", "attention_title", "name", site.get(SiteModel.NAME)),
                     detail,
                     "/admin/sites/" + site.get(SiteModel.ID) + "/page/databases"));
             }
@@ -178,7 +181,7 @@ public final class AttentionCollector {
             Row deploy = latest.get(0);
             if (DeploymentModel.STATUS_FAILED.equals(deploy.get(DeploymentModel.STATUS))) {
                 items.add(item("error", "rocket",
-                    "Deploy of " + site.get(SiteModel.NAME),
+                    copy("deploy", "attention_title", "name", site.get(SiteModel.NAME)),
                     stringOrEmpty(deploy.get(DeploymentModel.ERROR)),
                     "/admin/sites/" + siteId + "/page/deployments"));
             }
@@ -211,14 +214,14 @@ public final class AttentionCollector {
         }
         for (String type : failed) {
             items.add(item("warning", "clock",
-                "Task " + type,
-                "Last run failed",
+                copy("task", "attention_title", "name", type),
+                copy("last_run_failed", "attention_detail"),
                 null));
         }
     }
 
-    private static @NonNull Map<String, Object> item(String severity, String icon, String title,
-                                                     String detail, @Nullable String url) {
+    private static @NonNull Map<String, Object> item(String severity, String icon, Object title,
+                                                     Object detail, @Nullable String url) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("severity", severity);
         map.put("icon", icon);
@@ -230,5 +233,13 @@ public final class AttentionCollector {
 
     private static @NonNull String stringOrEmpty(@Nullable Object value) {
         return value != null ? String.valueOf(value) : "";
+    }
+
+    private static @NonNull Microcopy copy(String key, String scope, Object... args) {
+        Microcopy copy = Microcopy.of(key).withFilter("scope", scope);
+        for (int i = 0; i + 1 < args.length; i += 2) {
+            copy = copy.withArg(String.valueOf(args[i]), args[i + 1]);
+        }
+        return copy;
     }
 }

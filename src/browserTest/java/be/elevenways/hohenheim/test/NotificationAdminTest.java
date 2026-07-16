@@ -42,6 +42,18 @@ class NotificationAdminTest extends HohenheimTestBase {
     }
 
     @Test
+    @Order(2)
+    void eventSubscriptionsAreClosedChoices() {
+        navigateToApp("/admin/notifications/new");
+        waitForHydration();
+
+        var events = page.locator("pl-select[name='events']");
+        assertThat(events.count()).isEqualTo(1);
+        assertThat(events.getAttribute("tags")).isNull();
+        assertThat(events.locator("pl-select-item").count()).isEqualTo(5);
+    }
+
+    @Test
     @Order(3)
     void channelCreateAndEditRoundTrips() throws Exception {
         var create = postForm("/admin/notifications/new",

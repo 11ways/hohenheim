@@ -41,9 +41,12 @@ import java.util.Map;
 public final class SiteDomainResource extends RowResource {
 
     private static final List<FieldOption<String>> MATCH_OPTIONS = List.of(
-        FieldOption.of(SiteDomainModel.MATCH_EXACT, "Exact"),
-        FieldOption.of("wildcard", "Wildcard (* and ?)"),
-        FieldOption.of("regex", "Regular expression"));
+        FieldOption.of(SiteDomainModel.MATCH_EXACT,
+            Microcopy.of("exact").withFilter("scope", "domain_match")),
+        FieldOption.of("wildcard",
+            Microcopy.of("wildcard").withFilter("scope", "domain_match")),
+        FieldOption.of("regex",
+            Microcopy.of("regex").withFilter("scope", "domain_match")));
 
     /** Discovered local addresses (refreshed hourly by UpdateSystemIpAddresses); blank = all interfaces. */
     private static List<FieldOption<String>> listenOnOptions() {
@@ -76,7 +79,8 @@ public final class SiteDomainResource extends RowResource {
         .column(ColumnSpec.fromField(SiteDomainModel.HOSTNAME).filterable().build())
         .column(ColumnSpec.fromField(SiteDomainModel.MATCH_TYPE).filterable().build())
         .column(ColumnSpec.fromField(SiteDomainModel.FORCE_SSL).filterable().build())
-        .column(ColumnSpec.fromField(SiteDomainModel.SITE_ID).build())
+        .column(ColumnSpec.fromField(SiteDomainModel.SITE_ID)
+            .relation(RelationPick.of(SiteDomainModel.SITE_ID, SiteModel.MODEL_ID).build()).build())
         .filter(FilterSpec.forField(SiteDomainModel.HOSTNAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(SiteDomainModel.HOSTNAME)).build())
         .filter(FilterSpec.forField(SiteDomainModel.MATCH_TYPE, FilterSpec.Kind.TEXT)

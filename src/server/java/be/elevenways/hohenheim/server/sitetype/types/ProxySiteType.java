@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
@@ -33,28 +34,40 @@ public class ProxySiteType implements SiteTypeHandler {
         EnumField.builder("forward_scheme")
             .value("http", "HTTP")
             .value("https", "HTTPS")
+            .label(HohenheimFormCopy.label("forward_scheme"))
+            .help(HohenheimFormCopy.help("forward_scheme"))
             .build());
 
     public static final StringField FORWARD_HOST = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("forward_host").build());
+        StringField.builder().name("forward_host").label(HohenheimFormCopy.label("forward_host"))
+            .help(HohenheimFormCopy.help("forward_host")).build());
 
     public static final IntegerField FORWARD_PORT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("forward_port").build());
+        IntegerField.builder().name("forward_port").label(HohenheimFormCopy.label("forward_port"))
+            .help(HohenheimFormCopy.help("forward_port")).build());
 
     public static final BooleanField WEBSOCKET_UPGRADE = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("websocket_upgrade").defaultValue(true).build());
+        BooleanField.builder("websocket_upgrade").defaultValue(true)
+            .label(HohenheimFormCopy.label("websocket_upgrade"))
+            .help(HohenheimFormCopy.help("websocket_upgrade")).build());
 
     public static final BooleanField IGNORE_CERTIFICATES = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("ignore_certificates").defaultValue(false).build());
+        BooleanField.builder("ignore_certificates").defaultValue(false)
+            .label(HohenheimFormCopy.label("ignore_certificates"))
+            .help(HohenheimFormCopy.help("ignore_certificates")).build());
 
     public static final BooleanField REWRITE_LOCATION = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("rewrite_location").defaultValue(true).build());
+        BooleanField.builder("rewrite_location").defaultValue(true)
+            .label(HohenheimFormCopy.label("rewrite_location"))
+            .help(HohenheimFormCopy.help("rewrite_location")).build());
 
     public static final StringField SOCKET = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("socket").build());
+        StringField.builder().name("socket").label(HohenheimFormCopy.label("upstream_socket"))
+            .help(HohenheimFormCopy.help("upstream_socket")).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").build());
+        IntegerField.builder().name("delay").label(HohenheimFormCopy.label("delay"))
+            .help(HohenheimFormCopy.help("delay")).build());
 
     @Override
     public Identifier typeId() { return ID; }

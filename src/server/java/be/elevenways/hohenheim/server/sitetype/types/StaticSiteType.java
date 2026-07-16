@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -20,23 +21,30 @@ public class StaticSiteType implements SiteTypeHandler {
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField ROOT_PATH = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("root_path").build());
+        StringField.builder().name("root_path").label(HohenheimFormCopy.label("root_path"))
+            .help(HohenheimFormCopy.help("root_path")).build());
 
     // Default true matches the Node original (ecstatic showed listings out of the box).
     public static final BooleanField AUTOINDEX = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("autoindex").defaultValue(true).build());
+        BooleanField.builder("autoindex").defaultValue(true).label(HohenheimFormCopy.label("autoindex"))
+            .help(HohenheimFormCopy.help("autoindex")).build());
 
     public static final BooleanField INDEXES = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("indexes").defaultValue(true).build());
+        BooleanField.builder("indexes").defaultValue(true).label(HohenheimFormCopy.label("indexes"))
+            .help(HohenheimFormCopy.help("indexes")).build());
 
     public static final BooleanField SHOW_HIDDEN_FILES = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("show_hidden_files").defaultValue(false).build());
+        BooleanField.builder("show_hidden_files").defaultValue(false)
+            .label(HohenheimFormCopy.label("show_hidden_files"))
+            .help(HohenheimFormCopy.help("show_hidden_files")).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").build());
+        IntegerField.builder().name("delay").label(HohenheimFormCopy.label("delay"))
+            .help(HohenheimFormCopy.help("delay")).build());
 
     public static final StringField FALLBACK_FILE = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("fallback_file").build());
+        StringField.builder().name("fallback_file").label(HohenheimFormCopy.label("fallback_file"))
+            .help(HohenheimFormCopy.help("fallback_file")).build());
 
     @Override
     public Identifier typeId() { return ID; }

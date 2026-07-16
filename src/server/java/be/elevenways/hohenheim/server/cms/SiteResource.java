@@ -25,10 +25,7 @@ import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
-import be.elevenways.zenit.common.edit.FieldOption;
-import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
-import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -52,10 +49,6 @@ import java.util.UUID;
  */
 public final class SiteResource extends RowResource {
 
-    private static final List<FieldOption<String>> SOURCE_OPTIONS = List.of(
-        FieldOption.of("local", "Local files"),
-        FieldOption.of(SiteModel.SOURCE_GIT, "Git repository"));
-
     private final FormSpec formSpec = FormSpec.builder()
         .add(SiteModel.NAME)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SITE_TYPE))
@@ -64,7 +57,7 @@ public final class SiteResource extends RowResource {
         .add(SiteModel.DESCRIPTION)
         .add(RelationPick.of(SiteModel.AUTH_PROVIDER_ID, SiteAuthProviderModel.MODEL_ID).build())
         .add(RelationPick.of(SiteModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID).build())
-        .add(Select.of(SiteModel.SOURCE).options(OptionSource.of(SOURCE_OPTIONS)).build())
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SOURCE))
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SOURCE_SETTINGS))
         .build();
 

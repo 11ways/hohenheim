@@ -44,8 +44,10 @@ public final class SiteDatabaseResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(SiteDatabaseModel.SITE_ID).build())
-        .column(ColumnSpec.fromField(SiteDatabaseModel.DATABASE_ID).build())
+        .column(ColumnSpec.fromField(SiteDatabaseModel.SITE_ID)
+            .relation(RelationPick.of(SiteDatabaseModel.SITE_ID, SiteModel.MODEL_ID).build()).build())
+        .column(ColumnSpec.fromField(SiteDatabaseModel.DATABASE_ID)
+            .relation(RelationPick.of(SiteDatabaseModel.DATABASE_ID, DatabaseModel.MODEL_ID).build()).build())
         .column(ColumnSpec.fromField(SiteDatabaseModel.ENV_PREFIX).build())
         .build();
 

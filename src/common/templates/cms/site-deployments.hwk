@@ -25,27 +25,27 @@
 
     <pl-card>
         <pl-card-header>
-            <pl-card-title>Deployments</pl-card-title>
+            <pl-card-title>{{ t("title", scope: "site_deployments") }}</pl-card-title>
             {% if currentCommit != "" %}
-            <pl-card-description>Currently serving commit {{ currentCommit }}.</pl-card-description>
+            <pl-card-description>{{ t("current_commit", scope: "site_deployments", commit: currentCommit) }}</pl-card-description>
             {% /if %}
         </pl-card-header>
         <pl-card-content>
             <div class="cms-form-actions">
                 <form method="POST" action={% "/sites/" + siteId + "/deploy" %}>
                     {% csrf() %}
-                    <pl-button variant={% "primary" %} type={% "submit" %} disabled={% isDeploying %}>Deploy now</pl-button>
+                    <pl-button variant={% "primary" %} type={% "submit" %} disabled={% isDeploying %}>{{ t("deploy_now", scope: "site_deployments") }}</pl-button>
                 </form>
                 {% if isDeploying %}
                 <form method="POST" action={% "/sites/" + siteId + "/deploy/cancel" %}>
                     {% csrf() %}
-                    <pl-button variant={% "outline" %} type={% "submit" %}>Cancel deploy</pl-button>
+                    <pl-button variant={% "outline" %} type={% "submit" %}>{{ t("cancel", scope: "site_deployments") }}</pl-button>
                 </form>
                 {% /if %}
                 {% if canRollback %}
-                <form method="POST" action={% "/sites/" + siteId + "/rollback" %} data-confirm="Activate the previous deploy slot? The current version stops serving.">
+                <form method="POST" action={% "/sites/" + siteId + "/rollback" %} data-confirm={% t("rollback_confirm", scope: "site_deployments") %}>
                     {% csrf() %}
-                    <pl-button variant={% "destructive" %} type={% "submit" %}>Roll back</pl-button>
+                    <pl-button variant={% "destructive" %} type={% "submit" %}>{{ t("rollback", scope: "site_deployments") }}</pl-button>
                 </form>
                 {% /if %}
             </div>
@@ -53,11 +53,11 @@
             {% if deployments %}
             <pl-table>
                 <pl-table-header><pl-table-row>
-                    <pl-table-head>Status</pl-table-head>
-                    <pl-table-head>Trigger</pl-table-head>
-                    <pl-table-head>Commit</pl-table-head>
-                    <pl-table-head>Duration</pl-table-head>
-                    <pl-table-head>Started</pl-table-head>
+                    <pl-table-head>{{ t("status", scope: "site_deployments") }}</pl-table-head>
+                    <pl-table-head>{{ t("trigger", scope: "site_deployments") }}</pl-table-head>
+                    <pl-table-head>{{ t("commit", scope: "site_deployments") }}</pl-table-head>
+                    <pl-table-head>{{ t("duration", scope: "site_deployments") }}</pl-table-head>
+                    <pl-table-head>{{ t("started", scope: "site_deployments") }}</pl-table-head>
                 </pl-table-row></pl-table-header>
                 <pl-table-body>
                     {% each deployments as index, deploy %}
@@ -83,7 +83,7 @@
                             {% if deploy.get("hasLog") == true %}
                             <pl-collapsible>
                                 <pl-collapsible-trigger>
-                                    <pl-button variant={% "ghost" %}>Build log</pl-button>
+                                    <pl-button variant={% "ghost" %}>{{ t("build_log", scope: "site_deployments") }}</pl-button>
                                 </pl-collapsible-trigger>
                                 <pl-collapsible-content>
                                     <pre class="hh-deploy-log">{{ deploy.get("log") }}</pre>
@@ -98,8 +98,8 @@
             </pl-table>
             {% else %}
             <pl-empty-state icon="rocket">
-                <pl-empty-state-title>No deployments yet</pl-empty-state-title>
-                <pl-empty-state-description>Webhook, poll or manual deploys of this site will show up here.</pl-empty-state-description>
+                <pl-empty-state-title>{{ t("empty", scope: "site_deployments") }}</pl-empty-state-title>
+                <pl-empty-state-description>{{ t("empty_description", scope: "site_deployments") }}</pl-empty-state-description>
             </pl-empty-state>
             {% /if %}
         </pl-card-content>
@@ -108,24 +108,24 @@
     {% if webhookSecret != "" %}
     <pl-card class="hh-webhook-card">
         <pl-card-header>
-            <pl-card-title>Push webhook</pl-card-title>
-            <pl-card-description>Configure this URL and secret on your git host (GitHub, GitLab or Gitea) to deploy on every push.</pl-card-description>
+            <pl-card-title>{{ t("webhook", scope: "site_deployments") }}</pl-card-title>
+            <pl-card-description>{{ t("webhook_description", scope: "site_deployments") }}</pl-card-description>
         </pl-card-header>
         <pl-card-content>
             <dl class="hh-webhook-fields">
-                <dt>Payload URL</dt>
+                <dt>{{ t("payload_url", scope: "site_deployments") }}</dt>
                 <dd>
                     <code data-webhook-url>{{ webhookUrl }}</code>
-                    <pl-copy-button value={% webhookUrl %} ariaLabel="Copy webhook URL"></pl-copy-button>
+                    <pl-copy-button value={% webhookUrl %} ariaLabel={% t("copy_webhook_url", scope: "site_deployments") %}></pl-copy-button>
                 </dd>
-                <dt>Secret</dt>
+                <dt>{{ t("secret", scope: "site_deployments") }}</dt>
                 <dd>
                     <code data-webhook-secret>{{ webhookSecret }}</code>
-                    <pl-copy-button value={% webhookSecret %} ariaLabel="Copy webhook secret"></pl-copy-button>
+                    <pl-copy-button value={% webhookSecret %} ariaLabel={% t("copy_webhook_secret", scope: "site_deployments") %}></pl-copy-button>
                 </dd>
             </dl>
             {% if !webhookAutoDeploy %}
-            <pl-alert variant="warning">Auto-deploy is disabled for this site: pushes are acknowledged but not deployed. Enable it in the site's source settings.</pl-alert>
+            <pl-alert variant="warning">{{ t("auto_deploy_disabled", scope: "site_deployments") }}</pl-alert>
             {% /if %}
         </pl-card-content>
     </pl-card>

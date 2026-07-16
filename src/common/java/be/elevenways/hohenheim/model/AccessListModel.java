@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -19,10 +20,23 @@ public class AccessListModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
     public static final StringField SATISFY = SCHEMA.addField(StringField.builder().name("satisfy").build());
-    public static final StringField BASIC_AUTH_USER = SCHEMA.addField(StringField.builder().name("basic_auth_user").build());
-    public static final StringField BASIC_AUTH_PASS = SCHEMA.addField(StringField.builder().name("basic_auth_pass").build());
-    public static final StringField ALLOWED_IPS = SCHEMA.addField(StringField.builder().name("allowed_ips").build());
-    public static final StringField DENIED_IPS = SCHEMA.addField(StringField.builder().name("denied_ips").build());
+    public static final StringField BASIC_AUTH_USER = SCHEMA.addField(StringField.builder().name("basic_auth_user")
+        .label(HohenheimFormCopy.label("basic_auth_user"))
+        .help(HohenheimFormCopy.help("basic_auth_user"))
+        .build());
+    public static final StringField BASIC_AUTH_PASS = SCHEMA.addField(StringField.builder().name("basic_auth_pass")
+        .label(HohenheimFormCopy.label("basic_auth_password"))
+        .help(HohenheimFormCopy.help("basic_auth_password"))
+        .secret()
+        .build());
+    public static final TextField ALLOWED_IPS = SCHEMA.addField(TextField.builder().name("allowed_ips")
+        .label(HohenheimFormCopy.label("allowed_ips"))
+        .help(HohenheimFormCopy.help("allowed_ips"))
+        .build());
+    public static final TextField DENIED_IPS = SCHEMA.addField(TextField.builder().name("denied_ips")
+        .label(HohenheimFormCopy.label("denied_ips"))
+        .help(HohenheimFormCopy.help("denied_ips"))
+        .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

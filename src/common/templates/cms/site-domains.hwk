@@ -13,10 +13,10 @@
     <header class="cms-resource-list-header">
         <h1>{{ siteName }}</h1>
         <a href={% "/admin/certificates-request?site=" + siteId %} id="request-cert-link">
-            <pl-button variant={% "outline" %}>Request certificate</pl-button>
+            <pl-button variant={% "outline" %}>{{ t("request_certificate", scope: "site_domains") }}</pl-button>
         </a>
         <a href={% "/admin/domains/new?site_id=" + siteId %} id="add-domain-link">
-            <pl-button variant={% "primary" %}>Add Domain</pl-button>
+            <pl-button variant={% "primary" %}>{{ t("add_domain", scope: "site_domains") }}</pl-button>
         </a>
     </header>
 
@@ -25,10 +25,10 @@
     {% if domains %}
     <pl-table>
         <pl-table-header><pl-table-row>
-            <pl-table-head>Hostname</pl-table-head>
-            <pl-table-head>Match Type</pl-table-head>
-            <pl-table-head>SSL</pl-table-head>
-            <pl-table-head>Certificate</pl-table-head>
+            <pl-table-head>{{ t("hostname", scope: "site_domains") }}</pl-table-head>
+            <pl-table-head>{{ t("match_type", scope: "site_domains") }}</pl-table-head>
+            <pl-table-head>{{ t("ssl", scope: "site_domains") }}</pl-table-head>
+            <pl-table-head>{{ t("certificate", scope: "site_domains") }}</pl-table-head>
         </pl-table-row></pl-table-header>
         <pl-table-body>
             {% each domains as index, domain %}
@@ -37,9 +37,9 @@
                 <pl-table-cell><pl-badge variant={% "secondary" %}>{{ domain.get("matchType") }}</pl-badge></pl-table-cell>
                 <pl-table-cell>
                     {% if domain.get("forceSsl") == true %}
-                    <pl-badge variant={% "default" %}>Forced</pl-badge>
+                    <pl-badge variant={% "default" %}>{{ t("forced", scope: "site_domains") }}</pl-badge>
                     {% else %}
-                    <pl-badge variant={% "secondary" %}>Off</pl-badge>
+                    <pl-badge variant={% "secondary" %}>{{ t("off", scope: "site_domains") }}</pl-badge>
                     {% /if %}
                 </pl-table-cell>
                 <pl-table-cell data-cert-status={% domain.get("certStatus") %}>
@@ -50,7 +50,7 @@
                     {% elseif domain.get("certStatus") == "pending" %}
                     <a href={% domain.get("certUrl") %}><pl-badge variant={% "warning" %}>{{ domain.get("certName") }}</pl-badge></a>
                     {% elseif domain.get("certStatus") == "none" %}
-                    <pl-badge variant={% "outline" %}>None</pl-badge>
+                    <pl-badge variant={% "outline" %}>{{ t("none", scope: "site_domains") }}</pl-badge>
                     {% /if %}
                 </pl-table-cell>
             </pl-table-row>
@@ -59,8 +59,8 @@
     </pl-table>
     {% else %}
     <pl-empty-state icon="at">
-        <pl-empty-state-title>No domains configured</pl-empty-state-title>
-        <pl-empty-state-description>Add a hostname so traffic routes to this site.</pl-empty-state-description>
+        <pl-empty-state-title>{{ t("empty", scope: "site_domains") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("empty_description", scope: "site_domains") }}</pl-empty-state-description>
     </pl-empty-state>
     {% /if %}
 </section>

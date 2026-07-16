@@ -13,7 +13,7 @@
     <header class="cms-resource-list-header">
         <h1>{{ siteName }}</h1>
         <a href={% "/admin/site-databases/new?site_id=" + siteId %} id="attach-database-link">
-            <pl-button variant={% "primary" %}>Attach database</pl-button>
+            <pl-button variant={% "primary" %}>{{ t("attach", scope: "site_databases") }}</pl-button>
         </a>
     </header>
 
@@ -22,11 +22,11 @@
     {% if links %}
     <pl-table>
         <pl-table-header><pl-table-row>
-            <pl-table-head>Database</pl-table-head>
-            <pl-table-head>Engine</pl-table-head>
-            <pl-table-head>Status</pl-table-head>
-            <pl-table-head>Env prefix</pl-table-head>
-            <pl-table-head>Injected variables</pl-table-head>
+            <pl-table-head>{{ t("database", scope: "site_databases") }}</pl-table-head>
+            <pl-table-head>{{ t("engine", scope: "site_databases") }}</pl-table-head>
+            <pl-table-head>{{ t("status", scope: "site_databases") }}</pl-table-head>
+            <pl-table-head>{{ t("env_prefix", scope: "site_databases") }}</pl-table-head>
+            <pl-table-head>{{ t("variables", scope: "site_databases") }}</pl-table-head>
         </pl-table-row></pl-table-header>
         <pl-table-body>
             {% each links as index, link %}
@@ -34,17 +34,17 @@
                 <pl-table-cell>
                     <a href={% link.get("editUrl") %}>{{ link.get("dbName") }}</a>
                     {% if link.get("primary") == true %}
-                    <pl-badge variant={% "outline" %}>primary</pl-badge>
+                    <pl-badge variant={% "outline" %}>{{ t("primary", scope: "site_databases") }}</pl-badge>
                     {% /if %}
                 </pl-table-cell>
                 <pl-table-cell>{{ link.get("engine") }}</pl-table-cell>
                 <pl-table-cell data-db-status={% link.get("status") %}>
                     {% if link.get("status") == "active" %}
-                    <a href={% link.get("dbUrl") %}><pl-badge variant={% "success" %}>Active</pl-badge></a>
+                    <a href={% link.get("dbUrl") %}><pl-badge variant={% "success" %}>{{ t("active", scope: "site_databases") }}</pl-badge></a>
                     {% elseif link.get("status") == "failed" %}
-                    <a href={% link.get("dbUrl") %}><pl-badge variant={% "destructive" %}>Failed</pl-badge></a>
+                    <a href={% link.get("dbUrl") %}><pl-badge variant={% "destructive" %}>{{ t("failed", scope: "site_databases") }}</pl-badge></a>
                     {% elseif link.get("status") == "provisioning" %}
-                    <a href={% link.get("dbUrl") %}><pl-badge variant={% "warning" %}>Provisioning</pl-badge></a>
+                    <a href={% link.get("dbUrl") %}><pl-badge variant={% "warning" %}>{{ t("provisioning", scope: "site_databases") }}</pl-badge></a>
                     {% else %}
                     <pl-badge variant={% "secondary" %}>{{ link.get("status") }}</pl-badge>
                     {% /if %}
@@ -57,8 +57,8 @@
     </pl-table>
     {% else %}
     <pl-empty-state icon="database">
-        <pl-empty-state-title>No databases attached</pl-empty-state-title>
-        <pl-empty-state-description>Attach a managed database and its connection details are injected into this site's processes as environment variables.</pl-empty-state-description>
+        <pl-empty-state-title>{{ t("empty", scope: "site_databases") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("empty_description", scope: "site_databases") }}</pl-empty-state-description>
     </pl-empty-state>
     {% /if %}
 </section>

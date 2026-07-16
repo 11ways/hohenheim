@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.sitetype.SiteTypeRegistry;
 import be.elevenways.hohenheim.source.GitSourceSchema;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.behaviour.RevisionableBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -42,13 +44,24 @@ public class SiteModel extends Model {
             .build());
 
     // Source provisioning: null/"local" = local files, "git" = git-provisioned
-    public static final StringField SOURCE = SCHEMA.addField(
-        StringField.builder().name("source").build());
+    public static final EnumField SOURCE = SCHEMA.addField(
+        EnumField.builder("source")
+            .value("local", value -> value.displayName("Local files")
+                .label(Microcopy.of("local_files").withFilter("scope", "site_source"))
+                .icon("folder"))
+            .value(SOURCE_GIT, value -> value.displayName("Git repository")
+                .label(Microcopy.of("git_repository").withFilter("scope", "site_source"))
+                .icon("code-branch")
+                .schema(GitSourceSchema.SCHEMA))
+            .defaultValue("local")
+            .label(HohenheimFormCopy.label("source"))
+            .help(HohenheimFormCopy.help("source"))
+            .build());
 
     // Git-specific settings, only relevant when source == "git"
     public static final SchemaField SOURCE_SETTINGS = SCHEMA.addField(
         SchemaField.builder("source_settings")
-            .subSchema(GitSourceSchema.SCHEMA)
+            .schemaFrom(SOURCE)
             .embedded()
             .build());
 
