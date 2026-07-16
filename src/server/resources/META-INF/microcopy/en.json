@@ -5,6 +5,7 @@
     "hohenheim.auth_provider.plural": "Auth Providers",
     "hohenheim.certificate.download": "Download",
     "hohenheim.certificate.plural": "Certificates",
+    "hohenheim.certificate.renewal_status": "Renewal status",
     "hohenheim.certificate.request_le": "Request via Let's Encrypt",
     "hohenheim.database.backup": "Download backup",
     "hohenheim.database.plural": "Databases",
@@ -27,5 +28,7 @@
     "hohenheim.site.plural": "Sites",
     "hohenheim.site.processes": "Processes",
     "hohenheim.site.toggle": "Enable/disable",
-    "hohenheim.site_domain.plural": "Site Domains"
+    "hohenheim.site_domain.plural": "Site Domains",
+    "hohenheim.widget.attention": "Needs attention",
+    "hohenheim.widget.attention.all_clear": "All clear - nothing needs attention."
 }

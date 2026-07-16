@@ -198,6 +198,32 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
     }
 
     @Test
+    @Order(2)
+    void webhookCardShowsUrlAndSecretOnceMinted() throws Exception {
+        // This site was seeded without a webhook secret: no card.
+        var before = get("/admin/sites/" + siteId + "/page/deployments");
+        assertThat(before.body()).doesNotContain("Push webhook");
+
+        // Mint one the way SiteResource.normalizeSource does on save.
+        var siteModel = Models.get(SiteModel.class);
+        Row site = siteModel.find().where(SiteModel.ID.eq(siteId)).first();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> settings = new LinkedHashMap<>(
+            (Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS));
+        settings.put("webhook_secret", "whsec-test-123");
+        settings.put("auto_deploy", true);
+        site.set(SiteModel.SOURCE_SETTINGS, settings);
+        siteModel.save(site);
+
+        var page = get("/admin/sites/" + siteId + "/page/deployments");
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("Push webhook");
+        assertThat(page.body()).contains("://git-flow.test/api/webhooks/git/git-flow-site");
+        assertThat(page.body()).contains("whsec-test-123");
+        assertThat(page.body()).doesNotContain("Auto-deploy is disabled");
+    }
+
+    @Test
     @Order(3)
     void manualDeployPicksUpNewCommit() throws Exception {
         Files.writeString(upstreamRepo.resolve("index.html"), "v2");

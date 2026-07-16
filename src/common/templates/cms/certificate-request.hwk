@@ -2,6 +2,8 @@
     /admin/certificates-request endpoint. -#}
 {% declare title: String %}
 {% declare error: String = "" %}
+{% declare domains: String = "" %}
+{% declare niceName: String = "" %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
 
@@ -21,11 +23,11 @@
             <pl-card-content>
                 <pl-field>
                     <pl-label target="nice_name">Name</pl-label>
-                    <pl-input inputId="nice_name" type={% "text" %} name={% "nice_name" %} placeholder={% "Defaults to the first domain" %}></pl-input>
+                    <pl-input inputId="nice_name" type={% "text" %} name={% "nice_name" %} value={% niceName %} placeholder={% "Defaults to the first domain" %}></pl-input>
                 </pl-field>
                 <pl-field>
                     <pl-label target="domains">Domains</pl-label>
-                    <pl-textarea inputId="domains" name={% "domains" %} placeholder={% "example.com www.example.com" %}></pl-textarea>
+                    <pl-textarea inputId="domains" name={% "domains" %} value={% domains %} placeholder={% "example.com www.example.com" %}></pl-textarea>
                     <pl-field-description>Comma or whitespace separated. Each domain must already route to this proxy for the HTTP-01 challenge.</pl-field-description>
                 </pl-field>
                 <pl-field>

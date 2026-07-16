@@ -5,6 +5,7 @@
     "hohenheim.auth_provider.plural": "Authenticatieproviders",
     "hohenheim.certificate.download": "Downloaden",
     "hohenheim.certificate.plural": "Certificaten",
+    "hohenheim.certificate.renewal_status": "Vernieuwingsstatus",
     "hohenheim.certificate.request_le": "Aanvragen via Let's Encrypt",
     "hohenheim.database.backup": "Back-up downloaden",
     "hohenheim.database.plural": "Databanken",
@@ -27,5 +28,7 @@
     "hohenheim.site.plural": "Sites",
     "hohenheim.site.processes": "Processen",
     "hohenheim.site.toggle": "In-/uitschakelen",
-    "hohenheim.site_domain.plural": "Sitedomeinen"
+    "hohenheim.site_domain.plural": "Sitedomeinen",
+    "hohenheim.widget.attention": "Vraagt aandacht",
+    "hohenheim.widget.attention.all_clear": "Alles in orde - niets vraagt aandacht."
 }

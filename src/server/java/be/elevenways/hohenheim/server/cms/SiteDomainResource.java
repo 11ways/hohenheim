@@ -19,6 +19,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -94,6 +95,20 @@ public final class SiteDomainResource extends RowResource {
     @Override public @NonNull Icon icon() { return Icon.of("at"); }
     @Override public boolean showInNav() { return false; }
 
+
+    /** The site's Domains tab links here with ?site_id= so the pick is preselected. */
+    @Override
+    public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
+        String siteId = conduit.getQueryParam("site_id");
+        if (siteId != null && !siteId.isEmpty()) {
+            try {
+                return Map.of("site_id", Integer.parseInt(siteId));
+            } catch (NumberFormatException ignored) {
+                // Malformed prefill: render the bare form.
+            }
+        }
+        return Map.of();
+    }
 
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,

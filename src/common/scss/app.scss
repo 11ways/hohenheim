@@ -29,6 +29,89 @@
         overflow-y: auto;
     }
 
+    // Dashboard attention panel
+    .hh-attention-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--pl-space-sm);
+    }
+
+    .hh-attention-item {
+        display: flex;
+        align-items: baseline;
+        gap: var(--pl-space-sm);
+        padding: var(--pl-space-sm) var(--pl-space-md);
+        border: 1px solid var(--pl-color-border);
+        border-radius: var(--pl-radius-md);
+
+        &[data-severity="error"] > pl-icon {
+            color: var(--pl-color-destructive);
+        }
+
+        &[data-severity="warning"] > pl-icon {
+            color: var(--pl-color-warning, var(--pl-color-primary));
+        }
+    }
+
+    .hh-attention-text {
+        display: flex;
+        flex-wrap: wrap;
+        column-gap: var(--pl-space-sm);
+        min-width: 0;
+    }
+
+    .hh-attention-detail {
+        color: var(--pl-color-text-muted, inherit);
+        font-size: var(--pl-font-size-sm);
+        overflow-wrap: anywhere;
+    }
+
+    .hh-attention-clear {
+        display: flex;
+        align-items: center;
+        gap: var(--pl-space-sm);
+        margin: 0;
+        color: var(--pl-color-text-muted, inherit);
+
+        pl-icon {
+            color: var(--pl-color-success, var(--pl-color-primary));
+        }
+    }
+
+    // Push-webhook config card (site Deployments tab)
+    .hh-webhook-fields {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: var(--pl-space-sm) var(--pl-space-lg);
+        align-items: center;
+        margin: 0 0 var(--pl-space-md);
+
+        dt {
+            font-weight: var(--pl-font-weight-medium);
+            font-size: var(--pl-font-size-sm);
+        }
+
+        dd {
+            display: flex;
+            align-items: center;
+            gap: var(--pl-space-sm);
+            margin: 0;
+            min-width: 0;
+
+            code {
+                font-size: var(--pl-font-size-xs);
+                background: var(--pl-color-surface-muted, var(--pl-color-surface));
+                border: 1px solid var(--pl-color-border);
+                border-radius: var(--pl-radius-sm);
+                padding: var(--pl-space-2xs, 0.125rem) var(--pl-space-xs);
+                overflow-wrap: anywhere;
+            }
+        }
+    }
+
     // Persisted process log viewer (site Processes tab)
     .hh-proclog-content {
         font-family: var(--pl-font-family-mono, monospace);

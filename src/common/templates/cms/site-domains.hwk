@@ -12,7 +12,10 @@
 <section class="cms-resource-list-page">
     <header class="cms-resource-list-header">
         <h1>{{ siteName }}</h1>
-        <a href="/admin/domains/new" id="add-domain-link">
+        <a href={% "/admin/certificates-request?site=" + siteId %} id="request-cert-link">
+            <pl-button variant={% "outline" %}>Request certificate</pl-button>
+        </a>
+        <a href={% "/admin/domains/new?site_id=" + siteId %} id="add-domain-link">
             <pl-button variant={% "primary" %}>Add Domain</pl-button>
         </a>
     </header>
@@ -25,6 +28,7 @@
             <pl-table-head>Hostname</pl-table-head>
             <pl-table-head>Match Type</pl-table-head>
             <pl-table-head>SSL</pl-table-head>
+            <pl-table-head>Certificate</pl-table-head>
         </pl-table-row></pl-table-header>
         <pl-table-body>
             {% each domains as index, domain %}
@@ -36,6 +40,17 @@
                     <pl-badge variant={% "default" %}>Forced</pl-badge>
                     {% else %}
                     <pl-badge variant={% "secondary" %}>Off</pl-badge>
+                    {% /if %}
+                </pl-table-cell>
+                <pl-table-cell data-cert-status={% domain.get("certStatus") %}>
+                    {% if domain.get("certStatus") == "active" %}
+                    <a href={% domain.get("certUrl") %}><pl-badge variant={% "success" %}>{{ domain.get("certName") }}</pl-badge></a>
+                    {% elseif domain.get("certStatus") == "error" %}
+                    <a href={% domain.get("certUrl") %}><pl-badge variant={% "destructive" %}>{{ domain.get("certName") }}</pl-badge></a>
+                    {% elseif domain.get("certStatus") == "pending" %}
+                    <a href={% domain.get("certUrl") %}><pl-badge variant={% "warning" %}>{{ domain.get("certName") }}</pl-badge></a>
+                    {% elseif domain.get("certStatus") == "none" %}
+                    <pl-badge variant={% "outline" %}>None</pl-badge>
                     {% /if %}
                 </pl-table-cell>
             </pl-table-row>

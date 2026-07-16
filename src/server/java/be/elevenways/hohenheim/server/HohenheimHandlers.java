@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.AttentionItems;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -47,6 +49,7 @@ public final class HohenheimHandlers {
     }
 
     public static void init() {
+        AttentionItems.install(AttentionCollector::collect);
         initHealth();
         initCertificates();
         initDatabases();
