@@ -10,6 +10,7 @@ import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import org.junit.jupiter.api.*;
 
 import java.net.URI;
@@ -265,6 +266,31 @@ class AdminPagesTest extends HohenheimTestBase {
 
     @Test
     @Order(24)
+    void expensiveEndpointsAreRateLimited() throws Exception {
+        // The base installs a disable-all resolver (suite-wide buckets would
+        // trip across classes); unset it so the DECLARED policies apply.
+        RateLimitMiddleware.setPolicyResolver(null);
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NEVER).build();
+            boolean limited = false;
+            for (int i = 0; i < 40 && !limited; i++) {
+                var response = client.send(HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl() + "/certificates/999999/download"))
+                    .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+                    .build(), HttpResponse.BodyHandlers.ofString());
+                limited = response.statusCode() == 429;
+            }
+            assertThat(limited)
+                .as("the declared download policy (30/min) must answer 429 under a hammer")
+                .isTrue();
+        } finally {
+            RateLimitMiddleware.setPolicyResolver((conduit, endpoint, declared) -> null);
+        }
+    }
+
+    @Test
+    @Order(25)
     void domainsWeaveWithCertificates() throws Exception {
         Row site = Models.get(SiteModel.class).find()
             .where(SiteModel.NAME.eq("Audit Test Site")).first();
