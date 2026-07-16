@@ -163,7 +163,21 @@ class AdminPagesTest extends HohenheimTestBase {
 
         String content = page.content();
         assertThat(content).contains("Let's Encrypt");
-        assertThat(content).contains("domains");
+        assertThat(content).contains("DNS-01");
+        assertThat(content).contains("*.example.com");
+        assertThat(page.locator("pl-select[name='dns_mode'] pl-select-item[value='command'][disabled]")
+            .count()).isEqualTo(1);
+    }
+
+    @Test
+    @Order(19)
+    void wildcardRequestRefusesHttpValidationBeforeContactingTheCa() throws Exception {
+        var response = post("/admin/certificates-request",
+            "nice_name=wildcard&domains=*.example.test&challenge_type=http&dns_mode=manual");
+
+        assertThat(response.statusCode()).isIn(302, 303);
+        assertThat(response.headers().firstValue("Location").orElse(""))
+            .contains("Wildcard").contains("DNS-01");
     }
 
     @Test

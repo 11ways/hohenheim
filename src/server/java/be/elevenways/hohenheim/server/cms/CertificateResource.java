@@ -53,6 +53,8 @@ public final class CertificateResource extends RowResource {
         .add(CertificateModel.CERTIFICATE_PEM)
         .add(CertificateModel.PRIVATE_KEY_PEM)
         .add(CertificateModel.AUTO_RENEW)
+        .add(CertificateModel.CHALLENGE_TYPE)
+        .add(CertificateModel.DNS_PUBLISHER)
         .add(CertificateModel.RENEWAL_ERROR)
         .add(CertificateModel.ERROR_COUNT)
         .add(CertificateModel.NEXT_ATTEMPT_AT)
@@ -64,6 +66,8 @@ public final class CertificateResource extends RowResource {
         .column(ColumnSpec.fromField(CertificateModel.PROVIDER).filterable().build())
         .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).filterable().build())
         .column(ColumnSpec.fromField(CertificateModel.STATUS).filterable().build())
+        .column(ColumnSpec.fromField(CertificateModel.CHALLENGE_TYPE).filterable().build())
+        .column(ColumnSpec.fromField(CertificateModel.DNS_PUBLISHER).hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.RENEWAL_ERROR).filterable().build())
         .column(ColumnSpec.fromField(CertificateModel.NEXT_ATTEMPT_AT).hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.ERROR_COUNT).hidden().build())
@@ -114,7 +118,9 @@ public final class CertificateResource extends RowResource {
         return List.of(
             ResourceFieldBinding.of(CertificateModel.RENEWAL_ERROR.getName(), FieldAccess.alwaysReadonly()),
             ResourceFieldBinding.of(CertificateModel.ERROR_COUNT.getName(), FieldAccess.alwaysReadonly()),
-            ResourceFieldBinding.of(CertificateModel.NEXT_ATTEMPT_AT.getName(), FieldAccess.alwaysReadonly()));
+            ResourceFieldBinding.of(CertificateModel.NEXT_ATTEMPT_AT.getName(), FieldAccess.alwaysReadonly()),
+            ResourceFieldBinding.of(CertificateModel.CHALLENGE_TYPE.getName(), FieldAccess.alwaysReadonly()),
+            ResourceFieldBinding.of(CertificateModel.DNS_PUBLISHER.getName(), FieldAccess.alwaysReadonly()));
     }
 
     /** Scope out the internal ACME account row everywhere. */
@@ -138,8 +144,12 @@ public final class CertificateResource extends RowResource {
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        validatePems(coerced);
-        super.updateRow(existing, coerced, accessContext);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
+        validatePems(values);
+        if (CertificateModel.DNS_PUBLISHER_MANUAL.equals(existing.get(CertificateModel.DNS_PUBLISHER))) {
+            values.put(CertificateModel.AUTO_RENEW.getName(), false);
+        }
+        super.updateRow(existing, values, accessContext);
     }
 
     private static void validatePems(@NonNull Map<String, Object> coerced) {

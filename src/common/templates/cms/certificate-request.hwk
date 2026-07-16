@@ -1,46 +1,92 @@
-{#- Let's Encrypt certificate request form; the POST is the host-declared
-    /admin/certificates-request endpoint. -#}
+{#- Let's Encrypt HTTP-01 and DNS-01 request flow. Manual DNS orders stay
+    in memory while the operator publishes every displayed TXT value. -#}
 {% declare title: String %}
 {% declare error: String = "" %}
 {% declare domains: String = "" %}
 {% declare niceName: String = "" %}
+{% declare dnsHookConfigured: Boolean = false %}
+{% declare manualToken: String = "" %}
+{% declare dnsRecords: List<Map<String, Object>> = [] %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
 
 {% block "main" %}
 <section class="cms-resource-form-page">
-    <header class="cms-resource-list-header">
-        <h1>{{ title }}</h1>
-    </header>
+    <header class="cms-resource-list-header"><h1>{{ title }}</h1></header>
 
-    {% if error != "" %}
-    <pl-alert variant="destructive">{{ error }}</pl-alert>
-    {% /if %}
+    {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
 
+    {% if manualToken != "" %}
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>{{ t("publish_records", scope: "certificate_request") }}</pl-card-title>
+            <pl-card-description>{{ t("publish_description", scope: "certificate_request") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <pl-alert variant="warning">{{ t("manual_ephemeral", scope: "certificate_request") }}</pl-alert>
+            <pl-table>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>{{ t("record_name", scope: "certificate_request") }}</pl-table-head>
+                    <pl-table-head>{{ t("record_value", scope: "certificate_request") }}</pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each dnsRecords as record %}
+                    <pl-table-row>
+                        <pl-table-cell><code>{{ record.name }}</code> <pl-copy-button value={% record.name %} ariaLabel={% t("copy_record_name", scope: "certificate_request") %}></pl-copy-button></pl-table-cell>
+                        <pl-table-cell><code>{{ record.value }}</code> <pl-copy-button value={% record.value %} ariaLabel={% t("copy_record_value", scope: "certificate_request") %}></pl-copy-button></pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+        </pl-card-content>
+    </pl-card>
     <form method="POST" action="/admin/certificates-request">
-        {% csrf() %}
-        <pl-card>
-            <pl-card-content>
-                <pl-field>
-                    <pl-label target="nice_name">Name</pl-label>
-                    <pl-input inputId="nice_name" type={% "text" %} name={% "nice_name" %} value={% niceName %} placeholder={% "Defaults to the first domain" %}></pl-input>
-                </pl-field>
-                <pl-field>
-                    <pl-label target="domains">Domains</pl-label>
-                    <pl-textarea inputId="domains" name={% "domains" %} value={% domains %} placeholder={% "example.com www.example.com" %}></pl-textarea>
-                    <pl-field-description>Comma or whitespace separated. Each domain must already route to this proxy for the HTTP-01 challenge.</pl-field-description>
-                </pl-field>
-                <pl-field>
-                    <pl-label target="letsencrypt_email">Account email (optional)</pl-label>
-                    <pl-input inputId="letsencrypt_email" type={% "email" %} name={% "letsencrypt_email" %}></pl-input>
-                    <pl-field-description>Overrides the global Let's Encrypt account email for this certificate.</pl-field-description>
-                </pl-field>
-            </pl-card-content>
-        </pl-card>
+        {% csrf() %}<input type="hidden" name="manual_token" value={% manualToken %}>
         <div class="cms-form-actions">
-            <pl-button variant={% "primary" %} type={% "submit" %}>Request Certificate</pl-button>
-            <a href="/admin/certificates">Cancel</a>
+            <pl-button variant="primary" type="submit">{{ t("verify_dns", scope: "certificate_request") }}</pl-button>
+            <a href="/admin/certificates-request">{{ t("start_over", scope: "certificate_request") }}</a>
         </div>
     </form>
+    {% else %}
+    <form method="POST" action="/admin/certificates-request">
+        {% csrf() %}
+        <pl-card><pl-card-content>
+            <pl-field>
+                <pl-label target="nice_name">{{ t("name", scope: "certificate_request") }}</pl-label>
+                <pl-input inputId="nice_name" type="text" name="nice_name" value={% niceName %} placeholder={% t("name_placeholder", scope: "certificate_request") %}></pl-input>
+            </pl-field>
+            <pl-field>
+                <pl-label target="domains">{{ t("domains", scope: "certificate_request") }}</pl-label>
+                <pl-textarea inputId="domains" name="domains" value={% domains %} placeholder="example.com *.example.com"></pl-textarea>
+                <pl-field-description>{{ t("domains_help", scope: "certificate_request") }}</pl-field-description>
+            </pl-field>
+            <pl-field>
+                <pl-label>{{ t("validation", scope: "certificate_request") }}</pl-label>
+                <pl-select name="challenge_type" value="http" submitEmpty={% true %}>
+                    <pl-select-item value="http">HTTP-01</pl-select-item>
+                    <pl-select-item value="dns">DNS-01</pl-select-item>
+                </pl-select>
+                <pl-field-description>{{ t("validation_help", scope: "certificate_request") }}</pl-field-description>
+            </pl-field>
+            <pl-field>
+                <pl-label>{{ t("dns_mode", scope: "certificate_request") }}</pl-label>
+                <pl-select name="dns_mode" value="manual" submitEmpty={% true %}>
+                    <pl-select-item value="manual">{{ t("manual", scope: "certificate_request") }}</pl-select-item>
+                    <pl-select-item value="command" disabled={% !dnsHookConfigured %}>{{ t("automatic_hook", scope: "certificate_request") }}</pl-select-item>
+                </pl-select>
+                <pl-field-description>{% if dnsHookConfigured %}{{ t("hook_ready", scope: "certificate_request") }}{% else %}{{ t("hook_missing", scope: "certificate_request") }}{% /if %}</pl-field-description>
+            </pl-field>
+            <pl-field>
+                <pl-label target="letsencrypt_email">{{ t("account_email", scope: "certificate_request") }}</pl-label>
+                <pl-input inputId="letsencrypt_email" type="email" name="letsencrypt_email"></pl-input>
+                <pl-field-description>{{ t("account_email_help", scope: "certificate_request") }}</pl-field-description>
+            </pl-field>
+        </pl-card-content></pl-card>
+        <div class="cms-form-actions">
+            <pl-button variant="primary" type="submit">{{ t("request", scope: "certificate_request") }}</pl-button>
+            <a href="/admin/certificates">{{ t("cancel", scope: "certificate_request") }}</a>
+        </div>
+    </form>
+    {% /if %}
 </section>
 {% /block %}

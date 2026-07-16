@@ -2,6 +2,9 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
@@ -35,8 +38,30 @@ public final class CertificateRequestPage extends PanelPage {
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext) {
         Map<String, Object> vars = new HashMap<>();
         String error = conduit.getQueryParam("error");
-        vars.put("title", "Request Let's Encrypt certificate");
+        vars.put("title", Microcopy.of("request_certificate")
+            .withFilter("scope", "certificate_request")
+            .resolve(conduit.getLocales(), conduit.getMessageResolver()));
         vars.put("error", error != null ? error : "");
+        vars.put("dnsHookConfigured", CommandDnsTxtPublisher.isConfigured());
+        vars.put("manualToken", "");
+        vars.put("dnsRecords", List.of());
+        String manualToken = conduit.getQueryParam("manual");
+        var proxy = ServerMain.getProxyServer();
+        if (manualToken != null && proxy != null) {
+            AcmeService.ManualDnsRequest manual = proxy.getAcmeService().manualDnsRequest(manualToken);
+            if (manual != null) {
+                vars.put("manualToken", manual.token());
+                vars.put("dnsRecords", manual.records().stream()
+                    .map(record -> Map.<String, Object>of(
+                        "name", record.name(),
+                        "value", record.value()))
+                    .toList());
+            } else {
+                vars.put("error", Microcopy.of("manual_expired")
+                    .withFilter("scope", "certificate_request_error")
+                    .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+            }
+        }
         prefillFromSite(conduit, vars);
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/certificate-request"), vars);
     }

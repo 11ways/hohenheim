@@ -15,8 +15,10 @@ import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.ProcessTerminalHandler;
 import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
 import be.elevenways.domino.common.DominoFile;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -130,15 +132,31 @@ public final class HohenheimHandlers {
         HohenheimEndpoints.CERTIFICATES_REQUEST.setHandler(conduit -> {
             Map<String, String> form = formMap(conduit);
 
+            String manualToken = form.getOrDefault("manual_token", "").trim();
+            if (!manualToken.isEmpty()) {
+                var proxy = ServerMain.getProxyServer();
+                if (proxy == null) {
+                    return requestError(conduit, certificateError("proxy_unavailable"));
+                }
+                int certId = proxy.getAcmeService().completeManualDnsCertificate(manualToken);
+                if (certId < 0) {
+                    return requestError(conduit, certificateError("dns_validation_failed"));
+                }
+                ActivityLog.record(certModel, certId, "requested", "manual DNS-01");
+                return redirectUntyped("/admin/certificates");
+            }
+
             String domains = form.getOrDefault("domains", "").trim();
             String niceName = form.getOrDefault("nice_name", "").trim();
             String email = form.getOrDefault("letsencrypt_email", "").trim();
+            String challengeType = form.getOrDefault("challenge_type", CertificateModel.CHALLENGE_HTTP);
+            String dnsMode = form.getOrDefault("dns_mode", CertificateModel.DNS_PUBLISHER_MANUAL);
 
             if (!email.isEmpty() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-                return requestError("Invalid account email: " + email);
+                return requestError(conduit, certificateError("invalid_email").withArg("email", email));
             }
             if (domains.isEmpty()) {
-                return requestError("At least one domain is required");
+                return requestError(conduit, certificateError("domain_required"));
             }
             if (niceName.isEmpty()) {
                 niceName = domains.split("[,\\s]+")[0];
@@ -146,7 +164,7 @@ public final class HohenheimHandlers {
 
             var proxy = ServerMain.getProxyServer();
             if (proxy == null) {
-                return requestError("Proxy server not initialized");
+                return requestError(conduit, certificateError("proxy_unavailable"));
             }
 
             List<String> hostnames = new ArrayList<>();
@@ -155,19 +173,49 @@ public final class HohenheimHandlers {
                 if (!d.isEmpty()) hostnames.add(d);
             }
 
-            List<String> invalid = AcmeService.invalidHostnames(hostnames);
+            boolean dns = CertificateModel.CHALLENGE_DNS.equals(challengeType);
+            if (!dns && !CertificateModel.CHALLENGE_HTTP.equals(challengeType)) {
+                return requestError(conduit, certificateError("unknown_validation")
+                    .withArg("method", challengeType));
+            }
+            if (!dns && hostnames.stream().anyMatch(name -> name.startsWith("*."))) {
+                return requestError(conduit, certificateError("wildcard_requires_dns"));
+            }
+            List<String> invalid = AcmeService.invalidHostnames(hostnames, dns);
             if (!invalid.isEmpty()) {
-                return requestError("Invalid hostnames: " + String.join(", ", invalid));
+                return requestError(conduit, certificateError("invalid_hostnames")
+                    .withArg("hostnames", String.join(", ", invalid)));
             }
 
             List<String> excluded = excludedFromLetsencrypt(hostnames);
             if (!excluded.isEmpty()) {
-                return requestError("Excluded from Let's Encrypt by their domain settings: "
-                    + String.join(", ", excluded));
+                return requestError(conduit, certificateError("excluded_hostnames")
+                    .withArg("hostnames", String.join(", ", excluded)));
             }
 
+            if (dns && CertificateModel.DNS_PUBLISHER_MANUAL.equals(dnsMode)) {
+                try {
+                    var manual = proxy.getAcmeService().prepareManualDnsCertificate(
+                        hostnames, niceName, email.isEmpty() ? null : email);
+                    return redirectUntyped("/admin/certificates-request?manual="
+                        + URLEncoder.encode(manual.token(), StandardCharsets.UTF_8));
+                } catch (Exception e) {
+                    return requestError(conduit, certificateError("dns_start_failed")
+                        .withArg("reason", e.getMessage()));
+                }
+            }
+
+            if (dns && !CommandDnsTxtPublisher.ID.equals(dnsMode)) {
+                return requestError(conduit, certificateError("unknown_dns_mode")
+                    .withArg("mode", dnsMode));
+            }
+
+            String publisher = dns ? CommandDnsTxtPublisher.ID : null;
+            if (dns && !CommandDnsTxtPublisher.isConfigured()) {
+                return requestError(conduit, certificateError("hook_not_configured"));
+            }
             int certId = proxy.getAcmeService().requestCertificate(hostnames, niceName,
-                email.isEmpty() ? null : email);
+                email.isEmpty() ? null : email, challengeType, publisher);
 
             if (certId < 0) {
                 Row failed = certModel.find()
@@ -175,8 +223,12 @@ public final class HohenheimHandlers {
                     .orderBy(CertificateModel.CREATED_AT, SortOrder.DESC)
                     .first();
                 String reason = failed != null ? failed.get(CertificateModel.RENEWAL_ERROR) : null;
-                return requestError("Certificate request failed: "
-                    + (reason != null ? reason : "Unknown"));
+                if (reason == null) {
+                    reason = certificateError("unknown_reason")
+                        .resolve(conduit.getLocales(), conduit.getMessageResolver());
+                }
+                return requestError(conduit, certificateError("request_failed")
+                    .withArg("reason", reason));
             }
 
             ActivityLog.record(certModel, certId, "requested", niceName);
@@ -201,9 +253,14 @@ public final class HohenheimHandlers {
         });
     }
 
-    private static ActionResult<Object> requestError(String message) {
+    private static Microcopy certificateError(String key) {
+        return Microcopy.of(key).withFilter("scope", "certificate_request_error");
+    }
+
+    private static ActionResult<Object> requestError(Conduit conduit, Microcopy message) {
+        String resolved = message.resolve(conduit.getLocales(), conduit.getMessageResolver());
         return redirectUntyped("/admin/certificates-request?error="
-            + URLEncoder.encode(message, StandardCharsets.UTF_8));
+            + URLEncoder.encode(resolved, StandardCharsets.UTF_8));
     }
 
     /** The subset of hostnames whose domain record opted out of Let's Encrypt. */

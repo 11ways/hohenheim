@@ -8,9 +8,11 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.shredzone.acme4j.*;
 import org.shredzone.acme4j.challenge.Http01Challenge;
+import org.shredzone.acme4j.challenge.Dns01Challenge;
 import org.shredzone.acme4j.util.CSRBuilder;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
@@ -21,7 +23,9 @@ import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
@@ -39,6 +43,7 @@ public class AcmeService {
     private static final int RENEWAL_THRESHOLD_DAYS = 30;
     private static final int MAX_POLL_ATTEMPTS = 40;
     private static final long POLL_INTERVAL_MS = 3000;
+    private static final long MANUAL_DNS_ORDER_MINUTES = 30;
 
     private final CertificateStore certificateStore;
     private final ScheduledExecutorService scheduler;
@@ -47,6 +52,10 @@ public class AcmeService {
      * Pending HTTP-01 challenges: token -> challenge entry with authorization and valid hostnames.
      */
     private final ConcurrentHashMap<String, ChallengeEntry> pendingChallenges = new ConcurrentHashMap<>();
+
+    /** Same-account/SAN orders share one automated transaction or reserve one manual transaction. */
+    private final ConcurrentHashMap<String, OrderFlight> inFlightOrders = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, PendingManualDnsOrder> manualDnsOrders = new ConcurrentHashMap<>();
 
     // ACME account sessions keyed by normalized override email ("" = the global account),
     // each with its own persisted key pair. Guarded by the synchronized ensureAccount.
@@ -59,8 +68,23 @@ public class AcmeService {
      */
     private record OrderResult(String certPem, String keyPem, Instant expiresAt) {}
 
+    private record OrderFlight(boolean joinable, CompletableFuture<OrderResult> result) {}
+
+    private record DnsAuthorization(Authorization authorization, Dns01Challenge challenge,
+                                    DnsTxtRecord record) {}
+
+    private record DnsOrderContext(Order order, KeyPair domainKeyPair, List<String> hostnames,
+                                   List<DnsAuthorization> authorizations) {}
+
+    private record PendingManualDnsOrder(int certificateId, DnsOrderContext order, Instant createdAt,
+                                         String orderKey, OrderFlight flight) {}
+
+    /** Safe UI projection of an in-memory manual DNS order. */
+    public record ManualDnsRequest(String token, int certificateId, List<DnsTxtRecord> records) {}
+
     public AcmeService(CertificateStore certificateStore) {
         this.certificateStore = certificateStore;
+        DnsTxtPublishers.INSTANCE.register(new CommandDnsTxtPublisher());
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "acme-renewal");
             t.setDaemon(true);
@@ -76,6 +100,8 @@ public class AcmeService {
 
     public void stop() {
         scheduler.shutdownNow();
+        manualDnsOrders.forEach((token, pending) -> abandonManualDnsOrder(token, pending,
+            "Manual DNS challenge interrupted by server shutdown"));
     }
 
     /**
@@ -101,6 +127,12 @@ public class AcmeService {
      * @return the certificate database row ID, or -1 on failure
      */
     public int requestCertificate(List<String> hostnames, String niceName, @Nullable String email) {
+        return requestCertificate(hostnames, niceName, email,
+            CertificateModel.CHALLENGE_HTTP, null);
+    }
+
+    public int requestCertificate(List<String> hostnames, String niceName, @Nullable String email,
+                                  String challengeType, @Nullable String dnsPublisher) {
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
 
@@ -109,6 +141,8 @@ public class AcmeService {
         certRow.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
         certRow.set(CertificateModel.STATUS, CertificateModel.STATUS_PENDING);
         certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
+        certRow.set(CertificateModel.CHALLENGE_TYPE, challengeType);
+        certRow.set(CertificateModel.DNS_PUBLISHER, dnsPublisher);
         if (email != null && !email.isBlank()) {
             certRow.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
         }
@@ -116,7 +150,7 @@ public class AcmeService {
         int certId = certRow.get(CertificateModel.ID);
 
         try {
-            OrderResult result = performAcmeOrder(hostnames, email);
+            OrderResult result = performAcmeOrder(hostnames, email, challengeType, dnsPublisher);
 
             certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
             certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem);
@@ -139,6 +173,128 @@ public class AcmeService {
         }
     }
 
+    /** Begin a DNS-01 order and return the TXT values the operator must publish. */
+    public ManualDnsRequest prepareManualDnsCertificate(List<String> hostnames, String niceName,
+                                                         @Nullable String email) throws Exception {
+        List<String> invalid = invalidHostnames(hostnames, true);
+        if (!invalid.isEmpty()) {
+            throw new IllegalArgumentException("Invalid hostnames: " + String.join(", ", invalid));
+        }
+
+        String orderKey = certificateOrderKey(hostnames, email);
+        OrderFlight flight = new OrderFlight(false, new CompletableFuture<>());
+        if (inFlightOrders.putIfAbsent(orderKey, flight) != null) {
+            throw new IllegalStateException("A certificate order for these hostnames is already in progress");
+        }
+
+        var certModel = Models.get(CertificateModel.class);
+        Row certRow = certModel.createEmptyRow();
+        try {
+            certRow.set(CertificateModel.NICE_NAME, niceName);
+            certRow.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
+            certRow.set(CertificateModel.STATUS, CertificateModel.STATUS_PENDING);
+            certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
+            certRow.set(CertificateModel.CHALLENGE_TYPE, CertificateModel.CHALLENGE_DNS);
+            certRow.set(CertificateModel.DNS_PUBLISHER, CertificateModel.DNS_PUBLISHER_MANUAL);
+            certRow.set(CertificateModel.AUTO_RENEW, false);
+            if (email != null && !email.isBlank()) {
+                certRow.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
+            }
+            certModel.save(certRow);
+
+            DnsOrderContext order = prepareDnsOrder(hostnames, email);
+            String token = SecureTokens.randomToken();
+            int certificateId = certRow.get(CertificateModel.ID);
+            PendingManualDnsOrder pending = new PendingManualDnsOrder(
+                certificateId, order, Instant.now(), orderKey, flight);
+            manualDnsOrders.put(token, pending);
+            scheduler.schedule(() -> expireManualDnsOrder(token, pending),
+                MANUAL_DNS_ORDER_MINUTES, TimeUnit.MINUTES);
+            return manualRequest(token, manualDnsOrders.get(token));
+        } catch (Exception e) {
+            flight.result().completeExceptionally(e);
+            inFlightOrders.remove(orderKey, flight);
+            recordRenewalFailure(certRow, e.getMessage());
+            certModel.save(certRow);
+            throw e;
+        }
+    }
+
+    public @Nullable ManualDnsRequest manualDnsRequest(@Nullable String token) {
+        PendingManualDnsOrder pending = token != null ? manualDnsOrders.get(token) : null;
+        if (pending == null) {
+            return null;
+        }
+        if (pending.createdAt().isBefore(Instant.now()
+            .minus(MANUAL_DNS_ORDER_MINUTES, ChronoUnit.MINUTES))) {
+            expireManualDnsOrder(token, pending);
+            return null;
+        }
+        return manualRequest(token, pending);
+    }
+
+    /** Trigger and finish a manual order after the operator confirms all TXT values exist. */
+    public int completeManualDnsCertificate(String token) {
+        PendingManualDnsOrder pending = manualDnsOrders.remove(token);
+        if (pending == null) {
+            return -1;
+        }
+        var certModel = Models.get(CertificateModel.class);
+        Row certRow = certModel.findById(pending.certificateId());
+        if (certRow == null) {
+            IllegalStateException missing = new IllegalStateException("Pending certificate row no longer exists");
+            pending.flight().result().completeExceptionally(missing);
+            inFlightOrders.remove(pending.orderKey(), pending.flight());
+            return -1;
+        }
+        try {
+            completeDnsAuthorizations(pending.order().authorizations());
+            OrderResult result = finalizeOrder(pending.order());
+            certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem());
+            certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem());
+            certRow.set(CertificateModel.EXPIRES_ON, result.expiresAt());
+            certRow.set(CertificateModel.ISSUED_ON, Instant.now());
+            markRenewalSuccess(certRow);
+            certModel.save(certRow);
+            certificateStore.loadFromDatabase();
+            pending.flight().result().complete(result);
+            return pending.certificateId();
+        } catch (Exception e) {
+            pending.flight().result().completeExceptionally(e);
+            recordRenewalFailure(certRow, e.getMessage());
+            certModel.save(certRow);
+            return -1;
+        } finally {
+            inFlightOrders.remove(pending.orderKey(), pending.flight());
+        }
+    }
+
+    private static ManualDnsRequest manualRequest(String token, PendingManualDnsOrder pending) {
+        List<DnsTxtRecord> records = pending.order().authorizations().stream()
+            .map(DnsAuthorization::record)
+            .toList();
+        return new ManualDnsRequest(token, pending.certificateId(), records);
+    }
+
+    private static void markManualOrderLost(PendingManualDnsOrder pending, String message) {
+        Row cert = Models.get(CertificateModel.class).findById(pending.certificateId());
+        if (cert != null) {
+            recordRenewalFailure(cert, message);
+            Models.get(CertificateModel.class).save(cert);
+        }
+    }
+
+    private void expireManualDnsOrder(String token, PendingManualDnsOrder pending) {
+        abandonManualDnsOrder(token, pending, "Manual DNS challenge expired; start a new request");
+    }
+
+    private void abandonManualDnsOrder(String token, PendingManualDnsOrder pending, String message) {
+        if (!manualDnsOrders.remove(token, pending)) return;
+        pending.flight().result().completeExceptionally(new IllegalStateException(message));
+        inFlightOrders.remove(pending.orderKey(), pending.flight());
+        markManualOrderLost(pending, message);
+    }
+
     // -----------------------------------------------------------------------
     // Hostname validation
     // -----------------------------------------------------------------------
@@ -146,9 +302,7 @@ public class AcmeService {
     private static final Pattern HOSTNAME_LABEL =
         Pattern.compile("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?");
 
-    /**
-     * RFC-1123 hostname check. Wildcards are rejected: HTTP-01 cannot validate them.
-     */
+    /** RFC-1123 hostname check for HTTP-01, which cannot validate wildcards. */
     public static boolean isValidHostname(String hostname) {
         if (hostname == null) return false;
         String h = hostname.trim().toLowerCase();
@@ -161,9 +315,18 @@ public class AcmeService {
 
     /** @return the subset of hostnames that fail {@link #isValidHostname} */
     public static List<String> invalidHostnames(List<String> hostnames) {
+        return invalidHostnames(hostnames, false);
+    }
+
+    /** @return invalid names, optionally accepting one leading wildcard label for DNS-01 */
+    public static List<String> invalidHostnames(List<String> hostnames, boolean allowWildcard) {
         List<String> invalid = new ArrayList<>();
         for (String hostname : hostnames) {
-            if (!isValidHostname(hostname)) {
+            String candidate = hostname != null ? hostname.trim().toLowerCase(Locale.ROOT) : null;
+            if (allowWildcard && candidate != null && candidate.startsWith("*.")) {
+                candidate = candidate.substring(2);
+            }
+            if (!isValidHostname(candidate)) {
                 invalid.add(hostname);
             }
         }
@@ -269,8 +432,13 @@ public class AcmeService {
         List<String> hostnames = Arrays.asList(domainsText.split(","));
 
         try {
+            String challengeType = certRow.get(CertificateModel.CHALLENGE_TYPE);
+            if (challengeType == null || challengeType.isBlank()) {
+                challengeType = CertificateModel.CHALLENGE_HTTP;
+            }
             OrderResult result = performAcmeOrder(hostnames,
-                certRow.get(CertificateModel.LETSENCRYPT_EMAIL));
+                certRow.get(CertificateModel.LETSENCRYPT_EMAIL), challengeType,
+                certRow.get(CertificateModel.DNS_PUBLISHER));
 
             certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
             certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem);
@@ -343,20 +511,98 @@ public class AcmeService {
     // -----------------------------------------------------------------------
 
     private OrderResult performAcmeOrder(List<String> hostnames, @Nullable String email) throws Exception {
-        List<String> invalid = invalidHostnames(hostnames);
+        return performAcmeOrder(hostnames, email, CertificateModel.CHALLENGE_HTTP, null);
+    }
+
+    private OrderResult performAcmeOrder(List<String> hostnames, @Nullable String email,
+                                         String challengeType, @Nullable String dnsPublisher) throws Exception {
+        boolean dns = CertificateModel.CHALLENGE_DNS.equals(challengeType);
+        List<String> invalid = invalidHostnames(hostnames, dns);
         if (!invalid.isEmpty()) {
             throw new IllegalArgumentException("Invalid hostnames: " + String.join(", ", invalid));
         }
 
-        Account account = ensureAccount(normalizeAccountEmail(email));
-
-        KeyPair domainKeyPair = KeyPairUtils.createKeyPair(2048);
-
-        OrderBuilder orderBuilder = account.newOrder();
-        for (String hostname : hostnames) {
-            orderBuilder.domain(hostname);
+        String orderKey = certificateOrderKey(hostnames, email);
+        OrderFlight leader = new OrderFlight(true, new CompletableFuture<>());
+        OrderFlight existing = inFlightOrders.putIfAbsent(orderKey, leader);
+        if (existing != null) {
+            if (!existing.joinable()) {
+                throw new IllegalStateException("A manual certificate order for these hostnames is already in progress");
+            }
+            try {
+                return existing.result().get();
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof Exception exception) throw exception;
+                if (cause instanceof Error error) throw error;
+                throw new RuntimeException(cause);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw e;
+            }
         }
-        Order order = orderBuilder.create();
+
+        try {
+            OrderResult result = performAcmeOrderUncoalesced(hostnames, email, challengeType, dnsPublisher);
+            leader.result().complete(result);
+            return result;
+        } catch (Throwable failure) {
+            leader.result().completeExceptionally(failure);
+            if (failure instanceof Exception exception) throw exception;
+            if (failure instanceof Error error) throw error;
+            throw new RuntimeException(failure);
+        } finally {
+            inFlightOrders.remove(orderKey, leader);
+        }
+    }
+
+    private static String certificateOrderKey(List<String> hostnames, @Nullable String email) {
+        return normalizeAccountEmail(email) + ":" + hostnames.stream()
+            .map(name -> name.trim().toLowerCase(Locale.ROOT))
+            .distinct()
+            .sorted()
+            .collect(java.util.stream.Collectors.joining(","));
+    }
+
+    private OrderResult performAcmeOrderUncoalesced(List<String> hostnames, @Nullable String email,
+                                                     String challengeType,
+                                                     @Nullable String dnsPublisher) throws Exception {
+
+        if (CertificateModel.CHALLENGE_DNS.equals(challengeType)) {
+            DnsTxtPublisher publisher = DnsTxtPublishers.INSTANCE.get(dnsPublisher);
+            if (publisher == null) {
+                throw new IllegalStateException("DNS-01 publisher is unavailable: " + dnsPublisher);
+            }
+            DnsOrderContext context = prepareDnsOrder(hostnames, email);
+            List<DnsTxtRecord> published = new ArrayList<>();
+            try {
+                for (DnsAuthorization authorization : context.authorizations()) {
+                    publisher.publish(authorization.record());
+                    published.add(authorization.record());
+                }
+                int propagation = HohenheimSettings.VALUES.getValue(
+                    HohenheimSettings.Ssl.DNS_PROPAGATION_SECONDS);
+                if (propagation > 0) {
+                    Thread.sleep(TimeUnit.SECONDS.toMillis(propagation));
+                }
+                completeDnsAuthorizations(context.authorizations());
+                return finalizeOrder(context);
+            } finally {
+                Collections.reverse(published);
+                for (DnsTxtRecord record : published) {
+                    try {
+                        publisher.cleanup(record);
+                    } catch (Exception cleanupFailure) {
+                        Blast.log("ACME: DNS TXT cleanup failed for", record.name(), "-",
+                            cleanupFailure.getMessage());
+                    }
+                }
+            }
+        }
+
+        Account account = ensureAccount(normalizeAccountEmail(email));
+        KeyPair domainKeyPair = KeyPairUtils.createKeyPair(2048);
+        Order order = createOrder(account, hostnames);
 
         Set<String> hostnameSet = new HashSet<>();
         for (String h : hostnames) hostnameSet.add(h.toLowerCase());
@@ -366,13 +612,66 @@ public class AcmeService {
             completeHttpChallenge(auth, hostnameSet);
         }
 
-        CSRBuilder csrBuilder = new CSRBuilder();
+        return finalizeOrder(new DnsOrderContext(order, domainKeyPair, hostnames, List.of()));
+    }
+
+    private static Order createOrder(Account account, List<String> hostnames) throws Exception {
+        OrderBuilder orderBuilder = account.newOrder();
         for (String hostname : hostnames) {
+            orderBuilder.domain(hostname);
+        }
+        return orderBuilder.create();
+    }
+
+    private DnsOrderContext prepareDnsOrder(List<String> hostnames, @Nullable String email) throws Exception {
+        Account account = ensureAccount(normalizeAccountEmail(email));
+        KeyPair domainKeyPair = KeyPairUtils.createKeyPair(2048);
+        Order order = createOrder(account, hostnames);
+        List<DnsAuthorization> authorizations = new ArrayList<>();
+        for (Authorization auth : order.getAuthorizations()) {
+            if (auth.getStatus() == Status.VALID) {
+                continue;
+            }
+            Dns01Challenge challenge = auth.findChallenge(Dns01Challenge.class)
+                .orElseThrow(() -> new RuntimeException(
+                    "No DNS-01 challenge available for " + auth.getIdentifier().getDomain()));
+            authorizations.add(new DnsAuthorization(auth, challenge,
+                new DnsTxtRecord(Dns01Challenge.toRRName(auth.getIdentifier()), challenge.getDigest())));
+        }
+        return new DnsOrderContext(order, domainKeyPair, List.copyOf(hostnames),
+            List.copyOf(authorizations));
+    }
+
+    private void completeDnsAuthorizations(List<DnsAuthorization> authorizations) throws Exception {
+        for (DnsAuthorization pending : authorizations) {
+            pending.challenge().trigger();
+        }
+        for (DnsAuthorization pending : authorizations) {
+            awaitAuthorization(pending.authorization());
+        }
+    }
+
+    private void awaitAuthorization(Authorization auth) throws Exception {
+        for (int i = 0; i < MAX_POLL_ATTEMPTS; i++) {
+            Thread.sleep(POLL_INTERVAL_MS);
+            auth.update();
+            if (auth.getStatus() == Status.VALID) return;
+            if (auth.getStatus() == Status.INVALID) {
+                throw new RuntimeException("Challenge failed for " + auth.getIdentifier().getDomain());
+            }
+        }
+        throw new RuntimeException("Challenge timed out for " + auth.getIdentifier().getDomain());
+    }
+
+    private OrderResult finalizeOrder(DnsOrderContext context) throws Exception {
+        CSRBuilder csrBuilder = new CSRBuilder();
+        for (String hostname : context.hostnames()) {
             csrBuilder.addDomain(hostname);
         }
-        csrBuilder.sign(domainKeyPair);
-        order.execute(csrBuilder.getEncoded());
+        csrBuilder.sign(context.domainKeyPair());
+        context.order().execute(csrBuilder.getEncoded());
 
+        Order order = context.order();
         for (int i = 0; i < MAX_POLL_ATTEMPTS && order.getStatus() != Status.VALID; i++) {
             Thread.sleep(POLL_INTERVAL_MS);
             order.update();
@@ -391,7 +690,7 @@ public class AcmeService {
 
         return new OrderResult(
             certificateChainToPem(chain),
-            privateKeyToPem(domainKeyPair),
+            privateKeyToPem(context.domainKeyPair()),
             leaf.getNotAfter().toInstant()
         );
     }

@@ -32,6 +32,20 @@ Remaining parity items, roughly in value order:
   in-flight dedup (optimization).
 - Persistent remember-me cookies + SSO — see Phase 5 (belongs in `zenit-auth`, not this app).
 
+Completed in the 2026-07 parity/UX pass:
+
+- Legacy nested ready IPC plus the current flat form, a 60-second ready timeout,
+  uid+gid+HOME run-as identity, and Unix-socket process transport as the default.
+- Optional front-proxy AF_UNIX listening (with configurable socket permissions),
+  configurable additional Node.js discovery roots, trusted client-IP reuse for
+  process affinity, and same-SAN ACME order serialization.
+- Framework-backed immutable resource detail views, guided site/source forms,
+  closed notification-event choices, localized custom admin tabs/attention
+  messages, relation labels and first-run onboarding.
+- HTTP-01 plus DNS-01 certificate requests. Wildcard names use DNS-01; manual
+  TXT publication is one-shot/no-renewal, while the command publisher supports
+  automatic issuance and renewal for any DNS provider with an operator hook.
+
 Deliberately deferred (owner): per-request DB hit logging (was not performant in Node; revisit later).
 
 ## Phase 1 — Container layer (PaaS cornerstone) ← STARTED
@@ -207,3 +221,12 @@ only via the equivalent local `docker system dial-stdio` (no remote host availab
 | WebSocket / SSE | DONE (zenit core) | `WebSocketEndpoint` + `WebSocketHandler`; terminal consumes it |
 | Background job/queue | zenit tasks DONE; deploy queue stays app | `ScheduledTask`/cron in core; the coalescing per-site deploy queue needs a second consumer |
 | Plumage components | Plumage | terminal viewer, data table, toast, stepper, … (see framework-opportunities.md) |
+
+## Optional authoritative DNS
+
+Investigated and designed in [authoritative-dns.md](authoritative-dns.md). The
+recommended implementation is an authoritative-only Hohenheim service backed
+by zone/record models, public UDP+TCP 53, an internal ACME TXT publisher, and
+AXFR/NOTIFY interoperability with a secondary. A one-box home deployment is
+useful for experimentation but is not production-ready DNS redundancy; the
+registrar delegation and at least one independent secondary remain necessary.

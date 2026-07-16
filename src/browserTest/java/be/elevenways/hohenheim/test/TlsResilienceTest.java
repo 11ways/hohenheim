@@ -76,6 +76,10 @@ class TlsResilienceTest {
 
         assertThat(AcmeService.invalidHostnames(List.of("good.example.com", "*.bad.com")))
             .containsExactly("*.bad.com");
+        assertThat(AcmeService.invalidHostnames(
+            List.of("good.example.com", "*.example.com"), true)).isEmpty();
+        assertThat(AcmeService.invalidHostnames(List.of("*.*.example.com"), true))
+            .containsExactly("*.*.example.com");
     }
 
     @Test

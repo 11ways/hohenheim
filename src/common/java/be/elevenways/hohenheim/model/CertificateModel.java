@@ -35,6 +35,10 @@ public class CertificateModel extends Model {
     /** {@link #PROVIDER} value for user-uploaded certificates (never auto-managed). */
     public static final String PROVIDER_CUSTOM = "custom";
 
+    public static final String CHALLENGE_HTTP = "http";
+    public static final String CHALLENGE_DNS = "dns";
+    public static final String DNS_PUBLISHER_MANUAL = "manual";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NICE_NAME = SCHEMA.addField(StringField.builder().name("nice_name").build());
     public static final EnumField PROVIDER = SCHEMA.addField(EnumField.builder("provider")
@@ -62,6 +66,12 @@ public class CertificateModel extends Model {
 
     /** Per-cert ACME account email override; null means the global account. */
     public static final StringField LETSENCRYPT_EMAIL = SCHEMA.addField(StringField.builder().name("letsencrypt_email").build());
+    public static final EnumField CHALLENGE_TYPE = SCHEMA.addField(EnumField.builder("challenge_type")
+        .value(CHALLENGE_HTTP, value -> value.displayName("HTTP-01").icon("globe").color("blue"))
+        .value(CHALLENGE_DNS, value -> value.displayName("DNS-01").icon("at").color("violet"))
+        .build());
+    public static final StringField DNS_PUBLISHER = SCHEMA.addField(
+        StringField.builder().name("dns_publisher").build());
 
     /** Dedup stamp for the expiring-soon alert; a renewal moves expires_on forward, re-arming it. */
     public static final DateTimeField EXPIRY_NOTIFIED_AT = SCHEMA.addField(DateTimeField.builder().name("expiry_notified_at").build());
