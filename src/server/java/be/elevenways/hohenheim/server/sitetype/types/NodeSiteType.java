@@ -68,7 +68,7 @@ public class NodeSiteType implements SiteTypeHandler {
             .build());
 
     public static final BooleanField USE_PORTS = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("use_ports").defaultValue(true).build());
+        BooleanField.builder("use_ports").defaultValue(false).build());
 
     // Shared infrastructure (singleton per server)
     private static PortAllocator portAllocator;
@@ -149,7 +149,7 @@ public class NodeSiteType implements SiteTypeHandler {
 
         private final String script;
         private final String nodePath;
-        private final @Nullable Integer resolvedUid;
+        private final SystemUsers.@Nullable RunAsUser runAs;
         private final List<String> defaultArgs;
         private final boolean useChildWrapper;
 
@@ -158,7 +158,7 @@ public class NodeSiteType implements SiteTypeHandler {
             super(siteId, siteName, settings, portAllocator, processMonitor);
             this.script = (String) settings.getOrDefault("script", "");
             this.nodePath = NodeVersionOptions.resolvePath(settings.get("node"));
-            this.resolvedUid = SystemUsers.resolveUid(settings.get("user"));
+            this.runAs = SystemUsers.resolve(settings.get("user"));
             this.defaultArgs = defaultArgs;
             this.useChildWrapper = useChildWrapper;
 
@@ -227,8 +227,8 @@ public class NodeSiteType implements SiteTypeHandler {
         }
 
         @Override
-        protected @Nullable Integer getUid() {
-            return resolvedUid;
+        protected SystemUsers.@Nullable RunAsUser getRunAsUser() {
+            return runAs;
         }
 
         @Override

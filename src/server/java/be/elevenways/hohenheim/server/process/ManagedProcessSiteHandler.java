@@ -131,6 +131,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     private static final long SCALE_DOWN_IDLE_MS = 180_000;
     private static final int SCALE_DOWN_CPU_THRESHOLD = 0;
     private static final int ROUTING_CPU_CEILING = 92;
+    private static final long READY_TIMEOUT_MS = 60_000;
 
     /**
      * Whether a managed process is held out of the routing pool until it sends a ready signal
@@ -161,8 +162,10 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         this.waitForReady = settings.containsKey("wait_for_ready")
             ? Boolean.TRUE.equals(settings.get("wait_for_ready"))
             : defaultWaitForReady();
-        // use_ports=false routes through a unix socket instead of a loopback TCP port (default true).
-        this.usePorts = !Boolean.FALSE.equals(settings.get("use_ports"));
+        // use_ports=true routes through a loopback TCP port instead of a unix socket.
+        // Sockets are the DEFAULT (the original's posture); handlers without socket
+        // support (no allocateSocketPath) fall back to port mode automatically.
+        this.usePorts = Boolean.TRUE.equals(settings.get("use_ports"));
 
         // Parse API keys (stored as a JSON list of strings)
         this.apiKeys = new LinkedHashSet<>();
@@ -239,9 +242,9 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     protected abstract File getWorkingDirectory();
 
     /**
-     * Optional: UID to run the process as, or null to inherit the daemon's own user.
+     * Optional: the identity to run the process as, or null to inherit the daemon's own user.
      */
-    protected @Nullable Integer getUid() { return null; }
+    protected SystemUsers.@Nullable RunAsUser getRunAsUser() { return null; }
 
     // -----------------------------------------------------------------------
     // Lifecycle
@@ -379,15 +382,26 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             env.putAll(environmentVariables);
             env.putAll(buildRuntimeEnvironment(port));
 
-            Integer uid = getUid();
-            if (uid != null) {
+            SystemUsers.RunAsUser runAs = getRunAsUser();
+            if (runAs != null) {
                 List<String> suCommand = new ArrayList<>();
                 suCommand.add("sudo");
                 suCommand.add("-u");
-                suCommand.add("#" + uid);
+                suCommand.add("#" + runAs.uid());
+                if (runAs.gid() != null) {
+                    suCommand.add("-g");
+                    suCommand.add("#" + runAs.gid());
+                }
                 suCommand.add("--");
                 suCommand.addAll(command);
                 pb.command(suCommand);
+                // The child must not inherit the daemon's HOME (os.homedir() would
+                // resolve to the wrong user); point it at the target user's own home.
+                if (runAs.home() != null && !runAs.home().isBlank()) {
+                    env.put("HOME", runAs.home());
+                } else {
+                    env.remove("HOME");
+                }
             } else {
                 warnIfInheritingRoot();
             }
@@ -434,6 +448,10 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
             monitor.register(managed);
             process.onExit().thenAccept(p -> processExit(managed));
+
+            if (waitForReady) {
+                scheduleReadyTimeout(managed);
+            }
 
             Blast.log("PROCESS: started", siteName, "pid=" + process.pid(), "target=" + listenTarget);
             return managed;
@@ -486,6 +504,26 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         }
     }
 
+    /**
+     * A wait_for_ready child that never signals is killed after the timeout instead of
+     * lingering as "requested" forever and silently exhausting the process budget
+     * (the original killed at 60s too). The exit path handles cleanup and restart.
+     */
+    private void scheduleReadyTimeout(ManagedProcess managed) {
+        proclogFlushScheduler.schedule(() -> {
+            if (!managed.isReady() && processMap.containsKey(managed.pid())) {
+                Blast.log("PROCESS: no ready signal from", siteName,
+                    "pid=" + managed.pid(), "within", readyTimeoutMs() + "ms; killing");
+                managed.kill();
+            }
+        }, readyTimeoutMs(), TimeUnit.MILLISECONDS);
+    }
+
+    /** How long a wait_for_ready child may boot before it is killed (test-overridable). */
+    protected long readyTimeoutMs() {
+        return READY_TIMEOUT_MS;
+    }
+
     private void markProcessReady(ManagedProcess managed) {
         if (managed.isReady()) return;
         managed.setReady(true);
@@ -500,12 +538,36 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     // -----------------------------------------------------------------------
 
     private void handleIpcMessage(ManagedProcess proc, IpcChannel ipc, Map<String, Object> msg) {
+        // Legacy envelope: the original Node IPC wrapped everything as
+        // {"hohenheim":{...}} / {"alchemy":{...}} -- unwrap so old children keep working.
+        Object legacy = msg.get("hohenheim") != null ? msg.get("hohenheim") : msg.get("alchemy");
+        if (legacy instanceof Map<?, ?> data) {
+            if (Boolean.TRUE.equals(data.get("ready"))) {
+                msg = Map.of("type", "ready");
+            } else if (data.get("error") instanceof Map<?, ?> error
+                && "EADDRINUSE".equals(error.get("code"))) {
+                msg = Map.of("type", "error", "code", "EADDRINUSE");
+            } else {
+                return;
+            }
+        }
         String type = msg.get("type") instanceof String s ? s : "";
         switch (type) {
             case "ready" -> {
                 if (waitForReady) {
                     markProcessReady(proc);
                     Blast.log("PROCESS: ready signal from", siteName, "pid=" + proc.pid());
+                }
+            }
+            case "error" -> {
+                // A child reporting EADDRINUSE over IPC gets the same retry treatment
+                // as the stderr scan; anything else just logs.
+                if ("EADDRINUSE".equals(msg.get("code"))) {
+                    proc.markAddressInUse();
+                    proc.kill();
+                } else {
+                    Blast.log("PROCESS: child error via IPC for", siteName,
+                        "pid=" + proc.pid(), "-", msg.get("code"));
                 }
             }
             case "remcache_set" -> {
