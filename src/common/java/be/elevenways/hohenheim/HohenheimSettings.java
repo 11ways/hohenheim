@@ -40,13 +40,16 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<String> HTTP_SOCKET_PATH = GROUP.buildSetting("http_socket_path", String.class)
-            .description("Optional Unix socket path for the HTTP proxy instead of a public TCP listener")
+            .description("Optional Unix socket path for the HTTP proxy instead of a public TCP listener. "
+                + "The socket bridges to a loopback TCP port, so on a multi-user host any local account "
+                + "can still reach the proxy via 127.0.0.1 regardless of the socket permissions")
             .restartRequired()
             .build();
 
         public static final SettingDefinition<String> HTTP_SOCKET_PERMISSIONS = GROUP.buildSetting("http_socket_permissions", String.class)
             .defaultValue("0660")
-            .description("Octal permissions applied to the HTTP proxy Unix socket")
+            .description("Octal permissions applied to the HTTP proxy Unix socket (limits socket access only, "
+                + "not the internal loopback port)")
             .restartRequired()
             .build();
 

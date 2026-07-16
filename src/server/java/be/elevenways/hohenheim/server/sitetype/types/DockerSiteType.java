@@ -85,7 +85,7 @@ public class DockerSiteType implements SiteTypeHandler {
 
     @Override
     public Schema getSchema() {
-        ServerOptions.refresh();
+        ServerOptions.ensureFresh();
         return SETTINGS_SCHEMA;
     }
 

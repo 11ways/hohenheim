@@ -30,6 +30,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 /**
@@ -68,7 +69,12 @@ public class AcmeService {
      */
     private record OrderResult(String certPem, String keyPem, Instant expiresAt) {}
 
-    private record OrderFlight(boolean joinable, CompletableFuture<OrderResult> result) {}
+    /** certificateId carries the leader's row id so joiners can share the row instead of minting a duplicate. */
+    private record OrderFlight(boolean joinable, CompletableFuture<OrderResult> result, AtomicInteger certificateId) {
+        OrderFlight(boolean joinable, CompletableFuture<OrderResult> result) {
+            this(joinable, result, new AtomicInteger(-1));
+        }
+    }
 
     private record DnsAuthorization(Authorization authorization, Dns01Challenge challenge,
                                     DnsTxtRecord record) {}
@@ -133,8 +139,29 @@ public class AcmeService {
 
     public int requestCertificate(List<String> hostnames, String niceName, @Nullable String email,
                                   String challengeType, @Nullable String dnsPublisher) {
-        var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
+
+        // Claim the order key BEFORE creating a row: a concurrent identical
+        // request shares the leader's certificate row instead of minting a
+        // duplicate ACTIVE record for the same domains.
+        String orderKey = certificateOrderKey(hostnames, email);
+        OrderFlight flight = new OrderFlight(true, new CompletableFuture<>());
+        OrderFlight existing = inFlightOrders.putIfAbsent(orderKey, flight);
+        if (existing != null) {
+            if (!existing.joinable()) {
+                Blast.log("ACME: a manual order for", String.join(", ", hostnames), "is already in progress");
+                return -1;
+            }
+            try {
+                existing.result().get();
+                return existing.certificateId().get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return -1;
+            } catch (Exception e) {
+                return -1;
+            }
+        }
 
         Row certRow = certModel.createEmptyRow();
         certRow.set(CertificateModel.NICE_NAME, niceName);
@@ -148,9 +175,17 @@ public class AcmeService {
         }
         certModel.save(certRow);
         int certId = certRow.get(CertificateModel.ID);
+        flight.certificateId().set(certId);
 
         try {
-            OrderResult result = performAcmeOrder(hostnames, email, challengeType, dnsPublisher);
+            boolean dns = CertificateModel.CHALLENGE_DNS.equals(challengeType);
+            List<String> invalid = invalidHostnames(hostnames, dns);
+            if (!invalid.isEmpty()) {
+                throw new IllegalArgumentException("Invalid hostnames: " + String.join(", ", invalid));
+            }
+
+            OrderResult result = performAcmeOrderUncoalesced(hostnames, email, challengeType, dnsPublisher);
+            flight.result().complete(result);
 
             certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
             certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem);
@@ -164,12 +199,15 @@ public class AcmeService {
             return certId;
 
         } catch (Exception e) {
+            flight.result().completeExceptionally(e);
             Blast.log("ACME: certificate request failed for", String.join(", ", hostnames), "-", e.getMessage());
 
             recordRenewalFailure(certRow, e.getMessage());
             certModel.save(certRow);
 
             return -1;
+        } finally {
+            inFlightOrders.remove(orderKey, flight);
         }
     }
 
@@ -438,7 +476,8 @@ public class AcmeService {
             }
             OrderResult result = performAcmeOrder(hostnames,
                 certRow.get(CertificateModel.LETSENCRYPT_EMAIL), challengeType,
-                certRow.get(CertificateModel.DNS_PUBLISHER));
+                certRow.get(CertificateModel.DNS_PUBLISHER),
+                certRow.get(CertificateModel.ID));
 
             certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
             certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem);
@@ -510,12 +549,9 @@ public class AcmeService {
     // Core ACME order flow (shared by request and renewal)
     // -----------------------------------------------------------------------
 
-    private OrderResult performAcmeOrder(List<String> hostnames, @Nullable String email) throws Exception {
-        return performAcmeOrder(hostnames, email, CertificateModel.CHALLENGE_HTTP, null);
-    }
-
     private OrderResult performAcmeOrder(List<String> hostnames, @Nullable String email,
-                                         String challengeType, @Nullable String dnsPublisher) throws Exception {
+                                         String challengeType, @Nullable String dnsPublisher,
+                                         int certificateId) throws Exception {
         boolean dns = CertificateModel.CHALLENGE_DNS.equals(challengeType);
         List<String> invalid = invalidHostnames(hostnames, dns);
         if (!invalid.isEmpty()) {
@@ -524,6 +560,7 @@ public class AcmeService {
 
         String orderKey = certificateOrderKey(hostnames, email);
         OrderFlight leader = new OrderFlight(true, new CompletableFuture<>());
+        leader.certificateId().set(certificateId);
         OrderFlight existing = inFlightOrders.putIfAbsent(orderKey, leader);
         if (existing != null) {
             if (!existing.joinable()) {

@@ -190,12 +190,17 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
             }
         } else {
             lastDeployFailed = true;
-            Blast.log("GIT: deploy failed for site", siteId, "-", result.error());
             // Old handler (if any) keeps serving
             notifyDeployFailed(result.error());
         }
 
         DeploymentRecords.finished(recordId, result, deployment.getLog());
+
+        if (!result.success()) {
+            // The queue's contract is throw-means-failure: without this it
+            // records and logs the failed deploy as a success.
+            throw new IllegalStateException(result.error() != null ? result.error() : "Deploy failed");
+        }
     }
 
     /**

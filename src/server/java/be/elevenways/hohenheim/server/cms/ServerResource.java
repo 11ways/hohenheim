@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -126,7 +127,9 @@ public final class ServerResource extends RowResource {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, null);
         values.put("mode", ServerService.MODE_SSH);
-        return super.persistRow(values, accessContext);
+        Object id = super.persistRow(values, accessContext);
+        ServerOptions.refresh();
+        return id;
     }
 
     @Override
@@ -136,6 +139,7 @@ public final class ServerResource extends RowResource {
         validate(values, existing);
         values.put("mode", ServerService.MODE_SSH);
         super.updateRow(existing, values, accessContext);
+        ServerOptions.refresh();
     }
 
     @Override
@@ -144,6 +148,7 @@ public final class ServerResource extends RowResource {
             throw Violations.ofForm(CmsSupport.violationText("local_server_undeletable"));
         }
         super.deleteRow(existing, accessContext);
+        ServerOptions.refresh();
     }
 
     private static void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
