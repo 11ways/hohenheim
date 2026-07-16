@@ -14,6 +14,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -72,7 +73,8 @@ public final class AuthProviderResource extends RowResource {
         if (handler == null) {
             // AIDEV-NOTE: An unknown provider type MUST fail loudly. Storing the submitted config
             // as-is would persist Basic passwords in plaintext (normalizeConfigForSave hashes them).
-            throw new IllegalStateException("Unknown auth provider type: " + providerType);
+            throw Violations.ofField("provider_type", providerType,
+                CmsSupport.violationText("unknown_provider_type").withArg("type", providerType));
         }
         Object rawConfig = coerced.get("config");
         Map<String, Object> submitted = rawConfig instanceof Map<?, ?> map

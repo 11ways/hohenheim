@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -140,7 +141,7 @@ public final class ServerResource extends RowResource {
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
         if (ServerService.LOCAL.equals(existing.get(ServerModel.NAME))) {
-            throw new IllegalStateException("The implicit local host cannot be removed");
+            throw Violations.ofForm(CmsSupport.violationText("local_server_undeletable"));
         }
         super.deleteRow(existing, accessContext);
     }
@@ -150,17 +151,16 @@ public final class ServerResource extends RowResource {
         String name = nameValue != null ? String.valueOf(nameValue).trim()
             : existing != null ? existing.get(ServerModel.NAME) : "";
         if (ServerService.LOCAL.equals(name)) {
-            throw new IllegalStateException(existing == null
-                ? "'local' is reserved for this host"
-                : "The implicit local host cannot be edited");
+            throw Violations.ofField("name", name, CmsSupport.violationText(
+                existing == null ? "local_server_reserved" : "local_server_immutable"));
         }
         if (name == null || name.isEmpty() || !name.matches("[a-z0-9][a-z0-9-]*")) {
-            throw new IllegalStateException("Name must be lowercase letters, digits, and dashes");
+            throw Violations.ofField("name", name, CmsSupport.violationText("name_format"));
         }
         Object targetValue = coerced.get("ssh_target");
         String target = targetValue != null ? String.valueOf(targetValue).trim() : "";
         if (target.isEmpty() || !SSH_TARGET.matcher(target).matches()) {
-            throw new IllegalStateException("SSH target must be a plain [user@]host[:port]");
+            throw Violations.ofField("ssh_target", target, CmsSupport.violationText("ssh_target_format"));
         }
     }
 }

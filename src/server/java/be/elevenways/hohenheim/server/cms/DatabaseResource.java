@@ -32,6 +32,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -121,18 +122,20 @@ public final class DatabaseResource extends RowResource {
                                       @NonNull AccessContext accessContext) {
         String name = trimmed(coerced.get("name"));
         if (!name.matches("[a-z0-9][a-z0-9-]*")) {
-            throw new IllegalStateException("Name must be lowercase letters, digits, and dashes");
+            throw Violations.ofField("name", name, CmsSupport.violationText("name_format"));
         }
         String engineToken = trimmed(coerced.get("engine")).toLowerCase();
         ManagedDatabase.Engine engine;
         try {
             engine = ManagedDatabase.Engine.valueOf(engineToken.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new IllegalStateException("Unknown engine: " + engineToken);
+            throw Violations.ofField("engine", engineToken,
+                CmsSupport.violationText("unknown_engine").withArg("engine", engineToken));
         }
         String database = trimmed(coerced.get("db_name"));
         if (database.isEmpty()) {
-            throw new IllegalStateException("Database name is required");
+            throw Violations.ofField("db_name", database,
+                CmsSupport.violationText("database_name_required"));
         }
         String user = trimmed(coerced.get("db_user"));
         if (user.isEmpty()) {
@@ -169,7 +172,7 @@ public final class DatabaseResource extends RowResource {
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        throw new IllegalStateException("Managed databases cannot be edited; destroy and recreate instead");
+        throw Violations.ofForm(CmsSupport.violationText("database_immutable"));
     }
 
     /** Refuses while live sites still depend on the database's injected credentials. */
@@ -187,8 +190,9 @@ public final class DatabaseResource extends RowResource {
             }
         }
         if (!attachedTo.isEmpty()) {
-            throw new IllegalStateException("Database '" + name + "' is attached to "
-                + String.join(", ", attachedTo) + "; detach it from those sites first");
+            throw Violations.ofForm(CmsSupport.violationText("database_in_use")
+                .withArg("name", name)
+                .withArg("sites", String.join(", ", attachedTo)));
         }
         try {
             this.databaseService.destroy(name, true);

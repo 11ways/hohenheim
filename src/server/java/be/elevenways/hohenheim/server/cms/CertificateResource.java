@@ -27,6 +27,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.protoblast.common.http.Uri;
 import org.bouncycastle.openssl.PEMParser;
@@ -146,18 +147,20 @@ public final class CertificateResource extends RowResource {
         String keyPem = trimmed(coerced.get("private_key_pem"));
         String name = trimmed(coerced.get("nice_name"));
         if (name.isEmpty() || certPem.isEmpty() || keyPem.isEmpty()) {
-            throw new IllegalStateException("Name, certificate, and private key are required");
+            throw Violations.ofForm(CmsSupport.violationText("cert_fields_required"));
         }
         try {
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
             cf.generateCertificates(new ByteArrayInputStream(certPem.getBytes()));
         } catch (Exception e) {
-            throw new IllegalStateException("Invalid certificate PEM: " + e.getMessage());
+            throw Violations.ofField("certificate_pem", null,
+                CmsSupport.violationText("cert_pem_invalid").withArg("detail", e.getMessage()));
         }
         try {
             new PEMParser(new StringReader(keyPem)).readObject();
         } catch (Exception e) {
-            throw new IllegalStateException("Invalid private key PEM: " + e.getMessage());
+            throw Violations.ofField("private_key_pem", null,
+                CmsSupport.violationText("key_pem_invalid").withArg("detail", e.getMessage()));
         }
     }
 

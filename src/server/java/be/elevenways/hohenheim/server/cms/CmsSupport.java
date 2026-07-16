@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,6 +29,11 @@ public final class CmsSupport {
     /** The coerced maps the CMS hands to persist/update are immutable; copy before staging values. */
     public static @NonNull Map<String, Object> mutable(@NonNull Map<String, Object> coerced) {
         return new LinkedHashMap<>(coerced);
+    }
+
+    /** A violation-scoped microcopy message (catalog entries carry {@code scope=violations}). */
+    public static @NonNull Microcopy violationText(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", "violations");
     }
 
 }

@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -90,13 +91,15 @@ public final class NotificationChannelResource extends RowResource {
         Object urlValue = coerced.get("url");
         String url = urlValue != null ? String.valueOf(urlValue).trim() : "";
         if (url.isEmpty() || !(url.startsWith("http://") || url.startsWith("https://"))) {
-            throw new IllegalStateException("URL must start with http:// or https://");
+            throw Violations.ofField("url", null, CmsSupport.violationText("url_scheme"));
         }
         if (coerced.get("events") instanceof List<?> events) {
             for (Object event : events) {
                 if (!NotificationEvents.isKnown(String.valueOf(event))) {
-                    throw new IllegalStateException("Unknown event '" + event
-                        + "'; valid events: " + String.join(", ", NotificationEvents.ALL));
+                    throw Violations.ofField("events", event,
+                        CmsSupport.violationText("unknown_event")
+                            .withArg("event", String.valueOf(event))
+                            .withArg("valid", String.join(", ", NotificationEvents.ALL)));
                 }
             }
         }
