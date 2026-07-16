@@ -50,7 +50,14 @@ class NotificationAdminTest extends HohenheimTestBase {
         var events = page.locator("pl-select[name='events']");
         assertThat(events.count()).isEqualTo(1);
         assertThat(events.getAttribute("tags")).isNull();
-        assertThat(events.locator("pl-select-item").count()).isEqualTo(5);
+
+        // Item children portal into the overlay popup at hydration, so the
+        // closed vocabulary is counted inside the open popup.
+        page.click("pl-select[name='events'] .pl-select-field");
+        page.waitForSelector("he-bottom .pl-select-popup[data-open]");
+        assertThat(page.locator(
+            "he-bottom .pl-select-popup[data-open] div[role='option']").count()).isEqualTo(5);
+        page.keyboard().press("Escape");
     }
 
     @Test

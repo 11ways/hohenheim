@@ -165,8 +165,16 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(content).contains("Let's Encrypt");
         assertThat(content).contains("DNS-01");
         assertThat(content).contains("*.example.com");
-        assertThat(page.locator("pl-select[name='dns_mode'] pl-select-item[value='command'][disabled]")
-            .count()).isEqualTo(1);
+
+        // Item children portal into the overlay popup at hydration, so the
+        // command option's disabled state is asserted inside the open popup.
+        page.click("pl-select[name='dns_mode'] .pl-select-field");
+        page.waitForSelector("he-bottom .pl-select-popup[data-open]");
+        var command = page.locator(
+            "he-bottom .pl-select-popup[data-open] div[role='option'][data-value='command']");
+        assertThat(command.count()).isEqualTo(1);
+        assertThat(command.getAttribute("aria-disabled")).isEqualTo("true");
+        page.keyboard().press("Escape");
     }
 
     @Test

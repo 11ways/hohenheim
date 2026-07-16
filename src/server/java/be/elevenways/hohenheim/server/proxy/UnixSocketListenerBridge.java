@@ -16,6 +16,7 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** AF_UNIX front listener that splices accepted clients into a loopback TCP listener. */
 public final class UnixSocketListenerBridge {
@@ -95,26 +96,38 @@ public final class UnixSocketListenerBridge {
     }
 
     private void splice(SocketChannel unix) {
+        SocketChannel tcp;
         try {
-            SocketChannel tcp = SocketChannel.open(upstream);
-            Thread.ofVirtual().start(() -> { copy(unix, tcp); closeQuietly(unix); closeQuietly(tcp); });
-            Thread.ofVirtual().start(() -> { copy(tcp, unix); closeQuietly(unix); closeQuietly(tcp); });
+            tcp = SocketChannel.open(upstream);
         } catch (IOException e) {
             closeQuietly(unix);
+            return;
         }
+        AtomicInteger liveDirections = new AtomicInteger(2);
+        Thread.ofVirtual().start(() -> copy(unix, tcp, liveDirections));
+        Thread.ofVirtual().start(() -> copy(tcp, unix, liveDirections));
     }
 
-    private static void copy(SocketChannel from, SocketChannel to) {
+    private static void copy(SocketChannel from, SocketChannel to, AtomicInteger liveDirections) {
         ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
+        boolean clean = false;
         try {
-            int count;
-            while ((count = from.read(buffer)) != -1) {
+            while (from.read(buffer) != -1) {
                 buffer.flip();
                 while (buffer.hasRemaining()) to.write(buffer);
                 buffer.clear();
             }
+            // EOF is a half-close: the peer may still be sending the other
+            // direction (an HTTP client that shutdownOutput()s after its
+            // request must still receive the response).
+            to.shutdownOutput();
+            clean = true;
         } catch (IOException ignored) {
-            // The peer closed; the splice owner closes both channels.
+            // A torn direction ends the whole splice below.
+        }
+        if (!clean || liveDirections.decrementAndGet() == 0) {
+            closeQuietly(from);
+            closeQuietly(to);
         }
     }
 

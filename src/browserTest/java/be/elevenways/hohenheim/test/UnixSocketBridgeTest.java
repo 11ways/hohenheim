@@ -117,4 +117,50 @@ class UnixSocketBridgeTest {
         }
         assertThat(sockPath).doesNotExist();
     }
+
+    @Test
+    @Timeout(15)
+    void clientHalfCloseStillReceivesTheFullResponse() throws Exception {
+        Path sockPath = Files.createTempFile("hh-halfclose-test", ".sock");
+        Files.delete(sockPath);
+
+        String body = "response-after-half-close";
+        String response = "HTTP/1.1 200 OK\r\nContent-Length: " + body.length()
+            + "\r\nConnection: close\r\n\r\n" + body;
+        ServerSocketChannel tcpServer = ServerSocketChannel.open();
+        tcpServer.bind(new InetSocketAddress("127.0.0.1", 0));
+        int port = ((InetSocketAddress) tcpServer.getLocalAddress()).getPort();
+
+        // The backend only answers AFTER it has seen the client's EOF, so the
+        // response can only arrive if the bridge propagates the half-close
+        // instead of tearing the whole splice down.
+        Thread.ofVirtual().start(() -> {
+            try (SocketChannel conn = tcpServer.accept()) {
+                ByteBuffer sink = ByteBuffer.allocate(4096);
+                while (conn.read(sink) != -1) {
+                    sink.clear();
+                }
+                conn.write(ByteBuffer.wrap(response.getBytes(StandardCharsets.UTF_8)));
+            } catch (IOException ignored) {
+            }
+        });
+
+        UnixSocketListenerBridge bridge = new UnixSocketListenerBridge(sockPath, port, "0660");
+        try (SocketChannel client = SocketChannel.open(StandardProtocolFamily.UNIX)) {
+            client.connect(UnixDomainSocketAddress.of(sockPath));
+            client.write(ByteBuffer.wrap(
+                "GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8)));
+            client.shutdownOutput();
+            ByteBuffer buffer = ByteBuffer.allocate(4096);
+            while (client.read(buffer) != -1 && buffer.hasRemaining()) {
+                // Read until the bridge closes the connection or the buffer fills.
+            }
+            buffer.flip();
+            String received = StandardCharsets.UTF_8.decode(buffer).toString();
+            assertThat(received).contains("200 OK").contains(body);
+        } finally {
+            bridge.close();
+            tcpServer.close();
+        }
+    }
 }
