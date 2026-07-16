@@ -28,16 +28,16 @@ public class CleanOldActivity extends ScheduledTask {
         clean();
     }
 
-    /** Delete activity rows older than the retention window; logs, never throws. */
+    /**
+     * Delete activity rows older than the retention window.
+     *
+     * @throws RuntimeException on failure -- recorded by the task system as FAILED
+     */
     public static void clean() {
-        try {
-            int deleted = ActivityLog.prune(Instant.now().minus(RETENTION_DAYS, ChronoUnit.DAYS));
-            if (deleted > 0) {
-                Blast.log("TASK: CleanOldActivity removed", deleted, "entries older than",
-                    RETENTION_DAYS, "days");
-            }
-        } catch (Exception e) {
-            Blast.log("TASK: CleanOldActivity failed:", e.getMessage());
+        int deleted = ActivityLog.prune(Instant.now().minus(RETENTION_DAYS, ChronoUnit.DAYS));
+        if (deleted > 0) {
+            Blast.log("TASK: CleanOldActivity removed", deleted, "entries older than",
+                RETENTION_DAYS, "days");
         }
     }
 }

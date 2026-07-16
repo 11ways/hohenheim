@@ -15,21 +15,22 @@ final class RetentionSweep {
     private RetentionSweep() {
     }
 
-    /** Delete rows whose {@code createdAt} is past the retention window; logs, never throws. */
+    /**
+     * Delete rows whose {@code createdAt} is past the retention window.
+     *
+     * @throws RuntimeException on failure -- the task system records it as a
+     *         FAILED history row; swallowing here made repeated failures invisible
+     */
     static void clean(String taskName, Model model, DateTimeField createdAt, int retentionDays) {
-        try {
-            Instant cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
+        Instant cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
 
-            long deleted = model.find()
-                .where(createdAt.lte(cutoff))
-                .delete();
+        long deleted = model.find()
+            .where(createdAt.lte(cutoff))
+            .delete();
 
-            if (deleted > 0) {
-                Blast.log("TASK: " + taskName + " removed", deleted, "entries older than",
-                    retentionDays, "days");
-            }
-        } catch (Exception e) {
-            Blast.log("TASK: " + taskName + " failed:", e.getMessage());
+        if (deleted > 0) {
+            Blast.log("TASK: " + taskName + " removed", deleted, "entries older than",
+                retentionDays, "days");
         }
     }
 }

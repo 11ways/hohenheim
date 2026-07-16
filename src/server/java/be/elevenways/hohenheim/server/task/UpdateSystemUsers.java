@@ -10,6 +10,8 @@ import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
 
 import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.io.FileReader;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -110,8 +112,11 @@ public class UpdateSystemUsers extends ScheduledTask {
                 String home = parts[5];
                 result.add(new ParsedUser(name, uid, gid, home, gecos));
             }
-        } catch (Exception e) {
-            Blast.log("TASK: UpdateSystemUsers failed:", e.getMessage());
+        } catch (IOException e) {
+            // Propagate: a swallowed read failure returned an EMPTY list, and the
+            // reconcile pass would then mark EVERY system user obsolete -- users
+            // gate privilege-drop, so that silent degradation was dangerous.
+            throw new UncheckedIOException("Could not read /etc/passwd", e);
         }
         return result;
     }

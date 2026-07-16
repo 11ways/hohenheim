@@ -30,7 +30,13 @@ public class UpdateSystemIpAddresses extends ScheduledTask {
         discover();
     }
 
-    /** Scan network interfaces and refresh the cached local-address list. */
+    /**
+     * Scan network interfaces and refresh the cached local-address list.
+     *
+     * @throws java.io.UncheckedIOException when interface enumeration fails --
+     *         the task system records the FAILED run; the previous cached list
+     *         stays in effect, which beats silently degrading to loopback-only
+     */
     public static void discover() {
         List<String> addresses = new ArrayList<>();
 
@@ -48,8 +54,8 @@ public class UpdateSystemIpAddresses extends ScheduledTask {
                     }
                 }
             }
-        } catch (Exception e) {
-            Blast.log("TASK: UpdateSystemIpAddresses failed:", e.getMessage());
+        } catch (java.net.SocketException e) {
+            throw new java.io.UncheckedIOException("Network interface enumeration failed", e);
         }
 
         // Always include loopback

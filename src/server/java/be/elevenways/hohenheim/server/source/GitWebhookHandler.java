@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -118,6 +119,9 @@ public class GitWebhookHandler {
         SiteRequestHandler handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
         if (handler instanceof GitSiteRequestHandler gitHandler) {
             gitHandler.enqueueDeploy("webhook");
+            // An externally-triggered production deploy needs the same trail as
+            // the manual admin action (which records deploy_triggered).
+            ActivityLog.record(Models.get(SiteModel.class), siteId, "deploy_triggered", "webhook");
             Blast.log("GIT WEBHOOK: deploy queued for site", slug, "(id:", siteId + ")");
             sendJson(exchange, 200, "{\"status\":\"queued\"}");
         } else {

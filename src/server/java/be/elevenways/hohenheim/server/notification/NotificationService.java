@@ -100,13 +100,23 @@ public class NotificationService extends DatasourceScoped {
      */
     public int send(@Nullable String event, String subject, String message) {
         int delivered = 0;
+        int eligible = 0;
         for (Row row : query(() -> model().find().all())) {
             if (!subscribes(row, event)) {
                 continue;
             }
+            eligible++;
             if (sendOne(row, subject, message)) {
                 delivered++;
             }
+        }
+        if (delivered == 0) {
+            // An alert that reached nobody must not vanish silently: an operator
+            // can otherwise believe alerting works while receiving nothing.
+            Blast.slog("hohenheim.notification.undelivered", java.util.Map.of(
+                "event", event != null ? event : "(none)",
+                "subject", subject,
+                "reason", eligible == 0 ? "no_subscribed_channels" : "all_channels_failed"));
         }
         return delivered;
     }
