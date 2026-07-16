@@ -16,9 +16,12 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Deletes Let's Encrypt certificates whose hostnames no longer belong to any enabled site.
+ * Deletes Let's Encrypt certificates whose hostnames no longer belong to any live site.
  * A certificate is orphaned only when ALL of its SAN hostnames are unlinked; user-uploaded
  * (custom) certificates and the ACME account row are never touched. Runs daily.
+ * Gotcha this replaces: keying on ENABLED deleted the certs of a merely-DISABLED site,
+ * forcing re-issuance (and LE rate-limit pain) on re-enable -- only soft-DELETED sites
+ * orphan their certs, which also stops their pointless auto-renewals.
  */
 public class CleanOrphanCertificates extends ScheduledTask {
 
@@ -33,62 +36,58 @@ public class CleanOrphanCertificates extends ScheduledTask {
         clean();
     }
 
-    /** Delete letsencrypt certs whose every SAN hostname is absent from enabled sites' domains. */
+    /** Delete letsencrypt certs whose every SAN hostname is absent from live sites' domains. */
     public static void clean() {
-        try {
-            var certModel = Models.get(CertificateModel.class);
-            Set<String> linkedHostnames = enabledSiteHostnames();
+        var certModel = Models.get(CertificateModel.class);
+        Set<String> linkedHostnames = liveSiteHostnames();
 
-            List<Row> certs = certModel.find()
-                .where(CertificateModel.PROVIDER.eq(CertificateModel.PROVIDER_LETSENCRYPT))
-                .all();
+        List<Row> certs = certModel.find()
+            .where(CertificateModel.PROVIDER.eq(CertificateModel.PROVIDER_LETSENCRYPT))
+            .all();
 
-            int deleted = 0;
-            for (Row cert : certs) {
-                String domainsText = cert.get(CertificateModel.DOMAIN_NAMES_TEXT);
-                if (domainsText == null || domainsText.isBlank()) {
-                    continue;
-                }
+        int deleted = 0;
+        for (Row cert : certs) {
+            String domainsText = cert.get(CertificateModel.DOMAIN_NAMES_TEXT);
+            if (domainsText == null || domainsText.isBlank()) {
+                continue;
+            }
 
-                boolean anyLinked = false;
-                for (String hostname : domainsText.split(",")) {
-                    if (linkedHostnames.contains(hostname.trim().toLowerCase(Locale.ROOT))) {
-                        anyLinked = true;
-                        break;
-                    }
-                }
-
-                if (!anyLinked) {
-                    certModel.find().where(CertificateModel.ID.eq(cert.get(CertificateModel.ID))).delete();
-                    deleted++;
-                    Blast.log("TASK: CleanOrphanCertificates removed",
-                        cert.get(CertificateModel.NICE_NAME), "(" + domainsText + ")");
+            boolean anyLinked = false;
+            for (String hostname : domainsText.split(",")) {
+                if (linkedHostnames.contains(hostname.trim().toLowerCase(Locale.ROOT))) {
+                    anyLinked = true;
+                    break;
                 }
             }
 
-            if (deleted > 0) {
-                Blast.log("TASK: CleanOrphanCertificates removed", deleted, "orphaned certificates");
+            if (!anyLinked) {
+                certModel.find().where(CertificateModel.ID.eq(cert.get(CertificateModel.ID))).delete();
+                deleted++;
+                Blast.log("TASK: CleanOrphanCertificates removed",
+                    cert.get(CertificateModel.NICE_NAME), "(" + domainsText + ")");
             }
-        } catch (Exception e) {
-            Blast.log("TASK: CleanOrphanCertificates failed:", e.getMessage());
+        }
+
+        if (deleted > 0) {
+            Blast.log("TASK: CleanOrphanCertificates removed", deleted, "orphaned certificates");
         }
     }
 
-    /** All hostnames of domains that belong to an enabled site. */
-    private static Set<String> enabledSiteHostnames() {
+    /** All hostnames of domains that belong to a non-deleted site (disabled sites keep their certs). */
+    private static Set<String> liveSiteHostnames() {
         var siteModel = Models.get(SiteModel.class);
         var domainModel = Models.get(SiteDomainModel.class);
 
-        Set<Integer> enabledSiteIds = new HashSet<>();
-        for (Row site : siteModel.find().where(SiteModel.ENABLED.eq(true)).all()) {
-            enabledSiteIds.add(site.get(SiteModel.ID));
+        Set<Integer> liveSiteIds = new HashSet<>();
+        for (Row site : siteModel.find().where(SiteModel.DELETED_AT.isNull()).all()) {
+            liveSiteIds.add(site.get(SiteModel.ID));
         }
 
         Set<String> hostnames = new HashSet<>();
         for (Row domain : domainModel.find().all()) {
             Integer siteId = domain.get(SiteDomainModel.SITE_ID);
             String hostname = domain.get(SiteDomainModel.HOSTNAME);
-            if (siteId != null && hostname != null && enabledSiteIds.contains(siteId)) {
+            if (siteId != null && hostname != null && liveSiteIds.contains(siteId)) {
                 hostnames.add(hostname.trim().toLowerCase(Locale.ROOT));
             }
         }

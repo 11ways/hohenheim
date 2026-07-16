@@ -197,4 +197,60 @@ class TlsResilienceTest {
         assertThat(certModel.findById((Integer) orphan.get(CertificateModel.ID))).isNull();
         assertThat(certModel.findById((Integer) custom.get(CertificateModel.ID))).isNotNull();
     }
+
+    @Test
+    @Order(6)
+    void disabledSitesKeepTheirCertsButDeletedSitesOrphanThem() {
+        var certModel = Models.get(CertificateModel.class);
+        var siteModel = Models.get(SiteModel.class);
+        var domainModel = Models.get(SiteDomainModel.class);
+
+        // A temporarily DISABLED site: its cert must survive the sweep, or a
+        // toggle-off/toggle-on cycle forces LE re-issuance (rate-limit pain).
+        Row disabledSite = siteModel.createEmptyRow();
+        disabledSite.set(SiteModel.NAME, "Disabled Keep Site");
+        disabledSite.set(SiteModel.SLUG, "disabled-keep-site");
+        disabledSite.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        disabledSite.set(SiteModel.ENABLED, false);
+        disabledSite.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+        siteModel.save(disabledSite);
+
+        Row disabledDomain = domainModel.createEmptyRow();
+        disabledDomain.set(SiteDomainModel.SITE_ID, disabledSite.get(SiteModel.ID));
+        disabledDomain.set(SiteDomainModel.HOSTNAME, "disabled-keep.test");
+        disabledDomain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domainModel.save(disabledDomain);
+
+        Row keptCert = createCert("Disabled Keep", CertificateModel.PROVIDER_LETSENCRYPT,
+            CertificateModel.STATUS_ACTIVE, "disabled-keep.test");
+
+        // A soft-DELETED site: its cert is genuinely orphaned and gets removed
+        // (which also stops its pointless auto-renewals).
+        Row deletedSite = siteModel.createEmptyRow();
+        deletedSite.set(SiteModel.NAME, "Deleted Orphan Site");
+        deletedSite.set(SiteModel.SLUG, "deleted-orphan-site");
+        deletedSite.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        deletedSite.set(SiteModel.ENABLED, true);
+        deletedSite.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+        deletedSite.set(SiteModel.DELETED_AT, java.time.Instant.now());
+        siteModel.save(deletedSite);
+
+        Row deletedDomain = domainModel.createEmptyRow();
+        deletedDomain.set(SiteDomainModel.SITE_ID, deletedSite.get(SiteModel.ID));
+        deletedDomain.set(SiteDomainModel.HOSTNAME, "deleted-orphan.test");
+        deletedDomain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domainModel.save(deletedDomain);
+
+        Row orphanedCert = createCert("Deleted Orphan", CertificateModel.PROVIDER_LETSENCRYPT,
+            CertificateModel.STATUS_ACTIVE, "deleted-orphan.test");
+
+        CleanOrphanCertificates.clean();
+
+        assertThat(certModel.findById((Integer) keptCert.get(CertificateModel.ID)))
+            .as("a disabled site's cert must survive the orphan sweep")
+            .isNotNull();
+        assertThat(certModel.findById((Integer) orphanedCert.get(CertificateModel.ID)))
+            .as("a soft-deleted site's cert is orphaned")
+            .isNull();
+    }
 }

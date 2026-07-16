@@ -51,9 +51,13 @@ class BackupDatabasesTaskTest {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.BACKUP_RETENTION, 1);
 
         String name = "bk" + System.nanoTime();
+        String ephemeralName = "bke" + System.nanoTime();
         try {
+            // The backed-up database is durable; the ephemeral one pins the skip.
             service.create(name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
-                "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs, no btrfs I/O
+                "appuser", "secret123", "appdb", false);
+            service.create(ephemeralName, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
+                "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs
             DockerClient.ExecResult seed = docker.exec("hohenheim-db-" + name,
                 List.of("psql", "-U", "appuser", "-d", "appdb", "-c", "CREATE TABLE notes (id int);"),
                 List.of("PGPASSWORD=secret123"));
@@ -75,11 +79,19 @@ class BackupDatabasesTaskTest {
             String content = Files.readString(dumps.get(0));
             assertThat(content).contains("CREATE TABLE");       // the fresh real dump survived
             assertThat(content).doesNotContain("old1");         // stale dumps were pruned
+
+            // Ephemeral (tmpfs, wiped-on-restart) databases are declared
+            // throwaway and must be skipped entirely.
+            assertThat(Files.exists(backupRoot.resolve(ephemeralName)))
+                .as("ephemeral databases are not dumped")
+                .isFalse();
         } finally {
-            try {
-                service.destroy(name, true);
-            } catch (IOException ignored) {
-                // best effort
+            for (String each : List.of(name, ephemeralName)) {
+                try {
+                    service.destroy(each, true);
+                } catch (IOException ignored) {
+                    // best effort
+                }
             }
             deleteRecursively(backupRoot);
         }

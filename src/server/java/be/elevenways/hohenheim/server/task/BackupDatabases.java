@@ -50,6 +50,11 @@ public class BackupDatabases extends ScheduledTask {
             if (!db.running()) {
                 continue;   // can't dump a stopped container
             }
+            if (db.ephemeral()) {
+                // tmpfs databases are declared throwaway: dumping them wastes
+                // space and a dump failure would fire a false BACKUP_FAILED alert.
+                continue;
+            }
             try {
                 Path dbDir = backupRoot.resolve(db.name());
                 databaseService.backupToFile(db.name(), dbDir, STAMP.format(Instant.now()));

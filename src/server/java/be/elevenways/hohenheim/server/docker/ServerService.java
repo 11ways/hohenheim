@@ -91,6 +91,14 @@ public class ServerService extends DatasourceScoped {
     /** A DockerClient for the named server (local socket or remote over SSH). */
     public DockerClient clientFor(String name) {
         Row row = query(() -> model().findByName(name));
+        if (row == null && LOCAL.equals(name)) {
+            // The local daemon always exists; its row is bookkeeping that used
+            // to appear only once an admin FORM rendered (ensureLocal), so a
+            // restore/backup on a fresh install 500ed with "No server named
+            // 'local'" before anyone opened the databases form.
+            ensureLocal();
+            row = query(() -> model().findByName(name));
+        }
         if (row == null) {
             throw new IllegalArgumentException("No server named '" + name + "'");
         }
