@@ -47,6 +47,7 @@ public final class HohenheimSettingsFiles {
         ignored = HohenheimSettings.Proxy.GROUP;
         ignored = HohenheimSettings.Ssl.GROUP;
         ignored = HohenheimSettings.Logging.GROUP;
+        ignored = HohenheimSettings.Node.GROUP;
         ignored = HohenheimSettings.Storage.GROUP;
         ignored = HohenheimSettings.Database.GROUP;
         ignored = HohenheimSettings.Security.GROUP;

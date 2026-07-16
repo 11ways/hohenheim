@@ -15,6 +15,8 @@ import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 
 /**
@@ -108,5 +110,28 @@ class DiscoveryTaskTest {
         assertThat(reloaded).describedAs("ghost node version should still exist").isNotNull();
         assertThat((Boolean) reloaded.get(NodeVersionModel.OBSOLETE))
             .describedAs("unseen node versions should be marked obsolete").isTrue();
+    }
+
+    @Test
+    @Order(4)
+    void updateNodeVersionsScansConfiguredNLocations() throws Exception {
+        Path root = Files.createTempDirectory("hohenheim-node-location");
+        Path node = root.resolve("v99.4.2/bin/node");
+        Files.createDirectories(node.getParent());
+        Files.writeString(node, "#!/bin/sh\nexit 0\n");
+        assertThat(node.toFile().setExecutable(true)).isTrue();
+
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Node.LOCATIONS, root.toString());
+        try {
+            UpdateNodeVersions.reconcile();
+            Row discovered = Models.get(NodeVersionModel.class).find()
+                .where(NodeVersionModel.PATH.eq(node.toString()))
+                .first();
+            assertThat(discovered).isNotNull();
+            assertThat(discovered.get(NodeVersionModel.VERSION)).isEqualTo("99.4.2");
+            assertThat(discovered.get(NodeVersionModel.SOURCE)).isEqualTo("configured");
+        } finally {
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Node.LOCATIONS, null);
+        }
     }
 }

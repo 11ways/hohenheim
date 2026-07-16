@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.auth.server.PasswordHasher;
 import be.elevenways.zenit.common.session.SessionStore;
 import io.undertow.client.ClientCallback;
 import io.undertow.client.ClientConnection;
@@ -542,6 +543,8 @@ public class SiteDispatcher implements HttpHandler {
     private void continueAfterAuth(RouteEntry entry, HttpServerExchange exchange,
                                    String hostname, String clientIp) {
 
+        ResolvedClientIp.attach(exchange, clientIp);
+
         // --- Access list enforcement ---
         if (entry.hasAccessList() && !checkAccessList(exchange, entry, clientIp)) {
             return;
@@ -855,12 +858,16 @@ public class SiteDispatcher implements HttpHandler {
             if (colon < 0) return false;
             String user = decoded.substring(0, colon);
             String pass = decoded.substring(colon + 1);
+            boolean passwordMatches = entry.basicAuthPass != null
+                && (entry.basicAuthPass.startsWith("$argon2")
+                    ? PasswordHasher.verify(pass, entry.basicAuthPass)
+                    : MessageDigest.isEqual(
+                        entry.basicAuthPass.getBytes(StandardCharsets.UTF_8),
+                        pass.getBytes(StandardCharsets.UTF_8)));
             return MessageDigest.isEqual(
                     entry.basicAuthUser.getBytes(StandardCharsets.UTF_8),
                     user.getBytes(StandardCharsets.UTF_8))
-                && MessageDigest.isEqual(
-                    entry.basicAuthPass.getBytes(StandardCharsets.UTF_8),
-                    pass.getBytes(StandardCharsets.UTF_8));
+                && passwordMatches;
         } catch (Exception e) {
             return false;
         }

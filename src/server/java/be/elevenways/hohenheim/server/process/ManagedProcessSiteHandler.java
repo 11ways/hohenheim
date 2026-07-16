@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.NotificationService;
+import be.elevenways.hohenheim.server.proxy.ResolvedClientIp;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.TcpUpstreamConnection;
@@ -781,9 +782,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         if (list.size() == 1) return list.get(0);
 
         // Build fingerprint
-        String ip = exchange.getRequestHeaders().getFirst(new HttpString("X-Forwarded-For"));
-        if (ip == null) ip = exchange.getRequestHeaders().getFirst(new HttpString("X-Real-IP"));
-        if (ip == null) ip = exchange.getSourceAddress().getAddress().getHostAddress();
+        String ip = ResolvedClientIp.get(exchange);
         String ua = exchange.getRequestHeaders().getFirst(Headers.USER_AGENT);
         String al = exchange.getRequestHeaders().getFirst(new HttpString("Accept-Language"));
         String fingerprint = (ip != null ? ip : "") + (ua != null ? ua : "") + (al != null ? al : "");
