@@ -22,6 +22,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
 import com.microsoft.playwright.options.Cookie;
 
@@ -85,6 +86,11 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         new HohenheimPanel();
 
         sessionToken = seedAuthenticatedAdmin();
+
+        // Endpoint rate limits (deploy/db-io/download) share one JVM-wide
+        // bucket per principal; a full suite would trip them across classes.
+        // The dedicated rate-limit test installs its own strict resolver.
+        RateLimitMiddleware.setPolicyResolver((conduit, endpoint, declared) -> null);
 
         zenitServer = ServerZenitRuntime.createServer(0);
         zenitServer.start();

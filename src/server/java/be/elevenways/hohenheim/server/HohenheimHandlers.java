@@ -17,7 +17,11 @@ import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.domino.common.DominoFile;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
+import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -34,6 +38,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,6 +61,57 @@ public final class HohenheimHandlers {
         initProcessControl();
         initDeployControl();
         initTerminal();
+        initApi();
+    }
+
+    // -----------------------------------------------------------------------
+    // Automation API: znit_ bearer keys (zenit-auth). State-changing calls
+    // REFUSE session principals -- only header-carried API keys may act, which
+    // is what makes the csrfExempt declaration safe.
+    // -----------------------------------------------------------------------
+
+    private static void initApi() {
+        HohenheimEndpoints.API_SITES.setHandler(conduit -> {
+            List<Map<String, Object>> sites = new ArrayList<>();
+            var proxy = ServerMain.getProxyServer();
+            for (Row site : Models.get(SiteModel.class).find()
+                    .where(SiteModel.DELETED_AT.isNull()).all()) {
+                Integer siteId = site.get(SiteModel.ID);
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("id", siteId);
+                entry.put("name", site.get(SiteModel.NAME));
+                entry.put("slug", site.get(SiteModel.SLUG));
+                entry.put("type", String.valueOf(site.get(SiteModel.SITE_TYPE)));
+                entry.put("source", site.get(SiteModel.SOURCE));
+                entry.put("enabled", Boolean.TRUE.equals(site.get(SiteModel.ENABLED)));
+                SiteRequestHandler handler = proxy != null && siteId != null
+                    ? proxy.getDispatcher().findHandlerBySiteId(siteId) : null;
+                entry.put("health", handler != null
+                    ? BlastString.lower(handler.getHealth().name()) : "unknown");
+                if (handler instanceof GitSiteRequestHandler git) {
+                    entry.put("current_commit", git.getCurrentCommit());
+                    entry.put("deploying", git.isDeploying());
+                }
+                sites.add(entry);
+            }
+            return jsonUntyped(Map.of("sites", sites));
+        });
+
+        HohenheimEndpoints.API_SITES_DEPLOY.setHandler(conduit -> {
+            if (!(conduit.getAttribute(ConduitAttributes.PRINCIPAL) instanceof ApiKeyPrincipal)) {
+                conduit.forbidden();
+                return null;
+            }
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            var git = gitHandler(siteId);
+            if (git.isEmpty()) {
+                conduit.notFound();
+                return null;
+            }
+            git.get().enqueueDeploy("api");
+            ActivityLog.record(Models.get(SiteModel.class), siteId, "deploy_triggered", "api");
+            return jsonUntyped(Map.of("status", "queued", "site", siteId));
+        });
     }
 
     private static void initHealth() {

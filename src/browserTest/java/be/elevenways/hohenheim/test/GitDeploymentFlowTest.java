@@ -242,6 +242,43 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
     }
 
     @Test
+    @Order(5)
+    void automationApiDeploysWithAnApiKeyOnly() throws Exception {
+        // A session cookie must NOT be able to act on the csrf-exempt API route.
+        var sessionDeploy = postAction("/api/sites/" + siteId + "/deploy");
+        assertThat(sessionDeploy.statusCode()).isEqualTo(403);
+
+        Row user = be.elevenways.zenit.auth.server.AuthModels.users().find()
+            .where(be.elevenways.zenit.auth.model.UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        var key = be.elevenways.zenit.auth.server.ApiKeyService.create(
+            user.get(be.elevenways.zenit.auth.model.UserModel.ID), "flow-test-key",
+            List.of("hohenheim.*"), null);
+
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+
+        // Bearer GET: the site list carries slug, health and git state.
+        var list = client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + "/api/sites"))
+            .header("Authorization", "Bearer " + key.plaintext())
+            .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(list.statusCode()).isEqualTo(200);
+        assertThat(list.body()).contains("git-flow-site").contains("current_commit");
+
+        // Bearer POST: the deploy queues and is attributed to the api origin.
+        int before = deployments().size();
+        var deploy = client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + "/api/sites/" + siteId + "/deploy"))
+            .header("Authorization", "Bearer " + key.plaintext())
+            .POST(HttpRequest.BodyPublishers.ofString(""))
+            .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(deploy.statusCode()).isEqualTo(200);
+        assertThat(deploy.body()).contains("queued");
+
+        await("api deploy", () -> hasFinished(before + 1));
+        assertThat((String) deployments().get(0).get(DeploymentModel.REASON)).isEqualTo("api");
+    }
+
+    @Test
     @Order(4)
     void rollbackActivatesThePreviousSlot() throws Exception {
         assertThat(gitHandler().hasPreviousSlot()).isTrue();
