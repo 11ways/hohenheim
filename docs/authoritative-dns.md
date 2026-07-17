@@ -28,7 +28,8 @@ synthesized owner plus the NSEC proving the exact name does not exist; DS
 queries at a delegation are answered authoritatively by the parent.
 Response-rate-limiting on the UDP listener (`dns.rate_limit_per_second`)
 rounds out the abuse mitigations; verdicts key on the computed response, with
-NXDOMAIN bucketed per zone so random-subdomain floods cannot dodge the limit. The DNS story is feature-complete.
+NXDOMAIN bucketed per zone and referrals per delegation point so
+random-subdomain floods cannot dodge the limit. The DNS story is feature-complete.
 
 Hohenheim can become the authoritative DNS service for zones it manages. This
 removes the runtime dependency on a hosted DNS control panel and gives ACME
