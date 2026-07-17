@@ -109,7 +109,7 @@
     "down": {"text": "Onbereikbaar", "scope": "attention_detail"},
     "dump_file": {"text": "Dumpbestand", "scope": "database_tab"},
     "duration": {"text": "Duur", "scope": "site_deployments"},
-    "empty": [{"text": "Geen databases gekoppeld", "scope": "site_databases"}, {"text": "Geen domeinen geconfigureerd", "scope": "site_domains"}, {"text": "Nog geen deployments", "scope": "site_deployments"}],
+    "empty": [{"text": "Geen databases gekoppeld", "scope": "site_databases"}, {"text": "Geen domeinen geconfigureerd", "scope": "site_domains"}, {"text": "Nog geen deployments", "scope": "site_deployments"}, {"text": "Geen dev-servers verbonden", "scope": "dev_sessions"}],
     "empty_description": [{"text": "Koppel een beheerde database om de verbindingsgegevens als omgevingsvariabelen in de processen te injecteren.", "scope": "site_databases"}, {"text": "Voeg een hostnaam toe om verkeer naar deze site te sturen.", "scope": "site_domains"}, {"text": "Deployments via webhook, polling of handmatige start verschijnen hier.", "scope": "site_deployments"}],
     "engine": [{"text": "Engine", "scope": "database_tab"}, {"text": "Engine", "scope": "site_databases"}],
     "env_prefix": {"text": "Omgevingsprefix", "scope": "site_databases"},
@@ -177,7 +177,7 @@
     "copy_record_value": {"text": "Waarde van TXT-record kopiëren", "scope": "certificate_request"},
     "verify_dns": {"text": "DNS controleren en certificaat uitgeven", "scope": "certificate_request"},
     "start_over": {"text": "Opnieuw beginnen", "scope": "certificate_request"},
-    "name": {"text": "Naam", "scope": "certificate_request"},
+    "name": [{"text": "Naam", "scope": "certificate_request"}, {"text": "Naam", "scope": "dev_sessions"}],
     "name_placeholder": {"text": "Standaard het eerste domein", "scope": "certificate_request"},
     "domains": {"text": "Domeinen", "scope": "certificate_request"},
     "domains_help": {"text": "Gescheiden door komma's of witruimte. Wildcards zoals *.example.com vereisen DNS-01 en dekken de kale naam example.com niet; voeg beide toe wanneer nodig.", "scope": "certificate_request"},
@@ -241,6 +241,7 @@
     "hohenheim.site.domains": "Domeinen",
     "hohenheim.site.enabled": "Site ingeschakeld",
     "hohenheim.site.plural": "Sites",
+    "hohenheim.site.dev_sessions": "Dev-sessies",
     "hohenheim.site.processes": "Processen",
     "hohenheim.site.toggle": "In-/uitschakelen",
     "hohenheim.site_database.env_prefix_help": "Bepaalt de naam van de geinjecteerde variabelen: DB geeft DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME en DB_URL. De eerste koppeling van de site levert ook DATABASE_URL.",
@@ -319,5 +320,10 @@
     "zone_not_hosted": {"text": "Geen ingeschakelde gehoste DNS-zone dekt: {$hostnames}", "scope": "certificate_request_error"},
     "dns_server_disabled": {"text": "De DNS-server draait niet; schakel die eerst in bij de instellingen", "scope": "certificate_request_error"},
     "dns_listener": {"text": "DNS-server kon niet starten", "scope": "attention_title"},
-    "dns_zone_no_ns": [{"text": "Zone {$origin} heeft geen NS-records", "scope": "attention_title"}, {"text": "Delegatie vereist NS-records op de zone zelf; resolvers beschouwen de zone als defect.", "scope": "attention_detail"}]
+    "dns_zone_no_ns": [{"text": "Zone {$origin} heeft geen NS-records", "scope": "attention_title"}, {"text": "Delegatie vereist NS-records op de zone zelf; resolvers beschouwen de zone als defect.", "scope": "attention_detail"}],
+    "url": {"text": "URL", "scope": "dev_sessions"},
+    "connected_since": {"text": "Verbonden sinds", "scope": "dev_sessions"},
+    "active_streams": {"text": "Actieve streams", "scope": "dev_sessions"},
+    "empty_hint": {"text": "Start een Zenit-project met de dev-tunnel geconfigureerd en het verschijnt hier automatisch.", "scope": "dev_sessions"},
+    "registration_token": [{"text": "Registratietoken", "scope": "field"}, {"text": "Geheim dat externe dev-servers aanbieden bij het registreren. Wordt automatisch gegenereerd wanneer leeg; plak het in de zenit-dev-configuratie van de dev-machine.", "scope": "help"}]
 }

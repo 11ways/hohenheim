@@ -1,0 +1,45 @@
+{#- Dev sessions tab on a dev-namespace site: the live tunnel registrations. -#}
+{% declare title: String %}
+{% declare siteName: String %}
+{% declare sessions: List %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ siteName }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if sessions %}
+    <pl-table>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("name", scope: "dev_sessions") }}</pl-table-head>
+            <pl-table-head>{{ t("url", scope: "dev_sessions") }}</pl-table-head>
+            <pl-table-head>{{ t("connected_since", scope: "dev_sessions") }}</pl-table-head>
+            <pl-table-head>{{ t("active_streams", scope: "dev_sessions") }}</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each sessions as index, session %}
+            <pl-table-row>
+                <pl-table-cell><code>{{ session.get("name") }}</code></pl-table-cell>
+                <pl-table-cell>
+                    <a href={% session.get("origin") %} target="_blank" rel="noopener">{{ session.get("origin") }}</a>
+                </pl-table-cell>
+                <pl-table-cell>{{ session.get("registeredAt") }}</pl-table-cell>
+                <pl-table-cell>{{ session.get("streams") }}</pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="flask">
+        <pl-empty-state-title>{{ t("empty", scope: "dev_sessions") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("empty_hint", scope: "dev_sessions") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+</section>
+{% /block %}

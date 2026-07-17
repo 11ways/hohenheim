@@ -109,7 +109,7 @@
     "down": {"text": "Down", "scope": "attention_detail"},
     "dump_file": {"text": "Dump file", "scope": "database_tab"},
     "duration": {"text": "Duration", "scope": "site_deployments"},
-    "empty": [{"text": "No databases attached", "scope": "site_databases"}, {"text": "No domains configured", "scope": "site_domains"}, {"text": "No deployments yet", "scope": "site_deployments"}],
+    "empty": [{"text": "No databases attached", "scope": "site_databases"}, {"text": "No domains configured", "scope": "site_domains"}, {"text": "No deployments yet", "scope": "site_deployments"}, {"text": "No dev servers connected", "scope": "dev_sessions"}],
     "empty_description": [{"text": "Attach a managed database and its connection details are injected into this site's processes as environment variables.", "scope": "site_databases"}, {"text": "Add a hostname so traffic routes to this site.", "scope": "site_domains"}, {"text": "Webhook, poll or manual deploys of this site will show up here.", "scope": "site_deployments"}],
     "engine": [{"text": "Engine", "scope": "database_tab"}, {"text": "Engine", "scope": "site_databases"}],
     "env_prefix": {"text": "Env prefix", "scope": "site_databases"},
@@ -177,7 +177,7 @@
     "copy_record_value": {"text": "Copy TXT record value", "scope": "certificate_request"},
     "verify_dns": {"text": "Verify DNS and issue certificate", "scope": "certificate_request"},
     "start_over": {"text": "Start over", "scope": "certificate_request"},
-    "name": {"text": "Name", "scope": "certificate_request"},
+    "name": [{"text": "Name", "scope": "certificate_request"}, {"text": "Name", "scope": "dev_sessions"}],
     "name_placeholder": {"text": "Defaults to the first domain", "scope": "certificate_request"},
     "domains": {"text": "Domains", "scope": "certificate_request"},
     "domains_help": {"text": "Comma or whitespace separated. Wildcards such as *.example.com require DNS-01 and do not cover the bare example.com name; include both when needed.", "scope": "certificate_request"},
@@ -241,6 +241,7 @@
     "hohenheim.site.domains": "Domains",
     "hohenheim.site.enabled": "Site enabled",
     "hohenheim.site.plural": "Sites",
+    "hohenheim.site.dev_sessions": "Dev sessions",
     "hohenheim.site.processes": "Processes",
     "hohenheim.site.toggle": "Enable/disable",
     "hohenheim.site_database.env_prefix_help": "Names the injected variable family: DB gives DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME and DB_URL. The site's first attachment also provides DATABASE_URL.",
@@ -319,5 +320,10 @@
     "zone_not_hosted": {"text": "No enabled hosted DNS zone covers: {$hostnames}", "scope": "certificate_request_error"},
     "dns_server_disabled": {"text": "The DNS server is not running; enable it in the settings first", "scope": "certificate_request_error"},
     "dns_listener": {"text": "DNS server failed to start", "scope": "attention_title"},
-    "dns_zone_no_ns": [{"text": "Zone {$origin} has no NS records", "scope": "attention_title"}, {"text": "Delegation needs NS records on the zone itself; resolvers will treat it as broken.", "scope": "attention_detail"}]
+    "dns_zone_no_ns": [{"text": "Zone {$origin} has no NS records", "scope": "attention_title"}, {"text": "Delegation needs NS records on the zone itself; resolvers will treat it as broken.", "scope": "attention_detail"}],
+    "url": {"text": "URL", "scope": "dev_sessions"},
+    "connected_since": {"text": "Connected since", "scope": "dev_sessions"},
+    "active_streams": {"text": "Active streams", "scope": "dev_sessions"},
+    "empty_hint": {"text": "Start a Zenit project with the dev tunnel configured and it will appear here automatically.", "scope": "dev_sessions"},
+    "registration_token": [{"text": "Registration token", "scope": "field"}, {"text": "Secret that remote dev servers present when they register. Generated automatically when left blank; paste it into the dev machine's zenit-dev config.", "scope": "help"}]
 }

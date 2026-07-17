@@ -14,7 +14,7 @@ import java.util.Map;
 /**
  * Renders error responses for the reverse proxy using Hawkeye templates.
  */
-class ErrorPages {
+public final class ErrorPages {
 
     private static final Identifier ERROR_TEMPLATE =
         Identifier.of("hohenheim", "hohenheim/error");
@@ -24,6 +24,22 @@ class ErrorPages {
         String html = render("404", "No site configured", msg, hostname);
 
         exchange.setStatusCode(404);
+        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html; charset=UTF-8");
+        exchange.getResponseSender().send(html);
+    }
+
+    /**
+     * 503 for a dev-namespace subdomain with no live registration. Deliberately
+     * non-localized, matching the proxy's other error pages (they render before
+     * any locale context exists).
+     */
+    public static void sendDevOffline(HttpServerExchange exchange, String name) {
+        String html = render("503", "Dev site offline",
+            "No dev server is currently registered for '" + name + "'."
+                + " Start it with the dev tunnel enabled and reload.", name);
+
+        exchange.setStatusCode(503);
+        exchange.getResponseHeaders().put(Headers.RETRY_AFTER, "5");
         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html; charset=UTF-8");
         exchange.getResponseSender().send(html);
     }
