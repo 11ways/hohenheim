@@ -156,6 +156,14 @@ public class HohenheimSettings {
                 + "or a capability like CAP_NET_BIND_SERVICE")
             .restartRequired()
             .build();
+
+        public static final SettingDefinition<Integer> RATE_LIMIT_PER_SECOND = GROUP
+            .buildSetting("rate_limit_per_second", Integer.class)
+            .defaultValue(20)
+            .description("Response-rate-limit per client network and query over UDP, the standard "
+                + "mitigation against DNS reflection abuse. Every second limited response is answered "
+                + "truncated so legitimate clients retry over TCP (never limited). 0 disables")
+            .build();
     }
 
     // --- Logging ---
