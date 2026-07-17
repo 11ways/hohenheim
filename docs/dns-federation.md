@@ -124,8 +124,11 @@ the read-through/forwarding/fallback flows against a scripted peer.
 Signed zones federate unchanged: a primary's DNSKEY, RRSIGs and NSEC records
 ride the existing AXFR as ordinary records, and the secondary detects the
 apex DNSKEY and serves them as a signed zone (it does not re-sign -- the
-private key never leaves the owning primary). See `authoritative-dns.md` for
-DNSSEC itself.
+private key never leaves the owning primary). The daily re-sign task bumps
+each signed primary zone's serial so replicas pull the fresh RRSIGs long
+before the 14-day signature window closes; RRSIG churn between two builds of
+the same records is inherent to online signing. See `authoritative-dns.md`
+for DNSSEC itself.
 
 The DNS story is now feature-complete: authoritative serving, ACME DNS-01,
 zone-file import/export, federation (hidden primary + secondaries), central

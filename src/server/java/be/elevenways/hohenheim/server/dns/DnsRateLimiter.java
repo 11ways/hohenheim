@@ -2,7 +2,10 @@ package be.elevenways.hohenheim.server.dns;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.xbill.DNS.Message;
+import org.xbill.DNS.Rcode;
 import org.xbill.DNS.Record;
+import org.xbill.DNS.Section;
+import org.xbill.DNS.Type;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -34,7 +37,32 @@ public final class DnsRateLimiter {
         this.limitPerSecond = limitPerSecond;
     }
 
-    public @NonNull Verdict check(@NonNull InetAddress client, @NonNull Message query) {
+    /**
+     * The bucket key for a computed response. NXDOMAIN keys per ZONE, not per
+     * qname: a random-subdomain flood must share one bucket or RRL is useless
+     * against the standard reflection attack (classic BIND/NSD RRL semantics).
+     * Positive answers key per qname/qtype; other rcodes share an error bucket.
+     */
+    public static @NonNull String keyFor(@NonNull Message query, @NonNull Message response) {
+        int rcode = response.getHeader().getRcode();
+        if (rcode == Rcode.NXDOMAIN) {
+            for (Record record : response.getSection(Section.AUTHORITY)) {
+                if (record.getType() == Type.SOA) {
+                    return "nx|" + record.getName().toString(true).toLowerCase();
+                }
+            }
+            return "nx|-";
+        }
+        if (rcode != Rcode.NOERROR) {
+            return "err|" + rcode;
+        }
+        Record question = query.getQuestion();
+        return question != null
+            ? question.getName().toString(true).toLowerCase() + "|" + question.getType()
+            : "-";
+    }
+
+    public @NonNull Verdict check(@NonNull InetAddress client, @NonNull String bucket) {
         int limit = limitPerSecond.getAsInt();
         if (limit <= 0 || client.isLoopbackAddress()) {
             return Verdict.ALLOW;
@@ -50,10 +78,7 @@ public final class DnsRateLimiter {
             }
         }
 
-        Record question = query.getQuestion();
-        String key = prefixOf(client) + "|" + (question != null
-            ? question.getName().toString(true).toLowerCase() + "|" + question.getType()
-            : "-");
+        String key = prefixOf(client) + "|" + bucket;
         if (counts.size() >= MAX_TRACKED && !counts.containsKey(key)) {
             return Verdict.ALLOW;
         }

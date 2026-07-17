@@ -201,22 +201,34 @@ public final class DnsServer {
                 if (parsed != null && parsed.getHeader().getOpcode() == Opcode.NOTIFY) {
                     reply = handleNotify(parsed, wire);
                 }
+                else if (parsed == null) {
+                    // Unparseable garbage earns at most a FORMERR (amplification
+                    // <= 1); over-limit garbage is dropped from a shared bucket.
+                    if (this.rateLimiter.check(client.getAddress(), "err|formerr") != DnsRateLimiter.Verdict.ALLOW) {
+                        return;
+                    }
+                    reply = this.responder.respondToWire(wire, false);
+                }
                 else {
                     // RRL applies to UDP queries only: TCP is spoof-resistant, and a
                     // SLIP verdict answers truncated so real clients retry over TCP.
-                    if (parsed != null) {
-                        switch (this.rateLimiter.check(client.getAddress(), parsed)) {
-                            case DROP -> {
-                                return;
-                            }
-                            case SLIP -> {
-                                sendUdp(socket, truncatedWire(parsed), client);
-                                return;
-                            }
-                            case ALLOW -> { }
-                        }
+                    // The verdict keys on the COMPUTED response so an NXDOMAIN flood
+                    // with random subdomains shares one per-zone bucket.
+                    Message answer = this.responder.respond(parsed);
+                    if (answer == null) {
+                        return;
                     }
-                    reply = this.responder.respondToWire(wire, false);
+                    switch (this.rateLimiter.check(client.getAddress(), DnsRateLimiter.keyFor(parsed, answer))) {
+                        case DROP -> {
+                            return;
+                        }
+                        case SLIP -> {
+                            sendUdp(socket, truncatedWire(parsed), client);
+                            return;
+                        }
+                        case ALLOW -> { }
+                    }
+                    reply = this.responder.wireFor(parsed, answer, false);
                 }
                 if (reply == null) {
                     return;

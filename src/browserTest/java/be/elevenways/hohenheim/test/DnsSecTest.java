@@ -66,6 +66,12 @@ class DnsSecTest {
         record(zoneId, "@", DnsRecordModel.TYPE_NS, "ns1.signed.example");
         record(zoneId, "ns1", DnsRecordModel.TYPE_A, "192.0.2.1");
         record(zoneId, "www", DnsRecordModel.TYPE_A, "192.0.2.10");
+        // A wildcard one level down, a child under a populated node (forces the
+        // wildcard-denial NSEC to differ from the qname-covering one), and an
+        // insecure delegation for the parent-side DS answer.
+        record(zoneId, "*.sub", DnsRecordModel.TYPE_A, "192.0.2.20");
+        record(zoneId, "_acme-challenge.www", DnsRecordModel.TYPE_TXT, "seed");
+        record(zoneId, "child", DnsRecordModel.TYPE_NS, "ns1.signed.example");
         DnsZoneStore.INSTANCE.reload();
 
         server = new DnsServer();
@@ -164,6 +170,105 @@ class DnsSecTest {
     }
 
     @Test
+    void wildcardAnswerValidatesWithExpansionProof() throws Exception {
+        DNSKEYRecord key = apexKey();
+        Message response = query("foo.sub.signed.example", Type.A);
+        assertThat(response.getHeader().getRcode()).isEqualTo(Rcode.NOERROR);
+
+        Name qname = Name.fromString("foo.sub.signed.example.");
+        RRset aSet = new RRset();
+        RRSIGRecord sig = null;
+        for (Record record : response.getSection(Section.ANSWER)) {
+            if (record.getType() == Type.A) {
+                assertThat(record.getName()).isEqualTo(qname);
+                aSet.addRR(record);
+            }
+            else if (record instanceof RRSIGRecord rrsig && rrsig.getTypeCovered() == Type.A) {
+                sig = rrsig;
+            }
+        }
+        assertThat(sig).as("wildcard answer is signed").isNotNull();
+        // RFC 4035 3.1.3: the RRSIG follows the synthesized owner name; only
+        // its labels field keeps the wildcard's label count.
+        assertThat(sig.getName()).isEqualTo(qname);
+        assertThat(sig.getLabels()).isEqualTo(3);
+        DNSSEC.verify(aSet, sig, key);
+
+        // ...plus the NSEC proving the exact qname does not exist itself.
+        assertThat(coveringNsec(response.getSection(Section.AUTHORITY), qname, key))
+            .as("expansion proof NSEC").isNotNull();
+    }
+
+    @Test
+    void wildcardNoDataIsProven() throws Exception {
+        DNSKEYRecord key = apexKey();
+        Message response = query("foo.sub.signed.example", Type.TXT);
+        assertThat(response.getHeader().getRcode()).isEqualTo(Rcode.NOERROR);
+        assertThat(response.getSection(Section.ANSWER)).isEmpty();
+
+        // The wildcard's own NSEC proves the type is absent at the match.
+        List<Record> authority = response.getSection(Section.AUTHORITY);
+        Name wildcard = Name.fromString("*.sub.signed.example.");
+        NSECRecord atWildcard = null;
+        for (Record record : authority) {
+            if (record instanceof NSECRecord nsec && nsec.getName().equals(wildcard)) {
+                atWildcard = nsec;
+            }
+        }
+        assertThat(atWildcard).as("NSEC at the wildcard owner").isNotNull();
+        assertThat(atWildcard.hasType(Type.A)).isTrue();
+        assertThat(atWildcard.hasType(Type.TXT)).isFalse();
+        RRset set = new RRset();
+        set.addRR(atWildcard);
+        RRSIGRecord sig = rrsigFor(authority, Type.NSEC, wildcard);
+        assertThat(sig).as("wildcard NSEC is signed").isNotNull();
+        DNSSEC.verify(set, sig, key);
+    }
+
+    @Test
+    void nxdomainUnderAPopulatedNodeDeniesItsWildcard() throws Exception {
+        DNSKEYRecord key = apexKey();
+        Message response = query("absent.www.signed.example", Type.A);
+        assertThat(response.getHeader().getRcode()).isEqualTo(Rcode.NXDOMAIN);
+
+        // The qname and the wildcard at its closest encloser are covered by
+        // two DIFFERENT NSECs here (_acme-challenge.www sits between them),
+        // so both denials must be present for a validator.
+        List<Record> authority = response.getSection(Section.AUTHORITY);
+        assertThat(coveringNsec(authority, Name.fromString("absent.www.signed.example."), key))
+            .as("qname denial").isNotNull();
+        assertThat(coveringNsec(authority, Name.fromString("*.www.signed.example."), key))
+            .as("wildcard denial").isNotNull();
+    }
+
+    @Test
+    void delegationDsQueryIsAnsweredAuthoritatively() throws Exception {
+        DNSKEYRecord key = apexKey();
+        Message response = query("child.signed.example", Type.DS);
+        assertThat(response.getHeader().getFlag(Flags.AA)).as("parent answers DS with AA").isTrue();
+        assertThat(response.getHeader().getRcode()).isEqualTo(Rcode.NOERROR);
+        assertThat(response.getSection(Section.ANSWER)).isEmpty();
+
+        // Insecure delegation: the NSEC at the cut proves NS present, DS absent.
+        List<Record> authority = response.getSection(Section.AUTHORITY);
+        Name child = Name.fromString("child.signed.example.");
+        NSECRecord atChild = null;
+        for (Record record : authority) {
+            if (record instanceof NSECRecord nsec && nsec.getName().equals(child)) {
+                atChild = nsec;
+            }
+        }
+        assertThat(atChild).as("NSEC at the delegation").isNotNull();
+        assertThat(atChild.hasType(Type.NS)).isTrue();
+        assertThat(atChild.hasType(Type.DS)).isFalse();
+        RRset set = new RRset();
+        set.addRR(atChild);
+        RRSIGRecord sig = rrsigFor(authority, Type.NSEC, child);
+        assertThat(sig).as("delegation NSEC is signed").isNotNull();
+        DNSSEC.verify(set, sig, key);
+    }
+
+    @Test
     void unsignedQueryOmitsDnssecRecords() throws Exception {
         // No DO bit: a legacy resolver must not receive RRSIG/NSEC bloat.
         Message response = queryNoDo("www.signed.example", Type.A);
@@ -182,6 +287,32 @@ class DnsSecTest {
             }
         }
         return dnsKey;
+    }
+
+    /** Finds an NSEC whose canonical range covers the name and verifies its RRSIG. */
+    private static NSECRecord coveringNsec(List<Record> records, Name name, DNSKEYRecord key)
+            throws Exception {
+        for (Record record : records) {
+            if (!(record instanceof NSECRecord nsec)) {
+                continue;
+            }
+            Name owner = nsec.getName();
+            Name next = nsec.getNext();
+            boolean wraps = next.compareTo(owner) <= 0;
+            boolean covers = wraps
+                ? (name.compareTo(owner) > 0 || name.compareTo(next) < 0)
+                : (owner.compareTo(name) < 0 && name.compareTo(next) < 0);
+            if (!covers) {
+                continue;
+            }
+            RRset set = new RRset();
+            set.addRR(nsec);
+            RRSIGRecord sig = rrsigFor(records, Type.NSEC, owner);
+            assertThat(sig).as("NSEC at " + owner + " is signed").isNotNull();
+            DNSSEC.verify(set, sig, key);
+            return nsec;
+        }
+        return null;
     }
 
     private static RRSIGRecord rrsigFor(List<Record> records, int coveredType, Name owner) {

@@ -18,10 +18,17 @@ P-256 CSK (algorithm 13). Enabling `dnssec` on a zone mints a key on first
 use, signs every authoritative RRset, publishes an apex DNSKEY, and builds an
 NSEC chain for authenticated denial; RRSIG/NSEC/DNSKEY are served only to
 DO-bit queries, and the DS record for the registrar is shown on the zone's
-Zone-file tab. A daily task re-signs before the 14-day RRSIG window closes,
-and signed zones replicate to secondaries verbatim over the existing AXFR.
+Zone-file tab. A daily task re-signs before the 14-day RRSIG window closes
+and bumps each zone's serial while doing so: secondaries replicate signed
+records verbatim and only pull when the serial advances, so a silent re-sign
+would leave replicas serving RRSIGs until they expire. NXDOMAIN responses
+carry both the qname-covering NSEC and the NSEC denying the wildcard at the
+closest encloser; wildcard answers are served with the RRSIG rewritten to the
+synthesized owner plus the NSEC proving the exact name does not exist; DS
+queries at a delegation are answered authoritatively by the parent.
 Response-rate-limiting on the UDP listener (`dns.rate_limit_per_second`)
-rounds out the abuse mitigations. The DNS story is feature-complete.
+rounds out the abuse mitigations; verdicts key on the computed response, with
+NXDOMAIN bucketed per zone so random-subdomain floods cannot dodge the limit. The DNS story is feature-complete.
 
 Hohenheim can become the authoritative DNS service for zones it manages. This
 removes the runtime dependency on a hosted DNS control panel and gives ACME
