@@ -31,9 +31,20 @@ Each subsystem has a deeper design doc under [`docs/`](docs/).
 
 ### Database
 
-- **SQLite.** Bundled via `sqlite-jdbc`; no external DB server. The file path
-  is controlled by the `database.path` setting (default: `hohenheim.db` in the
-  working directory).
+- **SQLite by default.** Bundled via `sqlite-jdbc`; no external DB server. The
+  file path is controlled by the `database.path` setting (default:
+  `hohenheim.db` in the working directory). SQLite is recommended: Hohenheim is
+  a single-node control plane whose whole state is one file (trivial to back up
+  and move), and it never needs an external database to boot.
+- **Other engines are supported.** Set `database.url` to a JDBC URL and
+  Hohenheim uses that instead, inferring the engine from the scheme:
+  PostgreSQL (`jdbc:postgresql://…`), MySQL/MariaDB (`jdbc:mysql://…` /
+  `jdbc:mariadb://…`), Firebird (`jdbc:firebirdsql://…`), or DuckDB
+  (`jdbc:duckdb:…`). Set `database.username` / `database.password` for the
+  server engines. For CockroachDB (which shares PostgreSQL's URL scheme) set
+  `database.engine = cockroach` explicitly. Use a server engine only if you
+  need several Hohenheim instances sharing one config database; otherwise
+  SQLite is the better fit.
 
 ### Git
 
@@ -219,7 +230,11 @@ Most-useful keys:
         "data_path": "data"                // git checkouts land here
     },
     "database": {
-        "path": "hohenheim.db"
+        "path": "hohenheim.db",            // SQLite file (used when url is blank)
+        "url":  "",                        // JDBC URL to use another engine, e.g. jdbc:postgresql://host/hohenheim
+        "engine":   "auto",                // auto | sqlite | duckdb | postgres | mysql | mariadb | firebird | cockroach
+        "username": "",
+        "password": ""
     },
 
     // Security / fail2ban

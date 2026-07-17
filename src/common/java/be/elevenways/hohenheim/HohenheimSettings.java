@@ -223,7 +223,33 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<String> PATH = GROUP.buildSetting("path", String.class)
             .defaultValue("hohenheim.db")
-            .description("SQLite database file path")
+            .description("SQLite database file path (used when 'url' is blank)")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<String> URL = GROUP.buildSetting("url", String.class)
+            .description("Full JDBC URL to use instead of the SQLite file, e.g. "
+                + "jdbc:postgresql://host/hohenheim or jdbc:mysql://host/hohenheim. "
+                + "The engine is inferred from the URL scheme")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<String> ENGINE = GROUP.buildSetting("engine", String.class)
+            .defaultValue("auto")
+            .description("Database engine: auto (infer from url) or one of sqlite, duckdb, "
+                + "postgres, mysql, mariadb, firebird, cockroach. Set explicitly for CockroachDB, "
+                + "which shares the postgres URL scheme")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<String> USERNAME = GROUP.buildSetting("username", String.class)
+            .description("Database username (server engines only; ignored for sqlite/duckdb)")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<String> PASSWORD = GROUP.buildSetting("password", String.class)
+            .secret()
+            .description("Database password (server engines only)")
             .restartRequired()
             .build();
 
