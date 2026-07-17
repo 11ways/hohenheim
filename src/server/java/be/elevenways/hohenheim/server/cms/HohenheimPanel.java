@@ -40,7 +40,7 @@ public final class HohenheimPanel extends Panel {
     }
 
     @Override
-    public List<PanelPeer> peers() {
+    public List<PanelPeer> buildPeers() {
         List<PanelPeer> peers = new ArrayList<>();
         // The dashboard comes first: the panel landing soft-redirects to the
         // first accessible DashboardPanelPeer.
