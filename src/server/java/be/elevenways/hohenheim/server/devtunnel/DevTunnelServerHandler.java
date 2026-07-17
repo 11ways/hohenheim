@@ -85,7 +85,9 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
         preAuthCounted = true;
         timers.add(TIMERS.schedule(() -> {
             if (lease == null && !closed) {
-                sendControlQuietly(TunnelMessage.error("registration timeout"));
+                // Transient: a slow registration round-trip must not permanently
+                // silence the client; it reconnects and retries.
+                sendControlQuietly(TunnelMessage.transientError("registration timeout"));
                 teardown("no registration within " + (AUTH_TIMEOUT_MS / 1000) + "s", true);
             }
         }, AUTH_TIMEOUT_MS));
@@ -156,6 +158,9 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
     // ------------------------------------------------------------------
 
     private void handleRegister(TunnelMessage msg) {
+        if (closed) {
+            return; // teardown already ran; the close frame just hasn't landed yet
+        }
         if (lease != null) {
             sendControlQuietly(TunnelMessage.error("already registered"));
             return;
@@ -198,17 +203,31 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
         try {
             createdBridge = new DevTunnelBridge(this);
         } catch (Exception e) {
-            refuse("could not allocate a bridge: " + e.getMessage());
+            // Transient: a bind/fd hiccup on the proxy should not brick the client.
+            sendControlQuietly(TunnelMessage.transientError("could not allocate a bridge: " + e.getMessage()));
+            teardown("bridge allocation failed: " + e.getMessage(), true);
             return;
         }
-        this.bridge = createdBridge;
 
         DevLease newLease = new DevLease(siteId, name, origin, this, createdBridge, remoteDescription());
-        // Publish our lease BEFORE the registry claim: a racing claim for the same
-        // name replaces us immediately, and replacedBy() must see the lease to log
-        // it (the bridge itself is closed via the bridge field either way).
-        this.lease = newLease;
-        DevLease replaced = DevLeases.claim(newLease);
+        DevLease replaced;
+        // Publish bridge + lease + registry claim under the same lock teardown
+        // uses to set `closed`: the auth timer firing mid-registration (the DB
+        // scans above can straddle the window) must never leave a zombie lease
+        // owned by a torn-down handler, nor leak the freshly bound bridge.
+        synchronized (this) {
+            if (closed) {
+                createdBridge.close();
+                Blast.log("Dev tunnel: registration for '" + name + "' lost the race with teardown");
+                return;
+            }
+            this.bridge = createdBridge;
+            // Lease is visible BEFORE the claim races anyone: a racing claim for
+            // the same name replaces us immediately, and replacedBy() must see
+            // the lease to log it (the bridge is closed via the bridge field).
+            this.lease = newLease;
+            replaced = DevLeases.claim(newLease);
+        }
         releasePreAuthSlot();
 
         if (replaced != null) {
@@ -276,7 +295,10 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
             throw new IllegalStateException("tunnel connection is closed");
         }
         int id = nextStreamId.getAndIncrement();
-        TunnelStream stream = new TunnelStream(id, socket, this, jobs, streams::remove);
+        TunnelStream[] holder = new TunnelStream[1];
+        TunnelStream stream = new TunnelStream(id, socket, this, jobs,
+            sid -> streams.remove(sid, holder[0]));
+        holder[0] = stream;
         streams.put(id, stream);
         if (closed) {
             // Teardown raced the accept loop and already cleared the map.
@@ -286,7 +308,15 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
         }
         // The open control frame must precede the stream's first data frame; both go
         // through the send lock, and the pump only starts after open was sent.
-        sendControl(TunnelMessage.open(id));
+        try {
+            sendControl(TunnelMessage.open(id));
+        } catch (RuntimeException e) {
+            // A failed send means the connection is dying: do not leave a
+            // never-started stream in the map until teardown finds it.
+            streams.remove(id, stream);
+            stream.abort("open send failed: " + e.getMessage(), false);
+            throw e;
+        }
         stream.startPump();
     }
 
@@ -390,6 +420,14 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
             } catch (RuntimeException ignored) {
                 // Session already gone.
             }
+            // Backstop: a peer that never completes the close handshake (or keeps
+            // sending while refusing to read) would otherwise hold the channel —
+            // and any blocked send — open indefinitely.
+            TIMERS.schedule(session::abort, 2_000);
+        }
+        else {
+            // Transport already failed; make sure any blocked send is released.
+            session.abort();
         }
     }
 
