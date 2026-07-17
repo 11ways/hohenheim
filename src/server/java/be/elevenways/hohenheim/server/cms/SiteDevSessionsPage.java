@@ -27,7 +27,7 @@ import java.util.Map;
 public final class SiteDevSessionsPage implements RecordScopedPage<Row> {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_dev_sessions"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.site.dev_sessions"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("dev_sessions").withFilter("scope", "site"); }
     @Override public @NonNull String slug() { return "dev-sessions"; }
     @Override public @NonNull Icon icon() { return Icon.of("flask"); }
 

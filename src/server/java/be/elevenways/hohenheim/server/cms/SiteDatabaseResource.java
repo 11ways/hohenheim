@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.sitetype.SiteTypeInfo;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -52,7 +53,7 @@ public final class SiteDatabaseResource extends RowResource {
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_database"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.site_database.plural"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "site_database"); }
     @Override public @NonNull String slug() { return "site-databases"; }
     @Override public @NonNull Model model() { return Models.get(SiteDatabaseModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
@@ -61,6 +62,11 @@ public final class SiteDatabaseResource extends RowResource {
     @Override public int navOrder() { return 25; }
     @Override public @NonNull Icon icon() { return Icon.of("database"); }
     @Override public boolean showInNav() { return false; }
+
+    @Override
+    public @org.checkerframework.checker.nullness.qual.Nullable ResourceParent<Row> parent() {
+        return ResourceParent.<Row>of("sites", row -> row.get(SiteDatabaseModel.SITE_ID)).tab("databases");
+    }
 
     /** The site's Databases tab links here with ?site_id= so the pick is preselected. */
     @Override

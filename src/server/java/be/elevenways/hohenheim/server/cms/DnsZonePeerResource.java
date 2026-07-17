@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -47,7 +48,7 @@ public final class DnsZonePeerResource extends RowResource {
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_peer"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.dns_zone_peer.plural"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_zone_peer"); }
     @Override public @NonNull String slug() { return "dns-zone-peers"; }
     @Override public @NonNull Model model() { return Models.get(DnsZonePeerModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
@@ -56,6 +57,11 @@ public final class DnsZonePeerResource extends RowResource {
     @Override public int navOrder() { return 45; }
     @Override public @NonNull Icon icon() { return Icon.of("handshake"); }
     @Override public boolean showInNav() { return false; }
+
+    @Override
+    public @org.checkerframework.checker.nullness.qual.Nullable ResourceParent<Row> parent() {
+        return ResourceParent.<Row>of("dns-zones", row -> row.get(DnsZonePeerModel.ZONE_ID)).tab("secondaries");
+    }
 
     /** The zone's Secondaries tab links here with ?zone_id= so the link is scoped. */
     @Override

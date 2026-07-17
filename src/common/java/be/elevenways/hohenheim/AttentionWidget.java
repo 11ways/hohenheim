@@ -41,7 +41,7 @@ public final class AttentionWidget implements WidgetType {
 
     @Override
     public @NonNull Microcopy label() {
-        return Microcopy.of("hohenheim.widget.attention");
+        return Microcopy.of("attention").withFilter("scope", "dashboard");
     }
 
     @Override

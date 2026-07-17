@@ -32,7 +32,7 @@ import java.util.Map;
 public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_records"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.dns_zone.records"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("records").withFilter("scope", "dns_zone"); }
     @Override public @NonNull String slug() { return "records"; }
     @Override public @NonNull Icon icon() { return Icon.of("list-ul"); }
 

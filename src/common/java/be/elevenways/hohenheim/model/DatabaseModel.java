@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -28,27 +29,58 @@ public class DatabaseModel extends Model {
     public static final String STATUS_FAILED = "failed";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
+    public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
+        .label(HohenheimFormCopy.label("name"))
+        .help(HohenheimFormCopy.help("database_name"))
+        .build());
     public static final EnumField ENGINE = SCHEMA.addField(EnumField.builder("engine")
         .value("postgres", v -> v.displayName("PostgreSQL").icon("database").color("blue"))
         .value("mysql", v -> v.displayName("MySQL").icon("database").color("orange"))
         .value("redis", v -> v.displayName("Redis").icon("bolt").color("red"))
         .value("mongo", v -> v.displayName("MongoDB").icon("leaf").color("green"))
+        .label(HohenheimFormCopy.label("engine"))
+        .help(HohenheimFormCopy.help("engine"))
         .build());
-    public static final StringField IMAGE = SCHEMA.addField(StringField.builder().name("image").build());
-    public static final StringField DB_USER = SCHEMA.addField(StringField.builder().name("db_user").build());
-    public static final StringField DB_PASSWORD = SCHEMA.addField(StringField.builder().name("db_password").secret().build());
-    public static final StringField DB_NAME = SCHEMA.addField(StringField.builder().name("db_name").build());
-    public static final BooleanField EPHEMERAL = SCHEMA.addField(BooleanField.builder("ephemeral").defaultValue(false).build());
+    public static final StringField IMAGE = SCHEMA.addField(StringField.builder().name("image")
+        .label(HohenheimFormCopy.label("image"))
+        .help(HohenheimFormCopy.help("image"))
+        .build());
+    public static final StringField DB_USER = SCHEMA.addField(StringField.builder().name("db_user")
+        .label(HohenheimFormCopy.label("db_user"))
+        .help(HohenheimFormCopy.help("db_user"))
+        .build());
+    public static final StringField DB_PASSWORD = SCHEMA.addField(StringField.builder().name("db_password")
+        .secret()
+        .label(HohenheimFormCopy.label("db_password"))
+        .help(HohenheimFormCopy.help("db_password"))
+        .build());
+    public static final StringField DB_NAME = SCHEMA.addField(StringField.builder().name("db_name")
+        .label(HohenheimFormCopy.label("db_name"))
+        .help(HohenheimFormCopy.help("db_name"))
+        .build());
+    public static final BooleanField EPHEMERAL = SCHEMA.addField(BooleanField.builder("ephemeral")
+        .defaultValue(false)
+        .label(HohenheimFormCopy.label("ephemeral"))
+        .help(HohenheimFormCopy.help("ephemeral"))
+        .build());
     // Optional container resource caps (null = unlimited).
-    public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(IntegerField.builder().name("memory_limit_mb").build());
-    public static final DoubleField CPU_LIMIT = SCHEMA.addField(DoubleField.builder().name("cpu_limit").build());
+    public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(IntegerField.builder().name("memory_limit_mb")
+        .label(HohenheimFormCopy.label("memory_limit"))
+        .help(HohenheimFormCopy.help("memory_limit"))
+        .build());
+    public static final DoubleField CPU_LIMIT = SCHEMA.addField(DoubleField.builder().name("cpu_limit")
+        .label(HohenheimFormCopy.label("cpu_limit"))
+        .help(HohenheimFormCopy.help("cpu_limit"))
+        .build());
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_PROVISIONING, v -> v.displayName("Provisioning").icon("rotate").color("warning"))
         .value(STATUS_ACTIVE, v -> v.displayName("Active").icon("circle-check").color("success"))
         .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-xmark").color("destructive"))
         .build());
-    public static final StringField SERVER_NAME = SCHEMA.addField(StringField.builder().name("server_name").build());
+    public static final StringField SERVER_NAME = SCHEMA.addField(StringField.builder().name("server_name")
+        .label(HohenheimFormCopy.label("server"))
+        .help(HohenheimFormCopy.help("server"))
+        .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

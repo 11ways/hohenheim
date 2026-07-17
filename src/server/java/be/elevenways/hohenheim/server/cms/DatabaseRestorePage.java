@@ -28,7 +28,7 @@ import java.util.Map;
 public final class DatabaseRestorePage implements RecordScopedPage<Row> {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "database_restore"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.database.restore"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("restore").withFilter("scope", "database"); }
     @Override public @NonNull String slug() { return "restore"; }
     @Override public @NonNull Icon icon() { return Icon.of("upload"); }
 

@@ -69,7 +69,7 @@ public final class DnsRecordResource extends RowResource {
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_record"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.dns_record.plural"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_record"); }
     @Override public @NonNull String slug() { return "dns-records"; }
     @Override public @NonNull Model model() { return Models.get(DnsRecordModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
@@ -135,9 +135,9 @@ public final class DnsRecordResource extends RowResource {
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
         actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "dyndns_token"))
-            .label("hohenheim.dns_record.dyndns_token")
+            .label(Microcopy.of("dyndns_token").withFilter("scope", "dns_record"))
             .icon(Icon.of("rotate"))
-            .description("hohenheim.dns_record.dyndns_token_hint")
+            .description(Microcopy.of("dyndns_token_hint").withFilter("scope", "dns_record"))
             .handler((row, ctx) -> mintDynamicToken(row))
             .build());
         return actions;

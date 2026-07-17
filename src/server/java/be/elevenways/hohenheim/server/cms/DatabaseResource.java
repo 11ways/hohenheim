@@ -100,7 +100,7 @@ public final class DatabaseResource extends RowResource {
     }
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "database"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.database.plural"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "database"); }
     @Override public @NonNull String slug() { return "databases"; }
     @Override public @NonNull Model model() { return Models.get(DatabaseModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
@@ -202,7 +202,7 @@ public final class DatabaseResource extends RowResource {
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
         actions.add(RowAction.Url.<Row>builder(Identifier.of("hohenheim", "backup_database"))
-            .label("hohenheim.database.backup")
+            .label(Microcopy.of("backup").withFilter("scope", "database"))
             .icon(Icon.of("download"))
             .url(row -> new Uri(HohenheimEndpoints.DATABASES_BACKUP
                 .with(HohenheimEndpoints.DATABASE_NAME, row.get(DatabaseModel.NAME)).toUrl()))

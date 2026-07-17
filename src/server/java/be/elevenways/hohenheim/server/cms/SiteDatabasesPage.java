@@ -32,7 +32,7 @@ import java.util.Map;
 public final class SiteDatabasesPage implements RecordScopedPage<Row> {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_databases_page"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.site.databases"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("databases").withFilter("scope", "site"); }
     @Override public @NonNull String slug() { return "databases"; }
     @Override public @NonNull Icon icon() { return Icon.of("database"); }
 

@@ -30,7 +30,7 @@ import java.util.Map;
 public final class CertificateRequestPage extends PanelPage {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "certificates_request"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.certificate.request_le"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("request_le").withFilter("scope", "certificate"); }
     @Override public @NonNull String slug() { return "certificates-request"; }
     @Override public @NonNull Icon icon() { return Icon.of("lock"); }
     @Override public boolean showInNav() { return false; }

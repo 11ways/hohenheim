@@ -33,7 +33,7 @@ import java.util.Map;
 public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_deployments"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.site.deployments"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("deployments").withFilter("scope", "site"); }
     @Override public @NonNull String slug() { return "deployments"; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
 
