@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.cms.DnsRecordEdits;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
+import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -74,6 +75,7 @@ public final class HohenheimHandlers {
         initDnsZones();
         initDnsRecordApi();
         initDnsRemoteRecords();
+        initDynamicDns();
         initDatabases();
         initProcessControl();
         initDeployControl();
@@ -509,6 +511,51 @@ public final class HohenheimHandlers {
         else if (row.get(DnsRecordModel.ENABLED) == null) {
             row.set(DnsRecordModel.ENABLED, true);
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Dynamic DNS: the public dyndns2 update endpoint (/nic/update). The update
+    // token travels in HTTP Basic auth (password, or username as a fallback) or
+    // a ?token= param; the service refuses anything the token does not unlock.
+    // -----------------------------------------------------------------------
+
+    private static void initDynamicDns() {
+        DynamicDnsService service = new DynamicDnsService(DnsZoneStore.INSTANCE);
+        HohenheimEndpoints.DYNDNS_UPDATE.setHandler(conduit -> {
+            String token = dyndnsToken(conduit);
+            String hostname = conduit.getQueryParam("hostname");
+            String myip = conduit.getQueryParam("myip");
+            String callerIp = conduit.getRemoteIp();
+            DynamicDnsService.UpdateResult result = service.update(token, hostname, myip, callerIp);
+            conduit.endWithContentType("text/plain", result.wire());
+            return null;
+        });
+    }
+
+    /** The update token from HTTP Basic auth (password preferred, username fallback) or ?token=. */
+    private static @org.checkerframework.checker.nullness.qual.Nullable String dyndnsToken(Conduit conduit) {
+        String authorization = conduit.getRequestHeader("Authorization");
+        if (authorization != null && authorization.regionMatches(true, 0, "Basic ", 0, 6)) {
+            try {
+                String decoded = new String(java.util.Base64.getDecoder()
+                    .decode(authorization.substring(6).trim()), java.nio.charset.StandardCharsets.UTF_8);
+                int colon = decoded.indexOf(':');
+                String user = colon >= 0 ? decoded.substring(0, colon) : decoded;
+                String pass = colon >= 0 ? decoded.substring(colon + 1) : "";
+                // dyndns2 puts the credential in the password; tolerate clients that
+                // send it as the username with an empty password.
+                if (pass.startsWith(DynamicDnsService.TOKEN_MARKER)) {
+                    return pass;
+                }
+                if (user.startsWith(DynamicDnsService.TOKEN_MARKER)) {
+                    return user;
+                }
+            }
+            catch (IllegalArgumentException ignored) {
+                // Malformed base64: fall through to the query param.
+            }
+        }
+        return conduit.getQueryParam("token");
     }
 
     private static ActionResult<Object> validationError(Conduit conduit, Violations violations) {

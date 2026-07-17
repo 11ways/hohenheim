@@ -132,4 +132,29 @@ for DNSSEC itself.
 
 The DNS story is now feature-complete: authoritative serving, ACME DNS-01,
 zone-file import/export, federation (hidden primary + secondaries), central
-editing, DNSSEC, and response-rate-limiting are all implemented.
+editing, DNSSEC, response-rate-limiting, and dynamic DNS are all implemented.
+
+## Dynamic DNS (dyndns2)
+
+An A or AAAA record can be marked *dynamic*: the row action generates a
+per-record update token that is stored as-is and stays visible on the record's
+form, so the operator can re-read the update URL any time it needs to be put
+back into a router or ddclient config (a low-value credential, like FreeDNS's
+persistent update URL -- deliberately not the hash-only "shown once" posture
+used for account passwords and API keys). The public endpoint
+
+    GET /nic/update?hostname=<fqdn>&myip=<ip>
+
+speaks the de-facto dyndns2 protocol, so routers, ddclient, and any existing
+DDNS client work by pointing at it with the token as the HTTP Basic password
+(the token is also accepted as the username or a `?token=` param). Replies are
+the bare `good <ip>` / `nochg <ip>` / `badauth` / `nohost` lines clients
+expect. `myip` is honored when present, otherwise the trusted-proxy-resolved
+caller IP is used; the IP family must match the record type (an A record takes
+IPv4, AAAA takes IPv6, a comma-separated dual-stack `myip` picks the matching
+one). An unchanged address returns `nochg` WITHOUT bumping the serial, since
+clients poll every few minutes. A changed address rewrites the record row and
+rides the normal serial-bump -> re-sign -> NOTIFY path, so secondaries and
+DNSSEC signatures stay correct with no special-casing. Updates act only on the
+owning primary; a hit on a replica returns `!yours`. The endpoint is public
+(the token is the credential) and rate-limited per IP.
