@@ -26,21 +26,30 @@ public class SiteModel extends Model {
     public static final String STATUS_ACTIVE = "active";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
+    public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
+        .label(HohenheimFormCopy.label("name"))
+        .build());
     public static final StringField SLUG = SCHEMA.addField(StringField.builder().name("slug").build());
 
     // RegistryEnumField: values come from SiteTypeRegistry at runtime
     public static final EnumField SITE_TYPE = SCHEMA.addField(
         RegistryEnumField.builder("site_type")
             .registry(SiteTypeRegistry.REGISTRY)
+            .label(HohenheimFormCopy.label("site_type"))
+            .help(HohenheimFormCopy.help("site_type"))
             .build());
 
-    public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true).build());
+    public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled")
+        .defaultValue(true)
+        .label(HohenheimFormCopy.label("enabled"))
+        .help(HohenheimFormCopy.help("enabled"))
+        .build());
 
     // Polymorphic settings: schema resolved dynamically from site_type
     public static final SchemaField SETTINGS = SCHEMA.addField(
         SchemaField.builder("settings")
             .schemaFrom("site_type")
+            .label(HohenheimFormCopy.label("settings"))
             .build());
 
     // Source provisioning: null/"local" = local files, "git" = git-provisioned
@@ -62,14 +71,23 @@ public class SiteModel extends Model {
     public static final SchemaField SOURCE_SETTINGS = SCHEMA.addField(
         SchemaField.builder("source_settings")
             .schemaFrom(SOURCE)
+            .label(HohenheimFormCopy.label("source_settings"))
             .build());
 
-    public static final StringField DESCRIPTION = SCHEMA.addField(StringField.builder().name("description").build());
+    public static final StringField DESCRIPTION = SCHEMA.addField(StringField.builder().name("description")
+        .label(HohenheimFormCopy.label("description"))
+        .build());
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_ACTIVE, v -> v.displayName("Active").icon("circle-check").color("success"))
         .build());
-    public static final IntegerField ACCESS_LIST_ID = SCHEMA.addField(IntegerField.builder().name("access_list_id").build());
-    public static final IntegerField AUTH_PROVIDER_ID = SCHEMA.addField(IntegerField.builder().name("auth_provider_id").build());
+    public static final IntegerField ACCESS_LIST_ID = SCHEMA.addField(IntegerField.builder().name("access_list_id")
+        .label(HohenheimFormCopy.label("access_list"))
+        .help(HohenheimFormCopy.help("access_list"))
+        .build());
+    public static final IntegerField AUTH_PROVIDER_ID = SCHEMA.addField(IntegerField.builder().name("auth_provider_id")
+        .label(HohenheimFormCopy.label("auth_provider"))
+        .help(HohenheimFormCopy.help("auth_provider"))
+        .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());

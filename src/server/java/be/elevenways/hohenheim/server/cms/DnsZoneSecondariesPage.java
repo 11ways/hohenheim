@@ -28,7 +28,7 @@ import java.util.Map;
 public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_secondaries"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.dns_zone.secondaries"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("secondaries").withFilter("scope", "dns_zone"); }
     @Override public @NonNull String slug() { return "secondaries"; }
     @Override public @NonNull Icon icon() { return Icon.of("handshake"); }
 

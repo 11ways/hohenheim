@@ -83,7 +83,7 @@ public final class SiteResource extends RowResource {
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.site.plural"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "site"); }
     @Override public @NonNull String slug() { return "sites"; }
     @Override public @NonNull Model model() { return Models.get(SiteModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
@@ -201,7 +201,7 @@ public final class SiteResource extends RowResource {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
 
         actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "toggle_site"))
-            .label("hohenheim.site.toggle")
+            .label(Microcopy.of("toggle").withFilter("scope", "site"))
             .icon(Icon.of("power-off"))
             .handler((row, ctx) -> {
                 boolean current = Boolean.TRUE.equals(row.get(SiteModel.ENABLED));
@@ -209,16 +209,16 @@ public final class SiteResource extends RowResource {
                 ActivityLog.withAction(current ? "disabled" : "enabled", null,
                     () -> this.model().save(row));
                 return CmsActionResult.refreshWithToast(Microcopy.of(
-                    current ? "hohenheim.site.disabled" : "hohenheim.site.enabled"));
+                    current ? "disabled_toast" : "enabled_toast").withFilter("scope", "site"));
             })
             .build());
 
         actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "clone_site"))
-            .label("hohenheim.site.clone")
+            .label(Microcopy.of("clone").withFilter("scope", "site"))
             .icon(Icon.of("copy"))
             .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("hohenheim.site.clone"))
-                .body(Microcopy.of("hohenheim.site.clone.confirm"))
+                .title(Microcopy.of("clone").withFilter("scope", "site"))
+                .body(Microcopy.of("clone_confirm").withFilter("scope", "site"))
                 .build())
             .handler((row, ctx) -> cloneSite(row, ctx.access()))
             .build());

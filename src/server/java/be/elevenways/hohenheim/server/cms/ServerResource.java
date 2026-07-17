@@ -50,7 +50,7 @@ public final class ServerResource extends RowResource {
         .column(ColumnSpec.fromField(ServerModel.NAME).filterable().build())
         .column(ColumnSpec.fromField(ServerModel.MODE).filterable().build())
         .column(ColumnSpec.fromField(ServerModel.SSH_TARGET).filterable().build())
-        .column(ColumnSpec.virtual("host_status", Microcopy.of("hohenheim.server.host_status")).build())
+        .column(ColumnSpec.virtual("host_status", Microcopy.of("host_status").withFilter("scope", "server")).build())
         .filter(FilterSpec.forField(ServerModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(ServerModel.NAME)).build())
         .filter(FilterSpec.forField(ServerModel.MODE, FilterSpec.Kind.SELECT)
@@ -60,7 +60,7 @@ public final class ServerResource extends RowResource {
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "server"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.server.plural"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "server"); }
     @Override public @NonNull String slug() { return "servers"; }
     @Override public @NonNull Model model() { return Models.get(ServerModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

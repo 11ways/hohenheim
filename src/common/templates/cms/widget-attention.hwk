@@ -5,29 +5,32 @@
 
 {% let items = Hohenheim.attentionItems() %}
 <div class="widget widget-attention hh-attention" data-attention-count={% "" + items.size() %}>
-    <h3 class="widget-heading">{{ t("hohenheim.widget.attention") }}</h3>
+    <h3 class="widget-heading">{{ t("attention", scope: "dashboard") }}</h3>
     {% if items %}
     <ul class="hh-attention-list">
         {% each items as item %}
         <li class="hh-attention-item" data-severity={% item.get("severity") %}>
-            <pl-icon name={% item.get("icon") %}></pl-icon>
-            <div class="hh-attention-text">
-                {% if item.get("url") != "" %}
-                <a href={% item.get("url") %}>{{ item.get("title") }}</a>
-                {% else %}
-                <span>{{ item.get("title") }}</span>
-                {% /if %}
+            <span class="hh-attention-icon">
+                <pl-icon name={% item.get("icon") %} size="sm"></pl-icon>
+            </span>
+            <div class="hh-attention-body">
+                <span class="hh-attention-title">{{ item.get("title") }}</span>
                 {% if item.get("detail") != "" %}
                 <span class="hh-attention-detail">{{ item.get("detail") }}</span>
                 {% /if %}
             </div>
+            {% if item.get("url") != "" %}
+            <a class="hh-attention-link" href={% item.get("url") %}>
+                <pl-icon name="chevron-right" size="sm"></pl-icon>
+            </a>
+            {% /if %}
         </li>
         {% /each %}
     </ul>
     {% else %}
-    <p class="hh-attention-clear">
-        <pl-icon name="circle-check"></pl-icon>
-        {{ t("hohenheim.widget.attention.all_clear") }}
-    </p>
+    <div class="hh-attention-clear">
+        <pl-icon name="circle-check" size="lg"></pl-icon>
+        <span>{{ t("all_clear", scope: "dashboard") }}</span>
+    </div>
     {% /if %}
 </div>

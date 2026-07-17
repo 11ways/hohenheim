@@ -25,7 +25,7 @@ import java.util.Map;
 public final class DnsZoneFilePage implements RecordScopedPage<Row> {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_file"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.dns_zone.zone_file"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("zone_file").withFilter("scope", "dns_zone"); }
     @Override public @NonNull String slug() { return "zonefile"; }
     @Override public @NonNull Icon icon() { return Icon.of("file-lines"); }
 

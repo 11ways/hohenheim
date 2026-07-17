@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -28,7 +28,8 @@ public class SiteDatabaseModel extends Model {
     public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());
     public static final IntegerField DATABASE_ID = SCHEMA.addField(IntegerField.builder().name("database_id").build());
     public static final StringField ENV_PREFIX = SCHEMA.addField(StringField.builder().name("env_prefix")
-        .help(Microcopy.of("hohenheim.site_database.env_prefix_help"))
+        .label(HohenheimFormCopy.label("env_prefix"))
+        .help(HohenheimFormCopy.help("env_prefix"))
         .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

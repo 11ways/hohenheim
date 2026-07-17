@@ -29,14 +29,14 @@ public final class HohenheimPanel extends Panel {
 
     /** Proxy configuration group: sites, certificates, access control. */
     public static final NavGroup PROXY_GROUP =
-        NavGroup.of("proxy", Microcopy.of("hohenheim.nav.proxy"), 300, Icon.of("globe"));
+        NavGroup.of("proxy", Microcopy.of("proxy").withFilter("scope", "nav"), 300, Icon.of("globe"));
 
     /** Infrastructure group: databases, servers, notifications. */
     public static final NavGroup INFRA_GROUP =
-        NavGroup.of("infra", Microcopy.of("hohenheim.nav.infra"), 200, Icon.of("server"));
+        NavGroup.of("infra", Microcopy.of("infra").withFilter("scope", "nav"), 200, Icon.of("server"));
 
     public HohenheimPanel() {
-        super(Identifier.of("hohenheim", "admin"), "admin", Microcopy.of("hohenheim.admin.title"), ACCESS);
+        super(Identifier.of("hohenheim", "admin"), "admin", Microcopy.of("title").withFilter("scope", "admin"), ACCESS);
     }
 
     @Override
@@ -98,6 +98,6 @@ public final class HohenheimPanel extends Panel {
         }
         return new SettingsPage(
             Identifier.of("hohenheim", "settings"), "settings",
-            Microcopy.of("hohenheim.settings.title"), Icon.of("gear"), mounts);
+            Microcopy.of("title").withFilter("scope", "settings"), Icon.of("gear"), mounts);
     }
 }

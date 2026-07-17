@@ -28,7 +28,7 @@ import java.util.Map;
 public final class SiteDomainsPage implements RecordScopedPage<Row> {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_domains"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.site.domains"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("domains").withFilter("scope", "site"); }
     @Override public @NonNull String slug() { return "domains"; }
     @Override public @NonNull Icon icon() { return Icon.of("at"); }
 

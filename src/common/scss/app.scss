@@ -41,26 +41,49 @@
 
     .hh-attention-item {
         display: flex;
-        align-items: baseline;
-        gap: var(--pl-space-sm);
+        align-items: center;
+        gap: var(--pl-space-md);
         padding: var(--pl-space-sm) var(--pl-space-md);
         border: 1px solid var(--pl-color-border);
+        border-left-width: 3px;
         border-radius: var(--pl-radius-md);
+        background: var(--pl-color-surface-muted, var(--pl-color-surface));
 
-        &[data-severity="error"] > pl-icon {
-            color: var(--pl-color-destructive);
+        // A round icon chip, tinted by severity, so the state reads at a glance.
+        .hh-attention-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: none;
+            width: 2rem;
+            height: 2rem;
+            border-radius: var(--pl-radius-full, 999px);
+            color: var(--pl-color-text-muted);
+            background: color-mix(in srgb, currentColor 14%, transparent);
         }
 
-        &[data-severity="warning"] > pl-icon {
-            color: var(--pl-color-warning, var(--pl-color-primary));
+        &[data-severity="error"] {
+            border-left-color: var(--pl-color-destructive);
+            .hh-attention-icon { color: var(--pl-color-destructive); }
+        }
+
+        &[data-severity="warning"] {
+            border-left-color: var(--pl-color-warning, var(--pl-color-primary));
+            .hh-attention-icon { color: var(--pl-color-warning, var(--pl-color-primary)); }
         }
     }
 
-    .hh-attention-text {
+    .hh-attention-body {
         display: flex;
-        flex-wrap: wrap;
-        column-gap: var(--pl-space-sm);
+        flex-direction: column;
+        gap: var(--pl-space-3xs, 0.125rem);
         min-width: 0;
+        flex: 1;
+    }
+
+    .hh-attention-title {
+        font-weight: var(--pl-font-weight-medium);
+        color: var(--pl-color-text);
     }
 
     .hh-attention-detail {
@@ -69,11 +92,23 @@
         overflow-wrap: anywhere;
     }
 
+    .hh-attention-link {
+        display: inline-flex;
+        align-items: center;
+        flex: none;
+        color: var(--pl-color-text-muted);
+
+        &:hover {
+            color: var(--pl-color-text);
+        }
+    }
+
     .hh-attention-clear {
         display: flex;
         align-items: center;
-        gap: var(--pl-space-sm);
+        gap: var(--pl-space-md);
         margin: 0;
+        padding: var(--pl-space-lg) var(--pl-space-md);
         color: var(--pl-color-text-muted, inherit);
 
         pl-icon {

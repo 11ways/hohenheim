@@ -58,7 +58,7 @@ public final class CertificateResource extends RowResource {
         .add(CertificateModel.RENEWAL_ERROR)
         .add(CertificateModel.ERROR_COUNT)
         .add(CertificateModel.NEXT_ATTEMPT_AT)
-        .group(FieldGroup.of("renewal", Microcopy.of("hohenheim.certificate.renewal_status")))
+        .group(FieldGroup.of("renewal", Microcopy.of("renewal_status").withFilter("scope", "certificate")))
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -89,7 +89,7 @@ public final class CertificateResource extends RowResource {
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "certificate"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.certificate.plural"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "certificate"); }
     @Override public @NonNull String slug() { return "certificates"; }
     @Override public @NonNull Model model() { return Models.get(CertificateModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
@@ -182,7 +182,7 @@ public final class CertificateResource extends RowResource {
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
         actions.add(RowAction.Url.<Row>builder(Identifier.of("hohenheim", "download_certificate"))
-            .label("hohenheim.certificate.download")
+            .label(Microcopy.of("download").withFilter("scope", "certificate"))
             .icon(Icon.of("download"))
             .url(row -> new Uri(HohenheimEndpoints.CERTIFICATES_DOWNLOAD
                 .with(HohenheimEndpoints.CERT_ID, row.get(CertificateModel.ID)).toUrl()))
@@ -194,7 +194,7 @@ public final class CertificateResource extends RowResource {
     public @NonNull List<HeaderAction> headerActions() {
         List<HeaderAction> actions = new ArrayList<>(super.headerActions());
         actions.add(HeaderAction.Url.builder(Identifier.of("hohenheim", "request_letsencrypt"))
-            .label("hohenheim.certificate.request_le")
+            .label(Microcopy.of("request_le").withFilter("scope", "certificate"))
             .icon(Icon.of("lock"))
             .url(new Uri("/admin/certificates-request"))
             .build());

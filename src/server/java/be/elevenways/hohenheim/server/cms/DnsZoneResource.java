@@ -79,7 +79,7 @@ public final class DnsZoneResource extends RowResource {
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.dns_zone.plural"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_zone"); }
     @Override public @NonNull String slug() { return "dns-zones"; }
     @Override public @NonNull Model model() { return Models.get(DnsZoneModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

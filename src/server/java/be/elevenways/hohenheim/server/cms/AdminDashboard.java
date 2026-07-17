@@ -30,7 +30,7 @@ public final class AdminDashboard extends DashboardPanelPeer {
     private static final Locale EN = Locale.of("en");
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dashboard"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.admin.dashboard"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("dashboard").withFilter("scope", "admin"); }
     @Override public @NonNull String slug() { return "dashboard"; }
     @Override public @NonNull Icon icon() { return Icon.LAYOUT_DASH; }
     @Override public int navOrder() { return 1; }

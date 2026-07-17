@@ -49,7 +49,7 @@ public final class NotificationChannelResource extends RowResource {
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "notification_channel"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("hohenheim.notification_channel.plural"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "notification_channel"); }
     @Override public @NonNull String slug() { return "notifications"; }
     @Override public @NonNull Model model() { return Models.get(NotificationChannelModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
@@ -116,7 +116,7 @@ public final class NotificationChannelResource extends RowResource {
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
         actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "test_channel"))
-            .label("hohenheim.notification_channel.test")
+            .label(Microcopy.of("test").withFilter("scope", "notification_channel"))
             .icon(Icon.of("paper-plane"))
             .handler((row, ctx) -> {
                 String name = row.get(NotificationChannelModel.NAME);
@@ -124,8 +124,8 @@ public final class NotificationChannelResource extends RowResource {
                     "Hohenheim test", "If you can read this, the channel works.");
                 ActivityLog.record(this.model(), row.get(NotificationChannelModel.ID), "tested", name);
                 return delivered
-                    ? CmsActionResult.refreshWithToast(Microcopy.of("hohenheim.notification_channel.test_ok"))
-                    : CmsActionResult.errorToast(Microcopy.of("hohenheim.notification_channel.test_failed"));
+                    ? CmsActionResult.refreshWithToast(Microcopy.of("test_ok").withFilter("scope", "notification_channel"))
+                    : CmsActionResult.errorToast(Microcopy.of("test_failed").withFilter("scope", "notification_channel"));
             })
             .build());
         return actions;
