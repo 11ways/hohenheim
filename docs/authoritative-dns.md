@@ -8,10 +8,11 @@ registry, and an ACME propagation wait so DNS-01 issuance blocks until the
 secondaries serve the challenge. This lets Hohenheim run as a hidden primary
 behind a closed port 53, with a public secondary (another Hohenheim, or an
 off-the-shelf NSD/Knot) meeting the two-nameserver production threshold.
-Still open: phase 5 (DNSSEC), response-rate-limiting, and the central
-"edit a peer-owned zone from one instance" edit-forwarding layer (a secondary
-zone's records are currently read-only on the replica; edit them on their
-owning primary).
+Central editing is also implemented: a secondary zone's Records tab reads the
+owning peer's records live over its authenticated HTTPS API and forwards
+edits to it (see `dns-federation.md`), so one instance can be the single pane
+for every federated zone. Still open: phase 5 (DNSSEC) and
+response-rate-limiting.
 
 Hohenheim can become the authoritative DNS service for zones it manages. This
 removes the runtime dependency on a hosted DNS control panel and gives ACME

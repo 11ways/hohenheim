@@ -94,15 +94,32 @@ secondary replication is pulled and then answered from this instance's own
 listener with the zone row marked transferred, and an unreachable primary
 marks the secondary errored.
 
-## Not yet built (next slice): central editing
+## Central editing (edit forwarding)
 
-A secondary zone's records are read-only on the replica; edit them on the
-owning primary. The reserved `dns_peers.base_url` + `api_key` are for the
-planned edit-forwarding layer: a single instance would edit a peer-owned
-zone's records by forwarding the change to the owner over an authenticated
-HTTPS API, which applies it, bumps the serial, and NOTIFYs -- so the replica
-reflects it within seconds. Single-owner-per-zone stays the invariant; no
-multi-primary editing.
+One instance can be the single pane for every federated zone.
+Single-owner-per-zone stays the invariant; no multi-primary editing.
 
-Also still open: DNSSEC (a separate security project) and response-rate-
-limiting on the public listeners.
+Owner side: `/api/dns/zones/{origin}/records` (list; POST create; POST
+`/{id}` update; POST `/{id}/delete`) on the admin server, gated to znit_
+API-key principals (csrfExempt is safe for exactly that reason), primary
+zones only (a replica answers 409 `not_primary`, so a fork is impossible).
+Every mutation runs the same `DnsRecordEdits.validate` pipeline as the CMS
+resource, is activity-logged with origin `api`, and bumps the serial --
+which NOTIFYs the secondaries, so the editing instance's own replica
+catches up within seconds. Validation refusals answer 422 with the
+violation's microcopy key.
+
+Viewing side: a SECONDARY zone's Records tab reads the owner's records LIVE
+through `DnsPeerApi` (the peer's `base_url` + `api_key`) and renders
+add/edit/delete forms that POST to `/admin/dns-zones/{id}/remote-records`,
+which forwards to the owner and round-trips validation refusals by microcopy
+key (same catalogs on both instances). When the peer is unconfigured or
+unreachable, the tab degrades to the read-only replica snapshot -- DNS keeps
+serving; only editing needs the owner online.
+
+Verification: `DnsCentralEditTest` (real HTTP) covers the API CRUD +
+serial bumps + session-cookie refusal + 422s + the 409 replica guard, and
+the read-through/forwarding/fallback flows against a scripted peer.
+
+Still open: DNSSEC (a separate security project) and response-rate-limiting
+on the public listeners.
