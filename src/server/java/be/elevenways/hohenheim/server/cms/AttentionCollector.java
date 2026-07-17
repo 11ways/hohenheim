@@ -4,8 +4,11 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DeploymentModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
+import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -16,6 +19,7 @@ import be.elevenways.zenit.common.task.TaskStatus;
 import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.xbill.DNS.Type;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -46,7 +50,29 @@ public final class AttentionCollector {
         unavailableAttachedDatabases(items);
         failedDeployments(items);
         failedTasks(items);
+        dnsIssues(items);
         return items;
+    }
+
+    /** DNS listeners that failed to bind, and enabled zones a resolver cannot delegate to. */
+    private static void dnsIssues(List<Map<String, Object>> items) {
+        Boolean enabled = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.ENABLED);
+        var dnsServer = ServerMain.getDnsServer();
+        if (Boolean.TRUE.equals(enabled) && (dnsServer == null || !dnsServer.isRunning())) {
+            String reason = dnsServer != null ? dnsServer.getStartupError() : null;
+            items.add(item("error", "sitemap",
+                copy("dns_listener", "attention_title"),
+                stringOrEmpty(reason),
+                "/admin/settings"));
+        }
+        for (DnsZoneSnapshot zone : DnsZoneStore.INSTANCE.zones()) {
+            if (zone.getRrset(zone.getOrigin(), Type.NS) == null) {
+                items.add(item("warning", "sitemap",
+                    copy("dns_zone_no_ns", "attention_title", "origin", zone.getOriginString()),
+                    copy("dns_zone_no_ns", "attention_detail"),
+                    "/admin/dns-zones/" + zone.getZoneId() + "/page/records"));
+            }
+        }
     }
 
     private static void errorCertificates(List<Map<String, Object>> items) {

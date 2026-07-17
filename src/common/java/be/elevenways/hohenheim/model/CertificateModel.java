@@ -38,6 +38,7 @@ public class CertificateModel extends Model {
     public static final String CHALLENGE_HTTP = "http";
     public static final String CHALLENGE_DNS = "dns";
     public static final String DNS_PUBLISHER_MANUAL = "manual";
+    public static final String DNS_PUBLISHER_INTERNAL = "internal";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NICE_NAME = SCHEMA.addField(StringField.builder().name("nice_name").build());

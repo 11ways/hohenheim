@@ -4,6 +4,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.protoblast.common.Blast;
@@ -91,6 +92,7 @@ public class AcmeService {
     public AcmeService(CertificateStore certificateStore) {
         this.certificateStore = certificateStore;
         DnsTxtPublishers.INSTANCE.register(new CommandDnsTxtPublisher());
+        DnsTxtPublishers.INSTANCE.register(new InternalDnsTxtPublisher());
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "acme-renewal");
             t.setDaemon(true);
@@ -619,7 +621,7 @@ public class AcmeService {
                 }
                 int propagation = HohenheimSettings.VALUES.getValue(
                     HohenheimSettings.Ssl.DNS_PROPAGATION_SECONDS);
-                if (propagation > 0) {
+                if (propagation > 0 && !publisher.servesImmediately()) {
                     Thread.sleep(TimeUnit.SECONDS.toMillis(propagation));
                 }
                 completeDnsAuthorizations(context.authorizations());

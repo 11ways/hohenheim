@@ -129,6 +129,35 @@ public class HohenheimSettings {
             .build();
     }
 
+    // --- Authoritative DNS ---
+    public abstract class Dns {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("dns")
+            .label("DNS server")
+            .describe("Authoritative DNS for the zones Hohenheim hosts")
+            .icon("sitemap");
+
+        public static final SettingDefinition<Boolean> ENABLED = GROUP.buildSetting("enabled", Boolean.class)
+            .defaultValue(false)
+            .description("Serve the configured DNS zones authoritatively on UDP and TCP. "
+                + "The registrar must delegate each zone to this server before answers matter, "
+                + "and production delegations need at least two name servers")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<String> BIND_ADDRESS = GROUP.buildSetting("bind_address", String.class)
+            .defaultValue("0.0.0.0")
+            .description("Address the DNS listeners bind to")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<Integer> PORT = GROUP.buildSetting("port", Integer.class)
+            .defaultValue(53)
+            .description("DNS listen port (UDP and TCP); port 53 usually needs elevated privileges "
+                + "or a capability like CAP_NET_BIND_SERVICE")
+            .restartRequired()
+            .build();
+    }
+
     // --- Logging ---
     // Note: the admin UI listens on Zenit's ServerSettings.Network.PORT.
     // The previous HohenheimSettings.Admin.PORT was displayed in the UI but

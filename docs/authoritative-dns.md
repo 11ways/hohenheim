@@ -1,5 +1,11 @@
 # Optional Authoritative DNS
 
+STATUS (2026-07-17): delivery phases 1-3 below are implemented (models +
+validation + snapshots, authoritative UDP/TCP serving, internal ACME TXT
+publisher, zone-file import/export, CMS resources). Phase 4 (AXFR/TSIG/NOTIFY
++ secondary health) and phase 5 (DNSSEC) remain open; until a secondary
+exists the service is a deliberate single point of failure.
+
 Hohenheim can become the authoritative DNS service for zones it manages. This
 removes the runtime dependency on a hosted DNS control panel and gives ACME
 DNS-01 a first-party TXT publisher, but it does not replace the domain

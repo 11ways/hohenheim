@@ -5,6 +5,7 @@
 {% declare domains: String = "" %}
 {% declare niceName: String = "" %}
 {% declare dnsHookConfigured: Boolean = false %}
+{% declare internalDnsAvailable: Boolean = false %}
 {% declare manualToken: String = "" %}
 {% declare dnsRecords: List<Map<String, Object>> %}
 {% declare flashMessage: Microcopy = null %}
@@ -72,8 +73,10 @@
                 <pl-label>{{ t("dns_mode", scope: "certificate_request") }}</pl-label>
                 <pl-select name="dns_mode" value="manual" submitEmpty={% true %}>
                     <pl-select-item value="manual">{{ t("manual", scope: "certificate_request") }}</pl-select-item>
+                    <pl-select-item value="internal" disabled={% !internalDnsAvailable %}>{{ t("internal_dns", scope: "certificate_request") }}</pl-select-item>
                     <pl-select-item value="command" disabled={% !dnsHookConfigured %}>{{ t("automatic_hook", scope: "certificate_request") }}</pl-select-item>
                 </pl-select>
+                <pl-field-description>{% if internalDnsAvailable %}{{ t("internal_ready", scope: "certificate_request") }}{% else %}{{ t("internal_unavailable", scope: "certificate_request") }}{% /if %}</pl-field-description>
                 <pl-field-description>{% if dnsHookConfigured %}{{ t("hook_ready", scope: "certificate_request") }}{% else %}{{ t("hook_missing", scope: "certificate_request") }}{% /if %}</pl-field-description>
             </pl-field>
             <pl-field>

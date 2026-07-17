@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DeploymentModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -65,6 +66,11 @@ public final class HohenheimSources implements ZenitModule {
 
         RecordSourceRegistry.INSTANCE.register(RecordSource.of(SiteAuthProviderModel.class)
             .search(SiteAuthProviderModel.NAME)
+            .build());
+
+        // Feeds the DNS record form's zone picker.
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(DnsZoneModel.class)
+            .search(DnsZoneModel.ORIGIN)
             .build());
 
         // Feeds the admin dashboard's recent-activity records widget.

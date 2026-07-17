@@ -5,10 +5,13 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.process.IpcChannel;
 import be.elevenways.hohenheim.server.process.ManagedProcess;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
@@ -59,6 +62,7 @@ public final class HohenheimHandlers {
         AttentionItems.install(AttentionCollector::collect);
         initHealth();
         initCertificates();
+        initDnsZones();
         initDatabases();
         initProcessControl();
         initDeployControl();
@@ -207,13 +211,28 @@ public final class HohenheimHandlers {
                 }
             }
 
-            if (dns && !CommandDnsTxtPublisher.ID.equals(dnsMode)) {
+            if (dns && CertificateModel.DNS_PUBLISHER_INTERNAL.equals(dnsMode)) {
+                var dnsServer = ServerMain.getDnsServer();
+                if (dnsServer == null || !dnsServer.isRunning()) {
+                    return requestError(conduit, certificateError("dns_server_disabled"));
+                }
+                InternalDnsTxtPublisher internal = new InternalDnsTxtPublisher();
+                List<String> unhosted = hostnames.stream()
+                    .map(name -> name.startsWith("*.") ? name.substring(2) : name)
+                    .filter(name -> !internal.canPublishFor("_acme-challenge." + name))
+                    .toList();
+                if (!unhosted.isEmpty()) {
+                    return requestError(conduit, certificateError("zone_not_hosted")
+                        .withArg("hostnames", String.join(", ", unhosted)));
+                }
+            }
+            else if (dns && !CommandDnsTxtPublisher.ID.equals(dnsMode)) {
                 return requestError(conduit, certificateError("unknown_dns_mode")
                     .withArg("mode", dnsMode));
             }
 
-            String publisher = dns ? CommandDnsTxtPublisher.ID : null;
-            if (dns && !CommandDnsTxtPublisher.isConfigured()) {
+            String publisher = dns ? dnsMode : null;
+            if (dns && CommandDnsTxtPublisher.ID.equals(dnsMode) && !CommandDnsTxtPublisher.isConfigured()) {
                 return requestError(conduit, certificateError("hook_not_configured"));
             }
             int certId = proxy.getAcmeService().requestCertificate(hostnames, niceName,
@@ -252,6 +271,48 @@ public final class HohenheimHandlers {
             download(conduit, "application/x-pem-file",
                 (niceName != null ? niceName : "certificate") + ".pem", bundle.getBytes(StandardCharsets.UTF_8));
             return null;
+        });
+    }
+
+    // -----------------------------------------------------------------------
+    // DNS: zone-file import (the zone-file tab's paste form).
+    // -----------------------------------------------------------------------
+
+    private static void initDnsZones() {
+        HohenheimEndpoints.DNS_ZONE_IMPORT.setHandler(conduit -> {
+            Integer zoneId = conduit.getParameter(HohenheimEndpoints.ZONE_ID);
+            Row zone = Models.get(DnsZoneModel.class).find()
+                .where(DnsZoneModel.ID.eq(zoneId)).first();
+            if (zone == null) {
+                return redirectUntyped("/admin/dns-zones");
+            }
+
+            String backUrl = "/admin/dns-zones/" + zoneId + "/page/zonefile";
+            Map<String, String> form = formMap(conduit);
+            String text = form.getOrDefault("zone_text", "");
+            if (text.isBlank()) {
+                return redirectUntyped(backUrl + "?error=" + URLEncoder.encode(
+                    Microcopy.of("import_empty").withFilter("scope", "dns_zone")
+                        .resolve(conduit.getLocales(), conduit.getMessageResolver()),
+                    StandardCharsets.UTF_8));
+            }
+
+            try {
+                DnsZoneFiles.ImportResult result = DnsZoneFiles.importText(zone, text);
+                ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, "imported",
+                    zone.get(DnsZoneModel.ORIGIN));
+                StringBuilder target = new StringBuilder(backUrl)
+                    .append("?imported=").append(result.imported());
+                if (!result.skipped().isEmpty()) {
+                    target.append("&skipped=").append(URLEncoder.encode(
+                        String.join("; ", result.skipped()), StandardCharsets.UTF_8));
+                }
+                return redirectUntyped(target.toString());
+            }
+            catch (Exception e) {
+                return redirectUntyped(backUrl + "?error="
+                    + URLEncoder.encode(String.valueOf(e.getMessage()), StandardCharsets.UTF_8));
+            }
         });
     }
 

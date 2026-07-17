@@ -1,0 +1,202 @@
+package be.elevenways.hohenheim.server.dns;
+
+import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.xbill.DNS.DClass;
+import org.xbill.DNS.Name;
+import org.xbill.DNS.Record;
+import org.xbill.DNS.SOARecord;
+import org.xbill.DNS.TextParseException;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Builds immutable zone snapshots from the database and swaps them atomically;
+ * every zone/record mutation must end with {@link #reload()}.
+ */
+public final class DnsZoneStore {
+
+    public static final DnsZoneStore INSTANCE = new DnsZoneStore();
+
+    private volatile Map<String, DnsZoneSnapshot> zonesByOrigin = Map.of();
+
+    private DnsZoneStore() {}
+
+    /** Rebuilds every enabled zone from the database and swaps the serving view atomically. */
+    public synchronized void reload() {
+        Map<String, DnsZoneSnapshot> rebuilt = new HashMap<>();
+        DnsZoneModel zoneModel = Models.get(DnsZoneModel.class);
+        DnsRecordModel recordModel = Models.get(DnsRecordModel.class);
+
+        for (Row zone : zoneModel.findEnabled()) {
+            try {
+                DnsZoneSnapshot snapshot = buildSnapshot(zone, recordModel);
+                rebuilt.put(snapshot.getOriginString(), snapshot);
+            }
+            catch (Exception e) {
+                Blast.log("DNS: skipping zone", zone.get(DnsZoneModel.ORIGIN), "-", e.getMessage());
+            }
+        }
+
+        this.zonesByOrigin = Map.copyOf(rebuilt);
+    }
+
+    /** Atomically bumps the zone's SOA serial and rebuilds the serving view. */
+    public void bumpSerialAndReload(int zoneId) {
+        Models.get(DnsZoneModel.class).find()
+            .where(DnsZoneModel.ID.eq(zoneId))
+            .increment(DnsZoneModel.SERIAL)
+            .updateAll();
+        this.reload();
+    }
+
+    public @NonNull Collection<DnsZoneSnapshot> zones() {
+        return this.zonesByOrigin.values();
+    }
+
+    public @Nullable DnsZoneSnapshot getZone(@NonNull String origin) {
+        return this.zonesByOrigin.get(origin);
+    }
+
+    /** @return the most specific enabled zone containing the name, or null */
+    public @Nullable DnsZoneSnapshot findZoneFor(@NonNull Name qname) {
+        DnsZoneSnapshot best = null;
+        for (DnsZoneSnapshot zone : this.zonesByOrigin.values()) {
+            if (!qname.subdomain(zone.getOrigin())) {
+                continue;
+            }
+            if (best == null || zone.getOrigin().labels() > best.getOrigin().labels()) {
+                best = zone;
+            }
+        }
+        return best;
+    }
+
+    /** @return the most specific enabled zone containing the fqdn (no trailing dot needed), or null */
+    public @Nullable DnsZoneSnapshot findZoneFor(@NonNull String fqdn) {
+        String best = null;
+        for (DnsZoneSnapshot zone : this.zonesByOrigin.values()) {
+            String origin = zone.getOriginString();
+            if (DnsNames.zoneContains(origin, fqdn) && (best == null || origin.length() > best.length())) {
+                best = origin;
+            }
+        }
+        return best != null ? this.zonesByOrigin.get(best) : null;
+    }
+
+    private static @NonNull DnsZoneSnapshot buildSnapshot(@NonNull Row zone, @NonNull DnsRecordModel recordModel)
+            throws Exception {
+
+        int zoneId = zone.get(DnsZoneModel.ID);
+        String originString = zone.get(DnsZoneModel.ORIGIN);
+        Name origin = Name.fromString(originString + ".");
+
+        int serial = valueOr(zone.get(DnsZoneModel.SERIAL), 1);
+        int defaultTtl = valueOr(zone.get(DnsZoneModel.DEFAULT_TTL), 3600);
+        int negativeTtl = valueOr(zone.get(DnsZoneModel.NEGATIVE_TTL), 300);
+        int refresh = valueOr(zone.get(DnsZoneModel.SOA_REFRESH), 7200);
+        int retry = valueOr(zone.get(DnsZoneModel.SOA_RETRY), 3600);
+        int expire = valueOr(zone.get(DnsZoneModel.SOA_EXPIRE), 1209600);
+
+        Name primaryNs = absoluteName(zone.get(DnsZoneModel.SOA_PRIMARY_NS), origin);
+        Name contact = contactName(zone.get(DnsZoneModel.SOA_CONTACT), originString);
+
+        SOARecord soa = new SOARecord(origin, DClass.IN, defaultTtl,
+            primaryNs, contact, serial, refresh, retry, expire, negativeTtl);
+        SOARecord negativeSoa = new SOARecord(origin, DClass.IN, negativeTtl,
+            primaryNs, contact, serial, refresh, retry, expire, negativeTtl);
+
+        Map<Name, Map<Integer, List<Record>>> nodes = new HashMap<>();
+        addRecord(nodes, origin, soa, origin);
+
+        for (Row row : recordModel.findEnabledByZoneId(zoneId)) {
+            try {
+                String owner = row.get(DnsRecordModel.NAME);
+                String type = row.get(DnsRecordModel.TYPE);
+                long ttl = DnsRecordCodec.resolveTtl(row.get(DnsRecordModel.TTL), defaultTtl);
+                Record record = DnsRecordCodec.toRecord(origin, owner, type, ttl,
+                    valueOr(row.get(DnsRecordModel.VALUE), ""),
+                    row.get(DnsRecordModel.PRIORITY),
+                    row.get(DnsRecordModel.WEIGHT),
+                    row.get(DnsRecordModel.PORT));
+                addRecord(nodes, record.getName(), record, origin);
+            }
+            catch (DnsValueException e) {
+                Blast.log("DNS: skipping record", row.get(DnsRecordModel.ID), "in zone", originString,
+                    "-", e.getMessage());
+            }
+        }
+
+        Map<Name, Map<Integer, List<Record>>> frozen = new HashMap<>();
+        for (Map.Entry<Name, Map<Integer, List<Record>>> node : nodes.entrySet()) {
+            Map<Integer, List<Record>> types = new HashMap<>();
+            for (Map.Entry<Integer, List<Record>> rrset : node.getValue().entrySet()) {
+                types.put(rrset.getKey(), List.copyOf(rrset.getValue()));
+            }
+            frozen.put(node.getKey(), Map.copyOf(types));
+        }
+
+        return new DnsZoneSnapshot(zoneId, originString, origin, serial, soa, negativeSoa, Map.copyOf(frozen));
+    }
+
+    /** Registers the record and materializes empty non-terminal nodes up to the apex. */
+    private static void addRecord(@NonNull Map<Name, Map<Integer, List<Record>>> nodes,
+                                  @NonNull Name owner,
+                                  @NonNull Record record,
+                                  @NonNull Name origin) {
+        nodes.computeIfAbsent(owner, k -> new HashMap<>())
+            .computeIfAbsent(record.getType(), k -> new ArrayList<>())
+            .add(record);
+
+        Name current = DnsZoneSnapshot.parent(owner);
+        while (current.labels() > origin.labels() && current.subdomain(origin)) {
+            nodes.computeIfAbsent(current, k -> new HashMap<>());
+            current = DnsZoneSnapshot.parent(current);
+        }
+    }
+
+    private static @NonNull Name absoluteName(@Nullable String value, @NonNull Name origin) throws TextParseException {
+        if (value == null || value.isBlank()) {
+            return new Name("ns1", origin);
+        }
+        String name = value.trim().toLowerCase();
+        while (name.endsWith(".")) {
+            name = name.substring(0, name.length() - 1);
+        }
+        return Name.fromString(name + ".");
+    }
+
+    /** Turns an email contact into SOA RNAME form (dots in the local part escaped). */
+    private static @NonNull Name contactName(@Nullable String value, @NonNull String origin) throws TextParseException {
+        String contact = value != null ? value.trim().toLowerCase() : "";
+        if (contact.isEmpty()) {
+            contact = "hostmaster@" + origin;
+        }
+        int at = contact.indexOf('@');
+        if (at > 0) {
+            String local = contact.substring(0, at).replace(".", "\\.");
+            contact = local + "." + contact.substring(at + 1);
+        }
+        while (contact.endsWith(".")) {
+            contact = contact.substring(0, contact.length() - 1);
+        }
+        return Name.fromString(contact + ".");
+    }
+
+    private static int valueOr(@Nullable Integer value, int fallback) {
+        return value != null ? value : fallback;
+    }
+
+    private static @NonNull String valueOr(@Nullable String value, @NonNull String fallback) {
+        return value != null ? value : fallback;
+    }
+}

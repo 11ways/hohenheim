@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -43,6 +44,9 @@ public final class CertificateRequestPage extends PanelPage {
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
         vars.put("error", error != null ? error : "");
         vars.put("dnsHookConfigured", CommandDnsTxtPublisher.isConfigured());
+        var dnsServer = ServerMain.getDnsServer();
+        vars.put("internalDnsAvailable", dnsServer != null && dnsServer.isRunning()
+            && new InternalDnsTxtPublisher().hasZones());
         vars.put("manualToken", "");
         vars.put("dnsRecords", List.of());
         String manualToken = conduit.getQueryParam("manual");

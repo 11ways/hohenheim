@@ -119,4 +119,17 @@
         white-space: pre-wrap;
         overflow-x: auto;
     }
+
+    // Zone-file export (DNS zone Zone-file tab)
+    .hh-zone-file {
+        font-family: var(--pl-font-family-mono, monospace);
+        font-size: var(--pl-font-size-xs);
+        background: var(--pl-color-surface-muted, var(--pl-color-surface));
+        border: 1px solid var(--pl-color-border);
+        border-radius: var(--pl-radius-md);
+        padding: var(--pl-space-md);
+        overflow-x: auto;
+        max-height: 24rem;
+        overflow-y: auto;
+    }
 }
