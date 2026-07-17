@@ -260,3 +260,19 @@ mechanism (protocol, client, credit-window streams) lives in zenit
 registry, bridge, offline page, and the Dev sessions tab. `zenit-dev start`
 auto-registers when `devTunnel` is configured in its machine config. See
 `docs/dev-tunnel.md`.
+
+## DNS federation / hidden primary (2026-07-17): SHIPPED (replication core)
+
+Standards-based zone replication so Hohenheim can run as a hidden primary
+(port 53 closed at the office) with a public secondary (VPS Hohenheim, or
+NSD/Knot) meeting the two-nameserver production threshold. TSIG-authenticated
+AXFR both directions, NOTIFY, a secondary-zone subsystem (SOA
+refresh/retry/expire, NOTIFY-triggered pulls), per-zone primary/secondary
+roles, a peer registry + secondaries admin, and an ACME propagation wait so
+DNS-01 issuance blocks until secondaries serve the challenge. Proven over real
+sockets (DnsFederationTest). See docs/dns-federation.md.
+
+Next slice: central editing -- edit a peer-owned (secondary) zone's records
+from one instance by forwarding to the owner over an authenticated HTTPS API
+(the reserved dns_peers.base_url + api_key). Plus phase 5 (DNSSEC) and
+response-rate-limiting.

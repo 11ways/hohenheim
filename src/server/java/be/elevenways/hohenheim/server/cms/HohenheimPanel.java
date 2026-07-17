@@ -55,6 +55,8 @@ public final class HohenheimPanel extends Panel {
         peers.add(new ServerResource());
         peers.add(new DnsZoneResource());
         peers.add(new DnsRecordResource());
+        peers.add(new DnsPeerResource());
+        peers.add(new DnsZonePeerResource());
         peers.add(new NotificationChannelResource());
         peers.add(new ActivityResource());
         SettingsPage settings = settingsPage();

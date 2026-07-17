@@ -1,0 +1,43 @@
+{#- Secondaries tab on a primary zone: the peers it is replicated to. -#}
+{% declare title: String %}
+{% declare origin: String %}
+{% declare zoneId: Integer %}
+{% declare links: List %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ origin }}</h1>
+        <a href={% "/admin/dns-zone-peers/new?zone_id=" + zoneId %} id="attach-secondary-link">
+            <pl-button variant={% "primary" %}>{{ t("attach", scope: "dns_secondaries") }}</pl-button>
+        </a>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if links %}
+    <pl-table>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("peer", scope: "dns_secondaries") }}</pl-table-head>
+            <pl-table-head>{{ t("transfer_host", scope: "dns_secondaries") }}</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each links as index, link %}
+            <pl-table-row>
+                <pl-table-cell><a href={% link.get("editUrl") %}>{{ link.get("peerName") }}</a></pl-table-cell>
+                <pl-table-cell><code>{{ link.get("transferHost") }}</code></pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="handshake">
+        <pl-empty-state-title>{{ t("empty", scope: "dns_secondaries") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("empty_hint", scope: "dns_secondaries") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+</section>
+{% /block %}

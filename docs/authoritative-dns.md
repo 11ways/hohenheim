@@ -1,10 +1,17 @@
 # Optional Authoritative DNS
 
-STATUS (2026-07-17): delivery phases 1-3 below are implemented (models +
-validation + snapshots, authoritative UDP/TCP serving, internal ACME TXT
-publisher, zone-file import/export, CMS resources). Phase 4 (AXFR/TSIG/NOTIFY
-+ secondary health) and phase 5 (DNSSEC) remain open; until a secondary
-exists the service is a deliberate single point of failure.
+STATUS (2026-07-17): delivery phases 1-4 below are implemented. Phase 4 is
+the standards-based replication described in `dns-federation.md`: TSIG-
+authenticated AXFR (both directions), NOTIFY, a secondary-zone subsystem with
+SOA refresh/retry/expire discipline, per-zone primary/secondary roles, a peer
+registry, and an ACME propagation wait so DNS-01 issuance blocks until the
+secondaries serve the challenge. This lets Hohenheim run as a hidden primary
+behind a closed port 53, with a public secondary (another Hohenheim, or an
+off-the-shelf NSD/Knot) meeting the two-nameserver production threshold.
+Still open: phase 5 (DNSSEC), response-rate-limiting, and the central
+"edit a peer-owned zone from one instance" edit-forwarding layer (a secondary
+zone's records are currently read-only on the replica; edit them on their
+owning primary).
 
 Hohenheim can become the authoritative DNS service for zones it manages. This
 removes the runtime dependency on a hosted DNS control panel and gives ACME
