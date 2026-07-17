@@ -5,8 +5,14 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.DnsPeerModel;
+import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.cms.DnsRecordEdits;
+import be.elevenways.hohenheim.server.dns.DnsNames;
+import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
+import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
@@ -34,6 +40,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.JsonResult;
+import be.elevenways.zenit.common.validation.Violation;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.HttpConduit;
 import be.elevenways.zenit.server.http.RedirectResult;
 
@@ -64,6 +72,8 @@ public final class HohenheimHandlers {
         initHealth();
         initCertificates();
         initDnsZones();
+        initDnsRecordApi();
+        initDnsRemoteRecords();
         initDatabases();
         initProcessControl();
         initDeployControl();
@@ -315,6 +325,267 @@ public final class HohenheimHandlers {
                 return redirectUntyped(backUrl + "?error="
                     + URLEncoder.encode(String.valueOf(e.getMessage()), StandardCharsets.UTF_8));
             }
+        });
+    }
+
+    // -----------------------------------------------------------------------
+    // DNS records peer/automation API: the edit-forwarding channel other
+    // Hohenheim instances use to edit zones THIS instance owns (plus a plain
+    // automation API). API-key principals only; primary zones only.
+    // -----------------------------------------------------------------------
+
+    private static final List<String> RECORD_FIELDS =
+        List.of("name", "type", "value", "ttl", "priority", "weight", "port", "enabled");
+
+    private static void initDnsRecordApi() {
+        DnsRecordModel model = Models.get(DnsRecordModel.class);
+
+        HohenheimEndpoints.API_DNS_RECORDS.setHandler(conduit -> {
+            Row zone = apiPrimaryZone(conduit);
+            if (zone == null) {
+                return null;
+            }
+            List<Map<String, Object>> records = new ArrayList<>();
+            for (Row record : model.find()
+                    .where(DnsRecordModel.ZONE_ID.eq(zone.get(DnsZoneModel.ID)))
+                    .orderBy(DnsRecordModel.NAME, SortOrder.ASC)
+                    .all()) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("id", record.get(DnsRecordModel.ID));
+                entry.put("name", record.get(DnsRecordModel.NAME));
+                entry.put("type", record.get(DnsRecordModel.TYPE));
+                entry.put("ttl", record.get(DnsRecordModel.TTL));
+                entry.put("value", record.get(DnsRecordModel.VALUE));
+                entry.put("priority", record.get(DnsRecordModel.PRIORITY));
+                entry.put("weight", record.get(DnsRecordModel.WEIGHT));
+                entry.put("port", record.get(DnsRecordModel.PORT));
+                entry.put("enabled", Boolean.TRUE.equals(record.get(DnsRecordModel.ENABLED)));
+                entry.put("managed_by", record.get(DnsRecordModel.MANAGED_BY));
+                records.add(entry);
+            }
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("zone", zone.get(DnsZoneModel.ORIGIN));
+            body.put("serial", zone.get(DnsZoneModel.SERIAL));
+            body.put("records", records);
+            return jsonUntyped(body);
+        });
+
+        HohenheimEndpoints.API_DNS_RECORD_CREATE.setHandler(conduit -> {
+            Row zone = apiPrimaryZone(conduit);
+            if (zone == null) {
+                return null;
+            }
+            int zoneId = zone.get(DnsZoneModel.ID);
+            Map<String, Object> values = recordValues(formMap(conduit));
+            values.put("zone_id", zoneId);
+            try {
+                DnsRecordEdits.validate(values, null, model);
+            }
+            catch (Violations violations) {
+                return validationError(conduit, violations);
+            }
+            Row row = model.createEmptyRow();
+            row.set(DnsRecordModel.ZONE_ID, zoneId);
+            applyRecordValues(row, values);
+            model.save(row);
+            ActivityLog.record(model, row.get(DnsRecordModel.ID), "created", "api");
+            DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
+            return jsonUntyped(Map.of("id", row.get(DnsRecordModel.ID)));
+        });
+
+        HohenheimEndpoints.API_DNS_RECORD_UPDATE.setHandler(conduit -> {
+            Row zone = apiPrimaryZone(conduit);
+            if (zone == null) {
+                return null;
+            }
+            Row record = apiRecord(conduit, zone, model);
+            if (record == null) {
+                return null;
+            }
+            // Only submitted fields change; absent keys keep their stored value.
+            Map<String, Object> values = recordValues(formMap(conduit));
+            try {
+                DnsRecordEdits.validate(values, record, model);
+            }
+            catch (Violations violations) {
+                return validationError(conduit, violations);
+            }
+            applyRecordValues(record, values);
+            model.save(record);
+            ActivityLog.record(model, record.get(DnsRecordModel.ID), "updated", "api");
+            DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
+            return jsonUntyped(Map.of("id", record.get(DnsRecordModel.ID)));
+        });
+
+        HohenheimEndpoints.API_DNS_RECORD_DELETE.setHandler(conduit -> {
+            Row zone = apiPrimaryZone(conduit);
+            if (zone == null) {
+                return null;
+            }
+            Row record = apiRecord(conduit, zone, model);
+            if (record == null) {
+                return null;
+            }
+            Integer recordId = record.get(DnsRecordModel.ID);
+            model.delete(record);
+            ActivityLog.record(model, recordId, "deleted", "api");
+            DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
+            return jsonUntyped(Map.of("status", "deleted"));
+        });
+    }
+
+    /** Gate + zone resolution shared by every DNS api handler; null = response already written. */
+    private static @org.checkerframework.checker.nullness.qual.Nullable Row apiPrimaryZone(Conduit conduit) {
+        if (!(conduit.getAttribute(ConduitAttributes.PRINCIPAL) instanceof ApiKeyPrincipal)) {
+            conduit.forbidden();
+            return null;
+        }
+        String rawOrigin = conduit.getParameter(HohenheimEndpoints.DNS_ORIGIN);
+        String origin = DnsNames.normalizeOrigin(rawOrigin != null ? rawOrigin : "");
+        Row zone = origin != null ? Models.get(DnsZoneModel.class).findByOrigin(origin) : null;
+        if (zone == null) {
+            conduit.notFound();
+            return null;
+        }
+        if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
+            // Edits belong on the owning instance; a replica must never fork.
+            conduit.setResponseStatus(409);
+            conduit.endWithContentType("application/json", "{\"error\":\"not_primary\"}");
+            return null;
+        }
+        return zone;
+    }
+
+    private static @org.checkerframework.checker.nullness.qual.Nullable Row apiRecord(
+            Conduit conduit, Row zone, DnsRecordModel model) {
+        Integer recordId = conduit.getParameter(HohenheimEndpoints.DNS_RECORD_ID);
+        Row record = model.find()
+            .where(DnsRecordModel.ID.eq(recordId))
+            .where(DnsRecordModel.ZONE_ID.eq(zone.get(DnsZoneModel.ID)))
+            .first();
+        if (record == null) {
+            conduit.notFound();
+            return null;
+        }
+        return record;
+    }
+
+    /** Submitted record fields as a validation map; absent keys fall back to the existing row. */
+    private static Map<String, Object> recordValues(Map<String, String> form) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        for (String field : RECORD_FIELDS) {
+            if (form.containsKey(field)) {
+                values.put(field, form.get(field));
+            }
+        }
+        return values;
+    }
+
+    private static void applyRecordValues(Row row, Map<String, Object> values) {
+        if (values.containsKey("name")) {
+            row.set(DnsRecordModel.NAME, String.valueOf(values.get("name")));
+        }
+        if (values.containsKey("type")) {
+            row.set(DnsRecordModel.TYPE, String.valueOf(values.get("type")));
+        }
+        if (values.containsKey("value")) {
+            row.set(DnsRecordModel.VALUE, String.valueOf(values.get("value")));
+        }
+        if (values.containsKey("ttl")) {
+            row.set(DnsRecordModel.TTL, DnsRecordEdits.intOrNull(values.get("ttl")));
+        }
+        if (values.containsKey("priority")) {
+            row.set(DnsRecordModel.PRIORITY, DnsRecordEdits.intOrNull(values.get("priority")));
+        }
+        if (values.containsKey("weight")) {
+            row.set(DnsRecordModel.WEIGHT, DnsRecordEdits.intOrNull(values.get("weight")));
+        }
+        if (values.containsKey("port")) {
+            row.set(DnsRecordModel.PORT, DnsRecordEdits.intOrNull(values.get("port")));
+        }
+        if (values.containsKey("enabled")) {
+            row.set(DnsRecordModel.ENABLED, Boolean.parseBoolean(String.valueOf(values.get("enabled"))));
+        }
+        else if (row.get(DnsRecordModel.ENABLED) == null) {
+            row.set(DnsRecordModel.ENABLED, true);
+        }
+    }
+
+    private static ActionResult<Object> validationError(Conduit conduit, Violations violations) {
+        Violation first = violations.all().isEmpty() ? null : violations.all().get(0);
+        conduit.setResponseStatus(422);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("error", "validation");
+        if (first != null) {
+            body.put("field", first.fieldName());
+            body.put("key", first.message().key());
+            body.put("message", first.message().resolve(conduit.getLocales(), conduit.getMessageResolver()));
+        }
+        return jsonUntyped(body);
+    }
+
+    // -----------------------------------------------------------------------
+    // Remote-record edit forwarding: the admin form POST on a SECONDARY
+    // zone's Records tab, forwarded to the owning peer's API above.
+    // -----------------------------------------------------------------------
+
+    private static void initDnsRemoteRecords() {
+        HohenheimEndpoints.DNS_REMOTE_RECORD.setHandler(conduit -> {
+            Integer zoneId = conduit.getParameter(HohenheimEndpoints.ZONE_ID);
+            Row zone = Models.get(DnsZoneModel.class).find()
+                .where(DnsZoneModel.ID.eq(zoneId)).first();
+            if (zone == null || !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
+                return redirectUntyped("/admin/dns-zones");
+            }
+            String backUrl = "/admin/dns-zones/" + zoneId + "/page/records";
+
+            Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
+            Row peer = peerId != null ? Models.get(DnsPeerModel.class).findById(peerId) : null;
+            DnsPeerApi api = DnsPeerApi.forPeer(peer);
+            if (api == null) {
+                return redirectUntyped(backUrl + "?error=" + URLEncoder.encode(
+                    Microcopy.of("peer_not_configured").withFilter("scope", "dns_remote")
+                        .resolve(conduit.getLocales(), conduit.getMessageResolver()),
+                    StandardCharsets.UTF_8));
+            }
+
+            Map<String, String> form = formMap(conduit);
+            String origin = zone.get(DnsZoneModel.ORIGIN);
+            String action = form.getOrDefault("action", "save");
+            String recordId = form.getOrDefault("record_id", "").trim();
+            Map<String, String> fields = new LinkedHashMap<>();
+            for (String field : RECORD_FIELDS) {
+                if (form.containsKey(field)) {
+                    fields.put(field, form.get(field));
+                }
+            }
+
+            try {
+                if ("delete".equals(action) && !recordId.isEmpty()) {
+                    api.deleteRecord(origin, Integer.parseInt(recordId));
+                }
+                else if (!recordId.isEmpty()) {
+                    api.updateRecord(origin, Integer.parseInt(recordId), fields);
+                }
+                else {
+                    api.createRecord(origin, fields);
+                }
+            }
+            catch (NumberFormatException e) {
+                return redirectUntyped(backUrl);
+            }
+            catch (DnsPeerApi.PeerApiException e) {
+                // A validation refusal round-trips by microcopy key (same catalogs
+                // on both instances); transport failures show the raw message.
+                String message = e.getViolationKey() != null
+                    ? Microcopy.of(e.getViolationKey()).withFilter("scope", "violations")
+                        .resolve(conduit.getLocales(), conduit.getMessageResolver())
+                    : String.valueOf(e.getMessage());
+                return redirectUntyped(backUrl + "?error="
+                    + URLEncoder.encode(message, StandardCharsets.UTF_8));
+            }
+
+            return redirectUntyped(backUrl + "?saved=1");
         });
     }
 

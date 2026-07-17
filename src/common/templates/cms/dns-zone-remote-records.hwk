@@ -1,0 +1,158 @@
+{#- Records tab on a SECONDARY zone: the owner's live records read through the
+    peer API, with edits forwarded to the owning instance. Falls back to the
+    read-only replica when the owner is unreachable. -#}
+{% declare title: String %}
+{% declare zoneId: Integer %}
+{% declare origin: String %}
+{% declare peerName: String = "" %}
+{% declare records: List %}
+{% declare editable: Boolean = false %}
+{% declare notice: String = "" %}
+{% declare editRecord: Map = null %}
+{% declare recordTypes: List %}
+{% declare error: String = "" %}
+{% declare saved: Boolean = false %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ origin }}</h1>
+        {% if editable %}
+        <a href={% "/admin/dns-zones/" + zoneId + "/page/records?record=new" %} id="add-remote-record-link">
+            <pl-button variant={% "primary" %}>{{ t("add_record", scope: "dns_zone") }}</pl-button>
+        </a>
+        {% /if %}
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if editable %}
+    <pl-alert variant="default">{{ t("edits_forwarded", scope: "dns_remote", peer: peerName) }}</pl-alert>
+    {% /if %}
+    {% if notice != "" %}<pl-alert variant="warning">{{ notice }}</pl-alert>{% /if %}
+    {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
+    {% if saved %}<pl-alert variant="default">{{ t("edit_saved", scope: "dns_remote") }}</pl-alert>{% /if %}
+
+    {% if editRecord %}
+    <form method="POST" action={% "/admin/dns-zones/" + zoneId + "/remote-records" %}>
+        {% csrf() %}
+        <input type="hidden" name="record_id" value={% editRecord.get("id") %}>
+        <pl-card>
+            <pl-card-header>
+                <pl-card-title>
+                    {% if editRecord.get("id") == "" %}
+                    {{ t("add_record", scope: "dns_zone") }}
+                    {% else %}
+                    {{ t("edit_record", scope: "dns_remote") }}
+                    {% /if %}
+                </pl-card-title>
+            </pl-card-header>
+            <pl-card-content class="hh-remote-record-form">
+                <pl-field>
+                    <pl-label target="rr_name">{{ t("record_name_column", scope: "dns_zone") }}</pl-label>
+                    <pl-input inputId="rr_name" type="text" name="name" value={% editRecord.get("name") %}></pl-input>
+                </pl-field>
+                <pl-field>
+                    <pl-label target="rr_type">{{ t("record_type_column", scope: "dns_zone") }}</pl-label>
+                    <pl-select name="type" value={% editRecord.get("type") %} submitEmpty={% true %}>
+                        {% each recordTypes as index, recordType %}
+                        <pl-select-item value={% recordType %}>{{ recordType }}</pl-select-item>
+                        {% /each %}
+                    </pl-select>
+                </pl-field>
+                <pl-field>
+                    <pl-label target="rr_value">{{ t("record_value_column", scope: "dns_zone") }}</pl-label>
+                    <pl-input inputId="rr_value" type="text" name="value" value={% editRecord.get("value") %}></pl-input>
+                </pl-field>
+                <pl-field>
+                    <pl-label target="rr_ttl">{{ t("record_ttl_column", scope: "dns_zone") }}</pl-label>
+                    <pl-input inputId="rr_ttl" type="text" name="ttl" value={% editRecord.get("ttl") %}></pl-input>
+                </pl-field>
+                <pl-field>
+                    <pl-label target="rr_priority">{{ t("priority", scope: "dns_remote") }}</pl-label>
+                    <pl-input inputId="rr_priority" type="text" name="priority" value={% editRecord.get("priority") %}></pl-input>
+                </pl-field>
+                <pl-field>
+                    <pl-label target="rr_weight">{{ t("weight", scope: "dns_remote") }}</pl-label>
+                    <pl-input inputId="rr_weight" type="text" name="weight" value={% editRecord.get("weight") %}></pl-input>
+                </pl-field>
+                <pl-field>
+                    <pl-label target="rr_port">{{ t("port", scope: "dns_remote") }}</pl-label>
+                    <pl-input inputId="rr_port" type="text" name="port" value={% editRecord.get("port") %}></pl-input>
+                </pl-field>
+                <pl-field>
+                    <pl-label target="rr_enabled">{{ t("record_status_column", scope: "dns_zone") }}</pl-label>
+                    <pl-select name="enabled" value={% editRecord.get("enabled") %} submitEmpty={% true %}>
+                        <pl-select-item value="true">{{ t("record_enabled_badge", scope: "dns_zone") }}</pl-select-item>
+                        <pl-select-item value="false">{{ t("record_disabled_badge", scope: "dns_zone") }}</pl-select-item>
+                    </pl-select>
+                </pl-field>
+            </pl-card-content>
+        </pl-card>
+        <div class="cms-form-actions">
+            <pl-button variant="primary" type="submit">{{ t("save_remote", scope: "dns_remote") }}</pl-button>
+            <a href={% "/admin/dns-zones/" + zoneId + "/page/records" %}>
+                <pl-button variant={% "ghost" %} type="button">{{ t("cancel_remote", scope: "dns_remote") }}</pl-button>
+            </a>
+        </div>
+    </form>
+    {% /if %}
+
+    {% if records %}
+    <pl-table>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("record_name_column", scope: "dns_zone") }}</pl-table-head>
+            <pl-table-head>{{ t("record_type_column", scope: "dns_zone") }}</pl-table-head>
+            <pl-table-head>{{ t("record_ttl_column", scope: "dns_zone") }}</pl-table-head>
+            <pl-table-head>{{ t("record_value_column", scope: "dns_zone") }}</pl-table-head>
+            <pl-table-head>{{ t("record_status_column", scope: "dns_zone") }}</pl-table-head>
+            {% if editable %}<pl-table-head></pl-table-head>{% /if %}
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each records as index, record %}
+            <pl-table-row>
+                <pl-table-cell>
+                    {% if editable %}
+                    <a href={% "/admin/dns-zones/" + zoneId + "/page/records?record=" + record.get("id") %}><code>{{ record.get("name") }}</code></a>
+                    {% else %}
+                    <code>{{ record.get("name") }}</code>
+                    {% /if %}
+                </pl-table-cell>
+                <pl-table-cell><pl-badge variant={% "secondary" %}>{{ record.get("type") }}</pl-badge></pl-table-cell>
+                <pl-table-cell>{{ record.get("ttl") }}</pl-table-cell>
+                <pl-table-cell><code>{{ record.get("value") }}</code></pl-table-cell>
+                <pl-table-cell>
+                    {% if record.get("enabled") == true %}
+                    <pl-badge variant={% "success" %}>{{ t("record_enabled_badge", scope: "dns_zone") }}</pl-badge>
+                    {% else %}
+                    <pl-badge variant={% "outline" %}>{{ t("record_disabled_badge", scope: "dns_zone") }}</pl-badge>
+                    {% /if %}
+                    {% if record.get("managed") == true %}
+                    <pl-badge variant={% "secondary" %}>{{ t("record_managed_badge", scope: "dns_zone") }}</pl-badge>
+                    {% /if %}
+                </pl-table-cell>
+                {% if editable %}
+                <pl-table-cell>
+                    <form method="POST" action={% "/admin/dns-zones/" + zoneId + "/remote-records" %} data-confirm={% t("delete_confirm", scope: "dns_remote") %}>
+                        {% csrf() %}
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="record_id" value={% record.get("id") %}>
+                        <pl-button variant={% "ghost" %} type="submit">{{ t("delete_remote", scope: "dns_remote") }}</pl-button>
+                    </form>
+                </pl-table-cell>
+                {% /if %}
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="list-ul">
+        <pl-empty-state-title>{{ t("records_empty", scope: "dns_zone") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("remote_empty_hint", scope: "dns_remote") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+</section>
+{% /block %}

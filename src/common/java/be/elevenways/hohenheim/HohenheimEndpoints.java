@@ -44,6 +44,16 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
+    public static final ParameterDefinition<String> DNS_ORIGIN = ParameterDefinition.builder(String.class)
+        .name("dnsOrigin")
+        .stringResolver(value -> value)
+        .build();
+
+    public static final ParameterDefinition<Integer> DNS_RECORD_ID = ParameterDefinition.builder(Integer.class)
+        .name("dnsRecordId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
     // --- Rate limits: expensive or upstream-quota-bound operations. ---
     // The LE request burns Let's Encrypt quota; db dump/restore stream whole
     // databases; deploys spawn builds. Keyed per principal (per IP for
@@ -183,6 +193,58 @@ public class HohenheimEndpoints {
         .requiresPermission(Permission.of("hohenheim.admin.access"))
         .csrfExempt()
         .rateLimit(DEPLOY_LIMIT)
+        .build();
+
+    // --- DNS records peer/automation API (znit_ bearer keys; the edit-forwarding
+    //     channel other Hohenheim instances use to edit zones this instance owns) ---
+    public static final Endpoint<Object> API_DNS_RECORDS = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_dns_records"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
+            .addDelimiter().addParameter(DNS_ORIGIN)
+            .addDelimiter().addStatic("records").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .build();
+
+    /** csrfExempt is safe: the handlers refuse non-API-key principals, so an ambient session cookie can never act here. */
+    public static final Endpoint<Object> API_DNS_RECORD_CREATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_dns_record_create"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
+            .addDelimiter().addParameter(DNS_ORIGIN)
+            .addDelimiter().addStatic("records").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .csrfExempt()
+        .build();
+
+    public static final Endpoint<Object> API_DNS_RECORD_UPDATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_dns_record_update"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
+            .addDelimiter().addParameter(DNS_ORIGIN)
+            .addDelimiter().addStatic("records").addDelimiter().addParameter(DNS_RECORD_ID).build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .csrfExempt()
+        .build();
+
+    public static final Endpoint<Object> API_DNS_RECORD_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_dns_record_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
+            .addDelimiter().addParameter(DNS_ORIGIN)
+            .addDelimiter().addStatic("records").addDelimiter().addParameter(DNS_RECORD_ID)
+            .addDelimiter().addStatic("delete").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .csrfExempt()
+        .build();
+
+    // --- Remote-record edit forwarding (admin form POST on a SECONDARY zone's
+    //     Records tab; forwards to the owning peer's API above) ---
+    public static final Endpoint<Object> DNS_REMOTE_RECORD = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "dns_remote_record"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("admin").addDelimiter().addStatic("dns-zones").addDelimiter()
+            .addParameter(ZONE_ID).addDelimiter().addStatic("remote-records").build())
         .build();
 
     // --- Health check ---

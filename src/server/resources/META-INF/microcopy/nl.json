@@ -348,5 +348,18 @@
     "dns_port_range": {"text": "Poort moet tussen 1 en 65535 liggen", "scope": "violations"},
     "dns_zone_missing": {"text": "Die zone bestaat niet", "scope": "violations"},
     "dns_peer_missing": {"text": "Die peer bestaat niet", "scope": "violations"},
-    "dns_secondary_linked": {"text": "Die peer is al een secondary van deze zone", "scope": "violations"}
+    "dns_secondary_linked": {"text": "Die peer is al een secondary van deze zone", "scope": "violations"},
+    "edits_forwarded": {"text": "Deze zone is eigendom van peer \"{$peer}\": onderstaande records worden er live van gelezen en bewerkingen worden doorgestuurd.", "scope": "dns_remote"},
+    "edit_saved": {"text": "Wijziging toegepast op de eigenaar-peer", "scope": "dns_remote"},
+    "edit_record": {"text": "Record bewerken", "scope": "dns_remote"},
+    "save_remote": {"text": "Opslaan op peer", "scope": "dns_remote"},
+    "cancel_remote": {"text": "Annuleren", "scope": "dns_remote"},
+    "delete_remote": {"text": "Verwijderen", "scope": "dns_remote"},
+    "delete_confirm": {"text": "Dit record op de eigenaar-peer verwijderen?", "scope": "dns_remote"},
+    "priority": {"text": "Prioriteit", "scope": "dns_remote"},
+    "weight": {"text": "Gewicht", "scope": "dns_remote"},
+    "port": {"text": "Poort", "scope": "dns_remote"},
+    "remote_empty_hint": {"text": "De eigenaar-peer meldt geen records voor deze zone.", "scope": "dns_remote"},
+    "peer_not_configured": {"text": "De primaire peer heeft geen admin-URL / API-sleutel geconfigureerd; records worden alleen-lezen uit de replica getoond.", "scope": "dns_remote"},
+    "peer_unreachable": {"text": "De eigenaar-peer was onbereikbaar ({$message}); records worden alleen-lezen uit de replica getoond.", "scope": "dns_remote"}
 }

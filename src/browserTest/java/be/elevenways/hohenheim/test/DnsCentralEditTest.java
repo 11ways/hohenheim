@@ -1,0 +1,322 @@
+package be.elevenways.hohenheim.test;
+
+import be.elevenways.hohenheim.model.DnsPeerModel;
+import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.ApiKeyService;
+import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
+import com.sun.net.httpserver.HttpServer;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
+
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Central DNS editing: the record API an owning instance exposes, and the
+ * viewing instance's read-through + edit-forwarding on a secondary zone's
+ * Records tab (against a scripted peer over real HTTP).
+ */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+class DnsCentralEditTest extends HohenheimTestBase {
+
+    private static String apiKey;
+    private static int ownedZoneId;
+    private static PeerStub stub;
+
+    /** One recorded call on the scripted peer. */
+    record StubCall(String method, String path, String authorization, String body) {}
+
+    /** Minimal scripted peer: records every call, answers from a settable script. */
+    private static final class PeerStub implements AutoCloseable {
+        final HttpServer server;
+        final List<StubCall> calls = new CopyOnWriteArrayList<>();
+        volatile int status = 200;
+        volatile String body = "{}";
+
+        PeerStub() throws Exception {
+            server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/", exchange -> {
+                String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                calls.add(new StubCall(exchange.getRequestMethod(),
+                    exchange.getRequestURI().toString(),
+                    exchange.getRequestHeaders().getFirst("Authorization"),
+                    requestBody));
+                byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(status, payload.length);
+                try (OutputStream out = exchange.getResponseBody()) {
+                    out.write(payload);
+                }
+            });
+            server.start();
+        }
+
+        String baseUrl() {
+            return "http://127.0.0.1:" + server.getAddress().getPort();
+        }
+
+        @Override
+        public void close() {
+            server.stop(0);
+        }
+    }
+
+    @AfterAll
+    static void stopStub() {
+        if (stub != null) {
+            stub.close();
+            stub = null;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // The owner-side record API
+    // ------------------------------------------------------------------
+
+    @Test
+    @Order(1)
+    void apiRecordCrudOnAPrimaryZone() throws Exception {
+        ownedZoneId = createZone("owned.example", DnsZoneModel.ROLE_PRIMARY, null);
+
+        Row user = AuthModels.users().find()
+            .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        apiKey = ApiKeyService.create(user.get(UserModel.ID), "dns-central-test",
+            List.of("hohenheim.*"), null).plaintext();
+
+        // A session cookie must NOT be able to act on the csrf-exempt API route.
+        var sessionAttempt = postForm("/api/dns/zones/owned.example/records",
+            "name=www&type=A&value=192.0.2.1");
+        assertThat(sessionAttempt.statusCode()).isEqualTo(403);
+
+        long serialBefore = zoneSerial(ownedZoneId);
+
+        // Create.
+        var created = apiPost("/api/dns/zones/owned.example/records",
+            "name=www&type=A&value=192.0.2.1&ttl=300");
+        assertThat(created.statusCode()).isEqualTo(200);
+        assertThat(created.body()).contains("\"id\"");
+        assertThat(zoneSerial(ownedZoneId)).isGreaterThan(serialBefore);
+
+        // List includes it, with its id.
+        var list = apiGet("/api/dns/zones/owned.example/records");
+        assertThat(list.statusCode()).isEqualTo(200);
+        assertThat(list.body()).contains("\"www\"").contains("192.0.2.1");
+        int recordId = recordIdOf("owned.example", "www");
+
+        // Update only the value; the rest keeps its stored state.
+        var updated = apiPost("/api/dns/zones/owned.example/records/" + recordId, "value=192.0.2.7");
+        assertThat(updated.statusCode()).isEqualTo(200);
+        Row record = Models.get(DnsRecordModel.class).findById(recordId);
+        assertThat((String) record.get(DnsRecordModel.VALUE)).isEqualTo("192.0.2.7");
+        assertThat((String) record.get(DnsRecordModel.NAME)).isEqualTo("www");
+        assertThat((Integer) record.get(DnsRecordModel.TTL)).isEqualTo(300);
+
+        // Validation refusals answer 422 with the violation key.
+        var invalid = apiPost("/api/dns/zones/owned.example/records", "name=bad&type=A&value=not-an-ip");
+        assertThat(invalid.statusCode()).isEqualTo(422);
+        assertThat(invalid.body()).contains("\"error\":\"validation\"");
+
+        // Delete.
+        var deleted = apiPost("/api/dns/zones/owned.example/records/" + recordId + "/delete", "");
+        assertThat(deleted.statusCode()).isEqualTo(200);
+        assertThat(Models.get(DnsRecordModel.class).findById(recordId)).isNull();
+    }
+
+    @Test
+    @Order(2)
+    void apiRefusesSecondaryZones() throws Exception {
+        int peerId = createPeer("api-refusal-peer", null);
+        createZone("replica.example", DnsZoneModel.ROLE_SECONDARY, peerId);
+
+        var refused = apiPost("/api/dns/zones/replica.example/records", "name=www&type=A&value=192.0.2.1");
+        assertThat(refused.statusCode()).isEqualTo(409);
+        assertThat(refused.body()).contains("not_primary");
+
+        var unknown = apiGet("/api/dns/zones/nobody.example/records");
+        assertThat(unknown.statusCode()).isEqualTo(404);
+    }
+
+    // ------------------------------------------------------------------
+    // The viewing-side read-through + forwarding
+    // ------------------------------------------------------------------
+
+    @Test
+    @Order(3)
+    void remoteRecordsTabReadsThroughTheOwningPeer() throws Exception {
+        stub = new PeerStub();
+        int peerId = createPeer("central-peer", stub.baseUrl());
+        int zoneId = createZone("central.example", DnsZoneModel.ROLE_SECONDARY, peerId);
+
+        stub.body = "{\"zone\":\"central.example\",\"serial\":9,\"records\":["
+            + "{\"id\":5,\"name\":\"www\",\"type\":\"A\",\"ttl\":300,\"value\":\"198.51.100.9\",\"enabled\":true}]}";
+
+        var page = get("/admin/dns-zones/" + zoneId + "/page/records");
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("198.51.100.9");
+        assertThat(page.body()).contains("central-peer"); // the forwarded-edits banner names the owner
+
+        StubCall listCall = stub.calls.get(stub.calls.size() - 1);
+        assertThat(listCall.method()).isEqualTo("GET");
+        assertThat(listCall.path()).isEqualTo("/api/dns/zones/central.example/records");
+        assertThat(listCall.authorization()).isEqualTo("Bearer test-peer-key");
+    }
+
+    @Test
+    @Order(4)
+    void remoteRecordEditsAreForwardedToTheOwner() throws Exception {
+        int zoneId = zoneIdOf("central.example");
+
+        stub.calls.clear();
+        stub.status = 200;
+        stub.body = "{\"id\":6}";
+        var created = postForm("/admin/dns-zones/" + zoneId + "/remote-records",
+            "name=api&type=CNAME&value=owned.example.&ttl=&priority=&weight=&port=&enabled=true");
+        assertThat(created.statusCode()).isEqualTo(302);
+        assertThat(created.headers().firstValue("Location").orElse("")).contains("saved=1");
+
+        StubCall createCall = stub.calls.get(stub.calls.size() - 1);
+        assertThat(createCall.method()).isEqualTo("POST");
+        assertThat(createCall.path()).isEqualTo("/api/dns/zones/central.example/records");
+        assertThat(createCall.authorization()).isEqualTo("Bearer test-peer-key");
+        assertThat(createCall.body()).contains("name=api").contains("type=CNAME")
+            .contains("value=" + URLEncoder.encode("owned.example.", StandardCharsets.UTF_8));
+
+        // Update and delete address the owner's record id.
+        stub.calls.clear();
+        var updated = postForm("/admin/dns-zones/" + zoneId + "/remote-records",
+            "record_id=6&name=api&type=CNAME&value=other.example.&enabled=true");
+        assertThat(updated.headers().firstValue("Location").orElse("")).contains("saved=1");
+        assertThat(stub.calls.get(0).path()).isEqualTo("/api/dns/zones/central.example/records/6");
+
+        stub.calls.clear();
+        var deleted = postForm("/admin/dns-zones/" + zoneId + "/remote-records",
+            "action=delete&record_id=6");
+        assertThat(deleted.headers().firstValue("Location").orElse("")).contains("saved=1");
+        assertThat(stub.calls.get(0).path()).isEqualTo("/api/dns/zones/central.example/records/6/delete");
+    }
+
+    @Test
+    @Order(5)
+    void peerRefusalsRoundTripAsLocalizedErrors() throws Exception {
+        int zoneId = zoneIdOf("central.example");
+
+        // The owner's validation refusal (by microcopy key) resolves locally.
+        stub.calls.clear();
+        stub.status = 422;
+        stub.body = "{\"error\":\"validation\",\"field\":\"value\",\"key\":\"dns_record_duplicate\"}";
+        var refused = postForm("/admin/dns-zones/" + zoneId + "/remote-records",
+            "name=www&type=A&value=198.51.100.9&enabled=true");
+        String location = refused.headers().firstValue("Location").orElse("");
+        assertThat(location).contains("error=");
+        assertThat(java.net.URLDecoder.decode(location, StandardCharsets.UTF_8))
+            .doesNotContain("dns_record_duplicate"); // resolved text, not the raw key
+
+        // An unreachable owner degrades the tab to the read-only replica view.
+        stub.close();
+        var fallback = get("/admin/dns-zones/" + zoneId + "/page/records");
+        assertThat(fallback.statusCode()).isEqualTo(200);
+        assertThat(fallback.body()).doesNotContain("add-remote-record-link");
+    }
+
+    // ------------------------------------------------------------------
+    // Fixtures + plumbing
+    // ------------------------------------------------------------------
+
+    private static int createZone(String origin, String role, Integer primaryPeerId) {
+        DnsZoneModel zones = Models.get(DnsZoneModel.class);
+        Row zone = zones.createEmptyRow();
+        zone.set(DnsZoneModel.ORIGIN, origin);
+        zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1." + origin);
+        zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@" + origin);
+        zone.set(DnsZoneModel.ROLE, role);
+        zone.set(DnsZoneModel.PRIMARY_PEER_ID, primaryPeerId);
+        zone.set(DnsZoneModel.ENABLED, true);
+        zones.save(zone);
+        return zone.get(DnsZoneModel.ID);
+    }
+
+    private static int createPeer(String name, String baseUrl) {
+        DnsPeerModel peers = Models.get(DnsPeerModel.class);
+        Row peer = peers.createEmptyRow();
+        peer.set(DnsPeerModel.NAME, name);
+        peer.set(DnsPeerModel.BASE_URL, baseUrl);
+        peer.set(DnsPeerModel.API_KEY, baseUrl != null ? "test-peer-key" : null);
+        peer.set(DnsPeerModel.ENABLED, true);
+        peers.save(peer);
+        return peer.get(DnsPeerModel.ID);
+    }
+
+    private static long zoneSerial(int zoneId) {
+        Integer serial = Models.get(DnsZoneModel.class).findById(zoneId).get(DnsZoneModel.SERIAL);
+        return serial != null ? serial : 0;
+    }
+
+    private static int zoneIdOf(String origin) {
+        return Models.get(DnsZoneModel.class).findByOrigin(origin).get(DnsZoneModel.ID);
+    }
+
+    private static int recordIdOf(String origin, String name) {
+        int zoneId = zoneIdOf(origin);
+        Row record = Models.get(DnsRecordModel.class).find()
+            .where(DnsRecordModel.ZONE_ID.eq(zoneId))
+            .where(DnsRecordModel.NAME.eq(name))
+            .first();
+        return record.get(DnsRecordModel.ID);
+    }
+
+    private HttpResponse<String> apiGet(String path) throws Exception {
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+        return client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + path))
+            .header("Authorization", "Bearer " + apiKey)
+            .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> apiPost(String path, String body) throws Exception {
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+        return client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + path))
+            .header("Authorization", "Bearer " + apiKey)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> get(String path) throws Exception {
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+        return client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + path))
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> postForm(String path, String body) throws Exception {
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+        return client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + path))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .header("X-Csrf-Token", csrfToken)
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build(), HttpResponse.BodyHandlers.ofString());
+    }
+}

@@ -272,7 +272,9 @@ roles, a peer registry + secondaries admin, and an ACME propagation wait so
 DNS-01 issuance blocks until secondaries serve the challenge. Proven over real
 sockets (DnsFederationTest). See docs/dns-federation.md.
 
-Next slice: central editing -- edit a peer-owned (secondary) zone's records
-from one instance by forwarding to the owner over an authenticated HTTPS API
-(the reserved dns_peers.base_url + api_key). Plus phase 5 (DNSSEC) and
-response-rate-limiting.
+Central editing SHIPPED too (2026-07-17): an owner-side records API
+(/api/dns/zones/{origin}/records, znit_ keys, primary-only, shared
+validation pipeline) plus read-through + edit-forwarding on a secondary
+zone's Records tab (replica read-only fallback when the owner is down).
+One instance is now the single pane for every federated zone. Remaining:
+phase 5 (DNSSEC) and response-rate-limiting.

@@ -348,5 +348,18 @@
     "dns_port_range": {"text": "Port must be between 1 and 65535", "scope": "violations"},
     "dns_zone_missing": {"text": "That zone does not exist", "scope": "violations"},
     "dns_peer_missing": {"text": "That peer does not exist", "scope": "violations"},
-    "dns_secondary_linked": {"text": "That peer is already a secondary of this zone", "scope": "violations"}
+    "dns_secondary_linked": {"text": "That peer is already a secondary of this zone", "scope": "violations"},
+    "edits_forwarded": {"text": "This zone is owned by peer \"{$peer}\": the records below are read live from it and edits are forwarded there.", "scope": "dns_remote"},
+    "edit_saved": {"text": "Change applied on the owning peer", "scope": "dns_remote"},
+    "edit_record": {"text": "Edit record", "scope": "dns_remote"},
+    "save_remote": {"text": "Save on peer", "scope": "dns_remote"},
+    "cancel_remote": {"text": "Cancel", "scope": "dns_remote"},
+    "delete_remote": {"text": "Delete", "scope": "dns_remote"},
+    "delete_confirm": {"text": "Delete this record on the owning peer?", "scope": "dns_remote"},
+    "priority": {"text": "Priority", "scope": "dns_remote"},
+    "weight": {"text": "Weight", "scope": "dns_remote"},
+    "port": {"text": "Port", "scope": "dns_remote"},
+    "remote_empty_hint": {"text": "The owning peer reports no records for this zone.", "scope": "dns_remote"},
+    "peer_not_configured": {"text": "The primary peer has no admin base URL / API key configured, so records are shown from the replica read-only.", "scope": "dns_remote"},
+    "peer_unreachable": {"text": "The owning peer could not be reached ({$message}); records are shown from the replica read-only.", "scope": "dns_remote"}
 }

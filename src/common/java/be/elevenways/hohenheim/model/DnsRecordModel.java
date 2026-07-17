@@ -30,6 +30,9 @@ public class DnsRecordModel extends Model {
     /** {@link #MANAGED_BY} value for records the ACME DNS-01 flow owns. */
     public static final String MANAGED_BY_ACME = "acme";
 
+    public static final java.util.List<String> ALL_TYPES = java.util.List.of(
+        TYPE_A, TYPE_AAAA, TYPE_CNAME, TYPE_NS, TYPE_MX, TYPE_TXT, TYPE_CAA, TYPE_SRV);
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField ZONE_ID = SCHEMA.addField(IntegerField.builder().name("zone_id")
         .label(HohenheimFormCopy.label("record_zone")).build());
