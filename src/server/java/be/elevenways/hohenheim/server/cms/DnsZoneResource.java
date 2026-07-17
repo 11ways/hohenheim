@@ -61,6 +61,7 @@ public final class DnsZoneResource extends RowResource {
         .add(DnsZoneModel.SOA_REFRESH)
         .add(DnsZoneModel.SOA_RETRY)
         .add(DnsZoneModel.SOA_EXPIRE)
+        .add(DnsZoneModel.DNSSEC_ENABLED)
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()

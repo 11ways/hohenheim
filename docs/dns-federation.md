@@ -121,5 +121,12 @@ Verification: `DnsCentralEditTest` (real HTTP) covers the API CRUD +
 serial bumps + session-cookie refusal + 422s + the 409 replica guard, and
 the read-through/forwarding/fallback flows against a scripted peer.
 
-Still open: DNSSEC (a separate security project) and response-rate-limiting
-on the public listeners.
+Signed zones federate unchanged: a primary's DNSKEY, RRSIGs and NSEC records
+ride the existing AXFR as ordinary records, and the secondary detects the
+apex DNSKEY and serves them as a signed zone (it does not re-sign -- the
+private key never leaves the owning primary). See `authoritative-dns.md` for
+DNSSEC itself.
+
+The DNS story is now feature-complete: authoritative serving, ACME DNS-01,
+zone-file import/export, federation (hidden primary + secondaries), central
+editing, DNSSEC, and response-rate-limiting are all implemented.
