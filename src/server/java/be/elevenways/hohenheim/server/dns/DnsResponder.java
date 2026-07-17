@@ -62,6 +62,11 @@ public final class DnsResponder {
             return null;
         }
 
+        return wireFor(query, response, tcp);
+    }
+
+    /** Serializes an already-computed response within the query's transport limits (TC on overflow). */
+    public byte @NonNull [] wireFor(@NonNull Message query, @NonNull Message response, boolean tcp) {
         int maxLength = tcp ? 65535 : udpPayloadLimit(query);
         return response.toWire(maxLength);
     }
@@ -102,6 +107,14 @@ public final class DnsResponder {
 
         Name delegation = zone.findDelegation(qname);
         if (delegation != null) {
+            // The parent side answers DS queries at the delegation point
+            // authoritatively (RFC 4035 3.1.4.1); everything else refers.
+            if (qtype == Type.DS && qname.equals(delegation)) {
+                response.getHeader().setFlag(Flags.AA);
+                answerDelegationDs(response, zone, delegation, sign);
+                finishEdns(query, response);
+                return response;
+            }
             addReferral(response, zone, delegation, sign);
             finishEdns(query, response);
             return response;
@@ -204,9 +217,10 @@ public final class DnsResponder {
     }
 
     /**
-     * A wildcard match: the synthesized records are served under the queried
-     * name, but with the wildcard owner's RRSIG unchanged (its label count
-     * signals the expansion to a validator).
+     * A wildcard match: records AND their RRSIGs are served under the queried
+     * name (only the RRSIG's labels field keeps the wildcard's count, which is
+     * what signals the expansion), plus the NSEC proving the exact qname does
+     * not exist itself (RFC 4035 3.1.3.3).
      */
     private void answerFromWildcard(@NonNull DnsZoneSnapshot zone,
                                     @NonNull Map<Integer, List<Record>> wildcard,
@@ -221,20 +235,55 @@ public final class DnsResponder {
         if (rrset == null || rrset.isEmpty()) {
             List<Record> cnames = wildcard.get(Type.CNAME);
             if (cnames != null && !cnames.isEmpty() && qtype != Type.CNAME) {
-                addAnswer(response, cnames.get(0), qname, true);
+                CNAMERecord cname = (CNAMERecord) cnames.get(0);
+                addAnswer(response, cname, qname, true);
                 if (sign) {
-                    addRrsigs(response, zone.getRrsig(wildcardOwner, Type.CNAME), Section.ANSWER);
+                    addExpandedRrsigs(response, zone.getRrsig(wildcardOwner, Type.CNAME), qname);
+                    addWildcardExpansionProof(response, zone, qname);
+                }
+                Name target = cname.getTarget();
+                if (zone.contains(target) && zone.findDelegation(target) == null) {
+                    this.resolve(zone, target, qtype, response, depth + 1, visited, sign);
                 }
                 return;
             }
-            addNoDataProof(response, zone, qname, sign);
+            if (!sign) {
+                addNoDataProof(response, zone, qname, false);
+                return;
+            }
+            // Wildcard NODATA: the wildcard's own NSEC (the type is absent
+            // there) plus the NSEC covering the qname (which does not exist).
+            addSignedSoa(response, zone);
+            addSignedNsec(response, zone, wildcardOwner);
+            Name covering = zone.coveringNsecOwner(qname);
+            if (covering != null && !covering.equals(wildcardOwner)) {
+                addSignedNsec(response, zone, covering);
+            }
             return;
         }
         for (Record record : rrset) {
             addAnswer(response, record, qname, true);
         }
         if (sign) {
-            addRrsigs(response, zone.getRrsig(wildcardOwner, qtype), Section.ANSWER);
+            addExpandedRrsigs(response, zone.getRrsig(wildcardOwner, qtype), qname);
+            addWildcardExpansionProof(response, zone, qname);
+        }
+    }
+
+    /** Wildcard RRSIGs follow the synthesized owner; the labels field already counts the wildcard's labels. */
+    private static void addExpandedRrsigs(@NonNull Message response, @NonNull List<Record> sigs,
+                                          @NonNull Name qname) {
+        for (Record sig : sigs) {
+            response.addRecord(sig.withName(qname), Section.ANSWER);
+        }
+    }
+
+    /** The NSEC (plus its RRSIG) proving a wildcard-expanded qname does not exist as a node. */
+    private static void addWildcardExpansionProof(@NonNull Message response,
+                                                  @NonNull DnsZoneSnapshot zone, @NonNull Name qname) {
+        Name covering = zone.coveringNsecOwner(qname);
+        if (covering != null) {
+            addSignedNsec(response, zone, covering);
         }
     }
 
@@ -272,7 +321,7 @@ public final class DnsResponder {
         addSignedNsec(response, zone, qname);
     }
 
-    /** NXDOMAIN: SOA + the NSEC covering the missing name (and the apex NSEC to deny a wildcard). */
+    /** NXDOMAIN: SOA + the NSEC covering the missing name + the NSEC denying its wildcard. */
     private static void addNxDomainProof(@NonNull Message response, @NonNull DnsZoneSnapshot zone,
                                          @NonNull Name qname, boolean sign) {
         if (!sign) {
@@ -284,16 +333,38 @@ public final class DnsResponder {
         if (covering != null) {
             addSignedNsec(response, zone, covering);
         }
-        // The apex NSEC denies a wildcard at the closest encloser (covers the
-        // common no-wildcard case); a dedicated per-encloser wildcard NSEC is a
-        // known simplification for deep wildcard zones.
-        if (!zone.getOrigin().equals(covering)) {
-            addSignedNsec(response, zone, zone.getOrigin());
+        // Deny the wildcard at the CLOSEST ENCLOSER (RFC 4035 3.1.3.2): we only
+        // reach NXDOMAIN when that wildcard has no node, so a covering NSEC
+        // exists for it; often it is the same NSEC that covers the qname.
+        Name wildcard = wildcardName(zone.closestEncloser(qname));
+        if (wildcard != null) {
+            Name wildcardCovering = zone.coveringNsecOwner(wildcard);
+            if (wildcardCovering != null && !wildcardCovering.equals(covering)) {
+                addSignedNsec(response, zone, wildcardCovering);
+            }
         }
     }
 
+    /** DS at a delegation point: the one qtype the PARENT answers authoritatively. */
+    private static void answerDelegationDs(@NonNull Message response, @NonNull DnsZoneSnapshot zone,
+                                           @NonNull Name delegation, boolean sign) {
+        List<Record> ds = zone.getRrset(delegation, Type.DS);
+        if (ds != null && !ds.isEmpty()) {
+            for (Record record : ds) {
+                response.addRecord(record, Section.ANSWER);
+            }
+            if (sign) {
+                addRrsigs(response, zone.getRrsig(delegation, Type.DS), Section.ANSWER);
+            }
+            return;
+        }
+        // No DS: NODATA whose NSEC (at the delegation) proves the child is insecure.
+        addNoDataProof(response, zone, delegation, sign);
+    }
+
     private static void addSignedSoa(@NonNull Message response, @NonNull DnsZoneSnapshot zone) {
-        response.addRecord(zone.getSoa(), Section.AUTHORITY);
+        // The negative-TTL SOA copy; its RRSIG verifies via the original-TTL field.
+        response.addRecord(zone.getNegativeSoa(), Section.AUTHORITY);
         addRrsigs(response, zone.getRrsig(zone.getOrigin(), Type.SOA), Section.AUTHORITY);
     }
 
