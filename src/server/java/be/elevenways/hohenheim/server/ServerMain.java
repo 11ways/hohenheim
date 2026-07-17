@@ -3,8 +3,10 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
@@ -30,6 +32,7 @@ public class ServerMain {
 
     private static ProxyServer proxyServer;
     private static DnsServer dnsServer;
+    private static SecondaryZoneService secondaryZoneService;
     private static TaskService taskService;
 
     public static void main(String[] args) {
@@ -87,14 +90,24 @@ public class ServerMain {
         // editable (and the internal ACME publisher functional in tests)
         // while the DNS server itself is disabled.
         DnsZoneStore.INSTANCE.reload();
+
+        // Federation: NOTIFY secondaries when a primary zone's serial bumps
+        // (admin edits and the ACME publisher both funnel through bumpSerialAndReload),
+        // and replicate secondary zones from their primary peers.
+        DnsZoneStore.INSTANCE.setOnZoneChanged(DnsNotifier.INSTANCE::notifyZonePeers);
+        secondaryZoneService = new SecondaryZoneService(DnsZoneStore.INSTANCE);
+
         dnsServer = new DnsServer();
+        dnsServer.setSecondaryService(secondaryZoneService);
         dnsServer.startIfEnabled();
+        secondaryZoneService.start();
 
         // Reap managed child processes on daemon exit (SIGTERM/SIGINT); without this an
         // abrupt stop leaves every spawned site process running as an orphan.
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             proxyServer.stop();
             dnsServer.stop();
+            secondaryZoneService.stop();
             NodeSiteType.shutdownSharedInfrastructure();
         }, "hohenheim-shutdown"));
 

@@ -16,9 +16,18 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
+
+import org.xbill.DNS.Flags;
+import org.xbill.DNS.Message;
+import org.xbill.DNS.Opcode;
+import org.xbill.DNS.Rcode;
+import org.xbill.DNS.Record;
+import org.xbill.DNS.Section;
+import org.xbill.DNS.Type;
 
 /**
  * Authoritative-only DNS listeners on public UDP and TCP (default port 53).
@@ -32,8 +41,20 @@ public final class DnsServer {
     private static final int TCP_IDLE_TIMEOUT_MS = 30_000;
     private static final int TCP_MAX_CONNECTIONS = 128;
 
-    private final DnsResponder responder = new DnsResponder(DnsZoneStore.INSTANCE);
+    private final DnsResponder responder;
+    private final AxfrResponder axfrResponder;
     private final Semaphore tcpConnections = new Semaphore(TCP_MAX_CONNECTIONS);
+    private volatile @Nullable SecondaryZoneService secondaryService;
+
+    public DnsServer() {
+        this(new DnsResponder(DnsZoneStore.INSTANCE), new AxfrResponder(DnsZoneStore.INSTANCE));
+    }
+
+    /** For tests: serve an arbitrary store with a custom AXFR authorizer. */
+    public DnsServer(@NonNull DnsResponder responder, @NonNull AxfrResponder axfrResponder) {
+        this.responder = responder;
+        this.axfrResponder = axfrResponder;
+    }
 
     private volatile boolean running;
     private volatile @Nullable String startupError;
@@ -133,6 +154,11 @@ public final class DnsServer {
         return this.running;
     }
 
+    /** Wires the secondary service so inbound NOTIFY triggers an immediate refresh. */
+    public void setSecondaryService(@Nullable SecondaryZoneService secondaryService) {
+        this.secondaryService = secondaryService;
+    }
+
     /** @return the bind failure message from the last enabled start attempt, or null */
     public @Nullable String getStartupError() {
         return this.startupError;
@@ -166,7 +192,14 @@ public final class DnsServer {
                 return;
             }
             pool.execute(() -> {
-                byte[] reply = this.responder.respondToWire(wire, false);
+                Message parsed = tryParse(wire);
+                byte[] reply;
+                if (parsed != null && parsed.getHeader().getOpcode() == Opcode.NOTIFY) {
+                    reply = handleNotify(parsed, wire);
+                }
+                else {
+                    reply = this.responder.respondToWire(wire, false);
+                }
                 if (reply == null) {
                     return;
                 }
@@ -240,6 +273,22 @@ public final class DnsServer {
                 byte[] wire = new byte[length];
                 in.readFully(wire);
 
+                Message parsed = tryParse(wire);
+                if (parsed != null) {
+                    Record question = parsed.getQuestion();
+                    if (question != null && (question.getType() == Type.AXFR || question.getType() == Type.IXFR)) {
+                        writeAxfr(out, parsed, wire);
+                        continue;
+                    }
+                    if (parsed.getHeader().getOpcode() == Opcode.NOTIFY) {
+                        byte[] ack = handleNotify(parsed, wire);
+                        out.writeShort(ack.length);
+                        out.write(ack);
+                        out.flush();
+                        continue;
+                    }
+                }
+
                 byte[] reply = this.responder.respondToWire(wire, true);
                 if (reply == null) {
                     return;
@@ -253,6 +302,64 @@ public final class DnsServer {
         catch (IOException e) {
             // Peer went away mid-exchange; nothing to salvage.
         }
+    }
+
+    private static @Nullable Message tryParse(byte @NonNull [] wire) {
+        try {
+            return new Message(wire);
+        }
+        catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** Streams an AXFR (IXFR falls back to a full AXFR) or a single REFUSED when unauthorized. */
+    private void writeAxfr(@NonNull DataOutputStream out, @NonNull Message query, byte @NonNull [] wire)
+            throws IOException {
+        List<byte[]> stream = this.axfrResponder.respond(query, wire);
+        if (stream == null) {
+            byte[] refused = refusedWire(query);
+            out.writeShort(refused.length);
+            out.write(refused);
+            out.flush();
+            return;
+        }
+        for (byte[] message : stream) {
+            out.writeShort(message.length);
+            out.write(message);
+        }
+        out.flush();
+    }
+
+    /**
+     * Acks a NOTIFY; the secondary service decides whether it is authentic
+     * (TSIG when the primary peer has a key) and worth a serial-checked pull.
+     */
+    private byte @NonNull [] handleNotify(@NonNull Message query, byte @NonNull [] wire) {
+        Record question = query.getQuestion();
+        SecondaryZoneService service = this.secondaryService;
+        if (question != null && service != null) {
+            service.onNotify(query, wire);
+        }
+        Message ack = new Message(query.getHeader().getID());
+        ack.getHeader().setOpcode(Opcode.NOTIFY);
+        ack.getHeader().setFlag(Flags.QR);
+        ack.getHeader().setFlag(Flags.AA);
+        if (question != null) {
+            ack.addRecord(question, Section.QUESTION);
+        }
+        return ack.toWire(512);
+    }
+
+    private static byte @NonNull [] refusedWire(@NonNull Message query) {
+        Message response = new Message(query.getHeader().getID());
+        response.getHeader().setFlag(Flags.QR);
+        Record question = query.getQuestion();
+        if (question != null) {
+            response.addRecord(question, Section.QUESTION);
+        }
+        response.getHeader().setRcode(Rcode.REFUSED);
+        return response.toWire(65535);
     }
 
     private static void closeQuietly(@Nullable DatagramSocket socket) {

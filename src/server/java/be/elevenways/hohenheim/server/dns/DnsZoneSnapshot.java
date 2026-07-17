@@ -80,6 +80,23 @@ public final class DnsZoneSnapshot {
     }
 
     /**
+     * Every record in the zone EXCEPT the apex SOA, for AXFR bodies (the SOA
+     * brackets the transfer separately). Order is unspecified, which AXFR allows.
+     */
+    public @NonNull List<Record> allRecordsExceptSoa() {
+        List<Record> all = new java.util.ArrayList<>();
+        for (Map<Integer, List<Record>> node : this.nodes.values()) {
+            for (Map.Entry<Integer, List<Record>> rrset : node.entrySet()) {
+                if (rrset.getKey() == Type.SOA) {
+                    continue;
+                }
+                all.addAll(rrset.getValue());
+            }
+        }
+        return all;
+    }
+
+    /**
      * @return the nearest delegation point at or above the name (strictly below
      *         the apex, carrying an NS RRset), or null when none applies
      */

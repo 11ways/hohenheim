@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsNames;
@@ -13,7 +14,10 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.OptionSource;
+import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -42,6 +46,14 @@ public final class DnsZoneResource extends RowResource {
     private final FormSpec formSpec = FormSpec.builder()
         .add(DnsZoneModel.ORIGIN)
         .add(DnsZoneModel.ENABLED)
+        .add(Select.of(DnsZoneModel.ROLE)
+            .options(OptionSource.of(List.of(
+                FieldOption.of(DnsZoneModel.ROLE_PRIMARY, Microcopy.of("role_primary").withFilter("scope", "dns_role")),
+                FieldOption.of(DnsZoneModel.ROLE_SECONDARY, Microcopy.of("role_secondary").withFilter("scope", "dns_role")))))
+            .build())
+        .add(Select.of(DnsZoneModel.PRIMARY_PEER_ID)
+            .options(OptionSource.dynamic(ctx -> peerOptions()))
+            .build())
         .add(DnsZoneModel.SOA_PRIMARY_NS)
         .add(DnsZoneModel.SOA_CONTACT)
         .add(DnsZoneModel.DEFAULT_TTL)
@@ -54,7 +66,9 @@ public final class DnsZoneResource extends RowResource {
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(DnsZoneModel.ORIGIN).filterable().build())
         .column(ColumnSpec.fromField(DnsZoneModel.ENABLED).filterable().build())
+        .column(ColumnSpec.fromField(DnsZoneModel.ROLE).build())
         .column(ColumnSpec.fromField(DnsZoneModel.SERIAL).build())
+        .column(ColumnSpec.fromField(DnsZoneModel.TRANSFER_STATUS).build())
         .column(ColumnSpec.virtual("record_count", Microcopy.of("record_count")
             .withFilter("scope", "dns_zone")).build())
         .filter(FilterSpec.forField(DnsZoneModel.ORIGIN, FilterSpec.Kind.TEXT)
@@ -86,9 +100,20 @@ public final class DnsZoneResource extends RowResource {
     @Override
     public @NonNull List<RecordScopedPage<Row>> subpages() {
         List<RecordScopedPage<Row>> pages = new ArrayList<>(
-            List.of(new DnsZoneRecordsPage(), new DnsZoneFilePage()));
+            List.of(new DnsZoneRecordsPage(), new DnsZoneFilePage(), new DnsZoneSecondariesPage()));
         pages.addAll(this.frameworkSubpages());
         return pages;
+    }
+
+    /** Peer choices for the primary-peer select, with a leading "none" option. */
+    static @NonNull List<FieldOption<Integer>> peerOptions() {
+        List<FieldOption<Integer>> options = new ArrayList<>();
+        options.add(FieldOption.of(null, Microcopy.of("peer_none").withFilter("scope", "dns_peer")));
+        for (Row peer : Models.get(DnsPeerModel.class).find().all()) {
+            options.add(FieldOption.of(peer.get(DnsPeerModel.ID),
+                String.valueOf(peer.get(DnsPeerModel.NAME))));
+        }
+        return options;
     }
 
     @Override
@@ -107,7 +132,16 @@ public final class DnsZoneResource extends RowResource {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, existing, this.model());
         super.updateRow(existing, values, accessContext);
-        DnsZoneStore.INSTANCE.bumpSerialAndReload(existing.get(DnsZoneModel.ID));
+
+        // Bumping a SECONDARY zone's serial would leapfrog the primary's and
+        // freeze replication (the refresh check would see "already current").
+        Object role = values.containsKey("role") ? values.get("role") : existing.get(DnsZoneModel.ROLE);
+        if (DnsZoneModel.ROLE_SECONDARY.equals(role)) {
+            DnsZoneStore.INSTANCE.reload();
+        }
+        else {
+            DnsZoneStore.INSTANCE.bumpSerialAndReload(existing.get(DnsZoneModel.ID));
+        }
     }
 
     /** Deleting a zone takes its records (including ACME-managed ones) with it. */

@@ -39,11 +39,42 @@ public class DnsZoneModel extends Model {
         .label(HohenheimFormCopy.label("soa_expire")).help(HohenheimFormCopy.help("soa_expire")).build());
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true)
         .label(HohenheimFormCopy.label("zone_enabled")).help(HohenheimFormCopy.help("zone_enabled")).build());
+
+    /** {@link #ROLE} value for a zone owned and edited on this instance. */
+    public static final String ROLE_PRIMARY = "primary";
+    /** {@link #ROLE} value for a zone replicated from a peer via AXFR. */
+    public static final String ROLE_SECONDARY = "secondary";
+
+    public static final StringField ROLE = SCHEMA.addField(StringField.builder().name("role")
+        .label(HohenheimFormCopy.label("zone_role")).build());
+    public static final IntegerField PRIMARY_PEER_ID = SCHEMA.addField(
+        IntegerField.builder().name("primary_peer_id").build());
+    public static final StringField TRANSFER_STATUS = SCHEMA.addField(
+        StringField.builder().name("transfer_status").build());
+    public static final StringField TRANSFER_MESSAGE = SCHEMA.addField(
+        StringField.builder().name("transfer_message").build());
+    public static final DateTimeField LAST_CHECKED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("last_checked_at").build());
+    public static final DateTimeField LAST_TRANSFER_AT = SCHEMA.addField(
+        DateTimeField.builder().name("last_transfer_at").build());
+    public static final StringField REPLICA_RECORDS = SCHEMA.addField(
+        StringField.builder().name("replica_records").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
     public List<Row> findEnabled() {
         return find().where(ENABLED.eq(true)).all();
+    }
+
+    /** @return the zone's role, defaulting to primary for rows predating federation */
+    public static String roleOf(Row zone) {
+        String role = zone.get(ROLE);
+        return ROLE_SECONDARY.equals(role) ? ROLE_SECONDARY : ROLE_PRIMARY;
+    }
+
+    /** Enabled secondary zones only: a disabled secondary is neither replicated nor served. */
+    public List<Row> findSecondaries() {
+        return find().where(ROLE.eq(ROLE_SECONDARY)).and(ENABLED.eq(true)).all();
     }
 
     public Row findByOrigin(String origin) {

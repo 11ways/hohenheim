@@ -12,32 +12,73 @@ import org.xbill.DNS.Name;
 import org.xbill.DNS.Record;
 import org.xbill.DNS.SOARecord;
 import org.xbill.DNS.TextParseException;
+import org.xbill.DNS.Type;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntConsumer;
 
 /**
- * Builds immutable zone snapshots from the database and swaps them atomically;
- * every zone/record mutation must end with {@link #reload()}.
+ * Builds immutable zone snapshots and swaps the serving view atomically. Primary
+ * zones are rebuilt from the database; secondary zones are supplied as compiled
+ * snapshots by the transfer layer. The serving view is the merge of both, so a
+ * primary edit or an incoming AXFR each just rebuild their half.
  */
 public final class DnsZoneStore {
 
     public static final DnsZoneStore INSTANCE = new DnsZoneStore();
 
-    private volatile Map<String, DnsZoneSnapshot> zonesByOrigin = Map.of();
+    private volatile Map<String, DnsZoneSnapshot> primaryByOrigin = Map.of();
+    private final Map<String, DnsZoneSnapshot> secondaryByOrigin = new ConcurrentHashMap<>();
+    private volatile Map<String, DnsZoneSnapshot> serving = Map.of();
+    private volatile @Nullable IntConsumer onZoneChanged;
 
     private DnsZoneStore() {}
 
-    /** Rebuilds every enabled zone from the database and swaps the serving view atomically. */
+    /** A detached store (not the serving singleton) for tests that stand up a second nameserver. */
+    public static @NonNull DnsZoneStore createDetached() {
+        return new DnsZoneStore();
+    }
+
+    /** For tests: install a primary snapshot directly, bypassing the database. */
+    public synchronized void injectPrimarySnapshot(@NonNull DnsZoneSnapshot snapshot) {
+        Map<String, DnsZoneSnapshot> next = new HashMap<>(this.primaryByOrigin);
+        next.put(snapshot.getOriginString(), snapshot);
+        this.primaryByOrigin = Map.copyOf(next);
+        rebuildServing();
+    }
+
+    /**
+     * Registers a callback fired (with the zone id) after a primary zone's serial
+     * bumps, so the transfer layer can NOTIFY that zone's secondaries.
+     */
+    public void setOnZoneChanged(@Nullable IntConsumer onZoneChanged) {
+        this.onZoneChanged = onZoneChanged;
+    }
+
+    /**
+     * Rebuilds every enabled PRIMARY zone from the database and re-merges the
+     * serving view. Also prunes secondary snapshots whose zone row was deleted,
+     * disabled, or flipped to primary, so those stop being answered immediately.
+     */
     public synchronized void reload() {
         Map<String, DnsZoneSnapshot> rebuilt = new HashMap<>();
+        java.util.Set<String> activeSecondaryOrigins = new java.util.HashSet<>();
         DnsZoneModel zoneModel = Models.get(DnsZoneModel.class);
         DnsRecordModel recordModel = Models.get(DnsRecordModel.class);
 
         for (Row zone : zoneModel.findEnabled()) {
+            if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
+                String origin = zone.get(DnsZoneModel.ORIGIN);
+                if (origin != null) {
+                    activeSecondaryOrigins.add(origin);
+                }
+                continue; // secondary content is supplied by the transfer layer
+            }
             try {
                 DnsZoneSnapshot snapshot = buildSnapshot(zone, recordModel);
                 rebuilt.put(snapshot.getOriginString(), snapshot);
@@ -47,30 +88,55 @@ public final class DnsZoneStore {
             }
         }
 
-        this.zonesByOrigin = Map.copyOf(rebuilt);
+        this.primaryByOrigin = Map.copyOf(rebuilt);
+        this.secondaryByOrigin.keySet().retainAll(activeSecondaryOrigins);
+        rebuildServing();
     }
 
-    /** Atomically bumps the zone's SOA serial and rebuilds the serving view. */
+    /** Atomically bumps the zone's SOA serial, rebuilds, and notifies its secondaries. */
     public void bumpSerialAndReload(int zoneId) {
         Models.get(DnsZoneModel.class).find()
             .where(DnsZoneModel.ID.eq(zoneId))
             .increment(DnsZoneModel.SERIAL)
             .updateAll();
         this.reload();
+        IntConsumer hook = this.onZoneChanged;
+        if (hook != null) {
+            hook.accept(zoneId);
+        }
+    }
+
+    /** Installs (or replaces) a secondary zone's compiled snapshot in the serving view. */
+    public synchronized void putSecondarySnapshot(@NonNull DnsZoneSnapshot snapshot) {
+        this.secondaryByOrigin.put(snapshot.getOriginString(), snapshot);
+        rebuildServing();
+    }
+
+    /** Removes a secondary zone from the serving view (expired or deleted). */
+    public synchronized void removeSecondarySnapshot(@NonNull String origin) {
+        if (this.secondaryByOrigin.remove(origin) != null) {
+            rebuildServing();
+        }
+    }
+
+    private void rebuildServing() {
+        Map<String, DnsZoneSnapshot> merged = new HashMap<>(this.primaryByOrigin);
+        merged.putAll(this.secondaryByOrigin);
+        this.serving = Map.copyOf(merged);
     }
 
     public @NonNull Collection<DnsZoneSnapshot> zones() {
-        return this.zonesByOrigin.values();
+        return this.serving.values();
     }
 
     public @Nullable DnsZoneSnapshot getZone(@NonNull String origin) {
-        return this.zonesByOrigin.get(origin);
+        return this.serving.get(origin);
     }
 
     /** @return the most specific enabled zone containing the name, or null */
     public @Nullable DnsZoneSnapshot findZoneFor(@NonNull Name qname) {
         DnsZoneSnapshot best = null;
-        for (DnsZoneSnapshot zone : this.zonesByOrigin.values()) {
+        for (DnsZoneSnapshot zone : this.serving.values()) {
             if (!qname.subdomain(zone.getOrigin())) {
                 continue;
             }
@@ -84,13 +150,13 @@ public final class DnsZoneStore {
     /** @return the most specific enabled zone containing the fqdn (no trailing dot needed), or null */
     public @Nullable DnsZoneSnapshot findZoneFor(@NonNull String fqdn) {
         String best = null;
-        for (DnsZoneSnapshot zone : this.zonesByOrigin.values()) {
+        for (DnsZoneSnapshot zone : this.serving.values()) {
             String origin = zone.getOriginString();
             if (DnsNames.zoneContains(origin, fqdn) && (best == null || origin.length() > best.length())) {
                 best = origin;
             }
         }
-        return best != null ? this.zonesByOrigin.get(best) : null;
+        return best != null ? this.serving.get(best) : null;
     }
 
     private static @NonNull DnsZoneSnapshot buildSnapshot(@NonNull Row zone, @NonNull DnsRecordModel recordModel)
@@ -111,8 +177,6 @@ public final class DnsZoneStore {
         Name contact = contactName(zone.get(DnsZoneModel.SOA_CONTACT), originString);
 
         SOARecord soa = new SOARecord(origin, DClass.IN, defaultTtl,
-            primaryNs, contact, serial, refresh, retry, expire, negativeTtl);
-        SOARecord negativeSoa = new SOARecord(origin, DClass.IN, negativeTtl,
             primaryNs, contact, serial, refresh, retry, expire, negativeTtl);
 
         Map<Name, Map<Integer, List<Record>>> nodes = new HashMap<>();
@@ -136,6 +200,52 @@ public final class DnsZoneStore {
             }
         }
 
+        return freeze(zoneId, originString, origin, serial, soa, negativeTtl, nodes);
+    }
+
+    /**
+     * Compiles a secondary zone snapshot directly from transferred records; the
+     * apex SOA in the list supplies the zone's authority data and serial.
+     *
+     * @throws IllegalArgumentException when the record set has no apex SOA
+     */
+    public static @NonNull DnsZoneSnapshot snapshotFromTransfer(int zoneId,
+                                                                @NonNull String originString,
+                                                                @NonNull List<Record> records) throws Exception {
+        Name origin = Name.fromString(originString + ".");
+        SOARecord soa = null;
+        for (Record record : records) {
+            if (record.getType() == Type.SOA && record.getName().equals(origin)) {
+                soa = (SOARecord) record;
+                break;
+            }
+        }
+        if (soa == null) {
+            throw new IllegalArgumentException("Transferred zone " + originString + " has no apex SOA");
+        }
+
+        Map<Name, Map<Integer, List<Record>>> nodes = new HashMap<>();
+        addRecord(nodes, origin, soa, origin);
+        for (Record record : records) {
+            if (record.getType() == Type.SOA) {
+                continue; // the apex SOA is added once above; AXFR brackets with two SOAs
+            }
+            if (!record.getName().subdomain(origin)) {
+                continue; // out-of-zone glue: ignore
+            }
+            addRecord(nodes, record.getName(), record, origin);
+        }
+
+        return freeze(zoneId, originString, origin, soa.getSerial(), soa, (int) soa.getMinimum(), nodes);
+    }
+
+    private static @NonNull DnsZoneSnapshot freeze(int zoneId, @NonNull String originString, @NonNull Name origin,
+                                                   long serial, @NonNull SOARecord soa, int negativeTtl,
+                                                   @NonNull Map<Name, Map<Integer, List<Record>>> nodes) {
+        SOARecord negativeSoa = new SOARecord(origin, DClass.IN, negativeTtl,
+            soa.getHost(), soa.getAdmin(), soa.getSerial(), soa.getRefresh(), soa.getRetry(),
+            soa.getExpire(), soa.getMinimum());
+
         Map<Name, Map<Integer, List<Record>>> frozen = new HashMap<>();
         for (Map.Entry<Name, Map<Integer, List<Record>>> node : nodes.entrySet()) {
             Map<Integer, List<Record>> types = new HashMap<>();
@@ -144,7 +254,6 @@ public final class DnsZoneStore {
             }
             frozen.put(node.getKey(), Map.copyOf(types));
         }
-
         return new DnsZoneSnapshot(zoneId, originString, origin, serial, soa, negativeSoa, Map.copyOf(frozen));
     }
 
