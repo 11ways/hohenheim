@@ -39,6 +39,11 @@ public class HohenheimEndpoints {
         .stringResolver(value -> value)
         .build();
 
+    public static final ParameterDefinition<Integer> ZONE_ID = ParameterDefinition.builder(Integer.class)
+        .name("zoneId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
     // --- Rate limits: expensive or upstream-quota-bound operations. ---
     // The LE request burns Let's Encrypt quota; db dump/restore stream whole
     // databases; deploys spawn builds. Keyed per principal (per IP for
@@ -69,6 +74,14 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("admin").addDelimiter().addStatic("certificates-request").build())
         .rateLimit(LE_REQUEST_LIMIT)
+        .build();
+
+    // --- DNS zone-file import (POST for the CMS zone-file tab) ---
+    public static final Endpoint<Object> DNS_ZONE_IMPORT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "dns_zone_import"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("admin").addDelimiter().addStatic("dns-zones").addDelimiter()
+            .addParameter(ZONE_ID).addDelimiter().addStatic("zonefile").build())
         .build();
 
     // --- Certificate PEM bundle download ---

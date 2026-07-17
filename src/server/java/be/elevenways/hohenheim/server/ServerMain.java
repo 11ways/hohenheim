@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.dns.DnsServer;
+import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
@@ -27,6 +29,7 @@ import be.elevenways.zenit.server.task.TaskService;
 public class ServerMain {
 
     private static ProxyServer proxyServer;
+    private static DnsServer dnsServer;
     private static TaskService taskService;
 
     public static void main(String[] args) {
@@ -80,10 +83,18 @@ public class ServerMain {
         proxyServer.start();
         ProxyReloadHooks.install();
 
+        // The zone store loads regardless of the listeners so zones stay
+        // editable (and the internal ACME publisher functional in tests)
+        // while the DNS server itself is disabled.
+        DnsZoneStore.INSTANCE.reload();
+        dnsServer = new DnsServer();
+        dnsServer.startIfEnabled();
+
         // Reap managed child processes on daemon exit (SIGTERM/SIGINT); without this an
         // abrupt stop leaves every spawned site process running as an orphan.
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             proxyServer.stop();
+            dnsServer.stop();
             NodeSiteType.shutdownSharedInfrastructure();
         }, "hohenheim-shutdown"));
 
@@ -133,7 +144,16 @@ public class ServerMain {
         proxyServer = server;
     }
 
+    /** Test/embedding seam: adopt an externally constructed DNS server (null detaches). */
+    public static void adoptDnsServer(DnsServer server) {
+        dnsServer = server;
+    }
+
     public static TaskService getTaskService() {
         return taskService;
+    }
+
+    public static DnsServer getDnsServer() {
+        return dnsServer;
     }
 }

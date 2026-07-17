@@ -10,4 +10,9 @@ public interface DnsTxtPublisher {
     void publish(@NonNull DnsTxtRecord record) throws Exception;
 
     void cleanup(@NonNull DnsTxtRecord record) throws Exception;
+
+    /** @return true when published values are queryable the moment publish() returns (skips the propagation wait) */
+    default boolean servesImmediately() {
+        return false;
+    }
 }

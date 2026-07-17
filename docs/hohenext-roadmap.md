@@ -224,9 +224,27 @@ only via the equivalent local `docker system dial-stdio` (no remote host availab
 
 ## Optional authoritative DNS
 
-Investigated and designed in [authoritative-dns.md](authoritative-dns.md). The
-recommended implementation is an authoritative-only Hohenheim service backed
-by zone/record models, public UDP+TCP 53, an internal ACME TXT publisher, and
-AXFR/NOTIFY interoperability with a secondary. A one-box home deployment is
-useful for experimentation but is not production-ready DNS redundancy; the
-registrar delegation and at least one independent secondary remain necessary.
+Designed in [authoritative-dns.md](authoritative-dns.md); delivery phases 1-3
+are SHIPPED (2026-07-17):
+
+- `DnsZoneModel`/`DnsRecordModel` (M034), validation through `DnsRecordCodec`,
+  immutable `DnsZoneSnapshot`s swapped atomically by `DnsZoneStore`, and
+  framework-managed SOA serials (every zone/record mutation bumps + reloads).
+- Authoritative-only UDP+TCP listeners (`DnsServer`, `dns.enabled` off by
+  default, `dns.bind_address`/`dns.port` settings): AA answers, NXDOMAIN vs
+  NODATA with SOA authority, empty non-terminals, wildcard synthesis, in-zone
+  CNAME chasing, referrals for delegated children, EDNS 1232 with UDP
+  truncation, REFUSED for out-of-zone names/recursion/transfers. Wire parsing
+  is dnsjava; lookup/authority/policy are Hohenheim's.
+- Admin: DNS Zones resource (+ nav), zone-scoped Records and Zone-file tabs,
+  zone-file export/import (import replaces operator rows, ACME rows survive),
+  attention items for failed listeners and NS-less zones.
+- Internal ACME TXT publisher (`dns_publisher=internal`): DNS-01 wildcard
+  certificates issue and renew against the hosted zones with no provider
+  credentials or shell hook; the propagation wait is skipped because the
+  snapshot swap serves immediately.
+
+Still open (phase 4-5, the production-redundancy threshold): AXFR + TSIG +
+NOTIFY with an independent secondary, secondary-freshness UI, and DNSSEC as a
+separate project. A one-box home deployment works but the registrar delegation
+still applies and a single server remains a single point of failure.

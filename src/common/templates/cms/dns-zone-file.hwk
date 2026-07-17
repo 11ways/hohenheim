@@ -1,0 +1,56 @@
+{#- Zone-file tab on a DNS zone: master-file export text plus paste-to-import.
+    Import REPLACES all operator-managed records; ACME-managed rows survive. -#}
+{% declare title: String %}
+{% declare zoneId: Integer %}
+{% declare origin: String %}
+{% declare zoneText: String %}
+{% declare error: String = "" %}
+{% declare imported: String = "" %}
+{% declare skipped: String = "" %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ origin }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
+    {% if imported != "" %}<pl-alert variant="default">{{ t("import_done", scope: "dns_zone", count: imported) }}</pl-alert>{% /if %}
+    {% if skipped != "" %}<pl-alert variant="warning">{{ t("import_skipped", scope: "dns_zone", lines: skipped) }}</pl-alert>{% /if %}
+
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>{{ t("zone_file", scope: "dns_zone") }}</pl-card-title>
+            <pl-card-description>{{ t("zone_file_description", scope: "dns_zone") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <pre class="hh-zone-file"><code>{{ zoneText }}</code></pre>
+        </pl-card-content>
+    </pl-card>
+
+    <form method="POST" action={% "/admin/dns-zones/" + zoneId + "/zonefile" %}>
+        {% csrf() %}
+        <pl-card>
+            <pl-card-header>
+                <pl-card-title>{{ t("import_zone_file", scope: "dns_zone") }}</pl-card-title>
+                <pl-card-description>{{ t("import_description", scope: "dns_zone") }}</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <pl-field>
+                    <pl-label target="zone_text">{{ t("zone_file_text", scope: "dns_zone") }}</pl-label>
+                    <pl-textarea inputId="zone_text" name="zone_text" rows={% 12 %}></pl-textarea>
+                    <pl-field-description>{{ t("import_replaces", scope: "dns_zone") }}</pl-field-description>
+                </pl-field>
+            </pl-card-content>
+        </pl-card>
+        <div class="cms-form-actions">
+            <pl-button variant="primary" type="submit">{{ t("import_action", scope: "dns_zone") }}</pl-button>
+        </div>
+    </form>
+</section>
+{% /block %}
