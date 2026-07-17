@@ -32,17 +32,18 @@ class SiteTypeTest extends HohenheimTestBase {
 
     @Test
     @Order(1)
-    void typeDropdownHasAllNineTypes() {
+    void typeDropdownHasAllTenTypes() {
         navigateToApp("/admin/sites/new");
         waitForHydration();
 
         openPlSelect("pl-select[name='site_type']");
 
         var items = page.locator(OPEN_SELECT_POPUP + " div[role='option'][data-value^='hohenheim:']");
-        assertThat(items.count()).isEqualTo(9);
+        assertThat(items.count()).isEqualTo(10);
 
         String allText = items.allTextContents().toString();
         assertThat(allText).contains("Proxy");
+        assertThat(allText).contains("Java / Zenit");
         assertThat(allText).contains("Node.js");
         assertThat(allText).contains("Alchemy");
         assertThat(allText).contains("Command");
