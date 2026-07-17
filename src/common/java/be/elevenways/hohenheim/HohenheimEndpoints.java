@@ -78,6 +78,14 @@ public class HohenheimEndpoints {
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_deploy");
 
+    // The dyndns endpoint is public (token in HTTP Basic auth); keyed per IP so a
+    // credential-guessing client cannot grind tokens. Routers poll every few
+    // minutes, so a generous per-minute budget still leaves ample headroom.
+    private static final RateLimitPolicy DYNDNS_LIMIT =
+        RateLimitPolicy.of(30, Duration.ofMinutes(1))
+            .keyBy(RateLimitPolicy.KeyBy.IP)
+            .named("hh_dyndns");
+
     // --- Let's Encrypt request (POST for the CMS certificate-request page) ---
     public static final Endpoint<Object> CERTIFICATES_REQUEST = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "certificates_request"))
@@ -245,6 +253,17 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("admin").addDelimiter().addStatic("dns-zones").addDelimiter()
             .addParameter(ZONE_ID).addDelimiter().addStatic("remote-records").build())
+        .build();
+
+    // --- Dynamic DNS (dyndns2 update protocol; public, token in HTTP Basic auth) ---
+    // No requiresPermission: the token IS the credential, verified by the handler.
+    // csrfExempt because ddclient/routers cannot carry a CSRF token (GET, no cookie).
+    public static final Endpoint<Object> DYNDNS_UPDATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "dyndns_update"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("nic").addDelimiter().addStatic("update").build())
+        .csrfExempt()
+        .rateLimit(DYNDNS_LIMIT)
         .build();
 
     // --- Health check ---

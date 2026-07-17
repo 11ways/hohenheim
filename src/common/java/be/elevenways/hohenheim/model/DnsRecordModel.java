@@ -63,6 +63,17 @@ public class DnsRecordModel extends Model {
         .label(HohenheimFormCopy.label("record_enabled")).help(HohenheimFormCopy.help("record_enabled")).build());
     public static final StringField MANAGED_BY = SCHEMA.addField(StringField.builder().name("managed_by")
         .label(HohenheimFormCopy.label("managed_by")).build());
+
+    // --- Dynamic DNS (dyndns2 update protocol; only A/AAAA records) ---
+    public static final BooleanField DYNAMIC = SCHEMA.addField(BooleanField.builder("dynamic").defaultValue(false)
+        .label(HohenheimFormCopy.label("record_dynamic")).help(HohenheimFormCopy.help("record_dynamic")).build());
+    /**
+     * The update token, stored as-is so the operator can re-read the update URL
+     * any time (a low-value credential that lives in a router config, like
+     * FreeDNS). It is the HTTP Basic password the dyndns client presents.
+     */
+    public static final StringField DYNDNS_TOKEN = SCHEMA.addField(StringField.builder().name("dyndns_token")
+        .label(HohenheimFormCopy.label("record_dyndns_token")).help(HohenheimFormCopy.help("record_dyndns_token")).build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

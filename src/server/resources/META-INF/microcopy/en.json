@@ -131,7 +131,7 @@
     "password": {"text": "Password", "scope": "database_tab"},
     "payload_url": {"text": "Payload URL", "scope": "site_deployments"},
     "pid": {"text": "PID", "scope": "site_processes"},
-    "port": {"text": "Port", "scope": "site_processes"},
+    "port": {"text": "Port", "scope": "dns_remote"},
     "primary": {"text": "Primary", "scope": "site_databases"},
     "provisioning": {"text": "Provisioning", "scope": "site_databases"},
     "provisioning_failed": {"text": "Provisioning failed", "scope": "attention_detail"},
@@ -361,8 +361,13 @@
     "delete_confirm": {"text": "Delete this record on the owning peer?", "scope": "dns_remote"},
     "priority": {"text": "Priority", "scope": "dns_remote"},
     "weight": {"text": "Weight", "scope": "dns_remote"},
-    "port": {"text": "Port", "scope": "dns_remote"},
     "remote_empty_hint": {"text": "The owning peer reports no records for this zone.", "scope": "dns_remote"},
     "peer_not_configured": {"text": "The primary peer has no admin base URL / API key configured, so records are shown from the replica read-only.", "scope": "dns_remote"},
-    "peer_unreachable": {"text": "The owning peer could not be reached ({$message}); records are shown from the replica read-only.", "scope": "dns_remote"}
+    "peer_unreachable": {"text": "The owning peer could not be reached ({$message}); records are shown from the replica read-only.", "scope": "dns_remote"},
+    "record_dynamic": [{"text": "Dynamic DNS", "scope": "field"}, {"text": "Allow this A/AAAA record's address to be updated over the dyndns2 protocol; use the row action to mint an update token", "scope": "help"}],
+    "hohenheim.dns_record.dyndns_token": "Dynamic DNS token",
+    "hohenheim.dns_record.dyndns_token_hint": "Mint a new update token for this record (invalidates any previous one)",
+    "dyndns_only_address": {"text": "Dynamic DNS is only available for A and AAAA records", "scope": "dns_record"},
+    "dyndns_minted": {"text": "Update token generated -- it is shown on this record's form", "scope": "dns_record"},
+    "record_dyndns_token": [{"text": "Dynamic DNS token", "scope": "field"}, {"text": "The update password. Point a dyndns2 client (router, ddclient) at <host>/nic/update?hostname=<this record's FQDN> and send this token as the HTTP Basic password. Use the row action to (re)generate it", "scope": "help"}]
 }

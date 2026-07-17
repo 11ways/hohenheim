@@ -3,8 +3,11 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -15,6 +18,7 @@ import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -23,6 +27,8 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -42,6 +48,8 @@ public final class DnsRecordResource extends RowResource {
         .add(DnsRecordModel.WEIGHT)
         .add(DnsRecordModel.PORT)
         .add(DnsRecordModel.ENABLED)
+        .add(DnsRecordModel.DYNAMIC)
+        .add(DnsRecordModel.DYNDNS_TOKEN)
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -49,6 +57,7 @@ public final class DnsRecordResource extends RowResource {
         .column(ColumnSpec.fromField(DnsRecordModel.TYPE).filterable().build())
         .column(ColumnSpec.fromField(DnsRecordModel.VALUE).filterable().build())
         .column(ColumnSpec.fromField(DnsRecordModel.ENABLED).filterable().build())
+        .column(ColumnSpec.fromField(DnsRecordModel.DYNAMIC).filterable().build())
         .column(ColumnSpec.fromField(DnsRecordModel.ZONE_ID)
             .relation(RelationPick.of(DnsRecordModel.ZONE_ID, DnsZoneModel.MODEL_ID).build()).build())
         .filter(FilterSpec.forField(DnsRecordModel.NAME, FilterSpec.Kind.TEXT)
@@ -120,5 +129,36 @@ public final class DnsRecordResource extends RowResource {
     private static int validate(@NonNull Map<String, Object> coerced, @Nullable Row existing,
                                 @NonNull Model model) {
         return DnsRecordEdits.validate(coerced, existing, model);
+    }
+
+    @Override
+    public @NonNull List<RowAction<Row>> rowActions() {
+        List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
+        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "dyndns_token"))
+            .label("hohenheim.dns_record.dyndns_token")
+            .icon(Icon.of("rotate"))
+            .description("hohenheim.dns_record.dyndns_token_hint")
+            .handler((row, ctx) -> mintDynamicToken(row))
+            .build());
+        return actions;
+    }
+
+    /** Marks an A/AAAA record dynamic and (re)generates its update token; the token stays visible on the form. */
+    private CmsActionResult mintDynamicToken(@NonNull Row row) {
+        String type = row.get(DnsRecordModel.TYPE);
+        if (!DnsRecordModel.TYPE_A.equals(type) && !DnsRecordModel.TYPE_AAAA.equals(type)) {
+            return CmsActionResult.errorToast(
+                Microcopy.of("dyndns_only_address").withFilter("scope", "dns_record"));
+        }
+
+        row.set(DnsRecordModel.DYNAMIC, true);
+        row.set(DnsRecordModel.DYNDNS_TOKEN, DynamicDnsService.mintToken());
+        this.model().save(row);
+        ActivityLog.record(this.model(), row.get(DnsRecordModel.ID), "dyndns_token_minted", null);
+
+        // The record's edit form now shows the token and the full update URL, so
+        // this just confirms and points there -- nothing is lost if the toast fades.
+        return CmsActionResult.refreshWithToast(
+            Microcopy.of("dyndns_minted").withFilter("scope", "dns_record"));
     }
 }
