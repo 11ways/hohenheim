@@ -200,6 +200,15 @@ public final class DnsZoneStore {
             }
         }
 
+        // DNSSEC: sign in place before freezing (primary zones only; a secondary
+        // serves its primary's already-signed records verbatim).
+        if (Boolean.TRUE.equals(zone.get(DnsZoneModel.DNSSEC_ENABLED))) {
+            DnsSecKeys keys = DnsSecMaterial.ensure(zone);
+            if (keys != null) {
+                DnsSecSigner.sign(origin, defaultTtl, negativeTtl, nodes, keys, java.time.Instant.now());
+            }
+        }
+
         return freeze(zoneId, originString, origin, serial, soa, negativeTtl, nodes);
     }
 

@@ -59,6 +59,22 @@ public class DnsZoneModel extends Model {
         DateTimeField.builder().name("last_transfer_at").build());
     public static final StringField REPLICA_RECORDS = SCHEMA.addField(
         StringField.builder().name("replica_records").build());
+
+    // --- DNSSEC (online signing; one Combined Signing Key per zone) ---
+    public static final BooleanField DNSSEC_ENABLED = SCHEMA.addField(
+        BooleanField.builder("dnssec_enabled").defaultValue(false)
+        .label(HohenheimFormCopy.label("dnssec_enabled")).help(HohenheimFormCopy.help("dnssec_enabled")).build());
+    public static final IntegerField DNSSEC_ALGORITHM = SCHEMA.addField(
+        IntegerField.builder().name("dnssec_algorithm").defaultValue(13).build());
+    /** Base64 PKCS#8 private key; secret so it never leaves the server in exports or forms. */
+    public static final StringField DNSSEC_PRIVATE_KEY = SCHEMA.addField(
+        StringField.builder().name("dnssec_private_key").secret().build());
+    /** Base64 X.509 SubjectPublicKeyInfo of the signing key. */
+    public static final StringField DNSSEC_PUBLIC_KEY = SCHEMA.addField(
+        StringField.builder().name("dnssec_public_key").build());
+    public static final IntegerField DNSSEC_KEY_TAG = SCHEMA.addField(
+        IntegerField.builder().name("dnssec_key_tag").build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

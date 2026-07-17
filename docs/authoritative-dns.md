@@ -11,8 +11,17 @@ off-the-shelf NSD/Knot) meeting the two-nameserver production threshold.
 Central editing is also implemented: a secondary zone's Records tab reads the
 owning peer's records live over its authenticated HTTPS API and forwards
 edits to it (see `dns-federation.md`), so one instance can be the single pane
-for every federated zone. Still open: phase 5 (DNSSEC) and
-response-rate-limiting.
+for every federated zone.
+
+DNSSEC (phase 5) is implemented too: per-zone online signing with an ECDSA
+P-256 CSK (algorithm 13). Enabling `dnssec` on a zone mints a key on first
+use, signs every authoritative RRset, publishes an apex DNSKEY, and builds an
+NSEC chain for authenticated denial; RRSIG/NSEC/DNSKEY are served only to
+DO-bit queries, and the DS record for the registrar is shown on the zone's
+Zone-file tab. A daily task re-signs before the 14-day RRSIG window closes,
+and signed zones replicate to secondaries verbatim over the existing AXFR.
+Response-rate-limiting on the UDP listener (`dns.rate_limit_per_second`)
+rounds out the abuse mitigations. The DNS story is feature-complete.
 
 Hohenheim can become the authoritative DNS service for zones it manages. This
 removes the runtime dependency on a hosted DNS control panel and gives ACME

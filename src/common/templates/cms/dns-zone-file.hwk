@@ -4,6 +4,7 @@
 {% declare zoneId: Integer %}
 {% declare origin: String %}
 {% declare zoneText: String %}
+{% declare dsRecord: String = "" %}
 {% declare error: String = "" %}
 {% declare imported: String = "" %}
 {% declare skipped: String = "" %}
@@ -22,6 +23,18 @@
     {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
     {% if imported != "" %}<pl-alert variant="default">{{ t("import_done", scope: "dns_zone", count: imported) }}</pl-alert>{% /if %}
     {% if skipped != "" %}<pl-alert variant="warning">{{ t("import_skipped", scope: "dns_zone", lines: skipped) }}</pl-alert>{% /if %}
+
+    {% if dsRecord != "" %}
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>{{ t("ds_title", scope: "dns_zone") }}</pl-card-title>
+            <pl-card-description>{{ t("ds_description", scope: "dns_zone") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <pre class="hh-zone-file"><code>{{ dsRecord }}</code></pre>
+        </pl-card-content>
+    </pl-card>
+    {% /if %}
 
     <pl-card>
         <pl-card-header>

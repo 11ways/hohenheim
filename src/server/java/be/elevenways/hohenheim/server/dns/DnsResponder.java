@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.dns;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.xbill.DNS.CNAMERecord;
+import org.xbill.DNS.ExtendedFlags;
 import org.xbill.DNS.Flags;
 import org.xbill.DNS.Header;
 import org.xbill.DNS.MXRecord;
@@ -97,16 +98,17 @@ public final class DnsResponder {
         }
 
         Message response = baseResponse(query);
+        boolean sign = wantsDnssec(query) && zone.isSigned();
 
         Name delegation = zone.findDelegation(qname);
         if (delegation != null) {
-            addReferral(response, zone, delegation);
+            addReferral(response, zone, delegation, sign);
             finishEdns(query, response);
             return response;
         }
 
         response.getHeader().setFlag(Flags.AA);
-        resolve(zone, qname, qtype, response, 0, new HashSet<>());
+        resolve(zone, qname, qtype, response, 0, new HashSet<>(), sign);
         addAdditionalData(response, zone);
         finishEdns(query, response);
         return response;
@@ -117,7 +119,8 @@ public final class DnsResponder {
                          int qtype,
                          @NonNull Message response,
                          int depth,
-                         @NonNull Set<Name> visited) {
+                         @NonNull Set<Name> visited,
+                         boolean sign) {
 
         if (depth > MAX_CNAME_DEPTH || !visited.add(qname)) {
             return;
@@ -127,17 +130,18 @@ public final class DnsResponder {
 
         if (node == null) {
             Name closestEncloser = zone.closestEncloser(qname);
-            Map<Integer, List<Record>> wildcard = wildcardNode(zone, closestEncloser);
+            Name wildcardName = wildcardName(closestEncloser);
+            Map<Integer, List<Record>> wildcard = wildcardName != null ? zone.getNode(wildcardName) : null;
             if (wildcard == null) {
                 response.getHeader().setRcode(Rcode.NXDOMAIN);
-                addNegativeAuthority(response, zone);
+                addNxDomainProof(response, zone, qname, sign);
                 return;
             }
-            answerFromNode(zone, wildcard, qname, qtype, response, depth, visited, true);
+            answerFromWildcard(zone, wildcard, wildcardName, qname, qtype, response, depth, visited, sign);
             return;
         }
 
-        answerFromNode(zone, node, qname, qtype, response, depth, visited, false);
+        answerFromNode(zone, node, qname, qtype, response, depth, visited, sign);
     }
 
     private void answerFromNode(@NonNull DnsZoneSnapshot zone,
@@ -147,16 +151,19 @@ public final class DnsResponder {
                                 @NonNull Message response,
                                 int depth,
                                 @NonNull Set<Name> visited,
-                                boolean synthesized) {
+                                boolean sign) {
 
         List<Record> cnames = node.get(Type.CNAME);
         if (cnames != null && !cnames.isEmpty() && qtype != Type.CNAME && qtype != Type.ANY) {
             CNAMERecord cname = (CNAMERecord) cnames.get(0);
-            addAnswer(response, cname, qname, synthesized);
+            addAnswer(response, cname, qname, false);
+            if (sign) {
+                addRrsigs(response, zone.getRrsig(qname, Type.CNAME), Section.ANSWER);
+            }
             Name target = cname.getTarget();
             if (zone.contains(target)) {
                 if (zone.findDelegation(target) == null) {
-                    this.resolve(zone, target, qtype, response, depth + 1, visited);
+                    this.resolve(zone, target, qtype, response, depth + 1, visited, sign);
                 }
             }
             return;
@@ -164,34 +171,76 @@ public final class DnsResponder {
 
         if (qtype == Type.ANY) {
             boolean any = false;
-            for (List<Record> rrset : node.values()) {
-                for (Record record : rrset) {
-                    addAnswer(response, record, qname, synthesized);
+            for (Map.Entry<Integer, List<Record>> rrset : node.entrySet()) {
+                if (rrset.getKey() == Type.RRSIG || rrset.getKey() == Type.NSEC) {
+                    continue;
+                }
+                for (Record record : rrset.getValue()) {
+                    addAnswer(response, record, qname, false);
                     any = true;
+                }
+                if (sign) {
+                    addRrsigs(response, zone.getRrsig(qname, rrset.getKey()), Section.ANSWER);
                 }
             }
             if (!any) {
-                addNegativeAuthority(response, zone);
+                addNoDataProof(response, zone, qname, sign);
             }
             return;
         }
 
         List<Record> rrset = node.get(qtype);
         if (rrset == null || rrset.isEmpty()) {
-            addNegativeAuthority(response, zone);
+            addNoDataProof(response, zone, qname, sign);
             return;
         }
 
         for (Record record : rrset) {
-            addAnswer(response, record, qname, synthesized);
+            addAnswer(response, record, qname, false);
+        }
+        if (sign) {
+            addRrsigs(response, zone.getRrsig(qname, qtype), Section.ANSWER);
         }
     }
 
-    private static @Nullable Map<Integer, List<Record>> wildcardNode(@NonNull DnsZoneSnapshot zone,
-                                                                     @NonNull Name closestEncloser) {
+    /**
+     * A wildcard match: the synthesized records are served under the queried
+     * name, but with the wildcard owner's RRSIG unchanged (its label count
+     * signals the expansion to a validator).
+     */
+    private void answerFromWildcard(@NonNull DnsZoneSnapshot zone,
+                                    @NonNull Map<Integer, List<Record>> wildcard,
+                                    @NonNull Name wildcardOwner,
+                                    @NonNull Name qname,
+                                    int qtype,
+                                    @NonNull Message response,
+                                    int depth,
+                                    @NonNull Set<Name> visited,
+                                    boolean sign) {
+        List<Record> rrset = wildcard.get(qtype);
+        if (rrset == null || rrset.isEmpty()) {
+            List<Record> cnames = wildcard.get(Type.CNAME);
+            if (cnames != null && !cnames.isEmpty() && qtype != Type.CNAME) {
+                addAnswer(response, cnames.get(0), qname, true);
+                if (sign) {
+                    addRrsigs(response, zone.getRrsig(wildcardOwner, Type.CNAME), Section.ANSWER);
+                }
+                return;
+            }
+            addNoDataProof(response, zone, qname, sign);
+            return;
+        }
+        for (Record record : rrset) {
+            addAnswer(response, record, qname, true);
+        }
+        if (sign) {
+            addRrsigs(response, zone.getRrsig(wildcardOwner, qtype), Section.ANSWER);
+        }
+    }
+
+    private static @Nullable Name wildcardName(@NonNull Name closestEncloser) {
         try {
-            Name wildcard = Name.fromString("*", closestEncloser);
-            return zone.getNode(wildcard);
+            return Name.fromString("*", closestEncloser);
         }
         catch (TextParseException e) {
             return null;
@@ -206,13 +255,63 @@ public final class DnsResponder {
         response.addRecord(answer, Section.ANSWER);
     }
 
-    private static void addNegativeAuthority(@NonNull Message response, @NonNull DnsZoneSnapshot zone) {
-        response.addRecord(zone.getNegativeSoa(), Section.AUTHORITY);
+    private static void addRrsigs(@NonNull Message response, @NonNull List<Record> sigs, int section) {
+        for (Record sig : sigs) {
+            response.addRecord(sig, section);
+        }
+    }
+
+    /** NODATA: SOA (signed variant serves the real apex SOA + RRSIG) plus the owner's NSEC. */
+    private static void addNoDataProof(@NonNull Message response, @NonNull DnsZoneSnapshot zone,
+                                       @NonNull Name qname, boolean sign) {
+        if (!sign) {
+            response.addRecord(zone.getNegativeSoa(), Section.AUTHORITY);
+            return;
+        }
+        addSignedSoa(response, zone);
+        addSignedNsec(response, zone, qname);
+    }
+
+    /** NXDOMAIN: SOA + the NSEC covering the missing name (and the apex NSEC to deny a wildcard). */
+    private static void addNxDomainProof(@NonNull Message response, @NonNull DnsZoneSnapshot zone,
+                                         @NonNull Name qname, boolean sign) {
+        if (!sign) {
+            response.addRecord(zone.getNegativeSoa(), Section.AUTHORITY);
+            return;
+        }
+        addSignedSoa(response, zone);
+        Name covering = zone.coveringNsecOwner(qname);
+        if (covering != null) {
+            addSignedNsec(response, zone, covering);
+        }
+        // The apex NSEC denies a wildcard at the closest encloser (covers the
+        // common no-wildcard case); a dedicated per-encloser wildcard NSEC is a
+        // known simplification for deep wildcard zones.
+        if (!zone.getOrigin().equals(covering)) {
+            addSignedNsec(response, zone, zone.getOrigin());
+        }
+    }
+
+    private static void addSignedSoa(@NonNull Message response, @NonNull DnsZoneSnapshot zone) {
+        response.addRecord(zone.getSoa(), Section.AUTHORITY);
+        addRrsigs(response, zone.getRrsig(zone.getOrigin(), Type.SOA), Section.AUTHORITY);
+    }
+
+    private static void addSignedNsec(@NonNull Message response, @NonNull DnsZoneSnapshot zone, @NonNull Name owner) {
+        List<Record> nsec = zone.getRrset(owner, Type.NSEC);
+        if (nsec == null) {
+            return;
+        }
+        for (Record record : nsec) {
+            response.addRecord(record, Section.AUTHORITY);
+        }
+        addRrsigs(response, zone.getRrsig(owner, Type.NSEC), Section.AUTHORITY);
     }
 
     private static void addReferral(@NonNull Message response,
                                     @NonNull DnsZoneSnapshot zone,
-                                    @NonNull Name delegation) {
+                                    @NonNull Name delegation,
+                                    boolean sign) {
         List<Record> nsSet = zone.getRrset(delegation, Type.NS);
         if (nsSet == null) {
             return;
@@ -222,6 +321,20 @@ public final class DnsResponder {
             Name target = ((NSRecord) ns).getTarget();
             if (zone.contains(target)) {
                 addGlue(response, zone, target);
+            }
+        }
+        if (sign) {
+            // Secure delegation: a DS proves the child is signed, else the NSEC
+            // at the delegation proves no DS exists (insecure delegation).
+            List<Record> ds = zone.getRrset(delegation, Type.DS);
+            if (ds != null && !ds.isEmpty()) {
+                for (Record record : ds) {
+                    response.addRecord(record, Section.AUTHORITY);
+                }
+                addRrsigs(response, zone.getRrsig(delegation, Type.DS), Section.AUTHORITY);
+            }
+            else {
+                addSignedNsec(response, zone, delegation);
             }
         }
     }
@@ -273,9 +386,17 @@ public final class DnsResponder {
         return response;
     }
 
+    private static boolean wantsDnssec(@NonNull Message query) {
+        OPTRecord opt = query.getOPT();
+        return opt != null && (opt.getFlags() & ExtendedFlags.DO) != 0;
+    }
+
     private static void finishEdns(@NonNull Message query, @NonNull Message response) {
-        if (query.getOPT() != null) {
-            response.addRecord(new OPTRecord(EDNS_PAYLOAD, 0, 0), Section.ADDITIONAL);
+        OPTRecord opt = query.getOPT();
+        if (opt != null) {
+            // Echo the DO bit so a validating resolver sees DNSSEC was honored.
+            int flags = (opt.getFlags() & ExtendedFlags.DO) != 0 ? ExtendedFlags.DO : 0;
+            response.addRecord(new OPTRecord(EDNS_PAYLOAD, 0, 0, flags), Section.ADDITIONAL);
         }
     }
 

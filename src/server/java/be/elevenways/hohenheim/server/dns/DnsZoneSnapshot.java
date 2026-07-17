@@ -3,10 +3,13 @@ package be.elevenways.hohenheim.server.dns;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.xbill.DNS.Name;
+import org.xbill.DNS.RRSIGRecord;
 import org.xbill.DNS.Record;
 import org.xbill.DNS.SOARecord;
 import org.xbill.DNS.Type;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +26,9 @@ public final class DnsZoneSnapshot {
     private final SOARecord soa;
     private final SOARecord negativeSoa;
     private final Map<Name, Map<Integer, List<Record>>> nodes;
+    private final boolean signed;
+    /** Canonically ordered NSEC owner names, for covering-NSEC lookups on NXDOMAIN. */
+    private final List<Name> nsecOwners;
 
     DnsZoneSnapshot(int zoneId,
                     @NonNull String originString,
@@ -38,6 +44,75 @@ public final class DnsZoneSnapshot {
         this.soa = soa;
         this.negativeSoa = negativeSoa;
         this.nodes = nodes;
+
+        // A zone is served as signed when the apex carries a DNSKEY (fresh local
+        // signing OR a transferred already-signed secondary look identical here).
+        Map<Integer, List<Record>> apex = nodes.get(origin);
+        this.signed = apex != null && apex.containsKey(Type.DNSKEY);
+        if (this.signed) {
+            List<Name> owners = new ArrayList<>();
+            for (Map.Entry<Name, Map<Integer, List<Record>>> node : nodes.entrySet()) {
+                if (node.getValue().containsKey(Type.NSEC)) {
+                    owners.add(node.getKey());
+                }
+            }
+            owners.sort(Comparator.naturalOrder());
+            this.nsecOwners = List.copyOf(owners);
+        }
+        else {
+            this.nsecOwners = List.of();
+        }
+    }
+
+    public boolean isSigned() {
+        return this.signed;
+    }
+
+    /** @return the RRSIGs at {@code name} covering {@code coveredType}, or empty */
+    public @NonNull List<Record> getRrsig(@NonNull Name name, int coveredType) {
+        Map<Integer, List<Record>> node = this.nodes.get(name);
+        if (node == null) {
+            return List.of();
+        }
+        List<Record> sigs = node.get(Type.RRSIG);
+        if (sigs == null) {
+            return List.of();
+        }
+        List<Record> matching = new ArrayList<>(2);
+        for (Record sig : sigs) {
+            if (((RRSIGRecord) sig).getTypeCovered() == coveredType) {
+                matching.add(sig);
+            }
+        }
+        return matching;
+    }
+
+    /**
+     * @return the owner of the NSEC whose canonical range covers {@code qname}
+     *         (proving its non-existence), or null when the zone is unsigned
+     */
+    public @Nullable Name coveringNsecOwner(@NonNull Name qname) {
+        int n = this.nsecOwners.size();
+        if (n == 0) {
+            return null;
+        }
+        for (int i = 0; i < n; i++) {
+            Name owner = this.nsecOwners.get(i);
+            Name next = this.nsecOwners.get((i + 1) % n);
+            int cmpNext = next.compareTo(owner);
+            if (cmpNext > 0) {
+                if (owner.compareTo(qname) < 0 && qname.compareTo(next) < 0) {
+                    return owner;
+                }
+            }
+            else {
+                // Wrap point (greatest owner -> apex): covers everything after it.
+                if (qname.compareTo(owner) > 0 || qname.compareTo(next) < 0) {
+                    return owner;
+                }
+            }
+        }
+        return null;
     }
 
     public int getZoneId() {
