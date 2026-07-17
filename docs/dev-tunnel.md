@@ -78,8 +78,14 @@ The live registrations are visible on the site's "Dev sessions" tab.
   this is the existing posture; treat local shell access on the proxy host as
   equivalent to network access to the registered dev servers.
 - Unregistered tunnel connections are capped (32 concurrent) and dropped
-  after a 10s auth window; registration refusals stop the client's retry
-  loop.
+  after a 10s auth window. Only FATAL refusals (bad token, invalid name,
+  missing wildcard domain) stop the client's retry loop; transient failures
+  (registration timeout under load, a bridge allocation hiccup) are flagged
+  as such on the wire and the client reconnects with backoff.
+- Server teardown hard-aborts the transport (with a 2s backstop after the
+  close handshake), and each connection's serial receive lane is bounded
+  (overflow drops the connection), so a peer that sends but never reads
+  cannot pin a blocked send or heap-buffer frames indefinitely.
 
 - Leases are in-memory: a Hohenheim restart drops them and clients re-register
   on their next reconnect attempt (within ~30s).
