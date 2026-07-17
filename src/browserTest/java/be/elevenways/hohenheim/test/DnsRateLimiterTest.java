@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.xbill.DNS.DClass;
 import org.xbill.DNS.Flags;
 import org.xbill.DNS.Message;
+import org.xbill.DNS.NSRecord;
 import org.xbill.DNS.Name;
 import org.xbill.DNS.Rcode;
 import org.xbill.DNS.Record;
@@ -48,6 +49,39 @@ class DnsRateLimiterTest {
         Message response = new Message(query.getHeader().getID());
         response.getHeader().setFlag(Flags.QR);
         response.addRecord(query.getQuestion(), Section.QUESTION);
+        return response;
+    }
+
+    @Test
+    void referralsKeyPerDelegationPointNotPerQname() throws Exception {
+        // Random names under a delegated child are all NOERROR referrals; they
+        // must share one bucket or they re-open the reflection dodge that the
+        // per-zone NXDOMAIN keying closed.
+        Message q1 = query("r1.child.example.com", Type.A);
+        Message q2 = query("r2.child.example.com", Type.AAAA);
+        String k1 = DnsRateLimiter.keyFor(q1, referralFor(q1, "child.example.com"));
+        String k2 = DnsRateLimiter.keyFor(q2, referralFor(q2, "child.example.com"));
+        assertThat(k1).isEqualTo(k2).startsWith("ref|");
+
+        // Referrals for a different delegation stay independent.
+        Message q3 = query("r1.other.example.com", Type.A);
+        assertThat(DnsRateLimiter.keyFor(q3, referralFor(q3, "other.example.com"))).isNotEqualTo(k1);
+
+        // An AUTHORITATIVE answer that happens to carry NS records is not a referral.
+        Message authoritative = noerrorFor(q1);
+        authoritative.getHeader().setFlag(Flags.AA);
+        authoritative.addRecord(new NSRecord(Name.fromString("child.example.com."), DClass.IN, 300,
+            Name.fromString("ns1.example.com.")), Section.AUTHORITY);
+        assertThat(DnsRateLimiter.keyFor(q1, authoritative)).doesNotStartWith("ref|");
+    }
+
+    private static Message referralFor(Message query, String delegation) throws Exception {
+        Message response = new Message(query.getHeader().getID());
+        response.getHeader().setFlag(Flags.QR);
+        response.addRecord(query.getQuestion(), Section.QUESTION);
+        Name owner = Name.fromString(delegation + ".");
+        response.addRecord(new NSRecord(owner, DClass.IN, 300, Name.fromString("ns1." + delegation + ".")),
+            Section.AUTHORITY);
         return response;
     }
 

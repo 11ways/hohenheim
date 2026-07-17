@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.dns;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.xbill.DNS.Flags;
 import org.xbill.DNS.Message;
 import org.xbill.DNS.Rcode;
 import org.xbill.DNS.Record;
@@ -41,7 +42,8 @@ public final class DnsRateLimiter {
      * The bucket key for a computed response. NXDOMAIN keys per ZONE, not per
      * qname: a random-subdomain flood must share one bucket or RRL is useless
      * against the standard reflection attack (classic BIND/NSD RRL semantics).
-     * Positive answers key per qname/qtype; other rcodes share an error bucket.
+     * Referrals key per delegation point for the same reason. Authoritative
+     * answers key per qname/qtype; other rcodes share an error bucket.
      */
     public static @NonNull String keyFor(@NonNull Message query, @NonNull Message response) {
         int rcode = response.getHeader().getRcode();
@@ -55,6 +57,16 @@ public final class DnsRateLimiter {
         }
         if (rcode != Rcode.NOERROR) {
             return "err|" + rcode;
+        }
+        // A referral (non-authoritative NS in AUTHORITY) keys per delegation
+        // point: random names under a delegated child must share one bucket,
+        // exactly like the NXDOMAIN case, or they re-open the reflection dodge.
+        if (!response.getHeader().getFlag(Flags.AA)) {
+            for (Record record : response.getSection(Section.AUTHORITY)) {
+                if (record.getType() == Type.NS) {
+                    return "ref|" + record.getName().toString(true).toLowerCase();
+                }
+            }
         }
         Record question = query.getQuestion();
         return question != null
