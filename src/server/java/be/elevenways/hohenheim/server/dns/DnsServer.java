@@ -44,6 +44,10 @@ public final class DnsServer {
     private final DnsResponder responder;
     private final AxfrResponder axfrResponder;
     private final Semaphore tcpConnections = new Semaphore(TCP_MAX_CONNECTIONS);
+    private final DnsRateLimiter rateLimiter = new DnsRateLimiter(() -> {
+        Integer limit = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.RATE_LIMIT_PER_SECOND);
+        return limit != null ? limit : 0;
+    });
     private volatile @Nullable SecondaryZoneService secondaryService;
 
     public DnsServer() {
@@ -198,6 +202,20 @@ public final class DnsServer {
                     reply = handleNotify(parsed, wire);
                 }
                 else {
+                    // RRL applies to UDP queries only: TCP is spoof-resistant, and a
+                    // SLIP verdict answers truncated so real clients retry over TCP.
+                    if (parsed != null) {
+                        switch (this.rateLimiter.check(client.getAddress(), parsed)) {
+                            case DROP -> {
+                                return;
+                            }
+                            case SLIP -> {
+                                sendUdp(socket, truncatedWire(parsed), client);
+                                return;
+                            }
+                            case ALLOW -> { }
+                        }
+                    }
                     reply = this.responder.respondToWire(wire, false);
                 }
                 if (reply == null) {
@@ -349,6 +367,31 @@ public final class DnsServer {
             ack.addRecord(question, Section.QUESTION);
         }
         return ack.toWire(512);
+    }
+
+    /** An answerless TC response: "ask again over TCP". */
+    private static byte @NonNull [] truncatedWire(@NonNull Message query) {
+        Message response = new Message(query.getHeader().getID());
+        response.getHeader().setFlag(Flags.QR);
+        response.getHeader().setFlag(Flags.AA);
+        response.getHeader().setFlag(Flags.TC);
+        Record question = query.getQuestion();
+        if (question != null) {
+            response.addRecord(question, Section.QUESTION);
+        }
+        return response.toWire(512);
+    }
+
+    private void sendUdp(@NonNull DatagramSocket socket, byte @NonNull [] reply,
+                         @NonNull InetSocketAddress client) {
+        try {
+            socket.send(new DatagramPacket(reply, reply.length, client));
+        }
+        catch (IOException e) {
+            if (this.running) {
+                Blast.log("DNS: udp send failed:", e.getMessage());
+            }
+        }
     }
 
     private static byte @NonNull [] refusedWire(@NonNull Message query) {
