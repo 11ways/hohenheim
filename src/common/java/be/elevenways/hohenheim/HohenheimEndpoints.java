@@ -202,6 +202,14 @@ public class HohenheimEndpoints {
         .handler(session -> null) // Placeholder: set in HohenheimHandlers.init()
         .build();
 
+    // --- Dev-tunnel registration (remote dev servers; token-authenticated in-band) ---
+    public static final WebSocketEndpoint DEV_TUNNEL = WebSocketEndpoint.builder()
+        .identifier(Identifier.of("hohenheim", "dev_tunnel"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("ws").addDelimiter().addStatic("dev-tunnel").build())
+        .handler(session -> null) // Placeholder: set in HohenheimHandlers.init()
+        .build();
+
     public static void init() {
         // Static fields are initialized when this method is called
     }

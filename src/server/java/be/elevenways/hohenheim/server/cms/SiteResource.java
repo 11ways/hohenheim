@@ -5,7 +5,9 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.sitetype.types.DevNamespaceSiteType;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
+import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
@@ -121,6 +123,7 @@ public final class SiteResource extends RowResource {
         values.put("slug", slugify(name));
         values.put("status", SiteModel.STATUS_ACTIVE);
         normalizeSource(values);
+        normalizeDevNamespace(values);
         return super.persistRow(values, accessContext);
     }
 
@@ -133,6 +136,7 @@ public final class SiteResource extends RowResource {
             throw Violations.ofField("name", name, CmsSupport.violationText("name_required"));
         }
         normalizeSource(values);
+        normalizeDevNamespace(values);
         super.updateRow(existing, values, accessContext);
     }
 
@@ -158,6 +162,26 @@ public final class SiteResource extends RowResource {
             sourceSettings.put("webhook_secret", UUID.randomUUID().toString());
         }
         coerced.put("source_settings", sourceSettings);
+    }
+
+    /**
+     * Mint a registration token for a dev-namespace site that has none yet (a
+     * blank submit on an existing secret was already restored by the secrets
+     * contract before this runs, so blank here really means absent).
+     */
+    private static void normalizeDevNamespace(@NonNull Map<String, Object> coerced) {
+        if (!DevNamespaceSiteType.ID.toString().equals(coerced.get("site_type"))) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> settings = coerced.get("settings") instanceof Map<?, ?> map
+            ? new HashMap<>((Map<String, Object>) map)
+            : new HashMap<>();
+        if (isBlank(settings.get(DevNamespaceSiteType.REGISTRATION_TOKEN_KEY))) {
+            settings.put(DevNamespaceSiteType.REGISTRATION_TOKEN_KEY,
+                "zdev_" + SecureTokens.randomToken(24));
+        }
+        coerced.put("settings", settings);
     }
 
     /** Soft delete: stamp deleted_at, remove a git checkout, keep the row. */
@@ -255,7 +279,8 @@ public final class SiteResource extends RowResource {
     @Override
     public @NonNull List<RecordScopedPage<Row>> subpages() {
         List<RecordScopedPage<Row>> pages = new ArrayList<>(
-            List.of(new SiteDomainsPage(), new SiteDatabasesPage(), new SiteProcessesPage(), new SiteDeploymentsPage()));
+            List.of(new SiteDomainsPage(), new SiteDatabasesPage(), new SiteProcessesPage(),
+                new SiteDeploymentsPage(), new SiteDevSessionsPage()));
         pages.addAll(this.frameworkSubpages());
         return pages;
     }

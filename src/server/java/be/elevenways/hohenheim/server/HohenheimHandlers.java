@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.devtunnel.DevTunnelServerHandler;
 import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.process.IpcChannel;
 import be.elevenways.hohenheim.server.process.ManagedProcess;
@@ -67,6 +68,7 @@ public final class HohenheimHandlers {
         initProcessControl();
         initDeployControl();
         initTerminal();
+        initDevTunnel();
         initApi();
     }
 
@@ -481,6 +483,10 @@ public final class HohenheimHandlers {
 
     private static String deploymentsPageUrl(Integer siteId) {
         return "/admin/sites/" + siteId + "/page/deployments";
+    }
+
+    private static void initDevTunnel() {
+        HohenheimEndpoints.DEV_TUNNEL.setHandlerFactory(DevTunnelServerHandler::new);
     }
 
     private static void initTerminal() {

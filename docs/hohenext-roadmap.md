@@ -248,3 +248,15 @@ Still open (phase 4-5, the production-redundancy threshold): AXFR + TSIG +
 NOTIFY with an independent secondary, secondary-freshness UI, and DNSSEC as a
 separate project. A one-box home deployment works but the registrar delegation
 still applies and a single server remains a single point of failure.
+
+## Dev tunnel (2026-07-17): SHIPPED
+
+Remote dev sites under one wildcard "Dev namespace" site: dev servers register
+outbound over `/ws/dev-tunnel` (ngrok-style, but first-party and
+wildcard-TLS-correct), claim `<name>.<namespace-domain>`, and are served
+through the real proxy pipeline via multiplexed tunnel streams. The generic
+mechanism (protocol, client, credit-window streams) lives in zenit
+(`server/devtunnel`); Hohenheim ships the dev-namespace site type, lease
+registry, bridge, offline page, and the Dev sessions tab. `zenit-dev start`
+auto-registers when `devTunnel` is configured in its machine config. See
+`docs/dev-tunnel.md`.

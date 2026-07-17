@@ -166,6 +166,7 @@ public class SiteDispatcher implements HttpHandler {
     private static final class RouteEntry {
         final SiteRequestHandler handler;
         final String siteName;
+        final @Nullable String hostPattern;
         final String path;
         final boolean stripPath;
         final boolean forceSsl;
@@ -192,6 +193,7 @@ public class SiteDispatcher implements HttpHandler {
                    @Nullable String authProviderName) {
             this.handler = handler;
             this.siteName = siteName;
+            this.hostPattern = domain != null ? domain.get(SiteDomainModel.HOSTNAME) : null;
             this.authGate = authGate;
             this.authProviderName = authProviderName;
 
@@ -474,6 +476,9 @@ public class SiteDispatcher implements HttpHandler {
         if (match != null && match.groups() != null && !match.groups().isEmpty()) {
             exchange.putAttachment(MATCHED_GROUPS, match.groups());
         }
+        if (entry != null && entry.hostPattern != null) {
+            exchange.putAttachment(MATCHED_HOST_PATTERN, entry.hostPattern);
+        }
 
         // --- IP reputation tracking ---
         String clientIp = getClientIp(exchange);
@@ -641,6 +646,10 @@ public class SiteDispatcher implements HttpHandler {
     /** Named + numbered regex-host capture groups from the active route, if any. */
     public static final AttachmentKey<Map<String, String>> MATCHED_GROUPS =
         AttachmentKey.create(Map.class);
+
+    /** The matched domain row's configured hostname pattern (exact, glob or regex source). */
+    public static final AttachmentKey<String> MATCHED_HOST_PATTERN =
+        AttachmentKey.create(String.class);
 
     /** Set by site types that want upstream Location redirects rewritten to the public host. */
     public static final AttachmentKey<Boolean> REWRITE_LOCATION =

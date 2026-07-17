@@ -32,14 +32,14 @@ class SiteTypeTest extends HohenheimTestBase {
 
     @Test
     @Order(1)
-    void typeDropdownHasAllEightTypes() {
+    void typeDropdownHasAllNineTypes() {
         navigateToApp("/admin/sites/new");
         waitForHydration();
 
         openPlSelect("pl-select[name='site_type']");
 
         var items = page.locator(OPEN_SELECT_POPUP + " div[role='option'][data-value^='hohenheim:']");
-        assertThat(items.count()).isEqualTo(8);
+        assertThat(items.count()).isEqualTo(9);
 
         String allText = items.allTextContents().toString();
         assertThat(allText).contains("Proxy");
@@ -50,6 +50,7 @@ class SiteTypeTest extends HohenheimTestBase {
         assertThat(allText).contains("Static");
         assertThat(allText).contains("Redirect");
         assertThat(allText).contains("Dead");
+        assertThat(allText).contains("Dev namespace");
 
         // Close the dropdown again so later interactions start clean.
         page.keyboard().press("Escape");
