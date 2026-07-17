@@ -6,9 +6,22 @@ backends — node.js child processes, static files, arbitrary proxied upstreams,
 or git-provisioned apps.
 
 This is the **Java/Zenit rewrite** of the original Node.js/AlchemyMVC Hohenheim.
-Feature-parity with the Node version is the near-term goal; Coolify/Dokploy-class
-features (Docker, managed databases, backups, notifications) are the longer
-horizon.
+It has feature parity with the Node version and goes well beyond it:
+
+- **Reverse proxy + site dispatcher** — node/alchemy/command/proxy/static/redirect
+  site types, per-site process management, git-backed provisioning.
+- **Docker** site type and **managed databases** (create, back up, attach to sites).
+- **Automatic HTTPS** via Let's Encrypt, including **wildcard certificates**
+  through DNS-01.
+- **Authoritative DNS server** (optional) — host your own zones, with **DNSSEC**,
+  **hidden-primary/secondary federation**, and **dynamic DNS** (dyndns2), so you
+  can drop a hosted DNS control panel entirely.
+- **Dev tunnel** — expose a dev server running anywhere on a public
+  `*.dev.example.com` subdomain with a valid certificate, ngrok-style.
+- **Notifications**, an **automation API** (hashed `znit_` keys), IP-reputation
+  fail2ban logging, and a full admin UI.
+
+Each subsystem has a deeper design doc under [`docs/`](docs/).
 
 ## Requirements
 
@@ -34,8 +47,11 @@ horizon.
 
 ## Privileged ports
 
-Hohenheim wants to listen on 80 and 443. On Linux these are privileged ports
-and a non-root process cannot bind them without help.
+Hohenheim wants to listen on 80 and 443 (reverse proxy) and, if you enable the
+DNS server, UDP **and** TCP 53. On Linux all of these are privileged ports and
+a non-root process cannot bind them without help. A single capability,
+`CAP_NET_BIND_SERVICE`, covers every one of them (TCP and UDP alike), so the
+options below apply whether or not you run the DNS server.
 
 **The JVM binary — not the `.jar` — is what needs permission.** A `.jar` is a
 zip; capabilities are filesystem xattrs on the executable inode. You have four
@@ -185,7 +201,17 @@ Most-useful keys:
     "ssl": {
         "letsencrypt_enabled": true,
         "letsencrypt_email":   "ops@example.com",
-        "letsencrypt_staging": false       // flip to true for testing
+        "letsencrypt_staging": false,      // flip to true for testing
+        "dns_hook_command":    "",         // script for DNS-01 wildcard certs (optional)
+        "dns_propagation_seconds": 30
+    },
+
+    // Authoritative DNS server (optional; off by default)
+    "dns": {
+        "enabled":       false,
+        "bind_address":  "0.0.0.0",
+        "port":          53,
+        "rate_limit_per_second": 20
     },
 
     // Storage
@@ -251,6 +277,25 @@ Two paths:
   filesystem-path convention is required in the Java port — certificates live
   in the DB, not under `temp/letsencrypt/etc/acme/live/<domain>/`.
 
+- **Wildcard certificates (DNS-01).** A `*.example.com` certificate cannot be
+  issued over HTTP-01; it needs a DNS-01 challenge. The certificate-request
+  page accepts wildcard hostnames and offers three ways to answer the
+  challenge:
+  - **Manual** — Hohenheim shows the `_acme-challenge` TXT records to paste at
+    your DNS provider, then you click "Verify". One-shot: a manually issued
+    wildcard cert does **not** auto-renew.
+  - **Command hook** — set `ssl.dns_hook_command` to a script that publishes
+    the TXT record (invoked as `command present|cleanup <name> <value>`); this
+    auto-renews. `ssl.dns_propagation_seconds` (default 30) is how long to wait
+    before asking the CA to validate.
+  - **Hosted DNS** — if you run Hohenheim's own [DNS server](#dns-server) and
+    it is authoritative for the zone, it publishes the TXT record into its own
+    zone, serves it instantly, and auto-renews with no external credentials.
+
+  A single order can carry the apex, `*.example.com`, and `*.dev.example.com`
+  as SANs. Note a wildcard covers exactly one label: `*.example.com` matches
+  `a.example.com` but not `example.com` itself or `a.b.example.com`.
+
 Per-domain options:
 
 - `force_ssl` — redirect that domain's HTTP to HTTPS.
@@ -268,6 +313,8 @@ Built-in types, registered via `SiteTypeRegistry`:
 | `node`     | Managed Node.js child process. Hohenheim handles port/socket allocation, restart, scaling, logs. |
 | `alchemy`  | Extends `node` with `--stream-janeway` and a fork-wrapper that gives older alchemy installs a native `process.on('message')` IPC channel. |
 | `command`  | Managed arbitrary process (shell command).                 |
+| `docker`   | Managed Docker container on a local or remote engine; Hohenheim maps a container port and proxies to it. |
+| `dev-namespace` | A wildcard namespace (`*.dev.example.com`) that remote dev servers register into over the [dev tunnel](#dev-tunnel). |
 | `proxy`    | Transparent reverse proxy to a TCP address or unix socket. Regex host captures can be substituted into the socket path, e.g. `/run/{project}.sock`. |
 | `static`   | Static-file server, optionally git-provisioned. Directory listings (autoindex) are ON by default since 0.1.0, matching the Node original; untick "Show directory listing" to disable. |
 | `redirect` | 30x redirect, with an optional per-request delay.          |
@@ -290,6 +337,108 @@ Dual-slot deployment: Hohenheim clones into `<data_path>/git-repos/<id>/a` or
 builds don't take the site down.
 
 Webhooks: `POST /webhook/git/<site-id>` triggers a pull-and-rebuild.
+
+## Managed databases
+
+Hohenheim can create and manage databases (PostgreSQL, MySQL/MariaDB) on a
+local or remote **server**, attach them to sites (their credentials are
+injected into the site's environment), back them up on a schedule
+(`database.backup_path`, `database.backup_retention`), and restore from an
+uploaded dump. Managed database records are immutable after creation — destroy
+and recreate rather than editing in place.
+
+## DNS server
+
+Hohenheim can optionally act as an **authoritative** DNS server for zones you
+host — never a recursive resolver — so you can stop relying on a hosted DNS
+control panel. It is **off by default**. Full design notes:
+[`docs/authoritative-dns.md`](docs/authoritative-dns.md) and
+[`docs/dns-federation.md`](docs/dns-federation.md).
+
+Enable it in `settings/local.dry`:
+
+```
+"dns": {
+    "enabled":       true,
+    "bind_address":  "0.0.0.0",   // interface to bind (UDP + TCP 53)
+    "port":          53,          // change if you front it with a redirect
+    "rate_limit_per_second": 20   // per client-network response-rate-limit; 0 disables
+}
+```
+
+Binding port 53 needs the same `CAP_NET_BIND_SERVICE`
+[described above](#privileged-ports). Changing `dns.*` requires a restart; zone
+and record edits do not.
+
+In the admin UI (Infrastructure → DNS Zones) you create a zone (origin, SOA
+contact, TTLs), then manage A/AAAA/CNAME/NS/MX/TXT/CAA/SRV records on its
+**Records** tab. A **Zone file** tab imports and exports standard master-file
+text, so you can migrate an existing zone from another provider by pasting its
+export.
+
+**What you still need from outside Hohenheim:**
+
+- Delegate the domain at your **registrar** to Hohenheim's nameservers (with a
+  **glue record** giving the nameserver's IP, since it lives inside the zone).
+- Open **UDP and TCP 53** from the internet to the host.
+- A stable public IP and no carrier-grade NAT.
+- At least **two** authoritative nameservers for production (see federation).
+
+### DNSSEC
+
+Flip `dnssec` on a zone and Hohenheim signs it online (ECDSA P-256), publishes
+the apex DNSKEY, builds an NSEC chain, and serves RRSIG/NSEC only to
+DNSSEC-aware resolvers. The **DS record** to lodge with your registrar is shown
+on the zone's Zone-file tab; a daily task re-signs before signatures expire.
+Enable DNSSEC and verify externally (`dig +dnssec`, an unbound instance) for a
+few days **before** lodging the DS — a bad DS takes the domain down for
+validating resolvers.
+
+### Federation (hidden primary + secondaries)
+
+For redundancy and to keep your home/office box's port 53 closed to the world,
+run a **hidden primary** that owns the zones and a **public secondary** (a VPS
+running Hohenheim, or an off-the-shelf NSD/Knot) that answers the internet.
+Replication is standard **AXFR/TSIG/NOTIFY**: configure a DNS peer with a TSIG
+key and attach it to a zone as a secondary. The primary NOTIFYs on every
+change; the secondary pulls. A secondary Hohenheim instance can also act as a
+central editing surface, forwarding record edits to the owning primary over an
+authenticated HTTPS peer API. See
+[`docs/dns-federation.md`](docs/dns-federation.md).
+
+### Dynamic DNS
+
+An A or AAAA record can be marked **dynamic** to get a per-record update token.
+Point any dyndns2 client (router firmware, `ddclient`, ex-FreeDNS setups) at:
+
+```
+GET /nic/update?hostname=<fqdn>&myip=<ip>
+```
+
+with the token as the HTTP Basic password (`myip` is optional — the caller's
+public IP is used when omitted). Replies are the standard
+`good`/`nochg`/`badauth`/`nohost` lines. The token is stored so it stays
+visible on the record's form and can be re-copied any time. The endpoint is
+public and rate-limited per IP.
+
+## Dev tunnel
+
+Run a dev server anywhere — a laptop behind NAT, an LXC container, another
+machine — and have it appear on a public `https://<name>.dev.example.com`
+subdomain with a valid (wildcard) certificate, ngrok-style. Create one
+**dev-namespace** site carrying the wildcard domain; it mints a `zdev_`
+registration token. Any Zenit app then registers itself over an outbound
+WebSocket using that token (via `dev_tunnel.*` settings, or `zenit-dev`'s
+machine config) and is instantly reachable. Because Hohenheim remains a true
+reverse proxy (TLS terminates at Hohenheim; requests arrive with
+`X-Forwarded-*`), the dev app needs no code changes to be HTTPS-aware. Design
+notes: [`docs/dev-tunnel.md`](docs/dev-tunnel.md).
+
+## Notifications
+
+Hohenheim can send notifications (certificate expiry, deploy results, site-down
+alerts, attached-database problems) to configured channels. Manage them under
+the Notifications page; each channel subscribes to a closed set of event types.
 
 ## Fail2ban
 
@@ -457,7 +606,7 @@ Hohenheim falls back to `node` on `PATH` rather than crashing the spawn.
 ```bash
 zenit-dev build          # compile everything
 zenit-dev test           # unit tests
-zenit-dev browser-test   # Playwright end-to-end tests
+zenit-dev test --browser # Playwright end-to-end tests
 zenit-dev start          # run locally
 ```
 
