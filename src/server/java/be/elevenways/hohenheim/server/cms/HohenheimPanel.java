@@ -81,7 +81,7 @@ public final class HohenheimPanel extends Panel {
             SettingsEditor appEditor = SettingsEditor.forFile(
                 HohenheimSettings.VALUES, HohenheimSettingsFiles.settingsFile());
             mounts.add(new SettingsPage.Mount("app",
-                Microcopy.of("Hohenheim").withFallback("Hohenheim"), appEditor));
+                Microcopy.literal("Hohenheim"), appEditor));
         } catch (IllegalArgumentException notLoaded) {
             // Boot without the hohenheim settings file: framework mount only.
         }
