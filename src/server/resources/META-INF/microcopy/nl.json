@@ -131,7 +131,7 @@
     "password": {"text": "Wachtwoord", "scope": "database_tab"},
     "payload_url": {"text": "Payload-URL", "scope": "site_deployments"},
     "pid": {"text": "PID", "scope": "site_processes"},
-    "port": {"text": "Poort", "scope": "dns_remote"},
+    "port": [{"text": "Poort", "scope": "dns_remote"}, {"text": "Poort", "scope": "site_processes"}],
     "primary": {"text": "Primair", "scope": "site_databases"},
     "provisioning": {"text": "Wordt aangemaakt", "scope": "site_databases"},
     "provisioning_failed": {"text": "Aanmaken mislukt", "scope": "attention_detail"},
