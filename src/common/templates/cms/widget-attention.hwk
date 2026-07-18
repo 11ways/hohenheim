@@ -20,7 +20,8 @@
                 {% /if %}
             </div>
             {% if item.get("url") != "" %}
-            <a class="hh-attention-link" href={% item.get("url") %}>
+            <a class="hh-attention-link" href={% item.get("url") %}
+               attr:aria-label={% Cms.text(t("open", scope: "attention")) %}>
                 <pl-icon name="chevron-right" size="sm"></pl-icon>
             </a>
             {% /if %}
