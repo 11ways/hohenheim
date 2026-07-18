@@ -131,7 +131,7 @@
     "password": {"text": "Password", "scope": "database_tab"},
     "payload_url": {"text": "Payload URL", "scope": "site_deployments"},
     "pid": {"text": "PID", "scope": "site_processes"},
-    "port": {"text": "Port", "scope": "dns_remote"},
+    "port": [{"text": "Port", "scope": "dns_remote"}, {"text": "Port", "scope": "site_processes"}],
     "primary": {"text": "Primary", "scope": "site_databases"},
     "provisioning": {"text": "Provisioning", "scope": "site_databases"},
     "provisioning_failed": {"text": "Provisioning failed", "scope": "attention_detail"},
