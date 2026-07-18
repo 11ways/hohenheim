@@ -55,7 +55,7 @@ public final class ServerOptions {
             return ServerModel.MODE_LOCAL.equals(mode)
                 ? Microcopy.of("server_local").withFilter("scope", "server_option")
                     .withArg("name", name)
-                : Microcopy.of(name);
+                : Microcopy.literal(name);
         }
 
         @Override public @Nullable Schema getSchema() { return null; }
