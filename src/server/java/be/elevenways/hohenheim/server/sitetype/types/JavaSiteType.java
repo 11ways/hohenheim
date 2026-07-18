@@ -186,12 +186,18 @@ public class JavaSiteType implements SiteTypeHandler {
         protected File getWorkingDirectory() {
             if (workingDirectory != null && !workingDirectory.isBlank()) {
                 File dir = new File(workingDirectory);
-                if (dir.isDirectory()) {
-                    return dir;
+                if (!dir.isDirectory()) {
+                    // Fault instead of silently running elsewhere (the Node posture).
+                    throw new IllegalArgumentException(
+                        "working directory does not exist: " + workingDirectory);
                 }
+                return dir;
             }
-            File jar = new File(jarPath);
-            return jar.getParentFile();
+            File parent = new File(jarPath).getAbsoluteFile().getParentFile();
+            if (parent == null || !parent.isDirectory()) {
+                throw new IllegalArgumentException("working directory does not exist for: " + jarPath);
+            }
+            return parent;
         }
     }
 }

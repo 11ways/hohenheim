@@ -90,6 +90,18 @@ class DomainEditTest extends HohenheimTestBase {
 
         assertThat(page.content()).contains("edit-test.example.com");
         assertThat(page.locator("form").count()).isGreaterThan(0);
+
+        // The child record page breadcrumbs back to the owning site's Domains
+        // tab, and record titles render as literal text -- never as microcopy
+        // keys (user data must not enter the translation pipeline).
+        var crumbs = page.locator(".cms-breadcrumbs");
+        assertThat(crumbs.count()).isEqualTo(1);
+        assertThat(crumbs.textContent()).contains("Domain Test Site");
+        assertThat(crumbs.textContent()).contains("edit-test.example.com");
+        assertThat(page.locator(".cms-breadcrumbs a[href='/admin/sites/" + siteId
+            + "/page/domains']").count()).isEqualTo(1);
+        assertThat(page.locator(".cms-breadcrumbs zn-microcopy[key='Domain Test Site']").count())
+            .isEqualTo(0);
     }
 
     @Test

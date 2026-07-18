@@ -4,7 +4,10 @@ import be.elevenways.hohenheim.AttentionWidget;
 import be.elevenways.hohenheim.OnboardingWidget;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.i18n.Locale;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.DashboardPanelPeer;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -20,14 +23,13 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 
 /**
  * The /admin landing dashboard: entity-count stat tiles plus the most
  * recent activity-log entries.
  */
 public final class AdminDashboard extends DashboardPanelPeer {
-
-    private static final Locale EN = Locale.of("en");
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dashboard"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("dashboard").withFilter("scope", "admin"); }
@@ -38,9 +40,9 @@ public final class AdminDashboard extends DashboardPanelPeer {
     @Override
     public @NonNull WidgetTree widgets(@NonNull AccessContext accessContext) {
         WidgetTree stats = new WidgetTree(List.of(
-            stat("Sites", "hohenheim.site"),
-            stat("Certificates", "hohenheim.certificate"),
-            stat("Access Lists", "hohenheim.access_list")));
+            stat("site", "hohenheim.site"),
+            stat("certificate", "hohenheim.certificate"),
+            stat("access_list", "hohenheim.access_list")));
 
         List<WidgetInstance> widgets = new ArrayList<>();
         if (Models.get(SiteModel.class).findActive().isEmpty()) {
@@ -56,9 +58,15 @@ public final class AdminDashboard extends DashboardPanelPeer {
         return new WidgetTree(widgets);
     }
 
-    private static @NonNull WidgetInstance stat(@NonNull String label, @NonNull String sourceToken) {
+    /** The tile label resolves the model's "plural" microcopy per content locale. */
+    private static @NonNull WidgetInstance stat(@NonNull String modelScope, @NonNull String sourceToken) {
+        Microcopy plural = Microcopy.of("plural").withFilter("scope", modelScope);
+        Map<Locale, String> label = new LinkedHashMap<>();
+        for (Locale locale : ContentLocales.get()) {
+            label.put(locale, plural.resolve(LocaleChain.of(locale), Zenit.getMessageResolver()));
+        }
         return new WidgetInstance(StatWidget.ID, Map.of(
-            "label", Map.of(EN, label),
+            "label", label,
             "source", sourceToken));
     }
 }
