@@ -141,6 +141,8 @@ dependencies {
     serverImplementation ('be.elevenways:zenit-forms-server:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:zenit-microcopy-server:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:zenit-cms-server:0.1.0-SNAPSHOT') { changing = true }
+    serverImplementation ('be.elevenways:zenit-comms-common:0.1.0-SNAPSHOT') { changing = true }
+    serverImplementation ('be.elevenways:zenit-comms-server:0.1.0-SNAPSHOT') { changing = true }
 
     commonImplementation 'org.checkerframework:checker-qual:4.2.0'
     clientImplementation 'org.checkerframework:checker-qual:4.2.0'
@@ -182,6 +184,8 @@ dependencies {
     browserTestImplementation ('be.elevenways:zenit-forms-server:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:zenit-microcopy-server:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:zenit-cms-server:0.1.0-SNAPSHOT') { changing = true }
+    browserTestImplementation ('be.elevenways:zenit-comms-common:0.1.0-SNAPSHOT') { changing = true }
+    browserTestImplementation ('be.elevenways:zenit-comms-server:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation 'org.xerial:sqlite-jdbc:3.45.1.0'
     browserTestImplementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
     browserTestImplementation 'org.shredzone.acme4j:acme4j-client:3.4.0'
