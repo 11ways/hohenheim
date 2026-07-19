@@ -104,6 +104,30 @@ class NavigationTest extends HohenheimTestBase {
 
     @Test
     @Order(8)
+    void softNavResolvesListMicrocopy() {
+        // Regression: after a soft nav the client renders the list footer itself;
+        // filtered short keys ("none" scope=cms target=range) must resolve from
+        // the browser bundle, not degrade to their raw key.
+        navigateToApp("/admin/dashboard");
+        waitForHydration();
+
+        page.locator("pl-app-sidebar a[href='/admin/certificates']").click();
+        waitForHeading("Certificates");
+        page.waitForCondition(() -> page.locator(".cms-list-count").count() > 0);
+
+        // Allow the async microcopy fill one repaint before judging.
+        page.waitForCondition(() -> {
+            String text = page.locator(".cms-list-count").textContent().trim();
+            return !text.equals("none") && !text.equals("range");
+        });
+        String count = page.locator(".cms-list-count").textContent().trim();
+        assertThat(count).satisfiesAnyOf(
+            t -> assertThat(t).contains("No records"),
+            t -> assertThat(t).contains("of"));
+    }
+
+    @Test
+    @Order(9)
     void browserBackButtonWorks() {
         navigateToApp("/admin/sites");
         waitForHydration();

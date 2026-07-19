@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.cms;
 
-
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
@@ -24,8 +23,8 @@ import java.util.Map;
 /**
  * Per-site proxy auth providers with a type-discriminated config sub-form.
  * The save path routes the submitted config through the provider type's
- * normalizeConfigForSave, which hashes secrets and carries unchanged ones
- * forward -- an unknown type fails loudly so plaintext never persists.
+ * normalizeConfigForSave, which owns the provider-specific storage shape;
+ * an unknown type fails loudly instead of storing an undefined shape.
  */
 public final class AuthProviderResource extends RowResource {
 
@@ -72,7 +71,7 @@ public final class AuthProviderResource extends RowResource {
         SiteAuthProviderTypeHandler handler = SiteAuthProviders.getHandler(providerType);
         if (handler == null) {
             // AIDEV-NOTE: An unknown provider type MUST fail loudly. Storing the submitted config
-            // as-is would persist Basic passwords in plaintext (normalizeConfigForSave hashes them).
+            // as-is would bypass the provider's canonical storage normalization.
             throw Violations.ofField("provider_type", providerType,
                 CmsSupport.violationText("unknown_provider_type").withArg("type", providerType));
         }

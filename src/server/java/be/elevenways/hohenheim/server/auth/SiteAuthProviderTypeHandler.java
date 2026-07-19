@@ -27,8 +27,7 @@ public interface SiteAuthProviderTypeHandler extends SiteAuthProviderType {
 
     /**
      * Transform a submitted config blob before it is persisted, given the record's existing config
-     * (null when creating). Lets a provider hash secrets so plaintext is never stored, and carry
-     * forward unchanged secrets when an edit leaves a field blank. Default: store as submitted.
+     * (null when creating). This is the provider's normalization boundary for its storage shape.
      */
     default Map<String, Object> normalizeConfigForSave(Map<String, Object> submitted,
                                                         @Nullable Map<String, Object> existing) {

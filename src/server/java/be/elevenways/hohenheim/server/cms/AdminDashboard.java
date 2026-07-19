@@ -17,6 +17,7 @@ import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.ColumnsWidget;
 import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
+import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import be.elevenways.zenit.widget.common.builtin.StatWidget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -40,33 +41,45 @@ public final class AdminDashboard extends DashboardPanelPeer {
     @Override
     public @NonNull WidgetTree widgets(@NonNull AccessContext accessContext) {
         WidgetTree stats = new WidgetTree(List.of(
-            stat("site", "hohenheim.site"),
-            stat("certificate", "hohenheim.certificate"),
-            stat("access_list", "hohenheim.access_list")));
+            stat("site", "hohenheim.site", "sites"),
+            stat("certificate", "hohenheim.certificate", "certificates"),
+            stat("access_list", "hohenheim.access_list", "access-lists")));
 
         List<WidgetInstance> widgets = new ArrayList<>();
         if (Models.get(SiteModel.class).findActive().isEmpty()) {
-            widgets.add(new WidgetInstance(OnboardingWidget.ID, Map.of()));
+            widgets.add(section(new WidgetInstance(OnboardingWidget.ID, Map.of())));
         }
-        widgets.add(new WidgetInstance(AttentionWidget.ID, Map.of()));
-        widgets.add(new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 3), stats));
-        widgets.add(new WidgetInstance(RecordsWidget.ID, Map.of(
+        widgets.add(section(new WidgetInstance(AttentionWidget.ID, Map.of())));
+        widgets.add(section(new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 3), stats)));
+        widgets.add(section(new WidgetInstance(RecordsWidget.ID, Map.of(
+                "title", localized("recent_activity", "dashboard"),
                 "source", "zenit.activity",
                 "sort", "created_at",
                 "descending", true,
-                "limit", 10)));
+                "limit", 10))));
         return new WidgetTree(widgets);
     }
 
     /** The tile label resolves the model's "plural" microcopy per content locale. */
-    private static @NonNull WidgetInstance stat(@NonNull String modelScope, @NonNull String sourceToken) {
-        Microcopy plural = Microcopy.of("plural").withFilter("scope", modelScope);
+    private static @NonNull WidgetInstance stat(@NonNull String modelScope, @NonNull String sourceToken,
+                                                @NonNull String resourceSlug) {
+        return new WidgetInstance(StatWidget.ID, Map.of(
+            "label", localized("plural", modelScope),
+            "source", sourceToken,
+            "link", "/admin/" + resourceSlug));
+    }
+
+    private static @NonNull WidgetInstance section(@NonNull WidgetInstance child) {
+        return new WidgetInstance(SectionWidget.ID, Map.of("css_class", "hh-dashboard-band"),
+            new WidgetTree(List.of(child)));
+    }
+
+    private static @NonNull Map<Locale, String> localized(@NonNull String key, @NonNull String scope) {
+        Microcopy copy = Microcopy.of(key).withFilter("scope", scope);
         Map<Locale, String> label = new LinkedHashMap<>();
         for (Locale locale : ContentLocales.get()) {
-            label.put(locale, plural.resolve(LocaleChain.of(locale), Zenit.getMessageResolver()));
+            label.put(locale, copy.resolve(LocaleChain.of(locale), Zenit.getMessageResolver()));
         }
-        return new WidgetInstance(StatWidget.ID, Map.of(
-            "label", label,
-            "source", sourceToken));
+        return label;
     }
 }

@@ -137,7 +137,7 @@ class SecretFieldsTest extends HohenheimTestBase {
 
     @Test
     @Order(4)
-    void basicAuthCredentialHashesAreMaskedAndBlankSaveKeepsThemVerifiable() throws Exception {
+    void basicAuthCredentialsRemainVisibleAndEditable() throws Exception {
         var response = postForm("/admin/auth-providers/new",
             "name=Team+gate&provider_type=hohenheim%3Abasic"
             + "&config.credentials.0.key=alice&config.credentials.0.value=secret123");
@@ -146,32 +146,30 @@ class SecretFieldsTest extends HohenheimTestBase {
         Row row = Models.get(SiteAuthProviderModel.class).find()
             .where(SiteAuthProviderModel.NAME.eq("Team gate")).first();
         assertThat(row).isNotNull();
-        Map<String, String> hashes = BasicAuthProviderType.credentialHashes(configOf(row));
-        String storedHash = hashes.get("alice");
-        assertThat(storedHash).startsWith("$argon2");
+        Map<String, String> credentials = BasicAuthProviderType.credentials(configOf(row));
+        assertThat(credentials.get("alice")).isEqualTo("secret123");
         Integer id = row.get(SiteAuthProviderModel.ID);
 
-        // The edit page shows the username but neither the plaintext nor the hash.
+        // Basic provider credentials are intentionally operator-visible.
         navigateToApp("/admin/auth-providers/" + id);
         waitForHydration();
         String content = page.content();
         assertThat(content).contains("alice");
-        assertThat(content).doesNotContain("secret123");
-        assertThat(content).doesNotContain("$argon2");
+        assertThat(content).contains("secret123");
 
-        // A blank password resubmit keeps the stored hash verifiable.
+        // Editing the visible password replaces it directly.
         response = postForm("/admin/auth-providers/" + id,
             "name=Team+gate&provider_type=hohenheim%3Abasic"
-            + "&config.credentials.0.key=alice&config.credentials.0.value=");
+            + "&config.credentials.0.key=alice&config.credentials.0.value=new-secret");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row stored = Models.get(SiteAuthProviderModel.class).find()
             .where(SiteAuthProviderModel.ID.eq(id)).first();
-        Map<String, String> kept = BasicAuthProviderType.credentialHashes(configOf(stored));
-        assertThat(kept.get("alice")).isEqualTo(storedHash);
+        Map<String, String> updated = BasicAuthProviderType.credentials(configOf(stored));
+        assertThat(updated.get("alice")).isEqualTo("new-secret");
         String header = "Basic " + java.util.Base64.getEncoder()
-            .encodeToString("alice:secret123".getBytes());
-        assertThat(BasicAuthProviderType.verify(header, kept)).isEqualTo("alice");
+            .encodeToString("alice:new-secret".getBytes());
+        assertThat(BasicAuthProviderType.verify(header, updated)).isEqualTo("alice");
     }
 
     @Test

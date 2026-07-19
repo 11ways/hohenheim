@@ -19,9 +19,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.Map;
 
 /**
- * Gates proxied upstreams behind HTTP Basic credentials. The first valid Basic header establishes
- * a proxy session, so the deliberately-expensive Argon2 verify runs once per session, not per
- * request.
+ * Gates proxied upstreams behind HTTP Basic credentials and establishes a proxy session after login.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
@@ -40,7 +38,7 @@ public class BasicAuthGate implements SiteAuthGate {
         this.store = context.sessionStore();
         this.siteId = context.siteId();
         this.providerSlug = context.providerSlug();
-        this.credentials = BasicAuthProviderType.credentialHashes(configMap(context));
+        this.credentials = BasicAuthProviderType.credentials(configMap(context));
         this.challenge = "Basic realm=\"" + realmName(this.siteId) + "\"";
     }
 
@@ -62,7 +60,7 @@ public class BasicAuthGate implements SiteAuthGate {
 
     @Override
     public @Nullable SiteAuthDecision evaluate(HttpServerExchange exchange) {
-        // Fast path: an established session for this site bypasses the per-request Argon2 verify.
+        // Fast path: an established session bypasses credential verification on later requests.
         if (ProxySessionSupport.authenticatedSession(exchange, store, siteId) != null) {
             return null;
         }

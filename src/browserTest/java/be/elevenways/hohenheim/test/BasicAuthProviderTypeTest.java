@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
+import be.elevenways.zenit.auth.server.PasswordHasher;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -13,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Pure-logic tests for the Basic auth provider: save-time hashing over the
+ * Pure-logic tests for the Basic auth provider: editable storage over the
  * username -> password map shape and header verification. The full gate
  * (session establishment, 401 challenge) is exercised by the proxy
  * integration tests.
@@ -36,19 +37,18 @@ public class BasicAuthProviderTypeTest {
     }
 
     @Test
-    void savedConfigHashesPasswordAndNeverStoresPlaintext() {
+    void savedConfigKeepsPasswordEditable() {
         Map<String, Object> stored = type.normalizeConfigForSave(submitted("alice", "s3cret"), null);
 
-        Map<String, String> creds = BasicAuthProviderType.credentialHashes(stored);
+        Map<String, String> creds = BasicAuthProviderType.credentials(stored);
         assertEquals(1, creds.size());
-        String hash = creds.get("alice");
-        assertTrue(hash != null && hash.startsWith("$argon2"), "password must be Argon2-hashed");
+        assertEquals("s3cret", creds.get("alice"));
     }
 
     @Test
     void verifyAcceptsCorrectCredentialAndRejectsWrongOnes() {
         Map<String, Object> stored = type.normalizeConfigForSave(submitted("alice", "s3cret"), null);
-        Map<String, String> creds = BasicAuthProviderType.credentialHashes(stored);
+        Map<String, String> creds = BasicAuthProviderType.credentials(stored);
 
         assertEquals("alice", BasicAuthProviderType.verify(basicHeader("alice", "s3cret"), creds));
         assertNull(BasicAuthProviderType.verify(basicHeader("alice", "wrong"), creds));
@@ -59,42 +59,32 @@ public class BasicAuthProviderTypeTest {
     }
 
     @Test
-    void blankPasswordOnEditCarriesForwardExistingHash() {
+    void blankPasswordIsAVisibleEditableCredential() {
         Map<String, Object> existing = type.normalizeConfigForSave(submitted("alice", "s3cret"), null);
-
-        // Re-submit alice with a blank password: the prior hash must be preserved.
         Map<String, Object> updated = type.normalizeConfigForSave(submitted("alice", ""), existing);
 
-        Map<String, String> creds = BasicAuthProviderType.credentialHashes(updated);
+        Map<String, String> creds = BasicAuthProviderType.credentials(updated);
         assertEquals(1, creds.size());
-        assertEquals(BasicAuthProviderType.credentialHashes(existing).get("alice"), creds.get("alice"));
-        assertEquals("alice", BasicAuthProviderType.verify(basicHeader("alice", "s3cret"), creds));
+        assertEquals("", creds.get("alice"));
+        assertEquals("alice", BasicAuthProviderType.verify(basicHeader("alice", ""), creds));
+        assertNull(BasicAuthProviderType.verify(basicHeader("alice", "s3cret"), creds));
     }
 
     @Test
-    void resubmittedStoredHashRoundTripsUnchanged() {
-        Map<String, Object> existing = type.normalizeConfigForSave(submitted("alice", "s3cret"), null);
-        String hash = BasicAuthProviderType.credentialHashes(existing).get("alice");
-
-        // The KeyValue editor redisplays the stored hash; resubmitting it must not re-hash it.
-        Map<String, Object> updated = type.normalizeConfigForSave(submitted("alice", hash), existing);
-
-        assertEquals(hash, BasicAuthProviderType.credentialHashes(updated).get("alice"));
+    void legacyArgon2CredentialRemainsVerifiable() {
+        String hash = PasswordHasher.hash("s3cret");
+        Map<String, Object> stored = Map.of(BasicAuthProviderType.CREDENTIALS, Map.of("alice", hash));
         assertEquals("alice", BasicAuthProviderType.verify(basicHeader("alice", "s3cret"),
-            BasicAuthProviderType.credentialHashes(updated)));
-    }
-
-    @Test
-    void blankPasswordWithoutExistingHashIsDropped() {
-        Map<String, Object> stored = type.normalizeConfigForSave(submitted("ghost", ""), null);
-        assertFalse(BasicAuthProviderType.credentialHashes(stored).containsKey("ghost"));
+            BasicAuthProviderType.credentials(stored)));
+        assertNull(BasicAuthProviderType.verify(basicHeader("alice", "wrong"),
+            BasicAuthProviderType.credentials(stored)));
     }
 
     @Test
     void legacyListShapeIsStillReadable() {
         Map<String, Object> legacy = Map.of(BasicAuthProviderType.CREDENTIALS, List.of(
             Map.of(BasicAuthProviderType.USERNAME, "old", BasicAuthProviderType.PASSWORD_HASH, "$argon2fake")));
-        assertEquals("$argon2fake", BasicAuthProviderType.credentialHashes(legacy).get("old"));
+        assertEquals("$argon2fake", BasicAuthProviderType.credentials(legacy).get("old"));
     }
 
     @Test

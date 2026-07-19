@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth.types;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthContext;
@@ -31,10 +32,18 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
 
     public static final Schema CONFIG_SCHEMA = new Schema();
     static {
-        CONFIG_SCHEMA.addField(StringField.builder().name(ENDPOINT).build());
-        CONFIG_SCHEMA.addField(StringField.builder().name(REALM_CLIENT).build());
-        CONFIG_SCHEMA.addField(StringField.builder().name(ACCESS_KEY).secret().build());
-        CONFIG_SCHEMA.addField(StringField.builder().name(AUTHENTICATOR).build());
+        CONFIG_SCHEMA.addField(StringField.builder().name(ENDPOINT)
+            .label(HohenheimFormCopy.label("proteus_endpoint"))
+            .help(HohenheimFormCopy.help("proteus_endpoint")).build());
+        CONFIG_SCHEMA.addField(StringField.builder().name(REALM_CLIENT)
+            .label(HohenheimFormCopy.label("proteus_realm_client"))
+            .help(HohenheimFormCopy.help("proteus_realm_client")).build());
+        CONFIG_SCHEMA.addField(StringField.builder().name(ACCESS_KEY).secret()
+            .label(HohenheimFormCopy.label("proteus_access_key"))
+            .help(HohenheimFormCopy.help("proteus_access_key")).build());
+        CONFIG_SCHEMA.addField(StringField.builder().name(AUTHENTICATOR)
+            .label(HohenheimFormCopy.label("proteus_authenticator"))
+            .help(HohenheimFormCopy.help("proteus_authenticator")).build());
     }
 
     @Override
