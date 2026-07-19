@@ -6,7 +6,9 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
@@ -87,6 +89,28 @@ public final class DnsZoneResource extends RowResource {
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
     @Override public int navOrder() { return 30; }
     @Override public @NonNull Icon icon() { return Icon.of("sitemap"); }
+
+    /** The zone list opens the records workspace; the standard edit action still opens zone settings. */
+    @Override
+    public @NonNull String rowUrl(@NonNull Row row) {
+        return recordsUrl(row);
+    }
+
+    @Override
+    public @NonNull List<RowAction<Row>> rowActions() {
+        List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
+        actions.add(0, RowAction.Url.<Row>builder(Identifier.of("hohenheim", "dns_records"))
+            .label(Microcopy.of("records").withFilter("scope", "dns_zone"))
+            .description(Microcopy.of("records_hint").withFilter("scope", "dns_zone"))
+            .icon(Icon.of("list-ul"))
+            .url(row -> new Uri(recordsUrl(row)))
+            .build());
+        return actions;
+    }
+
+    private static @NonNull String recordsUrl(@NonNull Row row) {
+        return "/admin/dns-zones/" + row.get(DnsZoneModel.ID) + "/page/records";
+    }
 
     @Override
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {

@@ -77,6 +77,9 @@ public final class HohenheimSources implements ZenitModule {
         RecordSourceRegistry.INSTANCE.register(RecordSource.of(ActivityModel.class)
             .project(ActivityModel.ACTION, ActivityModel.MODEL,
                 ActivityModel.DETAIL, ActivityModel.ACTOR_LABEL, ActivityModel.CREATED_AT)
+            .title()
+            .subtitle(row -> activitySubtitle(row.get(ActivityModel.ACTOR_LABEL), row.get(ActivityModel.MODEL)))
+            .editUrl(row -> "/admin/activity/" + row.get(ActivityModel.ID))
             .sortable(ActivityModel.CREATED_AT)
             .build());
 
@@ -89,5 +92,14 @@ public final class HohenheimSources implements ZenitModule {
         // their own history UI. Tracking them would flood zenit_activity.
         ActivityLog.setPolicy(ProclogModel.MODEL_ID, ActivityPolicy.NONE);
         ActivityLog.setPolicy(DeploymentModel.MODEL_ID, ActivityPolicy.NONE);
+    }
+
+    private static String activitySubtitle(String actor, String model) {
+        String safeActor = actor == null ? "" : actor.trim();
+        String safeModel = model == null ? "" : model.trim();
+        if (safeActor.isEmpty()) {
+            return safeModel;
+        }
+        return safeModel.isEmpty() ? safeActor : safeActor + " · " + safeModel;
     }
 }

@@ -35,7 +35,7 @@ public class DnsRecordModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField ZONE_ID = SCHEMA.addField(IntegerField.builder().name("zone_id")
-        .label(HohenheimFormCopy.label("record_zone")).build());
+        .label(HohenheimFormCopy.label("record_zone")).help(HohenheimFormCopy.help("record_zone")).build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .label(HohenheimFormCopy.label("record_name")).help(HohenheimFormCopy.help("record_name")).build());
     public static final EnumField TYPE = SCHEMA.addField(EnumField.builder("type")

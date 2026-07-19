@@ -149,6 +149,14 @@ class AdminPagesTest extends HohenheimTestBase {
         String content = page.locator("body").textContent();
         assertThat(content).contains("create");
         assertThat(content).contains("hohenheim:site");
+
+        navigateToApp("/admin/dashboard");
+        waitForHydration();
+        assertThat(page.locator(".hh-dashboard-band").count()).isGreaterThanOrEqualTo(3);
+        assertThat(page.locator("a.widget-stat-link[href='/admin/sites']").count()).isEqualTo(1);
+        assertThat(page.locator("a.widget-record-entry[href^='/admin/activity/']").count())
+            .isGreaterThanOrEqualTo(1);
+        assertThat(page.locator(".widget-records dl.widget-record").count()).isZero();
     }
 
     // -----------------------------------------------------------------------
@@ -246,7 +254,7 @@ class AdminPagesTest extends HohenheimTestBase {
             waitForHydration();
             var item = page.locator(".hh-attention-item[data-severity='error']");
             assertThat(item.count()).isGreaterThanOrEqualTo(1);
-            assertThat(page.locator(".hh-attention-item a[href='/admin/certificates/"
+            assertThat(page.locator(".hh-attention-item > a.hh-attention-target[href='/admin/certificates/"
                 + cert.get(CertificateModel.ID) + "']").count()).isEqualTo(1);
         } finally {
             certModel.delete(cert);

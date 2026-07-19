@@ -52,6 +52,15 @@ class DnsAdminTest extends HohenheimTestBase {
         waitForHydration();
         assertThat(page.locator("pl-app-sidebar a[href='/admin/dns-zones']").count()).isEqualTo(1);
         assertThat(page.locator("body").textContent()).contains("DNS Zones");
+
+        navigateToApp("/admin/dns-zones/new");
+        waitForHydration();
+        assertThat(page.locator("body").textContent())
+            .contains("Zone origin")
+            .contains("The domain this zone is authoritative for")
+            .contains("Role")
+            .contains("Primary zones are edited here")
+            .contains("Owning peer");
     }
 
     @Test
@@ -125,6 +134,11 @@ class DnsAdminTest extends HohenheimTestBase {
     @Test
     @Order(7)
     void theRecordsTabListsRecordsWithEditLinks() {
+        navigateToApp("/admin/dns-zones");
+        waitForHydration();
+        assertThat(page.locator(".cms-row-link[href='/admin/dns-zones/" + zoneId
+            + "/page/records']").count()).isEqualTo(1);
+
         navigateToApp("/admin/dns-zones/" + zoneId + "/page/records");
         waitForHydration();
         assertThat(page.locator("body").textContent()).contains("www").contains("192.0.2.10");

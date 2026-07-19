@@ -46,9 +46,11 @@ public class DnsZoneModel extends Model {
     public static final String ROLE_SECONDARY = "secondary";
 
     public static final StringField ROLE = SCHEMA.addField(StringField.builder().name("role")
-        .label(HohenheimFormCopy.label("zone_role")).build());
+        .label(HohenheimFormCopy.label("zone_role")).help(HohenheimFormCopy.help("zone_role")).build());
     public static final IntegerField PRIMARY_PEER_ID = SCHEMA.addField(
-        IntegerField.builder().name("primary_peer_id").build());
+        IntegerField.builder().name("primary_peer_id")
+            .label(HohenheimFormCopy.label("primary_peer"))
+            .help(HohenheimFormCopy.help("primary_peer")).build());
     public static final StringField TRANSFER_STATUS = SCHEMA.addField(
         StringField.builder().name("transfer_status").build());
     public static final StringField TRANSFER_MESSAGE = SCHEMA.addField(

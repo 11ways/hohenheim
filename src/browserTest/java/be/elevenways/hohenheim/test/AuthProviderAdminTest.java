@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Auth-provider CRUD through the zenit-cms resource routes, including the
- * type-discriminated config sub-form and save-time credential hashing.
+ * type-discriminated config sub-form and editable Basic credentials.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class AuthProviderAdminTest extends HohenheimTestBase {
@@ -60,13 +60,13 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         waitForHydration();
 
         String body = page.locator("body").textContent();
-        assertThat(body).contains("name");
+        assertThat(body).contains("Name").contains("Provider type");
         assertThat(page.content()).contains("provider_type");
     }
 
     @Test
     @Order(3)
-    void createBasicProviderPersistsHashedCredentials() throws Exception {
+    void createBasicProviderPersistsEditableCredentials() throws Exception {
         // KeyValueField transport: config.credentials indexed row scopes.
         var response = postForm("/admin/auth-providers/new",
             "name=Staff+Gate&provider_type=hohenheim%3Abasic"
@@ -81,11 +81,9 @@ class AuthProviderAdminTest extends HohenheimTestBase {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> config = (Map<String, Object>) row.get(SiteAuthProviderModel.CONFIG);
-        Map<String, String> credentials = BasicAuthProviderType.credentialHashes(config);
+        Map<String, String> credentials = BasicAuthProviderType.credentials(config);
         assertThat(credentials).hasSize(1).containsKey("alice");
-        assertThat(credentials.get("alice"))
-            .as("password must be stored hashed, never plaintext")
-            .isNotEqualTo("secret123").isNotBlank();
+        assertThat(credentials.get("alice")).isEqualTo("secret123");
     }
 
     @Test
@@ -110,6 +108,11 @@ class AuthProviderAdminTest extends HohenheimTestBase {
 
         assertThat(page.content()).contains("Staff Gate");
         assertThat(page.locator("form").count()).isGreaterThan(0);
+        assertThat(page.content()).contains("placeholder=\"Username\"")
+            .contains("placeholder=\"Password\"");
+        var password = page.locator("pl-input[name='config.credentials.0.value'] input");
+        assertThat(password.inputValue()).isEqualTo("secret123");
+        assertThat(password.getAttribute("type")).isNotEqualTo("password");
     }
 
     @Test
