@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
-import be.elevenways.hohenheim.server.notification.NotificationService;
+import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.protoblast.common.Blast;
@@ -63,7 +63,7 @@ public class BackupDatabases extends ScheduledTask {
             } catch (IOException e) {
                 Blast.log("TASK: BackupDatabases failed for", db.name(), ":", e.getMessage());
                 try {
-                    new NotificationService().send(NotificationEvents.BACKUP_FAILED,
+                    Alerts.send(NotificationEvents.BACKUP_FAILED,
                         "Database backup failed: " + db.name(),
                         "The scheduled backup of '" + db.name() + "' failed: " + e.getMessage());
                 } catch (Exception notifyError) {

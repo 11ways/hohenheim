@@ -3,13 +3,19 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
-import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.zenit.comms.CommsChannels;
+import be.elevenways.zenit.comms.server.Comms;
+import be.elevenways.zenit.comms.server.CommsDispatcher;
+import be.elevenways.zenit.comms.server.transport.TransportTypes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+
+import java.util.Map;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -59,9 +65,19 @@ class CertExpiryAlertTest {
         });
         receiver.start();
         try {
-            new NotificationService().add("expiry-watch", NotificationService.FORMAT_GENERIC,
-                "http://127.0.0.1:" + receiver.getAddress().getPort() + "/hook",
-                List.of(NotificationEvents.CERT_EXPIRING));
+            // Inline delivery so the receiver's hit count is settled when the sweep returns.
+            Comms.install(new CommsDispatcher(Map.of(
+                CommsChannels.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+
+            NotificationChannelModel channels = Models.get(NotificationChannelModel.class);
+            Row channel = channels.createEmptyRow();
+            channel.set(NotificationChannelModel.NAME, "expiry-watch");
+            channel.set(NotificationChannelModel.KIND, NotificationChannelModel.KIND_WEBHOOK);
+            channel.set(NotificationChannelModel.FORMAT, NotificationChannelModel.FORMAT_GENERIC);
+            channel.set(NotificationChannelModel.URL,
+                "http://127.0.0.1:" + receiver.getAddress().getPort() + "/hook");
+            channel.set(NotificationChannelModel.EVENTS, List.of(NotificationEvents.CERT_EXPIRING));
+            channels.save(channel);
 
             CertificateModel certModel = Models.get(CertificateModel.class);
             Row cert = certModel.createEmptyRow();
@@ -90,6 +106,7 @@ class CertExpiryAlertTest {
             AcmeService.checkExpiryAlerts(certModel, now.plus(50, ChronoUnit.DAYS));
             assertThat(hits.get()).as("re-armed for the next cycle").isEqualTo(2);
         } finally {
+            Comms.install(null);
             receiver.stop(0);
         }
     }

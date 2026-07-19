@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.server.cms;
 
 
 import be.elevenways.hohenheim.model.NotificationChannelModel;
+import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
-import be.elevenways.hohenheim.server.notification.NotificationService;
 import be.elevenways.zenit.common.edit.Array;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
@@ -33,8 +33,6 @@ import java.util.Map;
  * test-send row action.
  */
 public final class NotificationChannelResource extends RowResource {
-
-    private final NotificationService notifications = new NotificationService();
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(NotificationChannelModel.NAME)
@@ -81,7 +79,7 @@ public final class NotificationChannelResource extends RowResource {
                                       @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values);
-        values.put("kind", NotificationService.KIND_WEBHOOK);
+        values.put("kind", NotificationChannelModel.KIND_WEBHOOK);
         return super.persistRow(values, accessContext);
     }
 
@@ -90,7 +88,7 @@ public final class NotificationChannelResource extends RowResource {
                           @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values);
-        values.put("kind", NotificationService.KIND_WEBHOOK);
+        values.put("kind", NotificationChannelModel.KIND_WEBHOOK);
         super.updateRow(existing, values, accessContext);
     }
 
@@ -120,7 +118,7 @@ public final class NotificationChannelResource extends RowResource {
             .icon(Icon.of("paper-plane"))
             .handler((row, ctx) -> {
                 String name = row.get(NotificationChannelModel.NAME);
-                boolean delivered = this.notifications.sendTo(name,
+                boolean delivered = Alerts.testChannel(row,
                     "Hohenheim test", "If you can read this, the channel works.");
                 ActivityLog.record(this.model(), row.get(NotificationChannelModel.ID), "tested", name);
                 return delivered

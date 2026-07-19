@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
-import be.elevenways.hohenheim.server.notification.NotificationService;
+import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.proxy.ResolvedClientIp;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -319,7 +319,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             return;
         }
         try {
-            new NotificationService().send(NotificationEvents.PROCESS_CRASH_LOOP,
+            Alerts.send(NotificationEvents.PROCESS_CRASH_LOOP,
                 "Crash loop: " + siteName,
                 "Processes of site '" + siteName + "' keep exiting shortly after start;"
                     + " restarts are being throttled. Check the process logs.");

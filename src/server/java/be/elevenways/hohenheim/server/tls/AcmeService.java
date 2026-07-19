@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
-import be.elevenways.hohenheim.server.notification.NotificationService;
+import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -422,7 +422,7 @@ public class AcmeService {
             }
             String niceName = cert.get(CertificateModel.NICE_NAME);
             try {
-                new NotificationService().send(NotificationEvents.CERT_EXPIRING,
+                Alerts.send(NotificationEvents.CERT_EXPIRING,
                     "Certificate expiring soon",
                     "Certificate '" + niceName + "' expires on " + expiresOn
                         + ". Renew or replace it before then.");
@@ -509,7 +509,7 @@ public class AcmeService {
         Integer errorCount = certRow.get(CertificateModel.ERROR_COUNT);
         if (errorCount == null || errorCount != 1) return;
         try {
-            new NotificationService().send(NotificationEvents.CERT_RENEWAL_FAILED,
+            Alerts.send(NotificationEvents.CERT_RENEWAL_FAILED,
                 "Certificate renewal failing",
                 "Renewal of " + niceName + " failed: " + message
                     + "\nRetries continue with escalating backoff; see the certificates page.");

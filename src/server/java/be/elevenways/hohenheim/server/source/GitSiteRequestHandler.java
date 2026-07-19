@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.server.source;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
-import be.elevenways.hohenheim.server.notification.NotificationService;
+import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
@@ -231,7 +231,7 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
         }
         try {
             String name = site.get(SiteModel.NAME);
-            new NotificationService().send(NotificationEvents.DEPLOY_FAILED,
+            Alerts.send(NotificationEvents.DEPLOY_FAILED,
                 "Deploy failed: " + name,
                 "Deploying site '" + name + "' failed: " + error
                     + "\nSee the Deployments tab for the build log.");
