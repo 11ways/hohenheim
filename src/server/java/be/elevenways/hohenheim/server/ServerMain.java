@@ -9,9 +9,13 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.security.KnownPermission;
+import be.elevenways.zenit.common.security.KnownPermissions;
 import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.auth.server.AuthRegistry;
 import be.elevenways.zenit.auth.server.AuthRequirement;
@@ -129,7 +133,10 @@ public class ServerMain {
         // not a session; the handler refuses anything the token does not unlock.
         AuthRegistry.registerPublicPrefix("/nic/update");
         AuthRegistry.baseline("/", AuthRequirement.requiresLogin());
-        AuthRegistry.registerPermissions("hohenheim", HohenheimPanel.ACCESS.value());
+        KnownPermissions.register("hohenheim", KnownPermission.of(
+            HohenheimPanel.ACCESS.value(),
+            Microcopy.of("hohenheim_admin_access").withFilter("scope", "permission")));
+        ProteusRealmSuggestions.register();
     }
 
     // Register the Proteus realm as an SSO option when configured; password login is always available.

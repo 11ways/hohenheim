@@ -36,7 +36,7 @@
     "auth_provider_name": [{"text": "Name", "scope": "field"}, {"text": "A recognizable name used when assigning this provider to a site.", "scope": "help"}],
     "auth_provider_type": [{"text": "Provider type", "scope": "field"}, {"text": "The authentication method this provider uses.", "scope": "help"}],
     "auth_provider_config": [{"text": "Credentials and connection", "scope": "field"}, {"text": "Settings required by the selected provider type.", "scope": "help"}],
-    "required_permission": [{"text": "Required permission", "scope": "field"}, {"text": "For claims-based providers, only identities with this permission are allowed. Leave blank to accept any authenticated identity.", "scope": "help"}],
+    "required_permission": [{"text": "Required permission", "scope": "field"}, {"text": "A single permission name, e.g. \"site.internal\", checked against the identity's permission claims. Only used by claims-based providers such as Proteus (HTTP Basic Auth ignores it). Leave blank to accept any authenticated identity.", "scope": "help"}],
     "credentials": [{"text": "Credentials", "scope": "field"}, {"text": "One Basic Auth username and password per row. Passwords are stored and shown as editable text.", "scope": "help"}],
     "key": {"text": "Username", "scope": "form", "field": "credentials"},
     "value": {"text": "Password", "scope": "form", "field": "credentials"},
@@ -390,5 +390,18 @@
     "jar_path": [{"text": "Jar file", "scope": "field"}, {"text": "Path to the application's fat/shadow jar.", "scope": "help"}],
     "java_binary": [{"text": "Java binary", "scope": "field"}, {"text": "Path to the java launcher. Blank uses java from PATH (e.g. a jlink image's bin/java).", "scope": "help"}],
     "jvm_args": [{"text": "JVM arguments", "scope": "field"}, {"text": "Extra arguments passed to the JVM before -jar, e.g. -Xmx512m.", "scope": "help"}],
-    "app_args": [{"text": "Application arguments", "scope": "field"}, {"text": "Arguments passed to the application after the jar.", "scope": "help"}]
+    "app_args": [{"text": "Application arguments", "scope": "field"}, {"text": "Arguments passed to the application after the jar.", "scope": "help"}],
+    "cert_nice_name": [{"text": "Name", "scope": "field"}, {"text": "A recognizable name for this certificate, e.g. the main domain it covers.", "scope": "help"}],
+    "cert_certificate_pem": [{"text": "Certificate (PEM)", "scope": "field"}, {"text": "Paste the full PEM-encoded certificate, including any intermediate chain (the -----BEGIN CERTIFICATE----- blocks).", "scope": "help"}],
+    "cert_private_key_pem": [{"text": "Private key (PEM)", "scope": "field"}, {"text": "The PEM-encoded private key matching the certificate. Stored as a secret: leave blank to keep the current key.", "scope": "help"}],
+    "cert_auto_renew": [{"text": "Auto-renew", "scope": "field"}, {"text": "Only applies to Let's Encrypt certificates; uploaded certificates are never renewed automatically.", "scope": "help"}],
+    "cert_challenge_type": [{"text": "Challenge type", "scope": "field"}, {"text": "How Let's Encrypt validated this certificate. Set by the request flow.", "scope": "help"}],
+    "cert_dns_publisher": [{"text": "DNS publisher", "scope": "field"}, {"text": "How DNS-01 TXT records are published on renewal. Set by the request flow.", "scope": "help"}],
+    "cert_renewal_error": {"text": "Last renewal error", "scope": "field"},
+    "cert_error_count": {"text": "Failed attempts", "scope": "field"},
+    "cert_next_attempt_at": {"text": "Next attempt", "scope": "field"},
+    "cert_domain_names": {"text": "Domains", "scope": "field"},
+    "enable": {"text": "Enable", "scope": "site"},
+    "disable": {"text": "Disable", "scope": "site"},
+    "hohenheim_admin_access": {"text": "Access the Hohenheim admin panel", "scope": "permission"}
 }

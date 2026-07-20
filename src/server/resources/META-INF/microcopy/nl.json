@@ -36,7 +36,7 @@
     "auth_provider_name": [{"text": "Naam", "scope": "field"}, {"text": "Een herkenbare naam die wordt gebruikt wanneer deze provider aan een site wordt toegewezen.", "scope": "help"}],
     "auth_provider_type": [{"text": "Providertype", "scope": "field"}, {"text": "De authenticatiemethode die deze provider gebruikt.", "scope": "help"}],
     "auth_provider_config": [{"text": "Inloggegevens en verbinding", "scope": "field"}, {"text": "Instellingen voor het geselecteerde providertype.", "scope": "help"}],
-    "required_permission": [{"text": "Vereiste permissie", "scope": "field"}, {"text": "Voor claims-gebaseerde providers worden alleen identiteiten met deze permissie toegelaten. Leeg aanvaardt elke geauthenticeerde identiteit.", "scope": "help"}],
+    "required_permission": [{"text": "Vereiste permissie", "scope": "field"}, {"text": "Een enkele permissienaam, bv. \"site.internal\", vergeleken met de permissie-claims van de identiteit. Alleen gebruikt door claims-gebaseerde providers zoals Proteus (HTTP Basic Auth negeert dit). Leeg aanvaardt elke geauthenticeerde identiteit.", "scope": "help"}],
     "credentials": [{"text": "Inloggegevens", "scope": "field"}, {"text": "Eén Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden als bewerkbare tekst opgeslagen en getoond.", "scope": "help"}],
     "key": {"text": "Gebruikersnaam", "scope": "form", "field": "credentials"},
     "value": {"text": "Wachtwoord", "scope": "form", "field": "credentials"},
@@ -390,5 +390,18 @@
     "jar_path": [{"text": "Jar-bestand", "scope": "field"}, {"text": "Pad naar het fat/shadow-jar-bestand van de applicatie.", "scope": "help"}],
     "java_binary": [{"text": "Java-binary", "scope": "field"}, {"text": "Pad naar de java-launcher. Leeg gebruikt java uit PATH (bijv. bin/java van een jlink-image).", "scope": "help"}],
     "jvm_args": [{"text": "JVM-argumenten", "scope": "field"}, {"text": "Extra argumenten voor de JVM voor -jar, bijv. -Xmx512m.", "scope": "help"}],
-    "app_args": [{"text": "Applicatie-argumenten", "scope": "field"}, {"text": "Argumenten voor de applicatie na het jar-bestand.", "scope": "help"}]
+    "app_args": [{"text": "Applicatie-argumenten", "scope": "field"}, {"text": "Argumenten voor de applicatie na het jar-bestand.", "scope": "help"}],
+    "cert_nice_name": [{"text": "Naam", "scope": "field"}, {"text": "Een herkenbare naam voor dit certificaat, bv. het hoofddomein dat het dekt.", "scope": "help"}],
+    "cert_certificate_pem": [{"text": "Certificaat (PEM)", "scope": "field"}, {"text": "Plak het volledige PEM-gecodeerde certificaat, inclusief eventuele tussenliggende keten (de -----BEGIN CERTIFICATE----- blokken).", "scope": "help"}],
+    "cert_private_key_pem": [{"text": "Prive-sleutel (PEM)", "scope": "field"}, {"text": "De PEM-gecodeerde prive-sleutel die bij het certificaat hoort. Opgeslagen als geheim: laat leeg om de huidige sleutel te behouden.", "scope": "help"}],
+    "cert_auto_renew": [{"text": "Automatisch vernieuwen", "scope": "field"}, {"text": "Geldt alleen voor Let's Encrypt-certificaten; opgeladen certificaten worden nooit automatisch vernieuwd.", "scope": "help"}],
+    "cert_challenge_type": [{"text": "Validatietype", "scope": "field"}, {"text": "Hoe Let's Encrypt dit certificaat valideerde. Ingesteld door de aanvraagpagina.", "scope": "help"}],
+    "cert_dns_publisher": [{"text": "DNS-publicatie", "scope": "field"}, {"text": "Hoe DNS-01 TXT-records gepubliceerd worden bij vernieuwing. Ingesteld door de aanvraagpagina.", "scope": "help"}],
+    "cert_renewal_error": {"text": "Laatste vernieuwingsfout", "scope": "field"},
+    "cert_error_count": {"text": "Mislukte pogingen", "scope": "field"},
+    "cert_next_attempt_at": {"text": "Volgende poging", "scope": "field"},
+    "cert_domain_names": {"text": "Domeinen", "scope": "field"},
+    "enable": {"text": "Inschakelen", "scope": "site"},
+    "disable": {"text": "Uitschakelen", "scope": "site"},
+    "hohenheim_admin_access": {"text": "Toegang tot het Hohenheim-beheerpaneel", "scope": "permission"}
 }

@@ -17,6 +17,30 @@
 }
 
 @layer patterns {
+    // Deployment error + log detail row (site Deployments tab): compact,
+    // clearly attached to the row above instead of a full-width alert.
+    .hh-deploy-detail {
+        padding-top: var(--pl-space-xs);
+        padding-bottom: var(--pl-space-md);
+    }
+
+    .hh-deploy-error {
+        display: flex;
+        align-items: baseline;
+        gap: var(--pl-space-xs);
+        color: var(--pl-color-destructive);
+        font-size: var(--pl-font-size-sm);
+        margin-bottom: var(--pl-space-xs);
+
+        pl-icon {
+            flex: none;
+        }
+
+        span {
+            overflow-wrap: anywhere;
+        }
+    }
+
     // Deployment build log (site Deployments tab)
     .hh-deploy-log {
         font-size: var(--pl-font-size-xs);

@@ -51,39 +51,42 @@
             </div>
 
             {% if deployments %}
-            <pl-table>
+            <pl-table striped={% true %}>
                 <pl-table-header><pl-table-row>
+                    <pl-table-head>{{ t("started", scope: "site_deployments") }}</pl-table-head>
                     <pl-table-head>{{ t("status", scope: "site_deployments") }}</pl-table-head>
                     <pl-table-head>{{ t("trigger", scope: "site_deployments") }}</pl-table-head>
                     <pl-table-head>{{ t("commit", scope: "site_deployments") }}</pl-table-head>
                     <pl-table-head>{{ t("duration", scope: "site_deployments") }}</pl-table-head>
-                    <pl-table-head>{{ t("started", scope: "site_deployments") }}</pl-table-head>
                 </pl-table-row></pl-table-header>
                 <pl-table-body>
                     {% each deployments as index, deploy %}
                     <pl-table-row>
+                        <pl-table-cell>
+                            {% if deploy.get("startedAtIso") != "" %}
+                            <pl-relative-time datetime={% deploy.get("startedAtIso") %} wording={% timeWording %} title={% deploy.get("startedAtIso") %}></pl-relative-time>
+                            {% /if %}
+                        </pl-table-cell>
                         <pl-table-cell>
                             <pl-badge variant={% deploy.get("statusVariant") %}>{{ deploy.get("status") }}</pl-badge>
                         </pl-table-cell>
                         <pl-table-cell>{{ deploy.get("reason") }}</pl-table-cell>
                         <pl-table-cell><code>{{ deploy.get("commit") }}</code></pl-table-cell>
                         <pl-table-cell>{{ deploy.get("duration") }}</pl-table-cell>
-                        <pl-table-cell>
-                            {% if deploy.get("startedAtIso") != "" %}
-                            <pl-relative-time datetime={% deploy.get("startedAtIso") %} wording={% timeWording %} title={% deploy.get("startedAtIso") %}></pl-relative-time>
-                            {% /if %}
-                        </pl-table-cell>
                     </pl-table-row>
                     {% if deploy.get("error") != "" or deploy.get("hasLog") == true %}
-                    <pl-table-row>
-                        <pl-table-cell colspan="5">
+                    <pl-table-row data-detail>
+                        <pl-table-cell colspan="5" class="hh-deploy-detail">
                             {% if deploy.get("error") != "" %}
-                            <pl-alert variant="destructive">{{ deploy.get("error") }}</pl-alert>
+                            <div class="hh-deploy-error">
+                                <pl-icon name="circle-exclamation"></pl-icon>
+                                <span>{{ deploy.get("error") }}</span>
+                            </div>
                             {% /if %}
                             {% if deploy.get("hasLog") == true %}
                             <pl-collapsible>
                                 <pl-collapsible-trigger>
-                                    <pl-button variant={% "ghost" %}>{{ t("build_log", scope: "site_deployments") }}</pl-button>
+                                    <pl-button variant={% "ghost" %} size={% "sm" %}>{{ t("build_log", scope: "site_deployments") }}</pl-button>
                                 </pl-collapsible-trigger>
                                 <pl-collapsible-content>
                                     <pre class="hh-deploy-log">{{ deploy.get("log") }}</pre>

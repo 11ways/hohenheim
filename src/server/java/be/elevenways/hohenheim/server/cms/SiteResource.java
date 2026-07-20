@@ -202,6 +202,8 @@ public final class SiteResource extends RowResource {
 
         actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "toggle_site"))
             .label(Microcopy.of("toggle").withFilter("scope", "site"))
+            .dynamicLabel(row -> Microcopy.of(Boolean.TRUE.equals(row.get(SiteModel.ENABLED))
+                ? "disable" : "enable").withFilter("scope", "site"))
             .icon(Icon.of("power-off"))
             .handler((row, ctx) -> {
                 boolean current = Boolean.TRUE.equals(row.get(SiteModel.ENABLED));

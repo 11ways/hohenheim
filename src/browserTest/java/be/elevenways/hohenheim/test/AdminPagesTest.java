@@ -210,6 +210,74 @@ class AdminPagesTest extends HohenheimTestBase {
     }
 
     @Test
+    @Order(19)
+    void certificateRequestFieldsAreVerticallySpaced() {
+        // Hand-built form pages get their inter-field rhythm from the plumage
+        // card itself (pl-card-content > pl-field + pl-field); a regression
+        // here squishes every label against the previous description.
+        navigateToApp("/admin/certificates-request");
+        waitForHydration();
+
+        Object marginTop = page.evaluate(
+            "() => getComputedStyle(document.querySelectorAll('pl-card-content > pl-field')[1]).marginTop");
+        assertThat(String.valueOf(marginTop)).isEqualTo("32px");
+    }
+
+    @Test
+    @Order(20)
+    void certificateCreateFormUsesTextareasForPemFields() {
+        // PEM blobs are multi-line: both fields must render as textareas, the
+        // private key as a masked secret one.
+        navigateToApp("/admin/certificates/new");
+        waitForHydration();
+
+        assertThat(page.locator("pl-textarea[name='certificate_pem']").count()).isEqualTo(1);
+        assertThat(page.locator("pl-textarea[name='private_key_pem']").count()).isEqualTo(1);
+
+        String content = page.content();
+        assertThat(content).contains("Certificate (PEM)");
+        assertThat(content).contains("Private key (PEM)");
+        assertThat(content).contains("intermediate chain");
+    }
+
+    @Test
+    @Order(21)
+    void siteToggleActionLabelReflectsEnabledState() {
+        var siteModel = Models.get(SiteModel.class);
+        Row site = siteModel.createEmptyRow();
+        site.set(SiteModel.NAME, "Toggle Label Site");
+        site.set(SiteModel.SLUG, "toggle-label-site");
+        site.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        site.set(SiteModel.SOURCE, "local");
+        site.set(SiteModel.STATUS, "active");
+        site.set(SiteModel.ENABLED, true);
+        siteModel.save(site);
+        Object siteId = site.get(SiteModel.ID);
+
+        try {
+            // Enabled record: the toolbar action reads "Disable", never "Enable/disable".
+            navigateToApp("/admin/sites/" + siteId);
+            waitForHydration();
+            var toggleButton = page.locator(
+                ".cms-record-toolbar pl-button[data-action-id='hohenheim:toggle_site']");
+            assertThat(toggleButton.count()).isEqualTo(1);
+            assertThat(toggleButton.innerText().trim()).isEqualTo("Disable");
+
+            site.set(SiteModel.ENABLED, false);
+            siteModel.save(site);
+
+            navigateToApp("/admin/sites/" + siteId);
+            waitForHydration();
+            assertThat(page.locator(
+                ".cms-record-toolbar pl-button[data-action-id='hohenheim:toggle_site']").innerText().trim())
+                .isEqualTo("Enable");
+        } finally {
+            siteModel.delete(site);
+        }
+    }
+
+    @Test
     @Order(21)
     void certificatesListLinksToRequestPage() {
         navigateToApp("/admin/certificates");

@@ -20,6 +20,9 @@ public class SiteAuthProviderModel extends Model {
     public static final Identifier MODEL_ID = Identifier.of("hohenheim", "site_auth_provider");
     public static final Schema SCHEMA = new Schema();
 
+    /** PermissionSuggestionSources key: the assigned Proteus realm's vocabulary (registered server-side). */
+    public static final String PROTEUS_SUGGESTION_SOURCE = "hohenheim:proteus_realm";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .label(HohenheimFormCopy.label("auth_provider_name"))
@@ -42,8 +45,11 @@ public class SiteAuthProviderModel extends Model {
             .build());
 
     // Provider-agnostic required permission for claims-based providers (null = any identity).
+    // PermissionField: edits with the KnownPermissions vocabulary as autocomplete, plus
+    // the assigned Proteus realm's fetched vocabulary on top.
     public static final StringField REQUIRED_PERMISSION = SCHEMA.addField(
-        StringField.builder().name("required_permission")
+        PermissionField.builder("required_permission")
+            .suggestionSource(PROTEUS_SUGGESTION_SOURCE)
             .label(HohenheimFormCopy.label("required_permission"))
             .help(HohenheimFormCopy.help("required_permission")).build());
 
