@@ -8,10 +8,14 @@ import be.elevenways.zenit.common.orm.model.Models;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import org.junit.jupiter.api.*;
 
+import com.sun.net.httpserver.HttpServer;
+
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,6 +66,87 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         String body = page.locator("body").textContent();
         assertThat(body).contains("Name").contains("Provider type");
         assertThat(page.content()).contains("provider_type");
+    }
+
+    @Test
+    @Order(2)
+    void requiredPermissionOffersKnownPermissionCombobox() {
+        // PermissionField: a free-text pl-select over the KnownPermissions
+        // vocabulary (the LuckPerms editor model) with described entries.
+        navigateToApp("/admin/auth-providers/new");
+        waitForHydration();
+
+        var picker = page.locator("pl-select[name='required_permission']");
+        assertThat(picker.count()).isEqualTo(1);
+        assertThat(picker.getAttribute("free-text")).isNotNull();
+
+        // Boot-registered and endpoint-declared permissions both feed it
+        // (options stay mounted while the popup is closed).
+        assertThat(page.locator("div[role='option'][data-value='hohenheim.admin.access']").count())
+            .isEqualTo(1);
+        assertThat(page.locator("div[role='option'][data-value='auth.admin.access']").count())
+            .isEqualTo(1);
+        // Described permissions render their description line.
+        assertThat(page.locator("div[role='option'][data-value='auth.admin.access'] .pl-select-subtitle")
+            .innerText()).isEqualTo("Access the admin panel");
+
+        // Free text commits as the value: type an unlisted permission, Enter.
+        picker.locator(".pl-select-field").click();
+        var popup = page.locator(
+            "he-bottom .pl-select-popup[data-open]");
+        popup.locator("input[role='searchbox']").fill("custom.special.permission");
+        popup.locator("input[role='searchbox']").press("Enter");
+        assertThat(picker.locator(".pl-select-value").innerText().trim())
+            .isEqualTo("custom.special.permission");
+    }
+
+    @Test
+    @Order(2)
+    void proteusProviderSuggestsTheAssignedRealmsVocabulary() throws Exception {
+        // A stub Proteus answers the realm-client known_permissions call; the
+        // edit form must merge the realm's vocabulary into the suggestions.
+        HttpServer stub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        stub.createContext("/", exchange -> {
+            byte[] body = ("[{\"permission\":\"site.internal\",\"description\":\"Internal staff only\"},"
+                + "{\"permission\":\"group.admins\",\"description\":\"Administrators\"}]")
+                .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        stub.start();
+
+        var model = Models.get(SiteAuthProviderModel.class);
+        Row row = model.createEmptyRow();
+        row.set(SiteAuthProviderModel.NAME, "Realm Suggest Provider");
+        row.set(SiteAuthProviderModel.PROVIDER_TYPE, "hohenheim:proteus");
+        row.set(SiteAuthProviderModel.CONFIG, Map.of(
+            "endpoint", "http://127.0.0.1:" + stub.getAddress().getPort(),
+            "realm_client", "testrealm",
+            "access_key", "test-access-key",
+            "authenticator", "password"));
+        model.save(row);
+
+        try {
+            navigateToApp("/admin/auth-providers/" + row.get(SiteAuthProviderModel.ID));
+            waitForHydration();
+
+            assertThat(page.locator("div[role='option'][data-value='site.internal']").count())
+                .isEqualTo(1);
+            assertThat(page.locator(
+                    "div[role='option'][data-value='site.internal'] .pl-select-subtitle").innerText())
+                .isEqualTo("Internal staff only");
+            // Groups ride along as group.<slug>, described by their title.
+            assertThat(page.locator("div[role='option'][data-value='group.admins']").count())
+                .isEqualTo(1);
+            // The local vocabulary is still merged in.
+            assertThat(page.locator("div[role='option'][data-value='hohenheim.admin.access']").count())
+                .isEqualTo(1);
+        } finally {
+            model.delete(row);
+            stub.stop(0);
+        }
     }
 
     @Test

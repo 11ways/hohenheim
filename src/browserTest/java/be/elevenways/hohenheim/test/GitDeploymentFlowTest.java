@@ -193,6 +193,16 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         assertThat(page.body()).contains("Deploy now");
         assertThat(page.body()).contains(firstCommit.substring(0, 8));
 
+        // The history table is striped and leads with the Started column.
+        // (host attribute order is not deterministic, so match within the tag)
+        assertThat(page.body()).containsPattern("<pl-table[^>]*\\bstriped\\b");
+        int header = page.body().indexOf("<pl-table-header");
+        assertThat(header).isPositive();
+        String headerRow = page.body().substring(header, page.body().indexOf("</pl-table-header>", header));
+        assertThat(headerRow.indexOf("Started"))
+            .as("Started is the first column")
+            .isLessThan(headerRow.indexOf("Status"));
+
         var blocked = get("/admin/sites/" + plainSiteId + "/page/deployments");
         assertThat(blocked.statusCode()).isEqualTo(404);
     }

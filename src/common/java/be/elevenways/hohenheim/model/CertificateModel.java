@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.edit.InputType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
@@ -41,16 +43,25 @@ public class CertificateModel extends Model {
     public static final String DNS_PUBLISHER_INTERNAL = "internal";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final StringField NICE_NAME = SCHEMA.addField(StringField.builder().name("nice_name").build());
+    public static final StringField NICE_NAME = SCHEMA.addField(StringField.builder().name("nice_name")
+        .label(HohenheimFormCopy.label("cert_nice_name"))
+        .help(HohenheimFormCopy.help("cert_nice_name")).build());
     public static final EnumField PROVIDER = SCHEMA.addField(EnumField.builder("provider")
         .value(PROVIDER_LETSENCRYPT, v -> v.displayName("Let's Encrypt").icon("lock").color("green"))
         .value(PROVIDER_CUSTOM, v -> v.displayName("Custom").icon("file-import").color("blue"))
         .value(PROVIDER_ACME_ACCOUNT, v -> v.displayName("ACME account").color("gray"))
         .build());
-    public static final StringField CERTIFICATE_PEM = SCHEMA.addField(StringField.builder().name("certificate_pem").build());
-    public static final StringField PRIVATE_KEY_PEM = SCHEMA.addField(StringField.builder().name("private_key_pem").secret().build());
+    public static final TextField CERTIFICATE_PEM = SCHEMA.addField(TextField.builder("certificate_pem")
+        .label(HohenheimFormCopy.label("cert_certificate_pem"))
+        .help(HohenheimFormCopy.help("cert_certificate_pem")).build());
+    public static final TextField PRIVATE_KEY_PEM = SCHEMA.addField(TextField.builder("private_key_pem")
+        .secret().inputHint(InputType.MULTILINE)
+        .label(HohenheimFormCopy.label("cert_private_key_pem"))
+        .help(HohenheimFormCopy.help("cert_private_key_pem")).build());
     public static final DateTimeField EXPIRES_ON = SCHEMA.addField(DateTimeField.builder().name("expires_on").build());
-    public static final BooleanField AUTO_RENEW = SCHEMA.addField(BooleanField.builder("auto_renew").defaultValue(true).build());
+    public static final BooleanField AUTO_RENEW = SCHEMA.addField(BooleanField.builder("auto_renew").defaultValue(true)
+        .label(HohenheimFormCopy.label("cert_auto_renew"))
+        .help(HohenheimFormCopy.help("cert_auto_renew")).build());
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_ACTIVE, v -> v.displayName("Active").icon("circle-check").color("success"))
         .value(STATUS_PENDING, v -> v.displayName("Pending").icon("clock").color("warning"))
@@ -58,21 +69,29 @@ public class CertificateModel extends Model {
         .build());
     public static final DateTimeField ISSUED_ON = SCHEMA.addField(DateTimeField.builder().name("issued_on").build());
     public static final StringField RENEWAL_ERROR = SCHEMA.addField(StringField.builder().name("renewal_error")
-        .attribute(FieldAttributes.GROUP, "renewal").build());
+        .attribute(FieldAttributes.GROUP, "renewal")
+        .label(HohenheimFormCopy.label("cert_renewal_error")).build());
     public static final IntegerField ERROR_COUNT = SCHEMA.addField(IntegerField.builder().name("error_count")
-        .attribute(FieldAttributes.GROUP, "renewal").build());
+        .attribute(FieldAttributes.GROUP, "renewal")
+        .label(HohenheimFormCopy.label("cert_error_count")).build());
     public static final DateTimeField NEXT_ATTEMPT_AT = SCHEMA.addField(DateTimeField.builder().name("next_attempt_at")
-        .attribute(FieldAttributes.GROUP, "renewal").build());
-    public static final StringField DOMAIN_NAMES_TEXT = SCHEMA.addField(StringField.builder().name("domain_names_text").build());
+        .attribute(FieldAttributes.GROUP, "renewal")
+        .label(HohenheimFormCopy.label("cert_next_attempt_at")).build());
+    public static final StringField DOMAIN_NAMES_TEXT = SCHEMA.addField(StringField.builder().name("domain_names_text")
+        .label(HohenheimFormCopy.label("cert_domain_names")).build());
 
     /** Per-cert ACME account email override; null means the global account. */
     public static final StringField LETSENCRYPT_EMAIL = SCHEMA.addField(StringField.builder().name("letsencrypt_email").build());
     public static final EnumField CHALLENGE_TYPE = SCHEMA.addField(EnumField.builder("challenge_type")
         .value(CHALLENGE_HTTP, value -> value.displayName("HTTP-01").icon("globe").color("blue"))
         .value(CHALLENGE_DNS, value -> value.displayName("DNS-01").icon("at").color("violet"))
+        .label(HohenheimFormCopy.label("cert_challenge_type"))
+        .help(HohenheimFormCopy.help("cert_challenge_type"))
         .build());
     public static final StringField DNS_PUBLISHER = SCHEMA.addField(
-        StringField.builder().name("dns_publisher").build());
+        StringField.builder().name("dns_publisher")
+            .label(HohenheimFormCopy.label("cert_dns_publisher"))
+            .help(HohenheimFormCopy.help("cert_dns_publisher")).build());
 
     /** Dedup stamp for the expiring-soon alert; a renewal moves expires_on forward, re-arming it. */
     public static final DateTimeField EXPIRY_NOTIFIED_AT = SCHEMA.addField(DateTimeField.builder().name("expiry_notified_at").build());
