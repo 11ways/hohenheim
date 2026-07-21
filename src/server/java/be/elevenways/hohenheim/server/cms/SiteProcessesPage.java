@@ -4,6 +4,9 @@ import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
+import be.elevenways.hohenheim.server.sitetype.SiteHandlers;
+import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.sitetype.SiteTypeInfo;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -35,6 +38,12 @@ public final class SiteProcessesPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("microchip"); }
 
     @Override
+    public boolean visibleFor(@NonNull Row site) {
+        SiteTypeInfo type = SiteTypes.getHandler(site.get(SiteModel.SITE_TYPE));
+        return type != null && type.supportsEnvInjection();
+    }
+
+    @Override
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row site) {
@@ -46,9 +55,8 @@ public final class SiteProcessesPage implements RecordScopedPage<Row> {
 
         boolean managed = false;
         List<Map<String, Object>> processes = new ArrayList<>();
-        var proxy = ServerMain.getProxyServer();
-        if (proxy != null && proxy.getDispatcher().findHandlerBySiteId(siteId)
-                instanceof ManagedProcessSiteHandler handler) {
+        ManagedProcessSiteHandler handler = SiteHandlers.managedProcess(siteId);
+        if (handler != null) {
             managed = true;
             for (var proc : handler.getProcesses()) {
                 Map<String, Object> info = new HashMap<>();

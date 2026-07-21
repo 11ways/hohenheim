@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DeploymentModel;
@@ -42,8 +43,8 @@ public final class AttentionCollector {
 
     private AttentionCollector() {}
 
-    public static @NonNull List<Map<String, Object>> collect() {
-        List<Map<String, Object>> items = new ArrayList<>();
+    public static @NonNull List<AttentionItem> collect() {
+        List<AttentionItem> items = new ArrayList<>();
         errorCertificates(items);
         unhealthySites(items);
         failedDatabases(items);
@@ -55,14 +56,14 @@ public final class AttentionCollector {
     }
 
     /** DNS listeners that failed to bind, and enabled zones a resolver cannot delegate to. */
-    private static void dnsIssues(List<Map<String, Object>> items) {
+    private static void dnsIssues(List<AttentionItem> items) {
         Boolean enabled = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.ENABLED);
         var dnsServer = ServerMain.getDnsServer();
         if (Boolean.TRUE.equals(enabled) && (dnsServer == null || !dnsServer.isRunning())) {
             String reason = dnsServer != null ? dnsServer.getStartupError() : null;
             items.add(item("error", "sitemap",
                 copy("dns_listener", "attention_title"),
-                stringOrEmpty(reason),
+                literal(reason),
                 "/admin/settings"));
         }
         for (DnsZoneSnapshot zone : DnsZoneStore.INSTANCE.zones()) {
@@ -75,19 +76,19 @@ public final class AttentionCollector {
         }
     }
 
-    private static void errorCertificates(List<Map<String, Object>> items) {
+    private static void errorCertificates(List<AttentionItem> items) {
         List<Row> rows = Models.get(CertificateModel.class).find()
             .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_ERROR))
             .all();
         for (Row row : rows) {
             items.add(item("error", "certificate",
                 copy("certificate", "attention_title", "name", row.get(CertificateModel.NICE_NAME)),
-                stringOrEmpty(row.get(CertificateModel.RENEWAL_ERROR)),
+                literal(row.get(CertificateModel.RENEWAL_ERROR)),
                 "/admin/certificates/" + row.get(CertificateModel.ID)));
         }
     }
 
-    private static void unhealthySites(List<Map<String, Object>> items) {
+    private static void unhealthySites(List<AttentionItem> items) {
         var proxy = ServerMain.getProxyServer();
         if (proxy == null) {
             return;
@@ -112,7 +113,7 @@ public final class AttentionCollector {
         }
     }
 
-    private static void failedDatabases(List<Map<String, Object>> items) {
+    private static void failedDatabases(List<AttentionItem> items) {
         List<Row> rows = Models.get(DatabaseModel.class).find()
             .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_FAILED))
             .all();
@@ -131,7 +132,7 @@ public final class AttentionCollector {
      * linked databases of live enabled sites are probed. Failed-record databases
      * already surface above; this frames the SITE impact of a stopped container.
      */
-    private static void unavailableAttachedDatabases(List<Map<String, Object>> items) {
+    private static void unavailableAttachedDatabases(List<AttentionItem> items) {
         var linkModel = Models.get(SiteDatabaseModel.class);
         if (linkModel == null) {
             return;
@@ -159,7 +160,7 @@ public final class AttentionCollector {
             }
             String status = database.get(DatabaseModel.STATUS);
             boolean unavailable;
-            Object detail;
+            Microcopy detail;
             if (!DatabaseModel.STATUS_ACTIVE.equals(status)) {
                 unavailable = true;
                 detail = copy("database_status", "attention_detail",
@@ -187,7 +188,7 @@ public final class AttentionCollector {
         }
     }
 
-    private static void failedDeployments(List<Map<String, Object>> items) {
+    private static void failedDeployments(List<AttentionItem> items) {
         var siteModel = Models.get(SiteModel.class);
         var deployModel = Models.get(DeploymentModel.class);
         List<Row> gitSites = siteModel.find()
@@ -208,14 +209,14 @@ public final class AttentionCollector {
             if (DeploymentModel.STATUS_FAILED.equals(deploy.get(DeploymentModel.STATUS))) {
                 items.add(item("error", "rocket",
                     copy("deploy", "attention_title", "name", site.get(SiteModel.NAME)),
-                    stringOrEmpty(deploy.get(DeploymentModel.ERROR)),
+                    literal(deploy.get(DeploymentModel.ERROR)),
                     "/admin/sites/" + siteId + "/page/deployments"));
             }
         }
     }
 
     /** Latest history row per task type; failed ones surface (no task UI yet, so no url). */
-    private static void failedTasks(List<Map<String, Object>> items) {
+    private static void failedTasks(List<AttentionItem> items) {
         // The task system registers its datasource-scoped model at its own boot
         // stage; a boot without it (tests, tools) simply has no task news.
         if (Models.get(SystemTaskHistoryModel.MODEL_ID) == null) {
@@ -246,19 +247,16 @@ public final class AttentionCollector {
         }
     }
 
-    private static @NonNull Map<String, Object> item(String severity, String icon, Object title,
-                                                     Object detail, @Nullable String url) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("severity", severity);
-        map.put("icon", icon);
-        map.put("title", title);
-        map.put("detail", detail);
-        map.put("url", url != null ? url : "");
-        return map;
+    private static @NonNull AttentionItem item(String severity, String icon, Microcopy title,
+                                               @Nullable Microcopy detail, @Nullable String url) {
+        return new AttentionItem(severity, icon, title, detail, url != null ? url : "");
     }
 
-    private static @NonNull String stringOrEmpty(@Nullable Object value) {
-        return value != null ? String.valueOf(value) : "";
+    private static @Nullable Microcopy literal(@Nullable Object value) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return null;
+        }
+        return Microcopy.literal(String.valueOf(value));
     }
 
     private static @NonNull Microcopy copy(String key, String scope, Object... args) {

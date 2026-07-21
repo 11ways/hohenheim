@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.field.UrlField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.Icon;
 
@@ -32,7 +33,7 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
 
     public static final Schema CONFIG_SCHEMA = new Schema();
     static {
-        CONFIG_SCHEMA.addField(StringField.builder().name(ENDPOINT)
+        CONFIG_SCHEMA.addField(UrlField.builder().name(ENDPOINT)
             .label(HohenheimFormCopy.label("proteus_endpoint"))
             .help(HohenheimFormCopy.help("proteus_endpoint")).build());
         CONFIG_SCHEMA.addField(StringField.builder().name(REALM_CLIENT)
@@ -75,9 +76,12 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
         String endpoint = str(config.get(ENDPOINT));
         String realmClient = str(config.get(REALM_CLIENT));
         String accessKey = str(config.get(ACCESS_KEY));
+        // Blank = no forced slug: Proteus then serves its chooser page offering
+        // every enabled authenticator. (The old blank->"password" default was a
+        // bug: no such authenticator type exists, so blank configs failed closed.)
         String authenticator = str(config.get(AUTHENTICATOR));
-        if (authenticator == null || authenticator.isBlank()) {
-            authenticator = "password";
+        if (authenticator != null && authenticator.isBlank()) {
+            authenticator = null;
         }
 
         // Pure construction (validates config, no network I/O); a blank-config throw fails closed.

@@ -48,6 +48,18 @@ class AdminPagesTest extends HohenheimTestBase {
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    private HttpResponse<String> get(String path) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + path))
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .GET()
+            .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
     // -----------------------------------------------------------------------
     // Settings
     // -----------------------------------------------------------------------
@@ -69,6 +81,41 @@ class AdminPagesTest extends HohenheimTestBase {
         // Secret settings never render their value; the input is a masked password field.
         assertThat(page.locator(
             "[data-path='app.auth_proteus.access_key'] input[type='password']").count()).isEqualTo(1);
+        assertThat(page.locator(
+            "[data-path='app.ssl.dns_propagation_seconds'] pl-input-group-addon").innerText().trim())
+            .isEqualTo("s");
+        assertThat(page.locator(
+            "[data-path='app.storage.data_path'] zf-path-input [data-zf-path-browse]").count()).isEqualTo(1);
+        for (String path : new String[] {
+            "framework.network.request_body_size_limit",
+            "framework.network.request_individual_file_size_limit",
+            "framework.network.request_total_file_size_limit",
+            "framework.network.request_body_inflight_limit",
+            "framework.compression.min_size_bytes"
+        }) {
+            assertThat(page.locator("[data-path='" + path + "'] pl-input-group-addon").innerText().trim())
+                .isEqualTo("B");
+        }
+        assertThat(page.locator(
+            ".cms-setting:has([data-path='app.auth_proteus.enabled']) .cms-setting-note-restart").count()).isEqualTo(1);
+        assertThat(page.locator(
+            ".cms-setting:has([data-path='app.auth_proteus.authenticator']) .cms-setting-note-restart").count()).isEqualTo(1);
+    }
+
+    @Test
+    @Order(1)
+    void filesystemPathBrowserSelectsAServerDirectory() {
+        navigateToApp("/admin/settings");
+        waitForHydration();
+
+        var field = page.locator("[data-path='app.storage.data_path']");
+        field.locator("[data-zf-path-browse]").click();
+        var dialog = page.locator("he-bottom .pl-dialog-modal[data-open]");
+        dialog.waitFor();
+        dialog.locator("pl-command-item div[role='option']").first().click();
+        dialog.locator("[data-zf-path-choose-directory]").click();
+
+        assertThat(field.locator("input").inputValue()).isEqualTo("/");
     }
 
     @Test
@@ -159,6 +206,64 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator(".widget-records dl.widget-record").count()).isZero();
     }
 
+    @Test
+    @Order(11)
+    void dashboardActivityEntriesCarryIconTitleAndTime() {
+        // Order(10) wrote at least one "create" activity row.
+        navigateToApp("/admin/dashboard");
+        waitForHydration();
+
+        var firstEntry = page.locator("a.widget-record-entry[href^='/admin/activity/']").first();
+        // Verb icon leads the row, a relative timestamp trails it.
+        assertThat(firstEntry.locator(".widget-record-icon pl-icon").count()).isEqualTo(1);
+        assertThat(firstEntry.locator("pl-relative-time.widget-record-time").count()).isEqualTo(1);
+        assertThat(firstEntry.locator("pl-relative-time.widget-record-time").innerText().trim())
+            .isNotEmpty();
+
+        // The title is the LOCALIZED verb plus the captured record title
+        // ("Created · <name>"), never the raw token; the model token is
+        // humanized in the subtitle.
+        String titles = page.locator(".widget-record-title").allInnerTexts().toString();
+        assertThat(titles).contains("Created");
+        assertThat(titles).contains("·");
+        assertThat(titles).doesNotContain("hohenheim:site");
+        String subtitles = page.locator(".widget-record-subtitle").allInnerTexts().toString();
+        assertThat(subtitles).doesNotContain("hohenheim:site");
+
+        // The ANCHOR carries the row padding, so the whole item is clickable.
+        var padding = firstEntry.evaluate("el => getComputedStyle(el).paddingLeft");
+        assertThat(String.valueOf(padding)).isNotEqualTo("0px");
+    }
+
+    @Test
+    @Order(21)
+    void responseDelayFieldCarriesAMsUnitSuffix() {
+        var siteModel = Models.get(SiteModel.class);
+        Row site = siteModel.createEmptyRow();
+        site.set(SiteModel.NAME, "Suffix Site");
+        site.set(SiteModel.SLUG, "suffix-site");
+        site.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        site.set(SiteModel.SOURCE, "local");
+        site.set(SiteModel.STATUS, "active");
+        site.set(SiteModel.ENABLED, true);
+        siteModel.save(site);
+
+        try {
+            navigateToApp("/admin/sites/" + site.get(SiteModel.ID));
+            waitForHydration();
+
+            var field = page.locator("pl-field[data-path='settings.delay']");
+            assertThat(field.locator("pl-input-group input[type='number']").count()).isEqualTo(1);
+            assertThat(field.locator("pl-input-group pl-input-group-addon").innerText().trim())
+                .isEqualTo("ms");
+            assertThat(page.locator(
+                "pl-field[data-path='settings.root_path'] zf-path-input [data-zf-path-browse]").count()).isEqualTo(1);
+        } finally {
+            siteModel.delete(site);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Certificates
     // -----------------------------------------------------------------------
@@ -173,6 +278,8 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(content).contains("Let's Encrypt");
         assertThat(content).contains("DNS-01");
         assertThat(content).contains("*.example.com");
+        assertThat(page.locator("pl-textarea[name='domains']").count()).isZero();
+        assertThat(page.locator("zf-array pl-input[name='domains']").count()).isEqualTo(1);
 
         // Item children portal into the overlay popup at hydration, so the
         // command option's disabled state is asserted inside the open popup.
@@ -190,6 +297,18 @@ class AdminPagesTest extends HohenheimTestBase {
     void wildcardRequestRefusesHttpValidationBeforeContactingTheCa() throws Exception {
         var response = post("/admin/certificates-request",
             "nice_name=wildcard&domains=*.example.test&challenge_type=http&dns_mode=manual");
+
+        assertThat(response.statusCode()).isIn(302, 303);
+        assertThat(response.headers().firstValue("Location").orElse(""))
+            .contains("Wildcard").contains("DNS-01");
+    }
+
+    @Test
+    @Order(19)
+    void certificateRequestKeepsEveryRepeatedDomainValue() throws Exception {
+        var response = post("/admin/certificates-request",
+            "nice_name=wildcard&domains=&domains=example.test&domains=*.example.test"
+                + "&challenge_type=http&dns_mode=manual");
 
         assertThat(response.statusCode()).isIn(302, 303);
         assertThat(response.headers().firstValue("Location").orElse(""))
@@ -218,9 +337,9 @@ class AdminPagesTest extends HohenheimTestBase {
         navigateToApp("/admin/certificates-request");
         waitForHydration();
 
-        Object marginTop = page.evaluate(
-            "() => getComputedStyle(document.querySelectorAll('pl-card-content > pl-field')[1]).marginTop");
-        assertThat(String.valueOf(marginTop)).isEqualTo("32px");
+        Object gap = page.evaluate(
+            "() => getComputedStyle(document.querySelector('pl-card-content .zf-entries')).gap");
+        assertThat(String.valueOf(gap)).isEqualTo("32px");
     }
 
     @Test
@@ -238,6 +357,9 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(content).contains("Certificate (PEM)");
         assertThat(content).contains("Private key (PEM)");
         assertThat(content).contains("intermediate chain");
+        assertThat(content).doesNotContain("Renewal status");
+        assertThat(page.locator("[data-path='challenge_type'], [data-path='dns_publisher']").count()).isZero();
+        assertThat(page.locator("[data-path='auto_renew'], [data-group='renewal']").count()).isZero();
     }
 
     @Test
@@ -336,16 +458,56 @@ class AdminPagesTest extends HohenheimTestBase {
 
     @Test
     @Order(22)
-    void processesTabRendersForASite() throws Exception {
+    void activityDetailLeadsWithTheRecordTitleAndGroupsTheVerbIconInItsBadge() {
+        Row activity = Models.get(ActivityModel.class).find()
+            .orderBy(ActivityModel.ID, SortOrder.DESC)
+            .first();
+        assertThat(activity).isNotNull();
+
+        navigateToApp("/admin/activity/" + activity.get(ActivityModel.ID));
+        waitForHydration();
+
+        var heading = page.locator(".cms-activity-detail-heading");
+        assertThat(heading.locator(":scope > h1").count()).isEqualTo(1);
+        assertThat(heading.locator(":scope > h1 + pl-badge[data-activity-verb]").count()).isEqualTo(1);
+        assertThat(heading.locator("pl-badge[data-activity-verb] > pl-icon[data-activity-icon]").count())
+            .isEqualTo(1);
+        assertThat(heading.locator(":scope > pl-icon[data-activity-icon]").count()).isZero();
+    }
+
+    @Test
+    @Order(22)
+    void processesTabOnlyRendersForManagedProcessSites() throws Exception {
         Row site = Models.get(SiteModel.class).find()
             .where(SiteModel.NAME.eq("Audit Test Site")).first();
         assertThat(site).isNotNull();
 
-        navigateToApp("/admin/sites/" + site.get(SiteModel.ID) + "/page/processes");
-        waitForHydration();
+        Integer unsupportedId = site.get(SiteModel.ID);
+        assertThat(get("/admin/sites/" + unsupportedId).body())
+            .doesNotContain("/admin/sites/" + unsupportedId + "/page/processes");
+        assertThat(get("/admin/sites/" + unsupportedId + "/page/processes").statusCode()).isEqualTo(404);
 
-        String content = page.locator("body").textContent();
-        assertThat(content).contains("Stored process logs");
+        var siteModel = Models.get(SiteModel.class);
+        Row managed = siteModel.createEmptyRow();
+        managed.set(SiteModel.NAME, "Managed Processes Site");
+        managed.set(SiteModel.SLUG, "managed-processes-site");
+        managed.set(SiteModel.SITE_TYPE, "hohenheim:command");
+        managed.set(SiteModel.SETTINGS, Map.of("start_command", "true"));
+        managed.set(SiteModel.SOURCE, "local");
+        managed.set(SiteModel.STATUS, "active");
+        managed.set(SiteModel.ENABLED, true);
+        siteModel.save(managed);
+
+        try {
+            Integer managedId = managed.get(SiteModel.ID);
+            assertThat(get("/admin/sites/" + managedId).body())
+                .contains("/admin/sites/" + managedId + "/page/processes");
+            HttpResponse<String> processes = get("/admin/sites/" + managedId + "/page/processes");
+            assertThat(processes.statusCode()).isEqualTo(200);
+            assertThat(processes.body()).contains("Stored process logs");
+        } finally {
+            siteModel.delete(managed);
+        }
     }
 
     @Test
@@ -435,8 +597,10 @@ class AdminPagesTest extends HohenheimTestBase {
             // The request-certificate link prefills the site's exact hostnames.
             navigateToApp("/admin/certificates-request?site=" + siteId);
             waitForHydration();
-            String domainsValue = page.locator("#domains").inputValue();
-            assertThat(domainsValue).contains("weave.example.test").contains("bare.example.test");
+            var domainInputs = page.locator("zf-array pl-input[name='domains'] input");
+            assertThat(domainInputs.count()).isEqualTo(2);
+            assertThat(domainInputs.nth(0).inputValue()).isEqualTo("weave.example.test");
+            assertThat(domainInputs.nth(1).inputValue()).isEqualTo("bare.example.test");
         } finally {
             certModel.delete(cert);
             domainModel.delete(covered);

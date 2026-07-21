@@ -2,7 +2,7 @@
     in memory while the operator publishes every displayed TXT value. -#}
 {% declare title: String %}
 {% declare error: String = "" %}
-{% declare domains: String = "" %}
+{% declare domainForm: FormState %}
 {% declare niceName: String = "" %}
 {% declare dnsHookConfigured: Boolean = false %}
 {% declare internalDnsAvailable: Boolean = false %}
@@ -51,16 +51,14 @@
     {% else %}
     <form method="POST" action="/admin/certificates-request">
         {% csrf() %}
-        <pl-card><pl-card-content>
+        <pl-card><pl-card-content><zf-form-scope><div class="zf-entries">
             <pl-field>
                 <pl-label target="nice_name">{{ t("name", scope: "certificate_request") }}</pl-label>
                 <pl-input inputId="nice_name" type="text" name="nice_name" value={% niceName %} placeholder={% t("name_placeholder", scope: "certificate_request") %}></pl-input>
             </pl-field>
-            <pl-field>
-                <pl-label target="domains">{{ t("domains", scope: "certificate_request") }}</pl-label>
-                <pl-textarea inputId="domains" name="domains" value={% domains %} placeholder="example.com *.example.com"></pl-textarea>
-                <pl-field-description>{{ t("domains_help", scope: "certificate_request") }}</pl-field-description>
-            </pl-field>
+            {% each domainForm.entries as entry %}
+            {% render entry.templateId var:entry=entry %}
+            {% /each %}
             <pl-field>
                 <pl-label>{{ t("validation", scope: "certificate_request") }}</pl-label>
                 <pl-select name="challenge_type" value="http" submitEmpty={% true %}>
@@ -84,7 +82,7 @@
                 <pl-input inputId="letsencrypt_email" type="email" name="letsencrypt_email"></pl-input>
                 <pl-field-description>{{ t("account_email_help", scope: "certificate_request") }}</pl-field-description>
             </pl-field>
-        </pl-card-content></pl-card>
+        </div></zf-form-scope></pl-card-content></pl-card>
         <div class="cms-form-actions">
             <pl-button variant="primary" type="submit">{{ t("request", scope: "certificate_request") }}</pl-button>
             <a href="/admin/certificates">{{ t("cancel", scope: "certificate_request") }}</a>

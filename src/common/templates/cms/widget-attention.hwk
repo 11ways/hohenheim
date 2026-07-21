@@ -1,30 +1,30 @@
 {# Dashboard attention panel: one row per operational state needing an
-   operator, or a quiet all-clear. Items are computed server-side by the
-   installed AttentionItems collector at render time. #}
+   operator, or a quiet all-clear. The server collector attaches typed items
+   as runtime widget data; WidgetTree transport carries them transparently. #}
 {% declare widget: WidgetInstance %}
+{% declare data: List<AttentionItem> %}
 
-{% snippet attentionContent(item: Map) %}
+{% snippet attentionContent(item: AttentionItem) %}
 <span class="hh-attention-icon">
-    <pl-icon name={% item.get("icon") %} size="sm"></pl-icon>
+    <pl-icon name={% item.icon %} size="sm"></pl-icon>
 </span>
 <span class="hh-attention-body">
-    <span class="hh-attention-title">{{ item.get("title") }}</span>
-    {% if item.get("detail") != "" %}
-    <span class="hh-attention-detail">{{ item.get("detail") }}</span>
+    <span class="hh-attention-title">{{ item.title }}</span>
+    {% if item.detail != null %}
+    <span class="hh-attention-detail">{{ item.detail }}</span>
     {% /if %}
 </span>
 {% /snippet %}
 
-{% let items = Hohenheim.attentionItems() %}
-<div class="widget widget-attention hh-attention" data-attention-count={% "" + items.size() %}>
+<div class="widget widget-attention hh-attention" data-attention-count={% "" + (data != null ? data.size() : 0) %}>
     <h3 class="widget-heading">{{ t("attention", scope: "dashboard") }}</h3>
-    {% if items %}
+    {% if data %}
     <ul class="hh-attention-list">
-        {% each items as item %}
-        <li class={% item.get("url") != "" ? "hh-attention-item" : "hh-attention-item hh-attention-static" %}
-            data-severity={% item.get("severity") %}>
-            {% if item.get("url") != "" %}
-            <a class="hh-attention-target" href={% item.get("url") %}>
+        {% each data as item %}
+        <li class={% item.url != "" ? "hh-attention-item" : "hh-attention-item hh-attention-static" %}
+            data-severity={% item.severity %}>
+            {% if item.url != "" %}
+            <a class="hh-attention-target" href={% item.url %}>
                 {% render attentionContent(item) %}
                 <span class="hh-attention-chevron" attr:aria-label={% Cms.text(t("open", scope: "attention")) %}>
                     <pl-icon name="chevron-right" size="sm"></pl-icon>

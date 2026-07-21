@@ -8,10 +8,10 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.common.ZenitModule;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ActivityPolicy;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
@@ -73,15 +73,9 @@ public final class HohenheimSources implements ZenitModule {
             .search(DnsZoneModel.ORIGIN)
             .build());
 
-        // Feeds the admin dashboard's recent-activity records widget.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(ActivityModel.class)
-            .project(ActivityModel.ACTION, ActivityModel.MODEL,
-                ActivityModel.DETAIL, ActivityModel.ACTOR_LABEL, ActivityModel.CREATED_AT)
-            .title()
-            .subtitle(row -> activitySubtitle(row.get(ActivityModel.ACTOR_LABEL), row.get(ActivityModel.MODEL)))
-            .editUrl(row -> "/admin/activity/" + row.get(ActivityModel.ID))
-            .sortable(ActivityModel.CREATED_AT)
-            .build());
+        // The admin dashboard's recent-activity records widget: the shared
+        // zenit-cms factory registers "zenit.activity" over the /admin panel.
+        ActivitySources.register("admin");
 
         // Sites carry field-level deltas in the activity log (the CMS history
         // tab renders them); every other model stays on the default tier.
@@ -92,14 +86,5 @@ public final class HohenheimSources implements ZenitModule {
         // their own history UI. Tracking them would flood zenit_activity.
         ActivityLog.setPolicy(ProclogModel.MODEL_ID, ActivityPolicy.NONE);
         ActivityLog.setPolicy(DeploymentModel.MODEL_ID, ActivityPolicy.NONE);
-    }
-
-    private static String activitySubtitle(String actor, String model) {
-        String safeActor = actor == null ? "" : actor.trim();
-        String safeModel = model == null ? "" : model.trim();
-        if (safeActor.isEmpty()) {
-            return safeModel;
-        }
-        return safeModel.isEmpty() ? safeActor : safeActor + " · " + safeModel;
     }
 }

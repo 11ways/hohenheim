@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.hohenheim.HohenheimPaths;
+import be.elevenways.zenit.common.validation.PathKind;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -22,7 +24,8 @@ public class NodeVersionModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField VERSION = SCHEMA.addField(StringField.builder().name("version").build());
-    public static final StringField PATH = SCHEMA.addField(StringField.builder().name("path").build());
+    public static final StringField PATH = SCHEMA.addField(PathField.builder("path")
+        .browserSource(HohenheimPaths.SERVER_FILES, PathKind.FILE).build());
     public static final StringField SOURCE = SCHEMA.addField(StringField.builder().name("source").build());
     public static final BooleanField OBSOLETE = SCHEMA.addField(BooleanField.builder("obsolete").defaultValue(false).build());
     public static final DateTimeField LAST_SEEN_AT = SCHEMA.addField(DateTimeField.builder().name("last_seen_at").build());

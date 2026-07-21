@@ -50,7 +50,7 @@ public class DnsRecordModel extends Model {
         .value(TYPE_SRV, v -> v.displayName("SRV").icon("network-wired").color("pink"))
         .build());
     public static final IntegerField TTL = SCHEMA.addField(IntegerField.builder().name("ttl")
-        .label(HohenheimFormCopy.label("record_ttl")).help(HohenheimFormCopy.help("record_ttl")).build());
+        .suffix("s").label(HohenheimFormCopy.label("record_ttl")).help(HohenheimFormCopy.help("record_ttl")).build());
     public static final StringField VALUE = SCHEMA.addField(StringField.builder().name("value")
         .label(HohenheimFormCopy.label("record_value")).help(HohenheimFormCopy.help("record_value")).build());
     public static final IntegerField PRIORITY = SCHEMA.addField(IntegerField.builder().name("priority")

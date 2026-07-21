@@ -5,10 +5,10 @@
 {% declare zoneId: Integer %}
 {% declare origin: String %}
 {% declare peerName: String = "" %}
-{% declare records: List %}
+{% declare records: List<DnsRecordView> %}
 {% declare editable: Boolean = false %}
 {% declare notice: String = "" %}
-{% declare editRecord: Map = null %}
+{% declare editRecord: DnsRecordFormView = null %}
 {% declare recordTypes: List %}
 {% declare error: String = "" %}
 {% declare saved: Boolean = false %}
@@ -39,11 +39,11 @@
     {% if editRecord %}
     <form method="POST" action={% "/admin/dns-zones/" + zoneId + "/remote-records" %}>
         {% csrf() %}
-        <input type="hidden" name="record_id" value={% editRecord.get("id") %}>
+        <input type="hidden" name="record_id" value={% editRecord.id %}>
         <pl-card>
             <pl-card-header>
                 <pl-card-title>
-                    {% if editRecord.get("id") == "" %}
+                    {% if editRecord.id == "" %}
                     {{ t("add_record", scope: "dns_zone") }}
                     {% else %}
                     {{ t("edit_record", scope: "dns_remote") }}
@@ -53,11 +53,11 @@
             <pl-card-content class="hh-remote-record-form">
                 <pl-field>
                     <pl-label target="rr_name">{{ t("record_name_column", scope: "dns_zone") }}</pl-label>
-                    <pl-input inputId="rr_name" type="text" name="name" value={% editRecord.get("name") %}></pl-input>
+                    <pl-input inputId="rr_name" type="text" name="name" value={% editRecord.name %}></pl-input>
                 </pl-field>
                 <pl-field>
                     <pl-label target="rr_type">{{ t("record_type_column", scope: "dns_zone") }}</pl-label>
-                    <pl-select name="type" value={% editRecord.get("type") %} submitEmpty={% true %}>
+                    <pl-select name="type" value={% editRecord.type %} submitEmpty={% true %}>
                         {% each recordTypes as index, recordType %}
                         <pl-select-item value={% recordType %}>{{ recordType }}</pl-select-item>
                         {% /each %}
@@ -65,27 +65,30 @@
                 </pl-field>
                 <pl-field>
                     <pl-label target="rr_value">{{ t("record_value_column", scope: "dns_zone") }}</pl-label>
-                    <pl-input inputId="rr_value" type="text" name="value" value={% editRecord.get("value") %}></pl-input>
+                    <pl-input inputId="rr_value" type="text" name="value" value={% editRecord.value %}></pl-input>
                 </pl-field>
                 <pl-field>
                     <pl-label target="rr_ttl">{{ t("record_ttl_column", scope: "dns_zone") }}</pl-label>
-                    <pl-input inputId="rr_ttl" type="text" name="ttl" value={% editRecord.get("ttl") %}></pl-input>
+                    <pl-input-group>
+                        <pl-input inputId="rr_ttl" type="number" name="ttl" value={% editRecord.ttl %}></pl-input>
+                        <pl-input-group-addon>s</pl-input-group-addon>
+                    </pl-input-group>
                 </pl-field>
                 <pl-field>
                     <pl-label target="rr_priority">{{ t("priority", scope: "dns_remote") }}</pl-label>
-                    <pl-input inputId="rr_priority" type="text" name="priority" value={% editRecord.get("priority") %}></pl-input>
+                    <pl-input inputId="rr_priority" type="text" name="priority" value={% editRecord.priority %}></pl-input>
                 </pl-field>
                 <pl-field>
                     <pl-label target="rr_weight">{{ t("weight", scope: "dns_remote") }}</pl-label>
-                    <pl-input inputId="rr_weight" type="text" name="weight" value={% editRecord.get("weight") %}></pl-input>
+                    <pl-input inputId="rr_weight" type="text" name="weight" value={% editRecord.weight %}></pl-input>
                 </pl-field>
                 <pl-field>
                     <pl-label target="rr_port">{{ t("port", scope: "dns_remote") }}</pl-label>
-                    <pl-input inputId="rr_port" type="text" name="port" value={% editRecord.get("port") %}></pl-input>
+                    <pl-input inputId="rr_port" type="text" name="port" value={% editRecord.port %}></pl-input>
                 </pl-field>
                 <pl-field>
                     <pl-label target="rr_enabled">{{ t("record_status_column", scope: "dns_zone") }}</pl-label>
-                    <pl-select name="enabled" value={% editRecord.get("enabled") %} submitEmpty={% true %}>
+                    <pl-select name="enabled" value={% editRecord.enabled %} submitEmpty={% true %}>
                         <pl-select-item value="true">{{ t("record_enabled_badge", scope: "dns_zone") }}</pl-select-item>
                         <pl-select-item value="false">{{ t("record_disabled_badge", scope: "dns_zone") }}</pl-select-item>
                     </pl-select>
@@ -116,21 +119,21 @@
             <pl-table-row>
                 <pl-table-cell>
                     {% if editable %}
-                    <a href={% "/admin/dns-zones/" + zoneId + "/page/records?record=" + record.get("id") %}><code>{{ record.get("name") }}</code></a>
+                    <a href={% "/admin/dns-zones/" + zoneId + "/page/records?record=" + record.id %}><code>{{ record.name }}</code></a>
                     {% else %}
-                    <code>{{ record.get("name") }}</code>
+                    <code>{{ record.name }}</code>
                     {% /if %}
                 </pl-table-cell>
-                <pl-table-cell><pl-badge variant={% "secondary" %}>{{ record.get("type") }}</pl-badge></pl-table-cell>
-                <pl-table-cell>{{ record.get("ttl") }}</pl-table-cell>
-                <pl-table-cell><code>{{ record.get("value") }}</code></pl-table-cell>
+                <pl-table-cell><pl-badge variant={% "secondary" %}>{{ record.type }}</pl-badge></pl-table-cell>
+                <pl-table-cell>{{ record.ttl }}</pl-table-cell>
+                <pl-table-cell><code>{{ record.value }}</code></pl-table-cell>
                 <pl-table-cell>
-                    {% if record.get("enabled") == true %}
+                    {% if record.enabled == true %}
                     <pl-badge variant={% "success" %}>{{ t("record_enabled_badge", scope: "dns_zone") }}</pl-badge>
                     {% else %}
                     <pl-badge variant={% "outline" %}>{{ t("record_disabled_badge", scope: "dns_zone") }}</pl-badge>
                     {% /if %}
-                    {% if record.get("managed") == true %}
+                    {% if record.managed == true %}
                     <pl-badge variant={% "secondary" %}>{{ t("record_managed_badge", scope: "dns_zone") }}</pl-badge>
                     {% /if %}
                 </pl-table-cell>
@@ -139,7 +142,7 @@
                     <form method="POST" action={% "/admin/dns-zones/" + zoneId + "/remote-records" %} data-confirm={% t("delete_confirm", scope: "dns_remote") %}>
                         {% csrf() %}
                         <input type="hidden" name="action" value="delete">
-                        <input type="hidden" name="record_id" value={% record.get("id") %}>
+                        <input type="hidden" name="record_id" value={% record.id %}>
                         <pl-button variant={% "ghost" %} type="submit">{{ t("delete_remote", scope: "dns_remote") }}</pl-button>
                     </form>
                 </pl-table-cell>

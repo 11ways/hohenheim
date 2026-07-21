@@ -24,12 +24,12 @@ public class GitSourceSchema {
             .help(HohenheimFormCopy.help("build_command")).build());
 
     public static final StringField BUILD_DIRECTORY = SCHEMA.addField(
-        StringField.builder().name("build_directory").label(HohenheimFormCopy.label("build_directory"))
+        PathField.builder().name("build_directory").label(HohenheimFormCopy.label("build_directory"))
             .help(HohenheimFormCopy.help("build_directory")).build());
 
     public static final IntegerField BUILD_TIMEOUT = SCHEMA.addField(
         IntegerField.builder().name("build_timeout").label(HohenheimFormCopy.label("build_timeout"))
-            .help(HohenheimFormCopy.help("build_timeout")).build());
+            .suffix("s").help(HohenheimFormCopy.help("build_timeout")).build());
 
     public static final BooleanField AUTO_DEPLOY = SCHEMA.addField(
         BooleanField.builder("auto_deploy").defaultValue(true).label(HohenheimFormCopy.label("auto_deploy"))
@@ -37,7 +37,7 @@ public class GitSourceSchema {
 
     public static final IntegerField POLL_INTERVAL = SCHEMA.addField(
         IntegerField.builder().name("poll_interval").label(HohenheimFormCopy.label("poll_interval"))
-            .help(HohenheimFormCopy.help("poll_interval")).build());
+            .suffix("s").help(HohenheimFormCopy.help("poll_interval")).build());
 
     public static final StringField WEBHOOK_SECRET = SCHEMA.addField(
         StringField.builder().name("webhook_secret").secret().label(HohenheimFormCopy.label("webhook_secret"))

@@ -41,15 +41,16 @@ public final class AdminDashboard extends DashboardPanelPeer {
     @Override
     public @NonNull WidgetTree widgets(@NonNull AccessContext accessContext) {
         WidgetTree stats = new WidgetTree(List.of(
-            stat("site", "hohenheim.site", "sites"),
-            stat("certificate", "hohenheim.certificate", "certificates"),
-            stat("access_list", "hohenheim.access_list", "access-lists")));
+            stat("site", "hohenheim.site", "sites", "globe"),
+            stat("certificate", "hohenheim.certificate", "certificates", "lock"),
+            stat("access_list", "hohenheim.access_list", "access-lists", "shield-halved")));
 
         List<WidgetInstance> widgets = new ArrayList<>();
         if (Models.get(SiteModel.class).findActive().isEmpty()) {
             widgets.add(section(new WidgetInstance(OnboardingWidget.ID, Map.of())));
         }
-        widgets.add(section(new WidgetInstance(AttentionWidget.ID, Map.of())));
+        widgets.add(section(new WidgetInstance(AttentionWidget.ID, Map.of())
+            .withData(AttentionCollector.collect())));
         widgets.add(section(new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 3), stats)));
         widgets.add(section(new WidgetInstance(RecordsWidget.ID, Map.of(
                 "title", localized("recent_activity", "dashboard"),
@@ -62,10 +63,11 @@ public final class AdminDashboard extends DashboardPanelPeer {
 
     /** The tile label resolves the model's "plural" microcopy per content locale. */
     private static @NonNull WidgetInstance stat(@NonNull String modelScope, @NonNull String sourceToken,
-                                                @NonNull String resourceSlug) {
+                                                @NonNull String resourceSlug, @NonNull String icon) {
         return new WidgetInstance(StatWidget.ID, Map.of(
             "label", localized("plural", modelScope),
             "source", sourceToken,
+            "icon", icon,
             "link", "/admin/" + resourceSlug));
     }
 

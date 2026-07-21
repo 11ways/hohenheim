@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -57,26 +58,25 @@ public class ServerService extends DatasourceScoped {
      *  All resource fields are 0 when the host is unreachable. */
     public record Summary(String name, String mode, String sshTarget, boolean reachable,
                           int cpus, long memoryBytes, int containersRunning, int containersTotal,
-                          int images) {}
+                          int images, String dockerVersion, String operatingSystem,
+                          String osType, String architecture) {}
 
     /** All servers with reachability + host stats (from Docker {@code /info}), best-effort per record. */
     public List<Summary> summaries() {
         List<Summary> result = new ArrayList<>();
         for (Row row : query(() -> model().find().all())) {
-            String target = row.get(ServerModel.SSH_TARGET);
-            Map<String, Object> info = infoFor(row);
-            result.add(new Summary(
-                row.get(ServerModel.NAME),
-                row.get(ServerModel.MODE),
-                target != null ? target : "",
-                info != null,
-                asInt(info, "NCPU"),
-                asLong(info, "MemTotal"),
-                asInt(info, "ContainersRunning"),
-                asInt(info, "Containers"),
-                asInt(info, "Images")));
+            result.add(summaryFor(row));
         }
         return result;
+    }
+
+    /** Returns one named server's live Docker snapshot without probing every host. */
+    public @Nullable Summary summary(String name) {
+        if (LOCAL.equals(name)) {
+            ensureLocal();
+        }
+        Row row = query(() -> model().findByName(name));
+        return row != null ? summaryFor(row) : null;
     }
 
     /** Just the server names (no reachability probe), for form dropdowns. */
@@ -150,11 +150,34 @@ public class ServerService extends DatasourceScoped {
         }
     }
 
+    private static Summary summaryFor(Row row) {
+        String target = row.get(ServerModel.SSH_TARGET);
+        Map<String, Object> info = infoFor(row);
+        return new Summary(
+            row.get(ServerModel.NAME),
+            row.get(ServerModel.MODE),
+            target != null ? target : "",
+            info != null,
+            asInt(info, "NCPU"),
+            asLong(info, "MemTotal"),
+            asInt(info, "ContainersRunning"),
+            asInt(info, "Containers"),
+            asInt(info, "Images"),
+            asString(info, "ServerVersion"),
+            asString(info, "OperatingSystem"),
+            asString(info, "OSType"),
+            asString(info, "Architecture"));
+    }
+
     private static int asInt(Map<String, Object> info, String key) {
         return info != null && info.get(key) instanceof Number n ? n.intValue() : 0;
     }
 
     private static long asLong(Map<String, Object> info, String key) {
         return info != null && info.get(key) instanceof Number n ? n.longValue() : 0L;
+    }
+
+    private static String asString(Map<String, Object> info, String key) {
+        return info != null && info.get(key) != null ? String.valueOf(info.get(key)) : "";
     }
 }

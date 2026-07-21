@@ -40,7 +40,7 @@ public class RedirectSiteType implements SiteTypeHandler {
 
     // Honored generically by SiteDispatcher's per-route delay scheduler.
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").label(HohenheimFormCopy.label("delay"))
+        IntegerField.builder().name("delay").suffix("ms").label(HohenheimFormCopy.label("delay"))
             .help(HohenheimFormCopy.help("delay")).build());
 
     @Override

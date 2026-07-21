@@ -138,6 +138,7 @@ public final class CertificateResource extends RowResource {
         validatePems(values);
         values.put("provider", "custom");
         values.put("status", CertificateModel.STATUS_ACTIVE);
+        values.put(CertificateModel.AUTO_RENEW.getName(), false);
         return super.persistRow(values, accessContext);
     }
 

@@ -40,7 +40,7 @@ public class DockerSiteType implements SiteTypeHandler {
 
     // Used only for git-sourced sites: path to the Dockerfile within the checkout.
     public static final StringField DOCKERFILE = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("dockerfile").label(HohenheimFormCopy.label("dockerfile"))
+        PathField.builder().name("dockerfile").label(HohenheimFormCopy.label("dockerfile"))
             .help(HohenheimFormCopy.help("dockerfile")).build());
 
     // Target server (servers.name); blank/local runs on the local daemon, else a remote host over SSH.

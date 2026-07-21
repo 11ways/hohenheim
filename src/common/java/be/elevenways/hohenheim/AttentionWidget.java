@@ -12,8 +12,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 /**
  * Dashboard attention panel: operational states that need an operator
  * (error certificates, down/degraded sites, failed databases, failed
- * latest deploys, failed task runs). Items come from the server-installed
- * {@link AttentionItems} collector at render time; no config.
+ * latest deploys, failed task runs).
  *
  * @author Jelle De Loecker
  * @since 0.2.0

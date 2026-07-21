@@ -1,12 +1,16 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.dns.DnsRecordDto;
+import be.elevenways.hohenheim.dns.DnsRecordListResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.sun.net.httpserver.HttpServer;
@@ -29,6 +33,7 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Central DNS editing: the record API an owning instance exposes, and the
@@ -113,18 +118,28 @@ class DnsCentralEditTest extends HohenheimTestBase {
         var created = apiPost("/api/dns/zones/owned.example/records",
             "name=www&type=A&value=192.0.2.1&ttl=300");
         assertThat(created.statusCode()).isEqualTo(200);
-        assertThat(created.body()).contains("\"id\"");
+        int recordId = recordIdOf("owned.example", "www");
+        assertThat(created.body()).isEqualTo("{\"id\":" + recordId + "}");
         assertThat(zoneSerial(ownedZoneId)).isGreaterThan(serialBefore);
 
         // List includes it, with its id.
         var list = apiGet("/api/dns/zones/owned.example/records");
         assertThat(list.statusCode()).isEqualTo(200);
-        assertThat(list.body()).contains("\"www\"").contains("192.0.2.1");
-        int recordId = recordIdOf("owned.example", "www");
+        DnsRecordListResponse listed = Zenit.DRY.fromJson(list.body(), DnsRecordListResponse.class);
+        assertThat(listed.zone()).isEqualTo("owned.example");
+        assertThat(listed.records()).singleElement().satisfies(record -> {
+            assertThat(record).isInstanceOf(DnsRecordDto.class);
+            assertThat(record.id()).isEqualTo(recordId);
+            assertThat(record.name()).isEqualTo("www");
+            assertThat(record.value()).isEqualTo("192.0.2.1");
+            assertThat(record.ttl()).isEqualTo(300);
+        });
+        assertThat(list.body()).contains("\"managed_by\":null");
 
         // Update only the value; the rest keeps its stored state.
         var updated = apiPost("/api/dns/zones/owned.example/records/" + recordId, "value=192.0.2.7");
         assertThat(updated.statusCode()).isEqualTo(200);
+        assertThat(updated.body()).isEqualTo("{\"id\":" + recordId + "}");
         Row record = Models.get(DnsRecordModel.class).findById(recordId);
         assertThat((String) record.get(DnsRecordModel.VALUE)).isEqualTo("192.0.2.7");
         assertThat((String) record.get(DnsRecordModel.NAME)).isEqualTo("www");
@@ -138,6 +153,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         // Delete.
         var deleted = apiPost("/api/dns/zones/owned.example/records/" + recordId + "/delete", "");
         assertThat(deleted.statusCode()).isEqualTo(200);
+        assertThat(deleted.body()).isEqualTo("{\"status\":\"deleted\"}");
         assertThat(Models.get(DnsRecordModel.class).findById(recordId)).isNull();
     }
 
@@ -169,6 +185,14 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.body = "{\"zone\":\"central.example\",\"serial\":9,\"records\":["
             + "{\"id\":5,\"name\":\"www\",\"type\":\"A\",\"ttl\":300,\"value\":\"198.51.100.9\",\"enabled\":true}]}";
 
+        DnsPeerApi api = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class).findById(peerId));
+        assertThat(api).isNotNull();
+        assertThat(api.listRecords("central.example")).singleElement().satisfies(record -> {
+            assertThat(record).isInstanceOf(DnsRecordDto.class);
+            assertThat(record.id()).isEqualTo(5);
+            assertThat(record.ttl()).isEqualTo(300);
+        });
+
         var page = get("/admin/dns-zones/" + zoneId + "/page/records");
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(page.body()).contains("198.51.100.9");
@@ -178,6 +202,11 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat(listCall.method()).isEqualTo("GET");
         assertThat(listCall.path()).isEqualTo("/api/dns/zones/central.example/records");
         assertThat(listCall.authorization()).isEqualTo("Bearer test-peer-key");
+
+        var editPage = get("/admin/dns-zones/" + zoneId + "/page/records?record=5");
+        assertThat(editPage.statusCode()).isEqualTo(200);
+        assertThat(editPage.body()).contains("name=\"record_id\" value=\"5\"")
+            .contains("198.51.100.9");
     }
 
     @Test
@@ -202,6 +231,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
 
         // Update and delete address the owner's record id.
         stub.calls.clear();
+        stub.body = "";
         var updated = postForm("/admin/dns-zones/" + zoneId + "/remote-records",
             "record_id=6&name=api&type=CNAME&value=other.example.&enabled=true");
         assertThat(updated.headers().firstValue("Location").orElse("")).contains("saved=1");
@@ -212,10 +242,50 @@ class DnsCentralEditTest extends HohenheimTestBase {
             "action=delete&record_id=6");
         assertThat(deleted.headers().firstValue("Location").orElse("")).contains("saved=1");
         assertThat(stub.calls.get(0).path()).isEqualTo("/api/dns/zones/central.example/records/6/delete");
+
+        stub.body = "{\"records\":[{\"name\":\"missing-id\",\"type\":\"A\",\"value\":\"192.0.2.1\",\"enabled\":true}]}";
+        DnsPeerApi api = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class)
+            .findById(zonePeerId("central.example")));
+        assertThatThrownBy(() -> api.listRecords("central.example"))
+            .isInstanceOf(DnsPeerApi.PeerApiException.class)
+            .hasMessage("Unexpected response from peer");
     }
 
     @Test
     @Order(5)
+    void peerClientMapsCreateUpdateAndDeleteValidationRefusals() {
+        DnsPeerApi api = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class)
+            .findById(zonePeerId("central.example")));
+        assertThat(api).isNotNull();
+        stub.status = 422;
+
+        stub.body = validationRefusal("name", "create_refused", "Create refused");
+        assertThatThrownBy(() -> api.createRecord("central.example", Map.of("name", "www")))
+            .isInstanceOfSatisfying(DnsPeerApi.PeerApiException.class, refusal -> {
+                assertThat(refusal.getViolationField()).isEqualTo("name");
+                assertThat(refusal.getViolationKey()).isEqualTo("create_refused");
+                assertThat(refusal.getMessage()).isEqualTo("Create refused");
+            });
+
+        stub.body = validationRefusal("value", "update_refused", "Update refused");
+        assertThatThrownBy(() -> api.updateRecord("central.example", 5, Map.of("value", "bad")))
+            .isInstanceOfSatisfying(DnsPeerApi.PeerApiException.class, refusal -> {
+                assertThat(refusal.getViolationField()).isEqualTo("value");
+                assertThat(refusal.getViolationKey()).isEqualTo("update_refused");
+                assertThat(refusal.getMessage()).isEqualTo("Update refused");
+            });
+
+        stub.body = validationRefusal("id", "delete_refused", "Delete refused");
+        assertThatThrownBy(() -> api.deleteRecord("central.example", 5))
+            .isInstanceOfSatisfying(DnsPeerApi.PeerApiException.class, refusal -> {
+                assertThat(refusal.getViolationField()).isEqualTo("id");
+                assertThat(refusal.getViolationKey()).isEqualTo("delete_refused");
+                assertThat(refusal.getMessage()).isEqualTo("Delete refused");
+            });
+    }
+
+    @Test
+    @Order(6)
     void peerRefusalsRoundTripAsLocalizedErrors() throws Exception {
         int zoneId = zoneIdOf("central.example");
 
@@ -272,6 +342,15 @@ class DnsCentralEditTest extends HohenheimTestBase {
 
     private static int zoneIdOf(String origin) {
         return Models.get(DnsZoneModel.class).findByOrigin(origin).get(DnsZoneModel.ID);
+    }
+
+    private static int zonePeerId(String origin) {
+        return Models.get(DnsZoneModel.class).findByOrigin(origin).get(DnsZoneModel.PRIMARY_PEER_ID);
+    }
+
+    private static String validationRefusal(String field, String key, String message) {
+        return "{\"error\":\"validation\",\"field\":\"" + field + "\",\"key\":\"" + key
+            + "\",\"message\":\"" + message + "\"}";
     }
 
     private static int recordIdOf(String origin, String name) {

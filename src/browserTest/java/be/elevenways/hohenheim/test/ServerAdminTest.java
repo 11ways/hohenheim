@@ -43,6 +43,22 @@ class ServerAdminTest extends HohenheimTestBase {
     }
 
     @Test
+    @Order(2)
+    void serverDetailShowsOneReadOnlyLiveDockerOverview() {
+        Row local = Models.get(ServerModel.class).find()
+            .where(ServerModel.NAME.eq("local")).first();
+        assertThat(local).isNotNull();
+
+        navigateToApp("/admin/servers/" + local.get(ServerModel.ID));
+        waitForHydration();
+
+        var overview = page.locator("pl-field[data-path='live_overview']");
+        assertThat(overview.locator(".zf-field-readonly").count()).isEqualTo(1);
+        assertThat(overview.locator(".zf-field-readonly").innerText()).contains("Docker");
+        assertThat(overview.locator("input, textarea").count()).isZero();
+    }
+
+    @Test
     @Order(3)
     void serverCreateAndEditRoundTrips() throws Exception {
         var create = postForm("/admin/servers/new", "name=edge-9&ssh_target=deploy%40edge9.example");

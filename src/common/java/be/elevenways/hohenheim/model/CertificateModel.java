@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.InputType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -60,6 +61,7 @@ public class CertificateModel extends Model {
         .help(HohenheimFormCopy.help("cert_private_key_pem")).build());
     public static final DateTimeField EXPIRES_ON = SCHEMA.addField(DateTimeField.builder().name("expires_on").build());
     public static final BooleanField AUTO_RENEW = SCHEMA.addField(BooleanField.builder("auto_renew").defaultValue(true)
+        .visibleIn(EditView.EDIT)
         .label(HohenheimFormCopy.label("cert_auto_renew"))
         .help(HohenheimFormCopy.help("cert_auto_renew")).build());
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
@@ -69,12 +71,15 @@ public class CertificateModel extends Model {
         .build());
     public static final DateTimeField ISSUED_ON = SCHEMA.addField(DateTimeField.builder().name("issued_on").build());
     public static final StringField RENEWAL_ERROR = SCHEMA.addField(StringField.builder().name("renewal_error")
+        .visibleIn(EditView.EDIT)
         .attribute(FieldAttributes.GROUP, "renewal")
         .label(HohenheimFormCopy.label("cert_renewal_error")).build());
     public static final IntegerField ERROR_COUNT = SCHEMA.addField(IntegerField.builder().name("error_count")
+        .visibleIn(EditView.EDIT)
         .attribute(FieldAttributes.GROUP, "renewal")
         .label(HohenheimFormCopy.label("cert_error_count")).build());
     public static final DateTimeField NEXT_ATTEMPT_AT = SCHEMA.addField(DateTimeField.builder().name("next_attempt_at")
+        .visibleIn(EditView.EDIT)
         .attribute(FieldAttributes.GROUP, "renewal")
         .label(HohenheimFormCopy.label("cert_next_attempt_at")).build());
     public static final StringField DOMAIN_NAMES_TEXT = SCHEMA.addField(StringField.builder().name("domain_names_text")
@@ -87,9 +92,11 @@ public class CertificateModel extends Model {
         .value(CHALLENGE_DNS, value -> value.displayName("DNS-01").icon("at").color("violet"))
         .label(HohenheimFormCopy.label("cert_challenge_type"))
         .help(HohenheimFormCopy.help("cert_challenge_type"))
+        .visibleIn(EditView.EDIT)
         .build());
     public static final StringField DNS_PUBLISHER = SCHEMA.addField(
         StringField.builder().name("dns_publisher")
+            .visibleIn(EditView.EDIT)
             .label(HohenheimFormCopy.label("cert_dns_publisher"))
             .help(HohenheimFormCopy.help("cert_dns_publisher")).build());
 
