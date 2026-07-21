@@ -1,8 +1,13 @@
 package be.elevenways.hohenheim.server;
 
-import be.elevenways.hohenheim.AttentionItems;
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.HohenheimPaths;
+import be.elevenways.hohenheim.dns.DnsApiErrorResponse;
+import be.elevenways.hohenheim.dns.DnsRecordDeleteResponse;
+import be.elevenways.hohenheim.dns.DnsRecordDto;
+import be.elevenways.hohenheim.dns.DnsRecordListResponse;
+import be.elevenways.hohenheim.dns.DnsRecordMutationResponse;
+import be.elevenways.hohenheim.dns.DnsValidationErrorResponse;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsPeerModel;
@@ -17,6 +22,8 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
+import be.elevenways.hohenheim.server.cms.CertificateRequestForm;
+import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.devtunnel.DevTunnelServerHandler;
 import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
@@ -24,6 +31,7 @@ import be.elevenways.hohenheim.server.process.IpcChannel;
 import be.elevenways.hohenheim.server.process.ManagedProcess;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.ProcessTerminalHandler;
+import be.elevenways.hohenheim.server.sitetype.SiteHandlers;
 import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
@@ -45,6 +53,9 @@ import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.HttpConduit;
 import be.elevenways.zenit.server.http.RedirectResult;
+import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
+import be.elevenways.zenit.forms.server.path.FilesystemBrowserRegistry;
+import be.elevenways.zenit.forms.server.path.FilesystemBrowserSource;
 
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -69,7 +80,8 @@ public final class HohenheimHandlers {
     }
 
     public static void init() {
-        AttentionItems.install(AttentionCollector::collect);
+        FilesystemBrowserRegistry.INSTANCE.register(FilesystemBrowserSource.of(
+            HohenheimPaths.SERVER_FILES, HohenheimPanel.ACCESS, Path.of("/")));
         initHealth();
         initCertificates();
         initDnsZones();
@@ -148,9 +160,9 @@ public final class HohenheimHandlers {
         CertificateModel certModel = Models.get(CertificateModel.class);
 
         HohenheimEndpoints.CERTIFICATES_REQUEST.setHandler(conduit -> {
-            Map<String, String> form = formMap(conduit);
+            Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
 
-            String manualToken = form.getOrDefault("manual_token", "").trim();
+            String manualToken = submittedString(form, "manual_token");
             if (!manualToken.isEmpty()) {
                 var proxy = ServerMain.getProxyServer();
                 if (proxy == null) {
@@ -164,26 +176,22 @@ public final class HohenheimHandlers {
                 return redirectUntyped("/admin/certificates");
             }
 
-            String domains = form.getOrDefault("domains", "").trim();
-            String niceName = form.getOrDefault("nice_name", "").trim();
-            String email = form.getOrDefault("letsencrypt_email", "").trim();
-            String challengeType = form.getOrDefault("challenge_type", CertificateModel.CHALLENGE_HTTP);
-            String dnsMode = form.getOrDefault("dns_mode", CertificateModel.DNS_PUBLISHER_MANUAL);
+            List<String> hostnames = CertificateRequestForm.submittedDomains(form);
+            String niceName = submittedString(form, "nice_name");
+            String email = submittedString(form, "letsencrypt_email");
+            String challengeType = submittedString(form, "challenge_type");
+            String dnsMode = submittedString(form, "dns_mode");
+            if (challengeType.isEmpty()) challengeType = CertificateModel.CHALLENGE_HTTP;
+            if (dnsMode.isEmpty()) dnsMode = CertificateModel.DNS_PUBLISHER_MANUAL;
 
             if (!email.isEmpty() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
                 return requestError(conduit, certificateError("invalid_email").withArg("email", email));
             }
-            if (domains.isEmpty()) {
+            if (hostnames.isEmpty()) {
                 return requestError(conduit, certificateError("domain_required"));
             }
             if (niceName.isEmpty()) {
-                niceName = domains.split("[,\\s]+")[0];
-            }
-
-            List<String> hostnames = new ArrayList<>();
-            for (String d : domains.split("[,\\s]+")) {
-                d = d.trim();
-                if (!d.isEmpty()) hostnames.add(d);
+                niceName = hostnames.get(0);
             }
 
             boolean dns = CertificateModel.CHALLENGE_DNS.equals(challengeType);
@@ -347,29 +355,15 @@ public final class HohenheimHandlers {
             if (zone == null) {
                 return null;
             }
-            List<Map<String, Object>> records = new ArrayList<>();
+            List<DnsRecordDto> records = new ArrayList<>();
             for (Row record : model.find()
                     .where(DnsRecordModel.ZONE_ID.eq(zone.get(DnsZoneModel.ID)))
                     .orderBy(DnsRecordModel.NAME, SortOrder.ASC)
                     .all()) {
-                Map<String, Object> entry = new LinkedHashMap<>();
-                entry.put("id", record.get(DnsRecordModel.ID));
-                entry.put("name", record.get(DnsRecordModel.NAME));
-                entry.put("type", record.get(DnsRecordModel.TYPE));
-                entry.put("ttl", record.get(DnsRecordModel.TTL));
-                entry.put("value", record.get(DnsRecordModel.VALUE));
-                entry.put("priority", record.get(DnsRecordModel.PRIORITY));
-                entry.put("weight", record.get(DnsRecordModel.WEIGHT));
-                entry.put("port", record.get(DnsRecordModel.PORT));
-                entry.put("enabled", Boolean.TRUE.equals(record.get(DnsRecordModel.ENABLED)));
-                entry.put("managed_by", record.get(DnsRecordModel.MANAGED_BY));
-                records.add(entry);
+                records.add(recordDto(record));
             }
-            Map<String, Object> body = new LinkedHashMap<>();
-            body.put("zone", zone.get(DnsZoneModel.ORIGIN));
-            body.put("serial", zone.get(DnsZoneModel.SERIAL));
-            body.put("records", records);
-            return jsonUntyped(body);
+            return new JsonResult<Object>(new DnsRecordListResponse(
+                zone.get(DnsZoneModel.ORIGIN), zone.get(DnsZoneModel.SERIAL), records));
         });
 
         HohenheimEndpoints.API_DNS_RECORD_CREATE.setHandler(conduit -> {
@@ -392,7 +386,8 @@ public final class HohenheimHandlers {
             model.save(row);
             ActivityLog.record(model, row.get(DnsRecordModel.ID), "created", "api");
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
-            return jsonUntyped(Map.of("id", row.get(DnsRecordModel.ID)));
+            return new JsonResult<Object>(
+                new DnsRecordMutationResponse(row.get(DnsRecordModel.ID)));
         });
 
         HohenheimEndpoints.API_DNS_RECORD_UPDATE.setHandler(conduit -> {
@@ -416,7 +411,8 @@ public final class HohenheimHandlers {
             model.save(record);
             ActivityLog.record(model, record.get(DnsRecordModel.ID), "updated", "api");
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
-            return jsonUntyped(Map.of("id", record.get(DnsRecordModel.ID)));
+            return new JsonResult<Object>(
+                new DnsRecordMutationResponse(record.get(DnsRecordModel.ID)));
         });
 
         HohenheimEndpoints.API_DNS_RECORD_DELETE.setHandler(conduit -> {
@@ -432,8 +428,22 @@ public final class HohenheimHandlers {
             model.delete(record);
             ActivityLog.record(model, recordId, "deleted", "api");
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
-            return jsonUntyped(Map.of("status", "deleted"));
+            return new JsonResult<Object>(new DnsRecordDeleteResponse("deleted"));
         });
+    }
+
+    private static DnsRecordDto recordDto(Row record) {
+        return new DnsRecordDto(
+            record.get(DnsRecordModel.ID),
+            record.get(DnsRecordModel.NAME),
+            record.get(DnsRecordModel.TYPE),
+            record.get(DnsRecordModel.TTL),
+            record.get(DnsRecordModel.VALUE),
+            record.get(DnsRecordModel.PRIORITY),
+            record.get(DnsRecordModel.WEIGHT),
+            record.get(DnsRecordModel.PORT),
+            Boolean.TRUE.equals(record.get(DnsRecordModel.ENABLED)),
+            record.get(DnsRecordModel.MANAGED_BY));
     }
 
     /** Gate + zone resolution shared by every DNS api handler; null = response already written. */
@@ -452,7 +462,8 @@ public final class HohenheimHandlers {
         if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
             // Edits belong on the owning instance; a replica must never fork.
             conduit.setResponseStatus(409);
-            conduit.endWithContentType("application/json", "{\"error\":\"not_primary\"}");
+            new JsonResult<Object>(new DnsApiErrorResponse("not_primary"))
+                .finalizeConduit(conduit);
             return null;
         }
         return zone;
@@ -561,14 +572,14 @@ public final class HohenheimHandlers {
     private static ActionResult<Object> validationError(Conduit conduit, Violations violations) {
         Violation first = violations.all().isEmpty() ? null : violations.all().get(0);
         conduit.setResponseStatus(422);
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("error", "validation");
-        if (first != null) {
-            body.put("field", first.fieldName());
-            body.put("key", first.message().key());
-            body.put("message", first.message().resolve(conduit.getLocales(), conduit.getMessageResolver()));
+        if (first == null) {
+            return new JsonResult<Object>(new DnsApiErrorResponse("validation"));
         }
-        return jsonUntyped(body);
+        return new JsonResult<Object>(new DnsValidationErrorResponse(
+            "validation",
+            first.fieldName(),
+            first.message().key(),
+            first.message().resolve(conduit.getLocales(), conduit.getMessageResolver())));
     }
 
     // -----------------------------------------------------------------------
@@ -828,19 +839,7 @@ public final class HohenheimHandlers {
     // -----------------------------------------------------------------------
 
     private static Optional<ManagedProcessSiteHandler> managedHandler(Integer siteId) {
-        var proxy = ServerMain.getProxyServer();
-        if (proxy != null && siteId != null) {
-            var handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
-            // Git-sourced sites wrap their process handler; unwrap so process
-            // control works for them too.
-            if (handler instanceof GitSiteRequestHandler git) {
-                handler = git.innerHandler();
-            }
-            if (handler instanceof ManagedProcessSiteHandler managed) {
-                return Optional.of(managed);
-            }
-        }
-        return Optional.empty();
+        return Optional.ofNullable(SiteHandlers.managedProcess(siteId));
     }
 
     private static Optional<GitSiteRequestHandler> gitHandler(Integer siteId) {
@@ -857,6 +856,14 @@ public final class HohenheimHandlers {
             return http.getFormData().toStringMap();
         }
         return Map.of();
+    }
+
+    private static String submittedString(Map<String, Object> values, String name) {
+        Object value = values.get(name);
+        if (value instanceof List<?> list) {
+            value = list.isEmpty() ? null : list.get(0);
+        }
+        return value == null ? "" : String.valueOf(value).trim();
     }
 
 

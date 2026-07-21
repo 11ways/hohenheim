@@ -70,6 +70,27 @@ class AuthProviderAdminTest extends HohenheimTestBase {
 
     @Test
     @Order(2)
+    void configSectionShowsPlaceholderUntilATypeIsChosen() {
+        navigateToApp("/admin/auth-providers/new");
+        waitForHydration();
+
+        // No provider type selected yet: the config fieldset must SAY so
+        // instead of rendering a mysteriously empty section.
+        var placeholder = page.locator("zf-schema-sub-form pl-empty-state");
+        assertThat(placeholder.count()).isEqualTo(1);
+        assertThat(placeholder.innerText()).contains("choose a type");
+
+        // Choosing a type swaps the placeholder for the type's fields, live.
+        page.locator("pl-select[name='provider_type'] .pl-select-field").click();
+        page.waitForSelector("he-bottom .pl-select-popup[data-open]");
+        page.locator("div[role='option'][data-value='hohenheim:basic']").click();
+        page.waitForSelector("zf-schema-sub-form pl-field");
+
+        assertThat(page.locator("zf-schema-sub-form pl-empty-state").count()).isZero();
+    }
+
+    @Test
+    @Order(2)
     void requiredPermissionOffersKnownPermissionCombobox() {
         // PermissionField: a free-text pl-select over the KnownPermissions
         // vocabulary (the LuckPerms editor model) with described entries.
@@ -98,6 +119,29 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         popup.locator("input[role='searchbox']").press("Enter");
         assertThat(picker.locator(".pl-select-value").innerText().trim())
             .isEqualTo("custom.special.permission");
+    }
+
+    @Test
+    @Order(1)
+    void permissionDescriptionsResolveOnAClientSideRender() {
+        // Regression: over soft navigation the form renders CLIENT-side; the
+        // permission descriptions are Java-registered microcopy, which only
+        // resolves in the browser when the served bundle carries catalog keys
+        // (they are in no template manifest). A raw "auth_admin_access" here
+        // means the bundle union regressed to manifest-only.
+        navigateToApp("/admin/auth-providers");
+        waitForHydration();
+
+        page.locator("a[href='/admin/auth-providers/new']").first().click();
+        page.waitForCondition(() ->
+            page.locator("pl-select[name='required_permission']").count() == 1);
+
+        var subtitle = page.locator(
+            "div[role='option'][data-value='auth.admin.access'] .pl-select-subtitle");
+        page.waitForCondition(() -> subtitle.count() == 1
+            && !subtitle.innerText().trim().equals("auth_admin_access")
+            && !subtitle.innerText().trim().isEmpty());
+        assertThat(subtitle.innerText()).isEqualTo("Access the admin panel");
     }
 
     @Test
@@ -131,6 +175,10 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         try {
             navigateToApp("/admin/auth-providers/" + row.get(SiteAuthProviderModel.ID));
             waitForHydration();
+
+            // The endpoint config field is a UrlField: a native url input.
+            assertThat(page.locator("pl-field[data-path='config.endpoint'] input[type='url']").count())
+                .isEqualTo(1);
 
             assertThat(page.locator("div[role='option'][data-value='site.internal']").count())
                 .isEqualTo(1);

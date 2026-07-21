@@ -256,12 +256,12 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
 
     private void startPolling() {
         Object pollObj = sourceSettings.get("poll_interval");
-        int pollMinutes = pollObj instanceof Integer p ? p : 0;
-        if (pollMinutes <= 0) return;
+        int pollSeconds = pollObj instanceof Integer p ? p : 0;
+        if (pollSeconds <= 0) return;
 
         pollFuture = GitProvisioner.getPollScheduler().scheduleAtFixedRate(
             this::pollForChanges,
-            pollMinutes, pollMinutes, TimeUnit.MINUTES
+            pollSeconds, pollSeconds, TimeUnit.SECONDS
         );
     }
 

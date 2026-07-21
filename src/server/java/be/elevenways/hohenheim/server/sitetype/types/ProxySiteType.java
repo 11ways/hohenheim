@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
@@ -21,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.validation.PathKind;
 
 /**
  * Forwards requests to an upstream HTTP/HTTPS server.
@@ -62,11 +64,12 @@ public class ProxySiteType implements SiteTypeHandler {
             .help(HohenheimFormCopy.help("rewrite_location")).build());
 
     public static final StringField SOCKET = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("socket").label(HohenheimFormCopy.label("upstream_socket"))
+        PathField.builder("socket").browserSource(HohenheimPaths.SERVER_FILES, PathKind.ANY)
+            .label(HohenheimFormCopy.label("upstream_socket"))
             .help(HohenheimFormCopy.help("upstream_socket")).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").label(HohenheimFormCopy.label("delay"))
+        IntegerField.builder().name("delay").suffix("ms").label(HohenheimFormCopy.label("delay"))
             .help(HohenheimFormCopy.help("delay")).build());
 
     @Override

@@ -3,7 +3,7 @@
 {% declare title: String %}
 {% declare zoneId: Integer %}
 {% declare origin: String %}
-{% declare records: List %}
+{% declare records: List<DnsRecordView> %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -31,17 +31,17 @@
         <pl-table-body>
             {% each records as index, record %}
             <pl-table-row>
-                <pl-table-cell><a href={% record.get("editUrl") %}><code>{{ record.get("name") }}</code></a></pl-table-cell>
-                <pl-table-cell><pl-badge variant={% "secondary" %}>{{ record.get("type") }}</pl-badge></pl-table-cell>
-                <pl-table-cell>{{ record.get("ttl") }}</pl-table-cell>
-                <pl-table-cell><code>{{ record.get("value") }}</code></pl-table-cell>
+                <pl-table-cell><a href={% record.editUrl %}><code>{{ record.name }}</code></a></pl-table-cell>
+                <pl-table-cell><pl-badge variant={% "secondary" %}>{{ record.type }}</pl-badge></pl-table-cell>
+                <pl-table-cell>{{ record.ttl }}</pl-table-cell>
+                <pl-table-cell><code>{{ record.value }}</code></pl-table-cell>
                 <pl-table-cell>
-                    {% if record.get("enabled") == true %}
+                    {% if record.enabled == true %}
                     <pl-badge variant={% "success" %}>{{ t("record_enabled_badge", scope: "dns_zone") }}</pl-badge>
                     {% else %}
                     <pl-badge variant={% "outline" %}>{{ t("record_disabled_badge", scope: "dns_zone") }}</pl-badge>
                     {% /if %}
-                    {% if record.get("managed") == true %}
+                    {% if record.managed == true %}
                     <pl-badge variant={% "secondary" %}>{{ t("record_managed_badge", scope: "dns_zone") }}</pl-badge>
                     {% /if %}
                 </pl-table-cell>

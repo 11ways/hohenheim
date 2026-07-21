@@ -66,27 +66,28 @@ public final class CertificateRequestPage extends PanelPage {
                     .resolve(conduit.getLocales(), conduit.getMessageResolver()));
             }
         }
-        prefillFromSite(conduit, vars);
+        List<String> domains = prefillFromSite(conduit, vars);
+        vars.put("domainForm", CertificateRequestForm.state(accessContext, domains));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/certificate-request"), vars);
     }
 
     /** A ?site= link (the site's Domains tab) prefills the LE-eligible exact hostnames. */
-    private static void prefillFromSite(@NonNull Conduit conduit, @NonNull Map<String, Object> vars) {
-        vars.put("domains", "");
+    private static @NonNull List<String> prefillFromSite(@NonNull Conduit conduit,
+                                                         @NonNull Map<String, Object> vars) {
         vars.put("niceName", "");
         String siteParam = conduit.getQueryParam("site");
         if (siteParam == null || siteParam.isEmpty()) {
-            return;
+            return List.of();
         }
         int siteId;
         try {
             siteId = Integer.parseInt(siteParam);
         } catch (NumberFormatException invalid) {
-            return;
+            return List.of();
         }
         Row site = Models.get(SiteModel.class).find().where(SiteModel.ID.eq(siteId)).first();
         if (site == null) {
-            return;
+            return List.of();
         }
         List<String> hostnames = new ArrayList<>();
         for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(siteId)) {
@@ -99,7 +100,7 @@ public final class CertificateRequestPage extends PanelPage {
                 hostnames.add(hostname);
             }
         }
-        vars.put("domains", String.join(" ", hostnames));
         vars.put("niceName", String.valueOf(site.get(SiteModel.NAME)));
+        return List.copyOf(hostnames);
     }
 }

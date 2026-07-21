@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.options.NodeVersionOptions;
 import be.elevenways.hohenheim.server.options.SystemUserOptions;
@@ -18,6 +19,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.validation.PathKind;
 
 import java.io.File;
 import java.util.*;
@@ -32,7 +34,8 @@ public class NodeSiteType implements SiteTypeHandler {
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField SCRIPT = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("script").label(HohenheimFormCopy.label("script"))
+        PathField.builder("script").browserSource(HohenheimPaths.SERVER_FILES, PathKind.FILE)
+            .label(HohenheimFormCopy.label("script"))
             .help(HohenheimFormCopy.help("script")).build());
 
     // Discovered node version ("hohenheim:<version>" registry key); null means
@@ -57,7 +60,7 @@ public class NodeSiteType implements SiteTypeHandler {
             .help(HohenheimFormCopy.help("maximum_processes")).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").label(HohenheimFormCopy.label("delay"))
+        IntegerField.builder().name("delay").suffix("ms").label(HohenheimFormCopy.label("delay"))
             .help(HohenheimFormCopy.help("delay")).build());
 
     // Environment variables as an ordered name -> value map

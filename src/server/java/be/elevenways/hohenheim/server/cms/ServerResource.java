@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -10,6 +11,8 @@ import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.common.edit.Computed;
+import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
@@ -17,6 +20,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
@@ -41,9 +45,17 @@ public final class ServerResource extends RowResource {
 
     private final ServerService serverService = new ServerService();
 
+    private static final StringField LIVE_OVERVIEW = StringField.builder("live_overview")
+        .label(HohenheimFormCopy.label("live_overview"))
+        .visibleIn(EditView.EDIT)
+        .build();
+
     private final FormSpec formSpec = FormSpec.builder()
         .add(ServerModel.NAME)
         .add(ServerModel.SSH_TARGET)
+        .add(Computed.of(LIVE_OVERVIEW, values -> serverOverview(String.valueOf(values.get("name"))))
+            .dependsOn("name")
+            .build())
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -82,7 +94,12 @@ public final class ServerResource extends RowResource {
 
     @Override
     public void applyValuesToRow(@NonNull Row row, @NonNull Map<String, Object> coerced) {
-        super.applyValuesToRow(row, coerced);
+        if (coerced.containsKey("name")) {
+            row.set(ServerModel.NAME, (String) coerced.get("name"));
+        }
+        if (coerced.containsKey("ssh_target")) {
+            row.set(ServerModel.SSH_TARGET, (String) coerced.get("ssh_target"));
+        }
         if (coerced.get("mode") instanceof String mode) {
             row.set(ServerModel.MODE, mode);
         }
@@ -106,11 +123,32 @@ public final class ServerResource extends RowResource {
                 status.put(summary.name(), "unreachable");
                 continue;
             }
-            status.put(summary.name(), String.format("up - %d cpu, %.1f GB, %d/%d containers, %d images",
-                summary.cpus(), summary.memoryBytes() / 1_000_000_000.0,
-                summary.containersRunning(), summary.containersTotal(), summary.images()));
+            status.put(summary.name(), formatSummary(summary));
         }
         return status;
+    }
+
+    private @NonNull String serverOverview(@NonNull String name) {
+        ServerService.Summary summary = this.serverService.summary(name);
+        return summary == null || !summary.reachable() ? "Docker unavailable" : formatSummary(summary);
+    }
+
+    private static @NonNull String formatSummary(ServerService.@NonNull Summary summary) {
+        String docker = summary.dockerVersion().isBlank() ? "Docker" : "Docker " + summary.dockerVersion();
+        String platform = summary.osType();
+        if (!summary.architecture().isBlank()) {
+            platform = platform.isBlank() ? summary.architecture() : platform + "/" + summary.architecture();
+        }
+        String operatingSystem = summary.operatingSystem().isBlank() ? platform : summary.operatingSystem();
+        if (!platform.isBlank() && !operatingSystem.equals(platform)) {
+            operatingSystem += " (" + platform + ")";
+        }
+        if (operatingSystem.isBlank()) {
+            operatingSystem = "unknown platform";
+        }
+        return String.format("%s | %s | %d CPU | %.1f GiB RAM | %d/%d containers | %d images",
+            docker, operatingSystem, summary.cpus(), summary.memoryBytes() / 1_073_741_824.0,
+            summary.containersRunning(), summary.containersTotal(), summary.images());
     }
 
     @Override

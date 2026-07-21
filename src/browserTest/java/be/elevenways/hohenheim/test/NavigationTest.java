@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
@@ -124,6 +127,48 @@ class NavigationTest extends HohenheimTestBase {
         assertThat(count).satisfiesAnyOf(
             t -> assertThat(t).contains("No records"),
             t -> assertThat(t).contains("of"));
+    }
+
+    @Test
+    @Order(10)
+    void softNavDashboardKeepsStatTitlesIconsAndAttentionEntries() throws Exception {
+        // Regression: the dashboard re-renders CLIENT-side over soft navigation.
+        // Stat titles are locale-map lookups (they need the payload-seeded locale
+        // chain) and typed attention items must ride WidgetInstance runtime
+        // data -- the old render-time server-only collector read produced a
+        // false "All clear" on every soft nav.
+        var certModel = Models.get(CertificateModel.class);
+        Row cert = certModel.createEmptyRow();
+        cert.set(CertificateModel.NICE_NAME, "softnav-attention-cert");
+        cert.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
+        cert.set(CertificateModel.STATUS, CertificateModel.STATUS_ERROR);
+        cert.set(CertificateModel.DOMAIN_NAMES_TEXT, "softnav.example.test");
+        cert.set(CertificateModel.RENEWAL_ERROR, "boom");
+        cert.set(CertificateModel.ERROR_COUNT, 3);
+        certModel.save(cert);
+
+        try {
+            navigateToApp("/admin/sites");
+            waitForHydration();
+
+            page.locator("pl-app-sidebar a[href='/admin/dashboard']").click();
+            page.waitForCondition(() -> page.locator(".hh-dashboard-band").count() >= 3);
+
+            // Stat tiles keep their localized titles AND their icons.
+            page.waitForCondition(() -> page.locator("pl-stat-card .label").count() >= 3);
+            var labels = page.locator("pl-stat-card .label").allInnerTexts();
+            assertThat(labels).anySatisfy(label -> assertThat(label).contains("Sites"));
+            assertThat(labels).allSatisfy(label -> assertThat(label.trim()).isNotEmpty());
+            assertThat(page.locator("pl-stat-card .stat-icon pl-icon").count())
+                .isGreaterThanOrEqualTo(3);
+
+            // The attention panel shows the real entries, never a false all-clear.
+            assertThat(page.locator(".hh-attention-item[data-severity='error']").count())
+                .isGreaterThanOrEqualTo(1);
+            assertThat(page.locator(".hh-attention-clear").count()).isZero();
+        } finally {
+            certModel.delete(cert);
+        }
     }
 
     @Test

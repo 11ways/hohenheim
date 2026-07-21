@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
@@ -16,6 +17,7 @@ import java.io.File;
 import java.util.*;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.validation.PathKind;
 
 /**
  * Runs an arbitrary command as a managed process.
@@ -30,7 +32,8 @@ public class CommandSiteType implements SiteTypeHandler {
             .help(HohenheimFormCopy.help("start_command")).build());
 
     public static final StringField WORKING_DIRECTORY = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("working_directory").label(HohenheimFormCopy.label("working_directory"))
+        PathField.builder("working_directory").browserSource(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
+            .label(HohenheimFormCopy.label("working_directory"))
             .help(HohenheimFormCopy.help("working_directory")).build());
 
     public static final StringField PORT_ARGUMENT = SETTINGS_SCHEMA.addField(
@@ -50,7 +53,7 @@ public class CommandSiteType implements SiteTypeHandler {
             .help(HohenheimFormCopy.help("maximum_processes")).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").label(HohenheimFormCopy.label("delay"))
+        IntegerField.builder().name("delay").suffix("ms").label(HohenheimFormCopy.label("delay"))
             .help(HohenheimFormCopy.help("delay")).build());
 
     // Environment variables as an ordered name -> value map

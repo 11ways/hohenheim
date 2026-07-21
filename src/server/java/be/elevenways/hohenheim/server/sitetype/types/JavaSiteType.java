@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
@@ -13,6 +14,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.validation.PathKind;
 
 import java.io.File;
 import java.util.*;
@@ -29,7 +31,8 @@ public class JavaSiteType implements SiteTypeHandler {
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField JAR_PATH = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("jar_path").placeholder("/opt/app/app.jar")
+        PathField.builder("jar_path").browserSource(HohenheimPaths.SERVER_FILES, PathKind.FILE)
+            .placeholder("/opt/app/app.jar")
             .label(HohenheimFormCopy.label("jar_path")).help(HohenheimFormCopy.help("jar_path")).build());
 
     public static final StringField JAVA_BINARY = SETTINGS_SCHEMA.addField(
@@ -45,7 +48,7 @@ public class JavaSiteType implements SiteTypeHandler {
             .label(HohenheimFormCopy.label("app_args")).help(HohenheimFormCopy.help("app_args")).build());
 
     public static final StringField WORKING_DIRECTORY = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("working_directory")
+        PathField.builder("working_directory").browserSource(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
             .label(HohenheimFormCopy.label("working_directory")).help(HohenheimFormCopy.help("working_directory")).build());
 
     public static final BooleanField WAIT_FOR_READY = SETTINGS_SCHEMA.addField(
@@ -61,7 +64,7 @@ public class JavaSiteType implements SiteTypeHandler {
             .help(HohenheimFormCopy.help("maximum_processes")).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").label(HohenheimFormCopy.label("delay"))
+        IntegerField.builder().name("delay").suffix("ms").label(HohenheimFormCopy.label("delay"))
             .help(HohenheimFormCopy.help("delay")).build());
 
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(

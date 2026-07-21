@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.hohenheim.dns.DnsRecordDto;
+import be.elevenways.hohenheim.dns.DnsRecordListResponse;
+import be.elevenways.hohenheim.dns.DnsValidationErrorResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -64,14 +67,20 @@ public final class DnsPeerApi {
         return new DnsPeerApi(baseUrl.trim(), apiKey.trim());
     }
 
-    /** @return the owner's live record rows for the zone (maps with id/name/type/ttl/value/...) */
-    @SuppressWarnings("unchecked")
-    public @NonNull List<Map<String, Object>> listRecords(@NonNull String origin) {
-        Object parsed = request("GET", recordsPath(origin), null);
-        if (parsed instanceof Map<?, ?> map && map.get("records") instanceof List<?> records) {
-            return (List<Map<String, Object>>) records;
+    /** @return the owner's live record rows for the zone */
+    public @NonNull List<DnsRecordDto> listRecords(@NonNull String origin) {
+        DnsRecordListResponse response = parseQuietly(
+            request("GET", recordsPath(origin), null), DnsRecordListResponse.class);
+        if (response == null || response.records() == null) {
+            throw new PeerApiException("Unexpected response from peer", null, null);
         }
-        throw new PeerApiException("Unexpected response from peer", null, null);
+        for (DnsRecordDto record : response.records()) {
+            if (record == null || record.id() == null || record.name() == null
+                || record.type() == null || record.value() == null) {
+                throw new PeerApiException("Unexpected response from peer", null, null);
+            }
+        }
+        return response.records();
     }
 
     public void createRecord(@NonNull String origin, @NonNull Map<String, String> fields) {
@@ -90,7 +99,7 @@ public final class DnsPeerApi {
         return "/api/dns/zones/" + URLEncoder.encode(origin, StandardCharsets.UTF_8) + "/records";
     }
 
-    private @Nullable Object request(@NonNull String method, @NonNull String path,
+    private @Nullable String request(@NonNull String method, @NonNull String path,
                                      @Nullable Map<String, String> formFields) {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
             .uri(URI.create(baseUrl + path))
@@ -112,28 +121,29 @@ public final class DnsPeerApi {
             throw new PeerApiException("Peer unreachable: " + e.getMessage(), null, null);
         }
 
-        Object parsed = parseQuietly(response.body());
         if (response.statusCode() >= 200 && response.statusCode() < 300) {
-            return parsed;
+            return response.body();
         }
-        if (parsed instanceof Map<?, ?> map) {
-            Object key = map.get("key");
-            Object field = map.get("field");
-            Object message = map.get("message");
+
+        DnsValidationErrorResponse refusal = parseQuietly(
+            response.body(), DnsValidationErrorResponse.class);
+        if (refusal != null && (refusal.error() != null || refusal.message() != null
+            || refusal.key() != null || refusal.field() != null)) {
             throw new PeerApiException(
-                message != null ? String.valueOf(message) : "Peer refused the edit (" + response.statusCode() + ")",
-                key != null ? String.valueOf(key) : null,
-                field != null ? String.valueOf(field) : null);
+                refusal.message() != null
+                    ? refusal.message()
+                    : "Peer refused the edit (" + response.statusCode() + ")",
+                refusal.key(), refusal.field());
         }
         throw new PeerApiException("Peer returned HTTP " + response.statusCode(), null, null);
     }
 
-    private static @Nullable Object parseQuietly(@Nullable String body) {
+    private static <T> @Nullable T parseQuietly(@Nullable String body, @NonNull Class<T> type) {
         if (body == null || body.isBlank()) {
             return null;
         }
         try {
-            return Zenit.DRY.parse(body);
+            return Zenit.DRY.fromJson(body, type);
         }
         catch (RuntimeException e) {
             return null;

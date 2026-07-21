@@ -5,6 +5,7 @@ import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.common.setting.SettingsContext;
+import be.elevenways.zenit.common.validation.PathKind;
 
 /**
  * All Hohenheim configuration settings, organized by group.
@@ -40,6 +41,7 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<String> HTTP_SOCKET_PATH = GROUP.buildSetting("http_socket_path", String.class)
+            .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.ANY)
             .description("Optional Unix socket path for the HTTP proxy instead of a public TCP listener. "
                 + "The socket bridges to a loopback TCP port, so on a multi-user host any local account "
                 + "can still reach the proxy via 127.0.0.1 regardless of the socket permissions")
@@ -125,6 +127,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> DNS_PROPAGATION_SECONDS = GROUP.buildSetting("dns_propagation_seconds", Integer.class)
             .defaultValue(30)
+            .suffix("s")
             .description("Seconds to wait after publishing DNS-01 TXT records")
             .build();
     }
@@ -160,6 +163,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<Integer> RATE_LIMIT_PER_SECOND = GROUP
             .buildSetting("rate_limit_per_second", Integer.class)
             .defaultValue(20)
+            .suffix("req/s")
             .description("Response-rate-limit per client network and query over UDP, the standard "
                 + "mitigation against DNS reflection abuse. Every second limited response is answered "
                 + "truncated so legitimate clients retry over TCP (never limited). 0 disables")
@@ -183,6 +187,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<String> ACCESS_PATH = GROUP.buildSetting("access_path", String.class)
             .defaultValue("/var/log/hohenheim/access.log")
+            .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
             .description("Access log file path")
             .build();
     }
@@ -209,6 +214,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<String> DATA_PATH = GROUP.buildSetting("data_path", String.class)
             .defaultValue("data")
+            .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
             .description("Base directory for persistent data (git repos, etc.)")
             .restartRequired()
             .build();
@@ -223,6 +229,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<String> PATH = GROUP.buildSetting("path", String.class)
             .defaultValue("hohenheim.db")
+            .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
             .description("SQLite database file path (used when 'url' is blank)")
             .restartRequired()
             .build();
@@ -255,6 +262,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<String> BACKUP_PATH = GROUP.buildSetting("backup_path", String.class)
             .defaultValue("data/backups")
+            .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
             .description("Directory for scheduled managed-database dumps")
             .build();
 
@@ -283,11 +291,13 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<String> DOMAIN_MISSES_LOG_PATH = GROUP.buildSetting("domain_misses_log_path", String.class)
             .defaultValue("/var/log/hohenheim/domain-misses.log")
+            .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
             .description("Path for domain miss log file (fail2ban)")
             .build();
 
         public static final SettingDefinition<Integer> DOMAIN_MISS_WINDOW_SECONDS = GROUP.buildSetting("domain_miss_window_seconds", Integer.class)
             .defaultValue(300)
+            .suffix("s")
             .description("Sliding window for counting domain misses towards a ban")
             .build();
 
@@ -339,6 +349,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<String> AUTHENTICATOR = GROUP.buildSetting("authenticator", String.class)
             .defaultValue("password")
             .description("Proteus authenticator slug")
+            .restartRequired()
             .build();
     }
 
@@ -351,11 +362,13 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Long> SESSION_TTL_SECONDS = GROUP.buildSetting("session_ttl_seconds", Long.class)
             .defaultValue(86400L)
+            .suffix("s")
             .description("Lifetime of a proxy-auth session (seconds)")
             .build();
 
         public static final SettingDefinition<Long> PERSISTENT_TTL_SECONDS = GROUP.buildSetting("persistent_ttl_seconds", Long.class)
             .defaultValue(1209600L)
+            .suffix("s")
             .description("Lifetime of a proxy-auth persistent (remember-me) cookie (seconds)")
             .build();
     }

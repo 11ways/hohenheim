@@ -28,15 +28,15 @@ public class DnsZoneModel extends Model {
     public static final IntegerField SERIAL = SCHEMA.addField(IntegerField.builder().name("serial").defaultValue(1)
         .label(HohenheimFormCopy.label("serial")).build());
     public static final IntegerField DEFAULT_TTL = SCHEMA.addField(IntegerField.builder().name("default_ttl").defaultValue(3600)
-        .label(HohenheimFormCopy.label("default_ttl")).help(HohenheimFormCopy.help("default_ttl")).build());
+        .suffix("s").label(HohenheimFormCopy.label("default_ttl")).help(HohenheimFormCopy.help("default_ttl")).build());
     public static final IntegerField NEGATIVE_TTL = SCHEMA.addField(IntegerField.builder().name("negative_ttl").defaultValue(300)
-        .label(HohenheimFormCopy.label("negative_ttl")).help(HohenheimFormCopy.help("negative_ttl")).build());
+        .suffix("s").label(HohenheimFormCopy.label("negative_ttl")).help(HohenheimFormCopy.help("negative_ttl")).build());
     public static final IntegerField SOA_REFRESH = SCHEMA.addField(IntegerField.builder().name("soa_refresh").defaultValue(7200)
-        .label(HohenheimFormCopy.label("soa_refresh")).help(HohenheimFormCopy.help("soa_refresh")).build());
+        .suffix("s").label(HohenheimFormCopy.label("soa_refresh")).help(HohenheimFormCopy.help("soa_refresh")).build());
     public static final IntegerField SOA_RETRY = SCHEMA.addField(IntegerField.builder().name("soa_retry").defaultValue(3600)
-        .label(HohenheimFormCopy.label("soa_retry")).help(HohenheimFormCopy.help("soa_retry")).build());
+        .suffix("s").label(HohenheimFormCopy.label("soa_retry")).help(HohenheimFormCopy.help("soa_retry")).build());
     public static final IntegerField SOA_EXPIRE = SCHEMA.addField(IntegerField.builder().name("soa_expire").defaultValue(1209600)
-        .label(HohenheimFormCopy.label("soa_expire")).help(HohenheimFormCopy.help("soa_expire")).build());
+        .suffix("s").label(HohenheimFormCopy.label("soa_expire")).help(HohenheimFormCopy.help("soa_expire")).build());
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true)
         .label(HohenheimFormCopy.label("zone_enabled")).help(HohenheimFormCopy.help("zone_enabled")).build());
 

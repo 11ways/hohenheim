@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -11,6 +12,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import java.nio.file.Path;
 import java.util.Map;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.validation.PathKind;
 
 /**
  * Serves static files from a directory.
@@ -21,7 +23,8 @@ public class StaticSiteType implements SiteTypeHandler {
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField ROOT_PATH = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("root_path").label(HohenheimFormCopy.label("root_path"))
+        PathField.builder("root_path").browserSource(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
+            .label(HohenheimFormCopy.label("root_path"))
             .help(HohenheimFormCopy.help("root_path")).build());
 
     // Default true matches the Node original (ecstatic showed listings out of the box).
@@ -39,11 +42,11 @@ public class StaticSiteType implements SiteTypeHandler {
             .help(HohenheimFormCopy.help("show_hidden_files")).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").label(HohenheimFormCopy.label("delay"))
+        IntegerField.builder().name("delay").suffix("ms").label(HohenheimFormCopy.label("delay"))
             .help(HohenheimFormCopy.help("delay")).build());
 
     public static final StringField FALLBACK_FILE = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("fallback_file").label(HohenheimFormCopy.label("fallback_file"))
+        PathField.builder().name("fallback_file").label(HohenheimFormCopy.label("fallback_file"))
             .help(HohenheimFormCopy.help("fallback_file")).build());
 
     @Override

@@ -79,7 +79,7 @@
                         <pl-table-cell colspan="5" class="hh-deploy-detail">
                             {% if deploy.get("error") != "" %}
                             <div class="hh-deploy-error">
-                                <pl-icon name="circle-exclamation"></pl-icon>
+                                <pl-icon name="triangle-exclamation"></pl-icon>
                                 <span>{{ deploy.get("error") }}</span>
                             </div>
                             {% /if %}

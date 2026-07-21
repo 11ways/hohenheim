@@ -20,6 +20,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -193,15 +194,19 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         assertThat(page.body()).contains("Deploy now");
         assertThat(page.body()).contains(firstCommit.substring(0, 8));
 
-        // The history table is striped and leads with the Started column.
-        // (host attribute order is not deterministic, so match within the tag)
-        assertThat(page.body()).containsPattern("<pl-table[^>]*\\bstriped\\b");
-        int header = page.body().indexOf("<pl-table-header");
-        assertThat(header).isPositive();
-        String headerRow = page.body().substring(header, page.body().indexOf("</pl-table-header>", header));
+        // The accessible table leads with the Started column.
+        assertThat(page.body()).contains("<pl-table");
+        int head = page.body().indexOf("<pl-table-header");
+        assertThat(head).isPositive();
+        String headerRow = page.body().substring(head, page.body().indexOf("</pl-table-row>", head));
         assertThat(headerRow.indexOf("Started"))
             .as("Started is the first column")
             .isLessThan(headerRow.indexOf("Status"));
+        // The successful initial deploy captured a build log, so its detail
+        // row + collapsible log render (no error line: nothing failed).
+        assertThat(page.body()).contains("hh-deploy-detail");
+        assertThat(page.body()).contains("hh-deploy-log");
+        assertThat(page.body()).contains("Build log");
 
         var blocked = get("/admin/sites/" + plainSiteId + "/page/deployments");
         assertThat(blocked.statusCode()).isEqualTo(404);
@@ -231,6 +236,30 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         assertThat(page.body()).contains("://git-flow.test/api/webhooks/git/git-flow-site");
         assertThat(page.body()).contains("whsec-test-123");
         assertThat(page.body()).doesNotContain("Auto-deploy is disabled");
+    }
+
+    @Test
+    @Order(2)
+    void failedDeploymentUsesTheSupportedWarningIcon() throws Exception {
+        DeploymentModel model = Models.get(DeploymentModel.class);
+        Row failed = model.createEmptyRow();
+        failed.set(DeploymentModel.SITE_ID, siteId);
+        failed.set(DeploymentModel.STATUS, DeploymentModel.STATUS_FAILED);
+        failed.set(DeploymentModel.REASON, "test");
+        failed.set(DeploymentModel.ERROR, "Synthetic deployment failure");
+        failed.set(DeploymentModel.STARTED_AT, Instant.now());
+        model.save(failed);
+
+        try {
+            navigateToApp("/admin/sites/" + siteId + "/page/deployments");
+            waitForHydration();
+            var icon = page.locator(".hh-deploy-error pl-icon[name='triangle-exclamation']").first();
+            assertThat(icon.count()).isEqualTo(1);
+            assertThat(icon.locator("svg[data-pl-icon-missing]").count()).isZero();
+            assertThat(page.locator(".hh-deploy-error pl-icon[name='circle-exclamation']").count()).isZero();
+        } finally {
+            model.delete(failed);
+        }
     }
 
     @Test
