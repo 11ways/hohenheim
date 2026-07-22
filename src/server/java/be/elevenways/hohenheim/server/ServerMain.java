@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
+import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
@@ -88,6 +89,10 @@ public class ServerMain {
         new HohenheimPanel();
         new ManagePanel();
 
+        // Native security engine: local event sink, nftables setup + resync,
+        // ban-cache warmup. Before the proxy starts so its hot path sees bans.
+        HohenheimSecurity.boot();
+
         proxyServer = new ProxyServer();
         proxyServer.start();
         ProxyReloadHooks.install();
@@ -134,6 +139,9 @@ public class ServerMain {
         // The dyndns endpoint authenticates by update token in the request itself,
         // not a session; the handler refuses anything the token does not unlock.
         AuthRegistry.registerPublicPrefix("/nic/update");
+        // The security ingest endpoint authenticates by zsec_ reporter token in
+        // the request itself, not a session.
+        AuthRegistry.registerPublicPrefix("/zn/security");
         AuthRegistry.baseline("/", AuthRequirement.requiresLogin());
         KnownPermissions.register("hohenheim",
             KnownPermission.of(

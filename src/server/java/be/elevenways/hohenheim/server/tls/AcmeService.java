@@ -115,6 +115,13 @@ public class AcmeService {
     }
 
     /**
+     * Test seam: expose a pending HTTP-01 challenge without a real ACME order.
+     */
+    public void offerHttpChallenge(String token, String authorization, Set<String> validHostnames) {
+        pendingChallenges.put(token, new ChallengeEntry(authorization, validHostnames));
+    }
+
+    /**
      * Lookup a pending HTTP-01 challenge response by token, validating the hostname.
      * Returns null if the token is not pending or the hostname is not authorized.
      */

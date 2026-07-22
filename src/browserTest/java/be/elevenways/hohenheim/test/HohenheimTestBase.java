@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
+import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantModel;
@@ -86,6 +87,10 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         HohenheimHandlers.init();
         new HohenheimPanel();
         new ManagePanel();
+
+        // Native security engine, exactly as ServerMain boots it (sink, event
+        // vocabulary, own-IP guard, ban cache).
+        HohenheimSecurity.boot();
 
         sessionToken = seedAuthenticatedAdmin();
 

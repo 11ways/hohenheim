@@ -8,6 +8,11 @@ import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.security.BanService;
+import be.elevenways.hohenheim.server.security.HohenheimSecurity;
+import be.elevenways.hohenheim.server.security.ThreatScorer;
+import be.elevenways.zenit.common.security.SecurityEventTypes;
+import be.elevenways.zenit.server.security.SecurityEvents;
 import be.elevenways.hohenheim.server.auth.SiteAuthContext;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
@@ -60,6 +65,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -129,8 +135,9 @@ public class SiteDispatcher implements HttpHandler {
     private static final HttpString HOST = Headers.HOST;
     private static final Pattern NAMED_GROUP_PATTERN = Pattern.compile("\\(\\?<([a-zA-Z][a-zA-Z0-9_]*)>");
 
-    // IP reputation (hostname-scanning ban tracking) and access/domain-miss logging.
-    private final IpReputationTracker ipReputation = new IpReputationTracker();
+    // Threat scoring (hostname-scanning ban tracking; shared with the ingest
+    // endpoint so remote events count toward the same auto-bans) and access logging.
+    private final ThreatScorer threatScorer = HohenheimSecurity.scorer();
     private final AccessLog accessLog = new AccessLog();
 
     // Trusted remote-proxy keys, re-parsed from settings at most every 10s (read per request).
@@ -426,17 +433,9 @@ public class SiteDispatcher implements HttpHandler {
     @Override
     public void handleRequest(HttpServerExchange exchange) throws Exception {
 
-        // --- IP reputation enforcement: reject known-bad IPs early (plain HTTP; HTTPS is
-        //     rejected earlier still, at the TLS handshake, via SniKeyManager). Uses the
-        //     effective client IP so bans follow real clients through a trusted remote proxy. ---
-        String earlyIp = getClientIp(exchange);
-        if (isBanned(earlyIp)) {
-            exchange.setStatusCode(403);
-            exchange.endExchange();
-            return;
-        }
-
-        // --- ACME HTTP-01 challenge ---
+        // --- ACME HTTP-01 challenge: BEFORE ban enforcement, so certificate
+        //     renewal survives a mistaken ban (serving a pending challenge
+        //     response is harmless). ---
         String acmePath = exchange.getRelativePath();
         if (acmePath.startsWith(ACME_CHALLENGE_PREFIX) && acmeService != null) {
             String token = acmePath.substring(ACME_CHALLENGE_PREFIX.length());
@@ -447,6 +446,16 @@ public class SiteDispatcher implements HttpHandler {
                 exchange.getResponseSender().send(response);
                 return;
             }
+        }
+
+        // --- Ban enforcement: reject banned IPs early (plain HTTP; HTTPS is
+        //     rejected earlier still, at the TLS handshake, via SniKeyManager). Uses the
+        //     effective client IP so bans follow real clients through a trusted remote proxy. ---
+        String earlyIp = getClientIp(exchange);
+        if (isBanned(earlyIp)) {
+            exchange.setStatusCode(403);
+            exchange.endExchange();
+            return;
         }
 
         // --- Git webhook intercept (before hostname routing) ---
@@ -480,14 +489,27 @@ public class SiteDispatcher implements HttpHandler {
             exchange.putAttachment(MATCHED_HOST_PATTERN, entry.hostPattern);
         }
 
-        // --- IP reputation tracking ---
+        // --- Threat scoring ---
         String clientIp = getClientIp(exchange);
         if (entry != null) {
-            ipReputation.recordHit(clientIp);
+            threatScorer.recordHit(clientIp);
         } else {
-            String userAgent = exchange.getRequestHeaders().getFirst(Headers.USER_AGENT);
-            accessLog.logDomainMiss(clientIp, hostname, exchange.getRelativePath(),
-                userAgent, ipReputation.recordMiss(clientIp));
+            int score = threatScorer.recordEvent(clientIp, SecurityEventTypes.DOMAIN_MISS, 1);
+            int threshold = HohenheimSettings.VALUES.getValue(
+                HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD);
+            if (score >= threshold) {
+                // Threshold-gated like the old fail2ban log line; the in-process
+                // sink (HohenheimSecurity) lands it in security_events. The
+                // scorer was already fed above, so the sink skips domain misses.
+                String userAgent = exchange.getRequestHeaders().getFirst(Headers.USER_AGENT);
+                Map<String, String> detail = new LinkedHashMap<>();
+                detail.put("domain", hostname);
+                detail.put("path", exchange.getRelativePath());
+                if (userAgent != null) {
+                    detail.put("ua", userAgent);
+                }
+                SecurityEvents.report(SecurityEventTypes.DOMAIN_MISS, clientIp, detail);
+            }
         }
 
         // --- Default fallback ---
@@ -1252,12 +1274,15 @@ public class SiteDispatcher implements HttpHandler {
     }
 
     /**
-     * Whether this source IP is currently reputation-banned. Used both at the HTTP stage and, for
-     * HTTPS, at the TLS handshake stage (via {@link SniKeyManager}) to drop bad IPs before a
-     * certificate is served.
+     * Whether this source IP is currently banned. Ban ROWS are the only
+     * enforcement truth (the scorer is purely a trigger that CREATES rows via
+     * BanService.autoBan), so every refused IP has an auditable, liftable ban
+     * row. Used both at the HTTP stage and, for HTTPS, at the TLS handshake
+     * stage (via {@link be.elevenways.hohenheim.server.tls.SniKeyManager}) to
+     * drop bad IPs before a certificate is served.
      */
     public boolean isBanned(String ip) {
-        return ipReputation.isBanned(ip);
+        return BanService.INSTANCE.isBanned(ip);
     }
 
     // -----------------------------------------------------------------------

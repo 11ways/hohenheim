@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.protoblast.common.Blast;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 
@@ -13,8 +12,10 @@ import java.io.Writer;
 import java.time.Instant;
 
 /**
- * Proxy access logging: the optional combined-format access log and the fail2ban-style domain-miss
- * log. Both are best-effort -- a logging failure never breaks request handling.
+ * Proxy access logging: the optional combined-format access log. Best-effort --
+ * a logging failure never breaks request handling. (Domain misses are no longer
+ * logged to a fail2ban file: the native security engine records them as
+ * security events and bans natively.)
  *
  * @author  Jelle De Loecker
  * @since   0.1.0
@@ -54,35 +55,6 @@ public final class AccessLog {
             }
             next.proceed();
         });
-    }
-
-    /** Append a CRLF-stripped domain-miss line to the fail2ban log once the IP crosses the threshold. */
-    public void logDomainMiss(String ip, String hostname, String path, String userAgent, int misses) {
-        boolean logEnabled = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.LOG_DOMAIN_MISSES);
-        int threshold = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD);
-        if (!logEnabled || misses < threshold) {
-            return;
-        }
-
-        // The fail2ban filter regex matches up to misses=; path/ua detail follows it,
-        // so the documented filter keeps working.
-        String line = Instant.now() + " DOMAIN_MISS ip=" + sanitize(ip)
-            + " domain=" + sanitize(hostname) + " misses=" + misses;
-        if (Boolean.TRUE.equals(HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.LOG_PATH_AND_UA))) {
-            line += " path=" + sanitize(path != null && !path.isEmpty() ? path : "-")
-                + " ua=\"" + sanitize(userAgent != null ? userAgent : "-") + "\"";
-        }
-        Blast.log(line);
-
-        String logPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISSES_LOG_PATH);
-        if (logPath != null && !logPath.isEmpty()) {
-            appendToLogFile(logPath, line);
-        }
-    }
-
-    /** Strip CR/LF to prevent log injection. */
-    private static String sanitize(String value) {
-        return value.replace("\n", "").replace("\r", "");
     }
 
     private static void appendToLogFile(String logPath, String line) {

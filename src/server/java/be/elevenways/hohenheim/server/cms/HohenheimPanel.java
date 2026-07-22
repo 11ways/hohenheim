@@ -35,6 +35,10 @@ public final class HohenheimPanel extends Panel {
     public static final NavGroup INFRA_GROUP =
         NavGroup.of("infra", Microcopy.of("infra").withFilter("scope", "nav"), 200, Icon.of("server"));
 
+    /** Security group: bans, security events, reporters. */
+    public static final NavGroup SECURITY_GROUP =
+        NavGroup.of("security", Microcopy.of("security").withFilter("scope", "nav"), 150, Icon.of("shield-halved"));
+
     public HohenheimPanel() {
         super(Identifier.of("hohenheim", "admin"), "admin", Microcopy.of("title").withFilter("scope", "admin"), ACCESS);
     }
@@ -58,6 +62,9 @@ public final class HohenheimPanel extends Panel {
         peers.add(new DnsPeerResource());
         peers.add(new DnsZonePeerResource());
         peers.add(new NotificationChannelResource());
+        peers.add(new BanResource());
+        peers.add(new SecurityEventResource());
+        peers.add(new SecurityReporterResource());
         peers.add(new ActivityResource());
         SettingsPage settings = settingsPage();
         if (settings != null) {

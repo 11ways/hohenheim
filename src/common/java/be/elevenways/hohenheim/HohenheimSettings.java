@@ -276,44 +276,80 @@ public class HohenheimSettings {
     public abstract class Security {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("security")
             .label("Security")
-            .describe("Hostname-scan detection, bans and the fail2ban log")
+            .describe("Hostname-scan detection, native IP bans and security-event ingest")
             .icon("shield");
-
-        public static final SettingDefinition<Boolean> LOG_DOMAIN_MISSES = GROUP.buildSetting("log_domain_misses", Boolean.class)
-            .defaultValue(true)
-            .description("Log unmatched domain requests for fail2ban")
-            .build();
 
         public static final SettingDefinition<Integer> DOMAIN_MISS_THRESHOLD = GROUP.buildSetting("domain_miss_threshold", Integer.class)
             .defaultValue(5)
-            .description("Domain misses before logging for fail2ban")
-            .build();
-
-        public static final SettingDefinition<String> DOMAIN_MISSES_LOG_PATH = GROUP.buildSetting("domain_misses_log_path", String.class)
-            .defaultValue("/var/log/hohenheim/domain-misses.log")
-            .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
-            .description("Path for domain miss log file (fail2ban)")
+            .description("In-window domain misses before an IP's misses are recorded as security events")
             .build();
 
         public static final SettingDefinition<Integer> DOMAIN_MISS_WINDOW_SECONDS = GROUP.buildSetting("domain_miss_window_seconds", Integer.class)
             .defaultValue(300)
             .suffix("s")
-            .description("Sliding window for counting domain misses towards a ban")
+            .description("Sliding window for counting weighted security events towards a ban")
             .build();
 
         public static final SettingDefinition<Integer> DOMAIN_MISS_BAN_THRESHOLD = GROUP.buildSetting("domain_miss_ban_threshold", Integer.class)
             .defaultValue(25)
-            .description("In-window domain misses before an IP is banned")
+            .description("In-window weighted event score before an IP is auto-banned")
             .build();
 
         public static final SettingDefinition<Integer> DOMAIN_MISS_DECAY_PER_HIT = GROUP.buildSetting("domain_miss_decay_per_hit", Integer.class)
             .defaultValue(2)
-            .description("Misses forgiven for each successful route hit")
+            .description("Score forgiven for each successful route hit")
             .build();
 
-        public static final SettingDefinition<Boolean> LOG_PATH_AND_UA = GROUP.buildSetting("log_path_and_ua", Boolean.class)
+        public static final SettingDefinition<Boolean> BANS_ENABLED = GROUP.buildSetting("bans_enabled", Boolean.class)
             .defaultValue(true)
-            .description("Append request path and user agent to domain miss log lines")
+            .description("Enforce IP bans in the proxy (HTTP refusal and TLS handshake refusal) "
+                + "and create automatic bans when the event score crosses the threshold")
+            .build();
+
+        public static final SettingDefinition<String> NEVER_BAN = GROUP.buildSetting("never_ban", String.class)
+            .defaultValue("")
+            .description("Comma-separated IPs and CIDR ranges that may NEVER be banned, "
+                + "automatically or manually (e.g. \"203.0.113.7, 198.51.100.0/24\"); "
+                + "add your own operator IPs here")
+            .build();
+
+        public static final SettingDefinition<Boolean> NFTABLES_ENABLED = GROUP.buildSetting("nftables_enabled", Boolean.class)
+            .defaultValue(false)
+            .description("Also enforce bans in the kernel via nftables (requires passwordless "
+                + "sudo for nft; the table 'inet hohenheim' is owned by Hohenheim)")
+            .build();
+
+        public static final SettingDefinition<String> NFTABLES_PORTS = GROUP.buildSetting("nftables_ports", String.class)
+            .defaultValue("80,443")
+            .description("Comma-separated TCP ports the nftables ban rule is scoped to; "
+                + "never widen this to ports like 22 or 53 that other services depend on")
+            .build();
+
+        public static final SettingDefinition<Integer> AUTO_BAN_TTL_HOURS = GROUP.buildSetting("auto_ban_ttl_hours", Integer.class)
+            .defaultValue(24)
+            .suffix("h")
+            .description("Lifetime of an automatically created ban")
+            .build();
+
+        public static final SettingDefinition<Integer> EVENT_RETENTION_DAYS = GROUP.buildSetting("event_retention_days", Integer.class)
+            .defaultValue(90)
+            .description("Days to keep aggregated security-event rows")
+            .build();
+
+        public static final SettingDefinition<Boolean> INGEST_ENABLED = GROUP.buildSetting("ingest_enabled", Boolean.class)
+            .defaultValue(true)
+            .description("Accept security events from registered reporters on /zn/security/ingest")
+            .build();
+
+        public static final SettingDefinition<String> INGEST_BASE_URL = GROUP.buildSetting("ingest_base_url", String.class)
+            .description("Public base URL of this Hohenheim instance, used to build the ingest URL "
+                + "injected into managed sites (e.g. https://admin.example.com). "
+                + "Empty disables the injection")
+            .build();
+
+        public static final SettingDefinition<Integer> DEFAULT_EVENT_WEIGHT = GROUP.buildSetting("default_event_weight", Integer.class)
+            .defaultValue(1)
+            .description("Ban-score weight for event types without a built-in weight")
             .build();
     }
 

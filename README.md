@@ -18,8 +18,9 @@ It has feature parity with the Node version and goes well beyond it:
   can drop a hosted DNS control panel entirely.
 - **Dev tunnel** — expose a dev server running anywhere on a public
   `*.dev.example.com` subdomain with a valid certificate, ngrok-style.
-- **Notifications**, an **automation API** (hashed `znit_` keys), IP-reputation
-  fail2ban logging, and a full admin UI.
+- **Notifications**, an **automation API** (hashed `znit_` keys), **native IP
+  banning** (threat scoring + nftables enforcement, remote security-event
+  ingest from managed sites), and a full admin UI.
 
 Each subsystem has a deeper design doc under [`docs/`](docs/).
 
@@ -267,15 +268,21 @@ Most-useful keys:
         "password": ""
     },
 
-    // Security / fail2ban
+    // Security / native IP banning
     "security": {
-        "log_domain_misses":          true,
         "domain_miss_threshold":      5,
-        "domain_misses_log_path":     "/var/log/hohenheim/domain-misses.log",
         "domain_miss_window_seconds": 300,
         "domain_miss_ban_threshold":  25,
         "domain_miss_decay_per_hit":  2,
-        "log_path_and_ua":            true
+        "bans_enabled":               true,
+        "never_ban":                  "",  // operator IPs/CIDRs that may NEVER be banned
+        "nftables_enabled":           false,
+        "nftables_ports":             "80,443",
+        "auto_ban_ttl_hours":         24,
+        "event_retention_days":       90,
+        "ingest_enabled":             true,
+        "ingest_base_url":            "",
+        "default_event_weight":       1
     },
 
     // Access & stats logging
@@ -485,62 +492,74 @@ Hohenheim can send notifications (certificate expiry, deploy results, site-down
 alerts, attached-database problems) to configured channels. Manage them under
 the Notifications page; each channel subscribes to a closed set of event types.
 
-## Fail2ban
+## Native IP banning
 
-Hohenheim logs unmatched-domain scans (bot hunting for `admin.`, `wp-login.`,
-etc.) in a format fail2ban can digest.
+Hohenheim scores hostile behaviour per source IP and bans natively -- no
+fail2ban needed (the old fail2ban domain-miss log was removed).
 
-Log line (the `path=`/`ua=` detail follows `misses=`, so the filter regex below
-keeps matching; disable it with `log_path_and_ua`):
+**Scoring.** Unmatched-domain scans (bots hunting `admin.`, `wp-login.`, ...)
+plus security events reported by managed zenit sites (failed logins, lockouts,
+rate-limit and CSRF violations) are weighted and counted per IP in a sliding
+window; every real route hit forgives `domain_miss_decay_per_hit` of the
+oldest points. Crossing `domain_miss_ban_threshold` inside
+`domain_miss_window_seconds` creates an automatic ban (TTL
+`auto_ban_ttl_hours`). Manual bans (with a duration or permanent) are created
+from the admin UI under Security -> IP Bans, which is also where bans are
+lifted. All events land aggregated per (reporter, type, ip, day) in the
+Security Events list and the dashboard chart.
 
-```
-2026-04-12T14:30:45.123Z DOMAIN_MISS ip=192.168.1.100 domain=unknown.example.com misses=7 path=/wp-login.php ua="Mozilla/5.0 zgrab/0.x"
-```
+**Safety rails.** Loopback, private/link-local ranges, and the server's own
+addresses can never be banned. On top of that, `never_ban` is an operator
+allowlist of IPs and CIDR ranges (e.g. `"203.0.113.7, 198.51.100.0/24"`) that
+refuses both automatic and manual bans -- **add your own home/office IPs
+there before enabling enforcement in production**. A single ingested event
+can contribute at most 10 ban-score points regardless of its claimed count
+(bans require accumulation across the window), and one reporter can trigger
+at most 20 automatic bans per hour (exceeding is logged loudly as
+`security.reporter_ban_budget_exceeded` and further auto-bans from that
+reporter are suppressed until the hourly window resets).
 
-Misses are counted in a sliding window and decayed by successful requests:
-an IP is banned at the proxy (HTTP 403; HTTPS is refused at the TLS
-handshake) once it exceeds `domain_miss_ban_threshold` misses inside
-`domain_miss_window_seconds`, and every real route hit forgives
-`domain_miss_decay_per_hit` of its oldest misses.
+**Enforcement.** Banned IPs are refused at the proxy (HTTP 403; HTTPS is
+refused at the TLS handshake, before a certificate is served). Every
+enforced IP has a ban ROW: the threat score only triggers ban creation, so
+anything refused is visible and liftable under Security -> IP Bans. ACME
+HTTP-01 challenge paths (`/.well-known/acme-challenge/*`) are served even to
+banned IPs, so certificate renewal survives a mistaken ban. With
+`nftables_enabled` the ban is ALSO installed in the kernel: Hohenheim owns
+the nftables table `inet hohenheim` with a chain `banned` (input hook,
+priority -10) and two timeout sets, `banned_v4` and `banned_v6`. The drop
+rule is scoped to the TCP ports in `nftables_ports` (default `80,443`) so
+SSH (22) and DNS (53) can never become collateral. Timed bans use per-element
+timeouts, so the kernel expires them on its own; the bans table stays the
+source of truth and is resynced into the kernel at boot.
 
-Settings:
+**Sudoers requirement.** nftables enforcement shells `sudo -n -- nft ...` as
+root, so the Hohenheim user needs passwordless sudo for `nft` (or the broad
+`NOPASSWD:SETENV: ALL` rule already used for per-site privilege drops). All
+nft failures are logged, never fatal: dev machines without sudo/nft run fine
+with `nftables_enabled` off (the default).
 
-```
-"security": {
-    "log_domain_misses": true,
-    "domain_miss_threshold": 5,
-    "domain_misses_log_path": "/var/log/hohenheim/domain-misses.log",
-    "domain_miss_window_seconds": 300,
-    "domain_miss_ban_threshold": 25,
-    "domain_miss_decay_per_hit": 2,
-    "log_path_and_ua": true
-}
-```
+**Remote ingest.** Managed zenit sites receive `ZENIT_SECURITY_REPORT_URL`
+and `ZENIT_SECURITY_REPORT_TOKEN` env vars (auto-minted per-site reporter
+tokens, hashed at rest) once `ingest_base_url` is set, and batch their
+security events to `POST /zn/security/ingest` (Bearer `zsec_` token,
+401 on a bad token, 422 on a malformed body, 413 over 256KB, max 500 events
+per batch). Remote events count toward the same automatic bans, but only
+events whose `ip` is a literal IPv4/IPv6 address are scored -- anything else
+(`"local"`, hostnames) is stored for analytics only and is never bannable.
+Additional reporters can be minted under Security -> Security Reporters.
 
-**/etc/fail2ban/filter.d/hohenheim.conf**
-
-```ini
-[Definition]
-failregex = ^.*DOMAIN_MISS ip=<HOST> domain=.* misses=.*$
-ignoreregex =
-```
-
-**/etc/fail2ban/jail.d/hohenheim.conf**
-
-```ini
-[hohenheim]
-enabled  = true
-filter   = hohenheim
-logpath  = /var/log/hohenheim/domain-misses.log
-maxretry = 10
-findtime = 600
-bantime  = 3600
-```
+**Migrating from fail2ban.** Remove the old jail so stale bans do not linger:
+delete `/etc/fail2ban/jail.d/hohenheim.conf` and
+`/etc/fail2ban/filter.d/hohenheim.conf`, run
+`fail2ban-client reload` (or stop fail2ban entirely if Hohenheim was its only
+jail), and drop the `/var/log/hohenheim/domain-misses.log` entry from
+logrotate. Then fill `security.never_ban` with your own operator IPs and set
+`nftables_enabled: true` in production.
 
 **/etc/logrotate.d/hohenheim**
 
 ```
-/var/log/hohenheim/domain-misses.log
 /var/log/hohenheim/access.log {
     daily
     rotate 7
