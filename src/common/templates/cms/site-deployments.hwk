@@ -7,7 +7,7 @@
 {% declare canRollback: Boolean = false %}
 {% declare currentCommit: String = "" %}
 {% declare deployments: List %}
-{% declare panelSlug: String = "admin" %}
+{% declare returnUrl: String = "" %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare timeWording: RelativeTimeWording %}
 {% declare webhookUrl: String = "" %}
@@ -33,19 +33,22 @@
         </pl-card-header>
         <pl-card-content>
             <div class="cms-form-actions">
+                {#- _return: the framework return target (zenit ReturnTarget) --
+                    the handler redirects back to whichever panel rendered this
+                    page (/admin or /manage); forged values fall back to /admin. -#}
                 <form method="POST" action={% "/sites/" + siteId + "/deploy" %}>
-                    {% csrf() %}<input type="hidden" name="panel" value={% panelSlug %}>
+                    {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
                     <pl-button variant={% "primary" %} type={% "submit" %} disabled={% isDeploying %}>{{ t("deploy_now", scope: "site_deployments") }}</pl-button>
                 </form>
                 {% if isDeploying %}
                 <form method="POST" action={% "/sites/" + siteId + "/deploy/cancel" %}>
-                    {% csrf() %}<input type="hidden" name="panel" value={% panelSlug %}>
+                    {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
                     <pl-button variant={% "outline" %} type={% "submit" %}>{{ t("cancel", scope: "site_deployments") }}</pl-button>
                 </form>
                 {% /if %}
                 {% if canRollback %}
                 <form method="POST" action={% "/sites/" + siteId + "/rollback" %} data-confirm={% t("rollback_confirm", scope: "site_deployments") %}>
-                    {% csrf() %}<input type="hidden" name="panel" value={% panelSlug %}>
+                    {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
                     <pl-button variant={% "destructive" %} type={% "submit" %}>{{ t("rollback", scope: "site_deployments") }}</pl-button>
                 </form>
                 {% /if %}

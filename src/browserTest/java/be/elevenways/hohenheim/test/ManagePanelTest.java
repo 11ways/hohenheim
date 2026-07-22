@@ -256,6 +256,12 @@ class ManagePanelTest extends HohenheimTestBase {
             .doesNotContain("data-webhook-secret")
             .doesNotContain("data-webhook-url");
 
+        // The manage-rendered page embeds ITS OWN URL as the _return target,
+        // so deploy actions bounce back to /manage, not /admin.
+        assertThat(delegated.body())
+            .contains("name=\"_return\"")
+            .contains("value=\"/manage/sites/" + siteAId + "/page/deployments\"");
+
         HttpResponse<String> admin = adminGet(
             "/admin/sites/" + siteAId + "/page/deployments");
         assertThat(admin.statusCode()).isEqualTo(200);
@@ -278,6 +284,26 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Manage Site A");
         assertThat(response.body()).doesNotContain("Manage Site B");
+    }
+
+    @Test
+    @Order(7)
+    void operatorActionSubmittedFromManageReturnsToManage() throws Exception {
+        // No proxy runs in this suite, so deploy is redirect-only: the handler
+        // finds no git handler and just answers with the return redirect.
+        String manageTarget = "/manage/sites/" + siteAId + "/page/deployments";
+        HttpResponse<String> fromManage = operatorPost("/sites/" + siteAId + "/deploy",
+            "_return=" + java.net.URLEncoder.encode(manageTarget, java.nio.charset.StandardCharsets.UTF_8));
+        assertThat(fromManage.statusCode()).isIn(302, 303);
+        assertThat(fromManage.headers().firstValue("Location")).hasValue(manageTarget);
+
+        // A forged _return can never open-redirect: unsafe values fall back
+        // to the admin page.
+        HttpResponse<String> forged = operatorPost("/sites/" + siteAId + "/deploy",
+            "_return=" + java.net.URLEncoder.encode("https://evil.example/", java.nio.charset.StandardCharsets.UTF_8));
+        assertThat(forged.statusCode()).isIn(302, 303);
+        assertThat(forged.headers().firstValue("Location"))
+            .hasValue("/admin/sites/" + siteAId + "/page/deployments");
     }
 
     @Test

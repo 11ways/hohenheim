@@ -10,7 +10,7 @@
 {% declare selectedLogHtml: String = "" %}
 {% declare selectedLogTitle: String = "" %}
 {% declare basePath: String = "/admin" %}
-{% declare panelSlug: String = "admin" %}
+{% declare returnUrl: String = "" %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -61,12 +61,15 @@
                             {% /if %}
                         </pl-table-cell>
                         <pl-table-cell>
+                            {#- _return: the framework return target (zenit ReturnTarget) --
+                                the handler redirects back to whichever panel rendered
+                                this page; forged values fall back to /admin. -#}
                             <form method="POST" action={% "/sites/" + siteId + "/processes/" + proc.get("pid") + "/isolate" %} style="display:inline">
-                                {% csrf() %}<input type="hidden" name="panel" value={% panelSlug %}>
+                                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
                                 <pl-button variant={% "outline" %} size={% "sm" %} type={% "submit" %}>{% if proc.get("isolated") == true %}{{ t("unisolate", scope: "site_processes") }}{% else %}{{ t("isolate", scope: "site_processes") }}{% /if %}</pl-button>
                             </form>
                             <form method="POST" action={% "/sites/" + siteId + "/processes/" + proc.get("pid") + "/kill" %} style="display:inline" data-confirm={% t("kill_confirm", scope: "site_processes") %}>
-                                {% csrf() %}<input type="hidden" name="panel" value={% panelSlug %}>
+                                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
                                 <pl-button variant={% "destructive" %} size={% "sm" %} type={% "submit" %}>{{ t("kill", scope: "site_processes") }}</pl-button>
                             </form>
                         </pl-table-cell>
@@ -78,7 +81,7 @@
             <p>{{ t("none_running", scope: "site_processes") }}</p>
             {% /if %}
             <form method="POST" action={% "/sites/" + siteId + "/processes/start" %}>
-                {% csrf() %}<input type="hidden" name="panel" value={% panelSlug %}>
+                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
                 <pl-button variant={% "outline" %} type={% "submit" %}>{{ t("start", scope: "site_processes") }}</pl-button>
             </form>
         </pl-card-content>

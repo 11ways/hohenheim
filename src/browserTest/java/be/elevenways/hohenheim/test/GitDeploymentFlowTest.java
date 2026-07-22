@@ -162,13 +162,17 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
     }
 
     private HttpResponse<String> postAction(String path) throws Exception {
+        return postAction(path, "");
+    }
+
+    private HttpResponse<String> postAction(String path, String body) throws Exception {
         HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create("http://localhost:" + getServerPort() + path))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
             .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(""))
+            .POST(HttpRequest.BodyPublishers.ofString(body))
             .build();
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
@@ -200,6 +204,13 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(page.body()).contains("Deploy now");
         assertThat(page.body()).contains(firstCommit.substring(0, 8));
+
+        // The action forms carry the framework _return target of THIS page, so
+        // their handlers redirect back to the panel that rendered it.
+        assertThat(page.body())
+            .contains("name=\"_return\"")
+            .contains("value=\"/admin/sites/" + siteId + "/page/deployments\"")
+            .doesNotContain("name=\"panel\"");
 
         // The accessible table leads with the Started column.
         assertThat(page.body()).contains("<pl-table");
@@ -287,6 +298,38 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         assertThat((String) deploy.get(DeploymentModel.REASON)).isEqualTo("manual");
         assertThat((String) deploy.get(DeploymentModel.COMMIT_SHA)).isEqualTo(secondCommit);
         assertThat(gitHandler().getCurrentCommit()).isEqualTo(secondCommit);
+    }
+
+    @Test
+    @Order(6)
+    void actionRedirectsHonorReturnTargetAndRejectForgedOnes() throws Exception {
+        // deploy/cancel is a no-op while nothing deploys, so this only
+        // exercises the redirect contract of the six subpage handlers.
+        String manageTarget = "/manage/sites/" + siteId + "/page/deployments";
+        var manageReturn = postAction("/sites/" + siteId + "/deploy/cancel",
+            "_return=" + java.net.URLEncoder.encode(manageTarget, java.nio.charset.StandardCharsets.UTF_8));
+        assertThat(manageReturn.statusCode()).isIn(302, 303);
+        assertThat(manageReturn.headers().firstValue("Location")).hasValue(manageTarget);
+
+        var forged = postAction("/sites/" + siteId + "/deploy/cancel",
+            "_return=" + java.net.URLEncoder.encode("https://evil.example/phish", java.nio.charset.StandardCharsets.UTF_8));
+        assertThat(forged.statusCode()).isIn(302, 303);
+        assertThat(forged.headers().firstValue("Location"))
+            .hasValue("/admin/sites/" + siteId + "/page/deployments");
+
+        // The process handlers share the mechanism; a static site has no
+        // managed handler, so start is side-effect-free too.
+        String processTarget = "/manage/sites/" + siteId + "/page/processes";
+        var processReturn = postAction("/sites/" + siteId + "/processes/start",
+            "_return=" + java.net.URLEncoder.encode(processTarget, java.nio.charset.StandardCharsets.UTF_8));
+        assertThat(processReturn.statusCode()).isIn(302, 303);
+        assertThat(processReturn.headers().firstValue("Location")).hasValue(processTarget);
+
+        var forgedProcess = postAction("/sites/" + siteId + "/processes/start",
+            "_return=" + java.net.URLEncoder.encode("//evil.example/phish", java.nio.charset.StandardCharsets.UTF_8));
+        assertThat(forgedProcess.statusCode()).isIn(302, 303);
+        assertThat(forgedProcess.headers().firstValue("Location"))
+            .hasValue("/admin/sites/" + siteId + "/page/processes");
     }
 
     @Test
