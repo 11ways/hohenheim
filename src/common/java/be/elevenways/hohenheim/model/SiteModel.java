@@ -88,6 +88,17 @@ public class SiteModel extends Model {
         .label(HohenheimFormCopy.label("auth_provider"))
         .help(HohenheimFormCopy.help("auth_provider"))
         .build());
+    // Raw zsec_ reporter token for env injection into this site's managed
+    // processes. AIDEV-NOTE: deliberately a dedicated column, NOT a key inside
+    // the polymorphic SETTINGS map -- the dynamic (schemaFrom) form entry
+    // rewrites that map on every admin save and would silently drop the token.
+    // The reporters table stores only the hash; this raw copy exists because
+    // the value must be re-injected on every child spawn. Tradeoff: an
+    // attacker who can read the sites table can impersonate this site's
+    // reporter -- acceptable, since that table already holds site env secrets.
+    public static final StringField SECURITY_REPORT_TOKEN = SCHEMA.addField(
+        StringField.builder().name("security_report_token").secret().build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());

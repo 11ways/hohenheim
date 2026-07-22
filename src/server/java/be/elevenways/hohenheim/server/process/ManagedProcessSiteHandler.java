@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.proxy.ResolvedClientIp;
+import be.elevenways.hohenheim.server.security.SecurityReportEnv;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.TcpUpstreamConnection;
@@ -238,7 +239,9 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
      * Overridable so handler-level tests can run without the injection tables.
      */
     protected Map<String, String> resolveInjectedEnvironment() {
-        return DatabaseEnvInjection.envForSite(siteId);
+        Map<String, String> env = new LinkedHashMap<>(DatabaseEnvInjection.envForSite(siteId));
+        env.putAll(SecurityReportEnv.forSite(siteId));
+        return env;
     }
 
     /**

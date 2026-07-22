@@ -15,12 +15,18 @@ import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.common.orm.query.rules.Rule;
+import be.elevenways.zenit.common.orm.query.rules.RuleGroup;
+import be.elevenways.zenit.common.orm.query.rules.RuleOperator;
+import be.elevenways.zenit.widget.common.builtin.ChartWidget;
 import be.elevenways.zenit.widget.common.builtin.ColumnsWidget;
 import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import be.elevenways.zenit.widget.common.builtin.StatWidget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
@@ -45,6 +51,24 @@ public final class AdminDashboard extends DashboardPanelPeer {
             stat("certificate", "hohenheim.certificate", "certificates", "lock"),
             stat("access_list", "hohenheim.access_list", "access-lists", "shield-halved")));
 
+        // Security band: active-ban and events-today counts plus a per-day
+        // event chart. The "today" rule is stamped per render (widgets() runs
+        // per request), so it never goes stale.
+        WidgetTree securityStats = new WidgetTree(List.of(
+            new WidgetInstance(StatWidget.ID, Map.of(
+                "label", localized("active_bans", "dashboard"),
+                "source", "hohenheim.ban",
+                "rules", RuleGroup.and(Rule.of("active", RuleOperator.IS_TRUE)),
+                "icon", "ban",
+                "link", "/admin/bans")),
+            new WidgetInstance(StatWidget.ID, Map.of(
+                "label", localized("events_today", "dashboard"),
+                "source", "hohenheim.security_event",
+                "rules", RuleGroup.and(Rule.of("day", RuleOperator.EQUALS,
+                    LocalDate.now(ZoneOffset.UTC).toString())),
+                "icon", "shield-halved",
+                "link", "/admin/security-events"))));
+
         List<WidgetInstance> widgets = new ArrayList<>();
         if (Models.get(SiteModel.class).findActive().isEmpty()) {
             widgets.add(section(new WidgetInstance(OnboardingWidget.ID, Map.of())));
@@ -52,6 +76,14 @@ public final class AdminDashboard extends DashboardPanelPeer {
         widgets.add(section(new WidgetInstance(AttentionWidget.ID, Map.of())
             .withData(AttentionCollector.collect())));
         widgets.add(section(new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 3), stats)));
+        widgets.add(section(new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 2), securityStats)));
+        widgets.add(section(new WidgetInstance(ChartWidget.ID, Map.of(
+            "title", localized("security_events_30d", "dashboard"),
+            "source", "hohenheim.security_event",
+            "date_field", "last_at",
+            "days", 30,
+            "type", "area",
+            "label", localized("plural", "security_event")))));
         widgets.add(section(new WidgetInstance(RecordsWidget.ID, Map.of(
                 "title", localized("recent_activity", "dashboard"),
                 "source", "zenit.activity",

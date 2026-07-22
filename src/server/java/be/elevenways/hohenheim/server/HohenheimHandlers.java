@@ -2,6 +2,15 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimPaths;
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.SecurityReporterModel;
+import be.elevenways.hohenheim.server.security.HohenheimSecurity;
+import be.elevenways.hohenheim.server.security.IpLiterals;
+import be.elevenways.hohenheim.server.security.SecurityEventStore;
+import be.elevenways.hohenheim.server.security.SecurityReporters;
+import be.elevenways.hohenheim.server.security.ThreatScorer;
+import be.elevenways.hohenheim.server.util.Json;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.dns.DnsApiErrorResponse;
 import be.elevenways.hohenheim.dns.DnsRecordDeleteResponse;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
@@ -64,6 +73,7 @@ import be.elevenways.zenit.forms.server.path.FilesystemBrowserSource;
 
 import java.io.IOException;
 import java.net.URLEncoder;
+import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -100,6 +110,179 @@ public final class HohenheimHandlers {
         initTerminal();
         initDevTunnel();
         initApi();
+        initSecurityIngest();
+    }
+
+    // -----------------------------------------------------------------------
+    // Security-event ingest: zsec_ Bearer tokens minted per reporter; events
+    // land in the aggregated security_events table AND feed the threat scorer
+    // so remote events count toward automatic bans.
+    // -----------------------------------------------------------------------
+
+    /** Batch and per-string caps on ingested payloads (abuse input reaches this path). */
+    private static final int INGEST_MAX_EVENTS = 500;
+    private static final int INGEST_MAX_TYPE = 100;
+    private static final int INGEST_MAX_IP = 64;
+    private static final int INGEST_MAX_COUNT = 1_000_000;
+    private static final int INGEST_MAX_BODY_BYTES = 256 * 1024;
+
+    private static void initSecurityIngest() {
+        HohenheimEndpoints.SECURITY_INGEST.setHandler(conduit -> {
+            if (!Boolean.TRUE.equals(HohenheimSettings.VALUES.getValue(
+                    HohenheimSettings.Security.INGEST_ENABLED))) {
+                conduit.notFound();
+                return null;
+            }
+
+            Row reporter = SecurityReporters.authenticate(conduit);
+            if (reporter == null) {
+                conduit.setResponseStatus(401);
+                return jsonUntyped(Map.of("error", Map.of(
+                    "type", "invalid_token",
+                    "message", "Missing, invalid, or disabled reporter token")));
+            }
+
+            // Cap the body BEFORE parsing: the declared length refuses early,
+            // the actual length catches undeclared/chunked oversends.
+            String declaredLength = conduit.getRequestHeader("content-length");
+            if (declaredLength != null && parsedLengthExceeds(declaredLength, INGEST_MAX_BODY_BYTES)) {
+                return payloadTooLarge(conduit);
+            }
+            String body = conduit.getBodyAsString();
+            if (body != null && body.length() > INGEST_MAX_BODY_BYTES) {
+                return payloadTooLarge(conduit);
+            }
+
+            List<Map<String, Object>> events = parseIngestEvents(body);
+            if (events == null) {
+                conduit.setResponseStatus(422);
+                return jsonUntyped(Map.of("error", Map.of(
+                    "type", "invalid_body",
+                    "message", "Expected {\"events\":[{type, ip, count, first_at, last_at, detail?}]}"
+                        + " with at most " + INGEST_MAX_EVENTS + " events")));
+            }
+
+            Integer reporterId = reporter.get(SecurityReporterModel.ID);
+            String reporterName = reporter.get(SecurityReporterModel.NAME);
+            ThreatScorer scorer = HohenheimSecurity.scorer();
+            int accepted = 0;
+            for (Map<String, Object> event : events) {
+                String type = (String) event.get("type");
+                String ip = (String) event.get("ip");
+                int count = (Integer) event.get("count");
+                Instant firstAt = (Instant) event.get("first_at");
+                Instant lastAt = (Instant) event.get("last_at");
+                String detail = (String) event.get("detail");
+                SecurityEventStore.record(reporterId, type, ip, count, firstAt, lastAt, detail);
+                // Only strict literal IPs feed the scorer: a non-literal "ip"
+                // ("local", hostnames) stays analytics-only and is never
+                // bannable, and no DNS lookup ever happens on it.
+                if (IpLiterals.isLiteral(ip)) {
+                    scorer.recordRemoteEvent(ip, type, count, reporterName);
+                }
+                accepted++;
+            }
+            return jsonUntyped(Map.of("accepted", accepted));
+        });
+    }
+
+    private static ActionResult<Object> payloadTooLarge(Conduit conduit) {
+        conduit.setResponseStatus(413);
+        return jsonUntyped(Map.of("error", Map.of(
+            "type", "payload_too_large",
+            "message", "Ingest bodies are capped at " + INGEST_MAX_BODY_BYTES + " bytes")));
+    }
+
+    private static boolean parsedLengthExceeds(String declared, int limit) {
+        try {
+            return Long.parseLong(declared.trim()) > limit;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Parse and validate the ingest body into normalized event maps
+     * (type/ip String, count Integer, first_at/last_at Instant, detail
+     * String-or-null). Any shape problem returns null (one 422 for the batch).
+     */
+    @SuppressWarnings("unchecked")
+    private static @org.checkerframework.checker.nullness.qual.Nullable List<Map<String, Object>>
+            parseIngestEvents(String body) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        Object parsed;
+        try {
+            parsed = Zenit.DRY.fromJson(body, Map.class);
+        } catch (RuntimeException e) {
+            return null;
+        }
+        if (!(parsed instanceof Map<?, ?> root) || !(root.get("events") instanceof List<?> rawEvents)
+                || rawEvents.size() > INGEST_MAX_EVENTS) {
+            return null;
+        }
+
+        long now = System.currentTimeMillis();
+        List<Map<String, Object>> events = new ArrayList<>(rawEvents.size());
+        for (Object entry : rawEvents) {
+            if (!(entry instanceof Map<?, ?> event)) {
+                return null;
+            }
+            String type = stringOrNull(event.get("type"));
+            String ip = stringOrNull(event.get("ip"));
+            if (type == null || type.isBlank() || type.length() > INGEST_MAX_TYPE
+                    || ip == null || ip.isBlank()) {
+                return null;
+            }
+            // Non-literal "ip" values are analytics-only: truncated for
+            // storage, never fed to the scorer (checked at the feed site).
+            ip = ip.trim();
+            if (ip.length() > INGEST_MAX_IP) {
+                ip = ip.substring(0, INGEST_MAX_IP);
+            }
+            int count = 1;
+            Object countValue = event.get("count");
+            if (countValue != null) {
+                if (!(countValue instanceof Number number) || number.longValue() < 1) {
+                    return null;
+                }
+                count = (int) Math.min(number.longValue(), INGEST_MAX_COUNT);
+            }
+            long firstAt = epochOr(event.get("first_at"), now);
+            long lastAt = epochOr(event.get("last_at"), now);
+            String detail = null;
+            Object detailValue = event.get("detail");
+            if (detailValue instanceof Map<?, ?> detailMap) {
+                detail = Json.stringify(detailMap);
+            } else if (detailValue != null) {
+                return null;
+            }
+
+            Map<String, Object> normalized = new LinkedHashMap<>();
+            normalized.put("type", type.trim());
+            normalized.put("ip", ip);
+            normalized.put("count", count);
+            normalized.put("first_at", Instant.ofEpochMilli(firstAt));
+            normalized.put("last_at", Instant.ofEpochMilli(lastAt));
+            normalized.put("detail", detail);
+            events.add(normalized);
+        }
+        return events;
+    }
+
+    private static @org.checkerframework.checker.nullness.qual.Nullable String stringOrNull(Object value) {
+        return value instanceof String text ? text : null;
+    }
+
+    private static long epochOr(Object value, long fallback) {
+        if (value instanceof Number number) {
+            long millis = number.longValue();
+            if (millis > 0) {
+                return millis;
+            }
+        }
+        return fallback;
     }
 
     // -----------------------------------------------------------------------

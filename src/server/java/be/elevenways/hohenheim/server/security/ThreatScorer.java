@@ -1,0 +1,238 @@
+package be.elevenways.hohenheim.server.security;
+
+import be.elevenways.hohenheim.HohenheimSettings;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntSupplier;
+import java.util.function.LongSupplier;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+/**
+ * Per-source-IP threat scoring (the generalized successor of the proxy's
+ * IpReputationTracker): WEIGHTED security events are counted in a sliding
+ * window and decayed by real route hits, so a hostname-scanning bot gets
+ * banned while a user with one stale bookmark recovers. Crossing the
+ * threshold triggers the installed auto-ban callback (BanService).
+ * Enforcement NEVER reads the scorer directly: ban rows are the only
+ * enforcement truth, so every refused IP has an auditable, liftable row;
+ * {@link #isOverThreshold} remains as a query for tests and metrics only.
+ *
+ * Only IPs that have scored are tracked; the per-IP ring buffer caps how many
+ * score points can count, so a ban threshold above the buffer capacity
+ * (2x threshold, min 64) is unreachable.
+ *
+ * @author  Jelle De Loecker
+ * @since   0.3.0
+ */
+public final class ThreatScorer {
+
+    private static final int MAX_ENTRIES = 50_000;
+    private static final long EVICT_AGE_MS = 3_600_000;
+    private static final long SETTINGS_TTL_MS = 10_000;
+
+    // AIDEV-NOTE: hardcoded per-type weights on purpose -- they become settings
+    // when someone actually needs to tune them, not before. Unknown types use
+    // the security.default_event_weight setting.
+    private static final Map<String, Integer> EVENT_WEIGHTS = Map.of(
+        "auth.login_failed", 3,
+        "auth.lockout", 10,
+        "http.rate_limited", 1,
+        "http.csrf_failure", 2,
+        "proxy.domain_miss", 1);
+    private static final int WS_EVENT_WEIGHT = 2;
+
+    // AIDEV-NOTE: no single REMOTE event may insta-ban -- a compromised or
+    // buggy reporter can claim any count, so one ingest event contributes at
+    // most min(weight * count, 10) points and bans require accumulation
+    // across the window. Local (in-process) events keep full weight semantics.
+    static final int REMOTE_EVENT_POINT_CAP = 10;
+
+    /**
+     * Callback fired when an IP's weighted score crosses the ban threshold.
+     * The reporter is null for local (in-process) events.
+     */
+    public interface AutoBanTrigger {
+        void onThresholdCrossed(String ip, String eventType, int score, @Nullable String reporter);
+    }
+
+    private final LongSupplier clock;
+    private final IntSupplier windowSecondsSource;
+    private final IntSupplier banThresholdSource;
+    private final IntSupplier decayPerHitSource;
+    private final IntSupplier defaultWeightSource;
+
+    private volatile @Nullable AutoBanTrigger autoBanTrigger;
+
+    // Settings snapshot, refreshed at most every SETTINGS_TTL_MS (read on the hot path).
+    // AIDEV-NOTE: initial readAt must be 0, not Long.MIN_VALUE -- "now - MIN_VALUE" overflows
+    // negative, the staleness check never fires, and settings changes are silently ignored.
+    private volatile long settingsReadAt = 0;
+    private volatile int windowSeconds = 300;
+    private volatile int banThreshold = 25;
+    private volatile int decayPerHit = 2;
+    private volatile int defaultWeight = 1;
+
+    private final ConcurrentHashMap<String, Entry> entries = new ConcurrentHashMap<>();
+
+    /** A ring buffer of score-point timestamps; slot value 0 means empty/forgiven. */
+    private static final class Entry {
+        final long[] pointTimestamps;
+        int head;
+        long lastTouchMs;
+
+        Entry(int capacity) {
+            this.pointTimestamps = new long[capacity];
+        }
+
+        synchronized void addPoints(long now, int points) {
+            for (int i = 0; i < points; i++) {
+                pointTimestamps[head] = now;
+                head = (head + 1) % pointTimestamps.length;
+            }
+            lastTouchMs = now;
+        }
+
+        synchronized int recentPointCount(long windowStart) {
+            int count = 0;
+            for (long timestamp : pointTimestamps) {
+                if (timestamp > 0 && timestamp > windowStart) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        /** Forgive the n oldest remaining points. */
+        synchronized void decay(int n) {
+            for (int k = 0; k < n; k++) {
+                int oldestIndex = -1;
+                long oldest = Long.MAX_VALUE;
+                for (int i = 0; i < pointTimestamps.length; i++) {
+                    long timestamp = pointTimestamps[i];
+                    if (timestamp > 0 && timestamp < oldest) {
+                        oldest = timestamp;
+                        oldestIndex = i;
+                    }
+                }
+                if (oldestIndex == -1) {
+                    return;
+                }
+                pointTimestamps[oldestIndex] = 0;
+            }
+        }
+    }
+
+    public ThreatScorer() {
+        this(System::currentTimeMillis,
+            () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_WINDOW_SECONDS),
+            () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_BAN_THRESHOLD),
+            () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_DECAY_PER_HIT),
+            () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DEFAULT_EVENT_WEIGHT));
+    }
+
+    /** Test constructor: inject the clock and the windowing knobs. */
+    ThreatScorer(LongSupplier clock, IntSupplier windowSeconds,
+                 IntSupplier banThreshold, IntSupplier decayPerHit,
+                 IntSupplier defaultWeight) {
+        this.clock = clock;
+        this.windowSecondsSource = windowSeconds;
+        this.banThresholdSource = banThreshold;
+        this.decayPerHitSource = decayPerHit;
+        this.defaultWeightSource = defaultWeight;
+    }
+
+    /** Install the callback fired when an IP crosses the ban threshold (null clears). */
+    public void setAutoBanTrigger(@Nullable AutoBanTrigger trigger) {
+        this.autoBanTrigger = trigger;
+    }
+
+    /** The ban-score weight of one occurrence of this event type. */
+    public int weightOf(String type) {
+        Integer weight = EVENT_WEIGHTS.get(type);
+        if (weight != null) {
+            return weight;
+        }
+        if (type != null && type.startsWith("ws.")) {
+            return WS_EVENT_WEIGHT;
+        }
+        refreshSettings();
+        return Math.max(1, defaultWeight);
+    }
+
+    private void refreshSettings() {
+        long now = clock.getAsLong();
+        if (now - settingsReadAt < SETTINGS_TTL_MS) {
+            return;
+        }
+        settingsReadAt = now;
+        windowSeconds = windowSecondsSource.getAsInt();
+        banThreshold = banThresholdSource.getAsInt();
+        decayPerHit = decayPerHitSource.getAsInt();
+        defaultWeight = defaultWeightSource.getAsInt();
+    }
+
+    /** Record a successful route hit: forgive some of this IP's oldest score points. */
+    public void recordHit(String ip) {
+        Entry entry = entries.get(ip);
+        if (entry == null) {
+            return;
+        }
+        refreshSettings();
+        entry.decay(decayPerHit);
+    }
+
+    /**
+     * Record weighted occurrences of a LOCAL (in-process) event for this IP
+     * and return its current in-window score. Fires the auto-ban trigger when
+     * the score crosses the threshold (the trigger dedupes already-banned IPs
+     * itself).
+     */
+    public int recordEvent(String ip, String type, int count) {
+        int points = Math.max(1, weightOf(type)) * Math.max(1, count);
+        return record(ip, type, points, null);
+    }
+
+    /**
+     * Record a REMOTE (ingested) event: the per-event contribution is capped
+     * at {@link #REMOTE_EVENT_POINT_CAP} and the reporter travels to the
+     * auto-ban trigger for accountability.
+     */
+    public int recordRemoteEvent(String ip, String type, int count, @Nullable String reporter) {
+        int points = Math.max(1, weightOf(type)) * Math.max(1, count);
+        return record(ip, type, Math.min(points, REMOTE_EVENT_POINT_CAP), reporter);
+    }
+
+    private int record(String ip, String type, int points, @Nullable String reporter) {
+        refreshSettings();
+        long now = clock.getAsLong();
+
+        Entry entry = entries.computeIfAbsent(ip,
+            k -> new Entry(Math.max(64, banThreshold * 2)));
+        entry.addPoints(now, Math.min(points, entry.pointTimestamps.length));
+
+        if (entries.size() > MAX_ENTRIES) {
+            long cutoff = now - EVICT_AGE_MS;
+            entries.entrySet().removeIf(e -> e.getValue().lastTouchMs < cutoff);
+        }
+
+        int score = entry.recentPointCount(now - windowSeconds * 1000L);
+        AutoBanTrigger trigger = this.autoBanTrigger;
+        if (trigger != null && score > banThreshold) {
+            trigger.onThresholdCrossed(ip, type, score, reporter);
+        }
+        return score;
+    }
+
+    /** Whether this source IP's in-window weighted score exceeds the ban threshold. */
+    public boolean isOverThreshold(String ip) {
+        Entry entry = entries.get(ip);
+        if (entry == null) {
+            return false;
+        }
+        refreshSettings();
+        long now = clock.getAsLong();
+        return entry.recentPointCount(now - windowSeconds * 1000L) > banThreshold;
+    }
+}
