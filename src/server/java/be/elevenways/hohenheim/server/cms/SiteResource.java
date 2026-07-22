@@ -49,7 +49,7 @@ import java.util.UUID;
  * picks to auth providers and access lists, clone/toggle row actions, and a
  * soft delete that also removes a git-provisioned checkout.
  */
-public final class SiteResource extends RowResource {
+public class SiteResource extends RowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(SiteModel.NAME)
@@ -199,8 +199,14 @@ public final class SiteResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
+        actions.add(this.toggleAction());
+        actions.add(this.cloneAction());
+        return actions;
+    }
 
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "toggle_site"))
+    /** The enable/disable operate action, shared with the delegated manage panel. */
+    protected final @NonNull RowAction<Row> toggleAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "toggle_site"))
             .label(Microcopy.of("toggle").withFilter("scope", "site"))
             .dynamicLabel(row -> Microcopy.of(Boolean.TRUE.equals(row.get(SiteModel.ENABLED))
                 ? "disable" : "enable").withFilter("scope", "site"))
@@ -213,9 +219,12 @@ public final class SiteResource extends RowResource {
                 return CmsActionResult.refreshWithToast(Microcopy.of(
                     current ? "disabled_toast" : "enabled_toast").withFilter("scope", "site"));
             })
-            .build());
+            .build();
+    }
 
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "clone_site"))
+    /** The record-creating clone action; deliberately admin-panel-only. */
+    protected final @NonNull RowAction<Row> cloneAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "clone_site"))
             .label(Microcopy.of("clone").withFilter("scope", "site"))
             .icon(Icon.of("copy"))
             .confirmation(ConfirmationSpec.builder()
@@ -223,9 +232,7 @@ public final class SiteResource extends RowResource {
                 .body(Microcopy.of("clone_confirm").withFilter("scope", "site"))
                 .build())
             .handler((row, ctx) -> cloneSite(row, ctx.access()))
-            .build());
-
-        return actions;
+            .build();
     }
 
     /** Clone a site + its domains; the copy starts disabled with a fresh webhook secret. */
@@ -282,7 +289,7 @@ public final class SiteResource extends RowResource {
     public @NonNull List<RecordScopedPage<Row>> subpages() {
         List<RecordScopedPage<Row>> pages = new ArrayList<>(
             List.of(new SiteDomainsPage(), new SiteDatabasesPage(), new SiteProcessesPage(),
-                new SiteDeploymentsPage(), new SiteDevSessionsPage()));
+                new SiteDeploymentsPage(), new SiteDevSessionsPage(), new SiteAccessPage()));
         pages.addAll(this.frameworkSubpages());
         return pages;
     }

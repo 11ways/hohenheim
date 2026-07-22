@@ -12,8 +12,9 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.shredzone.acme4j.*;
-import org.shredzone.acme4j.challenge.Http01Challenge;
+import org.shredzone.acme4j.challenge.Challenge;
 import org.shredzone.acme4j.challenge.Dns01Challenge;
+import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.util.CSRBuilder;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
@@ -33,6 +34,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Manages Let's Encrypt certificate issuance and renewal via ACME protocol.
@@ -202,15 +204,58 @@ public class AcmeService {
 
         } catch (Exception e) {
             flight.result().completeExceptionally(e);
-            Blast.log("ACME: certificate request failed for", String.join(", ", hostnames), "-", e.getMessage());
+            String reason = failureReason(e);
+            Blast.log("ACME: certificate request failed for", String.join(", ", hostnames), "-", reason);
 
-            recordRenewalFailure(certRow, e.getMessage());
+            recordRenewalFailure(certRow, reason);
             certModel.save(certRow);
 
             return -1;
         } finally {
             inFlightOrders.remove(orderKey, flight);
         }
+    }
+
+    /** Preserves nested transport diagnostics that generic ACME exceptions hide. */
+    static String failureReason(Throwable failure) {
+        StringJoiner reason = new StringJoiner(": ");
+        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        Throwable current = failure;
+        while (current != null && seen.add(current)) {
+            String message = current.getMessage();
+            if (message != null && !message.isBlank()) {
+                reason.add(message);
+            } else {
+                reason.add(current.getClass().getSimpleName());
+            }
+            current = current.getCause();
+        }
+        return reason.toString();
+    }
+
+    /** Formats the structured diagnostic returned by the ACME server. */
+    static String formatProblem(Problem problem) {
+        StringJoiner details = new StringJoiner(", ");
+        details.add("type=" + problem.getType());
+        problem.getTitle().ifPresent(title -> details.add("title=" + title));
+        problem.getDetail().ifPresent(detail -> details.add("detail=" + detail));
+        problem.getIdentifier().ifPresent(identifier -> details.add("identifier=" + identifier));
+        if (!problem.getSubProblems().isEmpty()) {
+            details.add("subproblems=" + problem.getSubProblems().stream()
+                .map(AcmeService::formatProblem)
+                .collect(Collectors.joining("; ")));
+        }
+        return details.toString();
+    }
+
+    static RuntimeException challengeFailure(String domain, Challenge challenge) {
+        String details = challenge.getError().map(AcmeService::formatProblem).orElse("unreported ACME error");
+        return new RuntimeException("Challenge failed for " + domain + ": " + details);
+    }
+
+    static RuntimeException orderFailure(Order order) {
+        String details = order.getError().map(AcmeService::formatProblem).orElse("unreported ACME error");
+        return new RuntimeException("Order rejected by CA: " + details);
     }
 
     /** Begin a DNS-01 order and return the TXT values the operator must publish. */
@@ -254,7 +299,7 @@ public class AcmeService {
         } catch (Exception e) {
             flight.result().completeExceptionally(e);
             inFlightOrders.remove(orderKey, flight);
-            recordRenewalFailure(certRow, e.getMessage());
+            recordRenewalFailure(certRow, failureReason(e));
             certModel.save(certRow);
             throw e;
         }
@@ -301,7 +346,7 @@ public class AcmeService {
             return pending.certificateId();
         } catch (Exception e) {
             pending.flight().result().completeExceptionally(e);
-            recordRenewalFailure(certRow, e.getMessage());
+            recordRenewalFailure(certRow, failureReason(e));
             certModel.save(certRow);
             return -1;
         } finally {
@@ -397,7 +442,7 @@ public class AcmeService {
                 renewCertificate(cert, certModel);
             }
         } catch (Exception e) {
-            Blast.log("ACME: renewal check failed:", e.getMessage());
+            Blast.log("ACME: renewal check failed:", failureReason(e));
         }
     }
 
@@ -492,10 +537,11 @@ public class AcmeService {
             Blast.log("ACME: renewed certificate", niceName);
 
         } catch (Exception e) {
-            Blast.log("ACME: renewal failed for", niceName, "-", e.getMessage());
-            recordRenewalFailure(certRow, e.getMessage());
+            String reason = failureReason(e);
+            Blast.log("ACME: renewal failed for", niceName, "-", reason);
+            recordRenewalFailure(certRow, reason);
             certModel.save(certRow);
-            notifyRenewalFailure(certRow, niceName, e.getMessage());
+            notifyRenewalFailure(certRow, niceName, reason);
         }
     }
 
@@ -686,17 +732,18 @@ public class AcmeService {
             pending.challenge().trigger();
         }
         for (DnsAuthorization pending : authorizations) {
-            awaitAuthorization(pending.authorization());
+            awaitAuthorization(pending.authorization(), pending.challenge());
         }
     }
 
-    private void awaitAuthorization(Authorization auth) throws Exception {
+    private void awaitAuthorization(Authorization auth, Dns01Challenge challenge) throws Exception {
         for (int i = 0; i < MAX_POLL_ATTEMPTS; i++) {
             Thread.sleep(POLL_INTERVAL_MS);
             auth.update();
             if (auth.getStatus() == Status.VALID) return;
             if (auth.getStatus() == Status.INVALID) {
-                throw new RuntimeException("Challenge failed for " + auth.getIdentifier().getDomain());
+                Challenge failed = auth.findChallenge(Dns01Challenge.class).orElse(challenge);
+                throw challengeFailure(auth.getIdentifier().getDomain(), failed);
             }
         }
         throw new RuntimeException("Challenge timed out for " + auth.getIdentifier().getDomain());
@@ -715,7 +762,7 @@ public class AcmeService {
             Thread.sleep(POLL_INTERVAL_MS);
             order.update();
             if (order.getStatus() == Status.INVALID) {
-                throw new RuntimeException("Order rejected by CA");
+                throw orderFailure(order);
             }
         }
 
@@ -754,7 +801,8 @@ public class AcmeService {
                 auth.update();
                 if (auth.getStatus() == Status.VALID) return;
                 if (auth.getStatus() == Status.INVALID) {
-                    throw new RuntimeException("Challenge failed for " + auth.getIdentifier().getDomain());
+                    Challenge failed = auth.findChallenge(Http01Challenge.class).orElse(challenge);
+                    throw challengeFailure(auth.getIdentifier().getDomain(), failed);
                 }
             }
 

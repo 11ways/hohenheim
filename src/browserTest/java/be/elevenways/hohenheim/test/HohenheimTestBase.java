@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantModel;
@@ -84,6 +85,7 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         ServerMain.installAuthBaselines();
         HohenheimHandlers.init();
         new HohenheimPanel();
+        new ManagePanel();
 
         sessionToken = seedAuthenticatedAdmin();
 

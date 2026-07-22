@@ -1,0 +1,89 @@
+{#- Access tab on a site (admin only): manage grants on this site, with an
+    add-user form and per-row revoke posting to the host endpoints. -#}
+{% declare title: String %}
+{% declare siteId: Integer %}
+{% declare siteName: String %}
+{% declare grants: List %}
+{% declare users: List %}
+{% declare error: String = "" %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ siteName }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
+
+    {% if grants %}
+    <pl-table id="site-access-grants">
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("subject", scope: "site_access") }}</pl-table-head>
+            <pl-table-head>{{ t("capability", scope: "site_access") }}</pl-table-head>
+            <pl-table-head>{{ t("allowed", scope: "site_access") }}</pl-table-head>
+            <pl-table-head>{{ t("added", scope: "site_access") }}</pl-table-head>
+            <pl-table-head></pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each grants as index, grant %}
+            <pl-table-row>
+                <pl-table-cell data-subject-id={% grant.get("subjectId") %}>{{ grant.get("subject") }}</pl-table-cell>
+                <pl-table-cell><pl-badge variant="secondary">{{ grant.get("capability") }}</pl-badge></pl-table-cell>
+                <pl-table-cell>
+                    {% if grant.get("allowed") == true %}
+                    <pl-badge variant="default">{{ t("yes", scope: "site_access") }}</pl-badge>
+                    {% else %}
+                    <pl-badge variant="destructive">{{ t("no", scope: "site_access") }}</pl-badge>
+                    {% /if %}
+                </pl-table-cell>
+                <pl-table-cell>{{ grant.get("createdAt") }}</pl-table-cell>
+                <pl-table-cell>
+                    <form method="POST" action={% "/admin/sites/" + siteId + "/access/remove" %}
+                          data-confirm={% t("remove_confirm", scope: "site_access") %} style="display:inline">
+                        {% csrf() %}
+                        <input type="hidden" name="subject_type" value={% grant.get("subjectType") %}>
+                        <input type="hidden" name="subject_id" value={% grant.get("subjectId") %}>
+                        <input type="hidden" name="capability" value={% grant.get("capability") %}>
+                        <pl-button variant="destructive" size="sm" type="submit">{{ t("remove", scope: "site_access") }}</pl-button>
+                    </form>
+                </pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="user-lock">
+        <pl-empty-state-title>{{ t("empty", scope: "site_access") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("empty_description", scope: "site_access") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>{{ t("add_title", scope: "site_access") }}</pl-card-title>
+            <pl-card-description>{{ t("add_description", scope: "site_access") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <form method="POST" action={% "/admin/sites/" + siteId + "/access/add" %} id="site-access-add-form">
+                {% csrf() %}
+                <pl-field>
+                    <pl-label>{{ t("user", scope: "site_access") }}</pl-label>
+                    <pl-select name="user_id" submitEmpty={% true %}>
+                        {% each users as index, user %}
+                        <pl-select-item value={% user.get("id") %}>{{ user.get("label") }}</pl-select-item>
+                        {% /each %}
+                    </pl-select>
+                </pl-field>
+                <div class="cms-form-actions">
+                    <pl-button variant="primary" type="submit">{{ t("add", scope: "site_access") }}</pl-button>
+                </div>
+            </form>
+        </pl-card-content>
+    </pl-card>
+</section>
+{% /block %}

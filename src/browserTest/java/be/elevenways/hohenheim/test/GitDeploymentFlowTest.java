@@ -66,6 +66,8 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         sourceSettings.put("repository_url", upstreamRepo.toString());
         sourceSettings.put("branch", "main");
         sourceSettings.put("shallow_clone", false);
+        sourceSettings.put("build_command",
+            "printf 'operator-safe build output\\n' # build-command-secret-flow");
         site.set(SiteModel.SOURCE_SETTINGS, sourceSettings);
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);
@@ -181,7 +183,12 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         assertThat((String) deploy.get(DeploymentModel.REASON)).isEqualTo("initial");
         assertThat((String) deploy.get(DeploymentModel.COMMIT_SHA)).isEqualTo(firstCommit);
         assertThat((String) deploy.get(DeploymentModel.SLOT)).isIn("a", "b");
-        assertThat((String) deploy.get(DeploymentModel.LOG)).contains("Cloning repository");
+        assertThat((String) deploy.get(DeploymentModel.LOG))
+            .contains("Cloning repository")
+            .contains("Build started")
+            .contains("operator-safe build output")
+            .contains("Build succeeded")
+            .doesNotContain("build-command-secret-flow");
         assertThat((Integer) deploy.get(DeploymentModel.DURATION_MS)).isNotNull();
         assertThat(gitHandler().getCurrentCommit()).isEqualTo(firstCommit);
     }
@@ -207,6 +214,8 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         assertThat(page.body()).contains("hh-deploy-detail");
         assertThat(page.body()).contains("hh-deploy-log");
         assertThat(page.body()).contains("Build log");
+        assertThat(page.body()).contains("Build started").contains("Build succeeded");
+        assertThat(page.body()).doesNotContain("build-command-secret-flow");
 
         var blocked = get("/admin/sites/" + plainSiteId + "/page/deployments");
         assertThat(blocked.statusCode()).isEqualTo(404);

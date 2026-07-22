@@ -108,6 +108,8 @@ public final class SiteProcessesPage implements RecordScopedPage<Row> {
         }
         vars.put("selectedLogHtml", selectedLogHtml);
         vars.put("selectedLogTitle", selectedLogTitle);
+        vars.put("basePath", CmsSupport.panelBase(conduit));
+        vars.put("panelSlug", CmsSupport.panelSlug(conduit));
         vars.put("recordTabs", recordTabs(conduit));
 
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-processes"), vars);

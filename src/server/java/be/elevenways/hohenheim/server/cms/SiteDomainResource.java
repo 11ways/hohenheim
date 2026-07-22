@@ -31,6 +31,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -39,9 +40,9 @@ import java.util.Map;
  * headers and certificate pinning. Hidden from the sidebar -- reached
  * through a site's Domains tab.
  */
-public final class SiteDomainResource extends RowResource {
+public class SiteDomainResource extends RowResource {
 
-    private static final List<FieldOption<String>> MATCH_OPTIONS = List.of(
+    static final List<FieldOption<String>> MATCH_OPTIONS = List.of(
         FieldOption.of(SiteDomainModel.MATCH_EXACT,
             Microcopy.of("exact").withFilter("scope", "domain_match")),
         FieldOption.of("wildcard",
@@ -50,7 +51,7 @@ public final class SiteDomainResource extends RowResource {
             Microcopy.of("regex").withFilter("scope", "domain_match")));
 
     /** Discovered local addresses (refreshed hourly by UpdateSystemIpAddresses); blank = all interfaces. */
-    private static List<FieldOption<String>> listenOnOptions() {
+    static List<FieldOption<String>> listenOnOptions() {
         List<FieldOption<String>> options = new ArrayList<>();
         for (String address : UpdateSystemIpAddresses.getLocalAddresses()) {
             options.add(FieldOption.of(address, address));
@@ -110,15 +111,16 @@ public final class SiteDomainResource extends RowResource {
     /** The site's Domains tab links here with ?site_id= so the pick is preselected. */
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
+        Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
         String siteId = conduit.getQueryParam("site_id");
         if (siteId != null && !siteId.isEmpty()) {
             try {
-                return Map.of("site_id", Integer.parseInt(siteId));
+                values.put("site_id", Integer.parseInt(siteId));
             } catch (NumberFormatException ignored) {
                 // Malformed prefill: render the bare form.
             }
         }
-        return Map.of();
+        return Map.copyOf(values);
     }
 
     @Override

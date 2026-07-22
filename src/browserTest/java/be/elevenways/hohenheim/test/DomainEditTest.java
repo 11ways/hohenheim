@@ -61,6 +61,13 @@ class DomainEditTest extends HohenheimTestBase {
         assertThat(site).isNotNull();
         siteId = site.get(SiteModel.ID);
 
+        navigateToApp("/admin/domains/new?site_id=" + siteId);
+        waitForHydration();
+        assertThat(page.locator("pl-select[name='match_type'] .pl-select-value")
+            .textContent().trim()).isEqualTo("Exact hostname");
+        assertThat(page.locator("pl-switch[name='force_ssl']").getAttribute("checked"))
+            .isNotNull();
+
         var domainResponse = postForm("/admin/domains/new",
             "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=exact");
         assertThat(domainResponse.statusCode()).isIn(200, 302, 303);

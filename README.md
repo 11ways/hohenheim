@@ -27,7 +27,7 @@ Each subsystem has a deeper design doc under [`docs/`](docs/).
 
 ### Java
 
-- **JDK 22 or newer.** The server is compiled against Java 22.
+- **JDK 25 or newer.** The server is compiled against Java 25.
 
 ### Database
 
@@ -76,7 +76,6 @@ time:
 ```ini
 [Service]
 AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 ```
 
 See the [full unit file](#systemd) below. Survives JRE upgrades automatically.
@@ -92,7 +91,7 @@ install directory via `/proc/self/exe`, so a stand-alone copy will fail with
 Instead, copy the whole JDK:
 
 ```bash
-sudo cp -a /usr/lib/jvm/java-22-openjdk /opt/hohenheim-jdk
+sudo cp -a /usr/lib/jvm/java-25-openjdk /opt/hohenheim-jdk
 sudo setcap 'cap_net_bind_service=+ep' /opt/hohenheim-jdk/bin/java
 ```
 
@@ -129,18 +128,49 @@ with `bind()`, nothing else. Option 1 supersedes it.
 ## uid/gid switching for spawned processes
 
 Hohenheim can run site processes as a different unix user (per-site
-`system_user_id`). This uses `sudo -u #<uid>`, so:
+`system_user_id`). It uses `sudo` as the privilege broker and util-linux
+`setsid` to give each launched runtime, build, and git command its own session
+and process group.
 
 - The JVM itself does **not** need `cap_setuid`/`cap_setgid`/`cap_kill`.
-- `sudo` is setuid-root on every distro and handles the switch.
-- You need a NOPASSWD rule for the hohenheim user:
+- `/usr/bin/sudo` must be owned by root, have its setuid bit intact, and reside
+  on a filesystem mounted without `nosuid`.
+- systemd must use `NoNewPrivileges=false`. Do not narrow
+  `CapabilityBoundingSet` to only `CAP_NET_BIND_SERVICE`: that also constrains
+  the setuid `sudo` child and prevents the uid/gid switch. The example unit
+  leaves the bounding set at systemd's default.
+- The explicit child environment is cleared before launch and carried through
+  `sudo --preserve-env`; values are never serialized into process arguments.
+- The daemon invokes arbitrary configured site commands as numeric users and
+  groups, and invokes `chown` for deployment slots. The matching sudoers rule is:
 
 ```
 # /etc/sudoers.d/hohenheim
-hohenheim ALL=(ALL) NOPASSWD: ALL
+Defaults:hohenheim !use_pty, !log_input, !log_output
+hohenheim ALL=(ALL:ALL) NOPASSWD:SETENV: ALL
 ```
 
-Tighten to a whitelist if you have a closed set of target users.
+Validate it with `visudo -cf /etc/sudoers.d/hohenheim`. The host must provide
+`/usr/bin/sudo`, util-linux `/usr/bin/setsid` with `--wait`, and
+`/usr/bin/kill`. A narrower sudoers policy is only equivalent if it permits
+every configured target uid/gid, runtime/build/git command, process-group
+signal, and deployment-slot `chown` invocation.
+
+The three `Defaults` flags are part of the process-group contract, not optional
+hardening. Hohenheim starts `/usr/bin/setsid` before `sudo`, then treats that
+`setsid` process PID as the session and process-group ID for cleanup. A sudo
+PTY or I/O-logging session can place the target command in a new session outside
+that group, so `use_pty`, `log_input`, and `log_output` must remain disabled for
+the `hohenheim` user. `SETENV` and `NOPASSWD` remain required for the explicit
+child environment and unattended uid/gid switch.
+
+On shutdown or cancellation Hohenheim sends TERM to the original process
+group, checks whether that group still exists, and sends KILL only when it
+does. This cleans up ordinary descendants, including children reparented after
+their leader exits. It is lifecycle cleanup, not a security sandbox: a hostile
+program can create another session or process group and escape this boundary.
+The systemd unit's `KillMode=control-group` separately asks systemd to reap all
+remaining processes in the service cgroup when the service stops.
 
 ## File descriptor limits
 
@@ -546,10 +576,12 @@ Environment=JAVA_TOOL_OPTIONS=-Xmx1g
 
 # Privileged ports — option 1 (recommended)
 AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
 # File descriptors
 LimitNOFILE=60000
+
+# Reap the daemon and its remaining descendants when the service stops
+KillMode=control-group
 
 # Hardening
 NoNewPrivileges=false           # must be false if sudo-based uid switching is used
@@ -603,7 +635,7 @@ Hohenheim falls back to `node` on `PATH` rather than crashing the spawn.
   strategy. Re-read that section.
 - **`libjli.so: cannot open shared object file`.** You copied only the `java`
   binary. Copy the whole JDK directory (option 2).
-- **Spawns run as the wrong user.** Either `sudo` NOPASSWD rule missing, or
+- **Spawns run as the wrong user.** Either the `sudo` NOPASSWD/SETENV rule is missing, or
   `NoNewPrivileges=true` is set in the unit.
 - **`EMFILE: too many open files`.** Raise `LimitNOFILE`.
 - **Let's Encrypt fails with rate-limit errors in testing.** Enable

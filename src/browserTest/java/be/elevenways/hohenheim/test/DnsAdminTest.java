@@ -161,6 +161,8 @@ class DnsAdminTest extends HohenheimTestBase {
     @Order(9)
     void importingAZoneFileReplacesOperatorRecords() throws Exception {
         String zoneText = """
+            $ORIGIN admin-zone.example.
+            $TTL 3600
             @ 3600 IN NS ns1.admin-zone.example.
             ns1 3600 IN A 192.0.2.1
             mail 3600 IN MX 10 mx.admin-zone.example.

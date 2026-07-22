@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -37,6 +38,7 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row site) {
         Integer siteId = site.get(SiteModel.ID);
+        String basePath = CmsSupport.panelBase(conduit);
         List<Map<String, Object>> domains = new ArrayList<>();
         for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(siteId)) {
             Map<String, Object> entry = new HashMap<>();
@@ -44,7 +46,7 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             entry.put("hostname", domain.get(SiteDomainModel.HOSTNAME));
             entry.put("matchType", domain.get(SiteDomainModel.MATCH_TYPE));
             entry.put("forceSsl", Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)));
-            entry.put("editUrl", "/admin/domains/" + domain.get(SiteDomainModel.ID));
+            entry.put("editUrl", basePath + "/domains/" + domain.get(SiteDomainModel.ID));
             putCertCoverage(entry, domain);
             domains.add(entry);
         }
@@ -54,6 +56,11 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         vars.put("siteId", siteId);
         vars.put("siteName", site.get(SiteModel.NAME));
         vars.put("domains", domains);
+        vars.put("basePath", basePath);
+        boolean administerDomains = HohenheimAccess.isAdmin(accessContext);
+        // Hostname ownership and LE requests are installation administration.
+        vars.put("canEditDomains", administerDomains);
+        vars.put("canRequestCert", administerDomains);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-domains"), vars);
     }
