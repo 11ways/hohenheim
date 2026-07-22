@@ -287,7 +287,18 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(subpage.statusCode()).isEqualTo(200);
         assertThat(subpage.body()).contains("managed.example.com").doesNotContain("add-domain-link");
 
-        assertThat(operatorGet("/manage/domains/" + domainAId).statusCode()).isEqualTo(200);
+        // The delegated record form must render INERT: updatable()==false makes
+        // the renderer null the submitUrl (so no form posts back to the domain
+        // record and the save pl-button is dropped) and skip the
+        // optimistic-concurrency token (cms__snapshot) that only writable forms
+        // carry. A bare type="submit" check would trip over the shell's logout
+        // button.
+        HttpResponse<String> domainForm = operatorGet("/manage/domains/" + domainAId);
+        assertThat(domainForm.statusCode()).isEqualTo(200);
+        assertThat(domainForm.body())
+            .doesNotContain("action=\"/manage/domains/")
+            .doesNotContain("<pl-button type=\"submit\"")
+            .doesNotContain("cms__snapshot");
         assertThat(operatorPost("/manage/domains/new",
             "site_id=" + siteAId + "&hostname=hijack.example.com&match_type=exact").statusCode())
             .isEqualTo(404);

@@ -76,15 +76,23 @@ public class ProcessTerminalHandler implements WebSocketHandler {
         Blast.log("TERMINAL: connected to pid=" + process.pid());
     }
 
+    /**
+     * Mid-session re-check of the per-site grant, consulted by the endpoint's
+     * revalidateEvery tick; runs off the serial callback lane (all reads here
+     * are thread-safe finals + the session principal), and core refuses
+     * inbound frames + closes 1008 once this stops passing, so onTextMessage
+     * needs no per-frame grant check (and no per-keystroke DB query).
+     */
+    @Override
+    public boolean revalidate() {
+        Principal principal = session.getPrincipal();
+        return principal != null && siteId != null
+            && HohenheimAccess.canManageSite(principal, siteId);
+    }
+
     @Override
     public void onTextMessage(String message) {
         if (!active || message == null) return;
-        Principal principal = session.getPrincipal();
-        if (principal == null || siteId == null
-            || !HohenheimAccess.canManageSite(principal, siteId)) {
-            refuseAccess();
-            return;
-        }
 
         if (message.startsWith("{\"type\":\"resize\"")) {
             handleResize(message);
@@ -107,12 +115,6 @@ public class ProcessTerminalHandler implements WebSocketHandler {
         active = false;
         detachLogListener();
         Blast.log("TERMINAL: disconnected from pid=" + (process != null ? process.pid() : "null"));
-    }
-
-    private void refuseAccess() {
-        active = false;
-        detachLogListener();
-        session.close(1008, "forbidden");
     }
 
     private void detachLogListener() {

@@ -79,7 +79,7 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
         vars.put("deployments", deployments);
 
         if (HohenheimAccess.isAdmin(accessContext)) {
-            putWebhookVars(vars, site);
+            putAdminOnlyVars(vars, site);
         }
 
         vars.put("panelSlug", CmsSupport.panelSlug(conduit));
@@ -91,12 +91,14 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
     }
 
     /**
-     * The push URL + secret an operator pastes into their git host. The
-     * webhook endpoint is intercepted before hostname routing, so any
+     * The ONLY place admin-only template vars may be populated (currently the
+     * webhook push URL + secret): every sensitive var must be added inside this
+     * method so the single isAdmin gate at the call site stays an allowlist.
+     * The webhook endpoint is intercepted before hostname routing, so any
      * hostname pointing at the proxy works; the site's own first exact
      * domain is the copy-pastable choice.
      */
-    private static void putWebhookVars(Map<String, Object> vars, Row site) {
+    private static void putAdminOnlyVars(Map<String, Object> vars, Row site) {
         @SuppressWarnings("unchecked")
         Map<String, Object> settings = site.get(SiteModel.SOURCE_SETTINGS) instanceof Map<?, ?> map
             ? (Map<String, Object>) map : Map.of();

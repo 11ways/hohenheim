@@ -78,7 +78,7 @@ public final class ManageSiteResource extends SiteResource {
         if (name.isEmpty()) {
             throw Violations.ofField(SiteModel.NAME.getName(), name, CmsSupport.violationText("name_required"));
         }
-        existing.set(SiteModel.NAME, (String) coerced.get(SiteModel.NAME.getName()));
+        existing.set(SiteModel.NAME, name);
         existing.set(SiteModel.ENABLED, (Boolean) coerced.get(SiteModel.ENABLED.getName()));
         existing.set(SiteModel.DESCRIPTION, (String) coerced.get(SiteModel.DESCRIPTION.getName()));
         this.model().save(existing);

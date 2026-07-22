@@ -274,13 +274,13 @@ public class GitDeployment {
             try {
                 finished = process.waitFor(timeoutSec, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
-                ProcessGroupSupport.terminate(process, runAs, 500);
+                ProcessGroupSupport.terminate(process, runAs, ProcessGroupSupport.GRACEFUL_TERM_MS);
                 output.finish();
                 throw e;
             }
             if (!finished) {
                 ProcessGroupSupport.TerminationResult termination =
-                    ProcessGroupSupport.terminate(process, runAs, 500);
+                    ProcessGroupSupport.terminate(process, runAs, ProcessGroupSupport.GRACEFUL_TERM_MS);
                 output.finish();
                 Blast.log("GIT: build timed out after", timeoutSec, "seconds for site", siteId);
                 log("Build failed (timed out after " + timeoutSec + " seconds)");
@@ -290,7 +290,7 @@ public class GitDeployment {
                     Blast.log("GIT:", cleanup, "for site", siteId);
                     log(cleanup);
                 }
-                log(output.output());
+                log(GitRepository.sanitizeOutput(output.output()));
                 return false;
             }
             output.finish();
@@ -299,9 +299,12 @@ public class GitDeployment {
             if (exitCode != 0) {
                 Blast.log("GIT: build failed (exit", exitCode + ") for site", siteId);
                 log("Build failed (exit " + exitCode + ")");
-                log(output.output());
+                // Build output is credential-sanitized on success and failure
+                // alike: a repo's own config can echo a credentialed URL.
+                String sanitized = GitRepository.sanitizeOutput(output.output());
+                log(sanitized);
                 // Log last 50 lines of output
-                String[] lines = output.output().split("\n");
+                String[] lines = sanitized.split("\n");
                 int start = Math.max(0, lines.length - 50);
                 for (int i = start; i < lines.length; i++) {
                     Blast.log("  BUILD:", lines[i]);
@@ -309,7 +312,7 @@ public class GitDeployment {
                 return false;
             }
 
-            log(output.output());
+            log(GitRepository.sanitizeOutput(output.output()));
             log("Build succeeded");
             Blast.log("GIT: build succeeded for site", siteId);
             return true;

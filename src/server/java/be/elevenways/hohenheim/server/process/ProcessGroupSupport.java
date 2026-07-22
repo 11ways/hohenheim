@@ -18,6 +18,9 @@ public final class ProcessGroupSupport {
     private static final long HELPER_TIMEOUT_SECONDS = 2;
     private static final long FORCE_WAIT_MILLIS = 2_000;
 
+    /** How long a terminated process group gets to exit gracefully after TERM before KILL. */
+    public static final long GRACEFUL_TERM_MS = 500;
+
     private ProcessGroupSupport() {}
 
     public enum Signal {
@@ -168,6 +171,9 @@ public final class ProcessGroupSupport {
         }
     }
 
+    // AIDEV-NOTE: this English-message parse only works because
+    // SystemUsers.safeEnvironment pins LANG=C.UTF-8 for every helper process;
+    // loosening that env turns ABSENT detection into FAILED on localized hosts.
     private static boolean noSuchProcess(String output) {
         return output.contains("No such process");
     }

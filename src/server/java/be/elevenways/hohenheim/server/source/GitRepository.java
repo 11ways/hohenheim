@@ -164,13 +164,13 @@ public class GitRepository {
             try {
                 finished = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
-                ProcessGroupSupport.terminate(process, runAs, 500);
+                ProcessGroupSupport.terminate(process, runAs, ProcessGroupSupport.GRACEFUL_TERM_MS);
                 output.finish();
                 throw e;
             }
             if (!finished) {
                 ProcessGroupSupport.TerminationResult termination =
-                    ProcessGroupSupport.terminate(process, runAs, 500);
+                    ProcessGroupSupport.terminate(process, runAs, ProcessGroupSupport.GRACEFUL_TERM_MS);
                 output.finish();
                 String message = "Git command timed out after "
                     + TimeUnit.MILLISECONDS.toSeconds(timeoutMillis) + " seconds";
@@ -182,14 +182,14 @@ public class GitRepository {
 
             output.finish();
             int exitCode = process.exitValue();
-            String resultOutput = output.output();
-            return new GitResult(exitCode == 0,
-                exitCode == 0 ? resultOutput : sanitizeFailureOutput(resultOutput), exitCode);
+            // Success output is sanitized too: a repo's own insteadOf/submodule
+            // config can echo a credentialed URL even when the command succeeds.
+            return new GitResult(exitCode == 0, sanitizeOutput(output.output()), exitCode);
         } catch (InterruptedException e) {
             throw e;
         } catch (Exception e) {
             return new GitResult(false,
-                sanitizeFailureOutput("Failed to execute git: " + e.getMessage()), -1);
+                sanitizeOutput("Failed to execute git: " + e.getMessage()), -1);
         }
     }
 
@@ -218,7 +218,8 @@ public class GitRepository {
         }
     }
 
-    static String sanitizeFailureOutput(String output) {
+    /** Redacts URI user-info credentials from git output (applied to success and failure alike). */
+    static String sanitizeOutput(String output) {
         if (output == null) {
             return "";
         }

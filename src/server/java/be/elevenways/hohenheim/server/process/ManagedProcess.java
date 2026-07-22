@@ -163,8 +163,9 @@ public class ManagedProcess {
     /** Terminates ordinary descendants that remain in the process's session group. */
     public boolean kill() {
         ProcessGroupSupport.TerminationResult result = processGroupOperator == null
-            ? ProcessGroupSupport.terminate(process, runAs, 500)
-            : ProcessGroupSupport.terminate(process, runAs, 500, processGroupOperator);
+            ? ProcessGroupSupport.terminate(process, runAs, ProcessGroupSupport.GRACEFUL_TERM_MS)
+            : ProcessGroupSupport.terminate(process, runAs, ProcessGroupSupport.GRACEFUL_TERM_MS,
+                processGroupOperator);
         if (!result.successful()) {
             String message = "PROCESS: termination incomplete for site " + siteId
                 + " group=" + result.processGroupId() + " term=" + result.termResult()

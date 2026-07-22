@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -125,8 +126,20 @@ class SystemUsersTest {
         assertThat(output)
             .contains("PATH=")
             .contains("HOME=/srv/site")
-            .contains("PORT=4321")
-            .doesNotContain("CAAS_ARTIFACTORY_READER_PASSWORD")
-            .doesNotContain("AWS_SECRET_ACCESS_KEY");
+            .contains("PORT=4321");
+
+        // Clear-then-put proof: EVERY env key the child sees must come from the
+        // explicit allowlist (safeEnvironment's PATH/LANG/HOME + the put PORT)
+        // or be shell-injected (sh sets PWD/SHLVL/_ even into a cleared env;
+        // pinned empirically with `env -i sh -c env`). A doesNotContain list of
+        // guessed daemon var names proves nothing about inheritance.
+        Set<String> allowed = Set.of("PATH", "LANG", "HOME", "PORT", "PWD", "SHLVL", "_");
+        List<String> keys = output.lines()
+            .filter(line -> line.contains("="))
+            .map(line -> line.substring(0, line.indexOf('=')))
+            .toList();
+        assertThat(keys).isNotEmpty().allSatisfy(key ->
+            assertThat(allowed).as("env key %s leaked from the daemon environment", key)
+                .contains(key));
     }
 }
