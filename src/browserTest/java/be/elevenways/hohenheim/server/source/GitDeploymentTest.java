@@ -56,6 +56,17 @@ class GitDeploymentTest {
             .contains("https://[REDACTED]@example.test/project.git")
             .doesNotContain("deploy")
             .doesNotContain("super-secret");
+
+        // SUCCESS output is sanitized too: a repo's own insteadOf/submodule
+        // config can echo a credentialed URL even when the command exits 0.
+        GitRepository.GitResult success = repository.execute(List.of("/bin/sh", "-c",
+            "printf '%s\\n' 'remote: https://deploy:success-secret@example.test/project.git'"),
+            workDir.toFile(), null);
+        assertThat(success.success()).isTrue();
+        assertThat(success.output())
+            .contains("https://[REDACTED]@example.test/project.git")
+            .doesNotContain("deploy")
+            .doesNotContain("success-secret");
     }
 
     @Test
@@ -132,13 +143,17 @@ class GitDeploymentTest {
         GitDeployment deployment = new GitDeployment(9402, null, null, Map.of(), Map.of(),
             repository("https://example.test/project.git"), siteDir.toFile(), null);
         String secret = "build-command-secret-9402";
-        String command = "printf 'operator-safe output\\n' # " + secret;
+        String command = "printf '%s\\n' 'operator-safe output' "
+            + "'cloning https://deploy:build-url-secret@example.test/project.git' # " + secret;
 
         assertThat(deployment.runBuild(siteDir.toFile(), command)).isTrue();
         assertThat(deployment.getLog())
             .contains("Build started")
             .contains("operator-safe output")
             .contains("Build succeeded")
+            // Credentialed URLs echoed by a SUCCESSFUL build are redacted too.
+            .contains("https://[REDACTED]@example.test/project.git")
+            .doesNotContain("build-url-secret")
             .doesNotContain(command)
             .doesNotContain(secret);
     }

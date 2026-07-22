@@ -297,6 +297,10 @@ public class HohenheimEndpoints {
         .build();
 
     // --- Interactive process terminal ---
+
+    /** How often a live terminal session's per-site manage grant is re-checked (revoked = 1008). */
+    public static final long TERMINAL_REVALIDATION_INTERVAL_MS = 15_000;
+
     public static final WebSocketEndpoint PROCESS_TERMINAL = WebSocketEndpoint.builder()
         .identifier(Identifier.of("hohenheim", "process_terminal"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
@@ -304,6 +308,7 @@ public class HohenheimEndpoints {
             .addDelimiter().addParameter(SITE_ID)
             .addDelimiter().addParameter(PID).build())
         .requiresLogin()
+        .revalidateEvery(TERMINAL_REVALIDATION_INTERVAL_MS)
         .handler(session -> null) // Placeholder: set in HohenheimHandlers.init()
         .build();
 

@@ -293,6 +293,9 @@ class ManagedProcessSiteHandlerTest {
 
     @Test
     void processOutputUsesPlatformThreadsForBlockingPipes() throws Exception {
+        // Virtual-thread blocking reads on Process pipes pinned both carriers on a
+        // 1-vCPU host and starved every virtual-thread task incl. the DNS
+        // responders (2026-07-22 VPS incident) -- the pumps MUST stay platform.
         SleepHandler handler = new SleepHandler(9109, settings(false, 1));
         handler.startMinimumServers();
         awaitCondition("child spawned", () -> handler.runningProcessCount() == 1);

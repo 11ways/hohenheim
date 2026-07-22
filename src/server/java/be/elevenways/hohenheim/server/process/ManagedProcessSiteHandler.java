@@ -90,6 +90,8 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     private static final long CRASH_BACKOFF_MS = 3000;
     private static final int MAX_EADDRINUSE_RETRIES = 10;
     private static final long STARTUP_GRACE_MS = 750;
+    /** Bounded window an exited child gets to drain stdout/stderr before startup diagnostics read the log. */
+    private static final long STARTUP_DRAIN_MS = 500;
 
     private static final ScheduledExecutorService crashRecoveryScheduler =
         Executors.newSingleThreadScheduledExecutor(r -> {
@@ -482,6 +484,11 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         }
     }
 
+    // AIDEV-NOTE: these pumps MUST be platform threads. Virtual-thread blocking
+    // reads on Process pipes pinned both carrier threads on a 1-vCPU host and
+    // starved every virtual-thread task including the DNS responders
+    // (2026-07-22 VPS incident). Guarded by
+    // ManagedProcessSiteHandlerTest.processOutputUsesPlatformThreadsForBlockingPipes.
     private List<Thread> captureProcessOutput(ManagedProcess managed) {
         return List.of(
             Thread.ofPlatform().daemon().name("process-output-" + managed.pid() + "-stdout")
@@ -493,7 +500,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
     /** Gives exited children a bounded window to drain stdout and stderr before diagnostics are read. */
     private void awaitProcessOutput(List<Thread> outputThreads) {
-        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(500);
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(STARTUP_DRAIN_MS);
         for (Thread thread : outputThreads) {
             long remaining = deadline - System.nanoTime();
             if (remaining <= 0) return;
