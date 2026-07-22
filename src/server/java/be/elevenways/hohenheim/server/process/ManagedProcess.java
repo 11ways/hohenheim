@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.server.process;
 
+import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.sitetype.UpstreamConnection;
+import be.elevenways.protoblast.common.Blast;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 import java.util.Set;
@@ -19,6 +22,8 @@ public class ManagedProcess {
     private final int port;
     private final String socketPath;
     private final int siteId;
+    private final SystemUsers.@Nullable RunAsUser runAs;
+    private final ProcessGroupSupport.@Nullable Operator processGroupOperator;
     private final Instant startTime;
 
     // Monitoring state (updated by ProcessMonitor)
@@ -60,11 +65,21 @@ public class ManagedProcess {
     // Each listener receives the exact raw chunk that was appended -- no transformation.
     private final Set<Consumer<String>> logListeners = new CopyOnWriteArraySet<>();
 
-    public ManagedProcess(Process process, int port, String socketPath, int siteId) {
+    public ManagedProcess(Process process, int port, String socketPath, int siteId,
+                          SystemUsers.@Nullable RunAsUser runAs) {
+        this(process, port, socketPath, siteId, runAs, null);
+    }
+
+    /** Test seam for process-group signalling without requiring real sudo. */
+    public ManagedProcess(Process process, int port, String socketPath, int siteId,
+                          SystemUsers.@Nullable RunAsUser runAs,
+                          ProcessGroupSupport.@Nullable Operator processGroupOperator) {
         this.process = process;
         this.port = port;
         this.socketPath = socketPath;
         this.siteId = siteId;
+        this.runAs = runAs;
+        this.processGroupOperator = processGroupOperator;
         this.startTime = Instant.now();
         this.isolated = false;
         this.ready = false;
@@ -145,11 +160,20 @@ public class ManagedProcess {
         }
     }
 
-    /**
-     * Kill the process.
-     */
-    public void kill() {
-        process.destroyForcibly();
+    /** Terminates ordinary descendants that remain in the process's session group. */
+    public boolean kill() {
+        ProcessGroupSupport.TerminationResult result = processGroupOperator == null
+            ? ProcessGroupSupport.terminate(process, runAs, 500)
+            : ProcessGroupSupport.terminate(process, runAs, 500, processGroupOperator);
+        if (!result.successful()) {
+            String message = "PROCESS: termination incomplete for site " + siteId
+                + " group=" + result.processGroupId() + " term=" + result.termResult()
+                + " groupAfterTerm=" + result.stateAfterTerm() + " kill=" + result.killResult()
+                + " finalGroup=" + result.finalGroupState() + " leaderAlive=" + result.leaderAlive();
+            Blast.log(message);
+            appendLog("\n" + message + "\n");
+        }
+        return result.successful();
     }
 
     /**

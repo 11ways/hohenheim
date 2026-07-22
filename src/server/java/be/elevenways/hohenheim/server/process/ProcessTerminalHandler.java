@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.process;
 
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
 
@@ -25,20 +27,35 @@ import java.util.function.Consumer;
 public class ProcessTerminalHandler implements WebSocketHandler {
 
     private final WebSocketSession session;
+    private final Integer siteId;
     private final ManagedProcess process;
     private final IpcChannel ipc;
     private volatile boolean active = true;
     private Consumer<String> logListener;
 
-    public ProcessTerminalHandler(WebSocketSession session, ManagedProcess process, IpcChannel ipc) {
+    public ProcessTerminalHandler(WebSocketSession session, Integer siteId,
+                                  ManagedProcess process, IpcChannel ipc) {
         this.session = session;
+        this.siteId = siteId;
         this.process = process;
         this.ipc = ipc;
     }
 
     @Override
     public void onOpen() {
+        // The endpoint's requiresLogin refused anonymous handshakes with 401;
+        // per-site authorization (admin OR a manage grant on THIS site) needs
+        // the route params, so it runs here. 1008 = policy violation.
+        Principal principal = session.getPrincipal();
+        if (principal == null || siteId == null
+            || !HohenheimAccess.canManageSite(principal, siteId)) {
+            active = false;
+            session.close(1008, "forbidden");
+            return;
+        }
+
         if (process == null || !process.isAlive()) {
+            active = false;
             session.sendText("\r\n[process not found or not running]\r\n");
             session.close();
             return;
@@ -61,7 +78,13 @@ public class ProcessTerminalHandler implements WebSocketHandler {
 
     @Override
     public void onTextMessage(String message) {
-        if (message == null) return;
+        if (!active || message == null) return;
+        Principal principal = session.getPrincipal();
+        if (principal == null || siteId == null
+            || !HohenheimAccess.canManageSite(principal, siteId)) {
+            refuseAccess();
+            return;
+        }
 
         if (message.startsWith("{\"type\":\"resize\"")) {
             handleResize(message);
@@ -82,10 +105,22 @@ public class ProcessTerminalHandler implements WebSocketHandler {
     @Override
     public void onClose(int code, String reason) {
         active = false;
-        if (process != null && logListener != null) {
-            process.removeLogListener(logListener);
-        }
+        detachLogListener();
         Blast.log("TERMINAL: disconnected from pid=" + (process != null ? process.pid() : "null"));
+    }
+
+    private void refuseAccess() {
+        active = false;
+        detachLogListener();
+        session.close(1008, "forbidden");
+    }
+
+    private void detachLogListener() {
+        Consumer<String> listener = logListener;
+        logListener = null;
+        if (process != null && listener != null) {
+            process.removeLogListener(listener);
+        }
     }
 
     /**

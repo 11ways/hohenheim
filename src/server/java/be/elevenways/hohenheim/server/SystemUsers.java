@@ -6,15 +6,22 @@ import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
  * Resolves a site's configured {@code system_user_id} to the numeric unix uid used
- * for per-site privilege drop (sudo -u). Single source of truth for the node,
+ * for per-site privilege drop. Single source of truth for the node,
  * command, and git provisioning site paths.
  *
  * @author  Jelle De Loecker
  * @since   0.1.0
  */
 public final class SystemUsers {
+
+    private static final String SAFE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
     private SystemUsers() {}
 
@@ -35,6 +42,56 @@ public final class SystemUsers {
 
     /** The identity a site's child processes run as: uid plus its primary gid and home. */
     public record RunAsUser(int uid, @Nullable Integer gid, @Nullable String home) {}
+
+    /** Builds the explicit baseline inherited by site runtime, build, and git commands. */
+    public static Map<String, String> safeEnvironment(@Nullable String home) {
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("PATH", SAFE_PATH);
+        result.put("LANG", "C.UTF-8");
+        if (home != null && !home.isBlank()) {
+            result.put("HOME", home);
+        }
+        return result;
+    }
+
+    /** Replaces ProcessBuilder's daemon environment rather than overlaying secrets onto it. */
+    public static void setEnvironment(ProcessBuilder builder, Map<String, String> environment) {
+        builder.environment().clear();
+        builder.environment().putAll(environment);
+    }
+
+    /** Builds a process with an explicit environment, optional uid drop, and optional new session. */
+    public static ProcessBuilder executionBuilder(@Nullable RunAsUser runAs,
+                                                   Map<String, String> environment,
+                                                   List<String> command,
+                                                   boolean newSession) {
+        List<String> result = new ArrayList<>();
+        if (newSession) {
+            // Keep the session leader outside sudo: sudo may fork a command monitor, but
+            // every process it creates still inherits the group whose id is the Java PID.
+            result.add("/usr/bin/setsid");
+            result.add("--wait");
+            result.add("--");
+        }
+        if (runAs != null) {
+            result.add("/usr/bin/sudo");
+            result.add("-n");
+            // ProcessBuilder has already reduced the environment to the explicit map below.
+            // Preserving it carries secrets in envp, never in the inspectable argument vector.
+            result.add("--preserve-env");
+            result.add("-u");
+            result.add("#" + runAs.uid());
+            if (runAs.gid() != null) {
+                result.add("-g");
+                result.add("#" + runAs.gid());
+            }
+            result.add("--");
+        }
+        result.addAll(command);
+        ProcessBuilder builder = new ProcessBuilder(result);
+        setEnvironment(builder, environment);
+        return builder;
+    }
 
     /**
      * Full run-as identity for a site's configured system user, or null when none is

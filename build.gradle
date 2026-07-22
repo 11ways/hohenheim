@@ -225,8 +225,30 @@ task serverJar(type: ShadowJar) {
         attributes(
             'Main-Class': 'be.elevenways.hohenheim.server.ServerMain',
             'Implementation-Title': project.name,
-            'Implementation-Version': project.version
+            'Implementation-Version': project.version,
+            // dnsjava's Java 18 InetAddressResolverProvider exists only in META-INF/versions/18.
+            'Multi-Release': 'true'
         )
+    }
+
+    doLast {
+        def jarFile = archiveFile.get().asFile
+        def jar = new java.util.jar.JarFile(jarFile)
+        try {
+            def multiRelease = jar.manifest?.mainAttributes?.getValue('Multi-Release')
+            if (!'true'.equalsIgnoreCase(multiRelease)) {
+                throw new GradleException("${jarFile.name} is missing Multi-Release: true")
+            }
+            def resolver = 'META-INF/versions/18/org/xbill/DNS/spi/DnsjavaInetAddressResolverProvider.class'
+            if (jar.getEntry(resolver) == null) {
+                throw new GradleException("${jarFile.name} is missing dnsjava's Java 18 resolver provider")
+            }
+            if (jar.getEntry('META-INF/services/java.net.spi.InetAddressResolverProvider') == null) {
+                throw new GradleException("${jarFile.name} is missing dnsjava's resolver service registration")
+            }
+        } finally {
+            jar.close()
+        }
     }
 }
 

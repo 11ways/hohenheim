@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
+import be.elevenways.zenit.common.conduit.Conduit;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -36,4 +38,14 @@ public final class CmsSupport {
         return Microcopy.of(key).withFilter("scope", "violations");
     }
 
+    /** The hosting panel's slug during a cms dispatch (subpages render under /admin AND /manage). */
+    public static @NonNull String panelSlug(@NonNull Conduit conduit) {
+        String slug = conduit.getParameter(ResourcePageEndpoints.PANEL_PARAM);
+        return slug != null && !slug.isBlank() ? slug : "admin";
+    }
+
+    /** The hosting panel's URL base, e.g. "/admin" or "/manage". */
+    public static @NonNull String panelBase(@NonNull Conduit conduit) {
+        return "/" + panelSlug(conduit);
+    }
 }

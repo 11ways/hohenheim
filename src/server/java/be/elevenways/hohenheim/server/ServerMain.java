@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -85,6 +86,7 @@ public class ServerMain {
         // (the panel's resources resolve model singletons from the MODELS stage).
         HohenheimHandlers.init();
         new HohenheimPanel();
+        new ManagePanel();
 
         proxyServer = new ProxyServer();
         proxyServer.start();
@@ -133,9 +135,13 @@ public class ServerMain {
         // not a session; the handler refuses anything the token does not unlock.
         AuthRegistry.registerPublicPrefix("/nic/update");
         AuthRegistry.baseline("/", AuthRequirement.requiresLogin());
-        KnownPermissions.register("hohenheim", KnownPermission.of(
-            HohenheimPanel.ACCESS.value(),
-            Microcopy.of("hohenheim_admin_access").withFilter("scope", "permission")));
+        KnownPermissions.register("hohenheim",
+            KnownPermission.of(
+                HohenheimPanel.ACCESS.value(),
+                Microcopy.of("hohenheim_admin_access").withFilter("scope", "permission")),
+            KnownPermission.of(
+                "hohenheim.manage.access",
+                Microcopy.of("hohenheim_manage_access").withFilter("scope", "permission")));
         ProteusRealmSuggestions.register();
     }
 

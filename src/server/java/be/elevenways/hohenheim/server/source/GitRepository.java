@@ -1,12 +1,15 @@
 package be.elevenways.hohenheim.server.source;
 
-import java.io.BufferedReader;
+import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.process.ProcessGroupSupport;
+
 import java.io.File;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -14,19 +17,35 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public class GitRepository {
 
+    private static final long DEFAULT_TIMEOUT_MILLIS = TimeUnit.MINUTES.toMillis(5);
+    private static final int OUTPUT_CAP = 1_000_000;
+    private static final Pattern URI_USER_INFO = Pattern.compile(
+        "(?i)([a-z][a-z0-9+.-]*://)[^\\s/@]+@");
+    private static final Pattern URI_AUTHORITY = Pattern.compile(
+        "(?i)^([a-z][a-z0-9+.-]*)://([^/?#]*)");
+
     private final String repositoryUrl;
     private final String branch;
     private final boolean shallow;
     private final boolean submodules;
-    private final @Nullable Integer uid;
+    private final SystemUsers.@Nullable RunAsUser runAs;
+    private final long timeoutMillis;
 
     public GitRepository(String repositoryUrl, String branch, boolean shallow,
-                         boolean submodules, @Nullable Integer uid) {
+                          boolean submodules, SystemUsers.@Nullable RunAsUser runAs) {
+        this(repositoryUrl, branch, shallow, submodules, runAs, DEFAULT_TIMEOUT_MILLIS);
+    }
+
+    GitRepository(String repositoryUrl, String branch, boolean shallow,
+                  boolean submodules, SystemUsers.@Nullable RunAsUser runAs,
+                  long timeoutMillis) {
+        rejectEmbeddedCredentials(repositoryUrl);
         this.repositoryUrl = repositoryUrl;
         this.branch = branch != null && !branch.isEmpty() ? branch : "main";
         this.shallow = shallow;
         this.submodules = submodules;
-        this.uid = uid;
+        this.runAs = runAs;
+        this.timeoutMillis = timeoutMillis;
     }
 
     /**
@@ -123,53 +142,87 @@ public class GitRepository {
         }
     }
 
-    private GitResult execute(List<String> command, File workDir,
-                              Map<String, String> extraEnv) throws InterruptedException {
-        List<String> fullCmd;
-        if (uid != null) {
-            fullCmd = new ArrayList<>();
-            fullCmd.add("sudo");
-            fullCmd.add("-u");
-            fullCmd.add("#" + uid);
-            fullCmd.add("--");
-            fullCmd.addAll(command);
-        } else {
-            fullCmd = command;
-        }
+    GitResult execute(List<String> command, File workDir,
+                      Map<String, String> extraEnv) throws InterruptedException {
+        Map<String, String> environment = SystemUsers.safeEnvironment(
+            runAs != null ? runAs.home() : System.getProperty("user.home"));
 
         try {
-            ProcessBuilder pb = new ProcessBuilder(fullCmd);
+            if (extraEnv != null) {
+                environment.putAll(extraEnv);
+            }
+            ProcessBuilder pb = SystemUsers.executionBuilder(runAs, environment, command, true);
             if (workDir != null && workDir.isDirectory()) {
                 pb.directory(workDir);
             }
             pb.redirectErrorStream(true);
 
-            if (extraEnv != null) {
-                pb.environment().putAll(extraEnv);
-            }
-
             Process process = pb.start();
-            StringBuilder output = new StringBuilder();
-            try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
+            ProcessGroupSupport.OutputCapture output = ProcessGroupSupport.drain(
+                process.getInputStream(), "git-output-" + process.pid(), OUTPUT_CAP);
+            boolean finished;
+            try {
+                finished = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                ProcessGroupSupport.terminate(process, runAs, 500);
+                output.finish();
+                throw e;
             }
-
-            boolean finished = process.waitFor(300, TimeUnit.SECONDS);
             if (!finished) {
-                process.destroyForcibly();
-                return new GitResult(false, "Git command timed out after 300 seconds", -1);
+                ProcessGroupSupport.TerminationResult termination =
+                    ProcessGroupSupport.terminate(process, runAs, 500);
+                output.finish();
+                String message = "Git command timed out after "
+                    + TimeUnit.MILLISECONDS.toSeconds(timeoutMillis) + " seconds";
+                if (!termination.successful()) {
+                    message += "; process group survived cleanup (" + termination.finalGroupState() + ")";
+                }
+                return new GitResult(false, message, -1);
             }
 
+            output.finish();
             int exitCode = process.exitValue();
-            return new GitResult(exitCode == 0, output.toString(), exitCode);
+            String resultOutput = output.output();
+            return new GitResult(exitCode == 0,
+                exitCode == 0 ? resultOutput : sanitizeFailureOutput(resultOutput), exitCode);
         } catch (InterruptedException e) {
             throw e;
         } catch (Exception e) {
-            return new GitResult(false, "Failed to execute git: " + e.getMessage(), -1);
+            return new GitResult(false,
+                sanitizeFailureOutput("Failed to execute git: " + e.getMessage()), -1);
         }
+    }
+
+    private static void rejectEmbeddedCredentials(String repositoryUrl) {
+        if (repositoryUrl == null) {
+            return;
+        }
+        var matcher = URI_AUTHORITY.matcher(repositoryUrl);
+        if (!matcher.find()) {
+            return;
+        }
+        String authority = matcher.group(2);
+        int at = authority.lastIndexOf('@');
+        if (at < 0) {
+            return;
+        }
+        String scheme = matcher.group(1);
+        String userInfo = authority.substring(0, at);
+        boolean sshUsername = (scheme.equalsIgnoreCase("ssh")
+            || scheme.equalsIgnoreCase("git+ssh"))
+            && !userInfo.contains(":")
+            && !userInfo.toLowerCase(Locale.ROOT).contains("%3a");
+        if (!sshUsername) {
+            throw new IllegalArgumentException(
+                "Repository URL must not contain embedded user-info credentials");
+        }
+    }
+
+    static String sanitizeFailureOutput(String output) {
+        if (output == null) {
+            return "";
+        }
+        return URI_USER_INFO.matcher(output).replaceAll("$1[REDACTED]@");
     }
 
     public record GitResult(boolean success, String output, int exitCode) {}

@@ -14,6 +14,9 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -88,5 +91,42 @@ class SystemUsersTest {
         assertThatThrownBy(() -> SystemUsers.resolveUid("hohenheim:hh-uid-test-root"))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("root");
+    }
+
+    @Test
+    void privilegeDropKeepsEnvironmentValuesOutOfArgv() {
+        Map<String, String> environment = new LinkedHashMap<>();
+        environment.put("PATH", "/safe/bin");
+        environment.put("HOME", "/srv/site");
+        environment.put("DATABASE_PASSWORD", "argv-secret-value");
+
+        ProcessBuilder builder = SystemUsers.executionBuilder(
+            new SystemUsers.RunAsUser(4242, 4243, "/srv/site"), environment,
+            List.of("node", "server.js"), true);
+
+        assertThat(builder.command())
+            .containsExactly("/usr/bin/setsid", "--wait", "--", "/usr/bin/sudo", "-n",
+                "--preserve-env", "-u", "#4242", "-g", "#4243", "--", "node", "server.js")
+            .noneMatch(argument -> argument.contains("argv-secret-value"))
+            .noneMatch(argument -> argument.startsWith("DATABASE_PASSWORD="));
+        assertThat(builder.environment()).containsEntry("DATABASE_PASSWORD", "argv-secret-value");
+    }
+
+    @Test
+    void explicitChildEnvironmentDoesNotInheritDaemonSecrets() throws Exception {
+        ProcessBuilder builder = new ProcessBuilder("sh", "-c", "env");
+        Map<String, String> environment = SystemUsers.safeEnvironment("/srv/site");
+        environment.put("PORT", "4321");
+        SystemUsers.setEnvironment(builder, environment);
+
+        Process process = builder.redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes());
+        assertThat(process.waitFor()).isZero();
+        assertThat(output)
+            .contains("PATH=")
+            .contains("HOME=/srv/site")
+            .contains("PORT=4321")
+            .doesNotContain("CAAS_ARTIFACTORY_READER_PASSWORD")
+            .doesNotContain("AWS_SECRET_ACCESS_KEY");
     }
 }

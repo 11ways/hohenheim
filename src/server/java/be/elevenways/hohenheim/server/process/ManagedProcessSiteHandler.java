@@ -64,6 +64,8 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     private final ConcurrentHashMap<Long, ManagedProcess> processMap = new ConcurrentHashMap<>();
     private final AtomicInteger readyCount = new AtomicInteger(0);
     private final AtomicInteger runningCount = new AtomicInteger(0);
+    private final AtomicBoolean destroyed = new AtomicBoolean(false);
+    private final Object lifecycleLock = new Object();
 
     // Processes requested but not yet ready: counted from spawn entry until the child
     // signals ready (or dies first). startMinimumServers subtracts it from its deficit so
@@ -258,6 +260,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
      * serializes truly concurrent callers.
      */
     public void startMinimumServers() {
+        if (destroyed.get()) return;
         long now = System.currentTimeMillis();
         long prev = lastStartMinimumServers.get();
         if (now - prev < 500 || !lastStartMinimumServers.compareAndSet(prev, now)) return;
@@ -274,12 +277,14 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
      * is visible to startMinimumServers.
      */
     public ManagedProcess startProcess() {
+        if (destroyed.get()) return null;
         long backoffMs = 150;
         requestedCount.incrementAndGet();
 
         boolean spawned = false;
         try {
             for (int attempt = 1; attempt <= MAX_EADDRINUSE_RETRIES; attempt++) {
+                if (destroyed.get()) return null;
                 ManagedProcess managed = startProcessOnce();
 
                 if (managed != null) {
@@ -365,13 +370,9 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             ipc = new IpcChannel();
             ipc.startAccepting();
 
-            ProcessBuilder pb = new ProcessBuilder(command);
-            if (workDir != null && workDir.exists()) {
-                pb.directory(workDir);
-            }
-            pb.redirectErrorStream(false);
-
-            Map<String, String> env = pb.environment();
+            SystemUsers.RunAsUser runAs = getRunAsUser();
+            Map<String, String> env = new LinkedHashMap<>(SystemUsers.safeEnvironment(
+                runAs != null ? runAs.home() : System.getProperty("user.home")));
             env.put("PORT", listenTarget);
             if (socketMode) {
                 env.put("PATH_TO_SOCKET", socketPath);
@@ -382,36 +383,30 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             env.putAll(resolveInjectedEnvironment());
             env.putAll(environmentVariables);
             env.putAll(buildRuntimeEnvironment(port));
-
-            SystemUsers.RunAsUser runAs = getRunAsUser();
             if (runAs != null) {
-                List<String> suCommand = new ArrayList<>();
-                suCommand.add("sudo");
-                suCommand.add("-u");
-                suCommand.add("#" + runAs.uid());
-                if (runAs.gid() != null) {
-                    suCommand.add("-g");
-                    suCommand.add("#" + runAs.gid());
-                }
-                suCommand.add("--");
-                suCommand.addAll(command);
-                pb.command(suCommand);
-                // The child must not inherit the daemon's HOME (os.homedir() would
-                // resolve to the wrong user); point it at the target user's own home.
                 if (runAs.home() != null && !runAs.home().isBlank()) {
                     env.put("HOME", runAs.home());
                 } else {
                     env.remove("HOME");
                 }
-            } else {
+            }
+
+            ProcessBuilder pb = SystemUsers.executionBuilder(runAs, env, command, true);
+            if (workDir != null && workDir.exists()) {
+                pb.directory(workDir);
+            }
+            pb.redirectErrorStream(false);
+            if (runAs == null) {
                 warnIfInheritingRoot();
             }
 
             Process process = pb.start();
-            ManagedProcess managed = new ManagedProcess(process, port, socketPath, siteId);
-            captureProcessOutput(managed);
+            ManagedProcess managed = new ManagedProcess(process, port, socketPath, siteId, runAs);
+            List<Thread> outputThreads = captureProcessOutput(managed);
 
             if (process.waitFor(STARTUP_GRACE_MS, TimeUnit.MILLISECONDS)) {
+                awaitProcessOutput(outputThreads);
+                persistProclog(managed);
                 ipc.close();
                 releaseUpstream(port, socketPath, null);
 
@@ -435,23 +430,32 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             }
             managed.setConnection(connection);
 
-            // Wire up IPC message handler
-            IpcChannel finalIpc = ipc;
-            ipc.setMessageHandler(msg -> handleIpcMessage(managed, finalIpc, msg));
-            ipcChannels.put(process.pid(), ipc);
+            synchronized (lifecycleLock) {
+                if (destroyed.get()) {
+                    managed.kill();
+                    ipc.close();
+                    releaseUpstream(port, socketPath, connection);
+                    return null;
+                }
 
-            processMap.put(process.pid(), managed);
-            runningCount.incrementAndGet();
+                // Wire up IPC message handler
+                IpcChannel finalIpc = ipc;
+                ipc.setMessageHandler(msg -> handleIpcMessage(managed, finalIpc, msg));
+                ipcChannels.put(process.pid(), ipc);
 
-            if (!waitForReady) {
-                markProcessReady(managed);
-            }
+                processMap.put(process.pid(), managed);
+                runningCount.incrementAndGet();
 
-            monitor.register(managed);
-            process.onExit().thenAccept(p -> processExit(managed));
+                if (!waitForReady) {
+                    markProcessReady(managed);
+                }
 
-            if (waitForReady) {
-                scheduleReadyTimeout(managed);
+                monitor.register(managed);
+                process.onExit().thenAccept(p -> processExit(managed));
+
+                if (waitForReady) {
+                    scheduleReadyTimeout(managed);
+                }
             }
 
             Blast.log("PROCESS: started", siteName, "pid=" + process.pid(), "target=" + listenTarget);
@@ -478,9 +482,28 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         }
     }
 
-    private void captureProcessOutput(ManagedProcess managed) {
-        Thread.startVirtualThread(() -> pumpStream(managed.process().getInputStream(), managed, false));
-        Thread.startVirtualThread(() -> pumpStream(managed.process().getErrorStream(), managed, true));
+    private List<Thread> captureProcessOutput(ManagedProcess managed) {
+        return List.of(
+            Thread.ofPlatform().daemon().name("process-output-" + managed.pid() + "-stdout")
+                .start(() -> pumpStream(managed.process().getInputStream(), managed, false)),
+            Thread.ofPlatform().daemon().name("process-output-" + managed.pid() + "-stderr")
+                .start(() -> pumpStream(managed.process().getErrorStream(), managed, true))
+        );
+    }
+
+    /** Gives exited children a bounded window to drain stdout and stderr before diagnostics are read. */
+    private void awaitProcessOutput(List<Thread> outputThreads) {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(500);
+        for (Thread thread : outputThreads) {
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) return;
+            try {
+                thread.join(Math.max(1, TimeUnit.NANOSECONDS.toMillis(remaining)));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
     }
 
     /**
@@ -649,6 +672,8 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             // Died while booting: release its requested-capacity slot.
             requestedCount.updateAndGet(v -> Math.max(0, v - 1));
         }
+
+        if (destroyed.get()) return;
 
         // Track exit for crash detection
         long now = System.currentTimeMillis();
@@ -925,23 +950,27 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
     @Override
     public void destroy() {
+        if (!destroyed.compareAndSet(false, true)) return;
         ScheduledFuture<?> flushTask = this.proclogFlushTask;
         if (flushTask != null) {
             flushTask.cancel(false);
         }
-        monitor.removeListener(siteId, this);
-        for (IpcChannel ipc : ipcChannels.values()) {
-            ipc.close();
+        synchronized (lifecycleLock) {
+            monitor.removeListener(siteId, this);
+            for (IpcChannel ipc : ipcChannels.values()) {
+                ipc.close();
+            }
+            ipcChannels.clear();
+            remoteCache.clear();
+            for (ManagedProcess proc : processMap.values()) {
+                proc.kill();
+                releaseUpstream(proc.port(), proc.socketPath(), proc.connection());
+            }
+            processMap.clear();
+            processList.clear();
+            readyCount.set(0);
+            runningCount.set(0);
+            requestedCount.set(0);
         }
-        ipcChannels.clear();
-        remoteCache.clear();
-        for (ManagedProcess proc : processMap.values()) {
-            proc.kill();
-            releaseUpstream(proc.port(), proc.socketPath(), proc.connection());
-        }
-        processMap.clear();
-        processList.clear();
-        readyCount.set(0);
-        runningCount.set(0);
     }
 }

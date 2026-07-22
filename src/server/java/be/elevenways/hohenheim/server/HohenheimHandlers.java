@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.CertificateRequestForm;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
@@ -39,6 +40,9 @@ import be.elevenways.domino.common.DominoFile;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -91,6 +95,7 @@ public final class HohenheimHandlers {
         initDatabases();
         initProcessControl();
         initDeployControl();
+        initSiteAccess();
         initTerminal();
         initDevTunnel();
         initApi();
@@ -738,16 +743,22 @@ public final class HohenheimHandlers {
     private static void initProcessControl() {
         HohenheimEndpoints.SITES_PROCESS_START.setHandler(conduit -> {
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            if (refusedSiteAccess(conduit, siteId)) {
+                return null;
+            }
             managedHandler(siteId).ifPresent(managed -> {
                 managed.startProcess();
                 ActivityLog.record(Models.get(SiteModel.class), siteId, "started_process", null);
             });
-            return redirectUntyped(processesPageUrl(siteId));
+            return redirectUntyped(processesPageUrl(conduit, siteId));
         });
 
         HohenheimEndpoints.SITES_PROCESS_KILL.setHandler(conduit -> {
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
             Long pid = conduit.getParameter(HohenheimEndpoints.PID);
+            if (refusedSiteAccess(conduit, siteId)) {
+                return null;
+            }
             managedHandler(siteId).ifPresent(managed -> {
                 ManagedProcess proc = managed.getProcess(pid);
                 if (proc != null) {
@@ -755,12 +766,15 @@ public final class HohenheimHandlers {
                     ActivityLog.record(Models.get(SiteModel.class), siteId, "killed_process", "PID " + pid);
                 }
             });
-            return redirectUntyped(processesPageUrl(siteId));
+            return redirectUntyped(processesPageUrl(conduit, siteId));
         });
 
         HohenheimEndpoints.SITES_PROCESS_ISOLATE.setHandler(conduit -> {
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
             Long pid = conduit.getParameter(HohenheimEndpoints.PID);
+            if (refusedSiteAccess(conduit, siteId)) {
+                return null;
+            }
             managedHandler(siteId).ifPresent(managed -> {
                 ManagedProcess proc = managed.getProcess(pid);
                 if (proc != null) {
@@ -768,12 +782,20 @@ public final class HohenheimHandlers {
                     ActivityLog.record(Models.get(SiteModel.class), siteId, "isolated_process", "PID " + pid);
                 }
             });
-            return redirectUntyped(processesPageUrl(siteId));
+            return redirectUntyped(processesPageUrl(conduit, siteId));
         });
     }
 
-    private static String processesPageUrl(Integer siteId) {
-        return "/admin/sites/" + siteId + "/page/processes";
+    private static String processesPageUrl(Conduit conduit, Integer siteId) {
+        return submittedPanelBase(conduit) + "/sites/" + siteId + "/page/processes";
+    }
+
+    /**
+     * The panel the submitting form rendered under ("panel" hidden field);
+     * whitelisted so a forged value can never turn into an open redirect.
+     */
+    private static String submittedPanelBase(Conduit conduit) {
+        return "manage".equals(formMap(conduit).get("panel")) ? "/manage" : "/admin";
     }
 
     // -----------------------------------------------------------------------
@@ -783,35 +805,124 @@ public final class HohenheimHandlers {
     private static void initDeployControl() {
         HohenheimEndpoints.SITES_DEPLOY.setHandler(conduit -> {
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            if (refusedSiteAccess(conduit, siteId)) {
+                return null;
+            }
             gitHandler(siteId).ifPresent(git -> {
                 git.enqueueDeploy("manual");
                 ActivityLog.record(Models.get(SiteModel.class), siteId, "deploy_triggered", null);
             });
-            return redirectUntyped(deploymentsPageUrl(siteId));
+            return redirectUntyped(deploymentsPageUrl(conduit, siteId));
         });
 
         HohenheimEndpoints.SITES_DEPLOY_CANCEL.setHandler(conduit -> {
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            if (refusedSiteAccess(conduit, siteId)) {
+                return null;
+            }
             gitHandler(siteId).ifPresent(git -> {
                 if (git.cancelCurrentDeploy()) {
                     ActivityLog.record(Models.get(SiteModel.class), siteId, "deploy_cancelled", null);
                 }
             });
-            return redirectUntyped(deploymentsPageUrl(siteId));
+            return redirectUntyped(deploymentsPageUrl(conduit, siteId));
         });
 
         HohenheimEndpoints.SITES_ROLLBACK.setHandler(conduit -> {
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            if (refusedSiteAccess(conduit, siteId)) {
+                return null;
+            }
             gitHandler(siteId).ifPresent(git -> {
                 git.enqueueRollback();
                 ActivityLog.record(Models.get(SiteModel.class), siteId, "rollback_triggered", null);
             });
-            return redirectUntyped(deploymentsPageUrl(siteId));
+            return redirectUntyped(deploymentsPageUrl(conduit, siteId));
         });
     }
 
-    private static String deploymentsPageUrl(Integer siteId) {
-        return "/admin/sites/" + siteId + "/page/deployments";
+    private static String deploymentsPageUrl(Conduit conduit, Integer siteId) {
+        return submittedPanelBase(conduit) + "/sites/" + siteId + "/page/deployments";
+    }
+
+    // -----------------------------------------------------------------------
+    // Site access grants: /manage eligibility is derived from effective record
+    // grants, so no independently administered global permissions are mutated.
+    // -----------------------------------------------------------------------
+
+    private static void initSiteAccess() {
+        HohenheimEndpoints.SITES_ACCESS_ADD.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            Row site = existingSite(siteId);
+            if (site == null) {
+                conduit.notFound();
+                return null;
+            }
+            String backUrl = accessPageUrl(siteId);
+            Map<String, String> form = formMap(conduit);
+            Integer userId = parseIntOrNull(form.get("user_id"));
+            Row user = userId != null ? AuthModels.users().findById(userId) : null;
+            if (user == null || !Boolean.TRUE.equals(user.get(UserModel.ENABLED))) {
+                return redirectUntyped(backUrl + "?error=" + URLEncoder.encode(
+                    CmsSupport.violationText("user_missing")
+                        .resolve(conduit.getLocales(), conduit.getMessageResolver()),
+                    StandardCharsets.UTF_8));
+            }
+            RecordGrants.grant("user", userId, SiteModel.MODEL_ID, siteId,
+                HohenheimAccess.MANAGE, true);
+            ActivityLog.record(Models.get(SiteModel.class), siteId, "access_granted",
+                String.valueOf(user.get(UserModel.EMAIL)));
+            return redirectUntyped(backUrl);
+        });
+
+        HohenheimEndpoints.SITES_ACCESS_REMOVE.setHandler(conduit -> {
+            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
+            Row site = existingSite(siteId);
+            if (site == null) {
+                conduit.notFound();
+                return null;
+            }
+            String backUrl = accessPageUrl(siteId);
+            Map<String, String> form = formMap(conduit);
+            String subjectType = form.getOrDefault("subject_type", "user");
+            Integer subjectId = parseIntOrNull(form.get("subject_id"));
+            String capability = form.getOrDefault("capability", HohenheimAccess.MANAGE);
+            if (subjectId == null) {
+                return redirectUntyped(backUrl);
+            }
+            boolean removed = RecordGrants.revoke(subjectType, subjectId,
+                SiteModel.MODEL_ID, siteId, capability);
+            if (removed && "user".equals(subjectType)) {
+                ActivityLog.record(Models.get(SiteModel.class), siteId, "access_revoked",
+                    "user #" + subjectId);
+            }
+            return redirectUntyped(backUrl);
+        });
+    }
+
+    private static String accessPageUrl(Integer siteId) {
+        return "/admin/sites/" + siteId + "/page/access";
+    }
+
+    private static Row existingSite(Integer siteId) {
+        if (siteId == null) {
+            return null;
+        }
+        return Models.get(SiteModel.class).find()
+            .where(SiteModel.ID.eq(siteId))
+            .where(SiteModel.DELETED_AT.isNull())
+            .first();
+    }
+
+    private static Integer parseIntOrNull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(raw.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private static void initDevTunnel() {
@@ -830,13 +941,22 @@ public final class HohenheimHandlers {
                 proc = managed.getProcess(pid);
                 ipc = managed.getIpcChannel(pid);
             }
-            return new ProcessTerminalHandler(session, proc, ipc);
+            return new ProcessTerminalHandler(session, siteId, proc, ipc);
         });
     }
 
     // -----------------------------------------------------------------------
     // Shared plumbing.
     // -----------------------------------------------------------------------
+
+    /** Site-scoped gate: admin or a manage grant on THIS site; true = 403 already written. */
+    private static boolean refusedSiteAccess(Conduit conduit, Integer siteId) {
+        if (siteId != null && HohenheimAccess.canManageSite(conduit, siteId)) {
+            return false;
+        }
+        conduit.forbidden();
+        return true;
+    }
 
     private static Optional<ManagedProcessSiteHandler> managedHandler(Integer siteId) {
         return Optional.ofNullable(SiteHandlers.managedProcess(siteId));

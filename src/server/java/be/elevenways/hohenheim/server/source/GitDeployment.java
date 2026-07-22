@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.process.ProcessGroupSupport;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
@@ -7,15 +9,13 @@ import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -33,15 +33,15 @@ public class GitDeployment {
     private final Map<String, Object> sourceSettings;
     private final GitRepository gitRepo;
     private final File siteDir;
-    private final @Nullable Integer uid;
+    private final SystemUsers.@Nullable RunAsUser runAs;
 
     /** Step + build output captured for the deployment record (capped). */
     private final StringBuilder deployLog = new StringBuilder();
     private static final int DEPLOY_LOG_CAP = 200_000;
 
     public GitDeployment(int siteId, Row site, SiteTypeHandler typeHandler,
-                         Map<String, Object> typeSettings, Map<String, Object> sourceSettings,
-                         GitRepository gitRepo, File siteDir, @Nullable Integer uid) {
+                          Map<String, Object> typeSettings, Map<String, Object> sourceSettings,
+                          GitRepository gitRepo, File siteDir, SystemUsers.@Nullable RunAsUser runAs) {
         this.siteId = siteId;
         this.site = site;
         this.typeHandler = typeHandler;
@@ -49,7 +49,7 @@ public class GitDeployment {
         this.sourceSettings = sourceSettings;
         this.gitRepo = gitRepo;
         this.siteDir = siteDir;
-        this.uid = uid;
+        this.runAs = runAs;
     }
 
     /**
@@ -158,8 +158,14 @@ public class GitDeployment {
 
     /** Append a line to the captured deploy log (silently capped). */
     private void log(String line) {
-        if (deployLog.length() < DEPLOY_LOG_CAP) {
-            deployLog.append(line).append('\n');
+        int remaining = DEPLOY_LOG_CAP - deployLog.length();
+        if (remaining <= 0) {
+            return;
+        }
+        int lineLength = Math.min(line.length(), remaining);
+        deployLog.append(line, 0, lineLength);
+        if (lineLength < remaining) {
+            deployLog.append('\n');
         }
     }
 
@@ -208,13 +214,13 @@ public class GitDeployment {
 
     private boolean freshClone(File targetDir) throws InterruptedException {
         targetDir.getParentFile().mkdirs();
-        if (uid != null) {
+        if (runAs != null) {
             // Create the slot dir as Hohenheim (which owns the parent siteDir), then
             // hand ownership to the site user so the uid-dropped clone/build can write
             // into it. See docs/hohenext-roadmap.md for the slot-ownership model.
             targetDir.mkdirs();
             if (!chownToSiteUser(targetDir)) {
-                Blast.log("GIT: chown of slot to uid", uid, "failed for site", siteId);
+                Blast.log("GIT: chown of slot to uid", runAs.uid(), "failed for site", siteId);
                 return false;
             }
         }
@@ -228,7 +234,7 @@ public class GitDeployment {
         return true;
     }
 
-    private boolean runBuild(File targetDir, String buildCommand) throws InterruptedException {
+    boolean runBuild(File targetDir, String buildCommand) throws InterruptedException {
         String buildDir = (String) sourceSettings.get("build_directory");
         File workDir = targetDir;
         if (buildDir != null && !buildDir.isEmpty()) {
@@ -238,66 +244,64 @@ public class GitDeployment {
         Object timeoutObj = sourceSettings.get("build_timeout");
         int timeoutSec = timeoutObj instanceof Integer t && t > 0 ? t : 600;
 
-        Blast.log("GIT: site", siteId, "running build:", buildCommand);
+        Blast.log("GIT: site", siteId, "build started");
+        log("Build started");
 
         try {
             // Run the build under the site's system user when configured, matching the
             // runtime process's uid drop. Without this, a compromised repo's build script
-            // would run as the (sudo-capable) Hohenheim user. The "--" terminates sudo
-            // option parsing so the shell invocation can't be read as sudo flags.
-            List<String> cmd = new ArrayList<>();
-            if (uid != null) {
-                cmd.add("sudo");
-                cmd.add("-u");
-                cmd.add("#" + uid);
-                cmd.add("--");
+            // would run as the (sudo-capable) Hohenheim user.
+            List<String> build = List.of("sh", "-c", buildCommand);
+            Map<String, String> env = new LinkedHashMap<>(SystemUsers.safeEnvironment(
+                runAs != null ? runAs.home() : System.getProperty("user.home")));
+            mergeEnvVars(env, typeSettings.get("environment_variables"));
+            mergeEnvVars(env, sourceSettings.get("build_environment_variables"));
+            if (runAs != null) {
+                if (runAs.home() != null && !runAs.home().isBlank()) {
+                    env.put("HOME", runAs.home());
+                } else {
+                    env.remove("HOME");
+                }
             }
-            cmd.add("sh");
-            cmd.add("-c");
-            cmd.add(buildCommand);
-
-            ProcessBuilder pb = new ProcessBuilder(cmd);
+            ProcessBuilder pb = SystemUsers.executionBuilder(runAs, env, build, true);
             pb.directory(workDir);
             pb.redirectErrorStream(true);
 
-            // Merge type environment variables + build-only environment variables
-            Map<String, String> env = pb.environment();
-            mergeEnvVars(env, typeSettings.get("environment_variables"));
-            mergeEnvVars(env, sourceSettings.get("build_environment_variables"));
-
             Process process = pb.start();
-
-            // Capture output (capped)
-            StringBuilder output = new StringBuilder();
-            int lineCount = 0;
-            try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (lineCount < 10_000) {
-                        output.append(line).append("\n");
-                    }
-                    lineCount++;
-                }
+            ProcessGroupSupport.OutputCapture output = ProcessGroupSupport.drain(
+                process.getInputStream(), "git-build-output-" + process.pid(), DEPLOY_LOG_CAP);
+            boolean finished;
+            try {
+                finished = process.waitFor(timeoutSec, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                ProcessGroupSupport.terminate(process, runAs, 500);
+                output.finish();
+                throw e;
             }
-
-            boolean finished = process.waitFor(timeoutSec, TimeUnit.SECONDS);
-
-            log("Build: " + buildCommand);
-            log(output.toString());
-
             if (!finished) {
-                process.destroyForcibly();
+                ProcessGroupSupport.TerminationResult termination =
+                    ProcessGroupSupport.terminate(process, runAs, 500);
+                output.finish();
                 Blast.log("GIT: build timed out after", timeoutSec, "seconds for site", siteId);
-                log("Build timed out after " + timeoutSec + " seconds");
+                log("Build failed (timed out after " + timeoutSec + " seconds)");
+                if (!termination.successful()) {
+                    String cleanup = "Build process group survived cleanup: "
+                        + termination.finalGroupState();
+                    Blast.log("GIT:", cleanup, "for site", siteId);
+                    log(cleanup);
+                }
+                log(output.output());
                 return false;
             }
+            output.finish();
 
             int exitCode = process.exitValue();
             if (exitCode != 0) {
                 Blast.log("GIT: build failed (exit", exitCode + ") for site", siteId);
                 log("Build failed (exit " + exitCode + ")");
+                log(output.output());
                 // Log last 50 lines of output
-                String[] lines = output.toString().split("\n");
+                String[] lines = output.output().split("\n");
                 int start = Math.max(0, lines.length - 50);
                 for (int i = start; i < lines.length; i++) {
                     Blast.log("  BUILD:", lines[i]);
@@ -305,6 +309,8 @@ public class GitDeployment {
                 return false;
             }
 
+            log(output.output());
+            log("Build succeeded");
             Blast.log("GIT: build succeeded for site", siteId);
             return true;
 
@@ -312,6 +318,7 @@ public class GitDeployment {
             throw e;
         } catch (Exception e) {
             Blast.log("GIT: build error for site", siteId, "-", e.getMessage());
+            log("Build failed");
             return false;
         }
     }
@@ -401,11 +408,13 @@ public class GitDeployment {
 
     private void deleteDirectory(File dir) {
         if (dir == null || !dir.exists()) return;
-        if (uid != null) {
+        if (runAs != null) {
             // Slot contents may be owned by the site user; clear those as that user.
             // deleteTree() then removes whatever remains (Hohenheim-owned leftovers and
             // the now-empty slot dir, which Hohenheim can remove via parent-dir write).
-            runProcess(List.of("sudo", "-u", "#" + uid, "--", "rm", "-rf", dir.getAbsolutePath()));
+            runProcess(SystemUsers.executionBuilder(runAs,
+                SystemUsers.safeEnvironment(runAs.home()),
+                List.of("rm", "-rf", dir.getAbsolutePath()), false));
         }
         deleteTree(dir);
     }
@@ -424,13 +433,17 @@ public class GitDeployment {
 
     /** Give the site user ownership of a freshly-created slot directory (sudo chown). */
     private boolean chownToSiteUser(File dir) {
-        return runProcess(List.of("sudo", "chown", String.valueOf(uid), dir.getAbsolutePath()));
+        ProcessBuilder builder = new ProcessBuilder(
+            "/usr/bin/sudo", "-n", "chown", String.valueOf(runAs.uid()), dir.getAbsolutePath());
+        SystemUsers.setEnvironment(builder, SystemUsers.safeEnvironment(System.getProperty("user.home")));
+        return runProcess(builder);
     }
 
     /** Run a short-lived helper process, draining its output; true on exit code 0. */
-    private boolean runProcess(List<String> command) {
+    private boolean runProcess(ProcessBuilder builder) {
         try {
-            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            builder.redirectErrorStream(true);
+            Process process = builder.start();
             try (var stdout = process.getInputStream()) {
                 stdout.readAllBytes();
             }

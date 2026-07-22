@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
@@ -77,8 +78,11 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
         }
         vars.put("deployments", deployments);
 
-        putWebhookVars(vars, site);
+        if (HohenheimAccess.isAdmin(accessContext)) {
+            putWebhookVars(vars, site);
+        }
 
+        vars.put("panelSlug", CmsSupport.panelSlug(conduit));
         vars.put("recordTabs", recordTabs(conduit));
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));

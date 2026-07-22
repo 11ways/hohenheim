@@ -32,7 +32,7 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
     private final File siteDir;
     private final GitRepository gitRepo;
     private final GitDeploymentQueue queue;
-    private final @Nullable Integer uid;
+    private final SystemUsers.@Nullable RunAsUser runAs;
 
     private volatile SiteRequestHandler innerHandler;
     private volatile String currentCommit;
@@ -56,13 +56,13 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
 
         // Drop git ops + build to the site's system user when configured, so a
         // compromised repo can't run as the (sudo-capable) Hohenheim user.
-        this.uid = SystemUsers.resolveUid(typeSettings.get("system_user_id"));
-        if (uid == null && SystemUsers.daemonRunsAsRoot()) {
+        this.runAs = SystemUsers.resolve(typeSettings.get("system_user_id"));
+        if (runAs == null && SystemUsers.daemonRunsAsRoot()) {
             Blast.log("GIT: site", siteId, "has no system user configured;",
                 "clone and build commands run as the root daemon user.",
                 "Configure a system user for this site to drop privileges.");
         }
-        this.gitRepo = new GitRepository(repoUrl, branch, shallow, submodules, uid);
+        this.gitRepo = new GitRepository(repoUrl, branch, shallow, submodules, runAs);
 
         // Create the deploy queue with deploy action
         this.queue = new GitDeploymentQueue(siteId, this::executeDeploy);
@@ -242,7 +242,7 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
 
     private GitDeployment createDeployment() {
         return new GitDeployment(siteId, site, typeHandler, typeSettings,
-            sourceSettings, gitRepo, siteDir, uid);
+            sourceSettings, gitRepo, siteDir, runAs);
     }
 
     private File getActiveSlotDir() {

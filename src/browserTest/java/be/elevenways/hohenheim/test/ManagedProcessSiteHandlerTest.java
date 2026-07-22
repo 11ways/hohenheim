@@ -4,9 +4,11 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.process.ManagedProcess;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.PortAllocator;
+import be.elevenways.hohenheim.server.process.ProcessGroupSupport;
 import be.elevenways.hohenheim.server.process.ProcessMonitor;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
@@ -21,10 +23,14 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -66,6 +72,8 @@ class ManagedProcessSiteHandlerTest {
     /** A managed handler that spawns an inert sleeping child. */
     private final class SleepHandler extends ManagedProcessSiteHandler {
 
+        private final AtomicInteger spawnCount = new AtomicInteger();
+
         SleepHandler(int siteId, Map<String, Object> settings) {
             super(siteId, "proc-test-" + siteId, settings, portAllocator, monitor);
             handlers.add(this);
@@ -73,7 +81,32 @@ class ManagedProcessSiteHandlerTest {
 
         @Override
         protected List<String> buildCommand(String listenTarget) {
-            return List.of("sh", "-c", "echo hello-from-child; sleep 600");
+            spawnCount.incrementAndGet();
+            return List.of("sh", "-c", "echo hello-from-child; sleep 600 & wait");
+        }
+
+        @Override
+        protected Map<String, String> buildRuntimeEnvironment(int port) {
+            return Map.of();
+        }
+
+        @Override
+        protected File getWorkingDirectory() {
+            return new File(System.getProperty("java.io.tmpdir"));
+        }
+    }
+
+    /** A managed handler whose child emits one diagnostic and fails during startup. */
+    private final class StartupFailureHandler extends ManagedProcessSiteHandler {
+
+        StartupFailureHandler(int siteId) {
+            super(siteId, "startup-failure-" + siteId, settings(false, 1), portAllocator, monitor);
+            handlers.add(this);
+        }
+
+        @Override
+        protected List<String> buildCommand(String listenTarget) {
+            return List.of("sh", "-c", "echo startup-failure-diagnostic >&2; exit 23");
         }
 
         @Override
@@ -111,12 +144,165 @@ class ManagedProcessSiteHandlerTest {
         handler.startMinimumServers();
         awaitCondition("child spawned", () -> handler.runningProcessCount() == 1);
 
-        long pid = handler.getProcesses().get(0).pid();
+        ManagedProcess managed = handler.getProcesses().get(0);
+        long pid = managed.pid();
+        List<ProcessHandle> descendants = managed.process().descendants().toList();
         assertThat(ProcessHandle.of(pid)).as("child alive before destroy").isPresent();
+        assertThat(descendants).as("wrapper has a real child process").isNotEmpty();
 
         handler.destroy();
         awaitCondition("child reaped",
             () -> ProcessHandle.of(pid).map(p -> !p.isAlive()).orElse(true));
+        awaitCondition("descendants reaped",
+            () -> descendants.stream().noneMatch(ProcessHandle::isAlive));
+        Thread.sleep(1_000);
+        assertThat(handler.runningProcessCount()).isZero();
+        assertThat(handler.spawnCount).hasValue(1);
+    }
+
+    @Test
+    void processGroupTerminationReportsHelperFailuresWithoutRealSudo() throws Exception {
+        Process wrapper = SystemUsers.executionBuilder(null,
+            SystemUsers.safeEnvironment(System.getProperty("user.home")),
+            List.of("sleep", "600"), true).start();
+        List<Long> groups = new CopyOnWriteArrayList<>();
+        AtomicInteger calls = new AtomicInteger();
+        ProcessGroupSupport.Operator operator = new ProcessGroupSupport.Operator() {
+            @Override
+            public ProcessGroupSupport.SignalResult signal(SystemUsers.RunAsUser runAs,
+                                                            long group,
+                                                            ProcessGroupSupport.Signal signal) {
+                calls.incrementAndGet();
+                groups.add(group);
+                return ProcessGroupSupport.SignalResult.FAILED;
+            }
+
+            @Override
+            public ProcessGroupSupport.GroupState probe(SystemUsers.RunAsUser runAs, long group) {
+                groups.add(group);
+                return ProcessGroupSupport.GroupState.UNKNOWN;
+            }
+        };
+        ManagedProcess managed = new ManagedProcess(wrapper, 0, null, 9110,
+            new SystemUsers.RunAsUser(4242, 4242, "/srv/site"), operator);
+
+        assertThat(managed.kill()).isFalse();
+
+        awaitCondition("wrapper reaped", () -> !wrapper.isAlive());
+        assertThat(calls).hasValue(1);
+        assertThat(groups).containsOnly(wrapper.pid());
+        assertThat(managed.getLogText()).contains("termination incomplete")
+            .contains("term=FAILED").contains("groupAfterTerm=UNKNOWN")
+            .contains("finalGroup=UNKNOWN");
+    }
+
+    @Test
+    void processGroupTerminationDoesNotKillAnAbsentGroup() throws Exception {
+        Process wrapper = SystemUsers.executionBuilder(null,
+            SystemUsers.safeEnvironment(System.getProperty("user.home")),
+            List.of("sleep", "600"), true).start();
+        List<ProcessGroupSupport.Signal> signals = new CopyOnWriteArrayList<>();
+        ProcessGroupSupport.Operator operator = new ProcessGroupSupport.Operator() {
+            @Override
+            public ProcessGroupSupport.SignalResult signal(SystemUsers.RunAsUser runAs,
+                                                            long group,
+                                                            ProcessGroupSupport.Signal signal) {
+                signals.add(signal);
+                wrapper.destroy();
+                return ProcessGroupSupport.SignalResult.DELIVERED;
+            }
+
+            @Override
+            public ProcessGroupSupport.GroupState probe(SystemUsers.RunAsUser runAs, long group) {
+                return ProcessGroupSupport.GroupState.ABSENT;
+            }
+        };
+        ManagedProcess managed = new ManagedProcess(wrapper, 0, null, 9113, null, operator);
+
+        assertThat(managed.kill()).isTrue();
+        assertThat(signals).containsExactly(ProcessGroupSupport.Signal.TERM);
+    }
+
+    @Test
+    void processGroupTerminationKillsAReparentedReplacement() throws Exception {
+        Process wrapper = SystemUsers.executionBuilder(null,
+            SystemUsers.safeEnvironment(System.getProperty("user.home")),
+            List.of("/bin/sh", "-c", "trap '' HUP; sleep 600 >/dev/null 2>&1 & echo $!"),
+            true).start();
+        long childPid = Long.parseLong(new String(
+            wrapper.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim());
+        assertThat(wrapper.waitFor(2, TimeUnit.SECONDS)).isTrue();
+        ProcessHandle child = ProcessHandle.of(childPid).orElseThrow();
+        try {
+            assertThat(child.isAlive()).isTrue();
+            assertThat(child.parent().map(ProcessHandle::pid).orElse(-1L)).isNotEqualTo(wrapper.pid());
+
+            ManagedProcess managed = new ManagedProcess(wrapper, 0, null, 9112, null);
+            assertThat(managed.kill()).isTrue();
+            awaitCondition("reparented process-group member reaped", () -> !child.isAlive());
+        } finally {
+            if (child.isAlive()) {
+                new ProcessBuilder("/usr/bin/kill", "-KILL", "--", "-" + wrapper.pid())
+                    .start().waitFor();
+            }
+        }
+    }
+
+    /** Emits the runtime environment before sleeping so the explicit environment contract is observable. */
+    private final class EnvironmentHandler extends ManagedProcessSiteHandler {
+
+        EnvironmentHandler(int siteId, Map<String, Object> settings) {
+            super(siteId, "environment-" + siteId, settings, portAllocator, monitor);
+            handlers.add(this);
+        }
+
+        @Override
+        protected List<String> buildCommand(String listenTarget) {
+            return List.of("sh", "-c",
+                "printf 'PORT=%s\\nHOME=%s\\nSITE=%s\\nRUNTIME=%s\\n' "
+                    + "\"$PORT\" \"$HOME\" \"$SITE_VALUE\" \"$RUNTIME_VALUE\"; sleep 600");
+        }
+
+        @Override
+        protected Map<String, String> buildRuntimeEnvironment(int port) {
+            return Map.of("RUNTIME_VALUE", "runtime-ok");
+        }
+
+        @Override
+        protected File getWorkingDirectory() {
+            return new File(System.getProperty("java.io.tmpdir"));
+        }
+    }
+
+    @Test
+    void runtimeReceivesPortHomeAndExplicitSiteEnvironment() throws Exception {
+        Map<String, Object> settings = settings(false, 1);
+        settings.put("environment_variables", Map.of("SITE_VALUE", "site-ok"));
+        EnvironmentHandler handler = new EnvironmentHandler(9111, settings);
+        handler.startMinimumServers();
+
+        awaitCondition("runtime environment emitted", () -> !handler.getProcesses().isEmpty()
+            && handler.getProcesses().get(0).getLogText().contains("RUNTIME=runtime-ok"));
+        String output = handler.getProcesses().get(0).getLogText();
+        assertThat(output)
+            .contains("PORT=")
+            .contains("HOME=" + System.getProperty("user.home"))
+            .contains("SITE=site-ok")
+            .contains("RUNTIME=runtime-ok");
+    }
+
+    @Test
+    void processOutputUsesPlatformThreadsForBlockingPipes() throws Exception {
+        SleepHandler handler = new SleepHandler(9109, settings(false, 1));
+        handler.startMinimumServers();
+        awaitCondition("child spawned", () -> handler.runningProcessCount() == 1);
+
+        long pid = handler.getProcesses().get(0).pid();
+        List<Thread> outputThreads = Thread.getAllStackTraces().keySet().stream()
+            .filter(thread -> thread.getName().startsWith("process-output-" + pid + "-"))
+            .toList();
+
+        assertThat(outputThreads).hasSize(2).allMatch(thread -> !thread.isVirtual());
     }
 
     @Test
@@ -184,6 +370,23 @@ class ManagedProcessSiteHandlerTest {
         assertThat(afterExit).as("flushes + exit persist must UPSERT one row").hasSize(1);
         assertThat((Integer) afterExit.get(0).get(ProclogModel.ID)).isEqualTo(rowId);
         assertThat((Object) afterExit.get(0).get(ProclogModel.SAVED_AT)).isNotNull();
+    }
+
+    @Test
+    void startupFailurePersistsCapturedDiagnostics() throws Exception {
+        var model = Models.get(ProclogModel.class);
+        StartupFailureHandler handler = new StartupFailureHandler(9108);
+        Thread starter = Thread.startVirtualThread(handler::startProcess);
+
+        awaitCondition("startup failure diagnostic persisted", () -> model.find()
+            .where(ProclogModel.SITE_ID.eq(9108))
+            .all()
+            .stream()
+            .anyMatch(row -> String.valueOf(row.get(ProclogModel.LOG_HTML))
+                .contains("startup-failure-diagnostic")));
+
+        starter.interrupt();
+        starter.join(1_000);
     }
 
     /** Spawns a child that signals ready over the TCP IPC socket in the LEGACY envelope. */

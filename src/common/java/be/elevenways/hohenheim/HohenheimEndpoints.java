@@ -91,6 +91,7 @@ public class HohenheimEndpoints {
         .identifier(Identifier.of("hohenheim", "certificates_request"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("admin").addDelimiter().addStatic("certificates-request").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
         .rateLimit(LE_REQUEST_LIMIT)
         .build();
 
@@ -100,6 +101,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("admin").addDelimiter().addStatic("dns-zones").addDelimiter()
             .addParameter(ZONE_ID).addDelimiter().addStatic("zonefile").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
         .build();
 
     // --- Certificate PEM bundle download ---
@@ -108,6 +110,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("certificates").addDelimiter().addParameter(CERT_ID)
             .addDelimiter().addStatic("download").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
         .rateLimit(DOWNLOAD_LIMIT)
         .build();
 
@@ -117,6 +120,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME)
             .addDelimiter().addStatic("backup").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
         .rateLimit(DATABASE_IO_LIMIT)
         .build();
 
@@ -125,6 +129,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME)
             .addDelimiter().addStatic("restore").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
         .rateLimit(DATABASE_IO_LIMIT)
         .build();
 
@@ -175,6 +180,23 @@ public class HohenheimEndpoints {
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
             .addDelimiter().addStatic("processes").addDelimiter().addParameter(PID)
             .addDelimiter().addStatic("isolate").build())
+        .build();
+
+    // --- Site access grants (forms on the admin site Access tab) ---
+    public static final Endpoint<Object> SITES_ACCESS_ADD = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_access_add"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("admin").addDelimiter().addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("access").addDelimiter().addStatic("add").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .build();
+
+    public static final Endpoint<Object> SITES_ACCESS_REMOVE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "sites_access_remove"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("admin").addDelimiter().addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("access").addDelimiter().addStatic("remove").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
         .build();
 
     // --- Root: the admin panel IS the app, so / lands on it ---
@@ -253,6 +275,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("admin").addDelimiter().addStatic("dns-zones").addDelimiter()
             .addParameter(ZONE_ID).addDelimiter().addStatic("remote-records").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
         .build();
 
     // --- Dynamic DNS (dyndns2 update protocol; public, token in HTTP Basic auth) ---
@@ -280,6 +303,7 @@ public class HohenheimEndpoints {
             .addStatic("ws").addDelimiter().addStatic("terminal")
             .addDelimiter().addParameter(SITE_ID)
             .addDelimiter().addParameter(PID).build())
+        .requiresLogin()
         .handler(session -> null) // Placeholder: set in HohenheimHandlers.init()
         .build();
 

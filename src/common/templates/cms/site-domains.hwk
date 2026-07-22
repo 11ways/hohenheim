@@ -4,6 +4,9 @@
 {% declare siteId: Integer %}
 {% declare siteName: String %}
 {% declare domains: List %}
+{% declare basePath: String = "/admin" %}
+{% declare canEditDomains: Boolean = true %}
+{% declare canRequestCert: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -12,12 +15,14 @@
 <section class="cms-resource-list-page">
     <header class="cms-resource-list-header">
         <h1>{{ siteName }}</h1>
+        {% if canRequestCert %}
         <a href={% "/admin/certificates-request?site=" + siteId %} id="request-cert-link">
             <pl-button variant={% "outline" %}>{{ t("request_certificate", scope: "site_domains") }}</pl-button>
         </a>
-        <a href={% "/admin/domains/new?site_id=" + siteId %} id="add-domain-link">
+        {% /if %}
+        {% if canEditDomains %}<a href={% basePath + "/domains/new?site_id=" + siteId %} id="add-domain-link">
             <pl-button variant={% "primary" %}>{{ t("add_domain", scope: "site_domains") }}</pl-button>
-        </a>
+        </a>{% /if %}
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
@@ -33,7 +38,7 @@
         <pl-table-body>
             {% each domains as index, domain %}
             <pl-table-row>
-                <pl-table-cell><a href={% domain.get("editUrl") %}>{{ domain.get("hostname") }}</a></pl-table-cell>
+                <pl-table-cell>{% if canEditDomains %}<a href={% domain.get("editUrl") %}>{{ domain.get("hostname") }}</a>{% else %}{{ domain.get("hostname") }}{% /if %}</pl-table-cell>
                 <pl-table-cell><pl-badge variant={% "secondary" %}>{{ domain.get("matchType") }}</pl-badge></pl-table-cell>
                 <pl-table-cell>
                     {% if domain.get("forceSsl") == true %}
@@ -44,11 +49,11 @@
                 </pl-table-cell>
                 <pl-table-cell data-cert-status={% domain.get("certStatus") %}>
                     {% if domain.get("certStatus") == "active" %}
-                    <a href={% domain.get("certUrl") %}><pl-badge variant={% "success" %}>{{ domain.get("certName") }}</pl-badge></a>
+                    {% if canRequestCert %}<a href={% domain.get("certUrl") %}><pl-badge variant={% "success" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "success" %}>{{ domain.get("certName") }}</pl-badge>{% /if %}
                     {% elseif domain.get("certStatus") == "error" %}
-                    <a href={% domain.get("certUrl") %}><pl-badge variant={% "destructive" %}>{{ domain.get("certName") }}</pl-badge></a>
+                    {% if canRequestCert %}<a href={% domain.get("certUrl") %}><pl-badge variant={% "destructive" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "destructive" %}>{{ domain.get("certName") }}</pl-badge>{% /if %}
                     {% elseif domain.get("certStatus") == "pending" %}
-                    <a href={% domain.get("certUrl") %}><pl-badge variant={% "warning" %}>{{ domain.get("certName") }}</pl-badge></a>
+                    {% if canRequestCert %}<a href={% domain.get("certUrl") %}><pl-badge variant={% "warning" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "warning" %}>{{ domain.get("certName") }}</pl-badge>{% /if %}
                     {% elseif domain.get("certStatus") == "none" %}
                     <pl-badge variant={% "outline" %}>{{ t("none", scope: "site_domains") }}</pl-badge>
                     {% /if %}

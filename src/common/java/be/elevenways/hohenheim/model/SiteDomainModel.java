@@ -24,6 +24,7 @@ public class SiteDomainModel extends Model {
         .placeholder("example.com")
         .build());
     public static final StringField MATCH_TYPE = SCHEMA.addField(StringField.builder().name("match_type")
+        .defaultValue(MATCH_EXACT)
         .label(HohenheimFormCopy.label("match_type"))
         .help(HohenheimFormCopy.help("match_type"))
         .build());
