@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -82,7 +83,9 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
             putAdminOnlyVars(vars, site);
         }
 
-        vars.put("panelSlug", CmsSupport.panelSlug(conduit));
+        // The deploy/cancel/rollback forms echo this as _return so their
+        // handlers redirect back to whichever panel rendered this page.
+        vars.put("returnUrl", ReturnTarget.capture(conduit));
         vars.put("recordTabs", recordTabs(conduit));
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));

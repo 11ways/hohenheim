@@ -57,6 +57,7 @@ import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.HttpConduit;
 import be.elevenways.zenit.server.http.RedirectResult;
+import be.elevenways.zenit.server.http.ReturnTarget;
 import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
 import be.elevenways.zenit.forms.server.path.FilesystemBrowserRegistry;
 import be.elevenways.zenit.forms.server.path.FilesystemBrowserSource;
@@ -786,16 +787,14 @@ public final class HohenheimHandlers {
         });
     }
 
-    private static String processesPageUrl(Conduit conduit, Integer siteId) {
-        return submittedPanelBase(conduit) + "/sites/" + siteId + "/page/processes";
-    }
-
     /**
-     * The panel the submitting form rendered under ("panel" hidden field);
-     * whitelisted so a forged value can never turn into an open redirect.
+     * The submitted {@code _return} target (the /admin or /manage page the form
+     * rendered on), validated by {@link ReturnTarget}; forged values fall back
+     * to the admin page.
      */
-    private static String submittedPanelBase(Conduit conduit) {
-        return "manage".equals(formMap(conduit).get("panel")) ? "/manage" : "/admin";
+    private static String processesPageUrl(Conduit conduit, Integer siteId) {
+        return ReturnTarget.or(ReturnTarget.read(conduit),
+            "/admin/sites/" + siteId + "/page/processes");
     }
 
     // -----------------------------------------------------------------------
@@ -842,7 +841,8 @@ public final class HohenheimHandlers {
     }
 
     private static String deploymentsPageUrl(Conduit conduit, Integer siteId) {
-        return submittedPanelBase(conduit) + "/sites/" + siteId + "/page/deployments";
+        return ReturnTarget.or(ReturnTarget.read(conduit),
+            "/admin/sites/" + siteId + "/page/deployments");
     }
 
     // -----------------------------------------------------------------------

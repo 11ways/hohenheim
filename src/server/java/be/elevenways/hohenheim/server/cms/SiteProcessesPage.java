@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
@@ -109,7 +110,9 @@ public final class SiteProcessesPage implements RecordScopedPage<Row> {
         vars.put("selectedLogHtml", selectedLogHtml);
         vars.put("selectedLogTitle", selectedLogTitle);
         vars.put("basePath", CmsSupport.panelBase(conduit));
-        vars.put("panelSlug", CmsSupport.panelSlug(conduit));
+        // The start/kill/isolate forms echo this as _return so their handlers
+        // redirect back to whichever panel rendered this page (?log= included).
+        vars.put("returnUrl", ReturnTarget.capture(conduit));
         vars.put("recordTabs", recordTabs(conduit));
 
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-processes"), vars);
