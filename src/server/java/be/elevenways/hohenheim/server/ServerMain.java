@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
+import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.security.KnownPermission;
 import be.elevenways.zenit.common.security.KnownPermissions;
@@ -28,7 +29,7 @@ import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusIdentityProvider;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.ServerZenitRuntime;
-import be.elevenways.zenit.server.task.TaskBootstrap;
+import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.server.task.TaskService;
 
 /**
@@ -39,7 +40,6 @@ public class ServerMain {
     private static ProxyServer proxyServer;
     private static DnsServer dnsServer;
     private static SecondaryZoneService secondaryZoneService;
-    private static TaskService taskService;
 
     public static void main(String[] args) {
         // Migrate-only invocation (zenit-dev's migration step): settings +
@@ -57,15 +57,9 @@ public class ServerMain {
         // needs an explicit boot before the proxy loads its routes.
         SiteTypes.boot();
 
-        // init() loads ServerSettings from default.dry / local.dry, fires the
-        // BlastAutoLoadInit force-loader (materializing HohenheimSettings'
-        // @ZenitAutoLoad groups), and kicks off the boot stages.
-        ServerZenitRuntime.init();
-
         // Load Hohenheim's own settings (settings/hohenheim.dry + HOHENHEIM__*
         // env). The context roots at the hohenheim group, so file keys keep the
-        // flat proxy/ssl/... shape. Boot stages run async and read no Hohenheim
-        // setting; the manual startup below sees configured values.
+        // flat proxy/ssl/... shape.
         HohenheimSettingsFiles.load();
 
         HohenheimEndpoints.init();
@@ -86,6 +80,10 @@ public class ServerMain {
         // Register handlers + the admin panel after the runtime is ready
         // (the panel's resources resolve model singletons from the MODELS stage).
         HohenheimHandlers.init();
+        installShutdownHook();
+        // The manager owns its own platform-thread lifecycle lane. Queue it before
+        // panel construction, but never hold HTTP/proxy/DNS startup on readiness.
+        SpamserviceManager.get().boot();
         new HohenheimPanel();
         new ManagePanel();
 
@@ -113,22 +111,17 @@ public class ServerMain {
         dnsServer.startIfEnabled();
         secondaryZoneService.start();
 
-        // Reap managed child processes on daemon exit (SIGTERM/SIGINT); without this an
-        // abrupt stop leaves every spawned site process running as an orphan.
+    }
+
+    /** Registers cleanup before the first managed child can start. */
+    private static void installShutdownHook() {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            proxyServer.stop();
-            dnsServer.stop();
-            secondaryZoneService.stop();
+            if (proxyServer != null) proxyServer.stop();
+            if (dnsServer != null) dnsServer.stop();
+            if (secondaryZoneService != null) secondaryZoneService.stop();
+            SpamserviceManager.get().shutdown();
             NodeSiteType.shutdownSharedInfrastructure();
         }, "hohenheim-shutdown"));
-
-        // Scheduled maintenance via zenit's TaskService: discovery tasks (IP / users / node
-        // versions) declare BOOT_AND_CRON so they run once now and hourly; cleanup and backup
-        // tasks declare daily FALLBACK schedules. Each task's schedule lives on the task class
-        // (defaultSchedules()) and is reconciled into system_task on boot. (Session expiry is
-        // owned by zenit-auth's session store.)
-        taskService = TaskBootstrap.start(
-            HohenheimDatabase.datasource(), "be.elevenways.hohenheim.server.task");
     }
 
     // baseline("/") is a catch-all (zenit-auth 620125d): every admin path requires login except
@@ -139,9 +132,6 @@ public class ServerMain {
         // The dyndns endpoint authenticates by update token in the request itself,
         // not a session; the handler refuses anything the token does not unlock.
         AuthRegistry.registerPublicPrefix("/nic/update");
-        // The security ingest endpoint authenticates by zsec_ reporter token in
-        // the request itself, not a session.
-        AuthRegistry.registerPublicPrefix("/zn/security");
         AuthRegistry.baseline("/", AuthRequirement.requiresLogin());
         KnownPermissions.register("hohenheim",
             KnownPermission.of(
@@ -187,7 +177,7 @@ public class ServerMain {
     }
 
     public static TaskService getTaskService() {
-        return taskService;
+        return TaskRuntime.service();
     }
 
     public static DnsServer getDnsServer() {

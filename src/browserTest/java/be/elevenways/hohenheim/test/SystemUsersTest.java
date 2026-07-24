@@ -102,7 +102,7 @@ class SystemUsersTest {
         environment.put("DATABASE_PASSWORD", "argv-secret-value");
 
         ProcessBuilder builder = SystemUsers.executionBuilder(
-            new SystemUsers.RunAsUser(4242, 4243, "/srv/site"), environment,
+            new SystemUsers.RunAsUser("site", 4242, 4243, "/srv/site"), environment,
             List.of("node", "server.js"), true);
 
         assertThat(builder.command())

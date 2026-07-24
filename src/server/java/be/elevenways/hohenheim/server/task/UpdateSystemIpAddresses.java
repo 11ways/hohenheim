@@ -4,6 +4,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -21,8 +22,19 @@ public class UpdateSystemIpAddresses extends ScheduledTask {
 
     private static volatile List<String> localAddresses = List.of();
 
-    public static List<ScheduleDeclaration> defaultSchedules() {
+    @Override
+    public @NonNull UpdateSystemIpAddresses newTask() {
+        return new UpdateSystemIpAddresses();
+    }
+
+    @Override
+    public @NonNull List<ScheduleDeclaration> schedules() {
         return List.of(ScheduleDeclaration.bootAndCron("8 * * * *"));
+    }
+
+    @Override
+    public @NonNull String description() {
+        return STATIC_DESCRIPTION;
     }
 
     @Override

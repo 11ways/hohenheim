@@ -35,7 +35,7 @@ public final class HohenheimPanel extends Panel {
     public static final NavGroup INFRA_GROUP =
         NavGroup.of("infra", Microcopy.of("infra").withFilter("scope", "nav"), 200, Icon.of("server"));
 
-    /** Security group: bans, security events, reporters. */
+    /** Security group: IP bans. */
     public static final NavGroup SECURITY_GROUP =
         NavGroup.of("security", Microcopy.of("security").withFilter("scope", "nav"), 150, Icon.of("shield-halved"));
 
@@ -63,8 +63,14 @@ public final class HohenheimPanel extends Panel {
         peers.add(new DnsZonePeerResource());
         peers.add(new NotificationChannelResource());
         peers.add(new BanResource());
-        peers.add(new SecurityEventResource());
-        peers.add(new SecurityReporterResource());
+        peers.add(new SpamserviceOverviewPage());
+        peers.add(new SpamserviceInstallationResource());
+        peers.add(new SpamserviceSamplesResource());
+        peers.add(new SpamserviceClientsResource());
+        peers.add(new SpamserviceClientKeysResource());
+        peers.add(new SpamserviceSecurityEventsResource());
+        peers.add(new SpamserviceWordsResource());
+        peers.add(new SpamserviceReputationPage());
         peers.add(new ActivityResource());
         SettingsPage settings = settingsPage();
         if (settings != null) {
@@ -100,6 +106,8 @@ public final class HohenheimPanel extends Panel {
         } catch (IllegalArgumentException notLoaded) {
             // Boot without the standard zenit chain: app settings only.
         }
+        mounts.add(new SettingsPage.Mount("spamservice",
+            Microcopy.literal("Spamservice"), new SpamserviceSettingsBackend()));
         if (mounts.isEmpty()) {
             return null;
         }

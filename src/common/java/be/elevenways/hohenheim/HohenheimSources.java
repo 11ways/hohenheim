@@ -2,7 +2,6 @@ package be.elevenways.hohenheim;
 
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.BanModel;
-import be.elevenways.hohenheim.model.SecurityEventModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DeploymentModel;
@@ -10,6 +9,8 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.common.ZenitModule;
 import be.elevenways.zenit.common.data.RecordSource;
@@ -26,6 +27,9 @@ import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
  * the MODELS boot stage.
  */
 public final class HohenheimSources implements ZenitModule {
+
+    public static final Identifier SPAMSERVICE_SYSTEM_USERS =
+        Identifier.of("hohenheim", "spamservice_system_users");
 
     private static volatile boolean registered = false;
 
@@ -70,24 +74,30 @@ public final class HohenheimSources implements ZenitModule {
             .search(SiteAuthProviderModel.NAME)
             .build());
 
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(SystemUserModel.class)
+            .search(SystemUserModel.NAME)
+            .build());
+
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(SystemUserModel.class)
+            .id(SPAMSERVICE_SYSTEM_USERS)
+            .search(SystemUserModel.NAME)
+            .baseCriteria(() -> new CompositeCriteria(CompositeOperator.AND,
+                SystemUserModel.OBSOLETE.eq(false),
+                SystemUserModel.NAME.eq("spamservice"),
+                SystemUserModel.UID.gt(0)))
+            .build());
+
         // Feeds the DNS record form's zone picker.
         RecordSourceRegistry.INSTANCE.register(RecordSource.of(DnsZoneModel.class)
             .search(DnsZoneModel.ORIGIN)
             .build());
 
-        // Aggregated security events: feeds the dashboard chart (per-day
-        // buckets over last_at) and the events-today stat tile.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(SecurityEventModel.class)
-            .project(SecurityEventModel.TYPE, SecurityEventModel.IP, SecurityEventModel.DAY,
-                SecurityEventModel.COUNT, SecurityEventModel.LAST_AT)
-            .sortable(SecurityEventModel.DAY, SecurityEventModel.COUNT,
-                SecurityEventModel.LAST_AT, SecurityEventModel.CREATED_AT)
-            .build());
-
-        // Bans: feeds the active-bans stat tile.
+        // Bans: feeds the active-bans stat tile and the bans-created chart
+        // (sortable doubles as the bucketable whitelist for created_at).
         RecordSourceRegistry.INSTANCE.register(RecordSource.of(BanModel.class)
             .project(BanModel.IP, BanModel.SOURCE, BanModel.ACTIVE,
                 BanModel.EXPIRES_AT, BanModel.CREATED_AT)
+            .sortable(BanModel.CREATED_AT)
             .build());
 
         // The admin dashboard's recent-activity records widget: the shared
@@ -103,9 +113,5 @@ public final class HohenheimSources implements ZenitModule {
         // their own history UI. Tracking them would flood zenit_activity.
         ActivityLog.setPolicy(ProclogModel.MODEL_ID, ActivityPolicy.NONE);
         ActivityLog.setPolicy(DeploymentModel.MODEL_ID, ActivityPolicy.NONE);
-
-        // Security-event aggregates are machine-generated churn (one upsert per
-        // probe burst); tracking them would flood zenit_activity.
-        ActivityLog.setPolicy(SecurityEventModel.MODEL_ID, ActivityPolicy.NONE);
     }
 }

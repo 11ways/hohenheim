@@ -1,0 +1,264 @@
+package be.elevenways.hohenheim.server.cms;
+
+import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
+import be.elevenways.spamservice.client.ManagedClient;
+import be.elevenways.spamservice.client.ManagedClientKey;
+import be.elevenways.spamservice.client.SampleSummary;
+import be.elevenways.spamservice.client.SecurityEventEntry;
+import be.elevenways.spamservice.client.SpamserviceApiException;
+import be.elevenways.spamservice.client.SpamserviceClient;
+import be.elevenways.zenit.cms.common.action.ActionContext;
+import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.common.schema.TableView;
+import be.elevenways.zenit.cms.server.page.SettingsBackend;
+import be.elevenways.zenit.common.orm.field.DateField;
+import be.elevenways.zenit.common.orm.field.DateTimeField;
+import be.elevenways.zenit.common.orm.field.UuidField;
+import be.elevenways.zenit.common.security.AccessContext;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+/** Contract tests for Hohenheim's model-independent Spamservice administration. */
+class SpamserviceCmsContractTest {
+
+    private HttpServer server;
+
+    @AfterEach
+    void stopServer() {
+        if (this.server != null) this.server.stop(0);
+    }
+
+    @Test
+    void resourcesAreRemoteOnlyAndDisconnectedListsStayUsable() {
+        List<Resource<?>> resources = List.of(
+            new SpamserviceClientsResource(() -> null),
+            new SpamserviceClientKeysResource(() -> null),
+            new SpamserviceSamplesResource(() -> null),
+            new SpamserviceSecurityEventsResource(() -> null),
+            new SpamserviceWordsResource(() -> null));
+
+        for (Resource<?> resource : resources) {
+            assertThat(resource.model()).as(resource.slug()).isNull();
+        }
+
+        SpamserviceClientsResource clients = (SpamserviceClientsResource) resources.get(0);
+        TableView.Applied<be.elevenways.spamservice.client.ManagedClient> applied =
+            TableView.forPrincipal(0, clients.id()).build().apply(clients.tableSpec());
+        assertThat(clients.listRows(applied, AccessContext.anonymous())).isEmpty();
+        assertThat(clients.countRows(applied, AccessContext.anonymous())).isEqualTo(-1);
+        assertThat(clients.listNotice(AccessContext.anonymous())).isNotNull();
+        assertThatThrownBy(() -> clients.loadRow(UUID.randomUUID(), AccessContext.anonymous()))
+            .isInstanceOf(SpamserviceApiException.class);
+
+        String clientId = UUID.randomUUID().toString();
+        ManagedClient client = new ManagedClient(clientId, "Primary", true, false, false, false,
+            null, null, null, 50, null, null, null, "r1");
+        RowAction.Url<ManagedClient> keysAction = (RowAction.Url<ManagedClient>) clients.rowActions().get(0);
+        assertThat(keysAction.urlFor(client).toString())
+            .isEqualTo("/admin/spamservice-clients/" + clientId + "/page/keys");
+        assertThat(((SpamserviceClientKeysResource) resources.get(1)).parent().subpageSlug())
+            .isEqualTo(SpamserviceClientKeysPage.SLUG);
+    }
+
+    @Test
+    void remoteSchemasUseUuidTemporalAndSecretFields() {
+        SpamserviceClientsResource clients = new SpamserviceClientsResource(() -> null);
+        SpamserviceClientKeysResource keys = new SpamserviceClientKeysResource(() -> null);
+        SpamserviceSecurityEventsResource events = new SpamserviceSecurityEventsResource(() -> null);
+        SpamserviceSamplesResource samples = new SpamserviceSamplesResource(() -> null);
+
+        assertThat(clients.schema().getField("provisioned_by_client_id")).isInstanceOf(UuidField.class);
+        assertThat(keys.schema().getField("client_id")).isInstanceOf(UuidField.class);
+        assertThat(keys.schema().getField("last_used")).isInstanceOf(DateTimeField.class);
+        assertThat(keys.schema().getField("created_at")).isInstanceOf(DateTimeField.class);
+        assertThat(keys.schema().getField("key").isSecret()).isTrue();
+        assertThat(events.schema().getField("client_id")).isInstanceOf(UuidField.class);
+        assertThat(events.schema().getField("day")).isInstanceOf(DateField.class);
+        assertThat(events.schema().getField("first_at")).isInstanceOf(DateTimeField.class);
+        assertThat(events.schema().getField("last_at")).isInstanceOf(DateTimeField.class);
+        assertThat(samples.schema().getField("client_id")).isInstanceOf(UuidField.class);
+        assertThat(samples.schema().getField("created_at")).isInstanceOf(DateTimeField.class);
+    }
+
+    @Test
+    void installationUsesTypedDefaultsAndNeverRendersControllerKey() {
+        SpamserviceInstallationResource installation = new SpamserviceInstallationResource();
+        List<String> fields = installation.formSpec().entries().stream()
+            .map(entry -> entry.field().getName()).toList();
+
+        assertThat(fields).containsExactly("enabled", "port", "system_user_id", "max_heap_mb");
+        assertThat(fields).doesNotContain(SpamserviceInstallationModel.CONTROLLER_KEY.getName());
+        assertThat(installation.formSpec().defaultValues())
+            .containsEntry("enabled", false).containsEntry("port", 8095).containsEntry("max_heap_mb", 512);
+    }
+
+    @Test
+    void remoteSettingsPreserveSecretsProvenanceRevisionAndRestartFlag() throws Exception {
+        AtomicReference<String> patchBody = new AtomicReference<>();
+        SpamserviceClient client = client(exchange -> {
+            if ("GET".equals(exchange.getRequestMethod())) {
+                return """
+                    {"revision":"r1","settings":[
+                      {"path":"scoring.threshold","label":"Threshold","description":"Cutoff","type":"integer","secret":false,"multiline":false,"suffix":"points","filesystem_path":false,"restart_required":true,"configured":true,"readonly":false,"source":"settings/spamservice.dry","value":50,"has_secret":false,"default_value":40,"allowed_values":[]},
+                      {"path":"datasets.token","label":"Token","description":null,"type":"string","secret":true,"multiline":false,"suffix":null,"filesystem_path":false,"restart_required":false,"configured":true,"readonly":false,"source":"settings/spamservice.dry","value":null,"has_secret":true,"default_value":null,"allowed_values":[]},
+                      {"path":"network.port","label":"Port","description":null,"type":"integer","secret":false,"multiline":false,"suffix":null,"filesystem_path":false,"restart_required":false,"configured":true,"readonly":true,"source":"env:PORT","value":8095,"has_secret":false,"default_value":8095,"allowed_values":[]}
+                    ]}
+                    """;
+            }
+            patchBody.set(readBody(exchange));
+            return "{\"revision\":\"r2\",\"changed\":1,\"restart_required\":true}";
+        });
+        SpamserviceSettingsBackend backend = new SpamserviceSettingsBackend(() -> client);
+
+        SettingsBackend.Snapshot snapshot = backend.snapshot();
+        assertThat(snapshot.revision()).isEqualTo("r1");
+        assertThat(snapshot.settings().get("datasets.token").value()).isNull();
+        assertThat(snapshot.settings().get("datasets.token").secretPresent()).isTrue();
+        assertThat(snapshot.settings().get("network.port").readOnly()).isTrue();
+        assertThat(snapshot.settings().get("network.port").provenance()).isEqualTo("env:PORT");
+        assertThat(snapshot.rootGroup().getChildGroup("scoring").getDefinition("threshold").isRestartRequired()).isTrue();
+
+        assertThat(backend.validate(new SettingsBackend.Patch("r1", List.of(
+            SettingsBackend.Change.set("network.port", "9000")))))
+            .extracting(SettingsBackend.Refusal::kind).containsExactly(SettingsBackend.RefusalKind.READ_ONLY);
+
+        SettingsBackend.ApplyResult result = backend.apply(new SettingsBackend.Patch("r1", List.of(
+            SettingsBackend.Change.set("scoring.threshold", "60"))));
+        assertThat(result.succeeded()).isTrue();
+        assertThat(result.restartRequired()).isTrue();
+        assertThat(result.revision()).isEqualTo("r2");
+        assertThat(patchBody.get()).contains("scoring.threshold").contains("60").doesNotContain("secret-value");
+
+        this.server.stop(0);
+        this.server = null;
+        SettingsBackend.Snapshot unavailable = backend.snapshot();
+        assertThat(unavailable.available()).isFalse();
+        assertThat(unavailable.settings()).containsKeys("scoring.threshold", "datasets.token", "network.port");
+        assertThat(backend.apply(new SettingsBackend.Patch("r1", List.of(
+            SettingsBackend.Change.set("scoring.threshold", "70")))).succeeded()).isFalse();
+    }
+
+    @Test
+    void clientUpdatesUseRevisionGuardedPutWithoutProvisioningMetadata() throws Exception {
+        AtomicReference<String> method = new AtomicReference<>();
+        AtomicReference<String> body = new AtomicReference<>();
+        String clientId = UUID.randomUUID().toString();
+        SpamserviceClient client = client(exchange -> {
+            method.set(exchange.getRequestMethod());
+            body.set(readBody(exchange));
+            return "{\"id\":\"" + clientId + "\",\"name\":\"Renamed\",\"enabled\":true,"
+                + "\"trusted\":true,\"provisioner\":false,\"manager\":false,\"external_id\":\"owned\","
+                + "\"provisioned_by_client_id\":null,\"allowed_languages\":\"eng\",\"spam_threshold\":55,"
+                + "\"notes\":\"note\",\"created_at\":null,\"updated_at\":null,\"revision\":\"r2\"}";
+        });
+        ManagedClient existing = new ManagedClient(clientId, "Original", true, true, false, false,
+            "owned", null, "eng", 50, null, null, null, "r1");
+        SpamserviceClientsResource resource = new SpamserviceClientsResource(() -> client);
+
+        resource.updateRow(existing, Map.of(
+            "name", "Renamed", "enabled", true, "trusted", true, "provisioner", false,
+            "manager", false, "allowed_languages", "eng", "spam_threshold", 55, "notes", "note"),
+            AccessContext.anonymous());
+
+        assertThat(method.get()).isEqualTo("PUT");
+        assertThat(body.get()).contains("\"revision\":\"r1\"")
+            .doesNotContain("external_id").doesNotContain("provisioned_by_client_id");
+    }
+
+    @Test
+    void securityEventDetailUsesTheDirectTypedEndpoint() throws Exception {
+        AtomicReference<String> path = new AtomicReference<>();
+        String eventId = UUID.randomUUID().toString();
+        String clientId = UUID.randomUUID().toString();
+        SpamserviceClient client = client(exchange -> {
+            path.set(exchange.getRequestURI().getPath());
+            return "{\"id\":\"" + eventId + "\",\"client_id\":\"" + clientId
+                + "\",\"type\":\"auth.failed\",\"ip\":\"203.0.113.4\",\"day\":\"2026-07-23\","
+                + "\"count\":2,\"first_at\":\"2026-07-23T00:00:00Z\","
+                + "\"last_at\":\"2026-07-23T01:00:00Z\",\"last_detail\":null}";
+        });
+        SpamserviceSecurityEventsResource resource = new SpamserviceSecurityEventsResource(() -> client);
+
+        SecurityEventEntry event = resource.loadRow(UUID.fromString(eventId), AccessContext.anonymous());
+
+        assertThat(event).isNotNull();
+        assertThat(event.day()).isEqualTo(LocalDate.parse("2026-07-23"));
+        assertThat(event.lastAt()).isEqualTo(Instant.parse("2026-07-23T01:00:00Z"));
+        assertThat(path.get()).isEqualTo("/v1/manage/security-events/" + eventId);
+    }
+
+    @Test
+    void generatedKeysAreCreateOnlyAndSampleActionsUseStrictManagementCalls() throws Exception {
+        AtomicReference<String> lastPath = new AtomicReference<>();
+        String clientId = UUID.randomUUID().toString();
+        String keyId = UUID.randomUUID().toString();
+        String sampleId = UUID.randomUUID().toString();
+        SpamserviceClient client = client(exchange -> {
+            lastPath.set(exchange.getRequestURI().getPath());
+            if (lastPath.get().endsWith("/keys")) {
+                return "{\"id\":\"" + keyId + "\",\"client_id\":\"" + clientId
+                    + "\",\"name\":\"primary\",\"key\":\"spam_once\",\"generated\":true}";
+            }
+            return "{\"id\":\"" + sampleId + "\",\"client_id\":\"" + clientId
+                + "\",\"ip\":\"203.0.113.9\",\"spam\":true,\"score\":70,\"confirmed\":true,"
+                + "\"flags\":\"\",\"languages\":\"eng\",\"created_at\":\"2026-07-23T00:00:00Z\","
+                + "\"updated_at\":null,\"useragent\":null,\"heuristic_score\":70,\"threshold\":50,"
+                + "\"confirmed_origin\":\"manual\",\"location\":{},\"asn\":{},\"properties\":[],\"breakdown\":[]}";
+        });
+
+        SpamserviceClientKeysResource keys = new SpamserviceClientKeysResource(() -> client);
+        Object createdKey = keys.persistRow(Map.of("client_id", UUID.fromString(clientId), "name", "primary", "key", ""),
+            AccessContext.anonymous());
+        assertThat(createdKey).isEqualTo(clientId + "~" + keyId);
+        assertThat(keys.valuesFromRow(new ManagedClientKey(keyId, clientId, "primary", true, null,
+            Instant.parse("2026-07-23T00:00:00Z"))))
+            .containsEntry("key", "").doesNotContainValue("spam_once");
+
+        SpamserviceSamplesResource samples = new SpamserviceSamplesResource(() -> client);
+        SampleSummary sample = new SampleSummary(sampleId, clientId, "203.0.113.9", false,
+            10, false, "", "eng", null, null);
+        ((RowAction.Invoke<SampleSummary>) samples.rowActions().get(0))
+            .invoke(sample, ActionContext.of(AccessContext.anonymous()));
+        assertThat(lastPath.get()).isEqualTo("/v1/manage/samples/" + sampleId + "/mark-spam");
+    }
+
+    private SpamserviceClient client(Function<HttpExchange, String> responder) throws IOException {
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/", exchange -> respond(exchange, responder.apply(exchange)));
+        this.server.start();
+        return SpamserviceClient.builder("http://127.0.0.1:" + this.server.getAddress().getPort(), "test-key").build();
+    }
+
+    private static void respond(HttpExchange exchange, String body) throws IOException {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(200, bytes.length);
+        exchange.getResponseBody().write(bytes);
+        exchange.close();
+    }
+
+    private static String readBody(HttpExchange exchange) {
+        try {
+            return new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException failure) {
+            throw new IllegalStateException("Could not read test request", failure);
+        }
+    }
+}

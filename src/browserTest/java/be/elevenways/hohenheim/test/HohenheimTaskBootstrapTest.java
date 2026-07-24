@@ -8,6 +8,8 @@ import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.server.task.CleanOldActivity;
 import be.elevenways.hohenheim.server.task.CleanOldProclogs;
 import be.elevenways.hohenheim.server.task.CleanOrphanCertificates;
+import be.elevenways.hohenheim.server.task.ResignDnssecZones;
+import be.elevenways.hohenheim.server.task.SecuritySweep;
 import be.elevenways.hohenheim.server.task.UpdateNodeVersions;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
@@ -25,9 +27,9 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * End-to-end verification of {@code ServerMain}'s {@link TaskBootstrap} wiring: the seven
- * Hohenheim maintenance tasks are discovered and reconciled into {@code system_task}, the three
- * BOOT_AND_CRON discovery tasks fire once at startup, and the four FALLBACK cleanup/backup tasks
+ * End-to-end verification of {@code ServerMain}'s {@link TaskBootstrap} wiring: the nine
+ * Hohenheim maintenance tasks are discovered and reconciled into {@code system_task}, the four
+ * BOOT_AND_CRON tasks fire once at startup, and the five FALLBACK maintenance tasks
  * do not fire at boot (they wait for their daily cron).
  */
 class HohenheimTaskBootstrapTest {
@@ -45,8 +47,7 @@ class HohenheimTaskBootstrapTest {
         HohenheimEndpoints.init();
         HohenheimDatabase.init();   // auto-discovery creates system_task + the M0xx tables
 
-        service = TaskBootstrap.start(
-            HohenheimDatabase.datasource(), "be.elevenways.hohenheim.server.task");
+        service = TaskBootstrap.start(HohenheimDatabase.datasource());
     }
 
     @AfterAll
@@ -55,7 +56,7 @@ class HohenheimTaskBootstrapTest {
     }
 
     @Test
-    void allSevenTasksAreReconciledIntoSystemTask() {
+    void allNineTasksAreReconciledIntoSystemTask() {
         List<String> types = service.taskModel().findAllSystemRows().stream()
             .map(r -> (String) r.get(SystemTaskModel.TYPE))
             .toList();
@@ -66,7 +67,9 @@ class HohenheimTaskBootstrapTest {
             BackupDatabases.class.getName(),
             CleanOldProclogs.class.getName(),
             CleanOldActivity.class.getName(),
-            CleanOrphanCertificates.class.getName());
+            CleanOrphanCertificates.class.getName(),
+            ResignDnssecZones.class.getName(),
+            SecuritySweep.class.getName());
     }
 
     @Test
@@ -74,7 +77,8 @@ class HohenheimTaskBootstrapTest {
         for (String type : List.of(
                 UpdateSystemIpAddresses.class.getName(),
                 UpdateSystemUsers.class.getName(),
-                UpdateNodeVersions.class.getName())) {
+                UpdateNodeVersions.class.getName(),
+                SecuritySweep.class.getName())) {
             assertThat(awaitHistory(type))
                 .as("BOOT_AND_CRON task should have a history row shortly after boot: " + type)
                 .isTrue();
@@ -87,7 +91,8 @@ class HohenheimTaskBootstrapTest {
                 BackupDatabases.class.getName(),
                 CleanOldProclogs.class.getName(),
                 CleanOldActivity.class.getName(),
-                CleanOrphanCertificates.class.getName())) {
+                CleanOrphanCertificates.class.getName(),
+                ResignDnssecZones.class.getName())) {
             assertThat(service.historyModel().findRecentForType(type, 5))
                 .as("FALLBACK task must NOT fire at boot: " + type)
                 .isEmpty();

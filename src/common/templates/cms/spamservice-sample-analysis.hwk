@@ -1,0 +1,53 @@
+{% declare title: String %}
+{% declare summary: Map<String, Object> %}
+{% declare location: List<Map<String, Object>> %}
+{% declare asn: List<Map<String, Object>> %}
+{% declare properties: List<Map<String, Object>> %}
+{% declare breakdown: List<Map<String, Object>> %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+{% setTitle(title) %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header"><h1>{{ title }}</h1></header>
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+    <pl-alert variant={% summary.spam ? "destructive" : "success" %}>
+        <strong>{% if summary.spam %}{{ t("verdict_spam", scope: "spamservice_sample") }}{% else %}{{ t("verdict_ham", scope: "spamservice_sample") }}{% /if %}</strong>
+        {{ t("score_threshold", scope: "spamservice_sample", score: summary.score, threshold: summary.threshold) }}
+        {% if summary.confirmed %}<pl-badge variant="info">{{ t("confirmed", scope: "spamservice_sample") }}</pl-badge>{% /if %}
+    </pl-alert>
+    <div class="cms-content-columns">
+        <pl-card>
+            <pl-card-header><pl-card-title>{{ t("request_info", scope: "spamservice_sample") }}</pl-card-title></pl-card-header>
+            <pl-card-content><pl-table><pl-table-body>
+                <pl-table-row><pl-table-head>{{ t("client", scope: "spamservice_sample") }}</pl-table-head><pl-table-cell>{{ summary.clientId }}</pl-table-cell></pl-table-row>
+                <pl-table-row><pl-table-head>{{ t("ip", scope: "spamservice_sample") }}</pl-table-head><pl-table-cell>{{ summary.ip }}</pl-table-cell></pl-table-row>
+                <pl-table-row><pl-table-head>{{ t("useragent", scope: "spamservice_sample") }}</pl-table-head><pl-table-cell>{{ summary.useragent }}</pl-table-cell></pl-table-row>
+                <pl-table-row><pl-table-head>{{ t("languages", scope: "spamservice_sample") }}</pl-table-head><pl-table-cell>{{ summary.languages }}</pl-table-cell></pl-table-row>
+                <pl-table-row><pl-table-head>{{ t("flags", scope: "spamservice_sample") }}</pl-table-head><pl-table-cell>{{ summary.flags }}</pl-table-cell></pl-table-row>
+            </pl-table-body></pl-table></pl-card-content>
+        </pl-card>
+        <pl-card>
+            <pl-card-header><pl-card-title>{{ t("ip_analysis", scope: "spamservice_sample") }}</pl-card-title></pl-card-header>
+            <pl-card-content><pl-table><pl-table-body>
+                {% each location as item %}<pl-table-row><pl-table-head>{{ item.name }}</pl-table-head><pl-table-cell>{{ item.value }}</pl-table-cell></pl-table-row>{% /each %}
+                {% each asn as item %}<pl-table-row><pl-table-head>{{ item.name }}</pl-table-head><pl-table-cell>{{ item.value }}</pl-table-cell></pl-table-row>{% /each %}
+            </pl-table-body></pl-table></pl-card-content>
+        </pl-card>
+    </div>
+    <pl-card>
+        <pl-card-header><pl-card-title>{{ t("breakdown", scope: "spamservice_sample") }}</pl-card-title></pl-card-header>
+        <pl-card-content><pl-table><pl-table-body>
+            {% each breakdown as line %}<pl-table-row><pl-table-cell>{{ line.points }}</pl-table-cell><pl-table-cell>{{ line.flag }}</pl-table-cell><pl-table-cell>{{ line.detail }}</pl-table-cell></pl-table-row>{% else %}<pl-empty-state title={% t("no_breakdown", scope: "spamservice_sample") %}></pl-empty-state>{% /each %}
+        </pl-table-body></pl-table></pl-card-content>
+    </pl-card>
+    <pl-card>
+        <pl-card-header><pl-card-title>{{ t("submitted_fields", scope: "spamservice_sample") }}</pl-card-title></pl-card-header>
+        <pl-card-content><pl-table><pl-table-body>
+            {% each properties as property %}<pl-table-row><pl-table-head>{{ property.name }}</pl-table-head><pl-table-cell>{{ property.value }}</pl-table-cell><pl-table-cell>{{ property.language }}</pl-table-cell></pl-table-row>{% /each %}
+        </pl-table-body></pl-table></pl-card-content>
+    </pl-card>
+</section>
+{% /block %}

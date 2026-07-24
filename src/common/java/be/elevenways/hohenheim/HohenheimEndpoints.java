@@ -289,26 +289,6 @@ public class HohenheimEndpoints {
         .rateLimit(DYNDNS_LIMIT)
         .build();
 
-    // The ingest endpoint is public (zsec_ Bearer token in the request); keyed
-    // per IP so a token-guessing client cannot grind tokens. Reporters batch
-    // client-side, so one request per flush interval leaves ample headroom.
-    private static final RateLimitPolicy SECURITY_INGEST_LIMIT =
-        RateLimitPolicy.of(60, Duration.ofMinutes(1))
-            .keyBy(RateLimitPolicy.KeyBy.IP)
-            .named("hh_security_ingest");
-
-    // --- Security-event ingest (zsec_ Bearer tokens; the DYNDNS_UPDATE shape) ---
-    // No requiresPermission: the token IS the credential, verified by the handler.
-    // csrfExempt because reporters are headless daemons without cookies or CSRF tokens.
-    public static final Endpoint<Object> SECURITY_INGEST = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "security_ingest"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("zn").addDelimiter().addStatic("security")
-            .addDelimiter().addStatic("ingest").build())
-        .csrfExempt()
-        .rateLimit(SECURITY_INGEST_LIMIT)
-        .build();
-
     // --- Health check ---
     public static final Endpoint<Object> HEALTH = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "health"))

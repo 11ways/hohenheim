@@ -1,0 +1,38 @@
+{% declare title: String %}
+{% declare pageUrl: String %}
+{% declare ip: String = "" %}
+{% declare error: String = "" %}
+{% declare result: Map<String, Object> %}
+{% declare datasets: List<Map<String, Object>> %}
+{% declare negative: List<Map<String, Object>> %}
+{% declare positive: List<Map<String, Object>> %}
+{% declare weighted: List<Map<String, Object>> %}
+{% declare threshold: Integer %}
+{% declare positiveWeight: Integer %}
+{% declare net: Long %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+{% setTitle(title) %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header"><h1>{{ title }}</h1></header>
+    <pl-card>
+        <pl-card-content>
+            <form method="get" action={% pageUrl %}>
+                <pl-field><pl-label target="spamservice-reputation-ip">{{ t("ip", scope: "spamservice_reputation") }}</pl-label><pl-input inputId="spamservice-reputation-ip" name="ip" value={% ip %} required></pl-input></pl-field>
+                <pl-button type="submit" variant="primary"><pl-icon name="magnifying-glass"></pl-icon>{{ t("lookup", scope: "spamservice_reputation") }}</pl-button>
+            </form>
+        </pl-card-content>
+    </pl-card>
+    {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
+    {% if result.ip %}
+        <pl-alert variant="info">{{ t("lookup_result", scope: "spamservice_reputation", ip: result.ip, subnet: result.subnet) }}</pl-alert>
+        <div class="cms-content-columns">
+            <pl-card><pl-card-header><pl-card-title>{{ t("datasets", scope: "spamservice_reputation") }}</pl-card-title></pl-card-header><pl-card-content><pl-table><pl-table-body>{% each datasets as item %}<pl-table-row><pl-table-head>{{ item.name }}</pl-table-head><pl-table-cell>{{ item.value }}</pl-table-cell></pl-table-row>{% /each %}</pl-table-body></pl-table></pl-card-content></pl-card>
+            <pl-card><pl-card-header><pl-card-title>{{ t("signals", scope: "spamservice_reputation") }}</pl-card-title></pl-card-header><pl-card-content><pl-table><pl-table-header><pl-table-row><pl-table-head>{{ t("category", scope: "spamservice_reputation") }}</pl-table-head><pl-table-head>{{ t("negative", scope: "spamservice_reputation") }}</pl-table-head><pl-table-head>{{ t("positive", scope: "spamservice_reputation") }}</pl-table-head></pl-table-row></pl-table-header><pl-table-body>{% each negative as item %}<pl-table-row><pl-table-cell>{{ item.category }}</pl-table-cell><pl-table-cell>{{ item.count }}</pl-table-cell><pl-table-cell></pl-table-cell></pl-table-row>{% /each %}{% each positive as item %}<pl-table-row><pl-table-cell>{{ item.category }}</pl-table-cell><pl-table-cell></pl-table-cell><pl-table-cell>{{ item.count }}</pl-table-cell></pl-table-row>{% /each %}</pl-table-body></pl-table></pl-card-content></pl-card>
+        </div>
+        <pl-card><pl-card-header><pl-card-title>{{ t("weighted_policy", scope: "spamservice_reputation") }}</pl-card-title><pl-card-description>{{ t("weighted_explanation", scope: "spamservice_reputation", weight: positiveWeight, threshold: threshold, net: net) }}</pl-card-description></pl-card-header><pl-card-content><pl-table><pl-table-header><pl-table-row><pl-table-head>{{ t("category", scope: "spamservice_reputation") }}</pl-table-head><pl-table-head>{{ t("formula", scope: "spamservice_reputation") }}</pl-table-head><pl-table-head>{{ t("net", scope: "spamservice_reputation") }}</pl-table-head></pl-table-row></pl-table-header><pl-table-body>{% each weighted as item %}<pl-table-row><pl-table-cell>{{ item.category }}</pl-table-cell><pl-table-cell>{{ item.negative }} - ({{ item.positive }} x {{ item.weight }})</pl-table-cell><pl-table-cell>{{ item.net }}</pl-table-cell></pl-table-row>{% /each %}</pl-table-body></pl-table></pl-card-content></pl-card>
+    {% /if %}
+</section>
+{% /block %}

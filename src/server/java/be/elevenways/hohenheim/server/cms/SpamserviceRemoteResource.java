@@ -1,0 +1,96 @@
+package be.elevenways.hohenheim.server.cms;
+
+import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.spamservice.client.PageResult;
+import be.elevenways.spamservice.client.SpamserviceApiException;
+import be.elevenways.spamservice.client.SpamserviceClient;
+import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.common.schema.TableView;
+import be.elevenways.zenit.common.security.AccessContext;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Supplier;
+
+/** Shared strict-client plumbing for model-independent Spamservice resources. */
+abstract class SpamserviceRemoteResource<T> extends Resource<T> {
+
+    private final Supplier<SpamserviceClient> clientSupplier;
+    private final ThreadLocal<Long> lastTotal = new ThreadLocal<>();
+    private final ThreadLocal<Boolean> unavailable = new ThreadLocal<>();
+
+    protected SpamserviceRemoteResource() {
+        this(() -> SpamserviceManager.get().client());
+    }
+
+    protected SpamserviceRemoteResource(@NonNull Supplier<SpamserviceClient> clientSupplier) {
+        this.clientSupplier = Objects.requireNonNull(clientSupplier, "clientSupplier cannot be null");
+    }
+
+    protected final @Nullable SpamserviceClient client() {
+        return this.clientSupplier.get();
+    }
+
+    protected final @NonNull SpamserviceClient requireClient() {
+        SpamserviceClient client = this.client();
+        if (client == null) {
+            throw new SpamserviceApiException(503, "spamservice_unavailable", "Spamservice is unavailable");
+        }
+        return client;
+    }
+
+    protected abstract @NonNull PageResult<T> fetchPage(@NonNull SpamserviceClient client,
+                                                        TableView.@NonNull Applied<T> applied);
+
+    @Override
+    public @NonNull List<T> listRows(TableView.@NonNull Applied<T> applied,
+                                     @NonNull AccessContext accessContext) {
+        SpamserviceClient client = this.client();
+        if (client == null) {
+            this.lastTotal.set(-1L);
+            this.unavailable.set(true);
+            return List.of();
+        }
+        try {
+            PageResult<T> page = this.fetchPage(client, applied);
+            this.lastTotal.set(page.total());
+            this.unavailable.set(false);
+            return page.items();
+        } catch (SpamserviceApiException unavailable) {
+            this.lastTotal.set(-1L);
+            this.unavailable.set(true);
+            return List.of();
+        }
+    }
+
+    @Override
+    public final long countRows(TableView.Applied<T> applied, @NonNull AccessContext accessContext) {
+        Long total = this.lastTotal.get();
+        this.lastTotal.remove();
+        return total != null ? total : -1;
+    }
+
+    @Override
+    public final @Nullable Microcopy listNotice(@NonNull AccessContext accessContext) {
+        Boolean failed = this.unavailable.get();
+        this.unavailable.remove();
+        return Boolean.TRUE.equals(failed)
+            ? Microcopy.of("disconnected").withFilter("scope", "spamservice") : null;
+    }
+
+    protected static @Nullable String textFilter(TableView.Applied<?> applied, String name) {
+        Object value = applied.filter().get(name);
+        if (!(value instanceof String text) || text.isBlank()) {
+            return null;
+        }
+        return text.trim();
+    }
+
+    protected static @Nullable Boolean booleanFilter(TableView.Applied<?> applied, String name) {
+        String value = textFilter(applied, name);
+        return value == null ? null : Boolean.valueOf(value);
+    }
+}

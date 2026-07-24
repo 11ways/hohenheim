@@ -1,0 +1,43 @@
+{% declare title: String %}
+{% declare runtime: Map<String, Object> %}
+{% declare connected: Boolean = false %}
+{% declare ready: Boolean = false %}
+{% declare service: Map<String, Object> %}
+{% declare checks: List<Map<String, Object>> %}
+{% declare summary: Map<String, Object> %}
+{% declare error: String = "" %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+{% setTitle(title) %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header"><h1>{{ title }}</h1></header>
+    {% if !connected %}<pl-alert variant="warning">{{ t("disconnected", scope: "spamservice") }}</pl-alert>{% /if %}
+    {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
+    <div class="cms-content-columns">
+        <pl-card>
+            <pl-card-header><pl-card-title>{{ t("runtime", scope: "spamservice") }}</pl-card-title><pl-badge variant={% ready ? "success" : "warning" %}>{{ runtime.state }}</pl-badge></pl-card-header>
+            <pl-card-content><pl-table><pl-table-body>
+                <pl-table-row><pl-table-head>{{ t("configured", scope: "spamservice") }}</pl-table-head><pl-table-cell>{{ runtime.configured }}</pl-table-cell></pl-table-row>
+                <pl-table-row><pl-table-head>{{ t("enabled", scope: "spamservice") }}</pl-table-head><pl-table-cell>{{ runtime.enabled }}</pl-table-cell></pl-table-row>
+                <pl-table-row><pl-table-head>PID</pl-table-head><pl-table-cell>{{ runtime.pid }}</pl-table-cell></pl-table-row>
+                <pl-table-row><pl-table-head>{{ t("base_url", scope: "spamservice") }}</pl-table-head><pl-table-cell>{{ runtime.baseUrl }}</pl-table-cell></pl-table-row>
+                <pl-table-row><pl-table-head>{{ t("crashes", scope: "spamservice") }}</pl-table-head><pl-table-cell>{{ runtime.crashes }}</pl-table-cell></pl-table-row>
+            </pl-table-body></pl-table></pl-card-content>
+        </pl-card>
+        <pl-card>
+            <pl-card-header><pl-card-title>{{ t("readiness", scope: "spamservice") }}</pl-card-title><pl-badge variant={% ready ? "success" : "warning" %}>{% if ready %}{{ t("ready", scope: "spamservice") }}{% else %}{{ t("not_ready", scope: "spamservice") }}{% /if %}</pl-badge></pl-card-header>
+            <pl-card-content><pl-table><pl-table-body>{% each checks as check %}<pl-table-row><pl-table-head>{{ check.name }}</pl-table-head><pl-table-cell><pl-badge variant={% check.ok ? "success" : "destructive" %}>{{ check.ok }}</pl-badge></pl-table-cell></pl-table-row>{% else %}<pl-empty-state title={% t("no_checks", scope: "spamservice") %}></pl-empty-state>{% /each %}</pl-table-body></pl-table></pl-card-content>
+        </pl-card>
+    </div>
+    {% if connected %}
+    <div class="cms-content-columns">
+        <pl-card><pl-card-header><pl-card-title>{{ t("clients", scope: "spamservice") }}</pl-card-title></pl-card-header><pl-card-content><strong>{{ summary.clients }}</strong><p>{{ t("active_keys_count", scope: "spamservice", count: summary.activeKeys) }}</p></pl-card-content></pl-card>
+        <pl-card><pl-card-header><pl-card-title>{{ t("samples", scope: "spamservice") }}</pl-card-title></pl-card-header><pl-card-content><strong>{{ summary.samples }}</strong><p>{{ t("spam_samples_count", scope: "spamservice", count: summary.spamSamples) }}</p></pl-card-content></pl-card>
+        <pl-card><pl-card-header><pl-card-title>{{ t("security_events", scope: "spamservice") }}</pl-card-title></pl-card-header><pl-card-content><strong>{{ summary.securityEvents }}</strong></pl-card-content></pl-card>
+        <pl-card><pl-card-header><pl-card-title>{{ t("spam_words", scope: "spamservice") }}</pl-card-title></pl-card-header><pl-card-content><strong>{{ summary.spamWords }}</strong><p>{{ t("confirmed_counts", scope: "spamservice", spam: summary.confirmedSpam, ham: summary.confirmedHam) }}</p></pl-card-content></pl-card>
+    </div>
+    {% /if %}
+</section>
+{% /block %}
