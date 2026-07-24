@@ -14,6 +14,7 @@ import io.undertow.server.handlers.encoding.ContentEncodingRepository;
 import io.undertow.server.handlers.encoding.EncodingHandler;
 import io.undertow.server.handlers.encoding.GzipEncodingProvider;
 import io.undertow.server.handlers.encoding.DeflateEncodingProvider;
+import io.undertow.util.Headers;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
@@ -63,11 +64,21 @@ public class ProxyServer {
         this.proxySessionStore = new InMemorySessionStore(sessionTtl);
         this.dispatcher = new SiteDispatcher(acmeService, proxySessionStore);
 
-        // Wrap dispatcher with gzip/deflate compression
-        this.handler = new EncodingHandler(dispatcher,
+        // Wrap dispatcher with gzip/deflate compression. gRPC exchanges bypass the
+        // encoding layer entirely: gRPC does its own message compression and a
+        // Content-Encoding-wrapped h2 body corrupts the length-prefixed frames.
+        EncodingHandler encodingHandler = new EncodingHandler(dispatcher,
             new ContentEncodingRepository()
                 .addEncodingHandler("gzip", new GzipEncodingProvider(), 100)
                 .addEncodingHandler("deflate", new DeflateEncodingProvider(), 50));
+        this.handler = exchange -> {
+            String contentType = exchange.getRequestHeaders().getFirst(Headers.CONTENT_TYPE);
+            if (contentType != null && contentType.startsWith("application/grpc")) {
+                dispatcher.handleRequest(exchange);
+            } else {
+                encodingHandler.handleRequest(exchange);
+            }
+        };
     }
 
     public SiteDispatcher getDispatcher() {
