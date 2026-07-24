@@ -19,6 +19,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
@@ -128,6 +129,20 @@ class AdminPagesTest extends HohenheimTestBase {
         fallback.fill("http://127.0.0.1:9999");
         var threshold = page.locator("[data-path='app.security.domain_miss_threshold'] input");
         threshold.fill("7");
+        String neverBan = "zf-array pl-field[data-path='app.security.never_ban']";
+        page.click(neverBan + " [data-array-add]");
+        waitForReactiveIdle();
+        page.locator(neverBan + " .zf-array-row:nth-child(1) input").fill("203.0.113.7");
+        page.click(neverBan + " [data-array-add]");
+        waitForReactiveIdle();
+        page.locator(neverBan + " .zf-array-row:nth-child(2) input").fill("198.51.100.0/24");
+        page.click(neverBan + " [data-array-add]");
+        waitForReactiveIdle();
+        page.locator(neverBan + " .zf-array-row:nth-child(3) input").fill("remove.example");
+        page.click(neverBan + " .zf-array-row:nth-child(3) [data-array-remove]");
+        waitForReactiveIdle();
+        page.click(neverBan + " .zf-array-row:nth-child(1) [data-array-move-down]");
+        waitForReactiveIdle();
 
         page.click(".cms-settings-actions pl-button");
         page.waitForCondition(() -> page.locator("pl-toast").count() > 0);
@@ -141,10 +156,14 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(String.valueOf(proxy.get("fallback_address"))).isEqualTo("http://127.0.0.1:9999");
         Map<?, ?> security = (Map<?, ?>) parsed.get("security");
         assertThat(((Number) security.get("domain_miss_threshold")).intValue()).isEqualTo(7);
+        assertThat(security.get("never_ban"))
+            .isEqualTo(List.of("198.51.100.0/24", "203.0.113.7"));
 
         // The live context applied the change without a restart.
         assertThat(HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD)).isEqualTo(7);
+        assertThat(HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NEVER_BAN))
+            .isEqualTo(List.of("198.51.100.0/24", "203.0.113.7"));
 
         // Settings edits are accountable: the touched keys land in the activity log.
         Row entry = Models.get(ActivityModel.class).find()
@@ -153,6 +172,17 @@ class AdminPagesTest extends HohenheimTestBase {
             .first();
         assertThat(entry).isNotNull();
         assertThat(entry.get(ActivityModel.DETAIL)).contains("security.domain_miss_threshold");
+
+        // Reset uses the same repeatable editor controls and elides the empty default.
+        page.click(".cms-setting:has([data-path='app.security.never_ban']) [data-cms-setting-reset]");
+        waitForReactiveIdle();
+        assertThat(page.locator(neverBan + " .zf-array-row").count()).isZero();
+        page.click(".cms-settings-actions pl-button");
+        page.waitForCondition(() -> HohenheimSettings.VALUES
+            .getValue(HohenheimSettings.Security.NEVER_BAN).isEmpty());
+        parsed = (Map<?, ?>) Zenit.DRY.parse(Files.readString(settingsDry));
+        security = (Map<?, ?>) parsed.get("security");
+        assertThat(security.containsKey("never_ban")).isFalse();
     }
 
     @Test
@@ -450,10 +480,11 @@ class AdminPagesTest extends HohenheimTestBase {
             certModel.delete(cert);
         }
 
-        // With the failure gone, the panel reports all clear.
+        // With the failure gone, its attention item disappears even if another subsystem still needs attention.
         navigateToApp("/admin/dashboard");
         waitForHydration();
-        assertThat(page.locator(".hh-attention-clear").count()).isEqualTo(1);
+        assertThat(page.locator(".hh-attention-item > a.hh-attention-target[href='/admin/certificates/"
+            + cert.get(CertificateModel.ID) + "']").count()).isZero();
     }
 
     @Test

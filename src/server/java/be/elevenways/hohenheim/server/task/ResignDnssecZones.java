@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
 
@@ -23,8 +24,19 @@ public class ResignDnssecZones extends ScheduledTask {
 
     public static final String STATIC_DESCRIPTION = "Re-sign DNSSEC zones";
 
-    public static List<ScheduleDeclaration> defaultSchedules() {
+    @Override
+    public @NonNull ResignDnssecZones newTask() {
+        return new ResignDnssecZones();
+    }
+
+    @Override
+    public @NonNull List<ScheduleDeclaration> schedules() {
         return List.of(ScheduleDeclaration.fallback("0 3 * * *"));
+    }
+
+    @Override
+    public @NonNull String description() {
+        return STATIC_DESCRIPTION;
     }
 
     @Override

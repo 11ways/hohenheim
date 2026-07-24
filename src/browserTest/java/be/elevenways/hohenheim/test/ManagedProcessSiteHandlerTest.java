@@ -184,7 +184,7 @@ class ManagedProcessSiteHandlerTest {
             }
         };
         ManagedProcess managed = new ManagedProcess(wrapper, 0, null, 9110,
-            new SystemUsers.RunAsUser(4242, 4242, "/srv/site"), operator);
+            new SystemUsers.RunAsUser("site", 4242, 4242, "/srv/site"), operator);
 
         assertThat(managed.kill()).isFalse();
 

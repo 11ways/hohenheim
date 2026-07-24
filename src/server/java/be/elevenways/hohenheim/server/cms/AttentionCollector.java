@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -52,7 +53,20 @@ public final class AttentionCollector {
         failedDeployments(items);
         failedTasks(items);
         dnsIssues(items);
+        spamserviceIssue(items);
         return items;
+    }
+
+    /** Surfaces an enabled managed Spamservice that is not currently ready. */
+    private static void spamserviceIssue(List<AttentionItem> items) {
+        SpamserviceManager.Snapshot snapshot = SpamserviceManager.get().snapshot();
+        if (snapshot.configured() && snapshot.enabled() && "ready".equals(snapshot.state())) {
+            return;
+        }
+        items.add(item("warning", "shield",
+            copy("not_ready", "spamservice"),
+            literal(snapshot.lastError() != null ? snapshot.lastError()
+                : snapshot.state()), null));
     }
 
     /** DNS listeners that failed to bind, and enabled zones a resolver cannot delegate to. */

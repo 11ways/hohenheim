@@ -3,11 +3,13 @@ package be.elevenways.hohenheim.server.task;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.options.SystemUserOptions;
+import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -31,8 +33,19 @@ public class UpdateSystemUsers extends ScheduledTask {
     /** Record used when parsing /etc/passwd before we hit the DB. */
     private record ParsedUser(String name, int uid, int gid, String home, String gecos) {}
 
-    public static List<ScheduleDeclaration> defaultSchedules() {
+    @Override
+    public @NonNull UpdateSystemUsers newTask() {
+        return new UpdateSystemUsers();
+    }
+
+    @Override
+    public @NonNull List<ScheduleDeclaration> schedules() {
         return List.of(ScheduleDeclaration.bootAndCron("11 * * * *"));
+    }
+
+    @Override
+    public @NonNull String description() {
+        return STATIC_DESCRIPTION;
     }
 
     @Override
@@ -104,9 +117,7 @@ public class UpdateSystemUsers extends ScheduledTask {
                     continue;
                 }
 
-                // Skip daemon/system accounts except root and nobody — they're never
-                // the right choice for running user code and just clutter the dropdown.
-                if (uid > 0 && uid < 1000 && !"nobody".equals(name)) continue;
+                if (!isEligibleUser(name, uid)) continue;
 
                 String gecos = parts[4];
                 String home = parts[5];
@@ -119,5 +130,10 @@ public class UpdateSystemUsers extends ScheduledTask {
             throw new UncheckedIOException("Could not read /etc/passwd", e);
         }
         return result;
+    }
+
+    static boolean isEligibleUser(String name, int uid) {
+        return uid == 0 || uid >= 1000 || "nobody".equals(name)
+            || SpamserviceManager.DEDICATED_SYSTEM_USER.equals(name);
     }
 }

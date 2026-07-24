@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.HashSet;
 import java.util.List;
@@ -27,8 +28,19 @@ public class CleanOrphanCertificates extends ScheduledTask {
 
     public static final String STATIC_DESCRIPTION = "Delete orphaned Let's Encrypt certificates";
 
-    public static List<ScheduleDeclaration> defaultSchedules() {
+    @Override
+    public @NonNull CleanOrphanCertificates newTask() {
+        return new CleanOrphanCertificates();
+    }
+
+    @Override
+    public @NonNull List<ScheduleDeclaration> schedules() {
         return List.of(ScheduleDeclaration.fallback("45 4 * * *"));
+    }
+
+    @Override
+    public @NonNull String description() {
+        return STATIC_DESCRIPTION;
     }
 
     @Override

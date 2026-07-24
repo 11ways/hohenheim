@@ -5,6 +5,7 @@ import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -19,8 +20,19 @@ public class CleanOldActivity extends ScheduledTask {
 
     private static final int RETENTION_DAYS = 90;
 
-    public static List<ScheduleDeclaration> defaultSchedules() {
+    @Override
+    public @NonNull CleanOldActivity newTask() {
+        return new CleanOldActivity();
+    }
+
+    @Override
+    public @NonNull List<ScheduleDeclaration> schedules() {
         return List.of(ScheduleDeclaration.fallback("0 5 * * *"));
+    }
+
+    @Override
+    public @NonNull String description() {
+        return STATIC_DESCRIPTION;
     }
 
     @Override

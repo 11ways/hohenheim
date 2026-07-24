@@ -85,6 +85,12 @@ configurations {
         canBeResolved = true
     }
 
+    spamserviceDistribution {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
+
     browserTestImplementation.extendsFrom testImplementation
     browserTestRuntimeOnly.extendsFrom testRuntimeOnly
 }
@@ -143,6 +149,10 @@ dependencies {
     serverImplementation ('be.elevenways:zenit-cms-server:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:zenit-comms-common:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:zenit-comms-server:0.1.0-SNAPSHOT') { changing = true }
+    // Spamservice: the canonical IP-reputation / security-event authority
+    // (reputation pulls + client provisioning for managed sites).
+    serverImplementation ('be.elevenways:spamservice-client:0.1.0-SNAPSHOT') { changing = true }
+    spamserviceDistribution ('be.elevenways:spamservice-server:0.1.0-SNAPSHOT') { changing = true }
 
     commonImplementation 'org.checkerframework:checker-qual:4.2.0'
     clientImplementation 'org.checkerframework:checker-qual:4.2.0'
@@ -183,6 +193,7 @@ dependencies {
     browserTestImplementation ('be.elevenways:plumage-server:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:zenit-forms-server:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:zenit-microcopy-server:0.1.0-SNAPSHOT') { changing = true }
+    browserTestImplementation ('be.elevenways:spamservice-client:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:zenit-cms-server:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:zenit-comms-common:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:zenit-comms-server:0.1.0-SNAPSHOT') { changing = true }
@@ -214,8 +225,16 @@ task serverJar(type: ShadowJar) {
     from(sourceSets.server.output)
     from(sourceSets.common.output) { exclude autoLoadInit }
     from({
-        project.configurations.serverRuntimeClasspath.findAll { it.isFile() }.collect { zipTree(it) }
+        // AIDEV-NOTE: zenit-common compiles against protoblast-client, but a JVM fat jar must
+        // contain only protoblast-server's platform bytecode or browser natives can win.
+        project.configurations.serverRuntimeClasspath.findAll {
+            it.isFile() && !it.name.startsWith('protoblast-client-')
+        }.collect { zipTree(it) }
     }) { exclude autoLoadInit }
+    from({ project.configurations.spamserviceDistribution.singleFile }) {
+        into 'managed-services'
+        rename { 'spamservice-server.jar' }
+    }
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
     failOnDuplicateEntries = false
     mergeServiceFiles()
@@ -245,6 +264,34 @@ task serverJar(type: ShadowJar) {
             }
             if (jar.getEntry('META-INF/services/java.net.spi.InetAddressResolverProvider') == null) {
                 throw new GradleException("${jarFile.name} is missing dnsjava's resolver service registration")
+            }
+            def nested = jar.getJarEntry('managed-services/spamservice-server.jar')
+            if (nested == null) {
+                throw new GradleException("${jarFile.name} is missing the nested Spamservice distribution")
+            }
+            if (jar.getEntry('be/elevenways/spamservice/server/ServerMain.class') != null) {
+                throw new GradleException("${jarFile.name} exploded Spamservice server classes onto Hohenheim's classpath")
+            }
+            def platformClass = 'be/elevenways/protoblast/common/dry/BlastDrySerializers.class'
+            def platformCopies = jar.stream().filter { it.name == platformClass }.count()
+            if (platformCopies != 1) {
+                throw new GradleException("${jarFile.name} contains ${platformCopies} Protoblast platform copies")
+            }
+            def hashStream = { input ->
+                def digest = java.security.MessageDigest.getInstance('SHA-256')
+                byte[] buffer = new byte[64 * 1024]
+                int count
+                while ((count = input.read(buffer)) >= 0) {
+                    if (count > 0) digest.update(buffer, 0, count)
+                }
+                digest.digest()
+            }
+            def expected = project.configurations.spamserviceDistribution.singleFile.withInputStream {
+                hashStream(it)
+            }
+            def actual = jar.getInputStream(nested).withCloseable { hashStream(it) }
+            if (!java.util.Arrays.equals(expected, actual)) {
+                throw new GradleException("${jarFile.name} contains the wrong Spamservice distribution")
             }
         } finally {
             jar.close()

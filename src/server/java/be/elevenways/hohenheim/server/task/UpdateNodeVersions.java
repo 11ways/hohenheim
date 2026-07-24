@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -38,8 +39,19 @@ public class UpdateNodeVersions extends ScheduledTask {
         "/usr/bin/nodejs"
     };
 
-    public static List<ScheduleDeclaration> defaultSchedules() {
+    @Override
+    public @NonNull UpdateNodeVersions newTask() {
+        return new UpdateNodeVersions();
+    }
+
+    @Override
+    public @NonNull List<ScheduleDeclaration> schedules() {
         return List.of(ScheduleDeclaration.bootAndCron("14 * * * *"));
+    }
+
+    @Override
+    public @NonNull String description() {
+        return STATIC_DESCRIPTION;
     }
 
     @Override

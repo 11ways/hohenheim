@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
 
@@ -17,8 +18,19 @@ public class CleanOldProclogs extends ScheduledTask {
 
     private static final int RETENTION_DAYS = 30;
 
-    public static List<ScheduleDeclaration> defaultSchedules() {
+    @Override
+    public @NonNull CleanOldProclogs newTask() {
+        return new CleanOldProclogs();
+    }
+
+    @Override
+    public @NonNull List<ScheduleDeclaration> schedules() {
         return List.of(ScheduleDeclaration.fallback("30 4 * * *"));
+    }
+
+    @Override
+    public @NonNull String description() {
+        return STATIC_DESCRIPTION;
     }
 
     @Override

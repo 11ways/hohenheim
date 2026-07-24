@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -31,8 +32,19 @@ public class BackupDatabases extends ScheduledTask {
     private static final DateTimeFormatter STAMP =
         DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
 
-    public static List<ScheduleDeclaration> defaultSchedules() {
+    @Override
+    public @NonNull BackupDatabases newTask() {
+        return new BackupDatabases();
+    }
+
+    @Override
+    public @NonNull List<ScheduleDeclaration> schedules() {
         return List.of(ScheduleDeclaration.fallback("0 3 * * *"));
+    }
+
+    @Override
+    public @NonNull String description() {
+        return STATIC_DESCRIPTION;
     }
 
     @Override

@@ -41,7 +41,7 @@ public final class SystemUsers {
     }
 
     /** The identity a site's child processes run as: uid plus its primary gid and home. */
-    public record RunAsUser(int uid, @Nullable Integer gid, @Nullable String home) {}
+    public record RunAsUser(String name, int uid, @Nullable Integer gid, @Nullable String home) {}
 
     /** Builds the explicit baseline inherited by site runtime, build, and git commands. */
     public static Map<String, String> safeEnvironment(@Nullable String home) {
@@ -123,7 +123,8 @@ public final class SystemUsers {
         if (uid == 0) {
             throw new IllegalStateException("System user '" + userKeyObj + "' is root (uid 0); refusing to run site processes as root");
         }
-        return new RunAsUser(uid, row.get(SystemUserModel.GID), row.get(SystemUserModel.HOME));
+        return new RunAsUser(row.get(SystemUserModel.NAME), uid,
+            row.get(SystemUserModel.GID), row.get(SystemUserModel.HOME));
     }
 
     /**
