@@ -118,8 +118,8 @@ class ThreatScorerTest {
     void crossingTheThresholdFiresTheAutoBanTrigger() {
         ThreatScorer scorer = newScorer();
         List<String> banned = new ArrayList<>();
-        scorer.setAutoBanTrigger((ip, type, score, reporter) ->
-            banned.add(ip + "|" + type + "|" + reporter));
+        scorer.setAutoBanTrigger((ip, type, score) ->
+            banned.add(ip + "|" + type));
 
         for (int i = 0; i < BAN_THRESHOLD; i++) {
             scorer.recordEvent("10.0.2.1", MISS, 1);
@@ -127,8 +127,28 @@ class ThreatScorerTest {
         assertThat(banned).isEmpty();
 
         scorer.recordEvent("10.0.2.1", MISS, 1);
-        // Local events carry a null reporter.
-        assertThat(banned).contains("10.0.2.1|" + MISS + "|null");
+        assertThat(banned).contains("10.0.2.1|" + MISS);
+    }
+
+    @Test
+    void v6AddressesScoreAsTheirSlash64() {
+        ThreatScorer scorer = newScorer();
+        List<String> banned = new ArrayList<>();
+        scorer.setAutoBanTrigger((ip, type, score) -> banned.add(ip));
+
+        // Rotating addresses inside ONE /64 accumulate on a single actor key.
+        for (int i = 0; i < BAN_THRESHOLD + 1; i++) {
+            scorer.recordEvent("2001:db8:1:2::" + Integer.toHexString(i + 1), MISS, 1);
+        }
+
+        assertThat(banned).containsExactly("2001:db8:1:2::/64");
+        assertThat(scorer.isOverThreshold("2001:db8:1:2::abcd")).isTrue();
+        // A neighboring /64 is a different actor.
+        assertThat(scorer.isOverThreshold("2001:db8:1:3::1")).isFalse();
+
+        // Hits from any address in the /64 decay the shared score.
+        scorer.recordHit("2001:db8:1:2::ffff");
+        assertThat(scorer.isOverThreshold("2001:db8:1:2::5")).isFalse();
     }
 
     @Test
@@ -138,32 +158,6 @@ class ThreatScorerTest {
         int score = scorer.recordEvent("10.0.3.1", "auth.lockout", 1_000_000);
         assertThat(score).isEqualTo(Math.max(64, BAN_THRESHOLD * 2));
         assertThat(scorer.isOverThreshold("10.0.3.1")).isTrue();
-    }
-
-    @Test
-    void singleRemoteEventNeverExceedsThePointCap() {
-        ThreatScorer scorer = newScorer();
-        // A remote reporter claiming a million lockouts contributes at most 10 points.
-        int score = scorer.recordRemoteEvent("10.0.5.1", "auth.lockout", 1_000_000, "site-a");
-        assertThat(score).isEqualTo(ThreatScorer.REMOTE_EVENT_POINT_CAP);
-        assertThat(scorer.isOverThreshold("10.0.5.1")).isFalse();
-    }
-
-    @Test
-    void remoteEventsAccumulateAcrossTheWindowAndCarryTheReporter() {
-        ThreatScorer scorer = newScorer();
-        List<String> banned = new ArrayList<>();
-        scorer.setAutoBanTrigger((ip, type, score, reporter) ->
-            banned.add(ip + "|" + reporter));
-
-        // Three capped events (10 each) accumulate to 30 > 25.
-        scorer.recordRemoteEvent("10.0.5.2", "auth.lockout", 50, "site-b");
-        scorer.recordRemoteEvent("10.0.5.2", "auth.lockout", 50, "site-b");
-        assertThat(banned).isEmpty();
-        scorer.recordRemoteEvent("10.0.5.2", "auth.lockout", 50, "site-b");
-
-        assertThat(scorer.isOverThreshold("10.0.5.2")).isTrue();
-        assertThat(banned).contains("10.0.5.2|site-b");
     }
 
     @Test

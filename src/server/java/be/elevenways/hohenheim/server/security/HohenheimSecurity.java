@@ -1,24 +1,23 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
-import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.security.KnownSecurityEvents;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 import be.elevenways.zenit.server.security.SecurityEvent;
 import be.elevenways.zenit.server.security.SecurityEvents;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.time.Instant;
-
 /**
  * Boot wiring for the native security engine: the process-wide
- * {@link ThreatScorer} (shared by the proxy dispatcher and the ingest
- * endpoint), its auto-ban hookup into {@link BanService} (budgeted per
- * reporter), and the in-process {@link SecurityEvents} sink that lands
- * Hohenheim's OWN events in the same analytics table remote reporters feed
- * (reporter_id null).
+ * {@link ThreatScorer} (fed by the proxy dispatcher and the in-process
+ * {@link SecurityEvents} sink) and its auto-ban hookup into
+ * {@link BanService}. Event ANALYTICS live in spamservice: Hohenheim's own
+ * events travel there through the sink installed by {@code SpamserviceManager};
+ * nothing is stored locally.
  */
 public final class HohenheimSecurity {
 
@@ -46,18 +45,16 @@ public final class HohenheimSecurity {
         if (!booted) {
             booted = true;
             SecurityEvents.addSink(HohenheimSecurity::acceptLocalEvent);
+            HohenheimSettings.Security.NEVER_BAN.addChangeListener((context, next, previous) ->
+                JobRunner.startVirtualThread(NeverBanHostnames.INSTANCE::refresh));
             describeEventTypes();
         }
         ensureLocalAddresses();
         BanService.INSTANCE.boot();
     }
 
-    private static void onThresholdCrossed(String ip, String type, int score, String reporter) {
-        if (reporter != null && !ReporterBanBudget.tryConsume(reporter)) {
-            // Budget exhaustion already slogged loudly by the budget itself.
-            return;
-        }
-        BanService.INSTANCE.autoBan(ip, type, score, reporter);
+    private static void onThresholdCrossed(String ip, String type, int score) {
+        BanService.INSTANCE.autoBan(ip, type, "score " + score + " over threshold");
     }
 
     /**
@@ -95,20 +92,23 @@ public final class HohenheimSecurity {
     }
 
     /**
-     * The in-process sink: every event this JVM reports through the core
-     * funnel is upserted with reporter_id null. Only NON-domain-miss types
-     * additionally feed the scorer -- the dispatcher already scores domain
-     * misses directly, and double-feeding would double their weight.
+     * The in-process sink: events this JVM reports through the core funnel
+     * feed the local scorer for immediate banning (storage/analytics is
+     * spamservice's job via the core remote sink). NON-domain-miss types
+     * only -- the dispatcher already scores domain misses directly, and
+     * double-feeding would double their weight.
      */
     private static void acceptLocalEvent(@NonNull SecurityEvent event) {
-        Instant at = Instant.ofEpochMilli(event.timestampMs());
-        String detail = event.detail() != null ? Json.stringify(event.detail()) : null;
-        SecurityEventStore.record(null, event.type(), event.remoteIp(), 1, at, at, detail);
+        acceptLocalEvent(event, SCORER);
+    }
 
-        // Only literal IPs are scoreable ("local" and friends stay analytics-only).
+    /** Testable local-scoring gate: positive signals remain analytics-only. */
+    static void acceptLocalEvent(@NonNull SecurityEvent event, @NonNull ThreatScorer scorer) {
+        // Only literal IPs are scoreable ("local" and friends are never bannable).
         if (!SecurityEventTypes.DOMAIN_MISS.equals(event.type())
+                && !SecurityEventClassification.isPositive(event.type())
                 && IpLiterals.isLiteral(event.remoteIp())) {
-            SCORER.recordEvent(event.remoteIp(), event.type(), 1);
+            scorer.recordEvent(event.remoteIp(), event.type(), 1);
         }
     }
 }

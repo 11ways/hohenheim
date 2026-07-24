@@ -4,10 +4,12 @@ import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.List;
+
 /**
  * Strict literal IPv4/IPv6 parsing and CIDR matching with NO DNS resolution:
- * ingest feeds untrusted "ip" strings, and {@code InetAddress.getByName} on a
- * hostname would trigger a lookup, so everything here works on characters only.
+ * untrusted "ip" strings reach the ban paths, and {@code InetAddress.getByName}
+ * on a hostname would trigger a lookup, so everything here works on characters only.
  */
 public final class IpLiterals {
 
@@ -40,20 +42,108 @@ public final class IpLiterals {
         return parseV4(trimmed);
     }
 
+    /** The IPv6 actor identity: the whole /64 network a single actor controls. */
+    public static final int V6_SUBNET_PREFIX = 64;
+
     /**
-     * Whether the address matches any entry of a comma/whitespace-separated
-     * list of IPs and CIDR ranges. Malformed entries are skipped with a
-     * one-per-list-value warning.
+     * The ban/scoring key of a literal address: IPv4 stays the exact
+     * (canonical) address, IPv6 collapses to its /64 network in
+     * {@code <network>/64} CIDR form (one v6 actor controls the whole /64).
+     *
+     * @return the key, or null when the value is not a literal address
      */
-    public static boolean matchesList(byte @NonNull [] address, @Nullable String list) {
-        if (list == null || list.isBlank()) {
+    public static @Nullable String subnetKey(@Nullable String value) {
+        byte[] bytes = parse(value);
+        if (bytes == null) {
+            return null;
+        }
+        if (bytes.length == 4) {
+            return formatV4(bytes);
+        }
+        return formatV6Subnet(bytes);
+    }
+
+    /** Canonical dotted-quad text of 4 address bytes. */
+    public static @NonNull String formatV4(byte @NonNull [] bytes) {
+        return (bytes[0] & 0xFF) + "." + (bytes[1] & 0xFF) + "."
+            + (bytes[2] & 0xFF) + "." + (bytes[3] & 0xFF);
+    }
+
+    /**
+     * The {@code <network>/64} CIDR string of a v6 address's /64: the four head
+     * groups in unpadded lowercase hex followed by {@code ::} (the host half is
+     * zero by construction, so the trailing {@code ::} is always valid).
+     */
+    public static @NonNull String formatV6Subnet(byte @NonNull [] bytes) {
+        StringBuilder out = new StringBuilder();
+        boolean allZero = true;
+        for (int group = 0; group < 4; group++) {
+            int value = ((bytes[group * 2] & 0xFF) << 8) | (bytes[group * 2 + 1] & 0xFF);
+            if (value != 0) {
+                allZero = false;
+            }
+            if (group > 0) {
+                out.append(':');
+            }
+            out.append(Integer.toHexString(value));
+        }
+        if (allZero) {
+            return "::/" + V6_SUBNET_PREFIX;
+        }
+        return out.append("::/").append(V6_SUBNET_PREFIX).toString();
+    }
+
+    /**
+     * Whether the address matches any IP or CIDR entry in the structured list.
+     */
+    public static boolean matchesList(byte @NonNull [] address, @Nullable List<String> list) {
+        if (list == null || list.isEmpty()) {
             return false;
         }
-        for (String entry : list.split("[,\\s]+")) {
-            if (entry.isBlank()) {
+        String rawList = list.toString();
+        for (String raw : list) {
+            String entry = raw.trim();
+            if (entry.isEmpty()) {
                 continue;
             }
-            if (matchesEntry(address, entry.trim(), list)) {
+            if (matchesEntry(address, entry, rawList)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether any v6 entry of the list overlaps the given /64 network: an
+     * address inside it, a wider range containing it, or a narrower range
+     * within it (a protected address inside the /64 vetoes the whole range).
+     */
+    public static boolean listOverlapsV6Subnet(byte @NonNull [] network,
+                                                @Nullable List<String> list) {
+        if (list == null || list.isEmpty()) {
+            return false;
+        }
+        for (String raw : list) {
+            String entry = raw.trim();
+            if (entry.isEmpty()) {
+                continue;
+            }
+            String addressPart = entry;
+            int prefix = 128;
+            int slash = entry.indexOf('/');
+            if (slash >= 0) {
+                addressPart = entry.substring(0, slash);
+                try {
+                    prefix = Integer.parseInt(entry.substring(slash + 1));
+                } catch (NumberFormatException e) {
+                    continue;
+                }
+            }
+            byte[] ruleBytes = parse(addressPart);
+            if (ruleBytes == null || ruleBytes.length != 16 || prefix < 0 || prefix > 128) {
+                continue;
+            }
+            if (prefixMatches(network, ruleBytes, Math.min(prefix, V6_SUBNET_PREFIX))) {
                 return true;
             }
         }
@@ -76,7 +166,11 @@ public final class IpLiterals {
         }
         byte[] ruleBytes = parse(addressPart);
         if (ruleBytes == null) {
-            warnMalformed(entry, rawList);
+            if (slash >= 0) {
+                warnMalformed(entry, rawList);
+            }
+            // No slash and not a literal: a hostname entry, handled by the
+            // background resolver (NeverBanHostnames), never matched here.
             return false;
         }
         int bits = ruleBytes.length * 8;

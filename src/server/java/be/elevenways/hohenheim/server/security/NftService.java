@@ -74,7 +74,7 @@ public class NftService {
      * Idempotent boot setup: create the owned table, chain and timeout sets,
      * then flush the chain and re-add the two port-scoped drop rules.
      */
-    public void setup(@NonNull List<Integer> ports) {
+    public synchronized void setup(@NonNull List<Integer> ports) {
         if (!isEnabled()) {
             return;
         }
@@ -84,8 +84,9 @@ public class NftService {
             "{ type filter hook input priority -10 ; policy accept ; }"));
         run(List.of("add", "set", "inet", TABLE, SET_V4,
             "{ type ipv4_addr ; flags timeout ; }"));
+        // interval: v6 bans are /64 prefixes, and prefix elements need it.
         run(List.of("add", "set", "inet", TABLE, SET_V6,
-            "{ type ipv6_addr ; flags timeout ; }"));
+            "{ type ipv6_addr ; flags interval, timeout ; }"));
         run(List.of("flush", "chain", "inet", TABLE, CHAIN));
         run(List.of("add", "rule", "inet", TABLE, CHAIN,
             "tcp", "dport", portSet, "ip", "saddr", "@" + SET_V4, "drop"));
@@ -93,16 +94,18 @@ public class NftService {
             "tcp", "dport", portSet, "ip6", "saddr", "@" + SET_V6, "drop"));
     }
 
-    /** Add a banned IP element; a null ttl means permanent (no kernel timeout). */
-    public void addBan(@NonNull String ip, @Nullable Long ttlSeconds) {
+    /** Add a banned IP element; a null ttl means permanent (no kernel timeout).
+     * @return true when disabled or the kernel accepted the element
+     */
+    public synchronized boolean addBan(@NonNull String ip, @Nullable Long ttlSeconds) {
         if (!isEnabled()) {
-            return;
+            return true;
         }
-        run(List.of("add", "element", "inet", TABLE, setFor(ip), elementLiteral(ip, ttlSeconds)));
+        return run(List.of("add", "element", "inet", TABLE, setFor(ip), elementLiteral(ip, ttlSeconds)));
     }
 
     /** Remove a banned IP element (a missing element only logs). */
-    public void removeBan(@NonNull String ip) {
+    public synchronized void removeBan(@NonNull String ip) {
         if (!isEnabled()) {
             return;
         }
@@ -116,7 +119,7 @@ public class NftService {
      * Full resync (used at boot): flush both sets and re-add every active DB
      * ban, so the database stays the source of truth over kernel state.
      */
-    public void resync(@NonNull List<ActiveBan> active) {
+    public synchronized void resync(@NonNull List<ActiveBan> active) {
         if (!isEnabled()) {
             return;
         }
@@ -173,15 +176,17 @@ public class NftService {
         return ports.isEmpty() ? List.of(80, 443) : List.copyOf(ports);
     }
 
-    private void run(@NonNull List<String> nftArgs) {
+    private boolean run(@NonNull List<String> nftArgs) {
         try {
             Result result = runner.run(nftArgs);
             if (!result.ok()) {
                 Blast.log("NFT: command failed (exit", result.exitCode() + "):",
                     String.join(" ", nftArgs), "-", result.stderr().trim());
             }
+            return result.ok();
         } catch (Exception e) {
             Blast.log("NFT: command error:", String.join(" ", nftArgs), "-", e.getMessage());
+            return false;
         }
     }
 
@@ -196,13 +201,15 @@ public class NftService {
             List<String> argv = new ArrayList<>(List.of("/usr/bin/sudo", "-n", "--", "nft"));
             argv.addAll(nftArgs);
             try {
-                Process process = new ProcessBuilder(argv).start();
-                String stderr = new String(process.getErrorStream().readAllBytes(),
-                    StandardCharsets.UTF_8);
+                Process process = new ProcessBuilder(argv)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .start();
                 if (!process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                     process.destroyForcibly();
                     return new Result(-1, "timed out after " + COMMAND_TIMEOUT_SECONDS + "s");
                 }
+                String stderr = new String(process.getErrorStream().readAllBytes(),
+                    StandardCharsets.UTF_8);
                 return new Result(process.exitValue(), stderr);
             } catch (IOException e) {
                 return new Result(-1, String.valueOf(e.getMessage()));

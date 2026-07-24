@@ -11,8 +11,8 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 
 /**
- * An IP ban: auto-created by the threat scorer, manual from the admin, or
- * synthesized from reporter events. A null expires_at means permanent; the
+ * An IP ban: auto-created by the threat scorer or the spamservice reputation
+ * policy, or manual from the admin. A null expires_at means permanent; the
  * kernel expires nftables elements itself, this row is the source of truth.
  */
 public class BanModel extends Model {
