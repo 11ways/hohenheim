@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
+import be.elevenways.hohenheim.server.notification.Alerts;
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -13,54 +15,111 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.LongSupplier;
 
 /**
- * IP ban lifecycle: creation (auto from the threat scorer, manual from the
- * admin), lifting, expiry, the O(1) in-memory active-ban cache the proxy hot
- * paths consult, and the nftables enforcement tier. The bans table is the
- * source of truth; the cache refreshes on every mutation and at boot.
+ * IP ban lifecycle: creation (auto from the threat scorer and the reputation
+ * policy, manual from the admin), lifting, expiry, the O(1) in-memory
+ * active-ban cache the proxy hot paths consult, the nftables enforcement
+ * tier, and the global auto-ban budget every automatic path shares. The bans
+ * table is the source of truth; the cache refreshes on every mutation and at
+ * boot.
+ *
+ * Ban granularity: v4 actors are banned by exact address, v6 actors by their
+ * /64 network (a single v6 actor controls the whole /64) -- every entry point
+ * normalizes v6 targets to the {@code <network>/64} key stored in the ip
+ * column, and lookups normalize the incoming address the same way (O(1), no
+ * CIDR scans).
  */
 public final class BanService {
 
     public static final BanService INSTANCE = new BanService(new NftService());
 
+    private static final long AUTO_BAN_WINDOW_MS = 3_600_000;
+
     private final NftService nft;
+    private final LongSupplier clock;
+    private final SecurityNotifier notifier;
+    private final AtomicBoolean nftBootStarted = new AtomicBoolean();
+    private volatile @Nullable Thread nftBootThread;
 
     // Snapshot of active, unexpired banned IPs; swapped atomically on refresh.
     private volatile Set<String> activeIps = Set.of();
     private volatile boolean cacheLoaded = false;
 
+    // AIDEV-NOTE: the auto-ban budget lives HERE, at the autoBan funnel, so
+    // every current and future automatic trigger (threat scorer, reputation
+    // policy, ...) is covered without remembering to wire it. One compromised
+    // trusted reporter or a spamservice bug must not convert into a mass ban
+    // of all visitors: the budget turns that into a bounded incident with a
+    // loud log signal. Manual admin bans go through createBan directly and
+    // are deliberately never budget-limited.
+    private final ArrayDeque<Long> completedAutoBans = new ArrayDeque<>();
+    private long budgetSuppressed;
+    private boolean budgetWarned;
+
     BanService(@NonNull NftService nft) {
+        this(nft, System::currentTimeMillis);
+    }
+
+    /** Test constructor: inject the clock the auto-ban budget window uses. */
+    BanService(@NonNull NftService nft, @NonNull LongSupplier clock) {
+        this(nft, clock, Alerts::send);
+    }
+
+    /** Test constructor: additionally inject the operator-notification sink. */
+    BanService(@NonNull NftService nft, @NonNull LongSupplier clock,
+               @NonNull SecurityNotifier notifier) {
         this.nft = nft;
+        this.clock = clock;
+        this.notifier = notifier;
     }
 
     NftService nft() {
         return this.nft;
     }
 
-    /** Boot wiring: idempotent nftables setup plus a full DB-to-kernel resync. */
+    /**
+     * Warm the app-level ban cache synchronously, then reconcile nftables off
+     * the critical server boot path. The proxy can enforce from the cache as
+     * soon as this method returns even when sudo/nft is unusually slow.
+     */
     public void boot() {
-        if (nft.isEnabled()) {
-            nft.setup(NftService.configuredPorts());
-            resyncNftables();
-        }
         refreshCache();
+        if (nft.isEnabled() && this.nftBootStarted.compareAndSet(false, true)) {
+            this.nftBootThread = Thread.ofPlatform().daemon().name("nft-resync").start(() -> {
+                Blast.log("NFT: background boot reconciliation started");
+                nft.setup(NftService.configuredPorts());
+                resyncNftables();
+                Blast.log("NFT: background boot reconciliation finished");
+            });
+        }
     }
 
     // -----------------------------------------------------------------------
     // Hot path
     // -----------------------------------------------------------------------
 
-    /** O(1) check against the cached active-ban set (app-level enforcement only). */
+    /**
+     * O(1) check against the cached active-ban set (app-level enforcement
+     * only): v4 addresses match exactly, v6 addresses match their /64 key.
+     */
     public boolean isBanned(@NonNull String ip) {
         if (!enforcementEnabled()) {
             return false;
         }
         ensureCacheLoaded();
+        if (ip.indexOf(':') >= 0) {
+            String key = IpLiterals.subnetKey(ip);
+            return key != null && activeIps.contains(key);
+        }
         return activeIps.contains(ip);
     }
 
@@ -73,36 +132,102 @@ public final class BanService {
     // Mutations
     // -----------------------------------------------------------------------
 
-    /** See {@link #autoBan(String, String, int, String)}. */
-    public void autoBan(@NonNull String ip, @Nullable String eventType, int score) {
-        autoBan(ip, eventType, score, null);
-    }
-
     /**
-     * Threat-scorer callback: create an automatic ban with the configured TTL.
-     * Idempotent for already-banned IPs and a no-op when bans are disabled.
-     * The reporter (null = this instance's own events) lands in the reason so
-     * a poisoning incident stays auditable per reporter.
+     * Automatic-ban entry point (threat scorer, reputation policy): create a
+     * ban with the configured TTL and the caller's reason. Idempotent for
+     * already-banned IPs, a no-op when bans are disabled, and subject to the
+     * global {@code security.auto_ban_budget_per_hour} budget.
      */
-    public void autoBan(@NonNull String ip, @Nullable String eventType, int score,
-                        @Nullable String reporter) {
+    public void autoBan(@NonNull String ip, @Nullable String eventType, @NonNull String reason) {
         if (!enforcementEnabled()) {
             return;
         }
+        int exhaustedBudget = 0;
+        synchronized (this) {
+            String trimmed = ip.trim();
+            String problem = protectionProblem(trimmed);
+            if (problem != null) {
+                logRefusalThrottled(ip, problem);
+                return;
+            }
+            String normalized = normalizeBanTarget(trimmed);
+            if (normalized == null) {
+                logRefusalThrottled(ip, "not a literal IP address");
+                return;
+            }
+
+            BanModel bans = Models.get(BanModel.class);
+            Row existing = findActiveBan(bans, normalized);
+            if (existing != null) {
+                return;
+            }
+
+            long now = this.clock.getAsLong();
+            int budget = configuredAutoBanBudget();
+            pruneAutoBanBudget(now, budget);
+            if (this.completedAutoBans.size() >= budget) {
+                this.budgetSuppressed++;
+                if (!this.budgetWarned) {
+                    this.budgetWarned = true;
+                    exhaustedBudget = budget;
+                    Blast.slog("security.auto_ban_budget_exceeded", Map.of("budget", budget));
+                    Blast.log("BANS: global auto-ban budget of", budget,
+                        "per sliding hour EXHAUSTED; further automatic bans are SUPPRESSED"
+                            + " (possible trigger runaway or event poisoning)");
+                }
+            } else {
+                try {
+                    int ttlHours = HohenheimSettings.VALUES.getValue(
+                        HohenheimSettings.Security.AUTO_BAN_TTL_HOURS);
+                    createBanNormalized(bans, normalized, reason, BanModel.SOURCE_AUTO,
+                        eventType, Duration.ofHours(Math.max(1, ttlHours)), true);
+                    this.completedAutoBans.addLast(now);
+                } catch (RuntimeException e) {
+                    Blast.log("BANS: auto-ban failed for", ip, "-", e.getMessage());
+                }
+            }
+        }
+        if (exhaustedBudget > 0) {
+            notifyBudgetExhausted(exhaustedBudget);
+        }
+    }
+
+    /**
+     * Global sliding-hour auto-ban budget over successfully completed unique rows.
+     */
+    private int configuredAutoBanBudget() {
+        Integer configured = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR);
+        return Math.max(1, configured != null ? configured : 50);
+    }
+
+    private void pruneAutoBanBudget(long now, int budget) {
+        long cutoff = now - AUTO_BAN_WINDOW_MS;
+        while (!this.completedAutoBans.isEmpty()
+                && this.completedAutoBans.peekFirst() <= cutoff) {
+            this.completedAutoBans.removeFirst();
+        }
+        if (this.completedAutoBans.size() < budget && this.budgetWarned) {
+            if (this.budgetSuppressed > 0) {
+                Blast.log("BANS: auto-ban budget available again -",
+                    this.budgetSuppressed, "automatic ban(s) were suppressed");
+            }
+            this.budgetSuppressed = 0;
+            this.budgetWarned = false;
+        }
+    }
+
+    private void notifyBudgetExhausted(int budget) {
         try {
-            int ttlHours = HohenheimSettings.VALUES.getValue(
-                HohenheimSettings.Security.AUTO_BAN_TTL_HOURS);
-            String reason = "score " + score + " over threshold"
-                + (reporter != null ? " (reporter " + reporter + ")" : "");
-            createBan(ip, reason, BanModel.SOURCE_AUTO,
-                eventType, Duration.ofHours(Math.max(1, ttlHours)));
-        } catch (IllegalArgumentException refused) {
-            // Protected IP (loopback/private/own/never_ban): never auto-ban and
-            // never crash the hot path -- WITHOUT a ban row there is no
-            // enforcement at all, so surface the refusal (throttled per IP).
-            logRefusalThrottled(ip, refused.getMessage());
+            this.notifier.send(NotificationEvents.AUTO_BAN_BUDGET_EXHAUSTED,
+                "Auto-ban budget exhausted",
+                "The global auto-ban budget of " + budget + " per sliding hour is"
+                    + " exhausted; further AUTOMATIC bans are suppressed until a completed"
+                    + " ban ages out (possible trigger runaway or event poisoning)."
+                    + " Manual bans still work.");
         } catch (RuntimeException e) {
-            Blast.log("BANS: auto-ban failed for", ip, "-", e.getMessage());
+            Blast.log("BANS: could not send budget-exhaustion notification -",
+                e.getMessage());
         }
     }
 
@@ -113,24 +238,31 @@ public final class BanService {
      * @throws IllegalArgumentException when the IP is unparseable or protected
      *         (loopback/private/link-local or one of this server's own addresses)
      */
-    public @NonNull Row createBan(@NonNull String ip, @Nullable String reason,
-                                  @NonNull String source, @Nullable String eventType,
-                                  @Nullable Duration ttl) {
-        String normalized = ip.trim();
-        String problem = protectionProblem(normalized);
+    public synchronized @NonNull Row createBan(@NonNull String ip, @Nullable String reason,
+                                               @NonNull String source,
+                                               @Nullable String eventType,
+                                               @Nullable Duration ttl) {
+        String trimmed = ip.trim();
+        String problem = protectionProblem(trimmed);
         if (problem != null) {
             throw new IllegalArgumentException(problem);
         }
+        // Non-null: protectionProblem already refused unnormalizable values.
+        String normalized = normalizeBanTarget(trimmed);
 
         BanModel bans = Models.get(BanModel.class);
-        Row existing = bans.find()
-            .where(BanModel.IP.eq(normalized))
-            .where(BanModel.ACTIVE.eq(true))
-            .first();
-        if (existing != null && !isExpired(existing)) {
+        Row existing = findActiveBan(bans, normalized);
+        if (existing != null) {
             return existing;
         }
 
+        return createBanNormalized(bans, normalized, reason, source, eventType, ttl, false);
+    }
+
+    private @NonNull Row createBanNormalized(@NonNull BanModel bans, @NonNull String normalized,
+                                             @Nullable String reason, @NonNull String source,
+                                             @Nullable String eventType, @Nullable Duration ttl,
+                                             boolean rollbackOnNftFailure) {
         Instant now = Instant.now();
         Row row = bans.createEmptyRow();
         row.set(BanModel.IP, normalized);
@@ -141,15 +273,30 @@ public final class BanService {
         row.set(BanModel.ACTIVE, true);
         bans.save(row);
 
-        nft.addBan(normalized, ttl != null ? ttl.toSeconds() : null);
+        boolean nftApplied = nft.addBan(normalized, ttl != null ? ttl.toSeconds() : null);
+        if (!nftApplied && rollbackOnNftFailure) {
+            if (!bans.delete(row)) {
+                throw new IllegalStateException("Could not roll back ban after nftables failure");
+            }
+            refreshCache();
+            throw new IllegalStateException("nftables rejected the automatic ban");
+        }
         refreshCache();
         Blast.log("BANS: banned", normalized, "(" + source + ")",
             ttl != null ? "for " + ttl : "permanently");
         return row;
     }
 
+    private static @Nullable Row findActiveBan(@NonNull BanModel bans, @NonNull String normalized) {
+        Row existing = bans.find()
+            .where(BanModel.IP.eq(normalized))
+            .where(BanModel.ACTIVE.eq(true))
+            .first();
+        return existing != null && !isExpired(existing) ? existing : null;
+    }
+
     /** Lift an active ban: audit-stamps the row and removes the kernel element. */
-    public void lift(@NonNull Row ban, @Nullable String liftedBy) {
+    public synchronized void lift(@NonNull Row ban, @Nullable String liftedBy) {
         BanModel bans = Models.get(BanModel.class);
         Integer id = ban.get(BanModel.ID);
         if (id == null) {
@@ -186,7 +333,7 @@ public final class BanService {
      *
      * @return the number of rows deactivated
      */
-    public int deactivateExpired() {
+    public synchronized int deactivateExpired() {
         BanModel bans = Models.get(BanModel.class);
         int updated = bans.find()
             .where(BanModel.ACTIVE.eq(true))
@@ -201,7 +348,7 @@ public final class BanService {
     }
 
     /** Flush both kernel sets and re-add every active DB ban with its remaining ttl. */
-    public void resyncNftables() {
+    public synchronized void resyncNftables() {
         List<NftService.ActiveBan> active = new ArrayList<>();
         Instant now = Instant.now();
         for (Row row : listActive()) {
@@ -214,6 +361,17 @@ public final class BanService {
             active.add(new NftService.ActiveBan(ip, ttl));
         }
         nft.resync(active);
+    }
+
+    /** Test seam: wait for the one background boot reconciliation. */
+    void awaitNftBootForTests() throws InterruptedException {
+        Thread thread = this.nftBootThread;
+        if (thread != null) {
+            thread.join(5_000);
+            if (thread.isAlive()) {
+                throw new IllegalStateException("nft boot reconciliation did not finish");
+            }
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -255,11 +413,32 @@ public final class BanService {
     // -----------------------------------------------------------------------
 
     /**
+     * The stored/enforced key of a ban target: v4 stays the exact (canonical)
+     * address, a v6 address (or an already-keyed {@code <network>/64}) becomes
+     * its canonical /64 CIDR string.
+     *
+     * @return the normalized key, or null when the value is not bannable text
+     */
+    static @Nullable String normalizeBanTarget(@NonNull String ip) {
+        String trimmed = ip.trim();
+        String suffix = "/" + IpLiterals.V6_SUBNET_PREFIX;
+        if (trimmed.indexOf(':') >= 0 && trimmed.endsWith(suffix)) {
+            byte[] network = IpLiterals.parse(
+                trimmed.substring(0, trimmed.length() - suffix.length()));
+            return network != null && network.length == 16
+                ? IpLiterals.formatV6Subnet(network) : null;
+        }
+        return IpLiterals.subnetKey(trimmed);
+    }
+
+    /**
      * CRITICAL SAFETY: never ban loopback, private/link-local ranges, one of
      * this server's own addresses, or anything on the {@code security.never_ban}
-     * operator allowlist -- a poisoned or misread client IP must not be able to
-     * firewall the operator (or the server itself) out. The literal pre-check
-     * guarantees no DNS lookup ever happens on untrusted input.
+     * operator allowlist (literal entries AND background-resolved hostname
+     * entries) -- a poisoned or misread client IP must not be able to firewall
+     * the operator (or the server itself) out. The literal pre-check guarantees
+     * no DNS lookup ever happens on this path. A v6 target is judged as its
+     * whole /64: one protected address inside the range vetoes the range.
      *
      * @return a refusal reason, or null when the IP may be banned
      */
@@ -267,7 +446,18 @@ public final class BanService {
         if (ip.isBlank()) {
             return "empty ip";
         }
-        byte[] literal = IpLiterals.parse(ip);
+        String key = normalizeBanTarget(ip);
+        if (key == null) {
+            return "not a literal IP address";
+        }
+        if (key.indexOf(':') >= 0) {
+            return v6SubnetProblem(key);
+        }
+        return v4Problem(key);
+    }
+
+    private static @Nullable String v4Problem(@NonNull String key) {
+        byte[] literal = IpLiterals.parse(key);
         if (literal == null) {
             return "not a literal IP address";
         }
@@ -280,18 +470,60 @@ public final class BanService {
         if (address.isLoopbackAddress() || address.isAnyLocalAddress()) {
             return "loopback address";
         }
+        if (address.isSiteLocalAddress() || address.isLinkLocalAddress()) {
+            return "private address";
+        }
+        for (String own : UpdateSystemIpAddresses.getLocalAddresses()) {
+            if (key.equals(own)) {
+                return "one of this server's own addresses";
+            }
+        }
+        List<String> neverBan = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NEVER_BAN);
+        if (IpLiterals.matchesList(literal, neverBan)) {
+            return "on the security.never_ban allowlist";
+        }
+        if (NeverBanHostnames.INSTANCE.protects(key)) {
+            return "on the security.never_ban allowlist (resolved hostname)";
+        }
+        return null;
+    }
+
+    /**
+     * Judge a whole v6 /64: the checks run against the RANGE, so any protected
+     * address inside it (loopback via the ::/64 network, an own address, a
+     * never_ban entry or resolved hostname address) vetoes the entire ban.
+     */
+    private static @Nullable String v6SubnetProblem(@NonNull String key) {
+        byte[] network = IpLiterals.parse(key.substring(0, key.indexOf('/')));
+        if (network == null) {
+            return "not a literal IP address";
+        }
+        InetAddress address;
+        try {
+            address = InetAddress.getByAddress(network);
+        } catch (UnknownHostException e) {
+            return "not a valid IP address";
+        }
+        // ::1 lives in ::/64, whose network address is the any-local :: --
+        // the network-address checks therefore cover the protected /64s.
+        if (address.isLoopbackAddress() || address.isAnyLocalAddress()) {
+            return "loopback address";
+        }
         if (address.isSiteLocalAddress() || address.isLinkLocalAddress()
                 || isUniqueLocalV6(address)) {
             return "private address";
         }
         for (String own : UpdateSystemIpAddresses.getLocalAddresses()) {
-            if (ip.equals(own)) {
-                return "one of this server's own addresses";
+            if (own.indexOf(':') >= 0 && key.equals(IpLiterals.subnetKey(own))) {
+                return "contains one of this server's own addresses";
             }
         }
-        String neverBan = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NEVER_BAN);
-        if (IpLiterals.matchesList(literal, neverBan)) {
-            return "on the security.never_ban allowlist";
+        List<String> neverBan = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NEVER_BAN);
+        if (IpLiterals.listOverlapsV6Subnet(network, neverBan)) {
+            return "contains an address on the security.never_ban allowlist";
+        }
+        if (NeverBanHostnames.INSTANCE.protects(key)) {
+            return "contains an address on the security.never_ban allowlist (resolved hostname)";
         }
         return null;
     }

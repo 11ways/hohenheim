@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.NotificationChannelModel;
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -56,7 +57,8 @@ class NotificationAdminTest extends HohenheimTestBase {
         page.click("pl-select[name='events'] .pl-select-field");
         page.waitForSelector("he-bottom .pl-select-popup[data-open]");
         assertThat(page.locator(
-            "he-bottom .pl-select-popup[data-open] div[role='option']").count()).isEqualTo(5);
+            "he-bottom .pl-select-popup[data-open] div[role='option']").count())
+            .isEqualTo(NotificationEvents.ALL.size());
         page.keyboard().press("Escape");
     }
 

@@ -19,8 +19,8 @@ It has feature parity with the Node version and goes well beyond it:
 - **Dev tunnel** — expose a dev server running anywhere on a public
   `*.dev.example.com` subdomain with a valid certificate, ngrok-style.
 - **Notifications**, an **automation API** (hashed `znit_` keys), **native IP
-  banning** (threat scoring + nftables enforcement, remote security-event
-  ingest from managed sites), and a full admin UI.
+  banning** (threat scoring + nftables enforcement, spamservice-backed IP
+  reputation), and a full admin UI.
 
 Each subsystem has a deeper design doc under [`docs/`](docs/).
 
@@ -275,14 +275,16 @@ Most-useful keys:
         "domain_miss_ban_threshold":  25,
         "domain_miss_decay_per_hit":  2,
         "bans_enabled":               true,
-        "never_ban":                  "",  // operator IPs/CIDRs that may NEVER be banned
+        "never_ban":                  [],  // one operator IP, CIDR or hostname per item
         "nftables_enabled":           false,
         "nftables_ports":             "80,443",
         "auto_ban_ttl_hours":         24,
-        "event_retention_days":       90,
-        "ingest_enabled":             true,
-        "ingest_base_url":            "",
-        "default_event_weight":       1
+        "auto_ban_budget_per_hour":   50,  // global cap on automatic bans per sliding hour
+        "default_event_weight":       1,
+        "reputation_ban_categories":  "spam,auth",
+        "reputation_ban_threshold":   25,
+        "reputation_positive_event_weight": 10, // same-category negatives offset per positive
+        "reputation_ttl_seconds":     300
     },
 
     // Access & stats logging
@@ -497,27 +499,80 @@ the Notifications page; each channel subscribes to a closed set of event types.
 Hohenheim scores hostile behaviour per source IP and bans natively -- no
 fail2ban needed (the old fail2ban domain-miss log was removed).
 
-**Scoring.** Unmatched-domain scans (bots hunting `admin.`, `wp-login.`, ...)
-plus security events reported by managed zenit sites (failed logins, lockouts,
-rate-limit and CSRF violations) are weighted and counted per IP in a sliding
-window; every real route hit forgives `domain_miss_decay_per_hit` of the
-oldest points. Crossing `domain_miss_ban_threshold` inside
+**Architecture.** A deployed [spamservice](../../javaweb/spamservice) is the
+single canonical IP-reputation and security-event authority; Hohenheim keeps
+only the BAN side: the ban decision, ban rows, nftables enforcement, the ban
+admin UI, and a local threat scorer for the signals only the proxy sees
+(domain misses). Managed sites and Hohenheim itself push their security
+events to spamservice; Hohenheim additionally PULLS reputation from it to
+ban IPs that abuse hosted apps (see below). Hohenheim's own ingest endpoint,
+reporter tokens, event store and Security Events admin list were deleted --
+spamservice replaced them.
+
+**Local scoring.** Unmatched-domain scans (bots hunting `admin.`,
+`wp-login.`, ...) plus this instance's own security events (failed logins,
+lockouts, rate-limit and CSRF violations) are weighted and counted per IP in
+a sliding window; every real route hit forgives `domain_miss_decay_per_hit`
+of the oldest points. Crossing `domain_miss_ban_threshold` inside
 `domain_miss_window_seconds` creates an automatic ban (TTL
 `auto_ban_ttl_hours`). Manual bans (with a duration or permanent) are created
 from the admin UI under Security -> IP Bans, which is also where bans are
-lifted. All events land aggregated per (reporter, type, ip, day) in the
-Security Events list and the dashboard chart.
+lifted; the dashboard charts bans created over the last 30 days.
+
+**Ban granularity.** IPv4 actors are banned by exact address. IPv6 actors are
+banned by their **/64 network**: a single v6 actor typically controls the
+whole /64, so per-address bans would be useless against address rotation.
+Every entry point (threat scorer, reputation policy, manual admin bans)
+normalizes a v6 target to its `<network>/64` key -- that CIDR string is what
+the ban row stores, what the proxy/TLS checks match (O(1), the incoming v6
+address is normalized to the same key), and what the kernel gets as a prefix
+element (`banned_v6` carries `flags interval`). Spamservice mirrors this by
+rolling reputation up per /64 server-side.
+
+**Reputation-informed banning.** When the local managed Spamservice installation
+is enabled and ready, every not-banned client IP seen by the proxy is (asynchronously,
+throttled per IP, cached `reputation_ttl_seconds`) looked up against
+spamservice. For each category in `reputation_ban_categories` (event-type
+category = the prefix before the first dot: `spam`, `auth`, `http`, `ws`,
+`proxy`), the contribution is `max(0, negative count - positive count *
+reputation_positive_event_weight)`. The category contributions are summed,
+and a net score at or above `reputation_ban_threshold` creates a regular
+auto-ban row (the /64 for v6). Positive events only offset negatives in the
+SAME category, so an auth success cannot forgive spam; the default weight is
+10 and 0 disables positive credit. Event recency and dataset risk flags
+(vpn/hosting/tor/proxy) are NEVER ban signals -- only behavior reported by
+trusted clients counts. The lookup fails open: a slow or down spamservice
+never blocks a request and never bans anyone.
 
 **Safety rails.** Loopback, private/link-local ranges, and the server's own
 addresses can never be banned. On top of that, `never_ban` is an operator
-allowlist of IPs and CIDR ranges (e.g. `"203.0.113.7, 198.51.100.0/24"`) that
-refuses both automatic and manual bans -- **add your own home/office IPs
-there before enabling enforcement in production**. A single ingested event
-can contribute at most 10 ban-score points regardless of its claimed count
-(bans require accumulation across the window), and one reporter can trigger
-at most 20 automatic bans per hour (exceeding is logged loudly as
-`security.reporter_ban_budget_exceeded` and further auto-bans from that
-reporter are suppressed until the hourly window resets).
+allowlist of IPs, CIDR ranges and hostnames (e.g. `["203.0.113.7",
+"198.51.100.0/24", "home.example.net"]`) that refuses both automatic and manual
+bans -- **add your own home/office IPs (or your dynamic-DNS hostname) there
+before enabling enforcement in production**. Hostname entries are for
+dynamic-IP operators: they are resolved (A + AAAA) ONLY in the background
+(immediately after a settings edit, plus the SecuritySweep task at boot and
+hourly -- never on a request or ban path); a failed resolution keeps the last
+successfully resolved addresses protected, and a resolved IPv6 address protects
+its whole /64. Because v6
+bans cover a /64, a protected address ANYWHERE inside a /64 vetoes banning
+that entire range. Finally, ALL automatic
+bans share a global budget of `auto_ban_budget_per_hour` (default 50) per
+sliding hour, enforced at the ban-service funnel so every trigger -- the
+threat scorer, the spamservice reputation policy, and anything added later --
+is covered: a compromised trusted reporter or a spamservice bug cannot
+convert into a mass ban of every visitor. Exhausting the budget suppresses
+further automatic bans until the window resets and is logged loudly (slog
+`security.auto_ban_budget_exceeded`, once per window, plus a tally of the
+suppressed attempts) -- and, once per window, notified to the configured
+notification channels (`auto_ban_budget_exhausted`). Manual bans from the
+admin are never budget-limited.
+
+**Degradation alerts.** Hohenheim fails open everywhere, so silent
+degradation is notified instead: sustained spamservice failure (reputation
+lookups or per-site report provisioning failing >= 5 consecutive times over
+>= 5 minutes) sends ONE `spamservice_outage` notification and ONE
+`spamservice_recovered` when calls succeed again -- never a stream.
 
 **Enforcement.** Banned IPs are refused at the proxy (HTTP 403; HTTPS is
 refused at the TLS handshake, before a certificate is served). Every
@@ -527,7 +582,8 @@ HTTP-01 challenge paths (`/.well-known/acme-challenge/*`) are served even to
 banned IPs, so certificate renewal survives a mistaken ban. With
 `nftables_enabled` the ban is ALSO installed in the kernel: Hohenheim owns
 the nftables table `inet hohenheim` with a chain `banned` (input hook,
-priority -10) and two timeout sets, `banned_v4` and `banned_v6`. The drop
+priority -10) and two timeout sets, `banned_v4` (exact addresses) and
+`banned_v6` (`flags interval`, holding /64 prefix elements). The drop
 rule is scoped to the TCP ports in `nftables_ports` (default `80,443`) so
 SSH (22) and DNS (53) can never become collateral. Timed bans use per-element
 timeouts, so the kernel expires them on its own; the bans table stays the
@@ -539,22 +595,33 @@ root, so the Hohenheim user needs passwordless sudo for `nft` (or the broad
 nft failures are logged, never fatal: dev machines without sudo/nft run fine
 with `nftables_enabled` off (the default).
 
-**Remote ingest.** Managed zenit sites receive `ZENIT_SECURITY_REPORT_URL`
-and `ZENIT_SECURITY_REPORT_TOKEN` env vars (auto-minted per-site reporter
-tokens, hashed at rest) once `ingest_base_url` is set, and batch their
-security events to `POST /zn/security/ingest` (Bearer `zsec_` token,
-401 on a bad token, 422 on a malformed body, 413 over 256KB, max 500 events
-per batch). Remote events count toward the same automatic bans, but only
-events whose `ip` is a literal IPv4/IPv6 address are scored -- anything else
-(`"local"`, hostnames) is stored for analytics only and is never bannable.
-Additional reporters can be minted under Security -> Security Reporters.
+**Operator setup.** Configure the Spamservice installation singleton in the
+Hohenheim admin: enable it, select the dedicated non-root `spamservice` system
+user, choose an unprivileged loopback port, and set a bounded JVM heap. Runtime
+data lives under `<storage.data_path>/managed-services/spamservice/instance`;
+the root-owned executable lives separately under `runtime` and is never writable
+by the child. Hohenheim extracts the embedded distribution by content hash, runs
+its migrations, and supervises that one local runtime. Its controller key is
+generated automatically and delivered once over stdin, never through argv or the
+environment. No external URL, manually-created client, or framework report token
+is required. Managed zenit sites then automatically receive
+`ZENIT_SECURITY_REPORT_URL` (`http://127.0.0.1:<port>/v1/events`) and
+`ZENIT_SECURITY_REPORT_TOKEN` env vars on every spawn: the per-site key is
+minted lazily, kept on the site row, and idempotently provisioned into
+spamservice under the stable external id `hohenheim:site:<id>` (a runtime that lost
+the client self-heals on the next spawn; temporary provisioning failures keep
+the child configured and retry in the background, so retained event batches
+deliver after recovery without blocking site startup). Hohenheim's own events use
+a separate installation reporter provisioned by the same manager; the manager
+installs zenit's remote sink directly. Those events still feed the local threat
+scorer for immediate banning regardless of remote reporting.
 
 **Migrating from fail2ban.** Remove the old jail so stale bans do not linger:
 delete `/etc/fail2ban/jail.d/hohenheim.conf` and
 `/etc/fail2ban/filter.d/hohenheim.conf`, run
 `fail2ban-client reload` (or stop fail2ban entirely if Hohenheim was its only
 jail), and drop the `/var/log/hohenheim/domain-misses.log` entry from
-logrotate. Then fill `security.never_ban` with your own operator IPs and set
+logrotate. Then add your operator IPs as separate `security.never_ban` items and set
 `nftables_enabled: true` in production.
 
 **/etc/logrotate.d/hohenheim**

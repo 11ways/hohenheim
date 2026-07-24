@@ -7,6 +7,8 @@ import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.common.setting.SettingsContext;
 import be.elevenways.zenit.common.validation.PathKind;
 
+import java.util.List;
+
 /**
  * All Hohenheim configuration settings, organized by group.
  */
@@ -276,7 +278,7 @@ public class HohenheimSettings {
     public abstract class Security {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("security")
             .label("Security")
-            .describe("Hostname-scan detection, native IP bans and security-event ingest")
+            .describe("Hostname-scan detection, native IP bans and spamservice reputation")
             .icon("shield");
 
         public static final SettingDefinition<Integer> DOMAIN_MISS_THRESHOLD = GROUP.buildSetting("domain_miss_threshold", Integer.class)
@@ -306,11 +308,13 @@ public class HohenheimSettings {
                 + "and create automatic bans when the event score crosses the threshold")
             .build();
 
-        public static final SettingDefinition<String> NEVER_BAN = GROUP.buildSetting("never_ban", String.class)
-            .defaultValue("")
-            .description("Comma-separated IPs and CIDR ranges that may NEVER be banned, "
-                + "automatically or manually (e.g. \"203.0.113.7, 198.51.100.0/24\"); "
-                + "add your own operator IPs here")
+        public static final SettingDefinition<List<String>> NEVER_BAN = GROUP
+            .buildStringListSetting("never_ban")
+            .defaultValue(List.of())
+            .description("IPs, CIDR ranges and hostnames that may NEVER be banned, automatically "
+                + "or manually; add your own operator addresses as separate entries. Hostnames are resolved "
+                + "in the background (never on a request), keep their last resolved addresses "
+                + "on failure, and resolved IPv6 addresses protect their whole /64")
             .build();
 
         public static final SettingDefinition<Boolean> NFTABLES_ENABLED = GROUP.buildSetting("nftables_enabled", Boolean.class)
@@ -331,26 +335,46 @@ public class HohenheimSettings {
             .description("Lifetime of an automatically created ban")
             .build();
 
-        public static final SettingDefinition<Integer> EVENT_RETENTION_DAYS = GROUP.buildSetting("event_retention_days", Integer.class)
-            .defaultValue(90)
-            .description("Days to keep aggregated security-event rows")
-            .build();
-
-        public static final SettingDefinition<Boolean> INGEST_ENABLED = GROUP.buildSetting("ingest_enabled", Boolean.class)
-            .defaultValue(true)
-            .description("Accept security events from registered reporters on /zn/security/ingest")
-            .build();
-
-        public static final SettingDefinition<String> INGEST_BASE_URL = GROUP.buildSetting("ingest_base_url", String.class)
-            .description("Public base URL of this Hohenheim instance, used to build the ingest URL "
-                + "injected into managed sites (e.g. https://admin.example.com). "
-                + "Empty disables the injection")
+        public static final SettingDefinition<Integer> AUTO_BAN_BUDGET_PER_HOUR = GROUP.buildSetting("auto_ban_budget_per_hour", Integer.class)
+            .defaultValue(50)
+            .description("Maximum automatic bans (any trigger: threat scorer, reputation) in a "
+                + "sliding hour; when exhausted further auto-bans are suppressed and logged "
+                + "loudly, so a runaway trigger becomes a bounded incident instead of a mass "
+                + "ban of all visitors (minimum 1; manual bans are never limited)")
             .build();
 
         public static final SettingDefinition<Integer> DEFAULT_EVENT_WEIGHT = GROUP.buildSetting("default_event_weight", Integer.class)
             .defaultValue(1)
             .description("Ban-score weight for event types without a built-in weight")
             .build();
+
+        public static final SettingDefinition<String> REPUTATION_BAN_CATEGORIES = GROUP.buildSetting("reputation_ban_categories", String.class)
+            .defaultValue("spam,auth")
+            .description("Comma-separated, case-insensitive behavioral event categories whose spamservice counts "
+                + "feed the reputation ban decision; dataset flags (vpn/hosting/tor/proxy) "
+                + "NEVER count")
+            .build();
+
+        public static final SettingDefinition<Integer> REPUTATION_BAN_THRESHOLD = GROUP.buildSetting("reputation_ban_threshold", Integer.class)
+            .defaultValue(25)
+            .description("Ban an IP when its weighted net spamservice event count across the "
+                + "configured categories reaches this value (minimum 1)")
+            .build();
+
+        public static final SettingDefinition<Integer> REPUTATION_POSITIVE_EVENT_WEIGHT = GROUP.buildSetting("reputation_positive_event_weight", Integer.class)
+            .defaultValue(10)
+            .description("Number of negative events offset by one positive event in the SAME "
+                + "category (minimum 0; 0 disables positive credit)")
+            .build();
+
+        public static final SettingDefinition<Integer> REPUTATION_TTL_SECONDS = GROUP.buildSetting("reputation_ttl_seconds", Integer.class)
+            .defaultValue(300)
+            .suffix("s")
+            .description("How long a spamservice reputation answer is cached in-process "
+                + "(minimum 1 second; changing this requires a restart)")
+            .restartRequired()
+            .build();
+
     }
 
     // --- Proteus SSO (optional; password login is always available) ---

@@ -2,12 +2,13 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
-import be.elevenways.hohenheim.model.SecurityEventModel;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.server.security.SecurityEvent;
+import be.elevenways.zenit.server.security.SecurityEvents;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -73,28 +74,35 @@ class BanEnforcementTest {
     }
 
     @Test
-    void thresholdedDomainMissesLandInTheEventTableViaTheLocalSink() throws Exception {
+    void thresholdedDomainMissesReportThroughTheSecurityEventsFunnel() throws Exception {
         HohenheimSecurity.boot();   // installs the in-process SecurityEvents sink (idempotent)
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, KEY);
         proxy = startProxy();
 
-        // Default DOMAIN_MISS_THRESHOLD is 5: the first 4 misses stay below the
-        // reporting gate, the fifth (and later) report through SecurityEvents.
-        for (int i = 0; i < 6; i++) {
-            rawRequest(httpPort(proxy), "miss-" + i + ".example", "/probe",
-                "X-Hohenheim-Key: " + KEY, "X-Real-IP: 203.0.113.170");
-        }
+        // Domain misses must still travel the core funnel (that is what the
+        // The manager-installed remote sink forwards to the local Spamservice;
+        // storage itself remains Spamservice's job.
+        java.util.List<SecurityEvent> captured =
+            java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        be.elevenways.zenit.server.security.SecurityEventSink sink = captured::add;
+        SecurityEvents.addSink(sink);
+        try {
+            // Default DOMAIN_MISS_THRESHOLD is 5: the first 4 misses stay below
+            // the reporting gate, the fifth (and later) report through the funnel.
+            for (int i = 0; i < 6; i++) {
+                rawRequest(httpPort(proxy), "miss-" + i + ".example", "/probe",
+                    "X-Hohenheim-Key: " + KEY, "X-Real-IP: 203.0.113.170");
+            }
 
-        var events = Models.get(SecurityEventModel.class).find()
-            .where(SecurityEventModel.IP.eq("203.0.113.170"))
-            .where(SecurityEventModel.TYPE.eq("proxy.domain_miss"))
-            .all();
-        assertThat(events).hasSize(1);
-        Row event = events.get(0);
-        // Reporter null = hohenheim itself; misses 5 and 6 aggregated into one row.
-        assertThat(event.get(SecurityEventModel.REPORTER_ID)).isNull();
-        assertThat(event.get(SecurityEventModel.COUNT)).isEqualTo(2);
-        assertThat(event.get(SecurityEventModel.LAST_DETAIL)).contains("/probe");
+            var misses = captured.stream()
+                .filter(event -> "proxy.domain_miss".equals(event.type())
+                    && "203.0.113.170".equals(event.remoteIp()))
+                .toList();
+            assertThat(misses).hasSize(2);
+            assertThat(misses.get(0).detail()).containsEntry("path", "/probe");
+        } finally {
+            SecurityEvents.removeSink(sink);
+        }
     }
 
     @Test

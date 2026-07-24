@@ -43,18 +43,13 @@ public final class ThreatScorer {
         "proxy.domain_miss", 1);
     private static final int WS_EVENT_WEIGHT = 2;
 
-    // AIDEV-NOTE: no single REMOTE event may insta-ban -- a compromised or
-    // buggy reporter can claim any count, so one ingest event contributes at
-    // most min(weight * count, 10) points and bans require accumulation
-    // across the window. Local (in-process) events keep full weight semantics.
-    static final int REMOTE_EVENT_POINT_CAP = 10;
-
     /**
-     * Callback fired when an IP's weighted score crosses the ban threshold.
-     * The reporter is null for local (in-process) events.
+     * Callback fired when an actor's weighted score crosses the ban threshold.
+     * The ip is the ACTOR KEY: the exact address for v4, the {@code <network>/64}
+     * for v6 (rotating addresses inside one /64 share a score).
      */
     public interface AutoBanTrigger {
-        void onThresholdCrossed(String ip, String eventType, int score, @Nullable String reporter);
+        void onThresholdCrossed(String ip, String eventType, int score);
     }
 
     private final LongSupplier clock;
@@ -173,9 +168,23 @@ public final class ThreatScorer {
         defaultWeight = defaultWeightSource.getAsInt();
     }
 
-    /** Record a successful route hit: forgive some of this IP's oldest score points. */
+    /**
+     * The scoring key of a source address: v6 collapses to its /64 (one actor
+     * controls the whole network), everything else stays as given.
+     */
+    private static String keyFor(String ip) {
+        if (ip != null && ip.indexOf(':') >= 0) {
+            String key = IpLiterals.subnetKey(ip);
+            if (key != null) {
+                return key;
+            }
+        }
+        return ip;
+    }
+
+    /** Record a successful route hit: forgive some of this actor's oldest score points. */
     public void recordHit(String ip) {
-        Entry entry = entries.get(ip);
+        Entry entry = entries.get(keyFor(ip));
         if (entry == null) {
             return;
         }
@@ -184,31 +193,22 @@ public final class ThreatScorer {
     }
 
     /**
-     * Record weighted occurrences of a LOCAL (in-process) event for this IP
+     * Record weighted occurrences of a local (in-process) event for this IP
      * and return its current in-window score. Fires the auto-ban trigger when
      * the score crosses the threshold (the trigger dedupes already-banned IPs
      * itself).
      */
     public int recordEvent(String ip, String type, int count) {
         int points = Math.max(1, weightOf(type)) * Math.max(1, count);
-        return record(ip, type, points, null);
+        return record(ip, type, points);
     }
 
-    /**
-     * Record a REMOTE (ingested) event: the per-event contribution is capped
-     * at {@link #REMOTE_EVENT_POINT_CAP} and the reporter travels to the
-     * auto-ban trigger for accountability.
-     */
-    public int recordRemoteEvent(String ip, String type, int count, @Nullable String reporter) {
-        int points = Math.max(1, weightOf(type)) * Math.max(1, count);
-        return record(ip, type, Math.min(points, REMOTE_EVENT_POINT_CAP), reporter);
-    }
-
-    private int record(String ip, String type, int points, @Nullable String reporter) {
+    private int record(String ip, String type, int points) {
         refreshSettings();
         long now = clock.getAsLong();
 
-        Entry entry = entries.computeIfAbsent(ip,
+        String key = keyFor(ip);
+        Entry entry = entries.computeIfAbsent(key,
             k -> new Entry(Math.max(64, banThreshold * 2)));
         entry.addPoints(now, Math.min(points, entry.pointTimestamps.length));
 
@@ -220,14 +220,14 @@ public final class ThreatScorer {
         int score = entry.recentPointCount(now - windowSeconds * 1000L);
         AutoBanTrigger trigger = this.autoBanTrigger;
         if (trigger != null && score > banThreshold) {
-            trigger.onThresholdCrossed(ip, type, score, reporter);
+            trigger.onThresholdCrossed(key, type, score);
         }
         return score;
     }
 
-    /** Whether this source IP's in-window weighted score exceeds the ban threshold. */
+    /** Whether this source actor's in-window weighted score exceeds the ban threshold. */
     public boolean isOverThreshold(String ip) {
-        Entry entry = entries.get(ip);
+        Entry entry = entries.get(keyFor(ip));
         if (entry == null) {
             return false;
         }

@@ -2,8 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
-import be.elevenways.hohenheim.model.SecurityReporterModel;
-import be.elevenways.hohenheim.server.security.SecurityEventStore;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -17,13 +15,14 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The Security admin surfaces: ban list + manual-ban form (with private-IP
- * refusal) + lift action, the read-only security-event list, and reporter
- * minting/rotation through the resource routes.
+ * refusal) + lift action, and the dashboard's security band (active-bans stat
+ * plus the bans-created chart over the ban model).
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SecurityAdminTest extends HohenheimTestBase {
@@ -76,7 +75,7 @@ class SecurityAdminTest extends HohenheimTestBase {
     @Order(2)
     void neverBanAllowlistedIpsAreRefusedByTheForm() throws Exception {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
-            "203.0.113.66, 198.51.100.0/24");
+            List.of("203.0.113.66", "198.51.100.0/24"));
         try {
             for (String ip : new String[] {"203.0.113.66", "198.51.100.9"}) {
                 var response = postForm("/admin/bans/new", "ip=" + ip + "&duration=24h");
@@ -86,7 +85,7 @@ class SecurityAdminTest extends HohenheimTestBase {
                     .where(BanModel.IP.eq(ip)).count()).as("ip %s", ip).isZero();
             }
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, "");
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
         }
     }
 
@@ -112,59 +111,14 @@ class SecurityAdminTest extends HohenheimTestBase {
 
     @Test
     @Order(4)
-    void securityEventListRendersReadOnly() throws Exception {
-        Instant now = Instant.now();
-        SecurityEventStore.record(null, "proxy.domain_miss", "203.0.113.88", 4, now, now,
-            "{\"domain\":\"nope.example\"}");
-        // Unknown types fall back to the raw type string.
-        SecurityEventStore.record(null, "custom.unknown_type", "203.0.113.89", 1, now, now, null);
-
-        navigateToApp("/admin/security-events");
-        waitForHydration();
-        String content = page.locator("body").textContent();
-        // The type column renders the KnownSecurityEvents label, not the raw token.
-        assertThat(content).contains("Unmatched domain request");
-        assertThat(content).contains("203.0.113.88");
-        // Unknown types keep their raw type string.
-        assertThat(content).contains("custom.unknown_type");
-
-        // Read-only: no create route, no delete affordance.
-        assertThat(postForm("/admin/security-events/new", "type=x&ip=1.2.3.4").statusCode())
-            .isIn(403, 404);
-    }
-
-    @Test
-    @Order(6)
-    void dashboardShowsSecurityStatsAndChart() {
+    void dashboardShowsTheBanStatAndBansChart() {
         navigateToApp("/admin/dashboard");
         waitForHydration();
         assertThat(page.locator("a.widget-stat-link[href='/admin/bans']").count()).isEqualTo(1);
+        // The deleted security-events surface is gone from the dashboard.
         assertThat(page.locator("a.widget-stat-link[href='/admin/security-events']").count())
-            .isEqualTo(1);
+            .isZero();
+        // The bans-created chart renders over the hohenheim.ban source.
         assertThat(page.locator(".widget-chart pl-chart").count()).isGreaterThanOrEqualTo(1);
-    }
-
-    @Test
-    @Order(5)
-    void reporterCreateMintsAndRotateReMints() throws Exception {
-        var response = postForm("/admin/security-reporters/new", "name=Manual+Reporter&enabled=on");
-        assertThat(response.statusCode()).isIn(200, 302, 303);
-
-        Row reporter = Models.get(SecurityReporterModel.class).find()
-            .where(SecurityReporterModel.NAME.eq("Manual Reporter")).first();
-        assertThat(reporter).isNotNull();
-        String hash = reporter.get(SecurityReporterModel.TOKEN_HASH);
-        assertThat(hash).hasSize(64);
-
-        var rotate = postForm("/admin/security-reporters/"
-            + reporter.get(SecurityReporterModel.ID) + "/action/rotate_reporter_token", "");
-        assertThat(rotate.statusCode()).isIn(200, 302, 303);
-        Row rotated = Models.get(SecurityReporterModel.class)
-            .findById(reporter.get(SecurityReporterModel.ID));
-        assertThat(rotated.get(SecurityReporterModel.TOKEN_HASH)).isNotEqualTo(hash);
-
-        navigateToApp("/admin/security-reporters");
-        waitForHydration();
-        assertThat(page.locator("body").textContent()).contains("Manual Reporter");
     }
 }

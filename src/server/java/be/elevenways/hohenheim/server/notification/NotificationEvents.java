@@ -13,9 +13,13 @@ public final class NotificationEvents {
     public static final String DEPLOY_FAILED = "deploy_failed";
     public static final String BACKUP_FAILED = "backup_failed";
     public static final String PROCESS_CRASH_LOOP = "process_crash_loop";
+    public static final String AUTO_BAN_BUDGET_EXHAUSTED = "auto_ban_budget_exhausted";
+    public static final String SPAMSERVICE_OUTAGE = "spamservice_outage";
+    public static final String SPAMSERVICE_RECOVERED = "spamservice_recovered";
 
     public static final List<String> ALL = List.of(
-        CERT_RENEWAL_FAILED, CERT_EXPIRING, DEPLOY_FAILED, BACKUP_FAILED, PROCESS_CRASH_LOOP);
+        CERT_RENEWAL_FAILED, CERT_EXPIRING, DEPLOY_FAILED, BACKUP_FAILED, PROCESS_CRASH_LOOP,
+        AUTO_BAN_BUDGET_EXHAUSTED, SPAMSERVICE_OUTAGE, SPAMSERVICE_RECOVERED);
 
     private NotificationEvents() {}
 
