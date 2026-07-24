@@ -197,6 +197,12 @@ Per-site basic auth, IP allowlists, and auth-request integration. Orthogonal to 
 - `forward_port` (integer, default: 80)
 - `forward_socket_path` (string, alternative to host:port -- requires Java 16+ Unix domain socket support; deferred to v2 if Undertow/XNIO support is insufficient)
 - `websocket_upgrade` (boolean, default: true)
+- `upstream_protocol` (enum: http1/h2, default: http1) -- h2 dials prior-knowledge h2c on
+  http upstreams and ALPN h2 on https upstreams; required for native gRPC backends.
+  Response trailers (grpc-status) are captured and forwarded.
+- `request_timeout` (integer seconds; absent = 30s, 0 = unlimited for streaming/gRPC/WebSocket sites)
+- `ignore_certificates` (boolean, default: false) -- https upstreams are otherwise validated
+  against the platform trust store INCLUDING hostname (JDK endpoint identification)
 
 **Handler:** `forwarder.forwardTo(URI(scheme, host, port))`. Upstream connection streams request/response with zero-copy IO. WebSocket upgrades are handled transparently.
 

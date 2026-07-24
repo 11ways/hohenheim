@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
+import be.elevenways.hohenheim.server.security.ReputationBanPolicy;
 import be.elevenways.hohenheim.server.security.ThreatScorer;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 import be.elevenways.zenit.server.security.SecurityEvents;
@@ -23,8 +24,10 @@ import be.elevenways.hohenheim.server.sitetype.ResponseMutator;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.sitetype.UpstreamProtocol;
 import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
 import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.hohenheim.server.tls.UpstreamTrust;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.auth.server.PasswordHasher;
@@ -41,6 +44,7 @@ import io.undertow.server.handlers.proxy.ProxyClient;
 import io.undertow.server.handlers.proxy.ProxyConnection;
 import io.undertow.server.handlers.proxy.ProxyHandler;
 import io.undertow.server.handlers.ResponseCodeHandler;
+import io.undertow.UndertowOptions;
 import io.undertow.util.HeaderMap;
 import io.undertow.util.Headers;
 import io.undertow.util.AttachmentKey;
@@ -106,14 +110,15 @@ public class SiteDispatcher implements HttpHandler {
 
     /**
      * Immutable snapshot of all route tables. Swapped atomically via volatile reference
-     * so concurrent requests never see a partially-loaded state.
+     * so concurrent requests never see a partially-loaded state. A hostname maps to a LIST
+     * of entries (one per configured path prefix); selection picks the longest matching path.
      */
     private static final class RouteTable {
-        final Map<String, RouteEntry> exactRoutes;
-        final Map<String, WildcardRoute> wildcardRoutes;
+        final Map<String, List<RouteEntry>> exactRoutes;
+        final List<WildcardRoute> wildcardRoutes;
         final List<RegexRoute> regexRoutes;
 
-        RouteTable(Map<String, RouteEntry> exact, Map<String, WildcardRoute> wildcard,
+        RouteTable(Map<String, List<RouteEntry>> exact, List<WildcardRoute> wildcard,
                    List<RegexRoute> regex) {
             this.exactRoutes = exact;
             this.wildcardRoutes = wildcard;
@@ -121,10 +126,10 @@ public class SiteDispatcher implements HttpHandler {
         }
     }
 
-    private volatile RouteTable routes = new RouteTable(Map.of(), Map.of(), List.of());
+    private volatile RouteTable routes = new RouteTable(Map.of(), List.of(), List.of());
 
     // Positive cache for regex matches.
-    private final ConcurrentHashMap<String, CachedRegexMatch> regexMatchCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CachedRegexMatches> regexMatchCache = new ConcurrentHashMap<>();
 
     // Negative cache for hostnames that don't match any route
     private final ConcurrentHashMap<String, Long> negativeCache = new ConcurrentHashMap<>();
@@ -135,8 +140,8 @@ public class SiteDispatcher implements HttpHandler {
     private static final HttpString HOST = Headers.HOST;
     private static final Pattern NAMED_GROUP_PATTERN = Pattern.compile("\\(\\?<([a-zA-Z][a-zA-Z0-9_]*)>");
 
-    // Threat scoring (hostname-scanning ban tracking; shared with the ingest
-    // endpoint so remote events count toward the same auto-bans) and access logging.
+    // Threat scoring (hostname-scanning ban tracking; shared with the local
+    // SecurityEvents sink so this instance's own events count too) and access logging.
     private final ThreatScorer threatScorer = HohenheimSecurity.scorer();
     private final AccessLog accessLog = new AccessLog();
 
@@ -154,8 +159,10 @@ public class SiteDispatcher implements HttpHandler {
     private static final SiteAuthGate FAIL_CLOSED_GATE =
         exchange -> SiteAuthDecision.deny(503, "Authentication unavailable");
 
-    // Shared proxy handler for proxy-type sites
-    private final ProxyHandler proxyHandler;
+    // Proxy handlers per request-timeout value (ProxyHandler fixes maxRequestTime at build
+    // time). Sites share one client; a handful of distinct timeouts at most.
+    private final DispatchingProxyClient proxyClient;
+    private final ConcurrentHashMap<Integer, ProxyHandler> proxyHandlers = new ConcurrentHashMap<>();
 
     private final ScheduledExecutorService delayScheduler;
 
@@ -178,6 +185,7 @@ public class SiteDispatcher implements HttpHandler {
         final boolean stripPath;
         final boolean forceSsl;
         final int requestDelayMs;
+        final int requestTimeoutMs;
         final boolean hstsEnabled;
         final boolean hstsSubdomains;
         final List<HeaderRule> customHeaders;
@@ -204,11 +212,12 @@ public class SiteDispatcher implements HttpHandler {
             this.authGate = authGate;
             this.authProviderName = authProviderName;
 
-            String p = domain != null ? domain.get(SiteDomainModel.PATH) : null;
-            this.path = (p != null && !p.isEmpty()) ? p : null;
+            this.path = normalizePath(domain != null ? domain.get(SiteDomainModel.PATH) : null);
             this.stripPath = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.STRIP_PATH));
             this.forceSsl = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL));
             this.requestDelayMs = parsePositiveInt(siteSettings != null ? siteSettings.get("delay") : null);
+            this.requestTimeoutMs = parseRequestTimeout(
+                siteSettings != null ? siteSettings.get("request_timeout") : null);
             this.hstsEnabled = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_ENABLED));
             this.hstsSubdomains = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
             this.customHeaders = parseHeaderRules(domain != null ? domain.get(SiteDomainModel.CUSTOM_HEADERS) : null);
@@ -234,6 +243,33 @@ public class SiteDispatcher implements HttpHandler {
 
         boolean hasAccessList() {
             return accessListSatisfy != null;
+        }
+
+        /**
+         * Canonical path prefix: leading slash enforced, trailing slash stripped,
+         * root/empty collapsed to null (= catch-all).
+         */
+        static @Nullable String normalizePath(String raw) {
+            if (raw == null) return null;
+            String path = raw.trim();
+            if (path.isEmpty() || path.equals("/")) return null;
+            if (!path.startsWith("/")) path = "/" + path;
+            while (path.length() > 1 && path.endsWith("/")) {
+                path = path.substring(0, path.length() - 1);
+            }
+            return path;
+        }
+
+        /**
+         * Prefix match with segment boundaries: /api matches /api and /api/x, never /apix.
+         */
+        boolean matchesPath(String requestPath) {
+            if (path == null) return true;
+            return requestPath.equals(path) || requestPath.startsWith(path + "/");
+        }
+
+        int pathLength() {
+            return path == null ? 0 : path.length();
         }
 
         boolean acceptsListener(String listenerIp) {
@@ -265,9 +301,13 @@ public class SiteDispatcher implements HttpHandler {
     private record RegexRoute(String hostnamePattern, Pattern pattern, List<String> namedGroups,
                               RouteEntry entry) {}
 
-    private record CachedRegexMatch(RouteEntry entry, Map<String, String> groups, long cachedAt) {}
+    /** All regex routes whose pattern matched this hostname, with their capture groups. */
+    private record CachedRegexMatches(List<RouteMatch> matches, long cachedAt) {}
 
     private record RouteMatch(RouteEntry entry, Map<String, String> groups) {}
+
+    /** hostnameKnown distinguishes wrong-path 404s from true domain misses. */
+    private record Resolution(@Nullable RouteMatch match, boolean hostnameKnown) {}
 
     public SiteDispatcher(AcmeService acmeService, SessionStore proxySessionStore) {
         this.acmeService = acmeService;
@@ -277,16 +317,22 @@ public class SiteDispatcher implements HttpHandler {
             thread.setDaemon(true);
             return thread;
         });
-        DispatchingProxyClient proxyClient = new DispatchingProxyClient();
+        this.proxyClient = new DispatchingProxyClient();
+    }
+
+    /**
+     * @param maxRequestTimeMs absolute exchange lifetime; -1 = unlimited (streaming sites)
+     */
+    private ProxyHandler proxyHandlerFor(int maxRequestTimeMs) {
         // reuseXForwarded: ProxyHandler appends the connected peer to an existing XFF chain
         // instead of overwriting it -- the dispatcher seeds the chain for trusted remote proxies.
-        this.proxyHandler = ProxyHandler.builder()
+        return proxyHandlers.computeIfAbsent(maxRequestTimeMs, timeout -> ProxyHandler.builder()
             .setProxyClient(proxyClient)
-            .setMaxRequestTime(30000)
+            .setMaxRequestTime(timeout)
             .setNext(ResponseCodeHandler.HANDLE_404)
             .setRewriteHostHeader(false)
             .setReuseXForwarded(true)
-            .build();
+            .build());
     }
 
     /**
@@ -300,9 +346,13 @@ public class SiteDispatcher implements HttpHandler {
         var authProviderModel = Models.get(SiteAuthProviderModel.class);
 
         // Build new route maps first, then swap atomically
-        Map<String, RouteEntry> newExact = new HashMap<>();
-        Map<String, WildcardRoute> newWildcard = new HashMap<>();
+        Map<String, List<RouteEntry>> newExact = new HashMap<>();
+        List<WildcardRoute> newWildcard = new ArrayList<>();
         List<RegexRoute> newRegex = new ArrayList<>();
+
+        // (match kind + hostname + path + listeners) -> owning site; duplicates are refused
+        // loudly with deterministic first-wins (sites load in name order).
+        Map<String, String> claimedRoutes = new HashMap<>();
 
         List<Row> sites = siteModel.findEnabled();
 
@@ -405,24 +455,56 @@ public class SiteDispatcher implements HttpHandler {
                 RouteEntry entry = new RouteEntry(requestHandler, siteName, domain, accessList,
                     settings, authGate, authProviderName);
 
+                String kind;
                 if ("regex".equals(matchType)) {
-                    Pattern pattern = compileHostnameRegex(hostname);
-                    if (pattern != null) {
-                        newRegex.add(new RegexRoute(hostname, pattern,
-                            extractNamedGroups(hostname), entry));
-                    }
+                    kind = "regex";
                 } else if ("wildcard".equals(matchType) || WildcardHostname.isWildcard(hostname)) {
-                    String glob = hostname.toLowerCase();
-                    newWildcard.put(glob, new WildcardRoute(WildcardHostname.compile(glob), entry));
+                    kind = "wildcard";
                 } else {
-                    newExact.put(hostname.toLowerCase(), entry);
+                    kind = "exact";
+                }
+
+                String claimKey = kind + "|" + hostname.toLowerCase() + "|"
+                    + (entry.path != null ? entry.path : "") + "|" + entry.listenOnAddresses;
+                String owner = claimedRoutes.putIfAbsent(claimKey, siteName);
+                if (owner != null && !owner.equals(siteName)) {
+                    Blast.log("SiteDispatcher: DUPLICATE route", hostname,
+                        (entry.path != null ? entry.path : "(all paths)"),
+                        "on site", siteName, "-- already claimed by site", owner, "; IGNORING");
+                    continue;
+                }
+
+                switch (kind) {
+                    case "regex" -> {
+                        Pattern pattern = compileHostnameRegex(hostname);
+                        if (pattern != null) {
+                            newRegex.add(new RegexRoute(hostname, pattern,
+                                extractNamedGroups(hostname), entry));
+                        }
+                    }
+                    case "wildcard" -> {
+                        String glob = hostname.toLowerCase();
+                        newWildcard.add(new WildcardRoute(WildcardHostname.compile(glob), entry));
+                    }
+                    default -> newExact
+                        .computeIfAbsent(hostname.toLowerCase(), k -> new ArrayList<>())
+                        .add(entry);
                 }
             }
         }
 
+        // Longest path first inside each hostname bucket, so selection can take the first match.
+        for (List<RouteEntry> bucket : newExact.values()) {
+            bucket.sort((a, b) -> Integer.compare(b.pathLength(), a.pathLength()));
+        }
+
         // Destroy old handlers, then swap in the new routes atomically
         destroyHandlers();
-        this.routes = new RouteTable(Map.copyOf(newExact), Map.copyOf(newWildcard), List.copyOf(newRegex));
+        Map<String, List<RouteEntry>> frozenExact = new HashMap<>();
+        for (Map.Entry<String, List<RouteEntry>> e : newExact.entrySet()) {
+            frozenExact.put(e.getKey(), List.copyOf(e.getValue()));
+        }
+        this.routes = new RouteTable(Map.copyOf(frozenExact), List.copyOf(newWildcard), List.copyOf(newRegex));
         negativeCache.clear();
         regexMatchCache.clear();
 
@@ -458,6 +540,11 @@ public class SiteDispatcher implements HttpHandler {
             return;
         }
 
+        // Not banned: let the reputation policy consider a (throttled, async)
+        // spamservice lookup -- an IP abusing hosted apps elsewhere gets a ban
+        // row here before it does more damage. Never blocks this request.
+        ReputationBanPolicy.INSTANCE.noteRequest(earlyIp);
+
         // --- Git webhook intercept (before hostname routing) ---
         if (GitWebhookHandler.matches(exchange)) {
             GitWebhookHandler.handle(exchange);
@@ -479,7 +566,8 @@ public class SiteDispatcher implements HttpHandler {
             return;
         }
 
-        RouteMatch match = resolveEntry(exchange, hostname);
+        Resolution resolution = resolveEntry(exchange, hostname);
+        RouteMatch match = resolution.match();
         RouteEntry entry = match != null ? match.entry() : null;
 
         if (match != null && match.groups() != null && !match.groups().isEmpty()) {
@@ -489,9 +577,10 @@ public class SiteDispatcher implements HttpHandler {
             exchange.putAttachment(MATCHED_HOST_PATTERN, entry.hostPattern);
         }
 
-        // --- Threat scoring ---
+        // --- Threat scoring: a known hostname with a wrong path is a plain 404,
+        //     not a domain-scanning signal. ---
         String clientIp = getClientIp(exchange);
-        if (entry != null) {
+        if (entry != null || resolution.hostnameKnown()) {
             threatScorer.recordHit(clientIp);
         } else {
             int score = threatScorer.recordEvent(clientIp, SecurityEventTypes.DOMAIN_MISS, 1);
@@ -514,6 +603,12 @@ public class SiteDispatcher implements HttpHandler {
 
         // --- Default fallback ---
         if (entry == null) {
+            if (resolution.hostnameKnown()) {
+                // The hostname IS configured, no path matched: a real 404,
+                // never the catch-all fallback redirect.
+                ErrorPages.send404(exchange, hostname);
+                return;
+            }
             String fallback = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS);
             if (fallback != null && !fallback.isEmpty()) {
                 exchange.setStatusCode(302);
@@ -577,10 +672,10 @@ public class SiteDispatcher implements HttpHandler {
             return;
         }
 
-        // --- Path matching ---
+        // --- Path matching (selection already guaranteed a match; kept as a safety net) ---
         if (entry.path != null) {
             String requestPath = exchange.getRelativePath();
-            if (!requestPath.startsWith(entry.path)) {
+            if (!entry.matchesPath(requestPath)) {
                 exchange.setStatusCode(404);
                 exchange.getResponseSender().send("Not Found");
                 return;
@@ -590,6 +685,10 @@ public class SiteDispatcher implements HttpHandler {
                 if (stripped.isEmpty()) stripped = "/";
                 exchange.setRelativePath(stripped);
                 exchange.setRequestPath(stripped);
+                // AIDEV-NOTE: ProxyHandler builds the upstream request from requestURI,
+                // not requestPath -- without this line strip_path silently forwards the
+                // unstripped path.
+                exchange.setRequestURI(stripped);
             }
         }
 
@@ -688,80 +787,127 @@ public class SiteDispatcher implements HttpHandler {
         return (colon != -1 ? host.substring(0, colon) : host).toLowerCase();
     }
 
-    private RouteMatch resolveEntry(HttpServerExchange exchange, String hostname) {
-        if (hostname.isEmpty()) return null;
+    private Resolution resolveEntry(HttpServerExchange exchange, String hostname) {
+        if (hostname.isEmpty()) return new Resolution(null, false);
 
         String listenerIp = extractListenerAddress(exchange);
         String cacheKey = hostname + "|" + (listenerIp != null ? listenerIp : "");
+        String requestPath = exchange.getRelativePath();
 
         // Check negative cache
         Long cachedAt = negativeCache.get(cacheKey);
         if (cachedAt != null) {
             if (System.currentTimeMillis() - cachedAt < NEGATIVE_CACHE_TTL_MS) {
-                return null;
+                return new Resolution(null, false);
             }
             negativeCache.remove(cacheKey);
         }
 
         // Take a consistent snapshot of the route table
         RouteTable rt = this.routes;
+        boolean hostnameKnown = false;
 
-        // 1. Exact match
-        RouteEntry entry = rt.exactRoutes.get(hostname);
-        if (entry != null && entry.acceptsListener(listenerIp)) return new RouteMatch(entry, null);
-
-        // 2. Wildcard match
-        for (WildcardRoute wildcardRoute : rt.wildcardRoutes.values()) {
-            if (wildcardRoute.entry().acceptsListener(listenerIp)
-                    && wildcardRoute.pattern().matcher(hostname).matches()) {
-                return new RouteMatch(wildcardRoute.entry(), null);
-            }
-        }
-
-        // 3. Regex match (with positive cache)
-        CachedRegexMatch cachedMatch = regexMatchCache.get(cacheKey);
-        if (cachedMatch != null) {
-            if (System.currentTimeMillis() - cachedMatch.cachedAt() < REGEX_CACHE_TTL_MS) {
-                return new RouteMatch(cachedMatch.entry(), cachedMatch.groups());
-            }
-            regexMatchCache.remove(cacheKey);
-        }
-
-        if (!rt.regexRoutes.isEmpty() && !isSuspiciousRegexHostname(hostname)) {
-            int hostnameDots = countChar(hostname, '.');
-            for (RegexRoute regexRoute : rt.regexRoutes) {
-                if (!regexRoute.entry().acceptsListener(listenerIp)) {
-                    continue;
-                }
-
-                // A hostname with more dots than the pattern accounts for means the
-                // regex is being probed with extra subdomain levels — too broad a match.
-                if (countChar(regexRoute.hostnamePattern(), '.') + 1 < hostnameDots) {
-                    continue;
-                }
-
-                Matcher matcher = regexRoute.pattern().matcher(hostname);
-                if (matcher.matches()) {
-                    Map<String, String> groups = extractRegexGroups(matcher, regexRoute.namedGroups());
-                    // Brute-force protection (faithful to the Node original): a dotted
-                    // "project" capture means the pattern swallowed a subdomain boundary.
-                    String project = groups != null ? groups.get("project") : null;
-                    if (project != null && project.indexOf('.') > -1) {
-                        break;
-                    }
-                    CachedRegexMatch positiveMatch = new CachedRegexMatch(regexRoute.entry(), groups,
-                        System.currentTimeMillis());
-                    regexMatchCache.put(cacheKey, positiveMatch);
-                    return new RouteMatch(regexRoute.entry(), groups);
+        // 1. Exact match: bucket is pre-sorted longest path first
+        List<RouteEntry> bucket = rt.exactRoutes.get(hostname);
+        if (bucket != null) {
+            for (RouteEntry entry : bucket) {
+                if (!entry.acceptsListener(listenerIp)) continue;
+                hostnameKnown = true;
+                if (entry.matchesPath(requestPath)) {
+                    return new Resolution(new RouteMatch(entry, null), true);
                 }
             }
         }
 
-        // 4. No match
-        if (negativeCache.size() < NEGATIVE_CACHE_MAX) {
+        // 2. Wildcard match: collect every matching route, pick the longest path
+        RouteEntry bestWildcard = null;
+        for (WildcardRoute wildcardRoute : rt.wildcardRoutes) {
+            RouteEntry entry = wildcardRoute.entry();
+            if (!entry.acceptsListener(listenerIp)) continue;
+            if (!wildcardRoute.pattern().matcher(hostname).matches()) continue;
+            hostnameKnown = true;
+            if (!entry.matchesPath(requestPath)) continue;
+            if (bestWildcard == null || entry.pathLength() > bestWildcard.pathLength()) {
+                bestWildcard = entry;
+            }
+        }
+        if (bestWildcard != null) {
+            return new Resolution(new RouteMatch(bestWildcard, null), true);
+        }
+
+        // 3. Regex match: hostname-level positive cache holds ALL matching routes,
+        //    path selection stays per-request.
+        List<RouteMatch> regexMatches = null;
+        CachedRegexMatches cached = regexMatchCache.get(cacheKey);
+        if (cached != null) {
+            if (System.currentTimeMillis() - cached.cachedAt() < REGEX_CACHE_TTL_MS) {
+                regexMatches = cached.matches();
+            } else {
+                regexMatchCache.remove(cacheKey);
+            }
+        }
+        if (regexMatches == null) {
+            regexMatches = computeRegexMatches(rt, hostname, listenerIp);
+            if (!regexMatches.isEmpty()) {
+                regexMatchCache.put(cacheKey,
+                    new CachedRegexMatches(regexMatches, System.currentTimeMillis()));
+            }
+        }
+        if (!regexMatches.isEmpty()) {
+            hostnameKnown = true;
+            RouteMatch bestRegex = null;
+            for (RouteMatch candidate : regexMatches) {
+                if (!candidate.entry().matchesPath(requestPath)) continue;
+                if (bestRegex == null
+                        || candidate.entry().pathLength() > bestRegex.entry().pathLength()) {
+                    bestRegex = candidate;
+                }
+            }
+            if (bestRegex != null) {
+                return new Resolution(bestRegex, true);
+            }
+        }
+
+        // 4. No match. Only a fully unknown hostname is negative-cached: a known
+        //    hostname with a non-matching path must keep re-checking other paths.
+        if (!hostnameKnown && negativeCache.size() < NEGATIVE_CACHE_MAX) {
             negativeCache.put(cacheKey, System.currentTimeMillis());
         }
-        return null;
+        return new Resolution(null, hostnameKnown);
+    }
+
+    /** Every regex route matching this hostname + listener, with capture groups extracted. */
+    private List<RouteMatch> computeRegexMatches(RouteTable rt, String hostname, String listenerIp) {
+        if (rt.regexRoutes.isEmpty() || isSuspiciousRegexHostname(hostname)) {
+            return List.of();
+        }
+
+        List<RouteMatch> matches = new ArrayList<>();
+        int hostnameDots = countChar(hostname, '.');
+        for (RegexRoute regexRoute : rt.regexRoutes) {
+            if (!regexRoute.entry().acceptsListener(listenerIp)) {
+                continue;
+            }
+
+            // A hostname with more dots than the pattern accounts for means the
+            // regex is being probed with extra subdomain levels — too broad a match.
+            if (countChar(regexRoute.hostnamePattern(), '.') + 1 < hostnameDots) {
+                continue;
+            }
+
+            Matcher matcher = regexRoute.pattern().matcher(hostname);
+            if (matcher.matches()) {
+                Map<String, String> groups = extractRegexGroups(matcher, regexRoute.namedGroups());
+                // Brute-force protection (faithful to the Node original): a dotted
+                // "project" capture means the pattern swallowed a subdomain boundary.
+                String project = groups != null ? groups.get("project") : null;
+                if (project != null && project.indexOf('.') > -1) {
+                    return List.of();
+                }
+                matches.add(new RouteMatch(regexRoute.entry(), groups));
+            }
+        }
+        return List.copyOf(matches);
     }
 
     /**
@@ -940,6 +1086,22 @@ public class SiteDispatcher implements HttpHandler {
         }
     }
 
+    /** Default absolute request lifetime for proxied exchanges. */
+    static final int DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
+    /**
+     * request_timeout site setting in seconds: absent/negative = 30s default,
+     * 0 = unlimited (streaming/gRPC/WebSocket sites).
+     */
+    private static int parseRequestTimeout(Object value) {
+        if (value instanceof Number number) {
+            int seconds = number.intValue();
+            if (seconds == 0) return -1;
+            if (seconds > 0) return seconds * 1000;
+        }
+        return DEFAULT_REQUEST_TIMEOUT_MS;
+    }
+
     private static int parsePositiveInt(Object value) {
         if (value instanceof Integer integer && integer > 0) {
             return integer;
@@ -1058,10 +1220,11 @@ public class SiteDispatcher implements HttpHandler {
     private void dispatchToRoute(RouteEntry entry, HttpServerExchange exchange) {
         exchange.addResponseCommitListener(ex -> applyResponseMutations(entry, ex));
 
+        ProxyHandler timedProxyHandler = proxyHandlerFor(entry.requestTimeoutMs);
         Runnable dispatch = () -> entry.handler.handleRequest(exchange, upstream -> {
             exchange.putAttachment(UPSTREAM_URI, upstream);
             try {
-                proxyHandler.handleRequest(exchange);
+                timedProxyHandler.handleRequest(exchange);
             } catch (Exception e) {
                 ErrorPages.send502(exchange, e.getMessage());
             }
@@ -1209,11 +1372,13 @@ public class SiteDispatcher implements HttpHandler {
         RouteTable rt = this.routes;
         Set<SiteRequestHandler> handlers = Collections.newSetFromMap(new IdentityHashMap<>());
         Set<SiteAuthGate> gates = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (RouteEntry entry : rt.exactRoutes.values()) {
-            handlers.add(entry.handler);
-            if (entry.authGate != null) gates.add(entry.authGate);
+        for (List<RouteEntry> bucket : rt.exactRoutes.values()) {
+            for (RouteEntry entry : bucket) {
+                handlers.add(entry.handler);
+                if (entry.authGate != null) gates.add(entry.authGate);
+            }
         }
-        for (WildcardRoute route : rt.wildcardRoutes.values()) {
+        for (WildcardRoute route : rt.wildcardRoutes) {
             handlers.add(route.entry().handler);
             if (route.entry().authGate != null) gates.add(route.entry().authGate);
         }
@@ -1289,10 +1454,21 @@ public class SiteDispatcher implements HttpHandler {
     // Proxy forwarding
     // -----------------------------------------------------------------------
 
+    /**
+     * Test-only override for the trusted upstream SSL context, so HTTPS-upstream tests can
+     * trust their own self-signed authority without weakening production validation.
+     */
+    private static volatile SSLContext trustedSslContextOverride;
+
+    public static void overrideTrustedUpstreamSslContextForTests(SSLContext context) {
+        trustedSslContextOverride = context;
+    }
+
     private class DispatchingProxyClient implements ProxyClient {
 
         private final UndertowClient client = UndertowClient.getInstance();
         private final XnioSsl insecureSsl = createInsecureSsl();
+        private final XnioSsl trustedSsl = createTrustedSsl();
 
         @Override
         public ProxyTarget findTarget(HttpServerExchange exchange) {
@@ -1306,8 +1482,16 @@ public class SiteDispatcher implements HttpHandler {
                                   long timeout, TimeUnit timeUnit) {
             SimpleTarget simpleTarget = (SimpleTarget) target;
             UpstreamTarget upstreamTarget = simpleTarget.target;
-            URI uri = upstreamTarget.uri();
-            XnioSsl ssl = upstreamTarget.ignoreCertificates() ? insecureSsl : null;
+            URI uri = dialUri(upstreamTarget);
+            XnioSsl ssl = sslFor(upstreamTarget);
+
+            // AIDEV-NOTE: Undertow's https/h2 providers force JDK endpoint identification
+            // (the SAN hostname check) unless the caller overrides the option -- so
+            // ignore_certificates must disable it too, or a trust-all context still
+            // rejects certs whose SAN doesn't match the dial host.
+            OptionMap connectOptions = upstreamTarget.ignoreCertificates()
+                ? OptionMap.create(UndertowOptions.ENDPOINT_IDENTIFICATION_ALGORITHM, "")
+                : OptionMap.EMPTY;
 
             client.connect(new ClientCallback<ClientConnection>() {
                 @Override
@@ -1318,7 +1502,12 @@ public class SiteDispatcher implements HttpHandler {
                     String path = uri.getPath();
                     if (path == null || path.isEmpty()) path = "/";
 
-                    callback.completed(exchange, new ProxyConnection(connection, path));
+                    // Capture response trailers (e.g. grpc-status) that the stock Undertow
+                    // h2 client would otherwise drop. Applied to EVERY upstream connection:
+                    // the hook only engages on HTTP/2 response channels, so h1 connections
+                    // pass through untouched and no protocol combination is left out.
+                    callback.completed(exchange, new ProxyConnection(
+                        new TrailerCapturingClientConnection(connection), path));
                 }
 
                 @Override
@@ -1327,7 +1516,48 @@ public class SiteDispatcher implements HttpHandler {
                 }
             }, uri, exchange.getIoThread(), ssl,
                exchange.getConnection().getByteBufferPool(),
-               OptionMap.EMPTY);
+               connectOptions);
+        }
+
+        /**
+         * The URI to hand Undertow's client, with the scheme mapped to the wire protocol:
+         * h2c-prior (prior-knowledge cleartext HTTP/2) or h2 (ALPN) for H2 upstreams.
+         */
+        private URI dialUri(UpstreamTarget target) {
+            URI uri = target.uri();
+            String dialScheme = target.protocol().dialScheme(uri.getScheme());
+            if (dialScheme.equals(uri.getScheme())) {
+                return uri;
+            }
+            try {
+                return new URI(dialScheme, uri.getUserInfo(), uri.getHost(), uri.getPort(),
+                    uri.getPath(), uri.getQuery(), uri.getFragment());
+            } catch (URISyntaxException e) {
+                return uri;
+            }
+        }
+
+        /**
+         * TLS upstreams always get an SSL provider; Undertow rejects an https/h2 dial with a
+         * null XnioSsl outright, so "no ssl" is only correct for cleartext upstreams.
+         */
+        private @Nullable XnioSsl sslFor(UpstreamTarget target) {
+            if (!"https".equalsIgnoreCase(target.uri().getScheme())) {
+                return null;
+            }
+            if (target.ignoreCertificates()) {
+                return insecureSsl;
+            }
+            SSLContext override = trustedSslContextOverride;
+            if (override != null) {
+                return new UndertowXnioSsl(Xnio.getInstance(), OptionMap.EMPTY, override);
+            }
+            return trustedSsl;
+        }
+
+        private XnioSsl createTrustedSsl() {
+            return new UndertowXnioSsl(Xnio.getInstance(), OptionMap.EMPTY,
+                UpstreamTrust.defaultContext());
         }
 
         private XnioSsl createInsecureSsl() {
@@ -1365,7 +1595,11 @@ public class SiteDispatcher implements HttpHandler {
     // -----------------------------------------------------------------------
 
     public int getExactRouteCount() {
-        return routes.exactRoutes.size();
+        int count = 0;
+        for (List<RouteEntry> bucket : routes.exactRoutes.values()) {
+            count += bucket.size();
+        }
+        return count;
     }
 
     public int getWildcardRouteCount() {
@@ -1383,10 +1617,12 @@ public class SiteDispatcher implements HttpHandler {
     public SiteRequestHandler findHandlerBySiteId(int siteId) {
         RouteTable rt = this.routes;
 
-        for (RouteEntry entry : rt.exactRoutes.values()) {
-            if (entry.handler.getSiteId() == siteId) return entry.handler;
+        for (List<RouteEntry> bucket : rt.exactRoutes.values()) {
+            for (RouteEntry entry : bucket) {
+                if (entry.handler.getSiteId() == siteId) return entry.handler;
+            }
         }
-        for (WildcardRoute route : rt.wildcardRoutes.values()) {
+        for (WildcardRoute route : rt.wildcardRoutes) {
             if (route.entry().handler.getSiteId() == siteId) return route.entry().handler;
         }
         for (RegexRoute route : rt.regexRoutes) {

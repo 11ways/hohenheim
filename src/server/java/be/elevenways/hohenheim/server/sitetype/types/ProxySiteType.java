@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.hohenheim.server.sitetype.UnixSocketBridgeConnection;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
+import be.elevenways.hohenheim.server.sitetype.UpstreamProtocol;
 import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -47,6 +48,20 @@ public class ProxySiteType implements SiteTypeHandler {
     public static final IntegerField FORWARD_PORT = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("forward_port").label(HohenheimFormCopy.label("forward_port"))
             .help(HohenheimFormCopy.help("forward_port")).build());
+
+    public static final EnumField UPSTREAM_PROTOCOL = SETTINGS_SCHEMA.addField(
+        EnumField.builder("upstream_protocol")
+            .value("http1", "HTTP/1.1")
+            .value("h2", "HTTP/2 (gRPC)")
+            .label(HohenheimFormCopy.label("upstream_protocol"))
+            .help(HohenheimFormCopy.help("upstream_protocol"))
+            .build());
+
+    public static final IntegerField REQUEST_TIMEOUT = SETTINGS_SCHEMA.addField(
+        IntegerField.builder().name("request_timeout").suffix("s")
+            .label(HohenheimFormCopy.label("request_timeout"))
+            .help(HohenheimFormCopy.help("request_timeout"))
+            .build());
 
     public static final BooleanField WEBSOCKET_UPGRADE = SETTINGS_SCHEMA.addField(
         BooleanField.builder("websocket_upgrade").defaultValue(true)
@@ -97,6 +112,7 @@ public class ProxySiteType implements SiteTypeHandler {
         String host = (String) settings.get("forward_host");
         boolean websocketEnabled = Boolean.TRUE.equals(settings.get("websocket_upgrade"));
         boolean ignoreCertificates = Boolean.TRUE.equals(settings.get("ignore_certificates"));
+        UpstreamProtocol protocol = UpstreamProtocol.fromSetting(settings.get("upstream_protocol"));
         // Default true when absent: sites created before the field existed keep rewriting.
         boolean rewriteLocation = !Boolean.FALSE.equals(settings.get("rewrite_location"));
 
@@ -112,7 +128,7 @@ public class ProxySiteType implements SiteTypeHandler {
         if (socket != null) {
             boolean hasPlaceholders = PLACEHOLDER.matcher(socket).find();
             return new ProxySocketHandler(socket, hasPlaceholders, ignoreCertificates,
-                websocketEnabled, rewriteLocation);
+                websocketEnabled, rewriteLocation, protocol);
         }
 
         String scheme = (String) settings.getOrDefault("forward_scheme", "http");
@@ -141,7 +157,7 @@ public class ProxySiteType implements SiteTypeHandler {
             if (rewriteLocation) {
                 exchange.putAttachment(SiteDispatcher.REWRITE_LOCATION, Boolean.TRUE);
             }
-            forwarder.forwardTo(new UpstreamTarget(upstream, ignoreCertificates));
+            forwarder.forwardTo(new UpstreamTarget(upstream, protocol, ignoreCertificates));
         };
     }
 
@@ -157,16 +173,18 @@ public class ProxySiteType implements SiteTypeHandler {
         private final boolean ignoreCertificates;
         private final boolean websocketEnabled;
         private final boolean rewriteLocation;
+        private final UpstreamProtocol protocol;
         private final Map<String, UnixSocketBridgeConnection> bridges = new ConcurrentHashMap<>();
 
         ProxySocketHandler(String socketTemplate, boolean hasPlaceholders,
                            boolean ignoreCertificates, boolean websocketEnabled,
-                           boolean rewriteLocation) {
+                           boolean rewriteLocation, UpstreamProtocol protocol) {
             this.socketTemplate = socketTemplate;
             this.hasPlaceholders = hasPlaceholders;
             this.ignoreCertificates = ignoreCertificates;
             this.websocketEnabled = websocketEnabled;
             this.rewriteLocation = rewriteLocation;
+            this.protocol = protocol;
         }
 
         @Override
@@ -196,7 +214,8 @@ public class ProxySiteType implements SiteTypeHandler {
             if (rewriteLocation) {
                 exchange.putAttachment(SiteDispatcher.REWRITE_LOCATION, Boolean.TRUE);
             }
-            forwarder.forwardTo(new UpstreamTarget(conn.connectUri(), conn.ignoreCertificates()));
+            forwarder.forwardTo(new UpstreamTarget(conn.connectUri(), protocol,
+                conn.ignoreCertificates()));
         }
 
         private UnixSocketBridgeConnection bridgeFor(String socketPath) throws IOException {

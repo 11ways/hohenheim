@@ -51,24 +51,39 @@ final class ProxyTestSupport {
     /** Persist an enabled site of the given type with one domain. */
     static void setupSiteWithDomain(String siteType, String hostname, String matchType,
                                     Map<String, Object> settings) {
-        var ds = HohenheimDatabase.datasource();
-        var siteModel = Models.get(SiteModel.class);
-        var domainModel = Models.get(SiteDomainModel.class);
+        Row site = setupSite(siteType, "Test Site " + hostname,
+            hostname.replaceAll("[^a-z0-9]+", "-"), settings);
+        addDomain(site, hostname, matchType, null, false);
+    }
 
+    /** Persist an enabled site without domains; add them via {@link #addDomain}. */
+    static Row setupSite(String siteType, String siteName, String slug,
+                         Map<String, Object> settings) {
+        var siteModel = Models.get(SiteModel.class);
         Row site = siteModel.createEmptyRow();
-        site.set(SiteModel.NAME, "Test Site " + hostname);
-        site.set(SiteModel.SLUG, hostname.replaceAll("[^a-z0-9]+", "-"));
+        site.set(SiteModel.NAME, siteName);
+        site.set(SiteModel.SLUG, slug);
         site.set(SiteModel.SITE_TYPE, siteType);
         site.set(SiteModel.SETTINGS, settings);
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);
         siteModel.save(site);
+        return site;
+    }
 
+    /** Attach a domain to a site, optionally with a path prefix. */
+    static void addDomain(Row site, String hostname, String matchType,
+                          String path, boolean stripPath) {
+        var domainModel = Models.get(SiteDomainModel.class);
         Row domain = domainModel.createEmptyRow();
         domain.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
         domain.set(SiteDomainModel.HOSTNAME, hostname);
         domain.set(SiteDomainModel.MATCH_TYPE, matchType);
         domain.set(SiteDomainModel.FORCE_SSL, false);
+        if (path != null) {
+            domain.set(SiteDomainModel.PATH, path);
+            domain.set(SiteDomainModel.STRIP_PATH, stripPath);
+        }
         domainModel.save(domain);
     }
 
@@ -107,9 +122,14 @@ final class ProxyTestSupport {
 
             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                response.append(line).append("\n");
+            try {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line).append("\n");
+                }
+            } catch (java.net.SocketTimeoutException e) {
+                // A killed exchange may leave the connection open without EOF;
+                // whatever was read so far is the observable response.
             }
             return response.toString();
         }
