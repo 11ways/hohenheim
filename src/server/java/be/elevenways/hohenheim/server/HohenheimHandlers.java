@@ -669,12 +669,17 @@ public final class HohenheimHandlers {
         var domainModel = Models.get(SiteDomainModel.class);
         List<String> excluded = new ArrayList<>();
         for (String hostname : hostnames) {
-            Row domain = domainModel.find()
+            List<Row> domains = domainModel.find()
                 .where(SiteDomainModel.HOSTNAME.eq(hostname))
-                .where(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.eq(true))
-                .first();
-            if (domain != null) {
-                excluded.add(hostname);
+                .all();
+            for (Row domain : domains) {
+                Row site = Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID));
+                if (Boolean.TRUE.equals(domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT))
+                        || site != null && SiteModel.SITE_TYPE_TLS_PASSTHROUGH
+                            .equals(site.get(SiteModel.SITE_TYPE))) {
+                    excluded.add(hostname);
+                    break;
+                }
             }
         }
         return excluded;

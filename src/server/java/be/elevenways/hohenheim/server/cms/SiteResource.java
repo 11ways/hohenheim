@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import be.elevenways.hohenheim.server.sitetype.types.TlsPassthroughSiteType;
 
 /**
  * The proxied sites: type-discriminated settings, git provisioning, relation
@@ -124,6 +125,7 @@ public class SiteResource extends RowResource {
         values.put("status", SiteModel.STATUS_ACTIVE);
         normalizeSource(values);
         normalizeDevNamespace(values);
+        validateTlsPassthrough(values);
         return super.persistRow(values, accessContext);
     }
 
@@ -137,7 +139,24 @@ public class SiteResource extends RowResource {
         }
         normalizeSource(values);
         normalizeDevNamespace(values);
+        validateTlsPassthrough(values);
         super.updateRow(existing, values, accessContext);
+    }
+
+    private static void validateTlsPassthrough(Map<String, Object> values) {
+        if (!TlsPassthroughSiteType.ID.toString().equals(values.get("site_type"))) return;
+        if (values.get("auth_provider_id") != null) {
+            throw Violations.ofField("auth_provider_id", values.get("auth_provider_id"),
+                CmsSupport.violationText("tls_passthrough_no_http_auth"));
+        }
+        if (values.get("access_list_id") != null) {
+            throw Violations.ofField("access_list_id", values.get("access_list_id"),
+                CmsSupport.violationText("tls_passthrough_no_access_list"));
+        }
+        if (values.get("source") != null) {
+            throw Violations.ofField("source", values.get("source"),
+                CmsSupport.violationText("tls_passthrough_local_only"));
+        }
     }
 
     /**

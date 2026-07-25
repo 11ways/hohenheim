@@ -18,8 +18,11 @@ import io.undertow.util.Headers;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The reverse proxy server that listens on the proxy ports (80/443)
@@ -41,6 +44,7 @@ public class ProxyServer {
     private final HttpHandler handler;
     private final CertificateStore certificateStore;
     private final AcmeService acmeService;
+    private final TlsConnectionIdentities tlsConnectionIdentities;
 
     // Proxy-auth sessions: a dedicated store, fully separate from the admin Zenit.SESSION_STORE.
     // In-memory by default; a DbSessionStore (backed by site_sessions) is a drop-in here.
@@ -48,6 +52,8 @@ public class ProxyServer {
 
     private Undertow httpServer;
     private Undertow httpsServer;
+    private final List<TlsMultiplexer> httpsMultiplexers = new ArrayList<>();
+    private volatile InetSocketAddress publicHttpsAddress;
     private UnixSocketListenerBridge httpSocketBridge;
 
     private volatile State httpState = State.STOPPED;
@@ -60,6 +66,7 @@ public class ProxyServer {
     public ProxyServer() {
         this.certificateStore = new CertificateStore();
         this.acmeService = new AcmeService(certificateStore);
+        this.tlsConnectionIdentities = new TlsConnectionIdentities();
         long sessionTtl = HohenheimSettings.VALUES.getValue(HohenheimSettings.ProxyAuth.SESSION_TTL_SECONDS);
         this.proxySessionStore = new InMemorySessionStore(sessionTtl);
         this.dispatcher = new SiteDispatcher(acmeService, proxySessionStore);
@@ -72,6 +79,7 @@ public class ProxyServer {
                 .addEncodingHandler("gzip", new GzipEncodingProvider(), 100)
                 .addEncodingHandler("deflate", new DeflateEncodingProvider(), 50));
         this.handler = exchange -> {
+            tlsConnectionIdentities.restore(exchange);
             String contentType = exchange.getRequestHeaders().getFirst(Headers.CONTENT_TYPE);
             if (contentType != null && contentType.startsWith("application/grpc")) {
                 dispatcher.handleRequest(exchange);
@@ -114,7 +122,7 @@ public class ProxyServer {
      * HTTP always starts. HTTPS starts only if certificates are loaded.
      * Never throws -- the admin UI must remain operational.
      */
-    public void start() {
+    public synchronized void start() {
         try {
             certificateStore.loadFromDatabase();
             dispatcher.reloadRoutes();
@@ -176,7 +184,7 @@ public class ProxyServer {
     }
 
     private void startHttpsListener() {
-        if (certificateStore.isEmpty()) {
+        if (certificateStore.isEmpty() && !dispatcher.hasTlsPassthroughRoutes()) {
             dispatcher.setHttpsAvailable(false);
             httpsState = State.STOPPED;
             httpsFailureReason = "No certificates loaded";
@@ -187,33 +195,103 @@ public class ProxyServer {
         int httpsPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT);
 
         try {
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            SniKeyManager sniKeyManager = new SniKeyManager(certificateStore, dispatcher::isBanned);
-            sslContext.init(new KeyManager[]{sniKeyManager}, null, null);
+            InetSocketAddress terminationAddress = null;
+            Exception terminationFailure = null;
+            if (!certificateStore.isEmpty()) {
+                try {
+                    terminationAddress = startHttpsTermination();
+                } catch (Exception e) {
+                    terminationFailure = e;
+                    if (!dispatcher.hasTlsPassthroughRoutes()) throw e;
+                    Blast.log("PROXY HTTPS TERMINATION START FAILED; passthrough remains available:",
+                        e.getMessage());
+                }
+            }
+            int helloTimeoutSeconds = HohenheimSettings.VALUES.getValue(
+                HohenheimSettings.Proxy.TLS_CLIENT_HELLO_TIMEOUT_SECONDS);
+            if (helloTimeoutSeconds < 1 || helloTimeoutSeconds > 300) {
+                throw new IllegalArgumentException(
+                    "proxy.tls_client_hello_timeout_seconds must be between 1 and 300");
+            }
+            int maxPendingHandshakes = HohenheimSettings.VALUES.getValue(
+                HohenheimSettings.Proxy.TLS_MAX_PENDING_HANDSHAKES);
+            if (maxPendingHandshakes < 1 || maxPendingHandshakes > 100_000) {
+                throw new IllegalArgumentException(
+                    "proxy.tls_max_pending_handshakes must be between 1 and 100000");
+            }
+            int maxConnections = HohenheimSettings.VALUES.getValue(
+                HohenheimSettings.Proxy.TLS_MAX_CONNECTIONS);
+            if (maxConnections < 1 || maxConnections > 1_000_000) {
+                throw new IllegalArgumentException(
+                    "proxy.tls_max_connections must be between 1 and 1000000");
+            }
 
-            // h2 toward clients only; Undertow's ProxyHandler talks HTTP/1.1 to upstreams.
-            Undertow.Builder builder = Undertow.builder()
-                .addHttpsListener(httpsPort, "0.0.0.0", sslContext)
-                .setServerOption(UndertowOptions.ENABLE_HTTP2, true)
-                .setIoThreads(IO_THREADS)
-                .setHandler(handler);
+            TlsMultiplexer ipv4 = new TlsMultiplexer("0.0.0.0", httpsPort,
+                helloTimeoutSeconds * 1000, terminationAddress, dispatcher::resolveTlsRoute,
+                () -> HohenheimSettings.VALUES.getValue(
+                    HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES),
+                tlsConnectionIdentities, dispatcher::isBanned, maxConnections, maxPendingHandshakes,
+                this::handleHttpsListenerFailure);
+            ipv4.start();
+            httpsMultiplexers.add(ipv4);
+            publicHttpsAddress = ipv4.getLocalAddress();
 
-            addIpv6Listener(builder, httpsPort, sslContext);
-            httpsServer = builder.build();
+            String ipv6Address = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS);
+            if (ipv6Address != null && !ipv6Address.isBlank()) {
+                int ipv6Port = httpsPort == 0 ? publicHttpsAddress.getPort() : httpsPort;
+                TlsMultiplexer ipv6 = new TlsMultiplexer(ipv6Address.trim(), ipv6Port,
+                    helloTimeoutSeconds * 1000, terminationAddress, dispatcher::resolveTlsRoute,
+                    () -> HohenheimSettings.VALUES.getValue(
+                        HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES),
+                    tlsConnectionIdentities, dispatcher::isBanned, maxConnections, maxPendingHandshakes,
+                    this::handleHttpsListenerFailure);
+                ipv6.start();
+                httpsMultiplexers.add(ipv6);
+            }
 
-            httpsServer.start();
-            dispatcher.setHttpsAvailable(true);
+            dispatcher.setHttpsAvailable(terminationAddress != null);
             httpsState = State.RUNNING;
-            httpsFailureReason = null;
-            Blast.log("Proxy HTTPS listening on port", httpsPort,
-                      "(" + certificateStore.getCertificateCount() + " certificates)");
+            httpsFailureReason = terminationFailure != null ? terminationFailure.getMessage() : null;
+            Blast.log("Proxy HTTPS multiplexer listening on port", publicHttpsAddress.getPort(),
+                "(" + certificateStore.getCertificateCount() + " certificates,",
+                dispatcher.hasTlsPassthroughRoutes() ? "passthrough enabled)" : "no passthrough routes)");
         } catch (Exception e) {
             dispatcher.setHttpsAvailable(false);
             httpsState = State.FAILED;
             httpsFailureReason = e.getMessage();
-            httpsServer = null;
+            stopHttpsResources();
             Blast.log("PROXY HTTPS STARTUP FAILED on port", httpsPort + ":", e.getMessage());
         }
+    }
+
+    private InetSocketAddress startHttpsTermination() throws Exception {
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        SniKeyManager sniKeyManager = new SniKeyManager(certificateStore, dispatcher::isBanned);
+        sslContext.init(new KeyManager[]{sniKeyManager}, null, null);
+
+        Undertow server = Undertow.builder()
+            .addHttpsListener(0, "127.0.0.1", sslContext)
+            .setServerOption(UndertowOptions.ENABLE_HTTP2, true)
+            .setIoThreads(IO_THREADS)
+            .setHandler(handler)
+            .build();
+        try {
+            server.start();
+        } catch (Exception e) {
+            server.stop();
+            throw e;
+        }
+        httpsServer = server;
+        return (InetSocketAddress) getHttpsListenerInfo().getAddress();
+    }
+
+    private synchronized void handleHttpsListenerFailure(IOException failure) {
+        if (httpsState == State.STOPPED) return;
+        stopHttpsResources();
+        dispatcher.setHttpsAvailable(false);
+        httpsState = State.FAILED;
+        httpsFailureReason = failure.getMessage();
+        Blast.log("PROXY HTTPS LISTENER FAILED:", failure.getMessage());
     }
 
     private static void addIpv6Listener(Undertow.Builder builder, int port, SSLContext sslContext) {
@@ -227,10 +305,8 @@ public class ProxyServer {
         }
     }
 
-    public void stop() {
+    public synchronized void stop() {
         acmeService.stop();
-        dispatcher.shutdown();
-        proxySessionStore.deleteExpired();
         if (httpSocketBridge != null) {
             httpSocketBridge.close();
             httpSocketBridge = null;
@@ -239,10 +315,9 @@ public class ProxyServer {
             httpServer.stop();
             httpServer = null;
         }
-        if (httpsServer != null) {
-            httpsServer.stop();
-            httpsServer = null;
-        }
+        stopHttpsResources();
+        dispatcher.shutdown();
+        proxySessionStore.deleteExpired();
         dispatcher.setHttpsAvailable(false);
         httpState = State.STOPPED;
         httpsState = State.STOPPED;
@@ -254,7 +329,7 @@ public class ProxyServer {
     /**
      * Reload routes and certificates. Restarts failed listeners.
      */
-    public void reload() {
+    public synchronized void reload() {
         try {
             certificateStore.loadFromDatabase();
             dispatcher.reloadRoutes();
@@ -268,14 +343,53 @@ public class ProxyServer {
             startHttpListener();
         }
 
-        // Start HTTPS if it wasn't running and we now have certs
-        if (httpsState != State.RUNNING && !certificateStore.isEmpty()) {
-            Blast.log("Proxy HTTPS starting after certificate reload");
-            if (httpsServer != null) {
-                httpsServer.stop();
-                httpsServer = null;
+        boolean wantsTermination = !certificateStore.isEmpty();
+        boolean wantsPassthrough = dispatcher.hasTlsPassthroughRoutes();
+        if (!wantsTermination && !wantsPassthrough) {
+            if (httpsState != State.STOPPED || publicHttpsAddress != null) {
+                stopHttpsResources();
+                dispatcher.setHttpsAvailable(false);
+                httpsState = State.STOPPED;
+                httpsFailureReason = "No certificates or TLS passthrough routes loaded";
+                Blast.log("Proxy HTTPS stopped: no terminating or passthrough routes remain");
             }
+            return;
+        }
+
+        if (httpsState != State.RUNNING) {
+            Blast.log("Proxy HTTPS starting after certificate reload");
+            stopHttpsResources();
             startHttpsListener();
+            return;
+        }
+
+        if (wantsTermination && httpsServer == null) {
+            try {
+                InetSocketAddress terminationAddress = startHttpsTermination();
+                for (TlsMultiplexer multiplexer : httpsMultiplexers) {
+                    multiplexer.setTerminationAddress(terminationAddress);
+                }
+                dispatcher.setHttpsAvailable(true);
+                httpsFailureReason = null;
+                Blast.log("Proxy HTTPS termination enabled after certificate reload");
+            } catch (Exception e) {
+                dispatcher.setHttpsAvailable(false);
+                httpsFailureReason = e.getMessage();
+                Blast.log("PROXY HTTPS TERMINATION START FAILED:", e.getMessage());
+                if (!wantsPassthrough) {
+                    stopHttpsResources();
+                    httpsState = State.FAILED;
+                }
+            }
+        } else if (!wantsTermination && httpsServer != null) {
+            for (TlsMultiplexer multiplexer : httpsMultiplexers) {
+                multiplexer.setTerminationAddress(null);
+            }
+            httpsServer.stop();
+            httpsServer = null;
+            dispatcher.setHttpsAvailable(false);
+            httpsFailureReason = null;
+            Blast.log("Proxy HTTPS termination stopped; passthrough remains available");
         }
     }
 
@@ -292,6 +406,23 @@ public class ProxyServer {
         if (httpsServer == null) return null;
         var listeners = httpsServer.getListenerInfo();
         return listeners.isEmpty() ? null : listeners.get(0);
+    }
+
+    /** Public HTTPS multiplexer address; unlike getHttpsListenerInfo this is reachable by clients. */
+    public InetSocketAddress getHttpsAddress() {
+        return publicHttpsAddress;
+    }
+
+    private void stopHttpsResources() {
+        for (TlsMultiplexer multiplexer : httpsMultiplexers) {
+            multiplexer.close();
+        }
+        httpsMultiplexers.clear();
+        publicHttpsAddress = null;
+        if (httpsServer != null) {
+            httpsServer.stop();
+            httpsServer = null;
+        }
     }
 
     // Backwards-compatible accessors for dashboard

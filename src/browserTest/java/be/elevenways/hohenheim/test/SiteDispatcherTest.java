@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.*;
@@ -42,16 +43,22 @@ class SiteDispatcherTest {
             upstream.stop(0);
             upstream = null;
         }
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, "");
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of());
     }
 
-    /** Start an upstream that records X-Real-IP and X-Forwarded-For of each request. */
-    private int startCapturingUpstream(AtomicReference<String> realIp,
-                                       AtomicReference<String> forwardedFor) throws Exception {
+    private record ProxyHeaders(String realIp, String forwardedFor, String forwardedProto,
+                                String forwardedHost, String hohenheimKey) {}
+
+    /** Start an upstream that records the forwarding trust-boundary headers. */
+    private int startCapturingUpstream(AtomicReference<ProxyHeaders> captured) throws Exception {
         upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         upstream.createContext("/", ex -> {
-            realIp.set(ex.getRequestHeaders().getFirst("X-Real-IP"));
-            forwardedFor.set(ex.getRequestHeaders().getFirst("X-Forwarded-For"));
+            captured.set(new ProxyHeaders(
+                ex.getRequestHeaders().getFirst("X-Real-IP"),
+                ex.getRequestHeaders().getFirst("X-Forwarded-For"),
+                ex.getRequestHeaders().getFirst("X-Forwarded-Proto"),
+                ex.getRequestHeaders().getFirst("X-Forwarded-Host"),
+                ex.getRequestHeaders().getFirst("X-Hohenheim-Key")));
             byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(200, body.length);
             ex.getResponseBody().write(body);
@@ -65,11 +72,10 @@ class SiteDispatcherTest {
     void trustedKeyPropagatesTheRealClientIp() throws Exception {
         resetDatabase();
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
-            "front-key-1, front-key-2");
+            List.of("front-key-1", "front-key-2"));
 
-        AtomicReference<String> realIp = new AtomicReference<>();
-        AtomicReference<String> forwardedFor = new AtomicReference<>();
-        int upstreamPort = startCapturingUpstream(realIp, forwardedFor);
+        AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
+        int upstreamPort = startCapturingUpstream(captured);
 
         setupSiteWithDomain("hohenheim:proxy", "trusted.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
@@ -80,46 +86,66 @@ class SiteDispatcherTest {
             "X-Real-IP: 203.0.113.9");
 
         assertThat(response).contains("200");
-        assertThat(realIp.get()).isEqualTo("203.0.113.9");
+        assertThat(captured.get().realIp()).isEqualTo("203.0.113.9");
         // The real client leads, the directly-connected trusted proxy is appended as the hop.
-        assertThat(forwardedFor.get().replace(" ", "")).isEqualTo("203.0.113.9,127.0.0.1");
+        assertThat(captured.get().forwardedFor().replace(" ", ""))
+            .isEqualTo("203.0.113.9,127.0.0.1");
+        assertThat(captured.get().hohenheimKey()).isNull();
     }
 
     @Test
-    void untrustedSpoofedRealIpIsOverwritten() throws Exception {
+    void untrustedForwardingHeadersAreRejectedAndRegenerated() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, "front-key-1");
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
+            List.of("front-key-1"));
 
-        AtomicReference<String> realIp = new AtomicReference<>();
-        AtomicReference<String> forwardedFor = new AtomicReference<>();
-        int upstreamPort = startCapturingUpstream(realIp, forwardedFor);
+        AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
+        int upstreamPort = startCapturingUpstream(captured);
 
         setupSiteWithDomain("hohenheim:proxy", "spoof.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
 
         proxy = startProxy();
 
-        // Wrong key: the spoofed X-Real-IP must NOT survive to the upstream.
         String response = rawRequest(httpPort(proxy), "spoof.test", "/",
             "X-Hohenheim-Key: wrong-key",
-            "X-Real-IP: 203.0.113.9");
+            "X-Real-IP: 203.0.113.9",
+            "X-Forwarded-For: 198.51.100.1, 203.0.113.9",
+            "X-Forwarded-Proto: https",
+            "X-Forwarded-Host: attacker.test");
 
         assertThat(response).contains("200");
-        assertThat(realIp.get()).isEqualTo("127.0.0.1");
+        assertThat(captured.get()).isEqualTo(new ProxyHeaders(
+            "127.0.0.1", "127.0.0.1", "http", "spoof.test", null));
+    }
 
-        // No key at all: same.
-        rawRequest(httpPort(proxy), "spoof.test", "/", "X-Real-IP: 198.51.100.7");
-        assertThat(realIp.get()).isEqualTo("127.0.0.1");
+    @Test
+    void trustedProxyCannotInstallANonLiteralClientIdentity() throws Exception {
+        resetDatabase();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
+            List.of("front-key-1"));
+        AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
+        int upstreamPort = startCapturingUpstream(captured);
+        setupSiteWithDomain("hohenheim:proxy", "invalid-ip.test", "exact",
+            Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
+        proxy = startProxy();
+
+        String response = rawRequest(httpPort(proxy), "invalid-ip.test", "/",
+            "X-Hohenheim-Key: front-key-1", "X-Real-IP: attacker.example");
+
+        assertThat(response).contains("200");
+        assertThat(captured.get().realIp()).isEqualTo("127.0.0.1");
+        assertThat(captured.get().forwardedFor()).isEqualTo("127.0.0.1");
     }
 
     @Test
     void trustedRequestAppendsToExistingForwardedFor() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, "front-key-1");
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
+            List.of("front-key-1"));
 
-        AtomicReference<String> realIp = new AtomicReference<>();
-        AtomicReference<String> forwardedFor = new AtomicReference<>();
-        int upstreamPort = startCapturingUpstream(realIp, forwardedFor);
+        AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
+        int upstreamPort = startCapturingUpstream(captured);
 
         setupSiteWithDomain("hohenheim:proxy", "chain.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
@@ -128,20 +154,41 @@ class SiteDispatcherTest {
         String response = rawRequest(httpPort(proxy), "chain.test", "/",
             "X-Hohenheim-Key: front-key-1",
             "X-Real-IP: 203.0.113.9",
-            "X-Forwarded-For: 203.0.113.9");
+            "X-Forwarded-For: 198.51.100.1, 203.0.113.9",
+            "X-Forwarded-Proto: https",
+            "X-Forwarded-Host: attacker.test");
 
         assertThat(response).contains("200");
-        assertThat(realIp.get()).isEqualTo("203.0.113.9");
-        assertThat(forwardedFor.get().replace(" ", "")).isEqualTo("203.0.113.9,127.0.0.1");
+        assertThat(captured.get().realIp()).isEqualTo("203.0.113.9");
+        assertThat(captured.get().forwardedFor().replace(" ", ""))
+            .isEqualTo("198.51.100.1,203.0.113.9,127.0.0.1");
+        assertThat(captured.get().forwardedProto()).isEqualTo("https");
+        assertThat(captured.get().forwardedHost()).isEqualTo("attacker.test");
+        assertThat(captured.get().hohenheimKey()).isNull();
+    }
+
+    @Test
+    void websocketUpgradeDefaultsToEnabledWhenSettingIsAbsent() throws Exception {
+        resetDatabase();
+        setupSiteWithDomain("hohenheim:proxy", "websocket-default.test", "exact",
+            Map.of("forward_host", "127.0.0.1", "forward_port", 1));
+
+        proxy = startProxy();
+        String response = rawRequest(httpPort(proxy), "websocket-default.test", "/",
+            "Connection: Upgrade",
+            "Upgrade: websocket",
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+            "Sec-WebSocket-Version: 13");
+
+        assertThat(response).contains("503").doesNotContain("403");
     }
 
     @Test
     void globHostnamesRouteThroughTheDispatcher() throws Exception {
         resetDatabase();
 
-        AtomicReference<String> realIp = new AtomicReference<>();
-        AtomicReference<String> forwardedFor = new AtomicReference<>();
-        int upstreamPort = startCapturingUpstream(realIp, forwardedFor);
+        AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
+        int upstreamPort = startCapturingUpstream(captured);
 
         setupSiteWithDomain("hohenheim:proxy", "eu?.wild.test", "wildcard",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));

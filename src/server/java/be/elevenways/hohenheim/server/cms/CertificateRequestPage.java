@@ -89,6 +89,9 @@ public final class CertificateRequestPage extends PanelPage {
         if (site == null) {
             return List.of();
         }
+        if (SiteModel.SITE_TYPE_TLS_PASSTHROUGH.equals(site.get(SiteModel.SITE_TYPE))) {
+            return List.of();
+        }
         List<String> hostnames = new ArrayList<>();
         for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(siteId)) {
             if (!SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))

@@ -1,0 +1,29 @@
+// Hohenheim developer-local overrides.
+//
+// Copy this file to `settings/hohenheim.dry`. The file is gitignored because
+// it commonly contains proxy trust keys and machine-local paths.
+{
+    "proxy": {
+        // Public listeners. Ports below 1024 normally require a capability.
+        //"http_port": 8080,
+        //"https_port": 443,
+
+        // Secret values accepted in X-Hohenheim-Key from upstream HTTP proxies.
+        //"trusted_proxy_keys": ["replace-with-a-random-key"],
+
+        // Literal IP/CIDR peers allowed to prepend PROXY protocol v2 on TLS.
+        //"proxy_protocol_trusted_sources": ["127.0.0.1/32", "::1/128"],
+        //"tls_client_hello_timeout_seconds": 5,
+        //"tls_max_pending_handshakes": 1024,
+        //"tls_max_connections": 10000
+    },
+    "ssl": {
+        //"letsencrypt_enabled": false
+    },
+    "storage": {
+        //"data_path": "data"
+    },
+    "database": {
+        //"path": "hohenheim.db"
+    }
+}
