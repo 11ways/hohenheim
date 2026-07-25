@@ -206,7 +206,7 @@ class ProxyDispatchTest {
         proxy = new ProxyServer();
         proxy.start();
 
-        int httpsPort = ((InetSocketAddress) proxy.getHttpsListenerInfo().getAddress()).getPort();
+        int httpsPort = proxy.getHttpsAddress().getPort();
 
         javax.net.ssl.SSLContext tls = javax.net.ssl.SSLContext.getInstance("TLS");
         tls.init(null, new javax.net.ssl.TrustManager[]{ new javax.net.ssl.X509TrustManager() {
@@ -577,7 +577,7 @@ class ProxyDispatchTest {
         proxy = new ProxyServer();
         proxy.start();
 
-        int httpsPort = ((InetSocketAddress) proxy.getHttpsListenerInfo().getAddress()).getPort();
+        int httpsPort = proxy.getHttpsAddress().getPort();
 
         javax.net.ssl.SSLContext tls = javax.net.ssl.SSLContext.getInstance("TLS");
         tls.init(null, new javax.net.ssl.TrustManager[]{ new javax.net.ssl.X509TrustManager() {

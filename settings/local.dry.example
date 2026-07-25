@@ -1,34 +1,14 @@
-// Hohenheim developer-local overrides.
+// Zenit server developer-local overrides for Hohenheim.
 //
 // Copy this file to `settings/local.dry` and uncomment the keys you need to
 // change. Values in `settings/local.dry` are loaded after `settings/default.dry`
 // (which Hohenheim does not currently ship), so entries here take precedence.
 //
-// `local.dry` is gitignored by design: it typically pins developer-local ports
-// or disables Let's Encrypt for offline work.
+// `local.dry` is gitignored by design: it typically pins developer-local ports.
 {
     // Zenit framework settings
     "network": {
         // Port the admin UI listens on. Default: 3000.
         //"port": 2999
-    },
-
-    // Hohenheim settings
-    "proxy": {
-        // Proxy HTTP listener port. Default: 80 (privileged; use something else
-        // for unprivileged dev runs).
-        //"http_port": 8080
-        //"https_port": 443
-    },
-    "ssl": {
-        //"letsencrypt_enabled": false
-    },
-    "storage": {
-        // Where git-provisioned site checkouts land. Default: data
-        //"data_path": "data"
-    },
-    "database": {
-        // SQLite file. Default: hohenheim.db
-        //"path": "hohenheim.db"
     }
 }

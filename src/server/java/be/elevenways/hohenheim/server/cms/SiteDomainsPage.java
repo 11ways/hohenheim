@@ -38,6 +38,8 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row site) {
         Integer siteId = site.get(SiteModel.ID);
+        boolean tlsPassthrough = SiteModel.SITE_TYPE_TLS_PASSTHROUGH
+            .equals(site.get(SiteModel.SITE_TYPE));
         String basePath = CmsSupport.panelBase(conduit);
         List<Map<String, Object>> domains = new ArrayList<>();
         for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(siteId)) {
@@ -47,7 +49,8 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             entry.put("matchType", domain.get(SiteDomainModel.MATCH_TYPE));
             entry.put("forceSsl", Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)));
             entry.put("editUrl", basePath + "/domains/" + domain.get(SiteDomainModel.ID));
-            putCertCoverage(entry, domain);
+            if (tlsPassthrough) entry.put("certStatus", "");
+            else putCertCoverage(entry, domain);
             domains.add(entry);
         }
 
@@ -60,7 +63,7 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         boolean administerDomains = HohenheimAccess.isAdmin(accessContext);
         // Hostname ownership and LE requests are installation administration.
         vars.put("canEditDomains", administerDomains);
-        vars.put("canRequestCert", administerDomains);
+        vars.put("canRequestCert", administerDomains && !tlsPassthrough);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-domains"), vars);
     }

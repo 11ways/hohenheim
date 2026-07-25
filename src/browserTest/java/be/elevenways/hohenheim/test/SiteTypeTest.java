@@ -32,14 +32,14 @@ class SiteTypeTest extends HohenheimTestBase {
 
     @Test
     @Order(1)
-    void typeDropdownHasAllTenTypes() {
+    void typeDropdownHasAllElevenTypes() {
         navigateToApp("/admin/sites/new");
         waitForHydration();
 
         openPlSelect("pl-select[name='site_type']");
 
         var items = page.locator(OPEN_SELECT_POPUP + " div[role='option'][data-value^='hohenheim:']");
-        assertThat(items.count()).isEqualTo(10);
+        assertThat(items.count()).isEqualTo(11);
 
         String allText = items.allTextContents().toString();
         assertThat(allText).contains("Proxy");
@@ -52,6 +52,7 @@ class SiteTypeTest extends HohenheimTestBase {
         assertThat(allText).contains("Redirect");
         assertThat(allText).contains("Dead");
         assertThat(allText).contains("Dev namespace");
+        assertThat(allText).contains("TLS passthrough");
 
         // Close the dropdown again so later interactions start clean.
         page.keyboard().press("Escape");
@@ -127,5 +128,18 @@ class SiteTypeTest extends HohenheimTestBase {
         openPlSelect("pl-select[name='settings.server']");
         assertThat(page.locator(OPEN_SELECT_POPUP
             + " div[role='option'][data-value='hohenheim:local']").count()).isEqualTo(1);
+    }
+
+    @Test
+    @Order(7)
+    void tlsPassthroughUsesTypedConnectionSettings() {
+        navigateToApp("/admin/sites/new");
+        waitForHydration();
+        selectSiteType("hohenheim:tls_passthrough");
+
+        page.waitForSelector("pl-input[name='settings.forward_host']");
+        assertThat(page.locator("pl-input[name='settings.forward_port']").count()).isEqualTo(1);
+        assertThat(page.locator("pl-switch[name='settings.proxy_protocol_v2']").count()).isEqualTo(1);
+        assertThat(page.locator("pl-input[name='settings.connect_timeout']").count()).isEqualTo(1);
     }
 }

@@ -513,9 +513,8 @@ class TlsCertificateTest {
             }
         }, null);
 
-        // Get the actual port the HTTPS listener bound to
-        var listenerInfo = proxy.getHttpsListenerInfo();
-        int httpsPort = ((java.net.InetSocketAddress) listenerInfo.getAddress()).getPort();
+        // Get the actual public port the TLS multiplexer bound to.
+        int httpsPort = proxy.getHttpsAddress().getPort();
 
         java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
             .sslContext(trustAll)

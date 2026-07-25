@@ -6,7 +6,10 @@ import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.common.setting.SettingsContext;
 import be.elevenways.zenit.common.validation.PathKind;
+import be.elevenways.hohenheim.security.IpAddressSyntax;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -63,6 +66,51 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
+        public static final SettingDefinition<Integer> TLS_CLIENT_HELLO_TIMEOUT_SECONDS = GROUP
+            .buildSetting("tls_client_hello_timeout_seconds", Integer.class)
+            .defaultValue(5)
+            .suffix("s")
+            .description("Maximum time allowed to receive a TLS ClientHello before routing the connection")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<List<String>> PROXY_PROTOCOL_TRUSTED_SOURCES = GROUP
+            .buildStringListSetting("proxy_protocol_trusted_sources")
+            .defaultValue(List.of())
+            .coercer(Proxy::coerceIpNetworks)
+            .description("IP addresses and CIDR ranges allowed to supply an inbound PROXY protocol v2 header. "
+                + "Direct clients remain supported; an untrusted PROXY header is rejected")
+            .build();
+
+        private static SettingDefinition.CoercionResult<List<String>> coerceIpNetworks(Object raw) {
+            if (!(raw instanceof List<?> list)) {
+                return SettingDefinition.CoercionResult.rejected();
+            }
+            ArrayList<String> result = new ArrayList<>();
+            for (Object item : list) {
+                if (!(item instanceof String value) || !IpAddressSyntax.isNetwork(value)) {
+                    return SettingDefinition.CoercionResult.rejected();
+                }
+                result.add(value.trim());
+            }
+            return SettingDefinition.CoercionResult.accepted(List.copyOf(result));
+        }
+
+        public static final SettingDefinition<Integer> TLS_MAX_PENDING_HANDSHAKES = GROUP
+            .buildSetting("tls_max_pending_handshakes", Integer.class)
+            .defaultValue(1024)
+            .description("Maximum simultaneous connections still sending a TLS ClientHello; excess connections "
+                + "are closed immediately to bound slow-client memory and file-descriptor use")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<Integer> TLS_MAX_CONNECTIONS = GROUP
+            .buildSetting("tls_max_connections", Integer.class)
+            .defaultValue(10_000)
+            .description("Maximum simultaneous client connections accepted by each public TLS listener")
+            .restartRequired()
+            .build();
+
         public static final SettingDefinition<String> FALLBACK_ADDRESS = GROUP.buildSetting("fallback_address", String.class)
             .description("Address for requests that match no site")
             .build();
@@ -95,10 +143,34 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
-        public static final SettingDefinition<String> TRUSTED_PROXY_KEYS = GROUP.buildSetting("trusted_proxy_keys", String.class)
-            .description("Comma-delimited X-Hohenheim-Key values from trusted upstream proxies")
+        public static final SettingDefinition<List<String>> TRUSTED_PROXY_KEYS = GROUP
+            .buildStringListSetting("trusted_proxy_keys")
+            .defaultValue(List.of())
+            .description("X-Hohenheim-Key values accepted from trusted upstream HTTP proxies")
             .secret()
+            .coercer(Proxy::coerceTrustedProxyKeys)
             .build();
+
+        private static SettingDefinition.CoercionResult<List<String>> coerceTrustedProxyKeys(Object raw) {
+            if (raw instanceof List<?> list) {
+                List<String> values = new ArrayList<>(list.size());
+                for (Object item : list) {
+                    if (!(item instanceof String string)) {
+                        return SettingDefinition.CoercionResult.rejected();
+                    }
+                    values.add(string);
+                }
+                return SettingDefinition.CoercionResult.accepted(List.copyOf(values));
+            }
+            if (raw instanceof String legacy) {
+                if (legacy.isBlank()) return SettingDefinition.CoercionResult.accepted(List.of());
+                return SettingDefinition.CoercionResult.accepted(Arrays.stream(legacy.split(","))
+                    .map(String::trim)
+                    .filter(value -> !value.isEmpty())
+                    .toList());
+            }
+            return SettingDefinition.CoercionResult.rejected();
+        }
     }
 
     // --- SSL/TLS ---

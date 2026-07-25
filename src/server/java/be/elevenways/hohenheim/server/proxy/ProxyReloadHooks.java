@@ -12,6 +12,8 @@ import be.elevenways.zenit.common.orm.model.GlobalModelHooks;
 import be.elevenways.zenit.common.orm.model.Model;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Set;
 
 /**
@@ -33,6 +35,8 @@ public final class ProxyReloadHooks {
         SiteAuthProviderModel.MODEL_ID);
 
     private static volatile boolean installed = false;
+    private static final ThreadLocal<Set<Datasource>> PENDING = ThreadLocal.withInitial(
+        () -> Collections.newSetFromMap(new IdentityHashMap<>()));
 
     private ProxyReloadHooks() {}
 
@@ -55,9 +59,18 @@ public final class ProxyReloadHooks {
             return;
         }
         Datasource ds = datasource != null ? datasource : model.getResolvedDatasource();
-        // After the surrounding transaction commits (immediately when there is none),
-        // so the reload reads the state it was triggered by.
+        if (!ds.hasActiveTransaction()) {
+            reload();
+            return;
+        }
+        Set<Datasource> pending = PENDING.get();
+        if (!pending.add(ds)) return;
+        // One reload per datasource transaction, after every related write is visible.
         ds.afterCommit(ProxyReloadHooks::reload);
+        ds.afterTransaction(() -> {
+            pending.remove(ds);
+            if (pending.isEmpty()) PENDING.remove();
+        });
     }
 
     private static void reload() {

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
+import be.elevenways.hohenheim.server.sitetype.types.TlsPassthroughSiteType;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -115,7 +116,14 @@ public class SiteDomainResource extends RowResource {
         String siteId = conduit.getQueryParam("site_id");
         if (siteId != null && !siteId.isEmpty()) {
             try {
-                values.put("site_id", Integer.parseInt(siteId));
+                int parsedSiteId = Integer.parseInt(siteId);
+                values.put("site_id", parsedSiteId);
+                Row site = Models.get(SiteModel.class).findById(parsedSiteId);
+                if (site != null && TlsPassthroughSiteType.ID.toString()
+                        .equals(site.get(SiteModel.SITE_TYPE))) {
+                    values.put("force_ssl", false);
+                    values.put("exclude_from_letsencrypt", true);
+                }
             } catch (NumberFormatException ignored) {
                 // Malformed prefill: render the bare form.
             }
@@ -149,6 +157,11 @@ public class SiteDomainResource extends RowResource {
         if (!(siteIdValue instanceof Integer siteId)) {
             throw Violations.ofField("site_id", siteIdValue, CmsSupport.violationText("site_required"));
         }
+        Row site = Models.get(SiteModel.class).findById(siteId);
+        if (site != null && TlsPassthroughSiteType.ID.toString()
+                .equals(site.get(SiteModel.SITE_TYPE))) {
+            validateTlsPassthroughDomain(coerced);
+        }
         Row duplicate = this.model().find()
             .where(SiteDomainModel.SITE_ID.eq(siteId))
             .where(SiteDomainModel.HOSTNAME.eq(hostname))
@@ -157,5 +170,34 @@ public class SiteDomainResource extends RowResource {
             && (existing == null || !duplicate.get(SiteDomainModel.ID).equals(existing.get(SiteDomainModel.ID)))) {
             throw Violations.ofField("hostname", hostname, CmsSupport.violationText("hostname_taken"));
         }
+    }
+
+    private static void validateTlsPassthroughDomain(Map<String, Object> values) {
+        String path = values.get("path") != null ? String.valueOf(values.get("path")).trim() : "";
+        if (!path.isEmpty() && !"/".equals(path)) {
+            throw Violations.ofField("path", path,
+                CmsSupport.violationText("tls_passthrough_no_path"));
+        }
+        if (Boolean.TRUE.equals(values.get("strip_path"))) {
+            throw Violations.ofField("strip_path", true,
+                CmsSupport.violationText("tls_passthrough_no_http_options"));
+        }
+        if (values.get("certificate_id") != null) {
+            throw Violations.ofField("certificate_id", values.get("certificate_id"),
+                CmsSupport.violationText("tls_passthrough_backend_certificate"));
+        }
+        if (Boolean.TRUE.equals(values.get("hsts_enabled"))
+                || Boolean.TRUE.equals(values.get("hsts_subdomains"))) {
+            throw Violations.ofField("hsts_enabled", values.get("hsts_enabled"),
+                CmsSupport.violationText("tls_passthrough_no_http_options"));
+        }
+        if (hasValues(values.get("custom_headers")) || hasValues(values.get("response_headers"))) {
+            throw Violations.ofField("custom_headers", values.get("custom_headers"),
+                CmsSupport.violationText("tls_passthrough_no_http_options"));
+        }
+    }
+
+    private static boolean hasValues(Object value) {
+        return value instanceof Map<?, ?> map && !map.isEmpty();
     }
 }

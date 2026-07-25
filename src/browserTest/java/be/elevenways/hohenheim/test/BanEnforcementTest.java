@@ -13,6 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Set;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.*;
@@ -45,12 +46,12 @@ class BanEnforcementTest {
             proxy.stop();
             proxy = null;
         }
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, "");
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of());
     }
 
     @Test
     void dbBanIsRefusedAtHttpAndClearedByLift() throws Exception {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, KEY);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
         proxy = startProxy();
 
         Row ban = BanService.INSTANCE.createBan("203.0.113.150", "test",
@@ -76,7 +77,7 @@ class BanEnforcementTest {
     @Test
     void thresholdedDomainMissesReportThroughTheSecurityEventsFunnel() throws Exception {
         HohenheimSecurity.boot();   // installs the in-process SecurityEvents sink (idempotent)
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, KEY);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
         proxy = startProxy();
 
         // Domain misses must still travel the core funnel (that is what the
@@ -107,7 +108,7 @@ class BanEnforcementTest {
 
     @Test
     void bannedIpStillGetsAcmeChallengesButNothingElse() throws Exception {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, KEY);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
         proxy = startProxy();
 
         proxy.getAcmeService().offerHttpChallenge("test-token-xyz",
@@ -133,7 +134,7 @@ class BanEnforcementTest {
 
     @Test
     void enforcementComesOnlyFromBanRows() throws Exception {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, KEY);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
         proxy = startProxy();
 
         // A PROTECTED (private) IP pushed over the threshold gets no ban row,
@@ -172,7 +173,7 @@ class BanEnforcementTest {
 
     @Test
     void disabledEnforcementLetsBannedIpsThrough() throws Exception {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, KEY);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
         proxy = startProxy();
         BanService.INSTANCE.createBan("203.0.113.160", "test", BanModel.SOURCE_MANUAL, null, null);
 

@@ -7,6 +7,10 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import java.util.List;
+import java.util.Locale;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violations;
 
 public class SiteDomainModel extends Model {
 
@@ -81,6 +85,65 @@ public class SiteDomainModel extends Model {
     static {
         // The hostname is the human title (breadcrumbs, relation pickers) instead of "SiteDomain #id".
         SCHEMA.setDisplayFields(HOSTNAME);
+        SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row == null) return;
+            String hostname = (String) effective(row, HOSTNAME);
+            if (hostname != null) {
+                String normalized = hostname.trim();
+                if (!"regex".equals(effective(row, MATCH_TYPE))) {
+                    normalized = normalized.toLowerCase(Locale.ROOT);
+                }
+                row.set(HOSTNAME, normalized);
+            }
+            Integer siteId = (Integer) effective(row, SITE_ID);
+            Row site = siteId != null ? Models.get(SiteModel.class).findById(siteId) : null;
+            if (site == null || !SiteModel.SITE_TYPE_TLS_PASSTHROUGH
+                    .equals(site.get(SiteModel.SITE_TYPE))) return;
+            row.set(FORCE_SSL, false);
+            row.set(EXCLUDE_FROM_LETSENCRYPT, true);
+            validateTlsPassthroughValues(row);
+        });
+    }
+
+    /** Enforces the model-level invariants of an encrypted, pre-HTTP route. */
+    public static void validateTlsPassthroughValues(Row row) {
+        String path = (String) effective(row, PATH);
+        if (path != null && !path.isBlank() && !"/".equals(path.trim())) {
+            throw violation("path", path, "tls_passthrough_no_path");
+        }
+        if (Boolean.TRUE.equals(effective(row, STRIP_PATH))) {
+            throw violation("strip_path", true, "tls_passthrough_no_http_options");
+        }
+        Object certificateId = effective(row, CERTIFICATE_ID);
+        if (certificateId != null) {
+            throw violation("certificate_id", certificateId, "tls_passthrough_backend_certificate");
+        }
+        if (Boolean.TRUE.equals(effective(row, HSTS_ENABLED))
+                || Boolean.TRUE.equals(effective(row, HSTS_SUBDOMAINS))) {
+            throw violation("hsts_enabled", effective(row, HSTS_ENABLED),
+                "tls_passthrough_no_http_options");
+        }
+        if (hasValues(effective(row, CUSTOM_HEADERS)) || hasValues(effective(row, RESPONSE_HEADERS))) {
+            throw violation("custom_headers", effective(row, CUSTOM_HEADERS),
+                "tls_passthrough_no_http_options");
+        }
+    }
+
+    private static Object effective(Row row, Field<?, ?> field) {
+        if (row.has(field.getName())) return row.get(field.getName());
+        if (!row.has(ID.getName())) return null;
+        Row stored = Models.get(SiteDomainModel.class).findById(row.get(ID));
+        return stored != null ? stored.get(field.getName()) : null;
+    }
+
+    private static boolean hasValues(Object value) {
+        return value instanceof java.util.Map<?, ?> map && !map.isEmpty();
+    }
+
+    private static Violations violation(String field, Object value, String key) {
+        return Violations.ofField(field, value,
+            Microcopy.of(key).withFilter("scope", "violations"));
     }
 
     public List<Row> findBySiteId(int siteId) {

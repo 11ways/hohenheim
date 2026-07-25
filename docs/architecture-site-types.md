@@ -140,14 +140,12 @@ Route changes are atomic: build a new RouteTable, swap with a single volatile re
 
 #### SiteDispatcher Lifecycle
 
-- **Route loading:** Builds new maps atomically (swap, not clear+rebuild). No 404 window.
-- **Site creation:** Incremental -- adds routes for the new site without rebuilding everything.
-- **Site update:** Calls `typeHandler.onSiteUpdated(existingHandler, site, newSettings)`.
-- **Site deletion/disable:** Calls `typeHandler.onSiteRemoved(handler)`, removes routes.
-- **Active connections preserved:** Route swaps don't kill in-flight requests or WebSocket connections.
-- **Shutdown:** Handlers are destroyed before Undertow stops, allowing graceful cleanup.
+- **Route loading:** Captures enabled sites and domains once, builds HTTP and pre-TLS maps, then publishes one generation. No partial or 404 window.
+- **Site changes:** Rebuild the generation after commit; failed builds retain the serving generation.
+- **Active connections:** HTTP requests and upgraded connections lease their generation through completion/connection close. Established TLS passthrough relays keep their selected target.
+- **Shutdown:** Public listeners stop first, then routed handlers and internal schedulers are destroyed.
 
-Route loading uses a single JOIN query instead of N+1 (one query for all sites + domains).
+Route loading uses one query for enabled sites and one for all domains, not an N+1 query per site.
 
 ### Layer 4: Admin UI
 
@@ -177,12 +175,20 @@ The `site_domains` table already has `path` and `strip_path` fields. The SiteDis
 - Exact hostname match first, then longest-prefix path match
 - `strip_path` removes the matched prefix before forwarding
 
-### SSL/TLS Termination
-TLS is a per-domain concern managed in the Domains tab:
+### SSL/TLS Termination and Passthrough
+TLS termination is a per-domain concern managed in the Domains tab:
 - Per-domain certificate selection (Let's Encrypt, custom upload, none)
 - SNI callback in the HTTPS listener selects the right certificate
 - ACME HTTP-01 challenge handling intercepts `/.well-known/acme-challenge/` before normal routing
-- This is complex enough to warrant its own design document
+
+The public TCP listener parses only the bounded ClientHello needed for SNI. It
+then either replays the exact bytes to a `hohenheim:tls_passthrough` backend or
+connects to an internal loopback Undertow TLS listener for HTTP/1.1, HTTP/2,
+gRPC, and WebSockets. HTTP and pre-TLS routes share one immutable generation.
+PROXY protocol v2 preserves source/destination identity below TLS for trusted
+ingress peers and opted-in passthrough backends. QUIC/HTTP3 will require a
+parallel datagram transport; it must reuse route policy rather than being folded
+into the TCP listener.
 
 ### Access Control (future)
 Per-site basic auth, IP allowlists, and auth-request integration. Orthogonal to site type.
@@ -205,6 +211,19 @@ Per-site basic auth, IP allowlists, and auth-request integration. Orthogonal to 
   against the platform trust store INCLUDING hostname (JDK endpoint identification)
 
 **Handler:** `forwarder.forwardTo(URI(scheme, host, port))`. Upstream connection streams request/response with zero-copy IO. WebSocket upgrades are handled transparently.
+
+### TlsPassthroughSiteType
+
+**Settings schema:**
+- `forward_host` (literal IP or DNS hostname, required)
+- `forward_port` (integer, required)
+- `proxy_protocol_v2` (boolean, default: false)
+- `connect_timeout` (integer seconds, bounded)
+
+**Handler:** no HTTP handler. The pre-TLS route snapshot connects directly to
+the backend, optionally emits PROXY v2, replays the ClientHello, and relays both
+directions until close. The backend owns certificates and every application-layer
+policy; model validation refuses HTTP-only domain and site options.
 
 ### StaticSiteType
 

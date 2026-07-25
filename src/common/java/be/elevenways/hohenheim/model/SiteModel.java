@@ -9,10 +9,12 @@ import be.elevenways.zenit.common.orm.behaviour.RevisionableBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 
 import java.util.List;
+import be.elevenways.zenit.common.validation.Violations;
 
 public class SiteModel extends Model {
 
@@ -24,6 +26,7 @@ public class SiteModel extends Model {
 
     /** {@link #STATUS} value for an active site. */
     public static final String STATUS_ACTIVE = "active";
+    public static final String SITE_TYPE_TLS_PASSTHROUGH = "hohenheim:tls_passthrough";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
@@ -107,6 +110,54 @@ public class SiteModel extends Model {
     // admins can diff and restore them from the CMS history tab.
     public static final RevisionableBehaviour REVISIONABLE =
         SCHEMA.addBehaviour(RevisionableBehaviour.create(50));
+
+    static {
+        SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row == null || !SITE_TYPE_TLS_PASSTHROUGH.equals(effective(row, SITE_TYPE))) return;
+            Object authProvider = effective(row, AUTH_PROVIDER_ID);
+            if (authProvider != null) {
+                throw violation("auth_provider_id", authProvider, "tls_passthrough_no_http_auth");
+            }
+            Object accessList = effective(row, ACCESS_LIST_ID);
+            if (accessList != null) {
+                throw violation("access_list_id", accessList, "tls_passthrough_no_access_list");
+            }
+            Object source = effective(row, SOURCE);
+            if (source != null && !"local".equals(source)) {
+                throw violation("source", source, "tls_passthrough_local_only");
+            }
+            Integer id = row.has(ID.getName()) ? row.get(ID) : null;
+            if (id != null) {
+                for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(id)) {
+                    SiteDomainModel.validateTlsPassthroughValues(domain);
+                }
+            }
+        });
+        SCHEMA.addAfterSaveHook(context -> {
+            Row site = context.getRow();
+            if (site == null || !SITE_TYPE_TLS_PASSTHROUGH.equals(effective(site, SITE_TYPE))) return;
+            Integer id = site.get(ID);
+            if (id == null) return;
+            SiteDomainModel domains = Models.get(SiteDomainModel.class);
+            domains.find().where(SiteDomainModel.SITE_ID.eq(id))
+                .assign(SiteDomainModel.FORCE_SSL, false)
+                .assign(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, true)
+                .updateAll();
+        });
+    }
+
+    private static Object effective(Row row, Field<?, ?> field) {
+        if (row.has(field.getName())) return row.get(field.getName());
+        if (!row.has(ID.getName())) return null;
+        Row stored = Models.get(SiteModel.class).findById(row.get(ID));
+        return stored != null ? stored.get(field.getName()) : null;
+    }
+
+    private static Violations violation(String field, Object value, String key) {
+        return Violations.ofField(field, value,
+            Microcopy.of(key).withFilter("scope", "violations"));
+    }
 
     public List<Row> findEnabled() {
         return find()

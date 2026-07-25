@@ -205,8 +205,10 @@ The build produces `build/libs/hohenheim-<version>-server.jar`.
 ├── hohenheim-server.jar          # fat jar (rename the built artifact)
 ├── public/                       # static assets (shipped with the repo)
 ├── settings/
-│   ├── local.dry                 # your overrides (not tracked)
-│   └── local.dry.example         # reference
+│   ├── local.dry                 # Zenit server overrides (not tracked)
+│   ├── local.dry.example         # Zenit reference
+│   ├── hohenheim.dry             # Hohenheim proxy/app settings (not tracked)
+│   └── hohenheim.dry.example     # Hohenheim reference
 ├── data/                         # git-provisioned site checkouts
 ├── hohenheim.db                  # SQLite database (auto-created)
 └── logs/                         # access + domain-miss logs
@@ -214,9 +216,12 @@ The build produces `build/libs/hohenheim-<version>-server.jar`.
 
 ## Configuration
 
-All runtime configuration lives in `settings/local.dry`. Copy the
-[`local.dry.example`](settings/local.dry.example) file and uncomment what you
-need. Values here override Zenit's and Hohenheim's defaults.
+Zenit server settings, including the admin listener, live in `settings/local.dry`.
+Hohenheim's own settings live in `settings/hohenheim.dry`. Copy the matching
+[`local.dry.example`](settings/local.dry.example) and
+[`hohenheim.dry.example`](settings/hohenheim.dry.example) files and uncomment
+what you need. `ZENIT__*` and `HOHENHEIM__*` environment variables override the
+corresponding files.
 
 Most-useful keys:
 
@@ -225,7 +230,14 @@ Most-useful keys:
     // Zenit admin UI
     "network": {
         "port": 3000                       // admin UI port (default 3000)
-    },
+    }
+}
+```
+
+`settings/hohenheim.dry`:
+
+```
+{
 
     // Reverse proxy
     "proxy": {
@@ -235,8 +247,11 @@ Most-useful keys:
         "fallback_address": "http://localhost:8081",  // tried when no site matches
         "ipv6_address": "",                // optional extra listener
         "first_port": 4748,                // first port handed to managed child processes
-        "trusted_proxy_keys": ""           // comma-delimited X-Hohenheim-Key values; a request
-                                           // carrying one may pass the real client IP in X-Real-IP
+        "trusted_proxy_keys": [],           // secret X-Hohenheim-Key values accepted from HTTP proxies
+        "proxy_protocol_trusted_sources": [], // literal IP/CIDR peers allowed to send inbound PROXY v2
+        "tls_client_hello_timeout_seconds": 5,
+        "tls_max_pending_handshakes": 1024,
+        "tls_max_connections": 10000
     },
 
     // Let's Encrypt
@@ -290,12 +305,43 @@ Most-useful keys:
     // Access & stats logging
     "logging": {
         "access_to_file":     true,
-        "access_path":        "/var/log/hohenheim/access.log",
-        "access_to_database": false,
-        "collect_stats":      true
+        "access_path":        "/var/log/hohenheim/access.log"
     }
 }
 ```
+
+`trusted_proxy_keys` used to be documented as a comma-delimited string. Existing
+files using that representation are read for migration, but all new values are
+stored and edited as DRY arrays.
+
+### TLS passthrough and PROXY v2
+
+The `hohenheim:tls_passthrough` site type routes an encrypted TCP stream by the
+SNI hostname in its TLS ClientHello. Hohenheim does not terminate, inspect, or
+modify the backend TLS session. Its settings are `forward_host`, `forward_port`,
+`connect_timeout`, and `proxy_protocol_v2`. The backend owns its
+certificate and protocol stack, so passthrough domains cannot use Hohenheim
+certificates, ACME issuance, paths, header rules, HSTS, access lists, or HTTP auth.
+
+TCP 443 is handled by one Layer-4 listener. Exact SNI routes win over wildcard
+routes, which win over regex routes. Conflicting declarations at the same
+precedence reject the connection. Unknown or absent SNI is sent to Hohenheim's
+internal TLS-termination listener when certificates are available; otherwise it
+is rejected. Route reloads publish the HTTP and pre-TLS tables as one generation.
+
+Inbound PROXY v2 is optional and accepted only when the socket peer matches
+`proxy_protocol_trusted_sources`. Entries must be literal IPv4/IPv6 addresses or
+CIDRs; hostnames are refused. A peer outside that list that sends a PROXY header is
+disconnected. Direct clients remain valid without a header, so deployments that
+require every connection to carry proxy identity must firewall the public listener
+to the configured proxy peers.
+
+When a passthrough site enables `proxy_protocol_v2`, Hohenheim prepends a PROXY v2
+header containing the original source and destination before replaying the exact
+ClientHello bytes. Enable this only for a backend listener explicitly configured
+to accept PROXY v2; an ordinary TLS listener will reject the prefixed stream.
+Connection, DNS, malformed-ClientHello, loop-prevention, and trust-boundary
+failures are rate-limited in the Hohenheim log.
 
 File format is Protoblast's **DRY** (extended JSON with comments). See
 `HohenheimSettings.java` in the source for the authoritative list.
@@ -355,7 +401,7 @@ Per-domain options:
 - `force_ssl` — redirect that domain's HTTP to HTTPS.
 - `hsts_enabled` — emit `Strict-Transport-Security` (only on HTTPS responses,
   per RFC 6797).
-- `ignore_certificates` — exclude from ACME enrollment (useful for `localhost`
+- `exclude_from_letsencrypt` — exclude from ACME enrollment (useful for `localhost`
   or internal hostnames).
 
 ## Site types

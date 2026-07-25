@@ -110,7 +110,7 @@ public class ProxySiteType implements SiteTypeHandler {
         String socketSetting = (String) settings.get("socket");
         String socket = socketSetting != null && !socketSetting.isEmpty() ? socketSetting : null;
         String host = (String) settings.get("forward_host");
-        boolean websocketEnabled = Boolean.TRUE.equals(settings.get("websocket_upgrade"));
+        boolean websocketEnabled = !Boolean.FALSE.equals(settings.get("websocket_upgrade"));
         boolean ignoreCertificates = Boolean.TRUE.equals(settings.get("ignore_certificates"));
         UpstreamProtocol protocol = UpstreamProtocol.fromSetting(settings.get("upstream_protocol"));
         // Default true when absent: sites created before the field existed keep rewriting.
