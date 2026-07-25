@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.security.IpLiterals;
-import be.elevenways.hohenheim.server.sitetype.TlsPassthroughTarget;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -26,68 +25,65 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
-import java.util.function.Predicate;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
-/** Public TLS listener that either terminates through Undertow or preserves the stream for SNI passthrough. */
-public final class TlsMultiplexer implements AutoCloseable {
-
-    @FunctionalInterface
-    public interface Resolver {
-        TlsPassthroughRoutes.Decision resolve(String serverName, String listenerIp);
-    }
+/**
+ * A public TCP listener that resolves connection identity before any protocol is decoded.
+ *
+ * It accepts an optional PROXY protocol v2 header from a configured peer, hands the remaining
+ * stream to a {@link ConnectionRouter}, and relays to the chosen backend. Connections routed to
+ * an internal listener keep their public identity through {@link ConnectionIdentities}; external
+ * backends may instead receive a re-emitted PROXY header.
+ */
+public final class PublicTcpListener implements AutoCloseable {
 
     private static final int COPY_BUFFER_SIZE = 32 * 1024;
-    private static final int TERMINATION_CONNECT_TIMEOUT_MS = 5_000;
 
     private final String bindAddress;
     private final int port;
-    private final int clientHelloTimeoutMillis;
-    private final Resolver resolver;
+    private final int prologueTimeoutMillis;
+    private final ConnectionRouter router;
     private final Supplier<List<String>> trustedProxySources;
-    private final TlsConnectionIdentities connectionIdentities;
+    private final ConnectionIdentities connectionIdentities;
     private final Predicate<String> bannedIpCheck;
     private final Consumer<IOException> listenerFailureHandler;
     private final Semaphore connectionSlots;
-    private final Semaphore pendingHandshakes;
+    private final Semaphore pendingPrologues;
     private final Set<Socket> activeSockets = ConcurrentHashMap.newKeySet();
     private final ExecutorService connections = Executors.newThreadPerTaskExecutor(
-        Thread.ofVirtual().name("tls-multiplexer-", 0).factory());
+        Thread.ofVirtual().name("public-tcp-listener-", 0).factory());
     private final AtomicLong nextFailureLogNanos = new AtomicLong();
     private final AtomicInteger suppressedFailures = new AtomicInteger();
 
-    private volatile @Nullable InetSocketAddress terminationAddress;
     private volatile boolean running;
     private ServerSocket listener;
-    private Thread acceptThread;
 
-    public TlsMultiplexer(String bindAddress, int port, int clientHelloTimeoutMillis,
-                          @Nullable InetSocketAddress terminationAddress, Resolver resolver,
-                           Supplier<List<String>> trustedProxySources,
-                           TlsConnectionIdentities connectionIdentities,
-                           Predicate<String> bannedIpCheck, int maxConnections,
-                           int maxPendingHandshakes, Consumer<IOException> listenerFailureHandler) {
-        if (clientHelloTimeoutMillis < 1) {
-            throw new IllegalArgumentException("ClientHello timeout must be positive");
+    public PublicTcpListener(String bindAddress, int port, int prologueTimeoutMillis,
+                             ConnectionRouter router, Supplier<List<String>> trustedProxySources,
+                             ConnectionIdentities connectionIdentities, Predicate<String> bannedIpCheck,
+                             int maxConnections, int maxPendingPrologues,
+                             Consumer<IOException> listenerFailureHandler) {
+        if (prologueTimeoutMillis < 1) {
+            throw new IllegalArgumentException("Prologue timeout must be positive");
+        }
+        if (maxConnections < 1) {
+            throw new IllegalArgumentException("Maximum connections must be positive");
+        }
+        if (maxPendingPrologues < 1) {
+            throw new IllegalArgumentException("Maximum pending prologues must be positive");
         }
         this.bindAddress = bindAddress;
         this.port = port;
-        this.clientHelloTimeoutMillis = clientHelloTimeoutMillis;
-        this.terminationAddress = terminationAddress;
-        this.resolver = resolver;
+        this.prologueTimeoutMillis = prologueTimeoutMillis;
+        this.router = router;
         this.trustedProxySources = trustedProxySources;
         this.connectionIdentities = connectionIdentities;
         this.bannedIpCheck = bannedIpCheck;
         this.listenerFailureHandler = listenerFailureHandler;
-        if (maxConnections < 1) {
-            throw new IllegalArgumentException("Maximum TLS connections must be positive");
-        }
         this.connectionSlots = new Semaphore(maxConnections);
-        if (maxPendingHandshakes < 1) {
-            throw new IllegalArgumentException("Maximum pending TLS handshakes must be positive");
-        }
-        this.pendingHandshakes = new Semaphore(maxPendingHandshakes);
+        this.pendingPrologues = new Semaphore(maxPendingPrologues);
     }
 
     public synchronized void start() throws IOException {
@@ -97,18 +93,14 @@ public final class TlsMultiplexer implements AutoCloseable {
         created.bind(new InetSocketAddress(InetAddress.getByName(bindAddress), port));
         listener = created;
         running = true;
-        acceptThread = Thread.ofPlatform().daemon(true)
-            .name("tls-multiplexer-accept-" + created.getLocalPort())
+        Thread.ofPlatform().daemon(true)
+            .name("public-tcp-accept-" + created.getLocalPort())
             .start(this::acceptLoop);
     }
 
-    public InetSocketAddress getLocalAddress() {
+    public @Nullable InetSocketAddress getLocalAddress() {
         ServerSocket current = listener;
         return current != null ? (InetSocketAddress) current.getLocalSocketAddress() : null;
-    }
-
-    public void setTerminationAddress(@Nullable InetSocketAddress address) {
-        this.terminationAddress = address;
     }
 
     private void acceptLoop() {
@@ -132,7 +124,7 @@ public final class TlsMultiplexer implements AutoCloseable {
                     closeQuietly(client);
                     continue;
                 }
-                admitted = pendingHandshakes.tryAcquire();
+                admitted = pendingPrologues.tryAcquire();
                 if (!admitted) {
                     closeQuietly(client);
                     connectionSlots.release();
@@ -146,7 +138,7 @@ public final class TlsMultiplexer implements AutoCloseable {
             } catch (IOException | RejectedExecutionException e) {
                 if (client != null) activeSockets.remove(client);
                 closeQuietly(client);
-                if (admitted) pendingHandshakes.release();
+                if (admitted) pendingPrologues.release();
                 if (connectionAdmitted) connectionSlots.release();
             }
         }
@@ -155,10 +147,10 @@ public final class TlsMultiplexer implements AutoCloseable {
     private void handle(Socket client) {
         Socket backend = null;
         InetSocketAddress registeredInternalSource = null;
-        boolean pendingHandshake = true;
+        boolean pendingPrologue = true;
         try {
             DeadlineInputStream deadlineInput = new DeadlineInputStream(
-                client.getInputStream(), client, clientHelloTimeoutMillis);
+                client.getInputStream(), client, prologueTimeoutMillis);
             BufferedInputStream input = new BufferedInputStream(deadlineInput, 8 * 1024);
 
             InetSocketAddress peer = internetAddress(client.getRemoteSocketAddress(), "client source");
@@ -177,57 +169,38 @@ public final class TlsMultiplexer implements AutoCloseable {
                 }
             }
 
-            TlsClientHelloReader.Result hello = TlsClientHelloReader.read(input);
+            ConnectionRouter.Decision decision = router.route(input, originalSource, originalDestination);
             deadlineInput.disableDeadline();
-            pendingHandshakes.release();
-            pendingHandshake = false;
+            pendingPrologues.release();
+            pendingPrologue = false;
             if (bannedIpCheck.test(originalSource.getAddress().getHostAddress())) {
                 return;
             }
-            String serverName = hello.serverName().orElse(null);
-            String listenerIp = originalDestination.getAddress().getHostAddress();
-            TlsPassthroughRoutes.Decision decision = resolver.resolve(serverName, listenerIp);
-            if (decision.action() == TlsPassthroughRoutes.Action.REJECT) return;
-            TlsPassthroughTarget passthrough = decision.target();
-            InetSocketAddress destination;
-            boolean sendProxyProtocol;
-            boolean terminating;
-            int connectTimeout;
-            if (passthrough != null) {
-                destination = null;
-                sendProxyProtocol = passthrough.proxyProtocolV2();
-                connectTimeout = passthrough.connectTimeoutMillis();
-                terminating = false;
-            } else {
-                destination = terminationAddress;
-                if (destination == null) return;
-                // The internal listener learns the public identity from the identity table,
-                // not from a PROXY header: Undertow owns that socket's protocol from byte one.
-                sendProxyProtocol = false;
-                connectTimeout = TERMINATION_CONNECT_TIMEOUT_MS;
-                terminating = true;
-            }
+            BackendChoice choice = decision.backend();
+            if (choice == null) return;
 
-            if (passthrough != null) {
-                backend = BackendConnector.connect(passthrough.host(), passthrough.port(),
-                    connectTimeout, listener.getLocalPort());
-            } else {
+            if (choice.isInternal()) {
                 backend = new Socket();
-                backend.connect(destination, connectTimeout);
+                backend.connect(choice.internalAddress(), choice.connectTimeoutMillis());
+            } else {
+                backend = BackendConnector.connect(choice.host(), choice.port(),
+                    choice.connectTimeoutMillis(), listener.getLocalPort());
             }
             configure(backend);
             activeSockets.add(backend);
-            if (terminating) {
+            if (choice.isInternal()) {
                 registeredInternalSource = internetAddress(
-                    backend.getLocalSocketAddress(), "internal TLS source");
+                    backend.getLocalSocketAddress(), "internal listener source");
                 connectionIdentities.register(registeredInternalSource,
                     originalSource, originalDestination);
             }
+
             OutputStream backendOutput = backend.getOutputStream();
-            if (sendProxyProtocol) {
+            if (choice.sendProxyProtocolV2()) {
                 backendOutput.write(ProxyProtocolV2.encode(originalSource, originalDestination));
             }
-            backendOutput.write(hello.replayBytes());
+            byte[] replay = decision.replayBytes();
+            if (replay.length > 0) backendOutput.write(replay);
             backendOutput.flush();
             relay(client, backend, input);
         } catch (IOException | RuntimeException failure) {
@@ -236,7 +209,7 @@ public final class TlsMultiplexer implements AutoCloseable {
             // port would have its restored public identity dropped by this unregister.
             logFailure(client, failure);
         } finally {
-            if (pendingHandshake) pendingHandshakes.release();
+            if (pendingPrologue) pendingPrologues.release();
             if (registeredInternalSource != null) {
                 connectionIdentities.unregister(registeredInternalSource);
             }
@@ -258,9 +231,9 @@ public final class TlsMultiplexer implements AutoCloseable {
         int suppressed = suppressedFailures.getAndSet(0);
         String source = String.valueOf(client.getRemoteSocketAddress());
         if (suppressed == 0) {
-            Blast.log("TLS multiplexer: connection failed from", source, "-", failure.getMessage());
+            Blast.log("Public TCP listener: connection failed from", source, "-", failure.getMessage());
         } else {
-            Blast.log("TLS multiplexer: connection failed from", source, "-", failure.getMessage(),
+            Blast.log("Public TCP listener: connection failed from", source, "-", failure.getMessage(),
                 "(" + suppressed + " similar failures suppressed)");
         }
     }

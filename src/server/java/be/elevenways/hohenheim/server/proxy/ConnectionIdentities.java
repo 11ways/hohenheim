@@ -5,8 +5,8 @@ import io.undertow.server.HttpServerExchange;
 import java.net.InetSocketAddress;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Restores public connection addresses after the multiplexer-to-Undertow loopback hop. */
-final class TlsConnectionIdentities {
+/** Restores public connection addresses after the public-listener-to-Undertow loopback hop. */
+final class ConnectionIdentities {
 
     private record Identity(InetSocketAddress source, InetSocketAddress destination) {}
 

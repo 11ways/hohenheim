@@ -249,9 +249,9 @@ Most-useful keys:
         "first_port": 4748,                // first port handed to managed child processes
         "trusted_proxy_keys": [],           // secret X-Hohenheim-Key values accepted from HTTP proxies
         "proxy_protocol_trusted_sources": [], // literal IP/CIDR peers allowed to send inbound PROXY v2
-        "tls_client_hello_timeout_seconds": 5,
-        "tls_max_pending_handshakes": 1024,
-        "tls_max_connections": 10000
+        "connection_prologue_timeout_seconds": 5,
+        "max_pending_connections": 1024,
+        "max_public_connections": 10000
     },
 
     // Let's Encrypt
@@ -335,6 +335,15 @@ CIDRs; hostnames are refused. A peer outside that list that sends a PROXY header
 disconnected. Direct clients remain valid without a header, so deployments that
 require every connection to carry proxy identity must firewall the public listener
 to the configured proxy peers.
+
+It applies to BOTH public ports, not only TLS. Setting
+`proxy_protocol_trusted_sources` to a non-empty list moves the plain HTTP
+listener behind the same Layer-4 front: Undertow binds a loopback port and the
+public port resolves connection identity first, so the recovered source drives
+bans, access logs and `X-Real-IP`/`X-Forwarded-For`, and the recovered
+destination drives per-domain `listen_on` matching. With an empty list (the
+default) the HTTP port stays a direct Undertow listener with no extra hop.
+Unix-socket mode is unaffected: the socket bridge already is that front.
 
 When a passthrough site enables `proxy_protocol_v2`, Hohenheim prepends a PROXY v2
 header containing the original source and destination before replaying the exact
