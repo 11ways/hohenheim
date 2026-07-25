@@ -66,11 +66,13 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
-        public static final SettingDefinition<Integer> TLS_CLIENT_HELLO_TIMEOUT_SECONDS = GROUP
-            .buildSetting("tls_client_hello_timeout_seconds", Integer.class)
+        public static final SettingDefinition<Integer> CONNECTION_PROLOGUE_TIMEOUT_SECONDS = GROUP
+            .buildSetting("connection_prologue_timeout_seconds", Integer.class)
             .defaultValue(5)
             .suffix("s")
-            .description("Maximum time allowed to receive a TLS ClientHello before routing the connection")
+            .description("Maximum time a public connection may take to send everything Hohenheim must "
+                + "read before routing it: an optional PROXY v2 header, plus the TLS ClientHello on "
+                + "the HTTPS port")
             .restartRequired()
             .build();
 
@@ -78,8 +80,9 @@ public class HohenheimSettings {
             .buildStringListSetting("proxy_protocol_trusted_sources")
             .defaultValue(List.of())
             .coercer(Proxy::coerceIpNetworks)
-            .description("IP addresses and CIDR ranges allowed to supply an inbound PROXY protocol v2 header. "
-                + "Direct clients remain supported; an untrusted PROXY header is rejected")
+            .description("IP addresses and CIDR ranges allowed to supply an inbound PROXY protocol v2 header "
+                + "on either public port. A non-empty list also moves the plain HTTP listener behind "
+                + "the shared ingress front. Direct clients remain supported; an untrusted header is rejected")
             .build();
 
         private static SettingDefinition.CoercionResult<List<String>> coerceIpNetworks(Object raw) {
@@ -96,18 +99,19 @@ public class HohenheimSettings {
             return SettingDefinition.CoercionResult.accepted(List.copyOf(result));
         }
 
-        public static final SettingDefinition<Integer> TLS_MAX_PENDING_HANDSHAKES = GROUP
-            .buildSetting("tls_max_pending_handshakes", Integer.class)
+        public static final SettingDefinition<Integer> MAX_PENDING_CONNECTIONS = GROUP
+            .buildSetting("max_pending_connections", Integer.class)
             .defaultValue(1024)
-            .description("Maximum simultaneous connections still sending a TLS ClientHello; excess connections "
-                + "are closed immediately to bound slow-client memory and file-descriptor use")
+            .description("Maximum simultaneous connections per public listener that have not finished their "
+                + "prologue; excess connections are closed immediately to bound slow-client memory "
+                + "and file-descriptor use")
             .restartRequired()
             .build();
 
-        public static final SettingDefinition<Integer> TLS_MAX_CONNECTIONS = GROUP
-            .buildSetting("tls_max_connections", Integer.class)
+        public static final SettingDefinition<Integer> MAX_PUBLIC_CONNECTIONS = GROUP
+            .buildSetting("max_public_connections", Integer.class)
             .defaultValue(10_000)
-            .description("Maximum simultaneous client connections accepted by each public TLS listener")
+            .description("Maximum simultaneous client connections accepted by each public listener")
             .restartRequired()
             .build();
 

@@ -11,11 +11,13 @@
         // Secret values accepted in X-Hohenheim-Key from upstream HTTP proxies.
         //"trusted_proxy_keys": ["replace-with-a-random-key"],
 
-        // Literal IP/CIDR peers allowed to prepend PROXY protocol v2 on TLS.
+        // Literal IP/CIDR peers allowed to prepend PROXY protocol v2, on BOTH public
+        // ports. A non-empty list also moves the plain HTTP listener behind the
+        // Layer-4 ingress front; an empty list keeps it a direct listener.
         //"proxy_protocol_trusted_sources": ["127.0.0.1/32", "::1/128"],
-        //"tls_client_hello_timeout_seconds": 5,
-        //"tls_max_pending_handshakes": 1024,
-        //"tls_max_connections": 10000
+        //"connection_prologue_timeout_seconds": 5,
+        //"max_pending_connections": 1024,
+        //"max_public_connections": 10000
     },
     "ssl": {
         //"letsencrypt_enabled": false

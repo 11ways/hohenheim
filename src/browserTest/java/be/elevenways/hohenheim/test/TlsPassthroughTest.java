@@ -68,11 +68,11 @@ class TlsPassthroughTest {
         HohenheimSettings.VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of());
         HohenheimSettings.VALUES.setValue(
-            HohenheimSettings.Proxy.TLS_CLIENT_HELLO_TIMEOUT_SECONDS, 5);
+            HohenheimSettings.Proxy.CONNECTION_PROLOGUE_TIMEOUT_SECONDS, 5);
         HohenheimSettings.VALUES.setValue(
-            HohenheimSettings.Proxy.TLS_MAX_CONNECTIONS, 10_000);
+            HohenheimSettings.Proxy.MAX_PUBLIC_CONNECTIONS, 10_000);
         HohenheimSettings.VALUES.setValue(
-            HohenheimSettings.Proxy.TLS_MAX_PENDING_HANDSHAKES, 1024);
+            HohenheimSettings.Proxy.MAX_PENDING_CONNECTIONS, 1024);
     }
 
     @Test
@@ -211,7 +211,7 @@ class TlsPassthroughTest {
     void clientHelloTimeoutIsAnAbsoluteDeadlineNotAnIdleTimeout() throws Exception {
         resetDatabase();
         HohenheimSettings.VALUES.setValue(
-            HohenheimSettings.Proxy.TLS_CLIENT_HELLO_TIMEOUT_SECONDS, 1);
+            HohenheimSettings.Proxy.CONNECTION_PROLOGUE_TIMEOUT_SECONDS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         rawBackend.setSoTimeout(1_500);
         setupPassthrough("slow.example.test", "exact", rawBackend.getLocalPort(), false);
@@ -238,7 +238,7 @@ class TlsPassthroughTest {
     void completedClientHelloRemovesTheHandshakeDeadlineFromTheRelay() throws Exception {
         resetDatabase();
         HohenheimSettings.VALUES.setValue(
-            HohenheimSettings.Proxy.TLS_CLIENT_HELLO_TIMEOUT_SECONDS, 1);
+            HohenheimSettings.Proxy.CONNECTION_PROLOGUE_TIMEOUT_SECONDS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         CompletableFuture<Void> backend = CompletableFuture.runAsync(() -> {
             try (Socket socket = rawBackend.accept()) {
@@ -277,7 +277,7 @@ class TlsPassthroughTest {
     @Test
     void activeConnectionLimitRejectsExcessTlsClients() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TLS_MAX_CONNECTIONS, 1);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.MAX_PUBLIC_CONNECTIONS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         CompletableFuture<Void> accepted = new CompletableFuture<>();
         CompletableFuture<Void> release = new CompletableFuture<>();
@@ -311,7 +311,7 @@ class TlsPassthroughTest {
     @Test
     void pendingHandshakeLimitRejectsExcessSlowClients() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TLS_MAX_PENDING_HANDSHAKES, 1);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.MAX_PENDING_CONNECTIONS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         setupPassthrough("pending.example.test", "exact", rawBackend.getLocalPort(), false);
         startProxy();

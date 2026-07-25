@@ -181,14 +181,20 @@ TLS termination is a per-domain concern managed in the Domains tab:
 - SNI callback in the HTTPS listener selects the right certificate
 - ACME HTTP-01 challenge handling intercepts `/.well-known/acme-challenge/` before normal routing
 
-The public TCP listener parses only the bounded ClientHello needed for SNI. It
-then either replays the exact bytes to a `hohenheim:tls_passthrough` backend or
+`PublicTcpListener` is the shared public-port front: it accepts an optional
+PROXY v2 header from a configured peer, hands the stream to a
+`ConnectionRouter`, and relays to the chosen backend. Two routers exist.
+`TlsSniRouter` parses only the bounded ClientHello needed for SNI and then
+either replays the exact bytes to a `hohenheim:tls_passthrough` backend or
 connects to an internal loopback Undertow TLS listener for HTTP/1.1, HTTP/2,
-gRPC, and WebSockets. HTTP and pre-TLS routes share one immutable generation.
-PROXY protocol v2 preserves source/destination identity below TLS for trusted
-ingress peers and opted-in passthrough backends. QUIC/HTTP3 will require a
-parallel datagram transport; it must reuse route policy rather than being folded
-into the TCP listener.
+gRPC, and WebSockets. `InternalListenerRouter` consumes nothing and is what puts
+the plain HTTP port behind the same ingress when trusted peers are configured.
+
+Identity survives the loopback hop through `ConnectionIdentities`, keyed by the
+internal socket's ephemeral source address, so Undertow exchanges see the public
+source and destination. HTTP and pre-TLS routes share one immutable generation.
+QUIC/HTTP3 will require a parallel datagram transport; it must reuse route policy
+and this identity seam rather than being folded into the TCP listener.
 
 ### Access Control (future)
 Per-site basic auth, IP allowlists, and auth-request integration. Orthogonal to site type.

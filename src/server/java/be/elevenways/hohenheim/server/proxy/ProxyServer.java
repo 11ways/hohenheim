@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.session.InMemorySessionStore;
 import be.elevenways.zenit.common.session.SessionStore;
 import io.undertow.Undertow;
@@ -23,6 +24,7 @@ import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * The reverse proxy server that listens on the proxy ports (80/443)
@@ -44,7 +46,7 @@ public class ProxyServer {
     private final HttpHandler handler;
     private final CertificateStore certificateStore;
     private final AcmeService acmeService;
-    private final TlsConnectionIdentities tlsConnectionIdentities;
+    private final ConnectionIdentities connectionIdentities;
 
     // Proxy-auth sessions: a dedicated store, fully separate from the admin Zenit.SESSION_STORE.
     // In-memory by default; a DbSessionStore (backed by site_sessions) is a drop-in here.
@@ -52,8 +54,12 @@ public class ProxyServer {
 
     private Undertow httpServer;
     private Undertow httpsServer;
-    private final List<TlsMultiplexer> httpsMultiplexers = new ArrayList<>();
+    private final List<PublicTcpListener> httpFrontListeners = new ArrayList<>();
+    private final List<PublicTcpListener> httpsFrontListeners = new ArrayList<>();
+    private volatile InetSocketAddress publicHttpAddress;
     private volatile InetSocketAddress publicHttpsAddress;
+    private volatile InetSocketAddress httpTerminationAddress;
+    private volatile InetSocketAddress httpsTerminationAddress;
     private UnixSocketListenerBridge httpSocketBridge;
 
     private volatile State httpState = State.STOPPED;
@@ -66,7 +72,7 @@ public class ProxyServer {
     public ProxyServer() {
         this.certificateStore = new CertificateStore();
         this.acmeService = new AcmeService(certificateStore);
-        this.tlsConnectionIdentities = new TlsConnectionIdentities();
+        this.connectionIdentities = new ConnectionIdentities();
         long sessionTtl = HohenheimSettings.VALUES.getValue(HohenheimSettings.ProxyAuth.SESSION_TTL_SECONDS);
         this.proxySessionStore = new InMemorySessionStore(sessionTtl);
         this.dispatcher = new SiteDispatcher(acmeService, proxySessionStore);
@@ -79,7 +85,7 @@ public class ProxyServer {
                 .addEncodingHandler("gzip", new GzipEncodingProvider(), 100)
                 .addEncodingHandler("deflate", new DeflateEncodingProvider(), 50));
         this.handler = exchange -> {
-            tlsConnectionIdentities.restore(exchange);
+            connectionIdentities.restore(exchange);
             String contentType = exchange.getRequestHeaders().getFirst(Headers.CONTENT_TYPE);
             if (contentType != null && contentType.startsWith("application/grpc")) {
                 dispatcher.handleRequest(exchange);
@@ -145,42 +151,107 @@ public class ProxyServer {
         int httpPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
         String socketPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_SOCKET_PATH);
         boolean socketMode = socketPath != null && !socketPath.isBlank();
+        // A configured PROXY v2 peer set means the public HTTP port must resolve connection
+        // identity before Undertow decodes a request. In socket mode the bridge already is
+        // that front, and with no configured peer nothing may send a header, so the plain
+        // public listener stays hop-free.
+        boolean proxyProtocolIngress = !socketMode && !trustedProxyProtocolSources().isEmpty();
+        boolean internalOnly = socketMode || proxyProtocolIngress;
 
         try {
             Undertow.Builder builder = Undertow.builder()
-                .addHttpListener(socketMode ? 0 : httpPort, socketMode ? "127.0.0.1" : "0.0.0.0")
+                .addHttpListener(internalOnly ? 0 : httpPort, internalOnly ? "127.0.0.1" : "0.0.0.0")
                 .setServerOption(UndertowOptions.ENABLE_HTTP2, true)
                 .setIoThreads(IO_THREADS)
                 .setHandler(handler);
 
-            if (!socketMode) addIpv6Listener(builder, httpPort, null);
+            if (!internalOnly) addIpv6Listener(builder, httpPort, null);
             httpServer = builder.build();
 
             httpServer.start();
+            InetSocketAddress undertowAddress = (InetSocketAddress) getHttpListenerInfo().getAddress();
             if (socketMode) {
-                int loopbackPort = ((InetSocketAddress) getHttpListenerInfo().getAddress()).getPort();
                 String permissions = HohenheimSettings.VALUES.getValue(
                     HohenheimSettings.Proxy.HTTP_SOCKET_PERMISSIONS);
                 httpSocketBridge = new UnixSocketListenerBridge(
-                    Path.of(socketPath.trim()), loopbackPort, permissions);
+                    Path.of(socketPath.trim()), undertowAddress.getPort(), permissions);
+            } else if (proxyProtocolIngress) {
+                httpTerminationAddress = undertowAddress;
+                startPublicListeners(httpFrontListeners, httpPort,
+                    new InternalListenerRouter(() -> httpTerminationAddress),
+                    this::handleHttpListenerFailure);
+                publicHttpAddress = httpFrontListeners.get(0).getLocalAddress();
+            } else {
+                publicHttpAddress = undertowAddress;
             }
             httpState = State.RUNNING;
             httpFailureReason = null;
             Blast.log(socketMode ? "Proxy HTTP listening on Unix socket" : "Proxy HTTP listening on port",
-                      socketMode ? httpSocketBridge.getSocketPath() : httpPort,
-                      "(" + dispatcher.getExactRouteCount() + " exact,",
+                      socketMode ? httpSocketBridge.getSocketPath() : publicHttpAddress.getPort(),
+                      proxyProtocolIngress ? "(PROXY v2 ingress," : "(",
+                      dispatcher.getExactRouteCount() + " exact,",
                       dispatcher.getWildcardRouteCount() + " wildcard routes)");
         } catch (Exception e) {
             httpState = State.FAILED;
             httpFailureReason = e.getMessage();
-            if (httpSocketBridge != null) {
-                httpSocketBridge.close();
-                httpSocketBridge = null;
-            }
-            if (httpServer != null) httpServer.stop();
-            httpServer = null;
+            stopHttpResources();
             Blast.log("PROXY HTTP STARTUP FAILED:", e.getMessage());
         }
+    }
+
+    private synchronized void handleHttpListenerFailure(IOException failure) {
+        if (httpState == State.STOPPED) return;
+        stopHttpResources();
+        httpState = State.FAILED;
+        httpFailureReason = failure.getMessage();
+        Blast.log("PROXY HTTP LISTENER FAILED:", failure.getMessage());
+    }
+
+    /**
+     * Binds the public IPv4 listener and, when configured, the extra IPv6 one.
+     *
+     * @throws IOException when a listener cannot bind; already-bound ones stay in the list
+     *                     so the caller's teardown closes them
+     */
+    private void startPublicListeners(List<PublicTcpListener> target, int port,
+                                      ConnectionRouter router,
+                                      Consumer<IOException> failureHandler) throws IOException {
+        int prologueTimeout = boundedSetting(HohenheimSettings.Proxy.CONNECTION_PROLOGUE_TIMEOUT_SECONDS,
+            "proxy.connection_prologue_timeout_seconds", 1, 300) * 1000;
+        int maxPending = boundedSetting(HohenheimSettings.Proxy.MAX_PENDING_CONNECTIONS,
+            "proxy.max_pending_connections", 1, 100_000);
+        int maxConnections = boundedSetting(HohenheimSettings.Proxy.MAX_PUBLIC_CONNECTIONS,
+            "proxy.max_public_connections", 1, 1_000_000);
+
+        PublicTcpListener ipv4 = new PublicTcpListener("0.0.0.0", port, prologueTimeout, router,
+            ProxyServer::trustedProxyProtocolSources, connectionIdentities, dispatcher::isBanned,
+            maxConnections, maxPending, failureHandler);
+        ipv4.start();
+        target.add(ipv4);
+
+        String ipv6Address = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS);
+        if (ipv6Address == null || ipv6Address.isBlank()) return;
+        int ipv6Port = port == 0 ? ipv4.getLocalAddress().getPort() : port;
+        PublicTcpListener ipv6 = new PublicTcpListener(ipv6Address.trim(), ipv6Port, prologueTimeout,
+            router, ProxyServer::trustedProxyProtocolSources, connectionIdentities,
+            dispatcher::isBanned, maxConnections, maxPending, failureHandler);
+        ipv6.start();
+        target.add(ipv6);
+    }
+
+    private static List<String> trustedProxyProtocolSources() {
+        List<String> configured = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES);
+        return configured != null ? configured : List.of();
+    }
+
+    private static int boundedSetting(SettingDefinition<Integer> definition, String path,
+                                      int minimum, int maximum) {
+        int value = HohenheimSettings.VALUES.getValue(definition);
+        if (value < minimum || value > maximum) {
+            throw new IllegalArgumentException(path + " must be between " + minimum + " and " + maximum);
+        }
+        return value;
     }
 
     private void startHttpsListener() {
@@ -195,11 +266,10 @@ public class ProxyServer {
         int httpsPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT);
 
         try {
-            InetSocketAddress terminationAddress = null;
             Exception terminationFailure = null;
             if (!certificateStore.isEmpty()) {
                 try {
-                    terminationAddress = startHttpsTermination();
+                    httpsTerminationAddress = startHttpsTermination();
                 } catch (Exception e) {
                     terminationFailure = e;
                     if (!dispatcher.hasTlsPassthroughRoutes()) throw e;
@@ -207,52 +277,16 @@ public class ProxyServer {
                         e.getMessage());
                 }
             }
-            int helloTimeoutSeconds = HohenheimSettings.VALUES.getValue(
-                HohenheimSettings.Proxy.TLS_CLIENT_HELLO_TIMEOUT_SECONDS);
-            if (helloTimeoutSeconds < 1 || helloTimeoutSeconds > 300) {
-                throw new IllegalArgumentException(
-                    "proxy.tls_client_hello_timeout_seconds must be between 1 and 300");
-            }
-            int maxPendingHandshakes = HohenheimSettings.VALUES.getValue(
-                HohenheimSettings.Proxy.TLS_MAX_PENDING_HANDSHAKES);
-            if (maxPendingHandshakes < 1 || maxPendingHandshakes > 100_000) {
-                throw new IllegalArgumentException(
-                    "proxy.tls_max_pending_handshakes must be between 1 and 100000");
-            }
-            int maxConnections = HohenheimSettings.VALUES.getValue(
-                HohenheimSettings.Proxy.TLS_MAX_CONNECTIONS);
-            if (maxConnections < 1 || maxConnections > 1_000_000) {
-                throw new IllegalArgumentException(
-                    "proxy.tls_max_connections must be between 1 and 1000000");
-            }
 
-            TlsMultiplexer ipv4 = new TlsMultiplexer("0.0.0.0", httpsPort,
-                helloTimeoutSeconds * 1000, terminationAddress, dispatcher::resolveTlsRoute,
-                () -> HohenheimSettings.VALUES.getValue(
-                    HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES),
-                tlsConnectionIdentities, dispatcher::isBanned, maxConnections, maxPendingHandshakes,
+            startPublicListeners(httpsFrontListeners, httpsPort,
+                new TlsSniRouter(dispatcher::resolveTlsRoute, () -> httpsTerminationAddress),
                 this::handleHttpsListenerFailure);
-            ipv4.start();
-            httpsMultiplexers.add(ipv4);
-            publicHttpsAddress = ipv4.getLocalAddress();
+            publicHttpsAddress = httpsFrontListeners.get(0).getLocalAddress();
 
-            String ipv6Address = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS);
-            if (ipv6Address != null && !ipv6Address.isBlank()) {
-                int ipv6Port = httpsPort == 0 ? publicHttpsAddress.getPort() : httpsPort;
-                TlsMultiplexer ipv6 = new TlsMultiplexer(ipv6Address.trim(), ipv6Port,
-                    helloTimeoutSeconds * 1000, terminationAddress, dispatcher::resolveTlsRoute,
-                    () -> HohenheimSettings.VALUES.getValue(
-                        HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES),
-                    tlsConnectionIdentities, dispatcher::isBanned, maxConnections, maxPendingHandshakes,
-                    this::handleHttpsListenerFailure);
-                ipv6.start();
-                httpsMultiplexers.add(ipv6);
-            }
-
-            dispatcher.setHttpsAvailable(terminationAddress != null);
+            dispatcher.setHttpsAvailable(httpsTerminationAddress != null);
             httpsState = State.RUNNING;
             httpsFailureReason = terminationFailure != null ? terminationFailure.getMessage() : null;
-            Blast.log("Proxy HTTPS multiplexer listening on port", publicHttpsAddress.getPort(),
+            Blast.log("Proxy HTTPS listening on port", publicHttpsAddress.getPort(),
                 "(" + certificateStore.getCertificateCount() + " certificates,",
                 dispatcher.hasTlsPassthroughRoutes() ? "passthrough enabled)" : "no passthrough routes)");
         } catch (Exception e) {
@@ -307,14 +341,7 @@ public class ProxyServer {
 
     public synchronized void stop() {
         acmeService.stop();
-        if (httpSocketBridge != null) {
-            httpSocketBridge.close();
-            httpSocketBridge = null;
-        }
-        if (httpServer != null) {
-            httpServer.stop();
-            httpServer = null;
-        }
+        stopHttpResources();
         stopHttpsResources();
         dispatcher.shutdown();
         proxySessionStore.deleteExpired();
@@ -365,10 +392,7 @@ public class ProxyServer {
 
         if (wantsTermination && httpsServer == null) {
             try {
-                InetSocketAddress terminationAddress = startHttpsTermination();
-                for (TlsMultiplexer multiplexer : httpsMultiplexers) {
-                    multiplexer.setTerminationAddress(terminationAddress);
-                }
+                httpsTerminationAddress = startHttpsTermination();
                 dispatcher.setHttpsAvailable(true);
                 httpsFailureReason = null;
                 Blast.log("Proxy HTTPS termination enabled after certificate reload");
@@ -382,9 +406,7 @@ public class ProxyServer {
                 }
             }
         } else if (!wantsTermination && httpsServer != null) {
-            for (TlsMultiplexer multiplexer : httpsMultiplexers) {
-                multiplexer.setTerminationAddress(null);
-            }
+            httpsTerminationAddress = null;
             httpsServer.stop();
             httpsServer = null;
             dispatcher.setHttpsAvailable(false);
@@ -408,17 +430,40 @@ public class ProxyServer {
         return listeners.isEmpty() ? null : listeners.get(0);
     }
 
-    /** Public HTTPS multiplexer address; unlike getHttpsListenerInfo this is reachable by clients. */
+    /** Public HTTPS address; unlike getHttpsListenerInfo this is the one clients reach. */
     public InetSocketAddress getHttpsAddress() {
         return publicHttpsAddress;
     }
 
-    private void stopHttpsResources() {
-        for (TlsMultiplexer multiplexer : httpsMultiplexers) {
-            multiplexer.close();
+    /** Public HTTP address; with PROXY v2 ingress this differs from the internal Undertow listener. */
+    public InetSocketAddress getHttpAddress() {
+        return publicHttpAddress;
+    }
+
+    private void stopHttpResources() {
+        for (PublicTcpListener listener : httpFrontListeners) {
+            listener.close();
         }
-        httpsMultiplexers.clear();
+        httpFrontListeners.clear();
+        publicHttpAddress = null;
+        httpTerminationAddress = null;
+        if (httpSocketBridge != null) {
+            httpSocketBridge.close();
+            httpSocketBridge = null;
+        }
+        if (httpServer != null) {
+            httpServer.stop();
+            httpServer = null;
+        }
+    }
+
+    private void stopHttpsResources() {
+        for (PublicTcpListener listener : httpsFrontListeners) {
+            listener.close();
+        }
+        httpsFrontListeners.clear();
         publicHttpsAddress = null;
+        httpsTerminationAddress = null;
         if (httpsServer != null) {
             httpsServer.stop();
             httpsServer = null;
