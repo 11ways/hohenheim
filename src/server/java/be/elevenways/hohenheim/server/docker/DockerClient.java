@@ -196,6 +196,28 @@ public class DockerClient {
 
     /** Conditional pull with optional private-registry credentials. */
     public void ensureImage(String image, String tag, RegistryAuth auth) throws IOException {
+        // Digest-pinned reference (repo@sha256:...): present iff the digest is in
+        // RepoDigests; pulls pass the digest via the tag parameter per the Engine API.
+        int at = image.indexOf('@');
+        if (at > 0) {
+            String repo = image.substring(0, at);
+            String digest = image.substring(at + 1);
+            String ref = repo + "@" + digest;
+            for (Object entry : listImages()) {
+                Object repoDigests = ((Map<?, ?>) entry).get("RepoDigests");
+                if (repoDigests instanceof List<?> digests && digests.contains(ref)) {
+                    return;
+                }
+            }
+            String path = "/images/create?fromImage=" + enc(repo) + "&tag=" + enc(digest);
+            Map<String, String> headers = auth == null ? null : Map.of("X-Registry-Auth", auth.encode());
+            String body = new String(
+                exchange("POST", path, null, null, headers, LONG_OP_TIMEOUT_MS).body(),
+                StandardCharsets.UTF_8);
+            throwIfStreamError(body, "Docker image pull for " + ref);
+            return;
+        }
+
         String repo = image;
         String resolvedTag = tag;
         int colon = image.lastIndexOf(':');
