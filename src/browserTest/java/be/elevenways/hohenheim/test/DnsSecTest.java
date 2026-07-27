@@ -52,14 +52,9 @@ class DnsSecTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        File db = File.createTempFile("hohenheim-dnssec", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-
         SiteTypes.boot();
         HohenheimEndpoints.init();
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
 
         int zoneId = createZone("signed.example");

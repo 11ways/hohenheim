@@ -59,11 +59,6 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         // Use temp files for the test database and the settings write-back so
         // tests never pollute the working directory or the developer's local.dry.
         try {
-            File db = File.createTempFile("hohenheim-test", ".db");
-            db.delete();
-            db.deleteOnExit();
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-
             File settingsDry = File.createTempFile("hohenheim-test-settings", ".dry");
             settingsDry.delete();
             settingsDry.deleteOnExit();
@@ -80,7 +75,13 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         HohenheimEndpoints.init();
         // Force-load the zenit-cms panel routes (all /{panel}/... endpoints).
         Object cmsRoutes = ResourcePageEndpoints.LIST;
-        HohenheimDatabase.init();
+        // Claims the database path too, AFTER HohenheimSettingsFiles.load() so a loaded
+        // settings file can never point the suite at a developer's real database.
+        try {
+            TestDatabases.freshDatabase();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create the test database", e);
+        }
 
         // Run the real boot path (MODELS discovery registers the model singletons); HTTP auto-start
         // is disabled inside ensureBooted() since this base binds its own server below.

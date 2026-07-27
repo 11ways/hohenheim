@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -32,11 +33,7 @@ class NeverBanHostnamesTest {
     static void initDb() throws Exception {
         if (initialized) return;
         initialized = true;
-        File db = File.createTempFile("hohenheim-neverban-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
     }
 

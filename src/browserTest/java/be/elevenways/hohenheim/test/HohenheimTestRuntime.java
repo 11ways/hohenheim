@@ -33,11 +33,8 @@ public final class HohenheimTestRuntime {
         }
 
         try {
-            File db = File.createTempFile("hohenheim-runtime-test", ".db");
-            db.deleteOnExit();
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-            HohenheimDatabase.init();
-        } catch (IOException exception) {
+            TestDatabases.freshDatabase();
+        } catch (Exception exception) {
             throw new IllegalStateException("Failed to create the Hohenheim test datasource", exception);
         }
     }

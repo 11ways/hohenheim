@@ -26,14 +26,9 @@ class ProxyServerStateTest {
         if (initialized) return;
         initialized = true;
 
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-
         SiteTypes.boot();
         HohenheimEndpoints.init();
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
         ServerZenitRuntime.init();
         Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }

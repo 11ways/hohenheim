@@ -42,14 +42,9 @@ class ManagedNodeSocketTest {
         nodeAvailable = new File("/usr/local/bin/node").canExecute()
             || new File("/usr/bin/node").canExecute();
 
-        File db = File.createTempFile("hohenheim-nodesock", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-
         SiteTypes.boot();
         HohenheimEndpoints.init();
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
         Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
