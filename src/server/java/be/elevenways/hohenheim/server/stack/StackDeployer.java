@@ -1,0 +1,502 @@
+package be.elevenways.hohenheim.server.stack;
+
+import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+
+/**
+ * Executes a {@link StackSpec} against one Docker daemon: network, volumes, then
+ * services in dependency order with condition gating. Everything it creates carries
+ * ownership labels; same-named resources WITHOUT our labels are refused unless the
+ * spec opts into adoption, so a deploy can never destroy someone else's container.
+ */
+public class StackDeployer {
+
+    /** Ownership label carrying the stack name. */
+    public static final String LABEL_STACK = "be.elevenways.hohenheim.stack";
+
+    /** Ownership label carrying the service name. */
+    public static final String LABEL_SERVICE = "be.elevenways.hohenheim.stack.service";
+
+    private static final int STOP_GRACE_SECONDS = 10;
+    private static final long CONDITION_POLL_MS = 500;
+    private static final long STARTED_WAIT_CAP_MS = 30_000;
+    private static final long HEALTHY_WAIT_BASE_MS = 120_000;
+
+    private final DockerClient docker;
+    private final Consumer<String> log;
+
+    public StackDeployer(@NonNull DockerClient docker, @Nullable Consumer<String> log) {
+        this.docker = docker;
+        this.log = log != null ? log : line -> {};
+    }
+
+    // -- naming ---------------------------------------------------------------
+
+    public static @NonNull String networkName(@NonNull StackSpec spec) {
+        return "hohenheim-stack-" + spec.name();
+    }
+
+    public static @NonNull String containerName(@NonNull StackSpec spec, @NonNull String service) {
+        return "hohenheim-stack-" + spec.name() + "-" + service;
+    }
+
+    public static @NonNull String volumeName(@NonNull StackSpec spec, StackSpec.@NonNull MountSpec mount) {
+        if (mount.externalName() != null) {
+            return mount.externalName();
+        }
+        return "hohenheim-stack-" + spec.name() + "-" + mount.name();
+    }
+
+    // -- deploy ---------------------------------------------------------------
+
+    /**
+     * Deploy the spec: ensure network and volumes, then per service (dependency
+     * order) pull, replace, upload files, start, and gate on dependency conditions.
+     *
+     * @throws IOException on any Docker failure or refused unowned resource
+     */
+    public void deploy(@NonNull StackSpec spec) throws IOException {
+        log.accept("Deploying stack '" + spec.name() + "' (" + spec.services().size() + " services)");
+        ensureNetwork(spec);
+        ensureVolumes(spec);
+
+        DockerClient.RegistryAuth auth = registryAuthOf(spec);
+
+        for (StackSpec.ServiceSpec service : spec.services()) {
+            awaitDependencies(spec, service);
+            deployService(spec, service, auth);
+        }
+        log.accept("Stack '" + spec.name() + "' deployed");
+    }
+
+    /** Stop every owned container, dependents first (reverse dependency order). */
+    public void stop(@NonNull StackSpec spec) throws IOException {
+        List<StackSpec.ServiceSpec> reversed = new ArrayList<>(spec.services());
+        java.util.Collections.reverse(reversed);
+        for (StackSpec.ServiceSpec service : reversed) {
+            String name = containerName(spec, service.name());
+            Map<String, Object> existing = findOwnedContainer(spec, name, false);
+            if (existing != null) {
+                log.accept("Stopping " + name);
+                docker.stopContainer(idOf(existing), STOP_GRACE_SECONDS);
+            }
+        }
+    }
+
+    /**
+     * Remove every owned container and the stack network; owned volumes only when
+     * {@code removeVolumes} (adopted external volumes are NEVER removed).
+     */
+    public void destroy(@NonNull StackSpec spec, boolean removeVolumes) throws IOException {
+        List<StackSpec.ServiceSpec> reversed = new ArrayList<>(spec.services());
+        java.util.Collections.reverse(reversed);
+        for (StackSpec.ServiceSpec service : reversed) {
+            String name = containerName(spec, service.name());
+            Map<String, Object> existing = findOwnedContainer(spec, name, false);
+            if (existing != null) {
+                log.accept("Removing " + name);
+                docker.removeContainer(idOf(existing), true);
+            }
+        }
+
+        Map<String, Object> network = docker.findNetworkByName(networkName(spec));
+        if (network != null && isOwned(labelsOf(network), spec)) {
+            log.accept("Removing network " + networkName(spec));
+            docker.removeNetwork(networkName(spec));
+        }
+
+        if (removeVolumes) {
+            for (StackSpec.ServiceSpec service : spec.services()) {
+                for (StackSpec.MountSpec mount : service.mounts()) {
+                    if (!StackServiceModelSupport.isVolume(mount) || mount.externalName() != null) {
+                        continue;
+                    }
+                    String volume = volumeName(spec, mount);
+                    try {
+                        Map<String, Object> inspected = docker.inspectVolume(volume);
+                        if (isOwned(labelsOf(inspected), spec)) {
+                            log.accept("Removing volume " + volume);
+                            docker.removeVolume(volume, true);
+                        }
+                    } catch (IOException missing) {
+                        // Already gone.
+                    }
+                }
+            }
+        }
+    }
+
+    /** Live per-service state, best-effort ("missing", "running", "healthy", "unhealthy", "stopped", "starting"). */
+    public @NonNull Map<String, String> status(@NonNull StackSpec spec) {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (StackSpec.ServiceSpec service : spec.services()) {
+            String name = containerName(spec, service.name());
+            try {
+                Map<String, Object> inspected = docker.inspectContainer(name);
+                result.put(service.name(), stateOf(inspected));
+            } catch (IOException missing) {
+                result.put(service.name(), "missing");
+            }
+        }
+        return result;
+    }
+
+    // -- pieces ---------------------------------------------------------------
+
+    private void ensureNetwork(StackSpec spec) throws IOException {
+        String name = networkName(spec);
+        Map<String, Object> existing = docker.findNetworkByName(name);
+        if (existing != null) {
+            if (isOwned(labelsOf(existing), spec)) {
+                return;
+            }
+            if (spec.adoptResources()) {
+                log.accept("Adopting existing network " + name);
+                return;
+            }
+            throw new IOException("Network '" + name + "' exists but is not owned by this stack;"
+                + " enable resource adoption to reuse it");
+        }
+        log.accept("Creating network " + name);
+        docker.createNetwork(name, ownershipLabels(spec, null), spec.subnet(), null);
+    }
+
+    private void ensureVolumes(StackSpec spec) throws IOException {
+        for (StackSpec.ServiceSpec service : spec.services()) {
+            for (StackSpec.MountSpec mount : service.mounts()) {
+                if (!StackServiceModelSupport.isVolume(mount)) {
+                    continue;
+                }
+                String name = volumeName(spec, mount);
+                Map<String, Object> existing = null;
+                try {
+                    existing = docker.inspectVolume(name);
+                } catch (IOException missing) {
+                    // Not there yet.
+                }
+                if (existing != null) {
+                    if (isOwned(labelsOf(existing), spec) || mount.externalName() != null) {
+                        continue;   // ours, or explicitly adopted by exact name
+                    }
+                    if (spec.adoptResources()) {
+                        log.accept("Adopting existing volume " + name);
+                        continue;
+                    }
+                    throw new IOException("Volume '" + name + "' exists but is not owned by this stack;"
+                        + " enable resource adoption (or set an external name) to reuse it");
+                }
+                if (mount.externalName() != null) {
+                    throw new IOException("External volume '" + name + "' does not exist;"
+                        + " create it first or drop the external name");
+                }
+                log.accept("Creating volume " + name);
+                docker.createVolume(name, ownershipLabels(spec, service.name()));
+            }
+        }
+    }
+
+    private void deployService(StackSpec spec, StackSpec.ServiceSpec service,
+                               DockerClient.RegistryAuth auth) throws IOException {
+        String name = containerName(spec, service.name());
+        log.accept("Deploying service '" + service.name() + "' (" + service.image() + ")");
+
+        docker.ensureImage(service.image(), null, auth);
+
+        Map<String, Object> existing = findAnyContainer(name);
+        if (existing != null) {
+            if (!isOwned(labelsOf(configOf(existing)), spec) && !spec.adoptResources()) {
+                throw new IOException("Container '" + name + "' exists but is not owned by this stack;"
+                    + " enable resource adoption to replace it");
+            }
+            log.accept("Replacing container " + name);
+            docker.removeContainer(idOf(existing), true);
+        }
+
+        String id = docker.createContainer(name, containerSpec(spec, service));
+        uploadFiles(id, service);
+        docker.startContainer(id);
+        log.accept("Started " + name);
+    }
+
+    private Map<String, Object> containerSpec(StackSpec spec, StackSpec.ServiceSpec service) {
+        Map<String, Object> container = new LinkedHashMap<>();
+        container.put("Image", service.image());
+
+        if (!service.command().isEmpty()) {
+            container.put("Cmd", service.command());
+        }
+
+        if (!service.environment().isEmpty()) {
+            List<String> env = new ArrayList<>();
+            for (Map.Entry<String, String> variable : service.environment().entrySet()) {
+                env.add(variable.getKey() + "=" + variable.getValue());
+            }
+            container.put("Env", env);
+        }
+
+        Map<String, String> labels = ownershipLabels(spec, service.name());
+        container.put("Labels", labels);
+
+        if (service.healthCmd() != null) {
+            Map<String, Object> health = new LinkedHashMap<>();
+            health.put("Test", List.of("CMD-SHELL", service.healthCmd()));
+            health.put("Interval", service.healthIntervalSeconds() * 1_000_000_000L);
+            health.put("Timeout", service.healthTimeoutSeconds() * 1_000_000_000L);
+            health.put("Retries", service.healthRetries());
+            health.put("StartPeriod", service.healthStartPeriodSeconds() * 1_000_000_000L);
+            container.put("Healthcheck", health);
+        }
+
+        Map<String, Object> exposed = new LinkedHashMap<>();
+        Map<String, Object> bindings = new LinkedHashMap<>();
+        for (StackSpec.PortSpec port : service.ports()) {
+            String key = port.containerPort() + "/" + port.protocol();
+            exposed.put(key, Map.of());
+            Map<String, Object> binding = new LinkedHashMap<>();
+            if (!port.hostIp().isBlank()) {
+                binding.put("HostIp", port.hostIp());
+            }
+            binding.put("HostPort", String.valueOf(port.hostPort()));
+            bindings.put(key, List.of(binding));
+        }
+        if (!exposed.isEmpty()) {
+            container.put("ExposedPorts", exposed);
+        }
+
+        Map<String, Object> hostConfig = new LinkedHashMap<>();
+        if (!bindings.isEmpty()) {
+            hostConfig.put("PortBindings", bindings);
+        }
+
+        List<Map<String, Object>> mounts = new ArrayList<>();
+        for (StackSpec.MountSpec mount : service.mounts()) {
+            Map<String, Object> mountMap = new LinkedHashMap<>();
+            if (StackServiceModelSupport.isVolume(mount)) {
+                mountMap.put("Type", "volume");
+                mountMap.put("Source", volumeName(spec, mount));
+            } else {
+                mountMap.put("Type", "tmpfs");
+            }
+            mountMap.put("Target", mount.containerPath());
+            mounts.add(mountMap);
+        }
+        if (!mounts.isEmpty()) {
+            hostConfig.put("Mounts", mounts);
+        }
+
+        hostConfig.put("RestartPolicy", Map.of("Name", service.restartPolicy()));
+        hostConfig.put("NetworkMode", networkName(spec));
+        ResourceLimits.of(service.memoryLimitMb(), service.cpuLimit()).applyTo(hostConfig);
+        container.put("HostConfig", hostConfig);
+
+        // The service name is the container's DNS alias on the stack network.
+        container.put("NetworkingConfig", Map.of("EndpointsConfig",
+            Map.of(networkName(spec), Map.of("Aliases", List.of(service.name())))));
+
+        return container;
+    }
+
+    /**
+     * Upload the service's config files into the CREATED (not yet started) container
+     * via the archive API -- works against remote daemons, no host bind mounts. The
+     * tar carries each file's mode; parent directories are created by extraction.
+     */
+    private void uploadFiles(String containerId, StackSpec.ServiceSpec service) throws IOException {
+        if (service.files().isEmpty()) {
+            return;
+        }
+        Path staging = Files.createTempDirectory("hohenheim-stack-files");
+        try {
+            for (StackSpec.FileSpec file : service.files()) {
+                String relative = file.containerPath().startsWith("/")
+                    ? file.containerPath().substring(1)
+                    : file.containerPath();
+                if (relative.isBlank() || relative.contains("..")) {
+                    throw new IOException("Refusing config file path '" + file.containerPath() + "'");
+                }
+                Path target = staging.resolve(relative).normalize();
+                if (!target.startsWith(staging)) {
+                    throw new IOException("Refusing config file path '" + file.containerPath() + "'");
+                }
+                Files.createDirectories(target.getParent());
+                Files.writeString(target, file.content());
+                applyMode(target, file.mode());
+            }
+            docker.putArchiveFromDirectory(containerId, "/", staging);
+            log.accept("Uploaded " + service.files().size() + " config file(s)");
+        } finally {
+            deleteRecursively(staging);
+        }
+    }
+
+    private static void applyMode(Path file, String mode) throws IOException {
+        try {
+            int octal = Integer.parseInt(mode, 8);
+            StringBuilder permissions = new StringBuilder(9);
+            String symbols = "rwxrwxrwx";
+            for (int bit = 8; bit >= 0; bit--) {
+                permissions.append((octal & (1 << bit)) != 0 ? symbols.charAt(8 - bit) : '-');
+            }
+            Files.setPosixFilePermissions(file, PosixFilePermissions.fromString(permissions.toString()));
+        } catch (NumberFormatException error) {
+            throw new IOException("Bad file mode '" + mode + "' (expected octal like 0644)");
+        } catch (UnsupportedOperationException ignored) {
+            // Non-POSIX staging filesystem: the tar will carry default modes.
+        }
+    }
+
+    private void awaitDependencies(StackSpec spec, StackSpec.ServiceSpec service) throws IOException {
+        for (StackSpec.DependsSpec dependency : service.dependsOn()) {
+            String name = containerName(spec, dependency.service());
+            boolean needHealthy = "healthy".equals(dependency.condition());
+            long startPeriodMs = 0;
+            for (StackSpec.ServiceSpec candidate : spec.services()) {
+                if (candidate.name().equals(dependency.service())) {
+                    startPeriodMs = candidate.healthStartPeriodSeconds() * 1000L;
+                    break;
+                }
+            }
+            long deadline = System.currentTimeMillis()
+                + (needHealthy ? HEALTHY_WAIT_BASE_MS + startPeriodMs : STARTED_WAIT_CAP_MS);
+
+            log.accept("Waiting for '" + dependency.service() + "' to be "
+                + (needHealthy ? "healthy" : "running"));
+            while (true) {
+                String state = stateOf(docker.inspectContainer(name));
+                if (needHealthy ? "healthy".equals(state)
+                    : ("running".equals(state) || "healthy".equals(state) || "starting".equals(state))) {
+                    break;
+                }
+                if ("unhealthy".equals(state)) {
+                    throw new IOException("Dependency '" + dependency.service() + "' became unhealthy");
+                }
+                if (System.currentTimeMillis() > deadline) {
+                    throw new IOException("Timed out waiting for dependency '" + dependency.service()
+                        + "' to become " + (needHealthy ? "healthy" : "running") + " (state: " + state + ")");
+                }
+                try {
+                    Thread.sleep(CONDITION_POLL_MS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Interrupted while waiting for dependency '"
+                        + dependency.service() + "'");
+                }
+            }
+        }
+    }
+
+    // -- helpers --------------------------------------------------------------
+
+    private static DockerClient.RegistryAuth registryAuthOf(StackSpec spec) {
+        if (spec.registryUser() == null || spec.registryPassword() == null) {
+            return null;
+        }
+        return new DockerClient.RegistryAuth(spec.registryUser(), spec.registryPassword(), spec.registryServer());
+    }
+
+    private Map<String, String> ownershipLabels(StackSpec spec, @Nullable String serviceName) {
+        Map<String, String> labels = new LinkedHashMap<>();
+        labels.put(LABEL_STACK, spec.name());
+        if (serviceName != null) {
+            labels.put(LABEL_SERVICE, serviceName);
+        }
+        return labels;
+    }
+
+    private static boolean isOwned(@Nullable Map<?, ?> labels, StackSpec spec) {
+        return labels != null && spec.name().equals(labels.get(LABEL_STACK));
+    }
+
+    /** Inspect a container by exact name; null when absent. */
+    private @Nullable Map<String, Object> findAnyContainer(String name) throws IOException {
+        try {
+            return docker.inspectContainer(name);
+        } catch (IOException missing) {
+            return null;
+        }
+    }
+
+    /** Inspect a container by name, returning it only when owned by this stack. */
+    private @Nullable Map<String, Object> findOwnedContainer(StackSpec spec, String name,
+                                                             boolean required) throws IOException {
+        Map<String, Object> inspected = findAnyContainer(name);
+        if (inspected == null) {
+            if (required) {
+                throw new IOException("Container '" + name + "' does not exist");
+            }
+            return null;
+        }
+        if (!isOwned(labelsOf(configOf(inspected)), spec)) {
+            if (required) {
+                throw new IOException("Container '" + name + "' is not owned by this stack");
+            }
+            return null;
+        }
+        return inspected;
+    }
+
+    private static String idOf(Map<String, Object> inspected) {
+        return String.valueOf(inspected.get("Id"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static @Nullable Map<String, Object> configOf(Map<String, Object> inspected) {
+        return inspected.get("Config") instanceof Map<?, ?> config
+            ? (Map<String, Object>) config : null;
+    }
+
+    private static @Nullable Map<?, ?> labelsOf(@Nullable Map<String, Object> payload) {
+        return payload != null && payload.get("Labels") instanceof Map<?, ?> labels ? labels : null;
+    }
+
+    /** Container state token: healthy/unhealthy/starting (with healthcheck), else running/stopped. */
+    @SuppressWarnings("unchecked")
+    private static String stateOf(Map<String, Object> inspected) {
+        Object rawState = inspected.get("State");
+        if (!(rawState instanceof Map<?, ?> state)) {
+            return "unknown";
+        }
+        Object health = state.get("Health");
+        if (health instanceof Map<?, ?> healthMap && healthMap.get("Status") instanceof String status) {
+            return status;   // "starting", "healthy", "unhealthy"
+        }
+        return Boolean.TRUE.equals(state.get("Running")) ? "running" : "stopped";
+    }
+
+    private static void deleteRecursively(Path root) {
+        try (Stream<Path> paths = Files.walk(root)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException ignored) {
+                    // best effort
+                }
+            });
+        } catch (IOException ignored) {
+            // best effort
+        }
+    }
+
+    /** Small shared predicates over spec records. */
+    static final class StackServiceModelSupport {
+        static boolean isVolume(StackSpec.MountSpec mount) {
+            return "volume".equals(mount.type());
+        }
+
+        private StackServiceModelSupport() {}
+    }
+}

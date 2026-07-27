@@ -208,6 +208,203 @@ class DockerClientTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void networkLifecycleWithLabelsSubnetAndAliases() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+
+        String networkName = "hohenheim-nettest-" + System.nanoTime();
+        String containerId = null;
+        String networkId = null;
+        try {
+            networkId = docker.createNetwork(networkName,
+                Map.of("be.elevenways.hohenheim.test", "true"), "172.29.111.0/24", "172.29.111.1");
+            assertThat(networkId).isNotBlank();
+
+            Map<String, Object> inspected = docker.inspectNetwork(networkName);
+            assertThat(inspected.get("Name")).isEqualTo(networkName);
+            Map<String, Object> labels = (Map<String, Object>) inspected.get("Labels");
+            assertThat(labels).containsEntry("be.elevenways.hohenheim.test", "true");
+
+            Map<String, Object> found = docker.findNetworkByName(networkName);
+            assertThat(found).isNotNull();
+            assertThat(found.get("Id")).isNotNull();
+            assertThat(docker.findNetworkByName(networkName + "-missing")).isNull();
+
+            containerId = docker.createContainer("hohenheim-nettest-c-" + System.nanoTime(), Map.of(
+                "Image", TEST_IMAGE,
+                "Cmd", List.of("sleep", "30")
+            ));
+            docker.startContainer(containerId);
+            docker.connectContainerToNetwork(networkName, containerId, List.of("svc-alias"));
+
+            Map<String, Object> withContainer = docker.inspectNetwork(networkName);
+            Map<String, Object> containers = (Map<String, Object>) withContainer.get("Containers");
+            assertThat(containers).isNotEmpty();
+
+            docker.disconnectContainerFromNetwork(networkName, containerId, true);
+            Map<String, Object> afterDisconnect = docker.inspectNetwork(networkName);
+            Map<String, Object> remaining = (Map<String, Object>) afterDisconnect.get("Containers");
+            assertThat(remaining == null || remaining.isEmpty()).isTrue();
+        } finally {
+            if (containerId != null) {
+                try {
+                    docker.removeContainer(containerId, true);
+                } catch (IOException ignored) {
+                    // best effort cleanup
+                }
+            }
+            if (networkId != null) {
+                try {
+                    docker.removeNetwork(networkName);
+                } catch (IOException ignored) {
+                    // best effort cleanup
+                }
+            }
+        }
+
+        try {
+            docker.inspectNetwork(networkName);
+            throw new AssertionError("expected inspect of removed network to fail");
+        } catch (IOException expected) {
+            // 404 -> IOException, as intended
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void volumeLifecycleWithLabels() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+
+        String volumeName = "hohenheim-voltest-" + System.nanoTime();
+        try {
+            Map<String, Object> created = docker.createVolume(volumeName,
+                Map.of("be.elevenways.hohenheim.test", "true"));
+            assertThat(created.get("Name")).isEqualTo(volumeName);
+
+            Map<String, Object> inspected = docker.inspectVolume(volumeName);
+            assertThat(inspected.get("Name")).isEqualTo(volumeName);
+            assertThat((String) inspected.get("Mountpoint")).isNotBlank();
+            Map<String, Object> labels = (Map<String, Object>) inspected.get("Labels");
+            assertThat(labels).containsEntry("be.elevenways.hohenheim.test", "true");
+
+            boolean listed = docker.listVolumes().stream()
+                .anyMatch(entry -> entry instanceof Map<?, ?> volume
+                    && volumeName.equals(volume.get("Name")));
+            assertThat(listed).isTrue();
+
+            // createVolume is idempotent per name: a second create returns the same volume.
+            Map<String, Object> again = docker.createVolume(volumeName, null);
+            assertThat(again.get("Name")).isEqualTo(volumeName);
+        } finally {
+            try {
+                docker.removeVolume(volumeName, true);
+            } catch (IOException ignored) {
+                // best effort cleanup
+            }
+        }
+
+        try {
+            docker.inspectVolume(volumeName);
+            throw new AssertionError("expected inspect of removed volume to fail");
+        } catch (IOException expected) {
+            // 404 -> IOException, as intended
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void fixedHostPortPublicationIncludingUdp() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+
+        // High ports chosen to avoid collisions; loopback-bound so nothing is exposed.
+        int tcpPort = 42000 + (int) (System.nanoTime() % 1000);
+        int udpPort = tcpPort + 1000;
+
+        String id = docker.createContainer("hohenheim-porttest-" + System.nanoTime(), Map.of(
+            "Image", TEST_IMAGE,
+            "Cmd", List.of("sleep", "30"),
+            "ExposedPorts", Map.of("7000/tcp", Map.of(), "7001/udp", Map.of()),
+            "HostConfig", Map.of("PortBindings", Map.of(
+                "7000/tcp", List.of(Map.of("HostIp", "127.0.0.1", "HostPort", String.valueOf(tcpPort))),
+                "7001/udp", List.of(Map.of("HostIp", "127.0.0.1", "HostPort", String.valueOf(udpPort)))
+            ))
+        ));
+        try {
+            docker.startContainer(id);
+
+            Map<String, Object> settings =
+                (Map<String, Object>) docker.inspectContainer(id).get("NetworkSettings");
+            Map<String, Object> ports = (Map<String, Object>) settings.get("Ports");
+
+            List<Object> tcpBindings = (List<Object>) ports.get("7000/tcp");
+            assertThat(tcpBindings).isNotEmpty();
+            assertThat(((Map<String, Object>) tcpBindings.get(0)).get("HostPort"))
+                .isEqualTo(String.valueOf(tcpPort));
+
+            List<Object> udpBindings = (List<Object>) ports.get("7001/udp");
+            assertThat(udpBindings).isNotEmpty();
+            assertThat(((Map<String, Object>) udpBindings.get(0)).get("HostPort"))
+                .isEqualTo(String.valueOf(udpPort));
+        } finally {
+            docker.removeContainer(id, true);
+        }
+    }
+
+    @Test
+    void restartContainerKeepsItRunning() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+
+        String id = docker.createContainer("hohenheim-restarttest-" + System.nanoTime(), Map.of(
+            "Image", TEST_IMAGE,
+            "Cmd", List.of("sleep", "30")
+        ));
+        try {
+            docker.startContainer(id);
+            String firstStart = startedAt(docker, id);
+
+            docker.restartContainer(id, 1);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> state = (Map<String, Object>) docker.inspectContainer(id).get("State");
+            assertThat(state.get("Running")).isEqualTo(Boolean.TRUE);
+            assertThat(startedAt(docker, id)).isNotEqualTo(firstStart);
+        } finally {
+            docker.removeContainer(id, true);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String startedAt(DockerClient docker, String id) throws IOException {
+        Map<String, Object> state = (Map<String, Object>) docker.inspectContainer(id).get("State");
+        return String.valueOf(state.get("StartedAt"));
+    }
+
+    @Test
+    void registryAuthEncodesBase64Json() {
+        DockerClient.RegistryAuth auth =
+            new DockerClient.RegistryAuth("robot", "s3cret\"quote", "ghcr.io");
+        String decoded = new String(
+            java.util.Base64.getUrlDecoder().decode(auth.encode()),
+            java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(decoded).contains("\"username\":\"robot\"");
+        assertThat(decoded).contains("s3cret");
+        assertThat(decoded).contains("\"serveraddress\":\"ghcr.io\"");
+
+        DockerClient.RegistryAuth hub = new DockerClient.RegistryAuth("user", "pw", null);
+        String hubDecoded = new String(
+            java.util.Base64.getUrlDecoder().decode(hub.encode()),
+            java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(hubDecoded).doesNotContain("serveraddress");
+    }
+
+    @Test
     void toJsonEncodesNestedSpecWithEscaping() {
         String json = DockerClient.toJson(Map.of(
             "Image", "alpine",

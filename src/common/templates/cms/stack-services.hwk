@@ -1,0 +1,65 @@
+{#- Services tab on a stack: live container states, config files, and links
+    into the (nav-hidden) service and file resource forms. -#}
+{% declare title: String %}
+{% declare stackId: Integer %}
+{% declare stackName: String %}
+{% declare services: List %}
+{% declare addServiceUrl: String = "" %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ stackName }}</h1>
+        <a href={% addServiceUrl %} id="add-service-link">
+            <pl-button variant={% "primary" %}>{{ t("add_service", scope: "stack_services") }}</pl-button>
+        </a>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if services %}
+    <pl-table striped={% true %}>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("service", scope: "stack_services") }}</pl-table-head>
+            <pl-table-head>{{ t("image", scope: "stack_services") }}</pl-table-head>
+            <pl-table-head>{{ t("state", scope: "stack_services") }}</pl-table-head>
+            <pl-table-head>{{ t("ports", scope: "stack_services") }}</pl-table-head>
+            <pl-table-head>{{ t("files", scope: "stack_services") }}</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each services as index, service %}
+            <pl-table-row>
+                <pl-table-cell>
+                    <a href={% service.get("editUrl") %}>{{ service.get("name") }}</a>
+                    {% if service.get("enabled") == false %}
+                    <pl-badge variant={% "secondary" %}>{{ t("disabled", scope: "stack_services") }}</pl-badge>
+                    {% /if %}
+                </pl-table-cell>
+                <pl-table-cell><code>{{ service.get("image") }}</code></pl-table-cell>
+                <pl-table-cell>
+                    <pl-badge variant={% service.get("stateVariant") %}>{{ service.get("state") }}</pl-badge>
+                </pl-table-cell>
+                <pl-table-cell>{{ service.get("ports") }}</pl-table-cell>
+                <pl-table-cell class="hh-stack-files">
+                    {% each service.get("files") as fileIndex, file %}
+                    <a href={% file.get("editUrl") %}><code>{{ file.get("path") }}</code></a>
+                    {% /each %}
+                    <a href={% service.get("addFileUrl") %} class="hh-stack-add-file">
+                        <pl-button variant={% "ghost" %} size={% "sm" %}>{{ t("add_file", scope: "stack_services") }}</pl-button>
+                    </a>
+                </pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="cubes">
+        <pl-empty-state-title>{{ t("empty", scope: "stack_services") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("empty_description", scope: "stack_services") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+</section>
+{% /block %}

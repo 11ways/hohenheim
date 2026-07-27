@@ -1,557 +1,3712 @@
 {
-    "cert_fields_required": {"text": "Name, certificate, and private key are required", "scope": "violations"},
-    "cert_pem_invalid": {"text": "Invalid certificate PEM: {$detail}", "scope": "violations"},
-    "database_already_attached": {"text": "That database is already attached to this site", "scope": "violations"},
-    "database_immutable": {"text": "Managed databases cannot be edited; destroy and recreate instead", "scope": "violations"},
-    "database_in_use": {"text": "Database '{$name}' is attached to {$sites}; detach it from those sites first", "scope": "violations"},
-    "database_missing": {"text": "That database does not exist", "scope": "violations"},
-    "database_name_required": {"text": "Database name is required", "scope": "violations"},
-    "database_remote": {"text": "Database '{$name}' runs on server '{$server}': its port is only published on that host's loopback, so sites on this server cannot reach it", "scope": "violations"},
-    "database_required": {"text": "A database is required", "scope": "violations"},
-    "hostname_required": {"text": "Hostname is required", "scope": "violations"},
-    "hostname_taken": {"text": "That hostname is already configured for this site", "scope": "violations"},
-    "key_pem_invalid": {"text": "Invalid private key PEM: {$detail}", "scope": "violations"},
-    "local_server_immutable": {"text": "The implicit local host cannot be edited", "scope": "violations"},
-    "local_server_reserved": {"text": "'local' is reserved for this host", "scope": "violations"},
-    "local_server_undeletable": {"text": "The implicit local host cannot be removed", "scope": "violations"},
-    "name_format": {"text": "Use only lowercase letters, digits, and dashes", "scope": "violations"},
-    "name_required": {"text": "Name is required", "scope": "violations"},
-    "open": {"text": "Open", "scope": "attention"},
-    "prefix_format": {"text": "The env prefix must start with a letter and contain only letters, digits, and underscores", "scope": "violations"},
-    "prefix_taken": {"text": "Env prefix '{$prefix}' is already used by another database on this site", "scope": "violations"},
-    "site_missing": {"text": "That site does not exist", "scope": "violations"},
-    "site_required": {"text": "A site is required", "scope": "violations"},
-    "site_type_no_injection": {"text": "Sites of type '{$type}' cannot receive database credentials: only host-process site types (Node.js, Alchemy, Command, Java / Zenit) can reach a managed database", "scope": "violations"},
-    "tls_passthrough_backend_certificate": {"text": "The backend presents the certificate for a TLS passthrough domain; do not assign a Hohenheim certificate", "scope": "violations"},
-    "tls_passthrough_local_only": {"text": "TLS passthrough sites route to an existing upstream and cannot use a Git deployment source", "scope": "violations"},
-    "tls_passthrough_no_access_list": {"text": "HTTP access lists cannot inspect encrypted TLS passthrough traffic", "scope": "violations"},
-    "tls_passthrough_no_http_auth": {"text": "HTTP authentication providers cannot inspect encrypted TLS passthrough traffic", "scope": "violations"},
-    "tls_passthrough_no_http_options": {"text": "HTTP headers, HSTS, and path stripping do not apply to untouched TLS streams", "scope": "violations"},
-    "tls_passthrough_no_path": {"text": "TLS passthrough routes by SNI hostname and cannot inspect URL paths", "scope": "violations"},
-    "ssh_target_format": {"text": "SSH target must be a plain [user@]host[:port]", "scope": "violations"},
-    "unknown_engine": {"text": "Unknown engine: {$engine}", "scope": "violations"},
-    "unknown_event": {"text": "Unknown event '{$event}'; valid events: {$valid}", "scope": "violations"},
-    "unknown_provider_type": {"text": "Unknown auth provider type: {$type}", "scope": "violations"},
-    "url_scheme": {"text": "The URL must start with http:// or https://", "scope": "violations"},
-    "api_keys": [{"text": "API keys", "scope": "field"}, {"text": "Keys accepted by the managed process API. Add one key per row.", "scope": "help"}],
-    "allowed_ips": [{"text": "Allowed IP networks", "scope": "field"}, {"text": "One IP address or CIDR network per line, for example 203.0.113.8 or 10.0.0.0/8.", "scope": "help"}],
-    "auto_deploy": [{"text": "Deploy automatically", "scope": "field"}, {"text": "Deploy when the repository webhook or polling detects a new revision.", "scope": "help"}],
-    "autoindex": [{"text": "Directory listing", "scope": "field"}, {"text": "Show a directory listing when no index file exists.", "scope": "help"}],
-    "basic_auth_user": [{"text": "Basic Auth username", "scope": "field"}, {"text": "Optional username required in addition to the IP rules.", "scope": "help"}],
-    "basic_auth_password": [{"text": "Basic Auth password", "scope": "field"}, {"text": "Leave blank on edit to keep the stored password; its value is never sent back to the browser.", "scope": "help"}],
-    "auth_provider_name": [{"text": "Name", "scope": "field"}, {"text": "A recognizable name used when assigning this provider to a site.", "scope": "help"}],
-    "auth_provider_type": [{"text": "Provider type", "scope": "field"}, {"text": "The authentication method this provider uses.", "scope": "help"}],
-    "auth_provider_config": [{"text": "Credentials and connection", "scope": "field"}, {"text": "Settings required by the selected provider type.", "scope": "help"}],
-    "required_permission": [{"text": "Required permission", "scope": "field"}, {"text": "A single permission name, e.g. \"site.internal\", checked against the identity's permission claims. Only used by claims-based providers such as Proteus (HTTP Basic Auth ignores it). Leave blank to accept any authenticated identity.", "scope": "help"}],
-    "credentials": [{"text": "Credentials", "scope": "field"}, {"text": "One Basic Auth username and password per row. Passwords are stored and shown as editable text.", "scope": "help"}],
-    "key": {"text": "Username", "scope": "form", "field": "credentials"},
-    "value": {"text": "Password", "scope": "form", "field": "credentials"},
-    "proteus_endpoint": [{"text": "Endpoint", "scope": "field"}, {"text": "Base URL of the Proteus identity service.", "scope": "help"}],
-    "proteus_realm_client": [{"text": "Realm client", "scope": "field"}, {"text": "Client identifier registered in the Proteus realm.", "scope": "help"}],
-    "proteus_access_key": [{"text": "Access key", "scope": "field"}, {"text": "Secret access key used to call the Proteus realm.", "scope": "help"}],
-    "proteus_authenticator": [{"text": "Authenticator", "scope": "field"}, {"text": "Slug of one specific Proteus sign-in method to force. Leave blank to let visitors choose from all sign-in methods the realm has enabled.", "scope": "help"}],
-    "branch": [{"text": "Branch", "scope": "field"}, {"text": "Git branch to check out. Leave blank to use the repository default.", "scope": "help"}],
-    "build_command": [{"text": "Build command", "scope": "field"}, {"text": "Shell command run after checkout and before a deployment becomes active.", "scope": "help"}],
-    "build_directory": [{"text": "Build directory", "scope": "field"}, {"text": "Working directory for the build command, relative to the repository root.", "scope": "help"}],
-    "build_environment_variables": [{"text": "Build environment", "scope": "field"}, {"text": "Environment variables available only while building the repository.", "scope": "help"}],
-    "build_timeout": [{"text": "Build timeout", "scope": "field"}, {"text": "Maximum build duration in seconds before the deployment is cancelled.", "scope": "help"}],
-    "container_command": [{"text": "Container command", "scope": "field"}, {"text": "Optional command that overrides the image's default command.", "scope": "help"}],
-    "container_port": [{"text": "Container port", "scope": "field"}, {"text": "TCP port on which the application listens inside the container.", "scope": "help"}],
-    "connect_timeout": [{"text": "Connect timeout", "scope": "field"}, {"text": "Maximum seconds allowed to establish the TCP connection to the passthrough backend.", "scope": "help"}],
-    "cpu_limit": [{"text": "CPU limit", "scope": "field"}, {"text": "Maximum CPU cores available to the container. Leave blank for no limit.", "scope": "help"}],
-    "delay": [{"text": "Response delay", "scope": "field"}, {"text": "Artificial delay in milliseconds before handling each request.", "scope": "help"}],
-    "denied_ips": [{"text": "Denied IP networks", "scope": "field"}, {"text": "One IP address or CIDR network per line, for example 203.0.113.8 or 10.0.0.0/8.", "scope": "help"}],
-    "dockerfile": [{"text": "Dockerfile", "scope": "field"}, {"text": "Path to the Dockerfile, relative to the repository root.", "scope": "help"}],
-    "environment_variables": [{"text": "Environment variables", "scope": "field"}, {"text": "Variables passed to each application process at runtime.", "scope": "help"}],
-    "fallback_file": [{"text": "Fallback file", "scope": "field"}, {"text": "File served when the requested path does not exist, for example index.html for an SPA.", "scope": "help"}],
-    "forward_host": [{"text": "Upstream host", "scope": "field"}, {"text": "Hostname or IP address of the HTTP upstream.", "scope": "help"}],
-    "forward_port": [{"text": "Upstream port", "scope": "field"}, {"text": "TCP port of the upstream. Defaults to 80 for HTTP and 443 for HTTPS.", "scope": "help"}],
-    "forward_scheme": [{"text": "Upstream protocol", "scope": "field"}, {"text": "Protocol used to connect to the upstream.", "scope": "help"}],
-    "proxy_protocol_v2": [{"text": "Send PROXY protocol v2", "scope": "field"}, {"text": "Prepend the binary PROXY v2 header so the backend receives the original client and destination addresses.", "scope": "help"}],
-    "tls_forward_host": [{"text": "TLS backend host", "scope": "field"}, {"text": "Hostname or IP address that receives the original, still-encrypted TLS stream.", "scope": "help"}],
-    "tls_forward_port": {"text": "TCP port that receives the original TLS stream.", "scope": "help"},
-    "ignore_certificates": [{"text": "Ignore TLS errors", "scope": "field"}, {"text": "Accept an invalid or self-signed certificate from the upstream.", "scope": "help"}],
-    "image": [{"text": "Container image", "scope": "field"}, {"text": "Image name to run when no Dockerfile build is used.", "scope": "help"}],
-    "image_tag": [{"text": "Image tag", "scope": "field"}, {"text": "Tag applied to a locally built image.", "scope": "help"}],
-    "indexes": [{"text": "Index files", "scope": "field"}, {"text": "Serve conventional index files such as index.html from directories.", "scope": "help"}],
-    "maximum_processes": [{"text": "Maximum processes", "scope": "field"}, {"text": "Upper scaling limit for concurrently running application processes.", "scope": "help"}],
-    "memory_limit": [{"text": "Memory limit", "scope": "field"}, {"text": "Maximum container memory in megabytes. Leave blank for no limit.", "scope": "help"}],
-    "live_overview": {"text": "Live Docker status", "scope": "field"},
-    "minimum_processes": [{"text": "Minimum processes", "scope": "field"}, {"text": "Number of warm application processes Hohenheim keeps running.", "scope": "help"}],
-    "node_runtime": [{"text": "Node.js runtime", "scope": "field"}, {"text": "Discovered Node.js version used to start this site.", "scope": "help"}],
-    "poll_interval": [{"text": "Poll interval", "scope": "field"}, {"text": "Seconds between repository checks when polling is enabled.", "scope": "help"}],
-    "port_argument": [{"text": "Port argument", "scope": "field"}, {"text": "Command-line argument placed before the allocated port number.", "scope": "help"}],
-    "preserve_path": [{"text": "Preserve path", "scope": "field"}, {"text": "Append the original request path and query string to the redirect target.", "scope": "help"}],
-    "redirect_status": [{"text": "Redirect status", "scope": "field"}, {"text": "HTTP status code returned for the redirect.", "scope": "help"}],
-    "repository_url": [{"text": "Repository URL", "scope": "field"}, {"text": "Git clone URL. SSH authentication uses the server's configured SSH keys.", "scope": "help"}],
-    "request_timeout": [{"text": "Request timeout", "scope": "field"}, {"text": "Maximum request lifetime in seconds. 0 removes the limit for streaming, gRPC and WebSocket backends.", "scope": "help"}],
-    "rewrite_location": [{"text": "Rewrite Location headers", "scope": "field"}, {"text": "Rewrite upstream redirects so they keep using the public site hostname.", "scope": "help"}],
-    "upstream_protocol": [{"text": "HTTP version", "scope": "field"}, {"text": "HTTP/2 is required for gRPC backends. Cleartext upstreams then use prior-knowledge h2c.", "scope": "help"}],
-    "root_path": [{"text": "Document root", "scope": "field"}, {"text": "Directory containing the files to serve; a relative path resolves against the Hohenheim working directory.", "scope": "help"}],
-    "run_as_user": [{"text": "Run as user", "scope": "field"}, {"text": "System account used for the child process, including its uid, gid and home directory.", "scope": "help"}],
-    "script": [{"text": "Script", "scope": "field"}, {"text": "Application entry script, relative to the working directory.", "scope": "help"}],
-    "server": [{"text": "Server", "scope": "field"}, {"text": "Host on which the container will run.", "scope": "help"}],
-    "shallow_clone": [{"text": "Shallow clone", "scope": "field"}, {"text": "Fetch only the latest history to reduce checkout time and disk use.", "scope": "help"}],
-    "show_hidden_files": [{"text": "Show hidden files", "scope": "field"}, {"text": "Allow files whose names start with a dot to be served or listed.", "scope": "help"}],
-    "source": [{"text": "Source", "scope": "field"}, {"text": "Use files already on this server or deploy them from a Git repository.", "scope": "help"}],
-    "start_command": [{"text": "Start command", "scope": "field"}, {"text": "Executable and arguments used to start each application process.", "scope": "help"}],
-    "submodules": [{"text": "Git submodules", "scope": "field"}, {"text": "Initialize and update repository submodules after checkout.", "scope": "help"}],
-    "target_url": [{"text": "Target URL", "scope": "field"}, {"text": "Absolute URL or root-relative path to which requests are redirected.", "scope": "help"}],
-    "upstream_socket": [{"text": "Upstream Unix socket", "scope": "field"}, {"text": "Unix socket path. When set, it takes precedence over host and port.", "scope": "help"}],
-    "use_ports": [{"text": "Use TCP ports", "scope": "field"}, {"text": "Allocate a loopback TCP port instead of the default Unix socket transport.", "scope": "help"}],
-    "volumes": [{"text": "Volumes", "scope": "field"}, {"text": "Container bind mounts in host-path:container-path form.", "scope": "help"}],
-    "wait_for_ready": [{"text": "Wait for ready signal", "scope": "field"}, {"text": "Route traffic only after the child reports that startup completed.", "scope": "help"}],
-    "webhook_secret": [{"text": "Webhook secret", "scope": "field"}, {"text": "Secret used to verify signed repository webhook requests.", "scope": "help"}],
-    "websocket_upgrade": [{"text": "Allow WebSockets", "scope": "field"}, {"text": "Forward WebSocket upgrade requests to the upstream.", "scope": "help"}],
-    "working_directory": [{"text": "Working directory", "scope": "field"}, {"text": "Directory in which the application command is started.", "scope": "help"}],
-    "cert_renewal_failed": {"text": "Certificate renewal failed", "scope": "notification_event"},
-    "cert_expiring": {"text": "Certificate expiring", "scope": "notification_event"},
-    "deploy_failed": {"text": "Deployment failed", "scope": "notification_event"},
-    "backup_failed": {"text": "Backup failed", "scope": "notification_event"},
-    "process_crash_loop": {"text": "Process crash loop", "scope": "notification_event"},
-    "auto_ban_budget_exhausted": {"text": "Auto-ban budget exhausted", "scope": "notification_event"},
-    "spamservice_outage": {"text": "Spamservice unreachable", "scope": "notification_event"},
-    "spamservice_recovered": {"text": "Spamservice recovered", "scope": "notification_event"},
-    "active": {"text": "Active", "scope": "site_databases"},
-    "add_domain": {"text": "Add domain", "scope": "site_domains"},
-    "attach": [{"text": "Attach database", "scope": "site_databases"}, {"text": "Add secondary", "scope": "dns_secondaries"}],
-    "auto_deploy_disabled": {"text": "Auto-deploy is disabled for this site: pushes are acknowledged but not deployed. Enable it in the site's source settings.", "scope": "site_deployments"},
-    "build_log": {"text": "Build log", "scope": "site_deployments"},
-    "cancel": [{"text": "Cancel deploy", "scope": "site_deployments"}, {"text": "Cancel", "scope": "certificate_request"}],
-    "captured": {"text": "Captured", "scope": "site_processes"},
-    "certificate": [{"text": "Certificate", "scope": "site_domains"}, {"text": "Certificate {$name}", "scope": "attention_title"}, {"text": "Certificate", "scope": "field"}, {"text": "TLS certificate served for this hostname. Blank lets the platform pick or request one.", "scope": "help"}],
-    "clients": [{"text": "Clients", "scope": "site_processes"}, {"text": "Clients", "scope": "spamservice"}],
-    "commit": {"text": "Commit", "scope": "site_deployments"},
-    "connection": {"text": "Connection", "scope": "database_tab"},
-    "copy_password": {"text": "Copy password", "scope": "database_tab"},
-    "copy_webhook_secret": {"text": "Copy webhook secret", "scope": "site_deployments"},
-    "copy_webhook_url": {"text": "Copy webhook URL", "scope": "site_deployments"},
-    "cpu": {"text": "CPU", "scope": "site_processes"},
-    "current_commit": {"text": "Currently serving commit {$commit}.", "scope": "site_deployments"},
-    "database": [{"text": "Database", "scope": "database_tab"}, {"text": "Database", "scope": "site_databases"}, {"text": "Database {$name}", "scope": "attention_title"}],
-    "database_not_running": {"text": "Attached database {$name} is not running", "scope": "attention_detail"},
-    "database_status": {"text": "Attached database {$name} is {$status}", "scope": "attention_detail"},
-    "degraded": {"text": "Degraded", "scope": "attention_detail"},
-    "deploy": {"text": "Deploy of {$name}", "scope": "attention_title"},
-    "deploy_now": {"text": "Deploy now", "scope": "site_deployments"},
-    "down": {"text": "Down", "scope": "attention_detail"},
-    "dump_file": {"text": "Dump file", "scope": "database_tab"},
-    "duration": {"text": "Duration", "scope": "site_deployments"},
-    "empty": [{"text": "No databases attached", "scope": "site_databases"}, {"text": "No domains configured", "scope": "site_domains"}, {"text": "No deployments yet", "scope": "site_deployments"}, {"text": "No dev servers connected", "scope": "dev_sessions"}, {"text": "No secondaries configured", "scope": "dns_secondaries"}, {"text": "No delegated access", "scope": "site_access"}],
-    "empty_description": [{"text": "Attach a managed database and its connection details are injected into this site's processes as environment variables.", "scope": "site_databases"}, {"text": "Add a hostname so traffic routes to this site.", "scope": "site_domains"}, {"text": "Webhook, poll or manual deploys of this site will show up here.", "scope": "site_deployments"}, {"text": "Nobody besides administrators can manage this site yet.", "scope": "site_access"}],
-    "engine": [{"text": "Engine", "scope": "database_tab"}, {"text": "Engine", "scope": "site_databases"}, {"text": "Engine", "scope": "field"}, {"text": "Database engine. Fixed after creation; destroy and recreate to change it.", "scope": "help"}],
-    "env_prefix": [{"text": "Env prefix", "scope": "site_databases"}, {"text": "Env prefix", "scope": "field"}, {"text": "Names the injected variable family: DB gives DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME and DB_URL. The site's first attachment also provides DATABASE_URL.", "scope": "help"}],
-    "failed": {"text": "Failed", "scope": "site_databases"},
-    "forced": {"text": "Forced", "scope": "site_domains"},
-    "hostname": [{"text": "Hostname", "scope": "site_domains"}, {"text": "Hostname", "scope": "field"}, {"text": "The Host header to match. Wildcard mode allows * and ?; regex mode takes a full regular expression.", "scope": "help"}],
-    "isolate": {"text": "Isolate", "scope": "site_processes"},
-    "isolated": {"text": "Isolated", "scope": "site_processes"},
-    "kill": {"text": "Kill", "scope": "site_processes"},
-    "kill_confirm": {"text": "The process is terminated immediately.", "scope": "site_processes"},
-    "last_run_failed": {"text": "Last run failed", "scope": "attention_detail"},
-    "lines": {"text": "Lines", "scope": "site_processes"},
-    "match_type": [{"text": "Match type", "scope": "site_domains"}, {"text": "Match type", "scope": "field"}, {"text": "How the hostname is compared: exact, wildcard, or regular expression.", "scope": "help"}],
-    "memory": {"text": "Memory", "scope": "site_processes"},
-    "no_logs": {"text": "No stored logs yet.", "scope": "site_processes"},
-    "none": {"text": "None", "scope": "site_domains"},
-    "none_running": {"text": "No processes running.", "scope": "site_processes"},
-    "off": {"text": "Off", "scope": "site_domains"},
-    "password": {"text": "Password", "scope": "database_tab"},
-    "payload_url": {"text": "Payload URL", "scope": "site_deployments"},
-    "pid": {"text": "PID", "scope": "site_processes"},
-    "port": [{"text": "Port", "scope": "dns_remote"}, {"text": "Port", "scope": "site_processes"}],
-    "primary": {"text": "Primary", "scope": "site_databases"},
-    "provisioning": {"text": "Provisioning", "scope": "site_databases"},
-    "provisioning_failed": {"text": "Provisioning failed", "scope": "attention_detail"},
-    "ready": [{"text": "Ready", "scope": "site_processes"}, {"text": "Ready", "scope": "spamservice"}],
-    "request_certificate": [{"text": "Request certificate", "scope": "site_domains"}, {"text": "Request Let's Encrypt certificate", "scope": "certificate_request"}],
-    "restore": [{"text": "Restore", "scope": "database_tab"}, {"text": "Restore", "scope": "database"}],
-    "restore_description": {"text": "Uploads a dump file and loads it into the running database.", "scope": "database_tab"},
-    "restore_dump": {"text": "Restore from dump", "scope": "database_tab"},
-    "restored": {"text": "Backup restored into '{$name}'.", "scope": "database_tab"},
-    "rollback": {"text": "Roll back", "scope": "site_deployments"},
-    "rollback_confirm": {"text": "Activate the previous deploy slot? The current version stops serving.", "scope": "site_deployments"},
-    "secret": {"text": "Secret", "scope": "site_deployments"},
-    "site": {"text": "Site {$name}", "scope": "attention_title"},
-    "ssl": {"text": "SSL", "scope": "site_domains"},
-    "start": [{"text": "Start process", "scope": "site_processes"}, {"text": "Start", "scope": "spamservice"}],
-    "started": {"text": "Started", "scope": "site_deployments"},
-    "starting": {"text": "Starting", "scope": "site_processes"},
-    "status": [{"text": "Status: {$status}", "scope": "database_tab"}, {"text": "Status", "scope": "site_databases"}, {"text": "Status", "scope": "site_deployments"}, {"text": "Status", "scope": "site_processes"}, {"text": "Status", "scope": "spamservice"}],
-    "stored_log": {"text": "Stored log {$title}", "scope": "site_processes"},
-    "stored_logs": {"text": "Stored process logs", "scope": "site_processes"},
-    "task": {"text": "Task {$name}", "scope": "attention_title"},
-    "terminal": {"text": "Terminal", "scope": "site_processes"},
-    "terminal_description": {"text": "Live stdout/stderr for pid {$pid}. Keystrokes are sent to the process's stdin.", "scope": "site_processes"},
-    "trigger": {"text": "Trigger", "scope": "site_deployments"},
-    "unisolate": {"text": "Unisolate", "scope": "site_processes"},
-    "unmanaged": {"text": "Not a managed site", "scope": "site_processes"},
-    "unmanaged_description": {"text": "Only node, alchemy, command, java and docker sites run managed processes.", "scope": "site_processes"},
-    "used_by": {"text": "Used by", "scope": "database_tab"},
-    "user": [{"text": "User", "scope": "database_tab"}, {"text": "User", "scope": "site_access"}],
-    "variables": {"text": "Injected variables", "scope": "site_databases"},
-    "webhook": {"text": "Push webhook", "scope": "site_deployments"},
-    "webhook_description": {"text": "Configure this URL and secret on your git host (GitHub, GitLab or Gitea) to deploy on every push.", "scope": "site_deployments"},
-    "onboarding": {"text": "Getting started", "scope": "dashboard"},
-    "title": [{"text": "Deployments", "scope": "site_deployments"}, {"text": "Processes", "scope": "site_processes"}, {"text": "Create your first site", "scope": "onboarding"}, {"text": "Hohenheim admin", "scope": "admin"}, {"text": "Settings", "scope": "settings"}, {"text": "Site management", "scope": "manage"}],
-    "description": [{"text": "Running child processes for this site.", "scope": "site_processes"}, {"text": "Choose how the application runs, add a domain, then request a certificate. Hohenheim guides each step from the site page.", "scope": "onboarding"}, {"text": "Description", "scope": "field"}],
-    "create_site": {"text": "Create site", "scope": "onboarding"},
-    "publish_records": {"text": "Publish the DNS TXT records", "scope": "certificate_request"},
-    "publish_description": {"text": "Add every value below at your DNS provider. Values sharing a name must coexist; do not replace one with the other.", "scope": "certificate_request"},
-    "manual_ephemeral": {"text": "This order remains available for 30 minutes and is lost when Hohenheim restarts. Manual DNS certificates do not auto-renew.", "scope": "certificate_request"},
-    "record_name": [{"text": "TXT record name", "scope": "certificate_request"}, {"text": "Name", "scope": "field"}, {"text": "Owner name relative to the zone: @ for the zone itself, www for a subdomain, * for a wildcard", "scope": "help"}],
-    "record_value": [{"text": "TXT record value", "scope": "certificate_request"}, {"text": "Value", "scope": "field"}, {"text": "A/AAAA: an IP address. CNAME/NS/MX/SRV: a hostname. TXT: the text. CAA: flags tag value, e.g. 0 issue letsencrypt.org", "scope": "help"}],
-    "copy_record_name": {"text": "Copy TXT record name", "scope": "certificate_request"},
-    "copy_record_value": {"text": "Copy TXT record value", "scope": "certificate_request"},
-    "verify_dns": {"text": "Verify DNS and issue certificate", "scope": "certificate_request"},
-    "start_over": {"text": "Start over", "scope": "certificate_request"},
-    "name": [{"text": "Name", "scope": "certificate_request"}, {"text": "Name", "scope": "dev_sessions"}, {"text": "Name", "scope": "field"}, {"text": "Name", "scope": "spamservice_client"}, {"text": "Name", "scope": "spamservice_key"}],
-    "name_placeholder": {"text": "Defaults to the first domain", "scope": "certificate_request"},
-    "domains": [{"text": "Domains", "scope": "certificate_request"}, {"text": "Domains", "scope": "site"}],
-    "domains_help": {"text": "Add each hostname separately. Wildcards such as *.example.com require DNS-01 and do not cover the bare example.com name; include both when needed.", "scope": "certificate_request"},
-    "validation": {"text": "Validation method", "scope": "certificate_request"},
-    "validation_help": {"text": "HTTP-01 requires each exact hostname to route to this proxy. DNS-01 works for exact and wildcard names.", "scope": "certificate_request"},
-    "dns_mode": {"text": "DNS publishing (DNS-01 only)", "scope": "certificate_request"},
-    "manual": {"text": "Manual TXT records (no auto-renewal)", "scope": "certificate_request"},
-    "automatic_hook": {"text": "Automatic command hook", "scope": "certificate_request"},
-    "hook_ready": {"text": "The configured hook publishes and removes TXT values, so this certificate can renew automatically.", "scope": "certificate_request"},
-    "hook_missing": {"text": "Configure ssl.dns_hook_command in Settings to enable automatic DNS-01 issuance and renewal.", "scope": "certificate_request"},
-    "account_email": {"text": "Account email (optional)", "scope": "certificate_request"},
-    "account_email_help": {"text": "Overrides the global Let's Encrypt account email for this certificate.", "scope": "certificate_request"},
-    "request": {"text": "Request certificate", "scope": "certificate_request"},
-    "any": {"text": "Any (IP or Basic Auth)", "scope": "access_satisfy"},
-    "all": {"text": "All (IP and Basic Auth)", "scope": "access_satisfy"},
-    "exact": {"text": "Exact hostname", "scope": "domain_match"},
-    "wildcard": {"text": "Wildcard (* and ?)", "scope": "domain_match"},
-    "regex": {"text": "Regular expression", "scope": "domain_match"},
-    "local_files": {"text": "Local files", "scope": "site_source"},
-    "git_repository": {"text": "Git repository", "scope": "site_source"},
-    "server_local": {"text": "{$name} (local)", "scope": "server_option"},
-    "proxy_unavailable": {"text": "The proxy server is not available yet", "scope": "certificate_request_error"},
-    "dns_validation_failed": {"text": "DNS validation failed. Verify every TXT value and start a new request.", "scope": "certificate_request_error"},
-    "invalid_email": {"text": "Invalid account email: {$email}", "scope": "certificate_request_error"},
-    "domain_required": {"text": "At least one domain is required", "scope": "certificate_request_error"},
-    "unknown_validation": {"text": "Unknown validation method: {$method}", "scope": "certificate_request_error"},
-    "wildcard_requires_dns": {"text": "Wildcard certificates require DNS-01 validation", "scope": "certificate_request_error"},
-    "invalid_hostnames": {"text": "Invalid hostnames: {$hostnames}", "scope": "certificate_request_error"},
-    "excluded_hostnames": {"text": "Excluded from Let's Encrypt by their domain settings: {$hostnames}", "scope": "certificate_request_error"},
-    "dns_start_failed": {"text": "Could not start DNS validation: {$reason}", "scope": "certificate_request_error"},
-    "unknown_dns_mode": {"text": "Unknown DNS publishing mode: {$mode}", "scope": "certificate_request_error"},
-    "hook_not_configured": {"text": "The automated DNS hook is not configured in SSL / TLS settings", "scope": "certificate_request_error"},
-    "request_failed": {"text": "Certificate request failed: {$reason}", "scope": "certificate_request_error"},
-    "unknown_reason": {"text": "Unknown reason", "scope": "certificate_request_error"},
-    "manual_expired": {"text": "The manual DNS request expired or the server restarted. Start a new request.", "scope": "certificate_request_error"},
-    "plural": [{"text": "Access Lists", "scope": "access_list"}, {"text": "Auth Providers", "scope": "auth_provider"}, {"text": "Certificates", "scope": "certificate"}, {"text": "Databases", "scope": "database"}, {"text": "Notification Channels", "scope": "notification_channel"}, {"text": "Servers", "scope": "server"}, {"text": "Sites", "scope": "site"}, {"text": "Attached databases", "scope": "site_database"}, {"text": "Site Domains", "scope": "site_domain"}, {"text": "DNS Zones", "scope": "dns_zone"}, {"text": "DNS Records", "scope": "dns_record"}, {"text": "DNS peers", "scope": "dns_peer"}, {"text": "Zone secondaries", "scope": "dns_zone_peer"}, {"text": "IP Bans", "scope": "ban"}, {"text": "Spamservice clients", "scope": "spamservice_client"}, {"text": "Client keys", "scope": "spamservice_key"}, {"text": "Security events", "scope": "spamservice_event"}, {"text": "Spam words", "scope": "spamservice_word"}, {"text": "Samples", "scope": "spamservice_sample"}],
-    "dashboard": {"text": "Dashboard", "scope": "admin"},
-    "download": {"text": "Download", "scope": "certificate"},
-    "renewal_status": {"text": "Renewal status", "scope": "certificate"},
-    "request_le": {"text": "Request via Let's Encrypt", "scope": "certificate"},
-    "backup": {"text": "Download backup", "scope": "database"},
-    "infra": {"text": "Infrastructure", "scope": "nav"},
-    "proxy": {"text": "Proxy", "scope": "nav"},
-    "test": [{"text": "Send test", "scope": "notification_channel"}, {"text": "Test connection", "scope": "spamservice"}],
-    "test_failed": {"text": "Test delivery failed", "scope": "notification_channel"},
-    "test_ok": [{"text": "Test delivered", "scope": "notification_channel"}, {"text": "Spamservice answered: {$status}", "scope": "spamservice"}],
-    "host_status": {"text": "Host", "scope": "server"},
-    "clone": {"text": "Clone", "scope": "site"},
-    "databases": {"text": "Databases", "scope": "site"},
-    "clone_confirm": {"text": "Create a copy with the same settings and domains (disabled by default)?", "scope": "site"},
-    "deployments": {"text": "Deployments", "scope": "site"},
-    "disabled_toast": {"text": "Site disabled", "scope": "site"},
-    "enabled_toast": {"text": "Site enabled", "scope": "site"},
-    "dev_sessions": {"text": "Dev sessions", "scope": "site"},
-    "processes": {"text": "Processes", "scope": "site"},
-    "toggle": {"text": "Enable/disable", "scope": "site"},
-    "attention": {"text": "Needs attention", "scope": "dashboard"},
-    "all_clear": {"text": "All clear - nothing needs attention.", "scope": "dashboard"},
-    "recent_activity": {"text": "Recent activity", "scope": "dashboard"},
-    "site_type": [{"text": "Site type", "scope": "field"}, {"text": "How this site is served: managed process, static files, proxy, redirect, ...", "scope": "help"}],
-    "enabled": [{"text": "Enabled", "scope": "field"}, {"text": "Disabled sites are not routed; requests get the offline page.", "scope": "help"}, {"text": "Enabled", "scope": "spamservice_client"}],
-    "settings": {"text": "Settings", "scope": "field"},
-    "source_settings": {"text": "Source settings", "scope": "field"},
-    "access_list": [{"text": "Access list", "scope": "field"}, {"text": "Optional IP allow/deny list and basic auth applied before requests reach the site.", "scope": "help"}],
-    "auth_provider": [{"text": "Auth provider", "scope": "field"}, {"text": "Optional identity provider visitors must authenticate with before reaching the site.", "scope": "help"}],
-    "listen_on": [{"text": "Listen address", "scope": "field"}, {"text": "Only serve this domain on the selected local IP address. Blank means all interfaces.", "scope": "help"}],
-    "path_prefix": [{"text": "Path prefix", "scope": "field"}, {"text": "Only requests whose path starts with this prefix use this entry. Blank matches everything.", "scope": "help"}],
-    "strip_path": [{"text": "Strip path", "scope": "field"}, {"text": "Remove the matched path prefix before forwarding the request upstream.", "scope": "help"}],
-    "force_ssl": [{"text": "Force SSL", "scope": "field"}, {"text": "Redirect plain HTTP requests to HTTPS.", "scope": "help"}],
-    "hsts_enabled": [{"text": "HSTS", "scope": "field"}, {"text": "Send the Strict-Transport-Security header so browsers refuse plain HTTP for this host.", "scope": "help"}],
-    "hsts_subdomains": [{"text": "HSTS subdomains", "scope": "field"}, {"text": "Extend HSTS to all subdomains (includeSubDomains).", "scope": "help"}],
-    "custom_headers": [{"text": "Request headers", "scope": "field"}, {"text": "Headers set on the request before it is forwarded upstream. An empty value removes the header.", "scope": "help"}],
-    "response_headers": [{"text": "Response headers", "scope": "field"}, {"text": "Headers set on the response sent to the client. An empty value removes the header.", "scope": "help"}],
-    "exclude_from_letsencrypt": [{"text": "Exclude from Let's Encrypt", "scope": "field"}, {"text": "Leave this hostname out when requesting Let's Encrypt certificates for the site.", "scope": "help"}],
-    "database_name": {"text": "Unique name for this managed database; also names its container and volume. Lowercase letters, digits, and dashes.", "scope": "help"},
-    "db_user": [{"text": "Database user", "scope": "field"}, {"text": "Username created in the database container and injected into attached sites.", "scope": "help"}],
-    "db_password": [{"text": "Database password", "scope": "field"}, {"text": "Password for the database user. Leave blank to generate one.", "scope": "help"}],
-    "db_name": [{"text": "Database name", "scope": "field"}, {"text": "Name of the initial database created inside the engine.", "scope": "help"}],
-    "ephemeral": [{"text": "Ephemeral", "scope": "field"}, {"text": "Store data in a RAM-backed tmpfs: fast, but ALL data is lost when the container restarts.", "scope": "help"}],
-    "records": {"text": "Records", "scope": "dns_zone"},
-    "records_hint": {"text": "Open this zone's A, AAAA, CNAME, MX, TXT and other DNS records.", "scope": "dns_zone"},
-    "zone_file": {"text": "Zone file", "scope": "dns_zone"},
-    "origin": [{"text": "Zone origin", "scope": "field"}, {"text": "The domain this zone is authoritative for, e.g. example.com (no trailing dot)", "scope": "help"}],
-    "soa_primary_ns": [{"text": "Primary name server", "scope": "field"}, {"text": "Hostname of the primary name server (the MNAME in the SOA record); leave empty for ns1.<zone>", "scope": "help"}],
-    "soa_contact": [{"text": "Contact email", "scope": "field"}, {"text": "Administrative contact for the zone; leave empty for hostmaster@<zone>", "scope": "help"}],
-    "serial": {"text": "Serial", "scope": "field"},
-    "default_ttl": [{"text": "Default TTL", "scope": "field"}, {"text": "Seconds resolvers may cache records that set no explicit TTL (3600 = 1 hour)", "scope": "help"}],
-    "negative_ttl": [{"text": "Negative TTL", "scope": "field"}, {"text": "Seconds resolvers may cache name-does-not-exist answers (300 = 5 minutes)", "scope": "help"}],
-    "soa_refresh": [{"text": "SOA refresh", "scope": "field"}, {"text": "Seconds before a secondary name server re-checks this zone (7200 = 2 hours)", "scope": "help"}],
-    "soa_retry": [{"text": "SOA retry", "scope": "field"}, {"text": "Seconds a secondary waits after a failed refresh before retrying (3600 = 1 hour)", "scope": "help"}],
-    "soa_expire": [{"text": "SOA expire", "scope": "field"}, {"text": "Seconds after which a secondary that cannot reach this server stops answering (1209600 = 2 weeks)", "scope": "help"}],
-    "zone_enabled": [{"text": "Enabled", "scope": "field"}, {"text": "Disabled zones are not served and their names get REFUSED answers", "scope": "help"}],
-    "record_zone": [{"text": "Zone", "scope": "field"}, {"text": "The authoritative zone this record belongs to.", "scope": "help"}],
-    "record_type": [{"text": "Type", "scope": "field"}, {"text": "The record type; MX and SRV also need a priority, SRV also needs a port", "scope": "help"}],
-    "record_ttl": [{"text": "TTL", "scope": "field"}, {"text": "Seconds resolvers may cache this record; leave empty to use the zone default", "scope": "help"}],
-    "record_priority": [{"text": "Priority", "scope": "field"}, {"text": "Required for MX and SRV records; lower numbers are tried first", "scope": "help"}],
-    "record_weight": [{"text": "Weight", "scope": "field"}, {"text": "SRV only: relative weight for records with the same priority (0 when unsure)", "scope": "help"}],
-    "record_port": [{"text": "Port", "scope": "field"}, {"text": "SRV only: the TCP/UDP port the service listens on", "scope": "help"}],
-    "record_enabled": [{"text": "Enabled", "scope": "field"}, {"text": "Disabled records stay stored but are not served", "scope": "help"}],
-    "managed_by": {"text": "Managed by", "scope": "field"},
-    "record_count": {"text": "Records", "scope": "dns_zone"},
-    "ds_title": {"text": "DS record (for the registrar)", "scope": "dns_zone"},
-    "ds_description": {"text": "Lodge this DS record with your domain registrar to complete the DNSSEC chain of trust. It changes if you regenerate the signing key.", "scope": "dns_zone"},
-    "dnssec_enabled": [{"text": "Sign this zone (DNSSEC)", "scope": "field"}, {"text": "Generate a signing key on first use and serve signed answers. Requires lodging the DS record (shown on the Zone file tab) with your registrar.", "scope": "help"}],
-    "add_record": {"text": "Add record", "scope": "dns_zone"},
-    "record_name_column": {"text": "Name", "scope": "dns_zone"},
-    "record_type_column": {"text": "Type", "scope": "dns_zone"},
-    "record_ttl_column": {"text": "TTL", "scope": "dns_zone"},
-    "record_value_column": {"text": "Value", "scope": "dns_zone"},
-    "record_status_column": {"text": "Status", "scope": "dns_zone"},
-    "record_enabled_badge": {"text": "Active", "scope": "dns_zone"},
-    "record_disabled_badge": {"text": "Disabled", "scope": "dns_zone"},
-    "record_managed_badge": {"text": "ACME", "scope": "dns_zone"},
-    "records_empty": {"text": "No records yet", "scope": "dns_zone"},
-    "records_empty_description": {"text": "Add A/AAAA records for your hosts and NS records for the zone itself.", "scope": "dns_zone"},
-    "zone_file_description": {"text": "The zone in standard master-file format; disabled rows appear as comments.", "scope": "dns_zone"},
-    "import_zone_file": {"text": "Import zone file", "scope": "dns_zone"},
-    "import_description": {"text": "Paste standard zone-file text to load records into this zone.", "scope": "dns_zone"},
-    "zone_file_text": {"text": "Zone file text", "scope": "dns_zone"},
-    "import_replaces": {"text": "Importing replaces every record of this zone except ACME-managed entries. SOA lines are ignored; the zone form owns those values.", "scope": "dns_zone"},
-    "import_action": {"text": "Import", "scope": "dns_zone"},
-    "import_done": {"text": "Imported {$count} records.", "scope": "dns_zone"},
-    "import_skipped": {"text": "Skipped: {$lines}", "scope": "dns_zone"},
-    "import_empty": {"text": "Paste zone-file text before importing", "scope": "dns_zone"},
-    "dns_origin_format": {"text": "Enter a bare domain like example.com (letters, digits and hyphens; no wildcard, no trailing dot)", "scope": "violations"},
-    "dns_origin_taken": {"text": "A zone for that origin already exists", "scope": "violations"},
-    "dns_zone_required": {"text": "Pick the zone this record belongs to", "scope": "violations"},
-    "dns_name_format": {"text": "Use @ for the zone itself, or labels like www, *.dev or _acme-challenge", "scope": "violations"},
-    "dns_value_required": {"text": "The record needs a value", "scope": "violations"},
-    "dns_ipv4_format": {"text": "Enter a valid IPv4 address like 203.0.113.10", "scope": "violations"},
-    "dns_ipv6_format": {"text": "Enter a valid IPv6 address like 2001:db8::1", "scope": "violations"},
-    "dns_target_format": {"text": "Enter a hostname like server.example.com", "scope": "violations"},
-    "dns_cname_apex": {"text": "A CNAME cannot live on the zone itself; use an A/AAAA record instead", "scope": "violations"},
-    "dns_cname_exclusive": {"text": "A CNAME owner cannot hold any other record; remove the conflicting records first", "scope": "violations"},
-    "dns_ns_wildcard": {"text": "NS records cannot use a wildcard name", "scope": "violations"},
-    "dns_priority_required": {"text": "MX and SRV records need a priority between 0 and 65535", "scope": "violations"},
-    "dns_port_required": {"text": "SRV records need a port between 0 and 65535", "scope": "violations"},
-    "dns_weight_format": {"text": "The weight must be between 0 and 65535", "scope": "violations"},
-    "dns_caa_format": {"text": "CAA values look like: 0 issue letsencrypt.org", "scope": "violations"},
-    "dns_caa_tag": {"text": "The CAA tag must be issue, issuewild or iodef", "scope": "violations"},
-    "dns_type_unknown": {"text": "Unknown record type", "scope": "violations"},
-    "dns_interval_range": {"text": "SOA intervals must be between 0 and 2419200 seconds (four weeks)", "scope": "violations"},
-    "dns_ttl_range": {"text": "TTL values must be between 0 and 604800 seconds (one week)", "scope": "violations"},
-    "dns_record_duplicate": {"text": "That exact record already exists in this zone", "scope": "violations"},
-    "dns_contact_format": {"text": "Enter an email address like hostmaster@example.com", "scope": "violations"},
-    "internal_dns": {"text": "Hosted DNS (this server)", "scope": "certificate_request"},
-    "internal_ready": {"text": "Hosted DNS: available when the domain's zone is served by this server; validation records publish instantly.", "scope": "certificate_request"},
-    "internal_unavailable": {"text": "Hosted DNS: enable the DNS server and create a zone for the domain to use this.", "scope": "certificate_request"},
-    "zone_not_hosted": {"text": "No enabled hosted DNS zone covers: {$hostnames}", "scope": "certificate_request_error"},
-    "dns_server_disabled": {"text": "The DNS server is not running; enable it in the settings first", "scope": "certificate_request_error"},
-    "dns_listener": {"text": "DNS server failed to start", "scope": "attention_title"},
-    "dns_zone_no_ns": [{"text": "Zone {$origin} has no NS records", "scope": "attention_title"}, {"text": "Delegation needs NS records on the zone itself; resolvers will treat it as broken.", "scope": "attention_detail"}],
-    "url": {"text": "URL", "scope": "dev_sessions"},
-    "connected_since": {"text": "Connected since", "scope": "dev_sessions"},
-    "active_streams": {"text": "Active streams", "scope": "dev_sessions"},
-    "empty_hint": [{"text": "Start a Zenit project with the dev tunnel configured and it will appear here automatically.", "scope": "dev_sessions"}, {"text": "Add a peer to replicate this zone to it over authenticated AXFR.", "scope": "dns_secondaries"}],
-    "registration_token": [{"text": "Registration token", "scope": "field"}, {"text": "Secret that remote dev servers present when they register. Generated automatically when left blank; paste it into the dev machine's zenit-dev config.", "scope": "help"}],
-    "secondaries": {"text": "Secondaries", "scope": "dns_zone"},
-    "peer_name": [{"text": "Name", "scope": "field"}, {"text": "A recognizable name for this DNS peer.", "scope": "help"}],
-    "peer_base_url": [{"text": "Admin base URL", "scope": "field"}, {"text": "HTTPS URL of a Hohenheim peer's admin server, for forwarding edits of zones it owns.", "scope": "help"}],
-    "peer_api_key": [{"text": "API key", "scope": "field"}, {"text": "znit_ API key used to call the peer's admin for edit forwarding.", "scope": "help"}],
-    "peer_transfer_host": [{"text": "Transfer host", "scope": "field"}, {"text": "Address of the peer's DNS server for AXFR/NOTIFY.", "scope": "help"}],
-    "peer_transfer_port": [{"text": "Transfer port", "scope": "field"}, {"text": "DNS port used for AXFR and NOTIFY; normally 53.", "scope": "help"}],
-    "peer_tsig_key_name": [{"text": "TSIG key name", "scope": "field"}, {"text": "Shared key name authenticating zone transfers with this peer.", "scope": "help"}],
-    "peer_tsig_algorithm": [{"text": "TSIG algorithm", "scope": "field"}, {"text": "HMAC algorithm, e.g. hmac-sha256.", "scope": "help"}],
-    "peer_tsig_secret": [{"text": "TSIG secret", "scope": "field"}, {"text": "Base64 shared secret for the TSIG key.", "scope": "help"}],
-    "peer_enabled": [{"text": "Enabled", "scope": "field"}, {"text": "Disabled peers are not contacted for transfers or forwarded edits.", "scope": "help"}],
-    "zone_role": [{"text": "Role", "scope": "field"}, {"text": "Primary zones are edited here; secondary zones are replicated from their owning peer.", "scope": "help"}],
-    "primary_peer": [{"text": "Owning peer", "scope": "field"}, {"text": "For a secondary zone, the peer that owns the zone and receives record edits.", "scope": "help"}],
-    "role_primary": {"text": "Primary (owned here)", "scope": "dns_role"},
-    "role_secondary": {"text": "Secondary (replicated)", "scope": "dns_role"},
-    "peer_none": {"text": "None", "scope": "dns_peer"},
-    "peer": {"text": "Peer", "scope": "dns_secondaries"},
-    "transfer_host": {"text": "Transfer host", "scope": "dns_secondaries"},
-    "dns_tsig_algorithm": {"text": "Unsupported TSIG algorithm", "scope": "violations"},
-    "dns_port_range": {"text": "Port must be between 1 and 65535", "scope": "violations"},
-    "dns_zone_missing": {"text": "That zone does not exist", "scope": "violations"},
-    "dns_peer_missing": {"text": "That peer does not exist", "scope": "violations"},
-    "dns_secondary_linked": {"text": "That peer is already a secondary of this zone", "scope": "violations"},
-    "edits_forwarded": {"text": "This zone is owned by peer \"{$peer}\": the records below are read live from it and edits are forwarded there.", "scope": "dns_remote"},
-    "edit_saved": {"text": "Change applied on the owning peer", "scope": "dns_remote"},
-    "edit_record": {"text": "Edit record", "scope": "dns_remote"},
-    "save_remote": {"text": "Save on peer", "scope": "dns_remote"},
-    "cancel_remote": {"text": "Cancel", "scope": "dns_remote"},
-    "delete_remote": {"text": "Delete", "scope": "dns_remote"},
-    "delete_confirm": {"text": "Delete this record on the owning peer?", "scope": "dns_remote"},
-    "priority": {"text": "Priority", "scope": "dns_remote"},
-    "weight": {"text": "Weight", "scope": "dns_remote"},
-    "remote_empty_hint": {"text": "The owning peer reports no records for this zone.", "scope": "dns_remote"},
-    "peer_not_configured": {"text": "The primary peer has no admin base URL / API key configured, so records are shown from the replica read-only.", "scope": "dns_remote"},
-    "peer_unreachable": {"text": "The owning peer could not be reached ({$message}); records are shown from the replica read-only.", "scope": "dns_remote"},
-    "record_dynamic": [{"text": "Dynamic DNS", "scope": "field"}, {"text": "Allow this A/AAAA record's address to be updated over the dyndns2 protocol; use the row action to mint an update token", "scope": "help"}],
-    "dyndns_token": {"text": "Dynamic DNS token", "scope": "dns_record"},
-    "dyndns_token_hint": {"text": "Mint a new update token for this record (invalidates any previous one)", "scope": "dns_record"},
-    "dyndns_only_address": {"text": "Dynamic DNS is only available for A and AAAA records", "scope": "dns_record"},
-    "dyndns_minted": {"text": "Update token generated -- it is shown on this record's form", "scope": "dns_record"},
-    "record_dyndns_token": [{"text": "Dynamic DNS token", "scope": "field"}, {"text": "The update password. Point a dyndns2 client (router, ddclient) at <host>/nic/update?hostname=<this record's FQDN> and send this token as the HTTP Basic password. Use the row action to (re)generate it", "scope": "help"}],
-    "jar_path": [{"text": "Jar file", "scope": "field"}, {"text": "Path to the application's fat/shadow jar.", "scope": "help"}],
-    "java_binary": [{"text": "Java binary", "scope": "field"}, {"text": "Path to the java launcher. Blank uses java from PATH (e.g. a jlink image's bin/java).", "scope": "help"}],
-    "jvm_args": [{"text": "JVM arguments", "scope": "field"}, {"text": "Extra arguments passed to the JVM before -jar, e.g. -Xmx512m.", "scope": "help"}],
-    "app_args": [{"text": "Application arguments", "scope": "field"}, {"text": "Arguments passed to the application after the jar.", "scope": "help"}],
-    "cert_nice_name": [{"text": "Name", "scope": "field"}, {"text": "A recognizable name for this certificate, e.g. the main domain it covers.", "scope": "help"}],
-    "cert_certificate_pem": [{"text": "Certificate (PEM)", "scope": "field"}, {"text": "Paste the full PEM-encoded certificate, including any intermediate chain (the -----BEGIN CERTIFICATE----- blocks).", "scope": "help"}],
-    "cert_private_key_pem": [{"text": "Private key (PEM)", "scope": "field"}, {"text": "The PEM-encoded private key matching the certificate. Stored as a secret: leave blank to keep the current key.", "scope": "help"}],
-    "cert_auto_renew": [{"text": "Auto-renew", "scope": "field"}, {"text": "Only applies to Let's Encrypt certificates; uploaded certificates are never renewed automatically.", "scope": "help"}],
-    "cert_challenge_type": [{"text": "Challenge type", "scope": "field"}, {"text": "How Let's Encrypt validated this certificate. Set by the request flow.", "scope": "help"}],
-    "cert_dns_publisher": [{"text": "DNS publisher", "scope": "field"}, {"text": "How DNS-01 TXT records are published on renewal. Set by the request flow.", "scope": "help"}],
-    "cert_renewal_error": {"text": "Last renewal error", "scope": "field"},
-    "cert_error_count": {"text": "Failed attempts", "scope": "field"},
-    "cert_next_attempt_at": {"text": "Next attempt", "scope": "field"},
-    "cert_domain_names": {"text": "Domains", "scope": "field"},
-    "enable": [{"text": "Enable", "scope": "site"}, {"text": "Enable", "scope": "spamservice_key"}],
-    "disable": {"text": "Disable", "scope": "site"},
-    "hohenheim_admin_access": {"text": "Access the Hohenheim admin panel", "scope": "permission"},
-    "hohenheim_manage_access": {"text": "Access the delegated site-management panel", "scope": "permission"},
-    "access": {"text": "Access", "scope": "site"},
-    "subject": {"text": "Who", "scope": "site_access"},
-    "capability": {"text": "Capability", "scope": "site_access"},
-    "allowed": {"text": "Allowed", "scope": "site_access"},
-    "added": {"text": "Added", "scope": "site_access"},
-    "yes": {"text": "Yes", "scope": "site_access"},
-    "no": {"text": "No", "scope": "site_access"},
-    "remove": {"text": "Remove", "scope": "site_access"},
-    "remove_confirm": {"text": "Revoke this access grant? The user loses the manage panel when this was their last site.", "scope": "site_access"},
-    "add_title": {"text": "Grant access", "scope": "site_access"},
-    "add_description": {"text": "The user can view, edit and operate this site (and its domains) through the /manage panel.", "scope": "site_access"},
-    "add": {"text": "Grant access", "scope": "site_access"},
-    "user_missing": {"text": "Pick an enabled user", "scope": "violations"},
-    "security": {"text": "Security", "scope": "nav"},
-    "lift": {"text": "Lift ban", "scope": "ban"},
-    "lift_hint": {"text": "Unban this IP immediately, in the app and in the firewall.", "scope": "ban"},
-    "lift_confirm": {"text": "Lift this ban? The IP can reach all proxied sites again right away.", "scope": "ban"},
-    "lifted": {"text": "Ban lifted", "scope": "ban"},
-    "duration_1h": {"text": "1 hour", "scope": "ban"},
-    "duration_24h": {"text": "24 hours", "scope": "ban"},
-    "duration_7d": {"text": "7 days", "scope": "ban"},
-    "duration_30d": {"text": "30 days", "scope": "ban"},
-    "duration_permanent": {"text": "Permanent", "scope": "ban"},
-    "ip": [{"text": "IP address", "scope": "field"}, {"text": "IP address", "scope": "spamservice_event"}, {"text": "IP address", "scope": "spamservice_sample"}, {"text": "IP address", "scope": "spamservice_reputation"}],
-    "ban_reason": {"text": "Reason", "scope": "field"},
-    "ban_source": {"text": "Source", "scope": "field"},
-    "ban_duration": {"text": "Duration", "scope": "field"},
-    "event_type": {"text": "Event type", "scope": "field"},
-    "expires_at": {"text": "Expires", "scope": "field"},
-    "active": [{"text": "Active", "scope": "field"}, {"text": "Active", "scope": "spamservice_key"}],
-    "ban_ip_refused": {"text": "This IP cannot be banned: {$reason}", "scope": "violations"},
-    "active_bans": {"text": "Active bans", "scope": "dashboard"},
-    "bans_created_30d": {"text": "Bans created (30 days)", "scope": "dashboard"},
-    "domain_miss": {"text": "Unmatched domain request", "scope": "security_event_type"},
-    "login_failed": {"text": "Failed login", "scope": "security_event_type"},
-    "lockout": {"text": "Account lockout", "scope": "security_event_type"},
-    "rate_limited": {"text": "Rate limited", "scope": "security_event_type"},
-    "csrf_failure": {"text": "CSRF failure", "scope": "security_event_type"},
-    "ws_origin_refused": {"text": "WebSocket origin refused", "scope": "security_event_type"},
-    "ws_auth_refused": {"text": "WebSocket authentication refused", "scope": "security_event_type"},
-    "overview": {"text": "Spamservice overview", "scope": "spamservice"},
-    "installation": {"text": "Installation", "scope": "spamservice"},
-    "reputation": {"text": "Reputation lookup", "scope": "spamservice"},
-    "disconnected": {"text": "Spamservice is not connected. Configure and start the local installation to use remote administration.", "scope": "spamservice"},
-    "runtime": {"text": "Managed runtime", "scope": "spamservice"},
-    "configured": {"text": "Configured", "scope": "spamservice"},
-    "base_url": {"text": "Base URL", "scope": "spamservice"},
-    "crashes": {"text": "Consecutive crashes", "scope": "spamservice"},
-    "readiness": {"text": "Readiness", "scope": "spamservice"},
-    "not_ready": {"text": "Not ready", "scope": "spamservice"},
-    "no_checks": {"text": "No readiness checks available", "scope": "spamservice"},
-    "samples": {"text": "Samples", "scope": "spamservice"},
-    "security_events": {"text": "Security events", "scope": "spamservice"},
-    "spam_words": {"text": "Spam words", "scope": "spamservice"},
-    "active_keys_count": {"text": "{$count} active keys", "scope": "spamservice"},
-    "spam_samples_count": {"text": "{$count} marked as spam", "scope": "spamservice"},
-    "confirmed_counts": {"text": "Confirmed: {$spam} spam, {$ham} ham", "scope": "spamservice"},
-    "start_hint": {"text": "Start the configured local Spamservice process.", "scope": "spamservice"},
-    "stop": {"text": "Stop", "scope": "spamservice"},
-    "stop_hint": {"text": "Stop Spamservice without changing its enabled setting.", "scope": "spamservice"},
-    "stop_confirm": {"text": "Stop Spamservice now? Scoring and reputation administration become unavailable.", "scope": "spamservice"},
-    "restart": {"text": "Restart", "scope": "spamservice"},
-    "restart_hint": {"text": "Restart Spamservice and reload its runtime configuration.", "scope": "spamservice"},
-    "restart_confirm": {"text": "Restart Spamservice now? Requests are briefly unavailable.", "scope": "spamservice"},
-    "test_hint": {"text": "Call the strict management status endpoint.", "scope": "spamservice"},
-    "start_ok": {"text": "Spamservice start requested", "scope": "spamservice"},
-    "stop_ok": {"text": "Spamservice stopped", "scope": "spamservice"},
-    "restart_ok": {"text": "Spamservice restart requested", "scope": "spamservice"},
-    "search": {"text": "Search", "scope": "spamservice"},
-    "trusted": {"text": "Trusted reporter", "scope": "spamservice_client"},
-    "provisioner": {"text": "May provision clients", "scope": "spamservice_client"},
-    "manager": {"text": "Management access", "scope": "spamservice_client"},
-    "external_id": {"text": "External ID", "scope": "spamservice_client"},
-    "owner": {"text": "Provisioned by", "scope": "spamservice_client"},
-    "allowed_languages": {"text": "Allowed languages", "scope": "spamservice_client"},
-    "spam_threshold": {"text": "Spam threshold", "scope": "spamservice_client"},
-    "notes": {"text": "Notes", "scope": "spamservice_client"},
-    "keys": {"text": "Keys", "scope": "spamservice_client"},
-    "keys_hint": {"text": "Manage this client's API keys.", "scope": "spamservice_client"},
-    "client": [{"text": "Client", "scope": "spamservice_key"}, {"text": "Client", "scope": "spamservice_event"}, {"text": "Client", "scope": "spamservice_sample"}],
-    "raw_key": {"text": "Existing key (optional)", "scope": "spamservice_key"},
-    "raw_key_help": {"text": "Leave blank to generate a new key. A generated key is shown once after creation.", "scope": "spamservice_key"},
-    "last_used": {"text": "Last used", "scope": "spamservice_key"},
-    "created_at": [{"text": "Created", "scope": "spamservice_key"}, {"text": "Created", "scope": "spamservice_sample"}],
-    "key_created": {"text": "Key created. Copy it now; it will not be shown again: {$key}", "scope": "spamservice_key"},
-    "key_adopted": {"text": "Existing key adopted", "scope": "spamservice_key"},
-    "revoke": {"text": "Revoke", "scope": "spamservice_key"},
-    "revoke_confirm": {"text": "Revoke this key? Existing callers lose access immediately.", "scope": "spamservice_key"},
-    "key_enabled": {"text": "Key enabled", "scope": "spamservice_key"},
-    "key_revoked": {"text": "Key revoked", "scope": "spamservice_key"},
-    "type": {"text": "Type", "scope": "spamservice_event"},
-    "day": {"text": "Day", "scope": "spamservice_event"},
-    "count": {"text": "Count", "scope": "spamservice_event"},
-    "first_at": {"text": "First seen", "scope": "spamservice_event"},
-    "last_at": {"text": "Last seen", "scope": "spamservice_event"},
-    "detail": {"text": "Last detail", "scope": "spamservice_event"},
-    "from": {"text": "From", "scope": "spamservice_event"},
-    "to": {"text": "To", "scope": "spamservice_event"},
-    "word": {"text": "Word or phrase", "scope": "spamservice_word"},
-    "score": [{"text": "Score", "scope": "spamservice_word"}, {"text": "Score", "scope": "spamservice_sample"}],
-    "language": {"text": "Language", "scope": "spamservice_word"},
-    "leet": {"text": "Match leetspeak", "scope": "spamservice_word"},
-    "spam": {"text": "Spam", "scope": "spamservice_sample"},
-    "confirmed": {"text": "Confirmed", "scope": "spamservice_sample"},
-    "flags": {"text": "Flags", "scope": "spamservice_sample"},
-    "languages": {"text": "Languages", "scope": "spamservice_sample"},
-    "analysis": {"text": "Analysis", "scope": "spamservice_sample"},
-    "mark_spam": {"text": "Mark spam", "scope": "spamservice_sample"},
-    "mark_ham": {"text": "Mark ham", "scope": "spamservice_sample"},
-    "rescore": {"text": "Rescore", "scope": "spamservice_sample"},
-    "marked_spam": {"text": "Sample confirmed as spam", "scope": "spamservice_sample"},
-    "marked_ham": {"text": "Sample confirmed as ham", "scope": "spamservice_sample"},
-    "rescored": {"text": "Sample rescored to {$score}", "scope": "spamservice_sample"},
-    "verdict_spam": {"text": "Spam", "scope": "spamservice_sample"},
-    "verdict_ham": {"text": "Ham", "scope": "spamservice_sample"},
-    "score_threshold": {"text": "Score {$score}, threshold {$threshold}", "scope": "spamservice_sample"},
-    "request_info": {"text": "Request", "scope": "spamservice_sample"},
-    "ip_analysis": {"text": "IP intelligence", "scope": "spamservice_sample"},
-    "breakdown": {"text": "Scoring breakdown", "scope": "spamservice_sample"},
-    "no_breakdown": {"text": "No scoring breakdown", "scope": "spamservice_sample"},
-    "submitted_fields": {"text": "Submitted fields", "scope": "spamservice_sample"},
-    "useragent": {"text": "User agent", "scope": "spamservice_sample"},
-    "lookup": {"text": "Look up", "scope": "spamservice_reputation"},
-    "lookup_result": {"text": "{$ip} is evaluated as actor subnet {$subnet}.", "scope": "spamservice_reputation"},
-    "datasets": {"text": "Reputation datasets", "scope": "spamservice_reputation"},
-    "signals": {"text": "Behavioral signals", "scope": "spamservice_reputation"},
-    "category": {"text": "Category", "scope": "spamservice_reputation"},
-    "negative": {"text": "Negative", "scope": "spamservice_reputation"},
-    "positive": {"text": "Positive", "scope": "spamservice_reputation"},
-    "weighted_policy": {"text": "Hohenheim weighted net", "scope": "spamservice_reputation"},
-    "weighted_explanation": {"text": "Within its own category, each positive event offsets up to {$weight} negative events. The current total net is {$net}; Hohenheim bans when it reaches {$threshold}. Dataset risk flags are diagnostic only.", "scope": "spamservice_reputation"},
-    "formula": {"text": "Negative - (positive x weight)", "scope": "spamservice_reputation"},
-    "net": {"text": "Net", "scope": "spamservice_reputation"}
+  "cert_fields_required": {
+    "text": "Name, certificate, and private key are required",
+    "scope": "violations"
+  },
+  "cert_pem_invalid": {
+    "text": "Invalid certificate PEM: {$detail}",
+    "scope": "violations"
+  },
+  "database_already_attached": {
+    "text": "That database is already attached to this site",
+    "scope": "violations"
+  },
+  "database_immutable": {
+    "text": "Managed databases cannot be edited; destroy and recreate instead",
+    "scope": "violations"
+  },
+  "database_in_use": {
+    "text": "Database '{$name}' is attached to {$sites}; detach it from those sites first",
+    "scope": "violations"
+  },
+  "database_missing": {
+    "text": "That database does not exist",
+    "scope": "violations"
+  },
+  "database_name_required": {
+    "text": "Database name is required",
+    "scope": "violations"
+  },
+  "database_remote": {
+    "text": "Database '{$name}' runs on server '{$server}': its port is only published on that host's loopback, so sites on this server cannot reach it",
+    "scope": "violations"
+  },
+  "database_required": {
+    "text": "A database is required",
+    "scope": "violations"
+  },
+  "hostname_required": {
+    "text": "Hostname is required",
+    "scope": "violations"
+  },
+  "hostname_taken": {
+    "text": "That hostname is already configured for this site",
+    "scope": "violations"
+  },
+  "key_pem_invalid": {
+    "text": "Invalid private key PEM: {$detail}",
+    "scope": "violations"
+  },
+  "local_server_immutable": {
+    "text": "The implicit local host cannot be edited",
+    "scope": "violations"
+  },
+  "local_server_reserved": {
+    "text": "'local' is reserved for this host",
+    "scope": "violations"
+  },
+  "local_server_undeletable": {
+    "text": "The implicit local host cannot be removed",
+    "scope": "violations"
+  },
+  "name_format": {
+    "text": "Use only lowercase letters, digits, and dashes",
+    "scope": "violations"
+  },
+  "name_required": {
+    "text": "Name is required",
+    "scope": "violations"
+  },
+  "open": {
+    "text": "Open",
+    "scope": "attention"
+  },
+  "prefix_format": {
+    "text": "The env prefix must start with a letter and contain only letters, digits, and underscores",
+    "scope": "violations"
+  },
+  "prefix_taken": {
+    "text": "Env prefix '{$prefix}' is already used by another database on this site",
+    "scope": "violations"
+  },
+  "site_missing": {
+    "text": "That site does not exist",
+    "scope": "violations"
+  },
+  "site_required": {
+    "text": "A site is required",
+    "scope": "violations"
+  },
+  "site_type_no_injection": {
+    "text": "Sites of type '{$type}' cannot receive database credentials: only host-process site types (Node.js, Alchemy, Command, Java / Zenit) can reach a managed database",
+    "scope": "violations"
+  },
+  "tls_passthrough_backend_certificate": {
+    "text": "The backend presents the certificate for a TLS passthrough domain; do not assign a Hohenheim certificate",
+    "scope": "violations"
+  },
+  "tls_passthrough_local_only": {
+    "text": "TLS passthrough sites route to an existing upstream and cannot use a Git deployment source",
+    "scope": "violations"
+  },
+  "tls_passthrough_no_access_list": {
+    "text": "HTTP access lists cannot inspect encrypted TLS passthrough traffic",
+    "scope": "violations"
+  },
+  "tls_passthrough_no_http_auth": {
+    "text": "HTTP authentication providers cannot inspect encrypted TLS passthrough traffic",
+    "scope": "violations"
+  },
+  "tls_passthrough_no_http_options": {
+    "text": "HTTP headers, HSTS, and path stripping do not apply to untouched TLS streams",
+    "scope": "violations"
+  },
+  "tls_passthrough_no_path": {
+    "text": "TLS passthrough routes by SNI hostname and cannot inspect URL paths",
+    "scope": "violations"
+  },
+  "ssh_target_format": {
+    "text": "SSH target must be a plain [user@]host[:port]",
+    "scope": "violations"
+  },
+  "unknown_engine": {
+    "text": "Unknown engine: {$engine}",
+    "scope": "violations"
+  },
+  "unknown_event": {
+    "text": "Unknown event '{$event}'; valid events: {$valid}",
+    "scope": "violations"
+  },
+  "unknown_provider_type": {
+    "text": "Unknown auth provider type: {$type}",
+    "scope": "violations"
+  },
+  "url_scheme": {
+    "text": "The URL must start with http:// or https://",
+    "scope": "violations"
+  },
+  "api_keys": [
+    {
+      "text": "API keys",
+      "scope": "field"
+    },
+    {
+      "text": "Keys accepted by the managed process API. Add one key per row.",
+      "scope": "help"
+    }
+  ],
+  "allowed_ips": [
+    {
+      "text": "Allowed IP networks",
+      "scope": "field"
+    },
+    {
+      "text": "One IP address or CIDR network per line, for example 203.0.113.8 or 10.0.0.0/8.",
+      "scope": "help"
+    }
+  ],
+  "auto_deploy": [
+    {
+      "text": "Deploy automatically",
+      "scope": "field"
+    },
+    {
+      "text": "Deploy when the repository webhook or polling detects a new revision.",
+      "scope": "help"
+    }
+  ],
+  "autoindex": [
+    {
+      "text": "Directory listing",
+      "scope": "field"
+    },
+    {
+      "text": "Show a directory listing when no index file exists.",
+      "scope": "help"
+    }
+  ],
+  "basic_auth_user": [
+    {
+      "text": "Basic Auth username",
+      "scope": "field"
+    },
+    {
+      "text": "Optional username required in addition to the IP rules.",
+      "scope": "help"
+    }
+  ],
+  "basic_auth_password": [
+    {
+      "text": "Basic Auth password",
+      "scope": "field"
+    },
+    {
+      "text": "Leave blank on edit to keep the stored password; its value is never sent back to the browser.",
+      "scope": "help"
+    }
+  ],
+  "auth_provider_name": [
+    {
+      "text": "Name",
+      "scope": "field"
+    },
+    {
+      "text": "A recognizable name used when assigning this provider to a site.",
+      "scope": "help"
+    }
+  ],
+  "auth_provider_type": [
+    {
+      "text": "Provider type",
+      "scope": "field"
+    },
+    {
+      "text": "The authentication method this provider uses.",
+      "scope": "help"
+    }
+  ],
+  "auth_provider_config": [
+    {
+      "text": "Credentials and connection",
+      "scope": "field"
+    },
+    {
+      "text": "Settings required by the selected provider type.",
+      "scope": "help"
+    }
+  ],
+  "required_permission": [
+    {
+      "text": "Required permission",
+      "scope": "field"
+    },
+    {
+      "text": "A single permission name, e.g. \"site.internal\", checked against the identity's permission claims. Only used by claims-based providers such as Proteus (HTTP Basic Auth ignores it). Leave blank to accept any authenticated identity.",
+      "scope": "help"
+    }
+  ],
+  "credentials": [
+    {
+      "text": "Credentials",
+      "scope": "field"
+    },
+    {
+      "text": "One Basic Auth username and password per row. Passwords are stored and shown as editable text.",
+      "scope": "help"
+    }
+  ],
+  "key": {
+    "text": "Username",
+    "scope": "form",
+    "field": "credentials"
+  },
+  "value": {
+    "text": "Password",
+    "scope": "form",
+    "field": "credentials"
+  },
+  "proteus_endpoint": [
+    {
+      "text": "Endpoint",
+      "scope": "field"
+    },
+    {
+      "text": "Base URL of the Proteus identity service.",
+      "scope": "help"
+    }
+  ],
+  "proteus_realm_client": [
+    {
+      "text": "Realm client",
+      "scope": "field"
+    },
+    {
+      "text": "Client identifier registered in the Proteus realm.",
+      "scope": "help"
+    }
+  ],
+  "proteus_access_key": [
+    {
+      "text": "Access key",
+      "scope": "field"
+    },
+    {
+      "text": "Secret access key used to call the Proteus realm.",
+      "scope": "help"
+    }
+  ],
+  "proteus_authenticator": [
+    {
+      "text": "Authenticator",
+      "scope": "field"
+    },
+    {
+      "text": "Slug of one specific Proteus sign-in method to force. Leave blank to let visitors choose from all sign-in methods the realm has enabled.",
+      "scope": "help"
+    }
+  ],
+  "branch": [
+    {
+      "text": "Branch",
+      "scope": "field"
+    },
+    {
+      "text": "Git branch to check out. Leave blank to use the repository default.",
+      "scope": "help"
+    }
+  ],
+  "build_command": [
+    {
+      "text": "Build command",
+      "scope": "field"
+    },
+    {
+      "text": "Shell command run after checkout and before a deployment becomes active.",
+      "scope": "help"
+    }
+  ],
+  "build_directory": [
+    {
+      "text": "Build directory",
+      "scope": "field"
+    },
+    {
+      "text": "Working directory for the build command, relative to the repository root.",
+      "scope": "help"
+    }
+  ],
+  "build_environment_variables": [
+    {
+      "text": "Build environment",
+      "scope": "field"
+    },
+    {
+      "text": "Environment variables available only while building the repository.",
+      "scope": "help"
+    }
+  ],
+  "build_timeout": [
+    {
+      "text": "Build timeout",
+      "scope": "field"
+    },
+    {
+      "text": "Maximum build duration in seconds before the deployment is cancelled.",
+      "scope": "help"
+    }
+  ],
+  "container_command": [
+    {
+      "text": "Container command",
+      "scope": "field"
+    },
+    {
+      "text": "Optional command that overrides the image's default command.",
+      "scope": "help"
+    }
+  ],
+  "container_port": [
+    {
+      "text": "Container port",
+      "scope": "field"
+    },
+    {
+      "text": "TCP port on which the application listens inside the container.",
+      "scope": "help"
+    }
+  ],
+  "connect_timeout": [
+    {
+      "text": "Connect timeout",
+      "scope": "field"
+    },
+    {
+      "text": "Maximum seconds allowed to establish the TCP connection to the passthrough backend.",
+      "scope": "help"
+    }
+  ],
+  "cpu_limit": [
+    {
+      "text": "CPU limit",
+      "scope": "field"
+    },
+    {
+      "text": "Maximum CPU cores available to the container. Leave blank for no limit.",
+      "scope": "help"
+    }
+  ],
+  "delay": [
+    {
+      "text": "Response delay",
+      "scope": "field"
+    },
+    {
+      "text": "Artificial delay in milliseconds before handling each request.",
+      "scope": "help"
+    }
+  ],
+  "denied_ips": [
+    {
+      "text": "Denied IP networks",
+      "scope": "field"
+    },
+    {
+      "text": "One IP address or CIDR network per line, for example 203.0.113.8 or 10.0.0.0/8.",
+      "scope": "help"
+    }
+  ],
+  "dockerfile": [
+    {
+      "text": "Dockerfile",
+      "scope": "field"
+    },
+    {
+      "text": "Path to the Dockerfile, relative to the repository root.",
+      "scope": "help"
+    }
+  ],
+  "environment_variables": [
+    {
+      "text": "Environment variables",
+      "scope": "field"
+    },
+    {
+      "text": "Variables passed to each application process at runtime.",
+      "scope": "help"
+    }
+  ],
+  "fallback_file": [
+    {
+      "text": "Fallback file",
+      "scope": "field"
+    },
+    {
+      "text": "File served when the requested path does not exist, for example index.html for an SPA.",
+      "scope": "help"
+    }
+  ],
+  "forward_host": [
+    {
+      "text": "Upstream host",
+      "scope": "field"
+    },
+    {
+      "text": "Hostname or IP address of the HTTP upstream.",
+      "scope": "help"
+    }
+  ],
+  "forward_port": [
+    {
+      "text": "Upstream port",
+      "scope": "field"
+    },
+    {
+      "text": "TCP port of the upstream. Defaults to 80 for HTTP and 443 for HTTPS.",
+      "scope": "help"
+    }
+  ],
+  "forward_scheme": [
+    {
+      "text": "Upstream protocol",
+      "scope": "field"
+    },
+    {
+      "text": "Protocol used to connect to the upstream.",
+      "scope": "help"
+    }
+  ],
+  "proxy_protocol_v2": [
+    {
+      "text": "Send PROXY protocol v2",
+      "scope": "field"
+    },
+    {
+      "text": "Prepend the binary PROXY v2 header so the backend receives the original client and destination addresses.",
+      "scope": "help"
+    }
+  ],
+  "tls_forward_host": [
+    {
+      "text": "TLS backend host",
+      "scope": "field"
+    },
+    {
+      "text": "Hostname or IP address that receives the original, still-encrypted TLS stream.",
+      "scope": "help"
+    }
+  ],
+  "tls_forward_port": {
+    "text": "TCP port that receives the original TLS stream.",
+    "scope": "help"
+  },
+  "ignore_certificates": [
+    {
+      "text": "Ignore TLS errors",
+      "scope": "field"
+    },
+    {
+      "text": "Accept an invalid or self-signed certificate from the upstream.",
+      "scope": "help"
+    }
+  ],
+  "image": [
+    {
+      "text": "Container image",
+      "scope": "field"
+    },
+    {
+      "text": "Image name to run when no Dockerfile build is used.",
+      "scope": "help"
+    },
+    {
+      "text": "Image",
+      "scope": "stack_services"
+    }
+  ],
+  "image_tag": [
+    {
+      "text": "Image tag",
+      "scope": "field"
+    },
+    {
+      "text": "Tag applied to a locally built image.",
+      "scope": "help"
+    }
+  ],
+  "indexes": [
+    {
+      "text": "Index files",
+      "scope": "field"
+    },
+    {
+      "text": "Serve conventional index files such as index.html from directories.",
+      "scope": "help"
+    }
+  ],
+  "maximum_processes": [
+    {
+      "text": "Maximum processes",
+      "scope": "field"
+    },
+    {
+      "text": "Upper scaling limit for concurrently running application processes.",
+      "scope": "help"
+    }
+  ],
+  "memory_limit": [
+    {
+      "text": "Memory limit",
+      "scope": "field"
+    },
+    {
+      "text": "Maximum container memory in megabytes. Leave blank for no limit.",
+      "scope": "help"
+    }
+  ],
+  "live_overview": {
+    "text": "Live Docker status",
+    "scope": "field"
+  },
+  "minimum_processes": [
+    {
+      "text": "Minimum processes",
+      "scope": "field"
+    },
+    {
+      "text": "Number of warm application processes Hohenheim keeps running.",
+      "scope": "help"
+    }
+  ],
+  "node_runtime": [
+    {
+      "text": "Node.js runtime",
+      "scope": "field"
+    },
+    {
+      "text": "Discovered Node.js version used to start this site.",
+      "scope": "help"
+    }
+  ],
+  "poll_interval": [
+    {
+      "text": "Poll interval",
+      "scope": "field"
+    },
+    {
+      "text": "Seconds between repository checks when polling is enabled.",
+      "scope": "help"
+    }
+  ],
+  "port_argument": [
+    {
+      "text": "Port argument",
+      "scope": "field"
+    },
+    {
+      "text": "Command-line argument placed before the allocated port number.",
+      "scope": "help"
+    }
+  ],
+  "preserve_path": [
+    {
+      "text": "Preserve path",
+      "scope": "field"
+    },
+    {
+      "text": "Append the original request path and query string to the redirect target.",
+      "scope": "help"
+    }
+  ],
+  "redirect_status": [
+    {
+      "text": "Redirect status",
+      "scope": "field"
+    },
+    {
+      "text": "HTTP status code returned for the redirect.",
+      "scope": "help"
+    }
+  ],
+  "repository_url": [
+    {
+      "text": "Repository URL",
+      "scope": "field"
+    },
+    {
+      "text": "Git clone URL. SSH authentication uses the server's configured SSH keys.",
+      "scope": "help"
+    }
+  ],
+  "request_timeout": [
+    {
+      "text": "Request timeout",
+      "scope": "field"
+    },
+    {
+      "text": "Maximum request lifetime in seconds. 0 removes the limit for streaming, gRPC and WebSocket backends.",
+      "scope": "help"
+    }
+  ],
+  "rewrite_location": [
+    {
+      "text": "Rewrite Location headers",
+      "scope": "field"
+    },
+    {
+      "text": "Rewrite upstream redirects so they keep using the public site hostname.",
+      "scope": "help"
+    }
+  ],
+  "upstream_protocol": [
+    {
+      "text": "HTTP version",
+      "scope": "field"
+    },
+    {
+      "text": "HTTP/2 is required for gRPC backends. Cleartext upstreams then use prior-knowledge h2c.",
+      "scope": "help"
+    }
+  ],
+  "root_path": [
+    {
+      "text": "Document root",
+      "scope": "field"
+    },
+    {
+      "text": "Directory containing the files to serve; a relative path resolves against the Hohenheim working directory.",
+      "scope": "help"
+    }
+  ],
+  "run_as_user": [
+    {
+      "text": "Run as user",
+      "scope": "field"
+    },
+    {
+      "text": "System account used for the child process, including its uid, gid and home directory.",
+      "scope": "help"
+    }
+  ],
+  "script": [
+    {
+      "text": "Script",
+      "scope": "field"
+    },
+    {
+      "text": "Application entry script, relative to the working directory.",
+      "scope": "help"
+    }
+  ],
+  "server": [
+    {
+      "text": "Server",
+      "scope": "field"
+    },
+    {
+      "text": "Host on which the container will run.",
+      "scope": "help"
+    }
+  ],
+  "shallow_clone": [
+    {
+      "text": "Shallow clone",
+      "scope": "field"
+    },
+    {
+      "text": "Fetch only the latest history to reduce checkout time and disk use.",
+      "scope": "help"
+    }
+  ],
+  "show_hidden_files": [
+    {
+      "text": "Show hidden files",
+      "scope": "field"
+    },
+    {
+      "text": "Allow files whose names start with a dot to be served or listed.",
+      "scope": "help"
+    }
+  ],
+  "source": [
+    {
+      "text": "Source",
+      "scope": "field"
+    },
+    {
+      "text": "Use files already on this server or deploy them from a Git repository.",
+      "scope": "help"
+    }
+  ],
+  "start_command": [
+    {
+      "text": "Start command",
+      "scope": "field"
+    },
+    {
+      "text": "Executable and arguments used to start each application process.",
+      "scope": "help"
+    }
+  ],
+  "submodules": [
+    {
+      "text": "Git submodules",
+      "scope": "field"
+    },
+    {
+      "text": "Initialize and update repository submodules after checkout.",
+      "scope": "help"
+    }
+  ],
+  "target_url": [
+    {
+      "text": "Target URL",
+      "scope": "field"
+    },
+    {
+      "text": "Absolute URL or root-relative path to which requests are redirected.",
+      "scope": "help"
+    }
+  ],
+  "upstream_socket": [
+    {
+      "text": "Upstream Unix socket",
+      "scope": "field"
+    },
+    {
+      "text": "Unix socket path. When set, it takes precedence over host and port.",
+      "scope": "help"
+    }
+  ],
+  "use_ports": [
+    {
+      "text": "Use TCP ports",
+      "scope": "field"
+    },
+    {
+      "text": "Allocate a loopback TCP port instead of the default Unix socket transport.",
+      "scope": "help"
+    }
+  ],
+  "volumes": [
+    {
+      "text": "Volumes",
+      "scope": "field"
+    },
+    {
+      "text": "Container bind mounts in host-path:container-path form.",
+      "scope": "help"
+    }
+  ],
+  "wait_for_ready": [
+    {
+      "text": "Wait for ready signal",
+      "scope": "field"
+    },
+    {
+      "text": "Route traffic only after the child reports that startup completed.",
+      "scope": "help"
+    }
+  ],
+  "webhook_secret": [
+    {
+      "text": "Webhook secret",
+      "scope": "field"
+    },
+    {
+      "text": "Secret used to verify signed repository webhook requests.",
+      "scope": "help"
+    }
+  ],
+  "websocket_upgrade": [
+    {
+      "text": "Allow WebSockets",
+      "scope": "field"
+    },
+    {
+      "text": "Forward WebSocket upgrade requests to the upstream.",
+      "scope": "help"
+    }
+  ],
+  "working_directory": [
+    {
+      "text": "Working directory",
+      "scope": "field"
+    },
+    {
+      "text": "Directory in which the application command is started.",
+      "scope": "help"
+    }
+  ],
+  "cert_renewal_failed": {
+    "text": "Certificate renewal failed",
+    "scope": "notification_event"
+  },
+  "cert_expiring": {
+    "text": "Certificate expiring",
+    "scope": "notification_event"
+  },
+  "deploy_failed": {
+    "text": "Deployment failed",
+    "scope": "notification_event"
+  },
+  "backup_failed": {
+    "text": "Backup failed",
+    "scope": "notification_event"
+  },
+  "process_crash_loop": {
+    "text": "Process crash loop",
+    "scope": "notification_event"
+  },
+  "auto_ban_budget_exhausted": {
+    "text": "Auto-ban budget exhausted",
+    "scope": "notification_event"
+  },
+  "spamservice_outage": {
+    "text": "Spamservice unreachable",
+    "scope": "notification_event"
+  },
+  "spamservice_recovered": {
+    "text": "Spamservice recovered",
+    "scope": "notification_event"
+  },
+  "active": [
+    {
+      "text": "Active",
+      "scope": "field"
+    },
+    {
+      "text": "Active",
+      "scope": "spamservice_key"
+    }
+  ],
+  "add_domain": {
+    "text": "Add domain",
+    "scope": "site_domains"
+  },
+  "attach": [
+    {
+      "text": "Attach database",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Add secondary",
+      "scope": "dns_secondaries"
+    }
+  ],
+  "auto_deploy_disabled": {
+    "text": "Auto-deploy is disabled for this site: pushes are acknowledged but not deployed. Enable it in the site's source settings.",
+    "scope": "site_deployments"
+  },
+  "build_log": {
+    "text": "Build log",
+    "scope": "site_deployments"
+  },
+  "cancel": [
+    {
+      "text": "Cancel deploy",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Cancel",
+      "scope": "certificate_request"
+    }
+  ],
+  "captured": {
+    "text": "Captured",
+    "scope": "site_processes"
+  },
+  "certificate": [
+    {
+      "text": "Certificate",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Certificate {$name}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Certificate",
+      "scope": "field"
+    },
+    {
+      "text": "TLS certificate served for this hostname. Blank lets the platform pick or request one.",
+      "scope": "help"
+    }
+  ],
+  "clients": [
+    {
+      "text": "Clients",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Clients",
+      "scope": "spamservice"
+    }
+  ],
+  "commit": {
+    "text": "Commit",
+    "scope": "site_deployments"
+  },
+  "connection": {
+    "text": "Connection",
+    "scope": "database_tab"
+  },
+  "copy_password": {
+    "text": "Copy password",
+    "scope": "database_tab"
+  },
+  "copy_webhook_secret": {
+    "text": "Copy webhook secret",
+    "scope": "site_deployments"
+  },
+  "copy_webhook_url": {
+    "text": "Copy webhook URL",
+    "scope": "site_deployments"
+  },
+  "cpu": {
+    "text": "CPU",
+    "scope": "site_processes"
+  },
+  "current_commit": {
+    "text": "Currently serving commit {$commit}.",
+    "scope": "site_deployments"
+  },
+  "database": [
+    {
+      "text": "Database",
+      "scope": "database_tab"
+    },
+    {
+      "text": "Database",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Database {$name}",
+      "scope": "attention_title"
+    }
+  ],
+  "database_not_running": {
+    "text": "Attached database {$name} is not running",
+    "scope": "attention_detail"
+  },
+  "database_status": {
+    "text": "Attached database {$name} is {$status}",
+    "scope": "attention_detail"
+  },
+  "degraded": {
+    "text": "Degraded",
+    "scope": "attention_detail"
+  },
+  "deploy": [
+    {
+      "text": "Deploy of {$name}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Deploy",
+      "scope": "stack"
+    }
+  ],
+  "deploy_now": {
+    "text": "Deploy now",
+    "scope": "site_deployments"
+  },
+  "down": {
+    "text": "Down",
+    "scope": "attention_detail"
+  },
+  "dump_file": {
+    "text": "Dump file",
+    "scope": "database_tab"
+  },
+  "duration": [
+    {
+      "text": "Duration",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Duration",
+      "scope": "stack_deployments"
+    }
+  ],
+  "empty": [
+    {
+      "text": "No databases attached",
+      "scope": "site_databases"
+    },
+    {
+      "text": "No domains configured",
+      "scope": "site_domains"
+    },
+    {
+      "text": "No deployments yet",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "No dev servers connected",
+      "scope": "dev_sessions"
+    },
+    {
+      "text": "No secondaries configured",
+      "scope": "dns_secondaries"
+    },
+    {
+      "text": "No delegated access",
+      "scope": "site_access"
+    },
+    {
+      "text": "No services yet",
+      "scope": "stack_services"
+    },
+    {
+      "text": "No deployments yet",
+      "scope": "stack_deployments"
+    }
+  ],
+  "empty_description": [
+    {
+      "text": "Attach a managed database and its connection details are injected into this site's processes as environment variables.",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Add a hostname so traffic routes to this site.",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Webhook, poll or manual deploys of this site will show up here.",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Nobody besides administrators can manage this site yet.",
+      "scope": "site_access"
+    },
+    {
+      "text": "Add a service to describe what this stack runs.",
+      "scope": "stack_services"
+    },
+    {
+      "text": "Use the Deploy action to run the first deployment.",
+      "scope": "stack_deployments"
+    }
+  ],
+  "engine": [
+    {
+      "text": "Engine",
+      "scope": "database_tab"
+    },
+    {
+      "text": "Engine",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Engine",
+      "scope": "field"
+    },
+    {
+      "text": "Database engine. Fixed after creation; destroy and recreate to change it.",
+      "scope": "help"
+    }
+  ],
+  "env_prefix": [
+    {
+      "text": "Env prefix",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Env prefix",
+      "scope": "field"
+    },
+    {
+      "text": "Names the injected variable family: DB gives DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME and DB_URL. The site's first attachment also provides DATABASE_URL.",
+      "scope": "help"
+    }
+  ],
+  "failed": {
+    "text": "Failed",
+    "scope": "site_databases"
+  },
+  "forced": {
+    "text": "Forced",
+    "scope": "site_domains"
+  },
+  "hostname": [
+    {
+      "text": "Hostname",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Hostname",
+      "scope": "field"
+    },
+    {
+      "text": "The Host header to match. Wildcard mode allows * and ?; regex mode takes a full regular expression.",
+      "scope": "help"
+    }
+  ],
+  "isolate": {
+    "text": "Isolate",
+    "scope": "site_processes"
+  },
+  "isolated": {
+    "text": "Isolated",
+    "scope": "site_processes"
+  },
+  "kill": {
+    "text": "Kill",
+    "scope": "site_processes"
+  },
+  "kill_confirm": {
+    "text": "The process is terminated immediately.",
+    "scope": "site_processes"
+  },
+  "last_run_failed": {
+    "text": "Last run failed",
+    "scope": "attention_detail"
+  },
+  "lines": {
+    "text": "Lines",
+    "scope": "site_processes"
+  },
+  "match_type": [
+    {
+      "text": "Match type",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Match type",
+      "scope": "field"
+    },
+    {
+      "text": "How the hostname is compared: exact, wildcard, or regular expression.",
+      "scope": "help"
+    }
+  ],
+  "memory": {
+    "text": "Memory",
+    "scope": "site_processes"
+  },
+  "no_logs": {
+    "text": "No stored logs yet.",
+    "scope": "site_processes"
+  },
+  "none": {
+    "text": "None",
+    "scope": "site_domains"
+  },
+  "none_running": {
+    "text": "No processes running.",
+    "scope": "site_processes"
+  },
+  "off": {
+    "text": "Off",
+    "scope": "site_domains"
+  },
+  "password": {
+    "text": "Password",
+    "scope": "database_tab"
+  },
+  "payload_url": {
+    "text": "Payload URL",
+    "scope": "site_deployments"
+  },
+  "pid": {
+    "text": "PID",
+    "scope": "site_processes"
+  },
+  "port": [
+    {
+      "text": "Port",
+      "scope": "dns_remote"
+    },
+    {
+      "text": "Port",
+      "scope": "site_processes"
+    }
+  ],
+  "primary": {
+    "text": "Primary",
+    "scope": "site_databases"
+  },
+  "provisioning": {
+    "text": "Provisioning",
+    "scope": "site_databases"
+  },
+  "provisioning_failed": {
+    "text": "Provisioning failed",
+    "scope": "attention_detail"
+  },
+  "ready": [
+    {
+      "text": "Ready",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Ready",
+      "scope": "spamservice"
+    }
+  ],
+  "request_certificate": [
+    {
+      "text": "Request certificate",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Request Let's Encrypt certificate",
+      "scope": "certificate_request"
+    }
+  ],
+  "restore": [
+    {
+      "text": "Restore",
+      "scope": "database_tab"
+    },
+    {
+      "text": "Restore",
+      "scope": "database"
+    }
+  ],
+  "restore_description": {
+    "text": "Uploads a dump file and loads it into the running database.",
+    "scope": "database_tab"
+  },
+  "restore_dump": {
+    "text": "Restore from dump",
+    "scope": "database_tab"
+  },
+  "restored": {
+    "text": "Backup restored into '{$name}'.",
+    "scope": "database_tab"
+  },
+  "rollback": [
+    {
+      "text": "Roll back",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Roll back",
+      "scope": "stack"
+    }
+  ],
+  "rollback_confirm": [
+    {
+      "text": "Activate the previous deploy slot? The current version stops serving.",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Re-deploy the last successful deployment? Current configuration changes stay saved but are not deployed.",
+      "scope": "stack"
+    }
+  ],
+  "secret": {
+    "text": "Secret",
+    "scope": "site_deployments"
+  },
+  "site": {
+    "text": "Site {$name}",
+    "scope": "attention_title"
+  },
+  "ssl": {
+    "text": "SSL",
+    "scope": "site_domains"
+  },
+  "start": [
+    {
+      "text": "Start process",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Start",
+      "scope": "spamservice"
+    }
+  ],
+  "started": [
+    {
+      "text": "Started",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Started",
+      "scope": "stack_deployments"
+    }
+  ],
+  "starting": {
+    "text": "Starting",
+    "scope": "site_processes"
+  },
+  "status": [
+    {
+      "text": "Status: {$status}",
+      "scope": "database_tab"
+    },
+    {
+      "text": "Status",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Status",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Status",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Status",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Status",
+      "scope": "stack_deployments"
+    }
+  ],
+  "stored_log": {
+    "text": "Stored log {$title}",
+    "scope": "site_processes"
+  },
+  "stored_logs": {
+    "text": "Stored process logs",
+    "scope": "site_processes"
+  },
+  "task": {
+    "text": "Task {$name}",
+    "scope": "attention_title"
+  },
+  "terminal": {
+    "text": "Terminal",
+    "scope": "site_processes"
+  },
+  "terminal_description": {
+    "text": "Live stdout/stderr for pid {$pid}. Keystrokes are sent to the process's stdin.",
+    "scope": "site_processes"
+  },
+  "trigger": [
+    {
+      "text": "Trigger",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Trigger",
+      "scope": "stack_deployments"
+    }
+  ],
+  "unisolate": {
+    "text": "Unisolate",
+    "scope": "site_processes"
+  },
+  "unmanaged": {
+    "text": "Not a managed site",
+    "scope": "site_processes"
+  },
+  "unmanaged_description": {
+    "text": "Only node, alchemy, command, java and docker sites run managed processes.",
+    "scope": "site_processes"
+  },
+  "used_by": {
+    "text": "Used by",
+    "scope": "database_tab"
+  },
+  "user": [
+    {
+      "text": "User",
+      "scope": "database_tab"
+    },
+    {
+      "text": "User",
+      "scope": "site_access"
+    }
+  ],
+  "variables": {
+    "text": "Injected variables",
+    "scope": "site_databases"
+  },
+  "webhook": {
+    "text": "Push webhook",
+    "scope": "site_deployments"
+  },
+  "webhook_description": {
+    "text": "Configure this URL and secret on your git host (GitHub, GitLab or Gitea) to deploy on every push.",
+    "scope": "site_deployments"
+  },
+  "onboarding": {
+    "text": "Getting started",
+    "scope": "dashboard"
+  },
+  "title": [
+    {
+      "text": "Deployments",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Processes",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Create your first site",
+      "scope": "onboarding"
+    },
+    {
+      "text": "Hohenheim admin",
+      "scope": "admin"
+    },
+    {
+      "text": "Settings",
+      "scope": "settings"
+    },
+    {
+      "text": "Site management",
+      "scope": "manage"
+    }
+  ],
+  "description": [
+    {
+      "text": "Running child processes for this site.",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Choose how the application runs, add a domain, then request a certificate. Hohenheim guides each step from the site page.",
+      "scope": "onboarding"
+    },
+    {
+      "text": "Description",
+      "scope": "field"
+    }
+  ],
+  "create_site": {
+    "text": "Create site",
+    "scope": "onboarding"
+  },
+  "publish_records": {
+    "text": "Publish the DNS TXT records",
+    "scope": "certificate_request"
+  },
+  "publish_description": {
+    "text": "Add every value below at your DNS provider. Values sharing a name must coexist; do not replace one with the other.",
+    "scope": "certificate_request"
+  },
+  "manual_ephemeral": {
+    "text": "This order remains available for 30 minutes and is lost when Hohenheim restarts. Manual DNS certificates do not auto-renew.",
+    "scope": "certificate_request"
+  },
+  "record_name": [
+    {
+      "text": "TXT record name",
+      "scope": "certificate_request"
+    },
+    {
+      "text": "Name",
+      "scope": "field"
+    },
+    {
+      "text": "Owner name relative to the zone: @ for the zone itself, www for a subdomain, * for a wildcard",
+      "scope": "help"
+    }
+  ],
+  "record_value": [
+    {
+      "text": "TXT record value",
+      "scope": "certificate_request"
+    },
+    {
+      "text": "Value",
+      "scope": "field"
+    },
+    {
+      "text": "A/AAAA: an IP address. CNAME/NS/MX/SRV: a hostname. TXT: the text. CAA: flags tag value, e.g. 0 issue letsencrypt.org",
+      "scope": "help"
+    }
+  ],
+  "copy_record_name": {
+    "text": "Copy TXT record name",
+    "scope": "certificate_request"
+  },
+  "copy_record_value": {
+    "text": "Copy TXT record value",
+    "scope": "certificate_request"
+  },
+  "verify_dns": {
+    "text": "Verify DNS and issue certificate",
+    "scope": "certificate_request"
+  },
+  "start_over": {
+    "text": "Start over",
+    "scope": "certificate_request"
+  },
+  "name": [
+    {
+      "text": "Name",
+      "scope": "certificate_request"
+    },
+    {
+      "text": "Name",
+      "scope": "dev_sessions"
+    },
+    {
+      "text": "Name",
+      "scope": "field"
+    },
+    {
+      "text": "Name",
+      "scope": "spamservice_client"
+    },
+    {
+      "text": "Name",
+      "scope": "spamservice_key"
+    }
+  ],
+  "name_placeholder": {
+    "text": "Defaults to the first domain",
+    "scope": "certificate_request"
+  },
+  "domains": [
+    {
+      "text": "Domains",
+      "scope": "certificate_request"
+    },
+    {
+      "text": "Domains",
+      "scope": "site"
+    }
+  ],
+  "domains_help": {
+    "text": "Add each hostname separately. Wildcards such as *.example.com require DNS-01 and do not cover the bare example.com name; include both when needed.",
+    "scope": "certificate_request"
+  },
+  "validation": {
+    "text": "Validation method",
+    "scope": "certificate_request"
+  },
+  "validation_help": {
+    "text": "HTTP-01 requires each exact hostname to route to this proxy. DNS-01 works for exact and wildcard names.",
+    "scope": "certificate_request"
+  },
+  "dns_mode": {
+    "text": "DNS publishing (DNS-01 only)",
+    "scope": "certificate_request"
+  },
+  "manual": {
+    "text": "Manual TXT records (no auto-renewal)",
+    "scope": "certificate_request"
+  },
+  "automatic_hook": {
+    "text": "Automatic command hook",
+    "scope": "certificate_request"
+  },
+  "hook_ready": {
+    "text": "The configured hook publishes and removes TXT values, so this certificate can renew automatically.",
+    "scope": "certificate_request"
+  },
+  "hook_missing": {
+    "text": "Configure ssl.dns_hook_command in Settings to enable automatic DNS-01 issuance and renewal.",
+    "scope": "certificate_request"
+  },
+  "account_email": {
+    "text": "Account email (optional)",
+    "scope": "certificate_request"
+  },
+  "account_email_help": {
+    "text": "Overrides the global Let's Encrypt account email for this certificate.",
+    "scope": "certificate_request"
+  },
+  "request": {
+    "text": "Request certificate",
+    "scope": "certificate_request"
+  },
+  "any": {
+    "text": "Any (IP or Basic Auth)",
+    "scope": "access_satisfy"
+  },
+  "all": {
+    "text": "All (IP and Basic Auth)",
+    "scope": "access_satisfy"
+  },
+  "exact": {
+    "text": "Exact hostname",
+    "scope": "domain_match"
+  },
+  "wildcard": {
+    "text": "Wildcard (* and ?)",
+    "scope": "domain_match"
+  },
+  "regex": {
+    "text": "Regular expression",
+    "scope": "domain_match"
+  },
+  "local_files": {
+    "text": "Local files",
+    "scope": "site_source"
+  },
+  "git_repository": {
+    "text": "Git repository",
+    "scope": "site_source"
+  },
+  "server_local": {
+    "text": "{$name} (local)",
+    "scope": "server_option"
+  },
+  "proxy_unavailable": {
+    "text": "The proxy server is not available yet",
+    "scope": "certificate_request_error"
+  },
+  "dns_validation_failed": {
+    "text": "DNS validation failed. Verify every TXT value and start a new request.",
+    "scope": "certificate_request_error"
+  },
+  "invalid_email": {
+    "text": "Invalid account email: {$email}",
+    "scope": "certificate_request_error"
+  },
+  "domain_required": {
+    "text": "At least one domain is required",
+    "scope": "certificate_request_error"
+  },
+  "unknown_validation": {
+    "text": "Unknown validation method: {$method}",
+    "scope": "certificate_request_error"
+  },
+  "wildcard_requires_dns": {
+    "text": "Wildcard certificates require DNS-01 validation",
+    "scope": "certificate_request_error"
+  },
+  "invalid_hostnames": {
+    "text": "Invalid hostnames: {$hostnames}",
+    "scope": "certificate_request_error"
+  },
+  "excluded_hostnames": {
+    "text": "Excluded from Let's Encrypt by their domain settings: {$hostnames}",
+    "scope": "certificate_request_error"
+  },
+  "dns_start_failed": {
+    "text": "Could not start DNS validation: {$reason}",
+    "scope": "certificate_request_error"
+  },
+  "unknown_dns_mode": {
+    "text": "Unknown DNS publishing mode: {$mode}",
+    "scope": "certificate_request_error"
+  },
+  "hook_not_configured": {
+    "text": "The automated DNS hook is not configured in SSL / TLS settings",
+    "scope": "certificate_request_error"
+  },
+  "request_failed": {
+    "text": "Certificate request failed: {$reason}",
+    "scope": "certificate_request_error"
+  },
+  "unknown_reason": {
+    "text": "Unknown reason",
+    "scope": "certificate_request_error"
+  },
+  "manual_expired": {
+    "text": "The manual DNS request expired or the server restarted. Start a new request.",
+    "scope": "certificate_request_error"
+  },
+  "plural": [
+    {
+      "text": "Access Lists",
+      "scope": "access_list"
+    },
+    {
+      "text": "Auth Providers",
+      "scope": "auth_provider"
+    },
+    {
+      "text": "Certificates",
+      "scope": "certificate"
+    },
+    {
+      "text": "Databases",
+      "scope": "database"
+    },
+    {
+      "text": "Notification Channels",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "Servers",
+      "scope": "server"
+    },
+    {
+      "text": "Sites",
+      "scope": "site"
+    },
+    {
+      "text": "Attached databases",
+      "scope": "site_database"
+    },
+    {
+      "text": "Site Domains",
+      "scope": "site_domain"
+    },
+    {
+      "text": "DNS Zones",
+      "scope": "dns_zone"
+    },
+    {
+      "text": "DNS Records",
+      "scope": "dns_record"
+    },
+    {
+      "text": "DNS peers",
+      "scope": "dns_peer"
+    },
+    {
+      "text": "Zone secondaries",
+      "scope": "dns_zone_peer"
+    },
+    {
+      "text": "IP Bans",
+      "scope": "ban"
+    },
+    {
+      "text": "Spamservice clients",
+      "scope": "spamservice_client"
+    },
+    {
+      "text": "Client keys",
+      "scope": "spamservice_key"
+    },
+    {
+      "text": "Security events",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "Spam words",
+      "scope": "spamservice_word"
+    },
+    {
+      "text": "Samples",
+      "scope": "spamservice_sample"
+    },
+    {
+      "text": "Stacks",
+      "scope": "stack"
+    },
+    {
+      "text": "Stack services",
+      "scope": "stack_service"
+    },
+    {
+      "text": "Stack files",
+      "scope": "stack_file"
+    }
+  ],
+  "dashboard": {
+    "text": "Dashboard",
+    "scope": "admin"
+  },
+  "download": {
+    "text": "Download",
+    "scope": "certificate"
+  },
+  "renewal_status": {
+    "text": "Renewal status",
+    "scope": "certificate"
+  },
+  "request_le": {
+    "text": "Request via Let's Encrypt",
+    "scope": "certificate"
+  },
+  "backup": {
+    "text": "Download backup",
+    "scope": "database"
+  },
+  "infra": {
+    "text": "Infrastructure",
+    "scope": "nav"
+  },
+  "proxy": {
+    "text": "Proxy",
+    "scope": "nav"
+  },
+  "test": [
+    {
+      "text": "Send test",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "Test connection",
+      "scope": "spamservice"
+    }
+  ],
+  "test_failed": {
+    "text": "Test delivery failed",
+    "scope": "notification_channel"
+  },
+  "test_ok": [
+    {
+      "text": "Test delivered",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "Spamservice answered: {$status}",
+      "scope": "spamservice"
+    }
+  ],
+  "host_status": {
+    "text": "Host",
+    "scope": "server"
+  },
+  "clone": {
+    "text": "Clone",
+    "scope": "site"
+  },
+  "databases": {
+    "text": "Databases",
+    "scope": "site"
+  },
+  "clone_confirm": {
+    "text": "Create a copy with the same settings and domains (disabled by default)?",
+    "scope": "site"
+  },
+  "deployments": [
+    {
+      "text": "Deployments",
+      "scope": "site"
+    },
+    {
+      "text": "Deployments",
+      "scope": "stack"
+    }
+  ],
+  "disabled_toast": {
+    "text": "Site disabled",
+    "scope": "site"
+  },
+  "enabled_toast": {
+    "text": "Site enabled",
+    "scope": "site"
+  },
+  "dev_sessions": {
+    "text": "Dev sessions",
+    "scope": "site"
+  },
+  "processes": {
+    "text": "Processes",
+    "scope": "site"
+  },
+  "toggle": {
+    "text": "Enable/disable",
+    "scope": "site"
+  },
+  "attention": {
+    "text": "Needs attention",
+    "scope": "dashboard"
+  },
+  "all_clear": {
+    "text": "All clear - nothing needs attention.",
+    "scope": "dashboard"
+  },
+  "recent_activity": {
+    "text": "Recent activity",
+    "scope": "dashboard"
+  },
+  "site_type": [
+    {
+      "text": "Site type",
+      "scope": "field"
+    },
+    {
+      "text": "How this site is served: managed process, static files, proxy, redirect, ...",
+      "scope": "help"
+    }
+  ],
+  "enabled": [
+    {
+      "text": "Enabled",
+      "scope": "field"
+    },
+    {
+      "text": "Disabled sites are not routed; requests get the offline page.",
+      "scope": "help"
+    },
+    {
+      "text": "Enabled",
+      "scope": "spamservice_client"
+    }
+  ],
+  "settings": {
+    "text": "Settings",
+    "scope": "field"
+  },
+  "source_settings": {
+    "text": "Source settings",
+    "scope": "field"
+  },
+  "access_list": [
+    {
+      "text": "Access list",
+      "scope": "field"
+    },
+    {
+      "text": "Optional IP allow/deny list and basic auth applied before requests reach the site.",
+      "scope": "help"
+    }
+  ],
+  "auth_provider": [
+    {
+      "text": "Auth provider",
+      "scope": "field"
+    },
+    {
+      "text": "Optional identity provider visitors must authenticate with before reaching the site.",
+      "scope": "help"
+    }
+  ],
+  "listen_on": [
+    {
+      "text": "Listen address",
+      "scope": "field"
+    },
+    {
+      "text": "Only serve this domain on the selected local IP address. Blank means all interfaces.",
+      "scope": "help"
+    }
+  ],
+  "path_prefix": [
+    {
+      "text": "Path prefix",
+      "scope": "field"
+    },
+    {
+      "text": "Only requests whose path starts with this prefix use this entry. Blank matches everything.",
+      "scope": "help"
+    }
+  ],
+  "strip_path": [
+    {
+      "text": "Strip path",
+      "scope": "field"
+    },
+    {
+      "text": "Remove the matched path prefix before forwarding the request upstream.",
+      "scope": "help"
+    }
+  ],
+  "force_ssl": [
+    {
+      "text": "Force SSL",
+      "scope": "field"
+    },
+    {
+      "text": "Redirect plain HTTP requests to HTTPS.",
+      "scope": "help"
+    }
+  ],
+  "hsts_enabled": [
+    {
+      "text": "HSTS",
+      "scope": "field"
+    },
+    {
+      "text": "Send the Strict-Transport-Security header so browsers refuse plain HTTP for this host.",
+      "scope": "help"
+    }
+  ],
+  "hsts_subdomains": [
+    {
+      "text": "HSTS subdomains",
+      "scope": "field"
+    },
+    {
+      "text": "Extend HSTS to all subdomains (includeSubDomains).",
+      "scope": "help"
+    }
+  ],
+  "custom_headers": [
+    {
+      "text": "Request headers",
+      "scope": "field"
+    },
+    {
+      "text": "Headers set on the request before it is forwarded upstream. An empty value removes the header.",
+      "scope": "help"
+    }
+  ],
+  "response_headers": [
+    {
+      "text": "Response headers",
+      "scope": "field"
+    },
+    {
+      "text": "Headers set on the response sent to the client. An empty value removes the header.",
+      "scope": "help"
+    }
+  ],
+  "exclude_from_letsencrypt": [
+    {
+      "text": "Exclude from Let's Encrypt",
+      "scope": "field"
+    },
+    {
+      "text": "Leave this hostname out when requesting Let's Encrypt certificates for the site.",
+      "scope": "help"
+    }
+  ],
+  "database_name": {
+    "text": "Unique name for this managed database; also names its container and volume. Lowercase letters, digits, and dashes.",
+    "scope": "help"
+  },
+  "db_user": [
+    {
+      "text": "Database user",
+      "scope": "field"
+    },
+    {
+      "text": "Username created in the database container and injected into attached sites.",
+      "scope": "help"
+    }
+  ],
+  "db_password": [
+    {
+      "text": "Database password",
+      "scope": "field"
+    },
+    {
+      "text": "Password for the database user. Leave blank to generate one.",
+      "scope": "help"
+    }
+  ],
+  "db_name": [
+    {
+      "text": "Database name",
+      "scope": "field"
+    },
+    {
+      "text": "Name of the initial database created inside the engine.",
+      "scope": "help"
+    }
+  ],
+  "ephemeral": [
+    {
+      "text": "Ephemeral",
+      "scope": "field"
+    },
+    {
+      "text": "Store data in a RAM-backed tmpfs: fast, but ALL data is lost when the container restarts.",
+      "scope": "help"
+    }
+  ],
+  "records": {
+    "text": "Records",
+    "scope": "dns_zone"
+  },
+  "records_hint": {
+    "text": "Open this zone's A, AAAA, CNAME, MX, TXT and other DNS records.",
+    "scope": "dns_zone"
+  },
+  "zone_file": {
+    "text": "Zone file",
+    "scope": "dns_zone"
+  },
+  "origin": [
+    {
+      "text": "Zone origin",
+      "scope": "field"
+    },
+    {
+      "text": "The domain this zone is authoritative for, e.g. example.com (no trailing dot)",
+      "scope": "help"
+    }
+  ],
+  "soa_primary_ns": [
+    {
+      "text": "Primary name server",
+      "scope": "field"
+    },
+    {
+      "text": "Hostname of the primary name server (the MNAME in the SOA record); leave empty for ns1.<zone>",
+      "scope": "help"
+    }
+  ],
+  "soa_contact": [
+    {
+      "text": "Contact email",
+      "scope": "field"
+    },
+    {
+      "text": "Administrative contact for the zone; leave empty for hostmaster@<zone>",
+      "scope": "help"
+    }
+  ],
+  "serial": {
+    "text": "Serial",
+    "scope": "field"
+  },
+  "default_ttl": [
+    {
+      "text": "Default TTL",
+      "scope": "field"
+    },
+    {
+      "text": "Seconds resolvers may cache records that set no explicit TTL (3600 = 1 hour)",
+      "scope": "help"
+    }
+  ],
+  "negative_ttl": [
+    {
+      "text": "Negative TTL",
+      "scope": "field"
+    },
+    {
+      "text": "Seconds resolvers may cache name-does-not-exist answers (300 = 5 minutes)",
+      "scope": "help"
+    }
+  ],
+  "soa_refresh": [
+    {
+      "text": "SOA refresh",
+      "scope": "field"
+    },
+    {
+      "text": "Seconds before a secondary name server re-checks this zone (7200 = 2 hours)",
+      "scope": "help"
+    }
+  ],
+  "soa_retry": [
+    {
+      "text": "SOA retry",
+      "scope": "field"
+    },
+    {
+      "text": "Seconds a secondary waits after a failed refresh before retrying (3600 = 1 hour)",
+      "scope": "help"
+    }
+  ],
+  "soa_expire": [
+    {
+      "text": "SOA expire",
+      "scope": "field"
+    },
+    {
+      "text": "Seconds after which a secondary that cannot reach this server stops answering (1209600 = 2 weeks)",
+      "scope": "help"
+    }
+  ],
+  "zone_enabled": [
+    {
+      "text": "Enabled",
+      "scope": "field"
+    },
+    {
+      "text": "Disabled zones are not served and their names get REFUSED answers",
+      "scope": "help"
+    }
+  ],
+  "record_zone": [
+    {
+      "text": "Zone",
+      "scope": "field"
+    },
+    {
+      "text": "The authoritative zone this record belongs to.",
+      "scope": "help"
+    }
+  ],
+  "record_type": [
+    {
+      "text": "Type",
+      "scope": "field"
+    },
+    {
+      "text": "The record type; MX and SRV also need a priority, SRV also needs a port",
+      "scope": "help"
+    }
+  ],
+  "record_ttl": [
+    {
+      "text": "TTL",
+      "scope": "field"
+    },
+    {
+      "text": "Seconds resolvers may cache this record; leave empty to use the zone default",
+      "scope": "help"
+    }
+  ],
+  "record_priority": [
+    {
+      "text": "Priority",
+      "scope": "field"
+    },
+    {
+      "text": "Required for MX and SRV records; lower numbers are tried first",
+      "scope": "help"
+    }
+  ],
+  "record_weight": [
+    {
+      "text": "Weight",
+      "scope": "field"
+    },
+    {
+      "text": "SRV only: relative weight for records with the same priority (0 when unsure)",
+      "scope": "help"
+    }
+  ],
+  "record_port": [
+    {
+      "text": "Port",
+      "scope": "field"
+    },
+    {
+      "text": "SRV only: the TCP/UDP port the service listens on",
+      "scope": "help"
+    }
+  ],
+  "record_enabled": [
+    {
+      "text": "Enabled",
+      "scope": "field"
+    },
+    {
+      "text": "Disabled records stay stored but are not served",
+      "scope": "help"
+    }
+  ],
+  "managed_by": {
+    "text": "Managed by",
+    "scope": "field"
+  },
+  "record_count": {
+    "text": "Records",
+    "scope": "dns_zone"
+  },
+  "ds_title": {
+    "text": "DS record (for the registrar)",
+    "scope": "dns_zone"
+  },
+  "ds_description": {
+    "text": "Lodge this DS record with your domain registrar to complete the DNSSEC chain of trust. It changes if you regenerate the signing key.",
+    "scope": "dns_zone"
+  },
+  "dnssec_enabled": [
+    {
+      "text": "Sign this zone (DNSSEC)",
+      "scope": "field"
+    },
+    {
+      "text": "Generate a signing key on first use and serve signed answers. Requires lodging the DS record (shown on the Zone file tab) with your registrar.",
+      "scope": "help"
+    }
+  ],
+  "add_record": {
+    "text": "Add record",
+    "scope": "dns_zone"
+  },
+  "record_name_column": {
+    "text": "Name",
+    "scope": "dns_zone"
+  },
+  "record_type_column": {
+    "text": "Type",
+    "scope": "dns_zone"
+  },
+  "record_ttl_column": {
+    "text": "TTL",
+    "scope": "dns_zone"
+  },
+  "record_value_column": {
+    "text": "Value",
+    "scope": "dns_zone"
+  },
+  "record_status_column": {
+    "text": "Status",
+    "scope": "dns_zone"
+  },
+  "record_enabled_badge": {
+    "text": "Active",
+    "scope": "dns_zone"
+  },
+  "record_disabled_badge": {
+    "text": "Disabled",
+    "scope": "dns_zone"
+  },
+  "record_managed_badge": {
+    "text": "ACME",
+    "scope": "dns_zone"
+  },
+  "records_empty": {
+    "text": "No records yet",
+    "scope": "dns_zone"
+  },
+  "records_empty_description": {
+    "text": "Add A/AAAA records for your hosts and NS records for the zone itself.",
+    "scope": "dns_zone"
+  },
+  "zone_file_description": {
+    "text": "The zone in standard master-file format; disabled rows appear as comments.",
+    "scope": "dns_zone"
+  },
+  "import_zone_file": {
+    "text": "Import zone file",
+    "scope": "dns_zone"
+  },
+  "import_description": {
+    "text": "Paste standard zone-file text to load records into this zone.",
+    "scope": "dns_zone"
+  },
+  "zone_file_text": {
+    "text": "Zone file text",
+    "scope": "dns_zone"
+  },
+  "import_replaces": {
+    "text": "Importing replaces every record of this zone except ACME-managed entries. SOA lines are ignored; the zone form owns those values.",
+    "scope": "dns_zone"
+  },
+  "import_action": {
+    "text": "Import",
+    "scope": "dns_zone"
+  },
+  "import_done": {
+    "text": "Imported {$count} records.",
+    "scope": "dns_zone"
+  },
+  "import_skipped": {
+    "text": "Skipped: {$lines}",
+    "scope": "dns_zone"
+  },
+  "import_empty": {
+    "text": "Paste zone-file text before importing",
+    "scope": "dns_zone"
+  },
+  "dns_origin_format": {
+    "text": "Enter a bare domain like example.com (letters, digits and hyphens; no wildcard, no trailing dot)",
+    "scope": "violations"
+  },
+  "dns_origin_taken": {
+    "text": "A zone for that origin already exists",
+    "scope": "violations"
+  },
+  "dns_zone_required": {
+    "text": "Pick the zone this record belongs to",
+    "scope": "violations"
+  },
+  "dns_name_format": {
+    "text": "Use @ for the zone itself, or labels like www, *.dev or _acme-challenge",
+    "scope": "violations"
+  },
+  "dns_value_required": {
+    "text": "The record needs a value",
+    "scope": "violations"
+  },
+  "dns_ipv4_format": {
+    "text": "Enter a valid IPv4 address like 203.0.113.10",
+    "scope": "violations"
+  },
+  "dns_ipv6_format": {
+    "text": "Enter a valid IPv6 address like 2001:db8::1",
+    "scope": "violations"
+  },
+  "dns_target_format": {
+    "text": "Enter a hostname like server.example.com",
+    "scope": "violations"
+  },
+  "dns_cname_apex": {
+    "text": "A CNAME cannot live on the zone itself; use an A/AAAA record instead",
+    "scope": "violations"
+  },
+  "dns_cname_exclusive": {
+    "text": "A CNAME owner cannot hold any other record; remove the conflicting records first",
+    "scope": "violations"
+  },
+  "dns_ns_wildcard": {
+    "text": "NS records cannot use a wildcard name",
+    "scope": "violations"
+  },
+  "dns_priority_required": {
+    "text": "MX and SRV records need a priority between 0 and 65535",
+    "scope": "violations"
+  },
+  "dns_port_required": {
+    "text": "SRV records need a port between 0 and 65535",
+    "scope": "violations"
+  },
+  "dns_weight_format": {
+    "text": "The weight must be between 0 and 65535",
+    "scope": "violations"
+  },
+  "dns_caa_format": {
+    "text": "CAA values look like: 0 issue letsencrypt.org",
+    "scope": "violations"
+  },
+  "dns_caa_tag": {
+    "text": "The CAA tag must be issue, issuewild or iodef",
+    "scope": "violations"
+  },
+  "dns_type_unknown": {
+    "text": "Unknown record type",
+    "scope": "violations"
+  },
+  "dns_interval_range": {
+    "text": "SOA intervals must be between 0 and 2419200 seconds (four weeks)",
+    "scope": "violations"
+  },
+  "dns_ttl_range": {
+    "text": "TTL values must be between 0 and 604800 seconds (one week)",
+    "scope": "violations"
+  },
+  "dns_record_duplicate": {
+    "text": "That exact record already exists in this zone",
+    "scope": "violations"
+  },
+  "dns_contact_format": {
+    "text": "Enter an email address like hostmaster@example.com",
+    "scope": "violations"
+  },
+  "internal_dns": {
+    "text": "Hosted DNS (this server)",
+    "scope": "certificate_request"
+  },
+  "internal_ready": {
+    "text": "Hosted DNS: available when the domain's zone is served by this server; validation records publish instantly.",
+    "scope": "certificate_request"
+  },
+  "internal_unavailable": {
+    "text": "Hosted DNS: enable the DNS server and create a zone for the domain to use this.",
+    "scope": "certificate_request"
+  },
+  "zone_not_hosted": {
+    "text": "No enabled hosted DNS zone covers: {$hostnames}",
+    "scope": "certificate_request_error"
+  },
+  "dns_server_disabled": {
+    "text": "The DNS server is not running; enable it in the settings first",
+    "scope": "certificate_request_error"
+  },
+  "dns_listener": {
+    "text": "DNS server failed to start",
+    "scope": "attention_title"
+  },
+  "dns_zone_no_ns": [
+    {
+      "text": "Zone {$origin} has no NS records",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Delegation needs NS records on the zone itself; resolvers will treat it as broken.",
+      "scope": "attention_detail"
+    }
+  ],
+  "url": {
+    "text": "URL",
+    "scope": "dev_sessions"
+  },
+  "connected_since": {
+    "text": "Connected since",
+    "scope": "dev_sessions"
+  },
+  "active_streams": {
+    "text": "Active streams",
+    "scope": "dev_sessions"
+  },
+  "empty_hint": [
+    {
+      "text": "Start a Zenit project with the dev tunnel configured and it will appear here automatically.",
+      "scope": "dev_sessions"
+    },
+    {
+      "text": "Add a peer to replicate this zone to it over authenticated AXFR.",
+      "scope": "dns_secondaries"
+    }
+  ],
+  "registration_token": [
+    {
+      "text": "Registration token",
+      "scope": "field"
+    },
+    {
+      "text": "Secret that remote dev servers present when they register. Generated automatically when left blank; paste it into the dev machine's zenit-dev config.",
+      "scope": "help"
+    }
+  ],
+  "secondaries": {
+    "text": "Secondaries",
+    "scope": "dns_zone"
+  },
+  "peer_name": [
+    {
+      "text": "Name",
+      "scope": "field"
+    },
+    {
+      "text": "A recognizable name for this DNS peer.",
+      "scope": "help"
+    }
+  ],
+  "peer_base_url": [
+    {
+      "text": "Admin base URL",
+      "scope": "field"
+    },
+    {
+      "text": "HTTPS URL of a Hohenheim peer's admin server, for forwarding edits of zones it owns.",
+      "scope": "help"
+    }
+  ],
+  "peer_api_key": [
+    {
+      "text": "API key",
+      "scope": "field"
+    },
+    {
+      "text": "znit_ API key used to call the peer's admin for edit forwarding.",
+      "scope": "help"
+    }
+  ],
+  "peer_transfer_host": [
+    {
+      "text": "Transfer host",
+      "scope": "field"
+    },
+    {
+      "text": "Address of the peer's DNS server for AXFR/NOTIFY.",
+      "scope": "help"
+    }
+  ],
+  "peer_transfer_port": [
+    {
+      "text": "Transfer port",
+      "scope": "field"
+    },
+    {
+      "text": "DNS port used for AXFR and NOTIFY; normally 53.",
+      "scope": "help"
+    }
+  ],
+  "peer_tsig_key_name": [
+    {
+      "text": "TSIG key name",
+      "scope": "field"
+    },
+    {
+      "text": "Shared key name authenticating zone transfers with this peer.",
+      "scope": "help"
+    }
+  ],
+  "peer_tsig_algorithm": [
+    {
+      "text": "TSIG algorithm",
+      "scope": "field"
+    },
+    {
+      "text": "HMAC algorithm, e.g. hmac-sha256.",
+      "scope": "help"
+    }
+  ],
+  "peer_tsig_secret": [
+    {
+      "text": "TSIG secret",
+      "scope": "field"
+    },
+    {
+      "text": "Base64 shared secret for the TSIG key.",
+      "scope": "help"
+    }
+  ],
+  "peer_enabled": [
+    {
+      "text": "Enabled",
+      "scope": "field"
+    },
+    {
+      "text": "Disabled peers are not contacted for transfers or forwarded edits.",
+      "scope": "help"
+    }
+  ],
+  "zone_role": [
+    {
+      "text": "Role",
+      "scope": "field"
+    },
+    {
+      "text": "Primary zones are edited here; secondary zones are replicated from their owning peer.",
+      "scope": "help"
+    }
+  ],
+  "primary_peer": [
+    {
+      "text": "Owning peer",
+      "scope": "field"
+    },
+    {
+      "text": "For a secondary zone, the peer that owns the zone and receives record edits.",
+      "scope": "help"
+    }
+  ],
+  "role_primary": {
+    "text": "Primary (owned here)",
+    "scope": "dns_role"
+  },
+  "role_secondary": {
+    "text": "Secondary (replicated)",
+    "scope": "dns_role"
+  },
+  "peer_none": {
+    "text": "None",
+    "scope": "dns_peer"
+  },
+  "peer": {
+    "text": "Peer",
+    "scope": "dns_secondaries"
+  },
+  "transfer_host": {
+    "text": "Transfer host",
+    "scope": "dns_secondaries"
+  },
+  "dns_tsig_algorithm": {
+    "text": "Unsupported TSIG algorithm",
+    "scope": "violations"
+  },
+  "dns_port_range": {
+    "text": "Port must be between 1 and 65535",
+    "scope": "violations"
+  },
+  "dns_zone_missing": {
+    "text": "That zone does not exist",
+    "scope": "violations"
+  },
+  "dns_peer_missing": {
+    "text": "That peer does not exist",
+    "scope": "violations"
+  },
+  "dns_secondary_linked": {
+    "text": "That peer is already a secondary of this zone",
+    "scope": "violations"
+  },
+  "edits_forwarded": {
+    "text": "This zone is owned by peer \"{$peer}\": the records below are read live from it and edits are forwarded there.",
+    "scope": "dns_remote"
+  },
+  "edit_saved": {
+    "text": "Change applied on the owning peer",
+    "scope": "dns_remote"
+  },
+  "edit_record": {
+    "text": "Edit record",
+    "scope": "dns_remote"
+  },
+  "save_remote": {
+    "text": "Save on peer",
+    "scope": "dns_remote"
+  },
+  "cancel_remote": {
+    "text": "Cancel",
+    "scope": "dns_remote"
+  },
+  "delete_remote": {
+    "text": "Delete",
+    "scope": "dns_remote"
+  },
+  "delete_confirm": {
+    "text": "Delete this record on the owning peer?",
+    "scope": "dns_remote"
+  },
+  "priority": {
+    "text": "Priority",
+    "scope": "dns_remote"
+  },
+  "weight": {
+    "text": "Weight",
+    "scope": "dns_remote"
+  },
+  "remote_empty_hint": {
+    "text": "The owning peer reports no records for this zone.",
+    "scope": "dns_remote"
+  },
+  "peer_not_configured": {
+    "text": "The primary peer has no admin base URL / API key configured, so records are shown from the replica read-only.",
+    "scope": "dns_remote"
+  },
+  "peer_unreachable": {
+    "text": "The owning peer could not be reached ({$message}); records are shown from the replica read-only.",
+    "scope": "dns_remote"
+  },
+  "record_dynamic": [
+    {
+      "text": "Dynamic DNS",
+      "scope": "field"
+    },
+    {
+      "text": "Allow this A/AAAA record's address to be updated over the dyndns2 protocol; use the row action to mint an update token",
+      "scope": "help"
+    }
+  ],
+  "dyndns_token": {
+    "text": "Dynamic DNS token",
+    "scope": "dns_record"
+  },
+  "dyndns_token_hint": {
+    "text": "Mint a new update token for this record (invalidates any previous one)",
+    "scope": "dns_record"
+  },
+  "dyndns_only_address": {
+    "text": "Dynamic DNS is only available for A and AAAA records",
+    "scope": "dns_record"
+  },
+  "dyndns_minted": {
+    "text": "Update token generated -- it is shown on this record's form",
+    "scope": "dns_record"
+  },
+  "record_dyndns_token": [
+    {
+      "text": "Dynamic DNS token",
+      "scope": "field"
+    },
+    {
+      "text": "The update password. Point a dyndns2 client (router, ddclient) at <host>/nic/update?hostname=<this record's FQDN> and send this token as the HTTP Basic password. Use the row action to (re)generate it",
+      "scope": "help"
+    }
+  ],
+  "jar_path": [
+    {
+      "text": "Jar file",
+      "scope": "field"
+    },
+    {
+      "text": "Path to the application's fat/shadow jar.",
+      "scope": "help"
+    }
+  ],
+  "java_binary": [
+    {
+      "text": "Java binary",
+      "scope": "field"
+    },
+    {
+      "text": "Path to the java launcher. Blank uses java from PATH (e.g. a jlink image's bin/java).",
+      "scope": "help"
+    }
+  ],
+  "jvm_args": [
+    {
+      "text": "JVM arguments",
+      "scope": "field"
+    },
+    {
+      "text": "Extra arguments passed to the JVM before -jar, e.g. -Xmx512m.",
+      "scope": "help"
+    }
+  ],
+  "app_args": [
+    {
+      "text": "Application arguments",
+      "scope": "field"
+    },
+    {
+      "text": "Arguments passed to the application after the jar.",
+      "scope": "help"
+    }
+  ],
+  "cert_nice_name": [
+    {
+      "text": "Name",
+      "scope": "field"
+    },
+    {
+      "text": "A recognizable name for this certificate, e.g. the main domain it covers.",
+      "scope": "help"
+    }
+  ],
+  "cert_certificate_pem": [
+    {
+      "text": "Certificate (PEM)",
+      "scope": "field"
+    },
+    {
+      "text": "Paste the full PEM-encoded certificate, including any intermediate chain (the -----BEGIN CERTIFICATE----- blocks).",
+      "scope": "help"
+    }
+  ],
+  "cert_private_key_pem": [
+    {
+      "text": "Private key (PEM)",
+      "scope": "field"
+    },
+    {
+      "text": "The PEM-encoded private key matching the certificate. Stored as a secret: leave blank to keep the current key.",
+      "scope": "help"
+    }
+  ],
+  "cert_auto_renew": [
+    {
+      "text": "Auto-renew",
+      "scope": "field"
+    },
+    {
+      "text": "Only applies to Let's Encrypt certificates; uploaded certificates are never renewed automatically.",
+      "scope": "help"
+    }
+  ],
+  "cert_challenge_type": [
+    {
+      "text": "Challenge type",
+      "scope": "field"
+    },
+    {
+      "text": "How Let's Encrypt validated this certificate. Set by the request flow.",
+      "scope": "help"
+    }
+  ],
+  "cert_dns_publisher": [
+    {
+      "text": "DNS publisher",
+      "scope": "field"
+    },
+    {
+      "text": "How DNS-01 TXT records are published on renewal. Set by the request flow.",
+      "scope": "help"
+    }
+  ],
+  "cert_renewal_error": {
+    "text": "Last renewal error",
+    "scope": "field"
+  },
+  "cert_error_count": {
+    "text": "Failed attempts",
+    "scope": "field"
+  },
+  "cert_next_attempt_at": {
+    "text": "Next attempt",
+    "scope": "field"
+  },
+  "cert_domain_names": {
+    "text": "Domains",
+    "scope": "field"
+  },
+  "enable": [
+    {
+      "text": "Enable",
+      "scope": "site"
+    },
+    {
+      "text": "Enable",
+      "scope": "spamservice_key"
+    }
+  ],
+  "disable": {
+    "text": "Disable",
+    "scope": "site"
+  },
+  "hohenheim_admin_access": {
+    "text": "Access the Hohenheim admin panel",
+    "scope": "permission"
+  },
+  "hohenheim_manage_access": {
+    "text": "Access the delegated site-management panel",
+    "scope": "permission"
+  },
+  "access": {
+    "text": "Access",
+    "scope": "site"
+  },
+  "subject": {
+    "text": "Who",
+    "scope": "site_access"
+  },
+  "capability": {
+    "text": "Capability",
+    "scope": "site_access"
+  },
+  "allowed": {
+    "text": "Allowed",
+    "scope": "site_access"
+  },
+  "added": {
+    "text": "Added",
+    "scope": "site_access"
+  },
+  "yes": {
+    "text": "Yes",
+    "scope": "site_access"
+  },
+  "no": {
+    "text": "No",
+    "scope": "site_access"
+  },
+  "remove": {
+    "text": "Remove",
+    "scope": "site_access"
+  },
+  "remove_confirm": {
+    "text": "Revoke this access grant? The user loses the manage panel when this was their last site.",
+    "scope": "site_access"
+  },
+  "add_title": {
+    "text": "Grant access",
+    "scope": "site_access"
+  },
+  "add_description": {
+    "text": "The user can view, edit and operate this site (and its domains) through the /manage panel.",
+    "scope": "site_access"
+  },
+  "add": {
+    "text": "Grant access",
+    "scope": "site_access"
+  },
+  "user_missing": {
+    "text": "Pick an enabled user",
+    "scope": "violations"
+  },
+  "security": {
+    "text": "Security",
+    "scope": "nav"
+  },
+  "lift": {
+    "text": "Lift ban",
+    "scope": "ban"
+  },
+  "lift_hint": {
+    "text": "Unban this IP immediately, in the app and in the firewall.",
+    "scope": "ban"
+  },
+  "lift_confirm": {
+    "text": "Lift this ban? The IP can reach all proxied sites again right away.",
+    "scope": "ban"
+  },
+  "lifted": {
+    "text": "Ban lifted",
+    "scope": "ban"
+  },
+  "duration_1h": {
+    "text": "1 hour",
+    "scope": "ban"
+  },
+  "duration_24h": {
+    "text": "24 hours",
+    "scope": "ban"
+  },
+  "duration_7d": {
+    "text": "7 days",
+    "scope": "ban"
+  },
+  "duration_30d": {
+    "text": "30 days",
+    "scope": "ban"
+  },
+  "duration_permanent": {
+    "text": "Permanent",
+    "scope": "ban"
+  },
+  "ip": [
+    {
+      "text": "IP address",
+      "scope": "field"
+    },
+    {
+      "text": "IP address",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "IP address",
+      "scope": "spamservice_sample"
+    },
+    {
+      "text": "IP address",
+      "scope": "spamservice_reputation"
+    }
+  ],
+  "ban_reason": {
+    "text": "Reason",
+    "scope": "field"
+  },
+  "ban_source": {
+    "text": "Source",
+    "scope": "field"
+  },
+  "ban_duration": {
+    "text": "Duration",
+    "scope": "field"
+  },
+  "event_type": {
+    "text": "Event type",
+    "scope": "field"
+  },
+  "expires_at": {
+    "text": "Expires",
+    "scope": "field"
+  },
+  "ban_ip_refused": {
+    "text": "This IP cannot be banned: {$reason}",
+    "scope": "violations"
+  },
+  "active_bans": {
+    "text": "Active bans",
+    "scope": "dashboard"
+  },
+  "bans_created_30d": {
+    "text": "Bans created (30 days)",
+    "scope": "dashboard"
+  },
+  "domain_miss": {
+    "text": "Unmatched domain request",
+    "scope": "security_event_type"
+  },
+  "login_failed": {
+    "text": "Failed login",
+    "scope": "security_event_type"
+  },
+  "lockout": {
+    "text": "Account lockout",
+    "scope": "security_event_type"
+  },
+  "rate_limited": {
+    "text": "Rate limited",
+    "scope": "security_event_type"
+  },
+  "csrf_failure": {
+    "text": "CSRF failure",
+    "scope": "security_event_type"
+  },
+  "ws_origin_refused": {
+    "text": "WebSocket origin refused",
+    "scope": "security_event_type"
+  },
+  "ws_auth_refused": {
+    "text": "WebSocket authentication refused",
+    "scope": "security_event_type"
+  },
+  "overview": {
+    "text": "Spamservice overview",
+    "scope": "spamservice"
+  },
+  "installation": {
+    "text": "Installation",
+    "scope": "spamservice"
+  },
+  "reputation": {
+    "text": "Reputation lookup",
+    "scope": "spamservice"
+  },
+  "disconnected": {
+    "text": "Spamservice is not connected. Configure and start the local installation to use remote administration.",
+    "scope": "spamservice"
+  },
+  "runtime": {
+    "text": "Managed runtime",
+    "scope": "spamservice"
+  },
+  "configured": {
+    "text": "Configured",
+    "scope": "spamservice"
+  },
+  "base_url": {
+    "text": "Base URL",
+    "scope": "spamservice"
+  },
+  "crashes": {
+    "text": "Consecutive crashes",
+    "scope": "spamservice"
+  },
+  "readiness": {
+    "text": "Readiness",
+    "scope": "spamservice"
+  },
+  "not_ready": {
+    "text": "Not ready",
+    "scope": "spamservice"
+  },
+  "no_checks": {
+    "text": "No readiness checks available",
+    "scope": "spamservice"
+  },
+  "samples": {
+    "text": "Samples",
+    "scope": "spamservice"
+  },
+  "security_events": {
+    "text": "Security events",
+    "scope": "spamservice"
+  },
+  "spam_words": {
+    "text": "Spam words",
+    "scope": "spamservice"
+  },
+  "active_keys_count": {
+    "text": "{$count} active keys",
+    "scope": "spamservice"
+  },
+  "spam_samples_count": {
+    "text": "{$count} marked as spam",
+    "scope": "spamservice"
+  },
+  "confirmed_counts": {
+    "text": "Confirmed: {$spam} spam, {$ham} ham",
+    "scope": "spamservice"
+  },
+  "start_hint": {
+    "text": "Start the configured local Spamservice process.",
+    "scope": "spamservice"
+  },
+  "stop": [
+    {
+      "text": "Stop",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Stop",
+      "scope": "stack"
+    }
+  ],
+  "stop_hint": {
+    "text": "Stop Spamservice without changing its enabled setting.",
+    "scope": "spamservice"
+  },
+  "stop_confirm": [
+    {
+      "text": "Stop Spamservice now? Scoring and reputation administration become unavailable.",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Stop all containers of this stack?",
+      "scope": "stack"
+    }
+  ],
+  "restart": {
+    "text": "Restart",
+    "scope": "spamservice"
+  },
+  "restart_hint": {
+    "text": "Restart Spamservice and reload its runtime configuration.",
+    "scope": "spamservice"
+  },
+  "restart_confirm": {
+    "text": "Restart Spamservice now? Requests are briefly unavailable.",
+    "scope": "spamservice"
+  },
+  "test_hint": {
+    "text": "Call the strict management status endpoint.",
+    "scope": "spamservice"
+  },
+  "start_ok": {
+    "text": "Spamservice start requested",
+    "scope": "spamservice"
+  },
+  "stop_ok": {
+    "text": "Spamservice stopped",
+    "scope": "spamservice"
+  },
+  "restart_ok": {
+    "text": "Spamservice restart requested",
+    "scope": "spamservice"
+  },
+  "search": {
+    "text": "Search",
+    "scope": "spamservice"
+  },
+  "trusted": {
+    "text": "Trusted reporter",
+    "scope": "spamservice_client"
+  },
+  "provisioner": {
+    "text": "May provision clients",
+    "scope": "spamservice_client"
+  },
+  "manager": {
+    "text": "Management access",
+    "scope": "spamservice_client"
+  },
+  "external_id": {
+    "text": "External ID",
+    "scope": "spamservice_client"
+  },
+  "owner": {
+    "text": "Provisioned by",
+    "scope": "spamservice_client"
+  },
+  "allowed_languages": {
+    "text": "Allowed languages",
+    "scope": "spamservice_client"
+  },
+  "spam_threshold": {
+    "text": "Spam threshold",
+    "scope": "spamservice_client"
+  },
+  "notes": {
+    "text": "Notes",
+    "scope": "spamservice_client"
+  },
+  "keys": {
+    "text": "Keys",
+    "scope": "spamservice_client"
+  },
+  "keys_hint": {
+    "text": "Manage this client's API keys.",
+    "scope": "spamservice_client"
+  },
+  "client": [
+    {
+      "text": "Client",
+      "scope": "spamservice_key"
+    },
+    {
+      "text": "Client",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "Client",
+      "scope": "spamservice_sample"
+    }
+  ],
+  "raw_key": {
+    "text": "Existing key (optional)",
+    "scope": "spamservice_key"
+  },
+  "raw_key_help": {
+    "text": "Leave blank to generate a new key. A generated key is shown once after creation.",
+    "scope": "spamservice_key"
+  },
+  "last_used": {
+    "text": "Last used",
+    "scope": "spamservice_key"
+  },
+  "created_at": [
+    {
+      "text": "Created",
+      "scope": "spamservice_key"
+    },
+    {
+      "text": "Created",
+      "scope": "spamservice_sample"
+    }
+  ],
+  "key_created": {
+    "text": "Key created. Copy it now; it will not be shown again: {$key}",
+    "scope": "spamservice_key"
+  },
+  "key_adopted": {
+    "text": "Existing key adopted",
+    "scope": "spamservice_key"
+  },
+  "revoke": {
+    "text": "Revoke",
+    "scope": "spamservice_key"
+  },
+  "revoke_confirm": {
+    "text": "Revoke this key? Existing callers lose access immediately.",
+    "scope": "spamservice_key"
+  },
+  "key_enabled": {
+    "text": "Key enabled",
+    "scope": "spamservice_key"
+  },
+  "key_revoked": {
+    "text": "Key revoked",
+    "scope": "spamservice_key"
+  },
+  "type": {
+    "text": "Type",
+    "scope": "spamservice_event"
+  },
+  "day": {
+    "text": "Day",
+    "scope": "spamservice_event"
+  },
+  "count": {
+    "text": "Count",
+    "scope": "spamservice_event"
+  },
+  "first_at": {
+    "text": "First seen",
+    "scope": "spamservice_event"
+  },
+  "last_at": {
+    "text": "Last seen",
+    "scope": "spamservice_event"
+  },
+  "detail": {
+    "text": "Last detail",
+    "scope": "spamservice_event"
+  },
+  "from": {
+    "text": "From",
+    "scope": "spamservice_event"
+  },
+  "to": {
+    "text": "To",
+    "scope": "spamservice_event"
+  },
+  "word": {
+    "text": "Word or phrase",
+    "scope": "spamservice_word"
+  },
+  "score": [
+    {
+      "text": "Score",
+      "scope": "spamservice_word"
+    },
+    {
+      "text": "Score",
+      "scope": "spamservice_sample"
+    }
+  ],
+  "language": {
+    "text": "Language",
+    "scope": "spamservice_word"
+  },
+  "leet": {
+    "text": "Match leetspeak",
+    "scope": "spamservice_word"
+  },
+  "spam": {
+    "text": "Spam",
+    "scope": "spamservice_sample"
+  },
+  "confirmed": {
+    "text": "Confirmed",
+    "scope": "spamservice_sample"
+  },
+  "flags": {
+    "text": "Flags",
+    "scope": "spamservice_sample"
+  },
+  "languages": {
+    "text": "Languages",
+    "scope": "spamservice_sample"
+  },
+  "analysis": {
+    "text": "Analysis",
+    "scope": "spamservice_sample"
+  },
+  "mark_spam": {
+    "text": "Mark spam",
+    "scope": "spamservice_sample"
+  },
+  "mark_ham": {
+    "text": "Mark ham",
+    "scope": "spamservice_sample"
+  },
+  "rescore": {
+    "text": "Rescore",
+    "scope": "spamservice_sample"
+  },
+  "marked_spam": {
+    "text": "Sample confirmed as spam",
+    "scope": "spamservice_sample"
+  },
+  "marked_ham": {
+    "text": "Sample confirmed as ham",
+    "scope": "spamservice_sample"
+  },
+  "rescored": {
+    "text": "Sample rescored to {$score}",
+    "scope": "spamservice_sample"
+  },
+  "verdict_spam": {
+    "text": "Spam",
+    "scope": "spamservice_sample"
+  },
+  "verdict_ham": {
+    "text": "Ham",
+    "scope": "spamservice_sample"
+  },
+  "score_threshold": {
+    "text": "Score {$score}, threshold {$threshold}",
+    "scope": "spamservice_sample"
+  },
+  "request_info": {
+    "text": "Request",
+    "scope": "spamservice_sample"
+  },
+  "ip_analysis": {
+    "text": "IP intelligence",
+    "scope": "spamservice_sample"
+  },
+  "breakdown": {
+    "text": "Scoring breakdown",
+    "scope": "spamservice_sample"
+  },
+  "no_breakdown": {
+    "text": "No scoring breakdown",
+    "scope": "spamservice_sample"
+  },
+  "submitted_fields": {
+    "text": "Submitted fields",
+    "scope": "spamservice_sample"
+  },
+  "useragent": {
+    "text": "User agent",
+    "scope": "spamservice_sample"
+  },
+  "lookup": {
+    "text": "Look up",
+    "scope": "spamservice_reputation"
+  },
+  "lookup_result": {
+    "text": "{$ip} is evaluated as actor subnet {$subnet}.",
+    "scope": "spamservice_reputation"
+  },
+  "datasets": {
+    "text": "Reputation datasets",
+    "scope": "spamservice_reputation"
+  },
+  "signals": {
+    "text": "Behavioral signals",
+    "scope": "spamservice_reputation"
+  },
+  "category": {
+    "text": "Category",
+    "scope": "spamservice_reputation"
+  },
+  "negative": {
+    "text": "Negative",
+    "scope": "spamservice_reputation"
+  },
+  "positive": {
+    "text": "Positive",
+    "scope": "spamservice_reputation"
+  },
+  "weighted_policy": {
+    "text": "Hohenheim weighted net",
+    "scope": "spamservice_reputation"
+  },
+  "weighted_explanation": {
+    "text": "Within its own category, each positive event offsets up to {$weight} negative events. The current total net is {$net}; Hohenheim bans when it reaches {$threshold}. Dataset risk flags are diagnostic only.",
+    "scope": "spamservice_reputation"
+  },
+  "formula": {
+    "text": "Negative - (positive x weight)",
+    "scope": "spamservice_reputation"
+  },
+  "net": {
+    "text": "Net",
+    "scope": "spamservice_reputation"
+  },
+  "command": [
+    {
+      "text": "Command",
+      "scope": "field"
+    },
+    {
+      "text": "Overrides the image's default command; one argument per row.",
+      "scope": "help"
+    }
+  ],
+  "stack_subnet": [
+    {
+      "text": "Subnet",
+      "scope": "field"
+    },
+    {
+      "text": "Optional CIDR for the stack's private network, e.g. 172.30.0.0/24. Leave blank to let Docker pick.",
+      "scope": "help"
+    }
+  ],
+  "stack_adopt": [
+    {
+      "text": "Adopt existing resources",
+      "scope": "field"
+    },
+    {
+      "text": "Allow the deploy to reuse or replace same-named containers, networks and volumes that hohenheim does not own. Off = refuse, which protects unrelated workloads.",
+      "scope": "help"
+    }
+  ],
+  "registry_server": [
+    {
+      "text": "Registry server",
+      "scope": "field"
+    },
+    {
+      "text": "Registry host for private images, e.g. ghcr.io. Leave blank for Docker Hub.",
+      "scope": "help"
+    }
+  ],
+  "registry_user": {
+    "text": "Registry username",
+    "scope": "field"
+  },
+  "registry_password": {
+    "text": "Registry password",
+    "scope": "field"
+  },
+  "mounts": {
+    "text": "Mounts",
+    "scope": "field"
+  },
+  "ports": {
+    "text": "Published ports",
+    "scope": "field"
+  },
+  "depends_on": {
+    "text": "Depends on",
+    "scope": "field"
+  },
+  "container_path": {
+    "text": "Container path",
+    "scope": "field"
+  },
+  "mount_external_name": {
+    "text": "External volume name",
+    "scope": "field"
+  },
+  "host_port": {
+    "text": "Host port",
+    "scope": "field"
+  },
+  "host_ip": {
+    "text": "Host address",
+    "scope": "field"
+  },
+  "depends_service": {
+    "text": "Service",
+    "scope": "field"
+  },
+  "health_cmd": [
+    {
+      "text": "Health check command",
+      "scope": "field"
+    },
+    {
+      "text": "Shell command run inside the container; exit 0 = healthy. Leave blank for no health check.",
+      "scope": "help"
+    }
+  ],
+  "health_interval": {
+    "text": "Health interval",
+    "scope": "field"
+  },
+  "health_timeout": {
+    "text": "Health timeout",
+    "scope": "field"
+  },
+  "health_retries": {
+    "text": "Health retries",
+    "scope": "field"
+  },
+  "health_start_period": {
+    "text": "Health start period",
+    "scope": "field"
+  },
+  "restart_policy": {
+    "text": "Restart policy",
+    "scope": "field"
+  },
+  "file_content": [
+    {
+      "text": "Content",
+      "scope": "field"
+    },
+    {
+      "text": "Stored encrypted at rest; uploaded into the container before start.",
+      "scope": "help"
+    }
+  ],
+  "file_mode": [
+    {
+      "text": "File mode",
+      "scope": "field"
+    },
+    {
+      "text": "Octal permissions, e.g. 0600 for secrets.",
+      "scope": "help"
+    }
+  ],
+  "stack_name": {
+    "text": "Lowercase letters, digits and dashes; becomes the network, container and volume name prefix.",
+    "scope": "help"
+  },
+  "service_name": {
+    "text": "Lowercase letters, digits and dashes; also the container's DNS name on the stack network.",
+    "scope": "help"
+  },
+  "service_image": {
+    "text": "Pinned image reference, e.g. netbirdio/netbird-server:1.2.3.",
+    "scope": "help"
+  },
+  "service_command": {
+    "text": "Overrides the image's default command; one argument per row.",
+    "scope": "help"
+  },
+  "service_environment": {
+    "text": "Environment variables passed to the container.",
+    "scope": "help"
+  },
+  "file_container_path": {
+    "text": "Absolute path inside the container, e.g. /etc/netbird/config.yaml.",
+    "scope": "help"
+  },
+  "services": {
+    "text": "Services",
+    "scope": "stack"
+  },
+  "deploy_hint": {
+    "text": "Create or replace the stack's containers from the current configuration",
+    "scope": "stack"
+  },
+  "deploy_confirm": {
+    "text": "Deploy this stack now? Changed services get their containers replaced.",
+    "scope": "stack"
+  },
+  "deploy_queued": {
+    "text": "Deploy queued",
+    "scope": "stack"
+  },
+  "stop_queued": {
+    "text": "Stop queued",
+    "scope": "stack"
+  },
+  "rollback_hint": {
+    "text": "Re-deploy the last successful deployment's configuration",
+    "scope": "stack"
+  },
+  "rollback_queued": {
+    "text": "Rollback queued",
+    "scope": "stack"
+  },
+  "refresh_status": {
+    "text": "Refresh status",
+    "scope": "stack"
+  },
+  "add_service": {
+    "text": "Add service",
+    "scope": "stack_services"
+  },
+  "service": {
+    "text": "Service",
+    "scope": "stack_services"
+  },
+  "state": {
+    "text": "State",
+    "scope": "stack_services"
+  },
+  "add_file": {
+    "text": "Add file",
+    "scope": "stack_services"
+  },
+  "stack_name_format": {
+    "text": "Use lowercase letters, digits and dashes (max 63 characters)",
+    "scope": "violations"
+  },
+  "stack_name_taken": {
+    "text": "A stack with this name already exists",
+    "scope": "violations"
+  },
+  "stack_required": {
+    "text": "A stack is required",
+    "scope": "violations"
+  },
+  "stack_destroy_failed": {
+    "text": "Could not remove the stack's containers; check the Docker daemon",
+    "scope": "violations"
+  },
+  "service_name_format": {
+    "text": "Use lowercase letters, digits and dashes (max 63 characters)",
+    "scope": "violations"
+  },
+  "service_name_taken": {
+    "text": "This stack already has a service with this name",
+    "scope": "violations"
+  },
+  "port_range": {
+    "text": "Ports must be between 1 and 65535",
+    "scope": "violations"
+  },
+  "file_path_absolute": {
+    "text": "The path must be absolute (start with /) without ..",
+    "scope": "violations"
+  },
+  "file_mode_format": {
+    "text": "Use octal permissions such as 0644",
+    "scope": "violations"
+  },
+  "files": {
+    "text": "Files",
+    "scope": "stack_services"
+  },
+  "disabled": {
+    "text": "Disabled",
+    "scope": "stack_services"
+  },
+  "deploy_log": {
+    "text": "Deploy log",
+    "scope": "stack_deployments"
+  }
 }

@@ -1,557 +1,3708 @@
 {
-    "cert_fields_required": {"text": "Naam, certificaat en private sleutel zijn verplicht", "scope": "violations"},
-    "cert_pem_invalid": {"text": "Ongeldig certificaat-PEM: {$detail}", "scope": "violations"},
-    "database_already_attached": {"text": "Die databank is al aan deze site gekoppeld", "scope": "violations"},
-    "database_immutable": {"text": "Beheerde databanken kunnen niet bewerkt worden; verwijder en maak opnieuw aan", "scope": "violations"},
-    "database_in_use": {"text": "Databank '{$name}' is gekoppeld aan {$sites}; koppel ze eerst los van die sites", "scope": "violations"},
-    "database_missing": {"text": "Die databank bestaat niet", "scope": "violations"},
-    "database_name_required": {"text": "Databanknaam is verplicht", "scope": "violations"},
-    "database_remote": {"text": "Databank '{$name}' draait op server '{$server}': haar poort is enkel op de loopback van die host gepubliceerd, dus sites op deze server kunnen ze niet bereiken", "scope": "violations"},
-    "database_required": {"text": "Een databank is verplicht", "scope": "violations"},
-    "hostname_required": {"text": "Hostnaam is verplicht", "scope": "violations"},
-    "hostname_taken": {"text": "Die hostnaam is al geconfigureerd voor deze site", "scope": "violations"},
-    "key_pem_invalid": {"text": "Ongeldig private-sleutel-PEM: {$detail}", "scope": "violations"},
-    "local_server_immutable": {"text": "De impliciete lokale host kan niet bewerkt worden", "scope": "violations"},
-    "local_server_reserved": {"text": "'local' is voorbehouden voor deze host", "scope": "violations"},
-    "local_server_undeletable": {"text": "De impliciete lokale host kan niet verwijderd worden", "scope": "violations"},
-    "name_format": {"text": "Gebruik enkel kleine letters, cijfers en streepjes", "scope": "violations"},
-    "name_required": {"text": "Naam is verplicht", "scope": "violations"},
-    "open": {"text": "Openen", "scope": "attention"},
-    "prefix_format": {"text": "De env-prefix moet met een letter beginnen en mag enkel letters, cijfers en underscores bevatten", "scope": "violations"},
-    "prefix_taken": {"text": "Env-prefix '{$prefix}' wordt al gebruikt door een andere databank op deze site", "scope": "violations"},
-    "site_missing": {"text": "Die site bestaat niet", "scope": "violations"},
-    "site_required": {"text": "Een site is verplicht", "scope": "violations"},
-    "site_type_no_injection": {"text": "Sites van type '{$type}' kunnen geen databankgegevens ontvangen: enkel host-procestypes (Node.js, Alchemy, Command, Java / Zenit) kunnen een beheerde databank bereiken", "scope": "violations"},
-    "tls_passthrough_backend_certificate": {"text": "De backend presenteert het certificaat voor een TLS-passthroughdomein; wijs geen Hohenheim-certificaat toe", "scope": "violations"},
-    "tls_passthrough_local_only": {"text": "TLS-passthroughsites routeren naar een bestaande upstream en kunnen geen Git-deploymentbron gebruiken", "scope": "violations"},
-    "tls_passthrough_no_access_list": {"text": "HTTP-toegangslijsten kunnen versleuteld TLS-passthroughverkeer niet inspecteren", "scope": "violations"},
-    "tls_passthrough_no_http_auth": {"text": "HTTP-authenticatieproviders kunnen versleuteld TLS-passthroughverkeer niet inspecteren", "scope": "violations"},
-    "tls_passthrough_no_http_options": {"text": "HTTP-headers, HSTS en padverwijdering zijn niet van toepassing op onaangeroerde TLS-streams", "scope": "violations"},
-    "tls_passthrough_no_path": {"text": "TLS-passthrough routeert op SNI-hostnaam en kan URL-paden niet inspecteren", "scope": "violations"},
-    "ssh_target_format": {"text": "SSH-doel moet een eenvoudige [user@]host[:poort] zijn", "scope": "violations"},
-    "unknown_engine": {"text": "Onbekende engine: {$engine}", "scope": "violations"},
-    "unknown_event": {"text": "Onbekend event '{$event}'; geldige events: {$valid}", "scope": "violations"},
-    "unknown_provider_type": {"text": "Onbekend authenticatieprovidertype: {$type}", "scope": "violations"},
-    "url_scheme": {"text": "De URL moet met http:// of https:// beginnen", "scope": "violations"},
-    "api_keys": [{"text": "API-sleutels", "scope": "field"}, {"text": "Sleutels die de proces-API aanvaardt. Voeg één sleutel per rij toe.", "scope": "help"}],
-    "allowed_ips": [{"text": "Toegestane IP-netwerken", "scope": "field"}, {"text": "Eén IP-adres of CIDR-netwerk per regel, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.", "scope": "help"}],
-    "auto_deploy": [{"text": "Automatisch uitrollen", "scope": "field"}, {"text": "Rol uit wanneer de webhook of polling een nieuwe revisie vindt.", "scope": "help"}],
-    "autoindex": [{"text": "Mappenlijst", "scope": "field"}, {"text": "Toon de inhoud van een map wanneer er geen indexbestand bestaat.", "scope": "help"}],
-    "basic_auth_user": [{"text": "Basic Auth-gebruikersnaam", "scope": "field"}, {"text": "Optionele gebruikersnaam die naast de IP-regels vereist is.", "scope": "help"}],
-    "basic_auth_password": [{"text": "Basic Auth-wachtwoord", "scope": "field"}, {"text": "Laat leeg tijdens het bewerken om het opgeslagen wachtwoord te behouden; de waarde wordt nooit teruggestuurd naar de browser.", "scope": "help"}],
-    "auth_provider_name": [{"text": "Naam", "scope": "field"}, {"text": "Een herkenbare naam die wordt gebruikt wanneer deze provider aan een site wordt toegewezen.", "scope": "help"}],
-    "auth_provider_type": [{"text": "Providertype", "scope": "field"}, {"text": "De authenticatiemethode die deze provider gebruikt.", "scope": "help"}],
-    "auth_provider_config": [{"text": "Inloggegevens en verbinding", "scope": "field"}, {"text": "Instellingen voor het geselecteerde providertype.", "scope": "help"}],
-    "required_permission": [{"text": "Vereiste permissie", "scope": "field"}, {"text": "Een enkele permissienaam, bv. \"site.internal\", vergeleken met de permissie-claims van de identiteit. Alleen gebruikt door claims-gebaseerde providers zoals Proteus (HTTP Basic Auth negeert dit). Leeg aanvaardt elke geauthenticeerde identiteit.", "scope": "help"}],
-    "credentials": [{"text": "Inloggegevens", "scope": "field"}, {"text": "Eén Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden als bewerkbare tekst opgeslagen en getoond.", "scope": "help"}],
-    "key": {"text": "Gebruikersnaam", "scope": "form", "field": "credentials"},
-    "value": {"text": "Wachtwoord", "scope": "form", "field": "credentials"},
-    "proteus_endpoint": [{"text": "Endpoint", "scope": "field"}, {"text": "Basis-URL van de Proteus-identiteitsdienst.", "scope": "help"}],
-    "proteus_realm_client": [{"text": "Realm-client", "scope": "field"}, {"text": "Client-ID geregistreerd in de Proteus-realm.", "scope": "help"}],
-    "proteus_access_key": [{"text": "Toegangssleutel", "scope": "field"}, {"text": "Geheime toegangssleutel voor de Proteus-realm.", "scope": "help"}],
-    "proteus_authenticator": [{"text": "Authenticator", "scope": "field"}, {"text": "Slug van een specifieke Proteus-aanmeldmethode om af te dwingen. Laat leeg om bezoekers te laten kiezen uit alle ingeschakelde aanmeldmethodes van de realm.", "scope": "help"}],
-    "branch": [{"text": "Branch", "scope": "field"}, {"text": "Git-branch om uit te checken. Leeg gebruikt de standaardbranch.", "scope": "help"}],
-    "build_command": [{"text": "Buildcommando", "scope": "field"}, {"text": "Shellcommando na checkout en vóór de deployment actief wordt.", "scope": "help"}],
-    "build_directory": [{"text": "Buildmap", "scope": "field"}, {"text": "Werkmap voor het buildcommando, relatief aan de repository.", "scope": "help"}],
-    "build_environment_variables": [{"text": "Buildomgeving", "scope": "field"}, {"text": "Omgevingsvariabelen die alleen tijdens het bouwen beschikbaar zijn.", "scope": "help"}],
-    "build_timeout": [{"text": "Build-time-out", "scope": "field"}, {"text": "Maximale buildduur in seconden voordat de deployment wordt geannuleerd.", "scope": "help"}],
-    "container_command": [{"text": "Containercommando", "scope": "field"}, {"text": "Optioneel commando dat het standaardcommando van de image vervangt.", "scope": "help"}],
-    "container_port": [{"text": "Containerpoort", "scope": "field"}, {"text": "TCP-poort waarop de applicatie in de container luistert.", "scope": "help"}],
-    "connect_timeout": [{"text": "Verbindingstime-out", "scope": "field"}, {"text": "Maximale tijd in seconden om de TCP-verbinding met de passthroughbackend op te zetten.", "scope": "help"}],
-    "cpu_limit": [{"text": "CPU-limiet", "scope": "field"}, {"text": "Maximaal aantal CPU-kernen voor de container. Leeg betekent onbeperkt.", "scope": "help"}],
-    "delay": [{"text": "Antwoordvertraging", "scope": "field"}, {"text": "Kunstmatige vertraging in milliseconden vóór elke aanvraag.", "scope": "help"}],
-    "denied_ips": [{"text": "Geweigerde IP-netwerken", "scope": "field"}, {"text": "Eén IP-adres of CIDR-netwerk per regel, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.", "scope": "help"}],
-    "dockerfile": [{"text": "Dockerfile", "scope": "field"}, {"text": "Pad naar de Dockerfile, relatief aan de repository.", "scope": "help"}],
-    "environment_variables": [{"text": "Omgevingsvariabelen", "scope": "field"}, {"text": "Variabelen die bij runtime aan elk proces worden doorgegeven.", "scope": "help"}],
-    "fallback_file": [{"text": "Terugvalbestand", "scope": "field"}, {"text": "Bestand voor ontbrekende paden, bijvoorbeeld index.html voor een SPA.", "scope": "help"}],
-    "forward_host": [{"text": "Upstream-host", "scope": "field"}, {"text": "Hostnaam of IP-adres van de HTTP-upstream.", "scope": "help"}],
-    "forward_port": [{"text": "Upstream-poort", "scope": "field"}, {"text": "TCP-poort van de upstream. Standaard 80 voor HTTP en 443 voor HTTPS.", "scope": "help"}],
-    "forward_scheme": [{"text": "Upstream-protocol", "scope": "field"}, {"text": "Protocol waarmee de upstream wordt benaderd.", "scope": "help"}],
-    "proxy_protocol_v2": [{"text": "PROXY-protocol v2 verzenden", "scope": "field"}, {"text": "Voeg de binaire PROXY v2-header toe zodat de backend de oorspronkelijke client- en doeladressen ontvangt.", "scope": "help"}],
-    "tls_forward_host": [{"text": "TLS-backendhost", "scope": "field"}, {"text": "Hostnaam of IP-adres dat de oorspronkelijke, nog versleutelde TLS-stream ontvangt.", "scope": "help"}],
-    "tls_forward_port": {"text": "TCP-poort die de oorspronkelijke TLS-stream ontvangt.", "scope": "help"},
-    "ignore_certificates": [{"text": "TLS-fouten negeren", "scope": "field"}, {"text": "Aanvaard een ongeldig of zelfondertekend upstreamcertificaat.", "scope": "help"}],
-    "image": [{"text": "Container-image", "scope": "field"}, {"text": "Image die wordt gestart wanneer geen Dockerfile-build wordt gebruikt.", "scope": "help"}],
-    "image_tag": [{"text": "Image-tag", "scope": "field"}, {"text": "Tag voor een lokaal gebouwde image.", "scope": "help"}],
-    "indexes": [{"text": "Indexbestanden", "scope": "field"}, {"text": "Serveer conventionele indexbestanden zoals index.html uit mappen.", "scope": "help"}],
-    "maximum_processes": [{"text": "Maximum processen", "scope": "field"}, {"text": "Bovengrens voor gelijktijdig draaiende applicatieprocessen.", "scope": "help"}],
-    "memory_limit": [{"text": "Geheugenlimiet", "scope": "field"}, {"text": "Maximaal containergeheugen in megabytes. Leeg betekent onbeperkt.", "scope": "help"}],
-    "live_overview": {"text": "Live Docker-status", "scope": "field"},
-    "minimum_processes": [{"text": "Minimum processen", "scope": "field"}, {"text": "Aantal warme applicatieprocessen dat Hohenheim actief houdt.", "scope": "help"}],
-    "node_runtime": [{"text": "Node.js-runtime", "scope": "field"}, {"text": "Gevonden Node.js-versie waarmee deze site wordt gestart.", "scope": "help"}],
-    "poll_interval": [{"text": "Pollinginterval", "scope": "field"}, {"text": "Seconden tussen repositorycontroles wanneer polling actief is.", "scope": "help"}],
-    "port_argument": [{"text": "Poortargument", "scope": "field"}, {"text": "Commandoregelargument vóór het toegewezen poortnummer.", "scope": "help"}],
-    "preserve_path": [{"text": "Pad behouden", "scope": "field"}, {"text": "Voeg het oorspronkelijke pad en de query aan het doel toe.", "scope": "help"}],
-    "redirect_status": [{"text": "Redirectstatus", "scope": "field"}, {"text": "HTTP-statuscode van de redirect.", "scope": "help"}],
-    "repository_url": [{"text": "Repository-URL", "scope": "field"}, {"text": "Git-clone-URL. SSH gebruikt de geconfigureerde serversleutels.", "scope": "help"}],
-    "request_timeout": [{"text": "Time-out aanvraag", "scope": "field"}, {"text": "Maximale levensduur van een aanvraag in seconden. 0 verwijdert de limiet voor streaming, gRPC en WebSockets.", "scope": "help"}],
-    "rewrite_location": [{"text": "Location-headers herschrijven", "scope": "field"}, {"text": "Herschrijf upstreamredirects naar de publieke sitehostnaam.", "scope": "help"}],
-    "upstream_protocol": [{"text": "HTTP-versie", "scope": "field"}, {"text": "HTTP/2 is vereist voor gRPC-backends. Upstreams zonder TLS gebruiken dan h2c met prior knowledge.", "scope": "help"}],
-    "root_path": [{"text": "Documentroot", "scope": "field"}, {"text": "Map met de bestanden die worden geserveerd; een relatief pad wordt opgelost tegen de werkmap van Hohenheim.", "scope": "help"}],
-    "run_as_user": [{"text": "Uitvoeren als gebruiker", "scope": "field"}, {"text": "Systeemaccount voor het proces, inclusief uid, gid en home-map.", "scope": "help"}],
-    "script": [{"text": "Script", "scope": "field"}, {"text": "Startscript relatief aan de werkmap.", "scope": "help"}],
-    "server": [{"text": "Server", "scope": "field"}, {"text": "Host waarop de container draait.", "scope": "help"}],
-    "shallow_clone": [{"text": "Ondiepe clone", "scope": "field"}, {"text": "Haal alleen de recentste geschiedenis op voor minder tijd en schijfruimte.", "scope": "help"}],
-    "show_hidden_files": [{"text": "Verborgen bestanden tonen", "scope": "field"}, {"text": "Sta bestanden met een punt vooraan toe in lijsten en antwoorden.", "scope": "help"}],
-    "source": [{"text": "Bron", "scope": "field"}, {"text": "Gebruik lokale bestanden of rol uit vanuit een Git-repository.", "scope": "help"}],
-    "start_command": [{"text": "Startcommando", "scope": "field"}, {"text": "Programma en argumenten waarmee elk applicatieproces start.", "scope": "help"}],
-    "submodules": [{"text": "Git-submodules", "scope": "field"}, {"text": "Initialiseer en update submodules na de checkout.", "scope": "help"}],
-    "target_url": [{"text": "Doel-URL", "scope": "field"}, {"text": "Absolute URL of root-relatief pad voor de redirect.", "scope": "help"}],
-    "upstream_socket": [{"text": "Upstream Unix-socket", "scope": "field"}, {"text": "Unix-socketpad. Indien ingevuld krijgt dit voorrang op host en poort.", "scope": "help"}],
-    "use_ports": [{"text": "TCP-poorten gebruiken", "scope": "field"}, {"text": "Gebruik een lokale TCP-poort in plaats van de standaard Unix-socket.", "scope": "help"}],
-    "volumes": [{"text": "Volumes", "scope": "field"}, {"text": "Containerkoppelingen in de vorm hostpad:containerpad.", "scope": "help"}],
-    "wait_for_ready": [{"text": "Op gereed-signaal wachten", "scope": "field"}, {"text": "Stuur pas verkeer nadat het proces meldt dat de start voltooid is.", "scope": "help"}],
-    "webhook_secret": [{"text": "Webhookgeheim", "scope": "field"}, {"text": "Geheim waarmee ondertekende repositorywebhooks worden gecontroleerd.", "scope": "help"}],
-    "websocket_upgrade": [{"text": "WebSockets toestaan", "scope": "field"}, {"text": "Stuur WebSocket-upgrades door naar de upstream.", "scope": "help"}],
-    "working_directory": [{"text": "Werkmap", "scope": "field"}, {"text": "Map waarin het applicatiecommando wordt gestart.", "scope": "help"}],
-    "cert_renewal_failed": {"text": "Certificaatvernieuwing mislukt", "scope": "notification_event"},
-    "cert_expiring": {"text": "Certificaat verloopt binnenkort", "scope": "notification_event"},
-    "deploy_failed": {"text": "Deployment mislukt", "scope": "notification_event"},
-    "backup_failed": {"text": "Back-up mislukt", "scope": "notification_event"},
-    "process_crash_loop": {"text": "Proces blijft crashen", "scope": "notification_event"},
-    "auto_ban_budget_exhausted": {"text": "Auto-banbudget opgebruikt", "scope": "notification_event"},
-    "spamservice_outage": {"text": "Spamservice onbereikbaar", "scope": "notification_event"},
-    "spamservice_recovered": {"text": "Spamservice hersteld", "scope": "notification_event"},
-    "active": {"text": "Actief", "scope": "site_databases"},
-    "add_domain": {"text": "Domein toevoegen", "scope": "site_domains"},
-    "attach": [{"text": "Database koppelen", "scope": "site_databases"}, {"text": "Secondary toevoegen", "scope": "dns_secondaries"}],
-    "auto_deploy_disabled": {"text": "Automatische uitrol staat uit: pushes worden aanvaard maar niet uitgerold. Schakel dit in bij de broninstellingen van de site.", "scope": "site_deployments"},
-    "build_log": {"text": "Buildlog", "scope": "site_deployments"},
-    "cancel": [{"text": "Deployment annuleren", "scope": "site_deployments"}, {"text": "Annuleren", "scope": "certificate_request"}],
-    "captured": {"text": "Opgenomen", "scope": "site_processes"},
-    "certificate": [{"text": "Certificaat", "scope": "site_domains"}, {"text": "Certificaat {$name}", "scope": "attention_title"}, {"text": "Certificaat", "scope": "field"}, {"text": "TLS-certificaat voor deze hostnaam. Leeg laat het platform kiezen of er een aanvragen.", "scope": "help"}],
-    "clients": [{"text": "Clients", "scope": "site_processes"}, {"text": "Clients", "scope": "spamservice"}],
-    "commit": {"text": "Commit", "scope": "site_deployments"},
-    "connection": {"text": "Verbinding", "scope": "database_tab"},
-    "copy_password": {"text": "Wachtwoord kopiëren", "scope": "database_tab"},
-    "copy_webhook_secret": {"text": "Webhookgeheim kopiëren", "scope": "site_deployments"},
-    "copy_webhook_url": {"text": "Webhook-URL kopiëren", "scope": "site_deployments"},
-    "cpu": {"text": "CPU", "scope": "site_processes"},
-    "current_commit": {"text": "Serveert momenteel commit {$commit}.", "scope": "site_deployments"},
-    "database": [{"text": "Database", "scope": "database_tab"}, {"text": "Database", "scope": "site_databases"}, {"text": "Database {$name}", "scope": "attention_title"}],
-    "database_not_running": {"text": "Gekoppelde database {$name} draait niet", "scope": "attention_detail"},
-    "database_status": {"text": "Gekoppelde database {$name} is {$status}", "scope": "attention_detail"},
-    "degraded": {"text": "Verminderd beschikbaar", "scope": "attention_detail"},
-    "deploy": {"text": "Deployment van {$name}", "scope": "attention_title"},
-    "deploy_now": {"text": "Nu uitrollen", "scope": "site_deployments"},
-    "down": {"text": "Onbereikbaar", "scope": "attention_detail"},
-    "dump_file": {"text": "Dumpbestand", "scope": "database_tab"},
-    "duration": {"text": "Duur", "scope": "site_deployments"},
-    "empty": [{"text": "Geen databases gekoppeld", "scope": "site_databases"}, {"text": "Geen domeinen geconfigureerd", "scope": "site_domains"}, {"text": "Nog geen deployments", "scope": "site_deployments"}, {"text": "Geen dev-servers verbonden", "scope": "dev_sessions"}, {"text": "Geen secondaries geconfigureerd", "scope": "dns_secondaries"}, {"text": "Geen gedelegeerde toegang", "scope": "site_access"}],
-    "empty_description": [{"text": "Koppel een beheerde database om de verbindingsgegevens als omgevingsvariabelen in de processen te injecteren.", "scope": "site_databases"}, {"text": "Voeg een hostnaam toe om verkeer naar deze site te sturen.", "scope": "site_domains"}, {"text": "Deployments via webhook, polling of handmatige start verschijnen hier.", "scope": "site_deployments"}, {"text": "Niemand behalve beheerders kan deze site al beheren.", "scope": "site_access"}],
-    "engine": [{"text": "Engine", "scope": "database_tab"}, {"text": "Engine", "scope": "site_databases"}, {"text": "Engine", "scope": "field"}, {"text": "Database-engine. Vast na aanmaak; vernietig en maak opnieuw aan om te wijzigen.", "scope": "help"}],
-    "env_prefix": [{"text": "Omgevingsprefix", "scope": "site_databases"}, {"text": "Env-voorvoegsel", "scope": "field"}, {"text": "Bepaalt de naam van de geinjecteerde variabelen: DB geeft DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME en DB_URL. De eerste koppeling van de site levert ook DATABASE_URL.", "scope": "help"}],
-    "failed": {"text": "Mislukt", "scope": "site_databases"},
-    "forced": {"text": "Verplicht", "scope": "site_domains"},
-    "hostname": [{"text": "Hostnaam", "scope": "site_domains"}, {"text": "Hostnaam", "scope": "field"}, {"text": "De Host-header die moet overeenkomen. Wildcardmodus laat * en ? toe; regexmodus neemt een volledige reguliere expressie.", "scope": "help"}],
-    "isolate": {"text": "Isoleren", "scope": "site_processes"},
-    "isolated": {"text": "Geïsoleerd", "scope": "site_processes"},
-    "kill": {"text": "Stoppen", "scope": "site_processes"},
-    "kill_confirm": {"text": "Het proces wordt onmiddellijk beëindigd.", "scope": "site_processes"},
-    "last_run_failed": {"text": "Laatste uitvoering mislukt", "scope": "attention_detail"},
-    "lines": {"text": "Regels", "scope": "site_processes"},
-    "match_type": [{"text": "Overeenkomsttype", "scope": "site_domains"}, {"text": "Overeenkomsttype", "scope": "field"}, {"text": "Hoe de hostnaam wordt vergeleken: exact, wildcard of reguliere expressie.", "scope": "help"}],
-    "memory": {"text": "Geheugen", "scope": "site_processes"},
-    "no_logs": {"text": "Nog geen opgeslagen logs.", "scope": "site_processes"},
-    "none": {"text": "Geen", "scope": "site_domains"},
-    "none_running": {"text": "Er draaien geen processen.", "scope": "site_processes"},
-    "off": {"text": "Uit", "scope": "site_domains"},
-    "password": {"text": "Wachtwoord", "scope": "database_tab"},
-    "payload_url": {"text": "Payload-URL", "scope": "site_deployments"},
-    "pid": {"text": "PID", "scope": "site_processes"},
-    "port": [{"text": "Poort", "scope": "dns_remote"}, {"text": "Poort", "scope": "site_processes"}],
-    "primary": {"text": "Primair", "scope": "site_databases"},
-    "provisioning": {"text": "Wordt aangemaakt", "scope": "site_databases"},
-    "provisioning_failed": {"text": "Aanmaken mislukt", "scope": "attention_detail"},
-    "ready": [{"text": "Gereed", "scope": "site_processes"}, {"text": "Gereed", "scope": "spamservice"}],
-    "request_certificate": [{"text": "Certificaat aanvragen", "scope": "site_domains"}, {"text": "Let's Encrypt-certificaat aanvragen", "scope": "certificate_request"}],
-    "restore": [{"text": "Herstellen", "scope": "database_tab"}, {"text": "Terugzetten", "scope": "database"}],
-    "restore_description": {"text": "Uploadt een dumpbestand en laadt het in de draaiende database.", "scope": "database_tab"},
-    "restore_dump": {"text": "Uit dump herstellen", "scope": "database_tab"},
-    "restored": {"text": "Back-up hersteld in '{$name}'.", "scope": "database_tab"},
-    "rollback": {"text": "Terugrollen", "scope": "site_deployments"},
-    "rollback_confirm": {"text": "De vorige deploymentsleuf activeren? De huidige versie stopt met serveren.", "scope": "site_deployments"},
-    "secret": {"text": "Geheim", "scope": "site_deployments"},
-    "site": {"text": "Site {$name}", "scope": "attention_title"},
-    "ssl": {"text": "SSL", "scope": "site_domains"},
-    "start": [{"text": "Proces starten", "scope": "site_processes"}, {"text": "Starten", "scope": "spamservice"}],
-    "started": {"text": "Gestart", "scope": "site_deployments"},
-    "starting": {"text": "Start", "scope": "site_processes"},
-    "status": [{"text": "Status: {$status}", "scope": "database_tab"}, {"text": "Status", "scope": "site_databases"}, {"text": "Status", "scope": "site_deployments"}, {"text": "Status", "scope": "site_processes"}],
-    "stored_log": {"text": "Opgeslagen log {$title}", "scope": "site_processes"},
-    "stored_logs": {"text": "Opgeslagen proceslogs", "scope": "site_processes"},
-    "task": {"text": "Taak {$name}", "scope": "attention_title"},
-    "terminal": {"text": "Terminal", "scope": "site_processes"},
-    "terminal_description": {"text": "Live stdout/stderr voor pid {$pid}. Toetsaanslagen gaan naar stdin van het proces.", "scope": "site_processes"},
-    "trigger": {"text": "Trigger", "scope": "site_deployments"},
-    "unisolate": {"text": "Isolatie opheffen", "scope": "site_processes"},
-    "unmanaged": {"text": "Geen beheerde site", "scope": "site_processes"},
-    "unmanaged_description": {"text": "Alleen node-, alchemy-, command-, java- en docker-sites draaien beheerde processen.", "scope": "site_processes"},
-    "used_by": {"text": "Gebruikt door", "scope": "database_tab"},
-    "user": [{"text": "Gebruiker", "scope": "database_tab"}, {"text": "Gebruiker", "scope": "site_access"}],
-    "variables": {"text": "Geïnjecteerde variabelen", "scope": "site_databases"},
-    "webhook": {"text": "Push-webhook", "scope": "site_deployments"},
-    "webhook_description": {"text": "Configureer deze URL en dit geheim bij je Git-host (GitHub, GitLab of Gitea) om bij elke push uit te rollen.", "scope": "site_deployments"},
-    "onboarding": {"text": "Aan de slag", "scope": "dashboard"},
-    "title": [{"text": "Deployments", "scope": "site_deployments"}, {"text": "Processen", "scope": "site_processes"}, {"text": "Maak je eerste site", "scope": "onboarding"}, {"text": "Hohenheim-beheer", "scope": "admin"}, {"text": "Instellingen", "scope": "settings"}, {"text": "Sitebeheer", "scope": "manage"}],
-    "description": [{"text": "Draaiende processen voor deze site.", "scope": "site_processes"}, {"text": "Kies hoe de applicatie draait, voeg een domein toe en vraag daarna een certificaat aan. Hohenheim begeleidt elke stap vanaf de sitepagina.", "scope": "onboarding"}, {"text": "Beschrijving", "scope": "field"}],
-    "create_site": {"text": "Site maken", "scope": "onboarding"},
-    "publish_records": {"text": "Publiceer de DNS TXT-records", "scope": "certificate_request"},
-    "publish_description": {"text": "Voeg elke waarde hieronder toe bij je DNS-provider. Waarden met dezelfde naam moeten naast elkaar bestaan; vervang de ene niet door de andere.", "scope": "certificate_request"},
-    "manual_ephemeral": {"text": "Deze aanvraag blijft 30 minuten beschikbaar en gaat verloren bij een herstart. Handmatige DNS-certificaten worden niet automatisch vernieuwd.", "scope": "certificate_request"},
-    "record_name": [{"text": "Naam van TXT-record", "scope": "certificate_request"}, {"text": "Naam", "scope": "field"}, {"text": "Eigenaarsnaam relatief aan de zone: @ voor de zone zelf, www voor een subdomein, * voor een wildcard", "scope": "help"}],
-    "record_value": [{"text": "Waarde van TXT-record", "scope": "certificate_request"}, {"text": "Waarde", "scope": "field"}, {"text": "A/AAAA: een IP-adres. CNAME/NS/MX/SRV: een hostnaam. TXT: de tekst. CAA: vlaggen tag waarde, bv. 0 issue letsencrypt.org", "scope": "help"}],
-    "copy_record_name": {"text": "Naam van TXT-record kopiëren", "scope": "certificate_request"},
-    "copy_record_value": {"text": "Waarde van TXT-record kopiëren", "scope": "certificate_request"},
-    "verify_dns": {"text": "DNS controleren en certificaat uitgeven", "scope": "certificate_request"},
-    "start_over": {"text": "Opnieuw beginnen", "scope": "certificate_request"},
-    "name": [{"text": "Naam", "scope": "certificate_request"}, {"text": "Naam", "scope": "dev_sessions"}, {"text": "Naam", "scope": "field"}, {"text": "Naam", "scope": "spamservice_client"}, {"text": "Naam", "scope": "spamservice_key"}],
-    "name_placeholder": {"text": "Standaard het eerste domein", "scope": "certificate_request"},
-    "domains": [{"text": "Domeinen", "scope": "certificate_request"}, {"text": "Domeinen", "scope": "site"}],
-    "domains_help": {"text": "Voeg elke hostnaam afzonderlijk toe. Wildcards zoals *.example.com vereisen DNS-01 en dekken de kale naam example.com niet; voeg beide toe wanneer nodig.", "scope": "certificate_request"},
-    "validation": {"text": "Validatiemethode", "scope": "certificate_request"},
-    "validation_help": {"text": "HTTP-01 vereist dat elke exacte hostnaam naar deze proxy wijst. DNS-01 werkt voor exacte namen en wildcards.", "scope": "certificate_request"},
-    "dns_mode": {"text": "DNS-publicatie (alleen DNS-01)", "scope": "certificate_request"},
-    "manual": {"text": "Handmatige TXT-records (geen automatische vernieuwing)", "scope": "certificate_request"},
-    "automatic_hook": {"text": "Automatische command-hook", "scope": "certificate_request"},
-    "hook_ready": {"text": "De geconfigureerde hook publiceert en verwijdert TXT-waarden, zodat dit certificaat automatisch kan vernieuwen.", "scope": "certificate_request"},
-    "hook_missing": {"text": "Configureer ssl.dns_hook_command in Instellingen voor automatische DNS-01-uitgifte en vernieuwing.", "scope": "certificate_request"},
-    "account_email": {"text": "Account-e-mail (optioneel)", "scope": "certificate_request"},
-    "account_email_help": {"text": "Overschrijft het globale Let's Encrypt-accountadres voor dit certificaat.", "scope": "certificate_request"},
-    "request": {"text": "Certificaat aanvragen", "scope": "certificate_request"},
-    "any": {"text": "Eén van beide (IP of Basic Auth)", "scope": "access_satisfy"},
-    "all": {"text": "Beide (IP en Basic Auth)", "scope": "access_satisfy"},
-    "exact": {"text": "Exacte hostnaam", "scope": "domain_match"},
-    "wildcard": {"text": "Wildcard (* en ?)", "scope": "domain_match"},
-    "regex": {"text": "Reguliere expressie", "scope": "domain_match"},
-    "local_files": {"text": "Lokale bestanden", "scope": "site_source"},
-    "git_repository": {"text": "Git-repository", "scope": "site_source"},
-    "server_local": {"text": "{$name} (lokaal)", "scope": "server_option"},
-    "proxy_unavailable": {"text": "De proxyserver is nog niet beschikbaar", "scope": "certificate_request_error"},
-    "dns_validation_failed": {"text": "DNS-validatie is mislukt. Controleer elke TXT-waarde en start een nieuwe aanvraag.", "scope": "certificate_request_error"},
-    "invalid_email": {"text": "Ongeldig e-mailadres voor het account: {$email}", "scope": "certificate_request_error"},
-    "domain_required": {"text": "Er is minstens één domein vereist", "scope": "certificate_request_error"},
-    "unknown_validation": {"text": "Onbekende validatiemethode: {$method}", "scope": "certificate_request_error"},
-    "wildcard_requires_dns": {"text": "Wildcardcertificaten vereisen DNS-01-validatie", "scope": "certificate_request_error"},
-    "invalid_hostnames": {"text": "Ongeldige hostnamen: {$hostnames}", "scope": "certificate_request_error"},
-    "excluded_hostnames": {"text": "Uitgesloten van Let's Encrypt via hun domeininstellingen: {$hostnames}", "scope": "certificate_request_error"},
-    "dns_start_failed": {"text": "DNS-validatie kon niet worden gestart: {$reason}", "scope": "certificate_request_error"},
-    "unknown_dns_mode": {"text": "Onbekende DNS-publicatiemodus: {$mode}", "scope": "certificate_request_error"},
-    "hook_not_configured": {"text": "De automatische DNS-hook is niet geconfigureerd in de SSL/TLS-instellingen", "scope": "certificate_request_error"},
-    "request_failed": {"text": "De certificaataanvraag is mislukt: {$reason}", "scope": "certificate_request_error"},
-    "unknown_reason": {"text": "Onbekende reden", "scope": "certificate_request_error"},
-    "manual_expired": {"text": "De handmatige DNS-aanvraag is verlopen of de server is herstart. Start een nieuwe aanvraag.", "scope": "certificate_request_error"},
-    "plural": [{"text": "Toegangslijsten", "scope": "access_list"}, {"text": "Authenticatieproviders", "scope": "auth_provider"}, {"text": "Certificaten", "scope": "certificate"}, {"text": "Databanken", "scope": "database"}, {"text": "Meldingskanalen", "scope": "notification_channel"}, {"text": "Servers", "scope": "server"}, {"text": "Sites", "scope": "site"}, {"text": "Gekoppelde databanken", "scope": "site_database"}, {"text": "Sitedomeinen", "scope": "site_domain"}, {"text": "DNS-zones", "scope": "dns_zone"}, {"text": "DNS-records", "scope": "dns_record"}, {"text": "DNS-peers", "scope": "dns_peer"}, {"text": "Zone-secondaries", "scope": "dns_zone_peer"}, {"text": "IP-verbanningen", "scope": "ban"}, {"text": "Spamservice-clients", "scope": "spamservice_client"}, {"text": "Clientsleutels", "scope": "spamservice_key"}, {"text": "Beveiligingsgebeurtenissen", "scope": "spamservice_event"}, {"text": "Spamwoorden", "scope": "spamservice_word"}, {"text": "Voorbeelden", "scope": "spamservice_sample"}],
-    "dashboard": {"text": "Dashboard", "scope": "admin"},
-    "download": {"text": "Downloaden", "scope": "certificate"},
-    "renewal_status": {"text": "Vernieuwingsstatus", "scope": "certificate"},
-    "request_le": {"text": "Aanvragen via Let's Encrypt", "scope": "certificate"},
-    "backup": {"text": "Back-up downloaden", "scope": "database"},
-    "infra": {"text": "Infrastructuur", "scope": "nav"},
-    "proxy": {"text": "Proxy", "scope": "nav"},
-    "test": [{"text": "Test versturen", "scope": "notification_channel"}, {"text": "Verbinding testen", "scope": "spamservice"}],
-    "test_failed": {"text": "Testbezorging mislukt", "scope": "notification_channel"},
-    "test_ok": [{"text": "Test bezorgd", "scope": "notification_channel"}, {"text": "Spamservice antwoordde: {$status}", "scope": "spamservice"}],
-    "host_status": {"text": "Host", "scope": "server"},
-    "clone": {"text": "Dupliceren", "scope": "site"},
-    "databases": {"text": "Databanken", "scope": "site"},
-    "clone_confirm": {"text": "Een kopie maken met dezelfde instellingen en domeinen (standaard uitgeschakeld)?", "scope": "site"},
-    "deployments": {"text": "Deployments", "scope": "site"},
-    "disabled_toast": {"text": "Site uitgeschakeld", "scope": "site"},
-    "enabled_toast": {"text": "Site ingeschakeld", "scope": "site"},
-    "dev_sessions": {"text": "Dev-sessies", "scope": "site"},
-    "processes": {"text": "Processen", "scope": "site"},
-    "toggle": {"text": "In-/uitschakelen", "scope": "site"},
-    "attention": {"text": "Vraagt aandacht", "scope": "dashboard"},
-    "all_clear": {"text": "Alles in orde - niets vraagt aandacht.", "scope": "dashboard"},
-    "recent_activity": {"text": "Recente activiteit", "scope": "dashboard"},
-    "site_type": [{"text": "Sitetype", "scope": "field"}, {"text": "Hoe deze site wordt bediend: beheerd proces, statische bestanden, proxy, redirect, ...", "scope": "help"}],
-    "enabled": [{"text": "Ingeschakeld", "scope": "field"}, {"text": "Uitgeschakelde sites worden niet gerouteerd; verzoeken krijgen de offlinepagina.", "scope": "help"}, {"text": "Ingeschakeld", "scope": "spamservice_client"}],
-    "settings": {"text": "Instellingen", "scope": "field"},
-    "source_settings": {"text": "Broninstellingen", "scope": "field"},
-    "access_list": [{"text": "Toegangslijst", "scope": "field"}, {"text": "Optionele IP-toestaan/weigeren-lijst en basic auth, toegepast voor verzoeken de site bereiken.", "scope": "help"}],
-    "auth_provider": [{"text": "Auth-provider", "scope": "field"}, {"text": "Optionele identiteitsprovider waarmee bezoekers zich eerst moeten aanmelden.", "scope": "help"}],
-    "listen_on": [{"text": "Luisteradres", "scope": "field"}, {"text": "Bedien dit domein alleen op het gekozen lokale IP-adres. Leeg betekent alle interfaces.", "scope": "help"}],
-    "path_prefix": [{"text": "Padvoorvoegsel", "scope": "field"}, {"text": "Alleen verzoeken waarvan het pad met dit voorvoegsel begint gebruiken deze regel. Leeg matcht alles.", "scope": "help"}],
-    "strip_path": [{"text": "Pad strippen", "scope": "field"}, {"text": "Verwijder het gematchte padvoorvoegsel voordat het verzoek wordt doorgestuurd.", "scope": "help"}],
-    "force_ssl": [{"text": "SSL afdwingen", "scope": "field"}, {"text": "Stuur gewone HTTP-verzoeken door naar HTTPS.", "scope": "help"}],
-    "hsts_enabled": [{"text": "HSTS", "scope": "field"}, {"text": "Stuur de Strict-Transport-Security-header zodat browsers HTTP voor deze host weigeren.", "scope": "help"}],
-    "hsts_subdomains": [{"text": "HSTS-subdomeinen", "scope": "field"}, {"text": "Breid HSTS uit naar alle subdomeinen (includeSubDomains).", "scope": "help"}],
-    "custom_headers": [{"text": "Verzoekheaders", "scope": "field"}, {"text": "Headers gezet op het verzoek voordat het wordt doorgestuurd. Een lege waarde verwijdert de header.", "scope": "help"}],
-    "response_headers": [{"text": "Antwoordheaders", "scope": "field"}, {"text": "Headers gezet op het antwoord naar de client. Een lege waarde verwijdert de header.", "scope": "help"}],
-    "exclude_from_letsencrypt": [{"text": "Uitsluiten van Let's Encrypt", "scope": "field"}, {"text": "Laat deze hostnaam weg bij het aanvragen van Let's Encrypt-certificaten voor de site.", "scope": "help"}],
-    "database_name": {"text": "Unieke naam voor deze beheerde database; benoemt ook de container en het volume. Kleine letters, cijfers en streepjes.", "scope": "help"},
-    "db_user": [{"text": "Databasegebruiker", "scope": "field"}, {"text": "Gebruikersnaam aangemaakt in de databasecontainer en geinjecteerd in gekoppelde sites.", "scope": "help"}],
-    "db_password": [{"text": "Databasewachtwoord", "scope": "field"}, {"text": "Wachtwoord voor de databasegebruiker. Leeg laten om er een te genereren.", "scope": "help"}],
-    "db_name": [{"text": "Databasenaam", "scope": "field"}, {"text": "Naam van de initiele database binnen de engine.", "scope": "help"}],
-    "ephemeral": [{"text": "Vluchtig", "scope": "field"}, {"text": "Bewaar data in een RAM-tmpfs: snel, maar ALLE data gaat verloren wanneer de container herstart.", "scope": "help"}],
-    "records": {"text": "Records", "scope": "dns_zone"},
-    "records_hint": {"text": "Open de A-, AAAA-, CNAME-, MX-, TXT- en andere DNS-records van deze zone.", "scope": "dns_zone"},
-    "zone_file": {"text": "Zonebestand", "scope": "dns_zone"},
-    "origin": [{"text": "Zone-origin", "scope": "field"}, {"text": "Het domein waarvoor deze zone autoritatief is, bv. example.com (zonder punt op het einde)", "scope": "help"}],
-    "soa_primary_ns": [{"text": "Primaire naamserver", "scope": "field"}, {"text": "Hostnaam van de primaire naamserver (de MNAME in het SOA-record); leeg = ns1.<zone>", "scope": "help"}],
-    "soa_contact": [{"text": "Contact-e-mail", "scope": "field"}, {"text": "Administratief contact voor de zone; leeg = hostmaster@<zone>", "scope": "help"}],
-    "serial": {"text": "Serienummer", "scope": "field"},
-    "default_ttl": [{"text": "Standaard-TTL", "scope": "field"}, {"text": "Seconden dat resolvers records zonder eigen TTL mogen cachen (3600 = 1 uur)", "scope": "help"}],
-    "negative_ttl": [{"text": "Negatieve TTL", "scope": "field"}, {"text": "Seconden dat resolvers naam-bestaat-niet-antwoorden mogen cachen (300 = 5 minuten)", "scope": "help"}],
-    "soa_refresh": [{"text": "SOA-refresh", "scope": "field"}, {"text": "Seconden voordat een secundaire naamserver deze zone opnieuw controleert (7200 = 2 uur)", "scope": "help"}],
-    "soa_retry": [{"text": "SOA-retry", "scope": "field"}, {"text": "Seconden die een secundaire wacht na een mislukte refresh (3600 = 1 uur)", "scope": "help"}],
-    "soa_expire": [{"text": "SOA-expire", "scope": "field"}, {"text": "Seconden waarna een secundaire die deze server niet bereikt stopt met antwoorden (1209600 = 2 weken)", "scope": "help"}],
-    "zone_enabled": [{"text": "Ingeschakeld", "scope": "field"}, {"text": "Uitgeschakelde zones worden niet bediend; hun namen krijgen REFUSED-antwoorden", "scope": "help"}],
-    "record_zone": [{"text": "Zone", "scope": "field"}, {"text": "De autoritatieve zone waartoe dit record behoort.", "scope": "help"}],
-    "record_type": [{"text": "Type", "scope": "field"}, {"text": "Het recordtype; MX en SRV hebben ook een prioriteit nodig, SRV ook een poort", "scope": "help"}],
-    "record_ttl": [{"text": "TTL", "scope": "field"}, {"text": "Seconden dat resolvers dit record mogen cachen; leeg = de zonestandaard", "scope": "help"}],
-    "record_priority": [{"text": "Prioriteit", "scope": "field"}, {"text": "Verplicht voor MX- en SRV-records; lagere nummers worden eerst geprobeerd", "scope": "help"}],
-    "record_weight": [{"text": "Gewicht", "scope": "field"}, {"text": "Alleen SRV: relatief gewicht voor records met dezelfde prioriteit (0 bij twijfel)", "scope": "help"}],
-    "record_port": [{"text": "Poort", "scope": "field"}, {"text": "Alleen SRV: de TCP/UDP-poort waarop de dienst luistert", "scope": "help"}],
-    "record_enabled": [{"text": "Ingeschakeld", "scope": "field"}, {"text": "Uitgeschakelde records blijven opgeslagen maar worden niet bediend", "scope": "help"}],
-    "managed_by": {"text": "Beheerd door", "scope": "field"},
-    "record_count": {"text": "Records", "scope": "dns_zone"},
-    "ds_title": {"text": "DS-record (voor de registrar)", "scope": "dns_zone"},
-    "ds_description": {"text": "Registreer dit DS-record bij je domeinregistrar om de DNSSEC-vertrouwensketen te sluiten. Het verandert wanneer je de ondertekeningssleutel opnieuw genereert.", "scope": "dns_zone"},
-    "dnssec_enabled": [{"text": "Deze zone ondertekenen (DNSSEC)", "scope": "field"}, {"text": "Genereert bij eerste gebruik een sleutel en serveert ondertekende antwoorden. Vereist het registreren van het DS-record (zie het tabblad Zonebestand) bij je registrar.", "scope": "help"}],
-    "add_record": {"text": "Record toevoegen", "scope": "dns_zone"},
-    "record_name_column": {"text": "Naam", "scope": "dns_zone"},
-    "record_type_column": {"text": "Type", "scope": "dns_zone"},
-    "record_ttl_column": {"text": "TTL", "scope": "dns_zone"},
-    "record_value_column": {"text": "Waarde", "scope": "dns_zone"},
-    "record_status_column": {"text": "Status", "scope": "dns_zone"},
-    "record_enabled_badge": {"text": "Actief", "scope": "dns_zone"},
-    "record_disabled_badge": {"text": "Uitgeschakeld", "scope": "dns_zone"},
-    "record_managed_badge": {"text": "ACME", "scope": "dns_zone"},
-    "records_empty": {"text": "Nog geen records", "scope": "dns_zone"},
-    "records_empty_description": {"text": "Voeg A/AAAA-records toe voor je hosts en NS-records voor de zone zelf.", "scope": "dns_zone"},
-    "zone_file_description": {"text": "De zone in standaard master-bestandsformaat; uitgeschakelde rijen staan als commentaar.", "scope": "dns_zone"},
-    "import_zone_file": {"text": "Zonebestand importeren", "scope": "dns_zone"},
-    "import_description": {"text": "Plak standaard zonebestand-tekst om records in deze zone te laden.", "scope": "dns_zone"},
-    "zone_file_text": {"text": "Zonebestand-tekst", "scope": "dns_zone"},
-    "import_replaces": {"text": "Importeren vervangt elk record van deze zone behalve ACME-beheerde items. SOA-regels worden genegeerd; het zoneformulier beheert die waarden.", "scope": "dns_zone"},
-    "import_action": {"text": "Importeren", "scope": "dns_zone"},
-    "import_done": {"text": "{$count} records geimporteerd.", "scope": "dns_zone"},
-    "import_skipped": {"text": "Overgeslagen: {$lines}", "scope": "dns_zone"},
-    "import_empty": {"text": "Plak eerst zonebestand-tekst voor het importeren", "scope": "dns_zone"},
-    "dns_origin_format": {"text": "Geef een kaal domein zoals example.com (letters, cijfers en koppeltekens; geen wildcard, geen punt op het einde)", "scope": "violations"},
-    "dns_origin_taken": {"text": "Er bestaat al een zone voor die origin", "scope": "violations"},
-    "dns_zone_required": {"text": "Kies de zone waartoe dit record behoort", "scope": "violations"},
-    "dns_name_format": {"text": "Gebruik @ voor de zone zelf, of labels zoals www, *.dev of _acme-challenge", "scope": "violations"},
-    "dns_value_required": {"text": "Het record heeft een waarde nodig", "scope": "violations"},
-    "dns_ipv4_format": {"text": "Geef een geldig IPv4-adres zoals 203.0.113.10", "scope": "violations"},
-    "dns_ipv6_format": {"text": "Geef een geldig IPv6-adres zoals 2001:db8::1", "scope": "violations"},
-    "dns_target_format": {"text": "Geef een hostnaam zoals server.example.com", "scope": "violations"},
-    "dns_cname_apex": {"text": "Een CNAME kan niet op de zone zelf staan; gebruik een A/AAAA-record", "scope": "violations"},
-    "dns_cname_exclusive": {"text": "Een CNAME-eigenaar kan geen andere records bevatten; verwijder eerst de conflicterende records", "scope": "violations"},
-    "dns_ns_wildcard": {"text": "NS-records kunnen geen wildcard-naam gebruiken", "scope": "violations"},
-    "dns_priority_required": {"text": "MX- en SRV-records hebben een prioriteit tussen 0 en 65535 nodig", "scope": "violations"},
-    "dns_port_required": {"text": "SRV-records hebben een poort tussen 0 en 65535 nodig", "scope": "violations"},
-    "dns_weight_format": {"text": "Het gewicht moet tussen 0 en 65535 liggen", "scope": "violations"},
-    "dns_caa_format": {"text": "CAA-waarden zien eruit als: 0 issue letsencrypt.org", "scope": "violations"},
-    "dns_caa_tag": {"text": "De CAA-tag moet issue, issuewild of iodef zijn", "scope": "violations"},
-    "dns_type_unknown": {"text": "Onbekend recordtype", "scope": "violations"},
-    "dns_interval_range": {"text": "SOA-intervallen moeten tussen 0 en 2419200 seconden liggen (vier weken)", "scope": "violations"},
-    "dns_ttl_range": {"text": "TTL-waarden moeten tussen 0 en 604800 seconden liggen (een week)", "scope": "violations"},
-    "dns_record_duplicate": {"text": "Dat exacte record bestaat al in deze zone", "scope": "violations"},
-    "dns_contact_format": {"text": "Geef een e-mailadres zoals hostmaster@example.com", "scope": "violations"},
-    "internal_dns": {"text": "Gehoste DNS (deze server)", "scope": "certificate_request"},
-    "internal_ready": {"text": "Gehoste DNS: beschikbaar wanneer de zone van het domein door deze server bediend wordt; validatierecords publiceren onmiddellijk.", "scope": "certificate_request"},
-    "internal_unavailable": {"text": "Gehoste DNS: schakel de DNS-server in en maak een zone voor het domein om dit te gebruiken.", "scope": "certificate_request"},
-    "zone_not_hosted": {"text": "Geen ingeschakelde gehoste DNS-zone dekt: {$hostnames}", "scope": "certificate_request_error"},
-    "dns_server_disabled": {"text": "De DNS-server draait niet; schakel die eerst in bij de instellingen", "scope": "certificate_request_error"},
-    "dns_listener": {"text": "DNS-server kon niet starten", "scope": "attention_title"},
-    "dns_zone_no_ns": [{"text": "Zone {$origin} heeft geen NS-records", "scope": "attention_title"}, {"text": "Delegatie vereist NS-records op de zone zelf; resolvers beschouwen de zone als defect.", "scope": "attention_detail"}],
-    "url": {"text": "URL", "scope": "dev_sessions"},
-    "connected_since": {"text": "Verbonden sinds", "scope": "dev_sessions"},
-    "active_streams": {"text": "Actieve streams", "scope": "dev_sessions"},
-    "empty_hint": [{"text": "Start een Zenit-project met de dev-tunnel geconfigureerd en het verschijnt hier automatisch.", "scope": "dev_sessions"}, {"text": "Voeg een peer toe om deze zone via geauthenticeerde AXFR naar hem te repliceren.", "scope": "dns_secondaries"}],
-    "registration_token": [{"text": "Registratietoken", "scope": "field"}, {"text": "Geheim dat externe dev-servers aanbieden bij het registreren. Wordt automatisch gegenereerd wanneer leeg; plak het in de zenit-dev-configuratie van de dev-machine.", "scope": "help"}],
-    "secondaries": {"text": "Secondaries", "scope": "dns_zone"},
-    "peer_name": [{"text": "Naam", "scope": "field"}, {"text": "Een herkenbare naam voor deze DNS-peer.", "scope": "help"}],
-    "peer_base_url": [{"text": "Admin-basis-URL", "scope": "field"}, {"text": "HTTPS-URL van de admin-server van een Hohenheim-peer, om bewerkingen van zones die het bezit door te sturen.", "scope": "help"}],
-    "peer_api_key": [{"text": "API-sleutel", "scope": "field"}, {"text": "znit_ API-sleutel om de admin van de peer aan te roepen voor edit-forwarding.", "scope": "help"}],
-    "peer_transfer_host": [{"text": "Transfer-host", "scope": "field"}, {"text": "Adres van de DNS-server van de peer voor AXFR/NOTIFY.", "scope": "help"}],
-    "peer_transfer_port": [{"text": "Transfer-poort", "scope": "field"}, {"text": "DNS-poort voor AXFR en NOTIFY; normaal 53.", "scope": "help"}],
-    "peer_tsig_key_name": [{"text": "TSIG-sleutelnaam", "scope": "field"}, {"text": "Gedeelde sleutelnaam die zone-transfers met deze peer authenticeert.", "scope": "help"}],
-    "peer_tsig_algorithm": [{"text": "TSIG-algoritme", "scope": "field"}, {"text": "HMAC-algoritme, bijv. hmac-sha256.", "scope": "help"}],
-    "peer_tsig_secret": [{"text": "TSIG-geheim", "scope": "field"}, {"text": "Base64 gedeeld geheim voor de TSIG-sleutel.", "scope": "help"}],
-    "peer_enabled": [{"text": "Ingeschakeld", "scope": "field"}, {"text": "Uitgeschakelde peers worden niet benaderd voor transfers of doorgestuurde bewerkingen.", "scope": "help"}],
-    "zone_role": [{"text": "Rol", "scope": "field"}, {"text": "Primaire zones worden hier bewerkt; secundaire zones worden gerepliceerd van hun eigenaar-peer.", "scope": "help"}],
-    "primary_peer": [{"text": "Eigenaar-peer", "scope": "field"}, {"text": "Voor een secundaire zone: de peer die de zone bezit en recordbewerkingen ontvangt.", "scope": "help"}],
-    "role_primary": {"text": "Primair (hier beheerd)", "scope": "dns_role"},
-    "role_secondary": {"text": "Secundair (gerepliceerd)", "scope": "dns_role"},
-    "peer_none": {"text": "Geen", "scope": "dns_peer"},
-    "peer": {"text": "Peer", "scope": "dns_secondaries"},
-    "transfer_host": {"text": "Transfer-host", "scope": "dns_secondaries"},
-    "dns_tsig_algorithm": {"text": "Niet-ondersteund TSIG-algoritme", "scope": "violations"},
-    "dns_port_range": {"text": "Poort moet tussen 1 en 65535 liggen", "scope": "violations"},
-    "dns_zone_missing": {"text": "Die zone bestaat niet", "scope": "violations"},
-    "dns_peer_missing": {"text": "Die peer bestaat niet", "scope": "violations"},
-    "dns_secondary_linked": {"text": "Die peer is al een secondary van deze zone", "scope": "violations"},
-    "edits_forwarded": {"text": "Deze zone is eigendom van peer \"{$peer}\": onderstaande records worden er live van gelezen en bewerkingen worden doorgestuurd.", "scope": "dns_remote"},
-    "edit_saved": {"text": "Wijziging toegepast op de eigenaar-peer", "scope": "dns_remote"},
-    "edit_record": {"text": "Record bewerken", "scope": "dns_remote"},
-    "save_remote": {"text": "Opslaan op peer", "scope": "dns_remote"},
-    "cancel_remote": {"text": "Annuleren", "scope": "dns_remote"},
-    "delete_remote": {"text": "Verwijderen", "scope": "dns_remote"},
-    "delete_confirm": {"text": "Dit record op de eigenaar-peer verwijderen?", "scope": "dns_remote"},
-    "priority": {"text": "Prioriteit", "scope": "dns_remote"},
-    "weight": {"text": "Gewicht", "scope": "dns_remote"},
-    "remote_empty_hint": {"text": "De eigenaar-peer meldt geen records voor deze zone.", "scope": "dns_remote"},
-    "peer_not_configured": {"text": "De primaire peer heeft geen admin-URL / API-sleutel geconfigureerd; records worden alleen-lezen uit de replica getoond.", "scope": "dns_remote"},
-    "peer_unreachable": {"text": "De eigenaar-peer was onbereikbaar ({$message}); records worden alleen-lezen uit de replica getoond.", "scope": "dns_remote"},
-    "record_dynamic": [{"text": "Dynamische DNS", "scope": "field"}, {"text": "Sta toe dat het adres van dit A/AAAA-record via het dyndns2-protocol wordt bijgewerkt; gebruik de rijactie om een updatetoken aan te maken", "scope": "help"}],
-    "dyndns_token": {"text": "Dynamische DNS-token", "scope": "dns_record"},
-    "dyndns_token_hint": {"text": "Maak een nieuw updatetoken voor dit record aan (maakt een eerder token ongeldig)", "scope": "dns_record"},
-    "dyndns_only_address": {"text": "Dynamische DNS is alleen beschikbaar voor A- en AAAA-records", "scope": "dns_record"},
-    "dyndns_minted": {"text": "Update-token gegenereerd -- het staat op het formulier van dit record", "scope": "dns_record"},
-    "record_dyndns_token": [{"text": "Dynamische DNS-token", "scope": "field"}, {"text": "Het update-wachtwoord. Richt een dyndns2-client (router, ddclient) op <host>/nic/update?hostname=<FQDN van dit record> en stuur dit token als HTTP Basic-wachtwoord. Gebruik de rijactie om het (opnieuw) te genereren", "scope": "help"}],
-    "jar_path": [{"text": "Jar-bestand", "scope": "field"}, {"text": "Pad naar het fat/shadow-jar-bestand van de applicatie.", "scope": "help"}],
-    "java_binary": [{"text": "Java-binary", "scope": "field"}, {"text": "Pad naar de java-launcher. Leeg gebruikt java uit PATH (bijv. bin/java van een jlink-image).", "scope": "help"}],
-    "jvm_args": [{"text": "JVM-argumenten", "scope": "field"}, {"text": "Extra argumenten voor de JVM voor -jar, bijv. -Xmx512m.", "scope": "help"}],
-    "app_args": [{"text": "Applicatie-argumenten", "scope": "field"}, {"text": "Argumenten voor de applicatie na het jar-bestand.", "scope": "help"}],
-    "cert_nice_name": [{"text": "Naam", "scope": "field"}, {"text": "Een herkenbare naam voor dit certificaat, bv. het hoofddomein dat het dekt.", "scope": "help"}],
-    "cert_certificate_pem": [{"text": "Certificaat (PEM)", "scope": "field"}, {"text": "Plak het volledige PEM-gecodeerde certificaat, inclusief eventuele tussenliggende keten (de -----BEGIN CERTIFICATE----- blokken).", "scope": "help"}],
-    "cert_private_key_pem": [{"text": "Prive-sleutel (PEM)", "scope": "field"}, {"text": "De PEM-gecodeerde prive-sleutel die bij het certificaat hoort. Opgeslagen als geheim: laat leeg om de huidige sleutel te behouden.", "scope": "help"}],
-    "cert_auto_renew": [{"text": "Automatisch vernieuwen", "scope": "field"}, {"text": "Geldt alleen voor Let's Encrypt-certificaten; opgeladen certificaten worden nooit automatisch vernieuwd.", "scope": "help"}],
-    "cert_challenge_type": [{"text": "Validatietype", "scope": "field"}, {"text": "Hoe Let's Encrypt dit certificaat valideerde. Ingesteld door de aanvraagpagina.", "scope": "help"}],
-    "cert_dns_publisher": [{"text": "DNS-publicatie", "scope": "field"}, {"text": "Hoe DNS-01 TXT-records gepubliceerd worden bij vernieuwing. Ingesteld door de aanvraagpagina.", "scope": "help"}],
-    "cert_renewal_error": {"text": "Laatste vernieuwingsfout", "scope": "field"},
-    "cert_error_count": {"text": "Mislukte pogingen", "scope": "field"},
-    "cert_next_attempt_at": {"text": "Volgende poging", "scope": "field"},
-    "cert_domain_names": {"text": "Domeinen", "scope": "field"},
-    "enable": [{"text": "Inschakelen", "scope": "site"}, {"text": "Inschakelen", "scope": "spamservice_key"}],
-    "disable": {"text": "Uitschakelen", "scope": "site"},
-    "hohenheim_admin_access": {"text": "Toegang tot het Hohenheim-beheerpaneel", "scope": "permission"},
-    "hohenheim_manage_access": {"text": "Toegang tot het gedelegeerde sitebeheerpaneel", "scope": "permission"},
-    "access": {"text": "Toegang", "scope": "site"},
-    "subject": {"text": "Wie", "scope": "site_access"},
-    "capability": {"text": "Bevoegdheid", "scope": "site_access"},
-    "allowed": {"text": "Toegestaan", "scope": "site_access"},
-    "added": {"text": "Toegevoegd", "scope": "site_access"},
-    "yes": {"text": "Ja", "scope": "site_access"},
-    "no": {"text": "Nee", "scope": "site_access"},
-    "remove": {"text": "Verwijderen", "scope": "site_access"},
-    "remove_confirm": {"text": "Deze toegang intrekken? De gebruiker verliest het beheerpaneel als dit de laatste site was.", "scope": "site_access"},
-    "add_title": {"text": "Toegang verlenen", "scope": "site_access"},
-    "add_description": {"text": "De gebruiker kan deze site (en haar domeinen) bekijken, bewerken en bedienen via het /manage-paneel.", "scope": "site_access"},
-    "add": {"text": "Toegang verlenen", "scope": "site_access"},
-    "user_missing": {"text": "Kies een actieve gebruiker", "scope": "violations"},
-    "security": {"text": "Beveiliging", "scope": "nav"},
-    "lift": {"text": "Verbanning opheffen", "scope": "ban"},
-    "lift_hint": {"text": "Hef de verbanning onmiddellijk op, in de app en in de firewall.", "scope": "ban"},
-    "lift_confirm": {"text": "Deze verbanning opheffen? Het IP-adres kan meteen alle sites weer bereiken.", "scope": "ban"},
-    "lifted": {"text": "Verbanning opgeheven", "scope": "ban"},
-    "duration_1h": {"text": "1 uur", "scope": "ban"},
-    "duration_24h": {"text": "24 uur", "scope": "ban"},
-    "duration_7d": {"text": "7 dagen", "scope": "ban"},
-    "duration_30d": {"text": "30 dagen", "scope": "ban"},
-    "duration_permanent": {"text": "Permanent", "scope": "ban"},
-    "ip": [{"text": "IP-adres", "scope": "field"}, {"text": "IP-adres", "scope": "spamservice_event"}, {"text": "IP-adres", "scope": "spamservice_sample"}, {"text": "IP-adres", "scope": "spamservice_reputation"}],
-    "ban_reason": {"text": "Reden", "scope": "field"},
-    "ban_source": {"text": "Bron", "scope": "field"},
-    "ban_duration": {"text": "Duur", "scope": "field"},
-    "event_type": {"text": "Gebeurtenistype", "scope": "field"},
-    "expires_at": {"text": "Vervalt", "scope": "field"},
-    "active": [{"text": "Actief", "scope": "field"}, {"text": "Actief", "scope": "spamservice_key"}],
-    "ban_ip_refused": {"text": "Dit IP-adres kan niet verbannen worden: {$reason}", "scope": "violations"},
-    "active_bans": {"text": "Actieve verbanningen", "scope": "dashboard"},
-    "bans_created_30d": {"text": "Aangemaakte verbanningen (30 dagen)", "scope": "dashboard"},
-    "domain_miss": {"text": "Onbekend domein opgevraagd", "scope": "security_event_type"},
-    "login_failed": {"text": "Mislukte aanmelding", "scope": "security_event_type"},
-    "lockout": {"text": "Account vergrendeld", "scope": "security_event_type"},
-    "rate_limited": {"text": "Verzoekslimiet overschreden", "scope": "security_event_type"},
-    "csrf_failure": {"text": "CSRF-fout", "scope": "security_event_type"},
-    "ws_origin_refused": {"text": "WebSocket-origin geweigerd", "scope": "security_event_type"},
-    "ws_auth_refused": {"text": "WebSocket-authenticatie geweigerd", "scope": "security_event_type"},
-    "overview": {"text": "Spamservice-overzicht", "scope": "spamservice"},
-    "installation": {"text": "Installatie", "scope": "spamservice"},
-    "reputation": {"text": "Reputatie opzoeken", "scope": "spamservice"},
-    "disconnected": {"text": "Spamservice is niet verbonden. Configureer en start de lokale installatie om beheer te gebruiken.", "scope": "spamservice"},
-    "runtime": {"text": "Beheerde runtime", "scope": "spamservice"},
-    "configured": {"text": "Geconfigureerd", "scope": "spamservice"},
-    "base_url": {"text": "Basis-URL", "scope": "spamservice"},
-    "crashes": {"text": "Opeenvolgende crashes", "scope": "spamservice"},
-    "readiness": {"text": "Gereedheid", "scope": "spamservice"},
-    "not_ready": {"text": "Niet gereed", "scope": "spamservice"},
-    "no_checks": {"text": "Geen gereedheidscontroles beschikbaar", "scope": "spamservice"},
-    "samples": {"text": "Voorbeelden", "scope": "spamservice"},
-    "security_events": {"text": "Beveiligingsgebeurtenissen", "scope": "spamservice"},
-    "spam_words": {"text": "Spamwoorden", "scope": "spamservice"},
-    "active_keys_count": {"text": "{$count} actieve sleutels", "scope": "spamservice"},
-    "spam_samples_count": {"text": "{$count} als spam gemarkeerd", "scope": "spamservice"},
-    "confirmed_counts": {"text": "Bevestigd: {$spam} spam, {$ham} ham", "scope": "spamservice"},
-    "start_hint": {"text": "Start het geconfigureerde lokale Spamservice-proces.", "scope": "spamservice"},
-    "stop": {"text": "Stoppen", "scope": "spamservice"},
-    "stop_hint": {"text": "Stop Spamservice zonder de instelling Ingeschakeld te wijzigen.", "scope": "spamservice"},
-    "stop_confirm": {"text": "Spamservice nu stoppen? Scoring en reputatiebeheer worden onbeschikbaar.", "scope": "spamservice"},
-    "restart": {"text": "Herstarten", "scope": "spamservice"},
-    "restart_hint": {"text": "Herstart Spamservice en laad de runtimeconfiguratie opnieuw.", "scope": "spamservice"},
-    "restart_confirm": {"text": "Spamservice nu herstarten? Verzoeken zijn kort onbeschikbaar.", "scope": "spamservice"},
-    "test_hint": {"text": "Roep het strikte managementstatus-endpoint aan.", "scope": "spamservice"},
-    "start_ok": {"text": "Start van Spamservice aangevraagd", "scope": "spamservice"},
-    "stop_ok": {"text": "Spamservice gestopt", "scope": "spamservice"},
-    "restart_ok": {"text": "Herstart van Spamservice aangevraagd", "scope": "spamservice"},
-    "search": {"text": "Zoeken", "scope": "spamservice"},
-    "trusted": {"text": "Vertrouwde rapporteur", "scope": "spamservice_client"},
-    "provisioner": {"text": "Mag clients aanmaken", "scope": "spamservice_client"},
-    "manager": {"text": "Managementtoegang", "scope": "spamservice_client"},
-    "external_id": {"text": "Externe ID", "scope": "spamservice_client"},
-    "owner": {"text": "Aangemaakt door", "scope": "spamservice_client"},
-    "allowed_languages": {"text": "Toegestane talen", "scope": "spamservice_client"},
-    "spam_threshold": {"text": "Spamdrempel", "scope": "spamservice_client"},
-    "notes": {"text": "Notities", "scope": "spamservice_client"},
-    "keys": {"text": "Sleutels", "scope": "spamservice_client"},
-    "keys_hint": {"text": "Beheer de API-sleutels van deze client.", "scope": "spamservice_client"},
-    "client": [{"text": "Client", "scope": "spamservice_key"}, {"text": "Client", "scope": "spamservice_event"}, {"text": "Client", "scope": "spamservice_sample"}],
-    "raw_key": {"text": "Bestaande sleutel (optioneel)", "scope": "spamservice_key"},
-    "raw_key_help": {"text": "Laat leeg om een nieuwe sleutel te genereren. Een gegenereerde sleutel wordt na aanmaak eenmaal getoond.", "scope": "spamservice_key"},
-    "last_used": {"text": "Laatst gebruikt", "scope": "spamservice_key"},
-    "created_at": [{"text": "Aangemaakt", "scope": "spamservice_key"}, {"text": "Aangemaakt", "scope": "spamservice_sample"}],
-    "key_created": {"text": "Sleutel aangemaakt. Kopieer hem nu; hij wordt niet opnieuw getoond: {$key}", "scope": "spamservice_key"},
-    "key_adopted": {"text": "Bestaande sleutel overgenomen", "scope": "spamservice_key"},
-    "revoke": {"text": "Intrekken", "scope": "spamservice_key"},
-    "revoke_confirm": {"text": "Deze sleutel intrekken? Bestaande aanroepers verliezen onmiddellijk toegang.", "scope": "spamservice_key"},
-    "key_enabled": {"text": "Sleutel ingeschakeld", "scope": "spamservice_key"},
-    "key_revoked": {"text": "Sleutel ingetrokken", "scope": "spamservice_key"},
-    "type": {"text": "Type", "scope": "spamservice_event"},
-    "day": {"text": "Dag", "scope": "spamservice_event"},
-    "count": {"text": "Aantal", "scope": "spamservice_event"},
-    "first_at": {"text": "Eerst gezien", "scope": "spamservice_event"},
-    "last_at": {"text": "Laatst gezien", "scope": "spamservice_event"},
-    "detail": {"text": "Laatste detail", "scope": "spamservice_event"},
-    "from": {"text": "Vanaf", "scope": "spamservice_event"},
-    "to": {"text": "Tot", "scope": "spamservice_event"},
-    "word": {"text": "Woord of zin", "scope": "spamservice_word"},
-    "score": [{"text": "Score", "scope": "spamservice_word"}, {"text": "Score", "scope": "spamservice_sample"}],
-    "language": {"text": "Taal", "scope": "spamservice_word"},
-    "leet": {"text": "Leetspeak herkennen", "scope": "spamservice_word"},
-    "spam": {"text": "Spam", "scope": "spamservice_sample"},
-    "confirmed": {"text": "Bevestigd", "scope": "spamservice_sample"},
-    "flags": {"text": "Vlaggen", "scope": "spamservice_sample"},
-    "languages": {"text": "Talen", "scope": "spamservice_sample"},
-    "analysis": {"text": "Analyse", "scope": "spamservice_sample"},
-    "mark_spam": {"text": "Als spam markeren", "scope": "spamservice_sample"},
-    "mark_ham": {"text": "Als ham markeren", "scope": "spamservice_sample"},
-    "rescore": {"text": "Opnieuw scoren", "scope": "spamservice_sample"},
-    "marked_spam": {"text": "Voorbeeld bevestigd als spam", "scope": "spamservice_sample"},
-    "marked_ham": {"text": "Voorbeeld bevestigd als ham", "scope": "spamservice_sample"},
-    "rescored": {"text": "Voorbeeld opnieuw gescoord op {$score}", "scope": "spamservice_sample"},
-    "verdict_spam": {"text": "Spam", "scope": "spamservice_sample"},
-    "verdict_ham": {"text": "Ham", "scope": "spamservice_sample"},
-    "score_threshold": {"text": "Score {$score}, drempel {$threshold}", "scope": "spamservice_sample"},
-    "request_info": {"text": "Verzoek", "scope": "spamservice_sample"},
-    "ip_analysis": {"text": "IP-informatie", "scope": "spamservice_sample"},
-    "breakdown": {"text": "Score-opbouw", "scope": "spamservice_sample"},
-    "no_breakdown": {"text": "Geen score-opbouw", "scope": "spamservice_sample"},
-    "submitted_fields": {"text": "Ingestuurde velden", "scope": "spamservice_sample"},
-    "useragent": {"text": "User agent", "scope": "spamservice_sample"},
-    "lookup": {"text": "Opzoeken", "scope": "spamservice_reputation"},
-    "lookup_result": {"text": "{$ip} wordt beoordeeld als actorsubnet {$subnet}.", "scope": "spamservice_reputation"},
-    "datasets": {"text": "Reputatiedatasets", "scope": "spamservice_reputation"},
-    "signals": {"text": "Gedragssignalen", "scope": "spamservice_reputation"},
-    "category": {"text": "Categorie", "scope": "spamservice_reputation"},
-    "negative": {"text": "Negatief", "scope": "spamservice_reputation"},
-    "positive": {"text": "Positief", "scope": "spamservice_reputation"},
-    "weighted_policy": {"text": "Gewogen nettoscore van Hohenheim", "scope": "spamservice_reputation"},
-    "weighted_explanation": {"text": "Binnen de eigen categorie compenseert elke positieve gebeurtenis maximaal {$weight} negatieve gebeurtenissen. De huidige totale nettoscore is {$net}; Hohenheim verbant zodra die {$threshold} bereikt. Risicovlaggen uit datasets zijn alleen diagnostisch.", "scope": "spamservice_reputation"},
-    "formula": {"text": "Negatief - (positief x gewicht)", "scope": "spamservice_reputation"},
-    "net": {"text": "Netto", "scope": "spamservice_reputation"}
+  "cert_fields_required": {
+    "text": "Naam, certificaat en private sleutel zijn verplicht",
+    "scope": "violations"
+  },
+  "cert_pem_invalid": {
+    "text": "Ongeldig certificaat-PEM: {$detail}",
+    "scope": "violations"
+  },
+  "database_already_attached": {
+    "text": "Die databank is al aan deze site gekoppeld",
+    "scope": "violations"
+  },
+  "database_immutable": {
+    "text": "Beheerde databanken kunnen niet bewerkt worden; verwijder en maak opnieuw aan",
+    "scope": "violations"
+  },
+  "database_in_use": {
+    "text": "Databank '{$name}' is gekoppeld aan {$sites}; koppel ze eerst los van die sites",
+    "scope": "violations"
+  },
+  "database_missing": {
+    "text": "Die databank bestaat niet",
+    "scope": "violations"
+  },
+  "database_name_required": {
+    "text": "Databanknaam is verplicht",
+    "scope": "violations"
+  },
+  "database_remote": {
+    "text": "Databank '{$name}' draait op server '{$server}': haar poort is enkel op de loopback van die host gepubliceerd, dus sites op deze server kunnen ze niet bereiken",
+    "scope": "violations"
+  },
+  "database_required": {
+    "text": "Een databank is verplicht",
+    "scope": "violations"
+  },
+  "hostname_required": {
+    "text": "Hostnaam is verplicht",
+    "scope": "violations"
+  },
+  "hostname_taken": {
+    "text": "Die hostnaam is al geconfigureerd voor deze site",
+    "scope": "violations"
+  },
+  "key_pem_invalid": {
+    "text": "Ongeldig private-sleutel-PEM: {$detail}",
+    "scope": "violations"
+  },
+  "local_server_immutable": {
+    "text": "De impliciete lokale host kan niet bewerkt worden",
+    "scope": "violations"
+  },
+  "local_server_reserved": {
+    "text": "'local' is voorbehouden voor deze host",
+    "scope": "violations"
+  },
+  "local_server_undeletable": {
+    "text": "De impliciete lokale host kan niet verwijderd worden",
+    "scope": "violations"
+  },
+  "name_format": {
+    "text": "Gebruik enkel kleine letters, cijfers en streepjes",
+    "scope": "violations"
+  },
+  "name_required": {
+    "text": "Naam is verplicht",
+    "scope": "violations"
+  },
+  "open": {
+    "text": "Openen",
+    "scope": "attention"
+  },
+  "prefix_format": {
+    "text": "De env-prefix moet met een letter beginnen en mag enkel letters, cijfers en underscores bevatten",
+    "scope": "violations"
+  },
+  "prefix_taken": {
+    "text": "Env-prefix '{$prefix}' wordt al gebruikt door een andere databank op deze site",
+    "scope": "violations"
+  },
+  "site_missing": {
+    "text": "Die site bestaat niet",
+    "scope": "violations"
+  },
+  "site_required": {
+    "text": "Een site is verplicht",
+    "scope": "violations"
+  },
+  "site_type_no_injection": {
+    "text": "Sites van type '{$type}' kunnen geen databankgegevens ontvangen: enkel host-procestypes (Node.js, Alchemy, Command, Java / Zenit) kunnen een beheerde databank bereiken",
+    "scope": "violations"
+  },
+  "tls_passthrough_backend_certificate": {
+    "text": "De backend presenteert het certificaat voor een TLS-passthroughdomein; wijs geen Hohenheim-certificaat toe",
+    "scope": "violations"
+  },
+  "tls_passthrough_local_only": {
+    "text": "TLS-passthroughsites routeren naar een bestaande upstream en kunnen geen Git-deploymentbron gebruiken",
+    "scope": "violations"
+  },
+  "tls_passthrough_no_access_list": {
+    "text": "HTTP-toegangslijsten kunnen versleuteld TLS-passthroughverkeer niet inspecteren",
+    "scope": "violations"
+  },
+  "tls_passthrough_no_http_auth": {
+    "text": "HTTP-authenticatieproviders kunnen versleuteld TLS-passthroughverkeer niet inspecteren",
+    "scope": "violations"
+  },
+  "tls_passthrough_no_http_options": {
+    "text": "HTTP-headers, HSTS en padverwijdering zijn niet van toepassing op onaangeroerde TLS-streams",
+    "scope": "violations"
+  },
+  "tls_passthrough_no_path": {
+    "text": "TLS-passthrough routeert op SNI-hostnaam en kan URL-paden niet inspecteren",
+    "scope": "violations"
+  },
+  "ssh_target_format": {
+    "text": "SSH-doel moet een eenvoudige [user@]host[:poort] zijn",
+    "scope": "violations"
+  },
+  "unknown_engine": {
+    "text": "Onbekende engine: {$engine}",
+    "scope": "violations"
+  },
+  "unknown_event": {
+    "text": "Onbekend event '{$event}'; geldige events: {$valid}",
+    "scope": "violations"
+  },
+  "unknown_provider_type": {
+    "text": "Onbekend authenticatieprovidertype: {$type}",
+    "scope": "violations"
+  },
+  "url_scheme": {
+    "text": "De URL moet met http:// of https:// beginnen",
+    "scope": "violations"
+  },
+  "api_keys": [
+    {
+      "text": "API-sleutels",
+      "scope": "field"
+    },
+    {
+      "text": "Sleutels die de proces-API aanvaardt. Voeg één sleutel per rij toe.",
+      "scope": "help"
+    }
+  ],
+  "allowed_ips": [
+    {
+      "text": "Toegestane IP-netwerken",
+      "scope": "field"
+    },
+    {
+      "text": "Eén IP-adres of CIDR-netwerk per regel, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
+      "scope": "help"
+    }
+  ],
+  "auto_deploy": [
+    {
+      "text": "Automatisch uitrollen",
+      "scope": "field"
+    },
+    {
+      "text": "Rol uit wanneer de webhook of polling een nieuwe revisie vindt.",
+      "scope": "help"
+    }
+  ],
+  "autoindex": [
+    {
+      "text": "Mappenlijst",
+      "scope": "field"
+    },
+    {
+      "text": "Toon de inhoud van een map wanneer er geen indexbestand bestaat.",
+      "scope": "help"
+    }
+  ],
+  "basic_auth_user": [
+    {
+      "text": "Basic Auth-gebruikersnaam",
+      "scope": "field"
+    },
+    {
+      "text": "Optionele gebruikersnaam die naast de IP-regels vereist is.",
+      "scope": "help"
+    }
+  ],
+  "basic_auth_password": [
+    {
+      "text": "Basic Auth-wachtwoord",
+      "scope": "field"
+    },
+    {
+      "text": "Laat leeg tijdens het bewerken om het opgeslagen wachtwoord te behouden; de waarde wordt nooit teruggestuurd naar de browser.",
+      "scope": "help"
+    }
+  ],
+  "auth_provider_name": [
+    {
+      "text": "Naam",
+      "scope": "field"
+    },
+    {
+      "text": "Een herkenbare naam die wordt gebruikt wanneer deze provider aan een site wordt toegewezen.",
+      "scope": "help"
+    }
+  ],
+  "auth_provider_type": [
+    {
+      "text": "Providertype",
+      "scope": "field"
+    },
+    {
+      "text": "De authenticatiemethode die deze provider gebruikt.",
+      "scope": "help"
+    }
+  ],
+  "auth_provider_config": [
+    {
+      "text": "Inloggegevens en verbinding",
+      "scope": "field"
+    },
+    {
+      "text": "Instellingen voor het geselecteerde providertype.",
+      "scope": "help"
+    }
+  ],
+  "required_permission": [
+    {
+      "text": "Vereiste permissie",
+      "scope": "field"
+    },
+    {
+      "text": "Een enkele permissienaam, bv. \"site.internal\", vergeleken met de permissie-claims van de identiteit. Alleen gebruikt door claims-gebaseerde providers zoals Proteus (HTTP Basic Auth negeert dit). Leeg aanvaardt elke geauthenticeerde identiteit.",
+      "scope": "help"
+    }
+  ],
+  "credentials": [
+    {
+      "text": "Inloggegevens",
+      "scope": "field"
+    },
+    {
+      "text": "Eén Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden als bewerkbare tekst opgeslagen en getoond.",
+      "scope": "help"
+    }
+  ],
+  "key": {
+    "text": "Gebruikersnaam",
+    "scope": "form",
+    "field": "credentials"
+  },
+  "value": {
+    "text": "Wachtwoord",
+    "scope": "form",
+    "field": "credentials"
+  },
+  "proteus_endpoint": [
+    {
+      "text": "Endpoint",
+      "scope": "field"
+    },
+    {
+      "text": "Basis-URL van de Proteus-identiteitsdienst.",
+      "scope": "help"
+    }
+  ],
+  "proteus_realm_client": [
+    {
+      "text": "Realm-client",
+      "scope": "field"
+    },
+    {
+      "text": "Client-ID geregistreerd in de Proteus-realm.",
+      "scope": "help"
+    }
+  ],
+  "proteus_access_key": [
+    {
+      "text": "Toegangssleutel",
+      "scope": "field"
+    },
+    {
+      "text": "Geheime toegangssleutel voor de Proteus-realm.",
+      "scope": "help"
+    }
+  ],
+  "proteus_authenticator": [
+    {
+      "text": "Authenticator",
+      "scope": "field"
+    },
+    {
+      "text": "Slug van een specifieke Proteus-aanmeldmethode om af te dwingen. Laat leeg om bezoekers te laten kiezen uit alle ingeschakelde aanmeldmethodes van de realm.",
+      "scope": "help"
+    }
+  ],
+  "branch": [
+    {
+      "text": "Branch",
+      "scope": "field"
+    },
+    {
+      "text": "Git-branch om uit te checken. Leeg gebruikt de standaardbranch.",
+      "scope": "help"
+    }
+  ],
+  "build_command": [
+    {
+      "text": "Buildcommando",
+      "scope": "field"
+    },
+    {
+      "text": "Shellcommando na checkout en vóór de deployment actief wordt.",
+      "scope": "help"
+    }
+  ],
+  "build_directory": [
+    {
+      "text": "Buildmap",
+      "scope": "field"
+    },
+    {
+      "text": "Werkmap voor het buildcommando, relatief aan de repository.",
+      "scope": "help"
+    }
+  ],
+  "build_environment_variables": [
+    {
+      "text": "Buildomgeving",
+      "scope": "field"
+    },
+    {
+      "text": "Omgevingsvariabelen die alleen tijdens het bouwen beschikbaar zijn.",
+      "scope": "help"
+    }
+  ],
+  "build_timeout": [
+    {
+      "text": "Build-time-out",
+      "scope": "field"
+    },
+    {
+      "text": "Maximale buildduur in seconden voordat de deployment wordt geannuleerd.",
+      "scope": "help"
+    }
+  ],
+  "container_command": [
+    {
+      "text": "Containercommando",
+      "scope": "field"
+    },
+    {
+      "text": "Optioneel commando dat het standaardcommando van de image vervangt.",
+      "scope": "help"
+    }
+  ],
+  "container_port": [
+    {
+      "text": "Containerpoort",
+      "scope": "field"
+    },
+    {
+      "text": "TCP-poort waarop de applicatie in de container luistert.",
+      "scope": "help"
+    }
+  ],
+  "connect_timeout": [
+    {
+      "text": "Verbindingstime-out",
+      "scope": "field"
+    },
+    {
+      "text": "Maximale tijd in seconden om de TCP-verbinding met de passthroughbackend op te zetten.",
+      "scope": "help"
+    }
+  ],
+  "cpu_limit": [
+    {
+      "text": "CPU-limiet",
+      "scope": "field"
+    },
+    {
+      "text": "Maximaal aantal CPU-kernen voor de container. Leeg betekent onbeperkt.",
+      "scope": "help"
+    }
+  ],
+  "delay": [
+    {
+      "text": "Antwoordvertraging",
+      "scope": "field"
+    },
+    {
+      "text": "Kunstmatige vertraging in milliseconden vóór elke aanvraag.",
+      "scope": "help"
+    }
+  ],
+  "denied_ips": [
+    {
+      "text": "Geweigerde IP-netwerken",
+      "scope": "field"
+    },
+    {
+      "text": "Eén IP-adres of CIDR-netwerk per regel, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
+      "scope": "help"
+    }
+  ],
+  "dockerfile": [
+    {
+      "text": "Dockerfile",
+      "scope": "field"
+    },
+    {
+      "text": "Pad naar de Dockerfile, relatief aan de repository.",
+      "scope": "help"
+    }
+  ],
+  "environment_variables": [
+    {
+      "text": "Omgevingsvariabelen",
+      "scope": "field"
+    },
+    {
+      "text": "Variabelen die bij runtime aan elk proces worden doorgegeven.",
+      "scope": "help"
+    }
+  ],
+  "fallback_file": [
+    {
+      "text": "Terugvalbestand",
+      "scope": "field"
+    },
+    {
+      "text": "Bestand voor ontbrekende paden, bijvoorbeeld index.html voor een SPA.",
+      "scope": "help"
+    }
+  ],
+  "forward_host": [
+    {
+      "text": "Upstream-host",
+      "scope": "field"
+    },
+    {
+      "text": "Hostnaam of IP-adres van de HTTP-upstream.",
+      "scope": "help"
+    }
+  ],
+  "forward_port": [
+    {
+      "text": "Upstream-poort",
+      "scope": "field"
+    },
+    {
+      "text": "TCP-poort van de upstream. Standaard 80 voor HTTP en 443 voor HTTPS.",
+      "scope": "help"
+    }
+  ],
+  "forward_scheme": [
+    {
+      "text": "Upstream-protocol",
+      "scope": "field"
+    },
+    {
+      "text": "Protocol waarmee de upstream wordt benaderd.",
+      "scope": "help"
+    }
+  ],
+  "proxy_protocol_v2": [
+    {
+      "text": "PROXY-protocol v2 verzenden",
+      "scope": "field"
+    },
+    {
+      "text": "Voeg de binaire PROXY v2-header toe zodat de backend de oorspronkelijke client- en doeladressen ontvangt.",
+      "scope": "help"
+    }
+  ],
+  "tls_forward_host": [
+    {
+      "text": "TLS-backendhost",
+      "scope": "field"
+    },
+    {
+      "text": "Hostnaam of IP-adres dat de oorspronkelijke, nog versleutelde TLS-stream ontvangt.",
+      "scope": "help"
+    }
+  ],
+  "tls_forward_port": {
+    "text": "TCP-poort die de oorspronkelijke TLS-stream ontvangt.",
+    "scope": "help"
+  },
+  "ignore_certificates": [
+    {
+      "text": "TLS-fouten negeren",
+      "scope": "field"
+    },
+    {
+      "text": "Aanvaard een ongeldig of zelfondertekend upstreamcertificaat.",
+      "scope": "help"
+    }
+  ],
+  "image": [
+    {
+      "text": "Container-image",
+      "scope": "field"
+    },
+    {
+      "text": "Image die wordt gestart wanneer geen Dockerfile-build wordt gebruikt.",
+      "scope": "help"
+    },
+    {
+      "text": "Image",
+      "scope": "stack_services"
+    }
+  ],
+  "image_tag": [
+    {
+      "text": "Image-tag",
+      "scope": "field"
+    },
+    {
+      "text": "Tag voor een lokaal gebouwde image.",
+      "scope": "help"
+    }
+  ],
+  "indexes": [
+    {
+      "text": "Indexbestanden",
+      "scope": "field"
+    },
+    {
+      "text": "Serveer conventionele indexbestanden zoals index.html uit mappen.",
+      "scope": "help"
+    }
+  ],
+  "maximum_processes": [
+    {
+      "text": "Maximum processen",
+      "scope": "field"
+    },
+    {
+      "text": "Bovengrens voor gelijktijdig draaiende applicatieprocessen.",
+      "scope": "help"
+    }
+  ],
+  "memory_limit": [
+    {
+      "text": "Geheugenlimiet",
+      "scope": "field"
+    },
+    {
+      "text": "Maximaal containergeheugen in megabytes. Leeg betekent onbeperkt.",
+      "scope": "help"
+    }
+  ],
+  "live_overview": {
+    "text": "Live Docker-status",
+    "scope": "field"
+  },
+  "minimum_processes": [
+    {
+      "text": "Minimum processen",
+      "scope": "field"
+    },
+    {
+      "text": "Aantal warme applicatieprocessen dat Hohenheim actief houdt.",
+      "scope": "help"
+    }
+  ],
+  "node_runtime": [
+    {
+      "text": "Node.js-runtime",
+      "scope": "field"
+    },
+    {
+      "text": "Gevonden Node.js-versie waarmee deze site wordt gestart.",
+      "scope": "help"
+    }
+  ],
+  "poll_interval": [
+    {
+      "text": "Pollinginterval",
+      "scope": "field"
+    },
+    {
+      "text": "Seconden tussen repositorycontroles wanneer polling actief is.",
+      "scope": "help"
+    }
+  ],
+  "port_argument": [
+    {
+      "text": "Poortargument",
+      "scope": "field"
+    },
+    {
+      "text": "Commandoregelargument vóór het toegewezen poortnummer.",
+      "scope": "help"
+    }
+  ],
+  "preserve_path": [
+    {
+      "text": "Pad behouden",
+      "scope": "field"
+    },
+    {
+      "text": "Voeg het oorspronkelijke pad en de query aan het doel toe.",
+      "scope": "help"
+    }
+  ],
+  "redirect_status": [
+    {
+      "text": "Redirectstatus",
+      "scope": "field"
+    },
+    {
+      "text": "HTTP-statuscode van de redirect.",
+      "scope": "help"
+    }
+  ],
+  "repository_url": [
+    {
+      "text": "Repository-URL",
+      "scope": "field"
+    },
+    {
+      "text": "Git-clone-URL. SSH gebruikt de geconfigureerde serversleutels.",
+      "scope": "help"
+    }
+  ],
+  "request_timeout": [
+    {
+      "text": "Time-out aanvraag",
+      "scope": "field"
+    },
+    {
+      "text": "Maximale levensduur van een aanvraag in seconden. 0 verwijdert de limiet voor streaming, gRPC en WebSockets.",
+      "scope": "help"
+    }
+  ],
+  "rewrite_location": [
+    {
+      "text": "Location-headers herschrijven",
+      "scope": "field"
+    },
+    {
+      "text": "Herschrijf upstreamredirects naar de publieke sitehostnaam.",
+      "scope": "help"
+    }
+  ],
+  "upstream_protocol": [
+    {
+      "text": "HTTP-versie",
+      "scope": "field"
+    },
+    {
+      "text": "HTTP/2 is vereist voor gRPC-backends. Upstreams zonder TLS gebruiken dan h2c met prior knowledge.",
+      "scope": "help"
+    }
+  ],
+  "root_path": [
+    {
+      "text": "Documentroot",
+      "scope": "field"
+    },
+    {
+      "text": "Map met de bestanden die worden geserveerd; een relatief pad wordt opgelost tegen de werkmap van Hohenheim.",
+      "scope": "help"
+    }
+  ],
+  "run_as_user": [
+    {
+      "text": "Uitvoeren als gebruiker",
+      "scope": "field"
+    },
+    {
+      "text": "Systeemaccount voor het proces, inclusief uid, gid en home-map.",
+      "scope": "help"
+    }
+  ],
+  "script": [
+    {
+      "text": "Script",
+      "scope": "field"
+    },
+    {
+      "text": "Startscript relatief aan de werkmap.",
+      "scope": "help"
+    }
+  ],
+  "server": [
+    {
+      "text": "Server",
+      "scope": "field"
+    },
+    {
+      "text": "Host waarop de container draait.",
+      "scope": "help"
+    }
+  ],
+  "shallow_clone": [
+    {
+      "text": "Ondiepe clone",
+      "scope": "field"
+    },
+    {
+      "text": "Haal alleen de recentste geschiedenis op voor minder tijd en schijfruimte.",
+      "scope": "help"
+    }
+  ],
+  "show_hidden_files": [
+    {
+      "text": "Verborgen bestanden tonen",
+      "scope": "field"
+    },
+    {
+      "text": "Sta bestanden met een punt vooraan toe in lijsten en antwoorden.",
+      "scope": "help"
+    }
+  ],
+  "source": [
+    {
+      "text": "Bron",
+      "scope": "field"
+    },
+    {
+      "text": "Gebruik lokale bestanden of rol uit vanuit een Git-repository.",
+      "scope": "help"
+    }
+  ],
+  "start_command": [
+    {
+      "text": "Startcommando",
+      "scope": "field"
+    },
+    {
+      "text": "Programma en argumenten waarmee elk applicatieproces start.",
+      "scope": "help"
+    }
+  ],
+  "submodules": [
+    {
+      "text": "Git-submodules",
+      "scope": "field"
+    },
+    {
+      "text": "Initialiseer en update submodules na de checkout.",
+      "scope": "help"
+    }
+  ],
+  "target_url": [
+    {
+      "text": "Doel-URL",
+      "scope": "field"
+    },
+    {
+      "text": "Absolute URL of root-relatief pad voor de redirect.",
+      "scope": "help"
+    }
+  ],
+  "upstream_socket": [
+    {
+      "text": "Upstream Unix-socket",
+      "scope": "field"
+    },
+    {
+      "text": "Unix-socketpad. Indien ingevuld krijgt dit voorrang op host en poort.",
+      "scope": "help"
+    }
+  ],
+  "use_ports": [
+    {
+      "text": "TCP-poorten gebruiken",
+      "scope": "field"
+    },
+    {
+      "text": "Gebruik een lokale TCP-poort in plaats van de standaard Unix-socket.",
+      "scope": "help"
+    }
+  ],
+  "volumes": [
+    {
+      "text": "Volumes",
+      "scope": "field"
+    },
+    {
+      "text": "Containerkoppelingen in de vorm hostpad:containerpad.",
+      "scope": "help"
+    }
+  ],
+  "wait_for_ready": [
+    {
+      "text": "Op gereed-signaal wachten",
+      "scope": "field"
+    },
+    {
+      "text": "Stuur pas verkeer nadat het proces meldt dat de start voltooid is.",
+      "scope": "help"
+    }
+  ],
+  "webhook_secret": [
+    {
+      "text": "Webhookgeheim",
+      "scope": "field"
+    },
+    {
+      "text": "Geheim waarmee ondertekende repositorywebhooks worden gecontroleerd.",
+      "scope": "help"
+    }
+  ],
+  "websocket_upgrade": [
+    {
+      "text": "WebSockets toestaan",
+      "scope": "field"
+    },
+    {
+      "text": "Stuur WebSocket-upgrades door naar de upstream.",
+      "scope": "help"
+    }
+  ],
+  "working_directory": [
+    {
+      "text": "Werkmap",
+      "scope": "field"
+    },
+    {
+      "text": "Map waarin het applicatiecommando wordt gestart.",
+      "scope": "help"
+    }
+  ],
+  "cert_renewal_failed": {
+    "text": "Certificaatvernieuwing mislukt",
+    "scope": "notification_event"
+  },
+  "cert_expiring": {
+    "text": "Certificaat verloopt binnenkort",
+    "scope": "notification_event"
+  },
+  "deploy_failed": {
+    "text": "Deployment mislukt",
+    "scope": "notification_event"
+  },
+  "backup_failed": {
+    "text": "Back-up mislukt",
+    "scope": "notification_event"
+  },
+  "process_crash_loop": {
+    "text": "Proces blijft crashen",
+    "scope": "notification_event"
+  },
+  "auto_ban_budget_exhausted": {
+    "text": "Auto-banbudget opgebruikt",
+    "scope": "notification_event"
+  },
+  "spamservice_outage": {
+    "text": "Spamservice onbereikbaar",
+    "scope": "notification_event"
+  },
+  "spamservice_recovered": {
+    "text": "Spamservice hersteld",
+    "scope": "notification_event"
+  },
+  "active": [
+    {
+      "text": "Actief",
+      "scope": "field"
+    },
+    {
+      "text": "Actief",
+      "scope": "spamservice_key"
+    }
+  ],
+  "add_domain": {
+    "text": "Domein toevoegen",
+    "scope": "site_domains"
+  },
+  "attach": [
+    {
+      "text": "Database koppelen",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Secondary toevoegen",
+      "scope": "dns_secondaries"
+    }
+  ],
+  "auto_deploy_disabled": {
+    "text": "Automatische uitrol staat uit: pushes worden aanvaard maar niet uitgerold. Schakel dit in bij de broninstellingen van de site.",
+    "scope": "site_deployments"
+  },
+  "build_log": {
+    "text": "Buildlog",
+    "scope": "site_deployments"
+  },
+  "cancel": [
+    {
+      "text": "Deployment annuleren",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Annuleren",
+      "scope": "certificate_request"
+    }
+  ],
+  "captured": {
+    "text": "Opgenomen",
+    "scope": "site_processes"
+  },
+  "certificate": [
+    {
+      "text": "Certificaat",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Certificaat {$name}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Certificaat",
+      "scope": "field"
+    },
+    {
+      "text": "TLS-certificaat voor deze hostnaam. Leeg laat het platform kiezen of er een aanvragen.",
+      "scope": "help"
+    }
+  ],
+  "clients": [
+    {
+      "text": "Clients",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Clients",
+      "scope": "spamservice"
+    }
+  ],
+  "commit": {
+    "text": "Commit",
+    "scope": "site_deployments"
+  },
+  "connection": {
+    "text": "Verbinding",
+    "scope": "database_tab"
+  },
+  "copy_password": {
+    "text": "Wachtwoord kopiëren",
+    "scope": "database_tab"
+  },
+  "copy_webhook_secret": {
+    "text": "Webhookgeheim kopiëren",
+    "scope": "site_deployments"
+  },
+  "copy_webhook_url": {
+    "text": "Webhook-URL kopiëren",
+    "scope": "site_deployments"
+  },
+  "cpu": {
+    "text": "CPU",
+    "scope": "site_processes"
+  },
+  "current_commit": {
+    "text": "Serveert momenteel commit {$commit}.",
+    "scope": "site_deployments"
+  },
+  "database": [
+    {
+      "text": "Database",
+      "scope": "database_tab"
+    },
+    {
+      "text": "Database",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Database {$name}",
+      "scope": "attention_title"
+    }
+  ],
+  "database_not_running": {
+    "text": "Gekoppelde database {$name} draait niet",
+    "scope": "attention_detail"
+  },
+  "database_status": {
+    "text": "Gekoppelde database {$name} is {$status}",
+    "scope": "attention_detail"
+  },
+  "degraded": {
+    "text": "Verminderd beschikbaar",
+    "scope": "attention_detail"
+  },
+  "deploy": [
+    {
+      "text": "Deployment van {$name}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Deployen",
+      "scope": "stack"
+    }
+  ],
+  "deploy_now": {
+    "text": "Nu uitrollen",
+    "scope": "site_deployments"
+  },
+  "down": {
+    "text": "Onbereikbaar",
+    "scope": "attention_detail"
+  },
+  "dump_file": {
+    "text": "Dumpbestand",
+    "scope": "database_tab"
+  },
+  "duration": [
+    {
+      "text": "Duur",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Duur",
+      "scope": "stack_deployments"
+    }
+  ],
+  "empty": [
+    {
+      "text": "Geen databases gekoppeld",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Geen domeinen geconfigureerd",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Nog geen deployments",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Geen dev-servers verbonden",
+      "scope": "dev_sessions"
+    },
+    {
+      "text": "Geen secondaries geconfigureerd",
+      "scope": "dns_secondaries"
+    },
+    {
+      "text": "Geen gedelegeerde toegang",
+      "scope": "site_access"
+    },
+    {
+      "text": "Nog geen services",
+      "scope": "stack_services"
+    },
+    {
+      "text": "Nog geen deployments",
+      "scope": "stack_deployments"
+    }
+  ],
+  "empty_description": [
+    {
+      "text": "Koppel een beheerde database om de verbindingsgegevens als omgevingsvariabelen in de processen te injecteren.",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Voeg een hostnaam toe om verkeer naar deze site te sturen.",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Deployments via webhook, polling of handmatige start verschijnen hier.",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Niemand behalve beheerders kan deze site al beheren.",
+      "scope": "site_access"
+    },
+    {
+      "text": "Voeg een service toe om te beschrijven wat deze stack draait.",
+      "scope": "stack_services"
+    },
+    {
+      "text": "Gebruik de actie Deployen voor de eerste deployment.",
+      "scope": "stack_deployments"
+    }
+  ],
+  "engine": [
+    {
+      "text": "Engine",
+      "scope": "database_tab"
+    },
+    {
+      "text": "Engine",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Engine",
+      "scope": "field"
+    },
+    {
+      "text": "Database-engine. Vast na aanmaak; vernietig en maak opnieuw aan om te wijzigen.",
+      "scope": "help"
+    }
+  ],
+  "env_prefix": [
+    {
+      "text": "Omgevingsprefix",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Env-voorvoegsel",
+      "scope": "field"
+    },
+    {
+      "text": "Bepaalt de naam van de geinjecteerde variabelen: DB geeft DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME en DB_URL. De eerste koppeling van de site levert ook DATABASE_URL.",
+      "scope": "help"
+    }
+  ],
+  "failed": {
+    "text": "Mislukt",
+    "scope": "site_databases"
+  },
+  "forced": {
+    "text": "Verplicht",
+    "scope": "site_domains"
+  },
+  "hostname": [
+    {
+      "text": "Hostnaam",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Hostnaam",
+      "scope": "field"
+    },
+    {
+      "text": "De Host-header die moet overeenkomen. Wildcardmodus laat * en ? toe; regexmodus neemt een volledige reguliere expressie.",
+      "scope": "help"
+    }
+  ],
+  "isolate": {
+    "text": "Isoleren",
+    "scope": "site_processes"
+  },
+  "isolated": {
+    "text": "Geïsoleerd",
+    "scope": "site_processes"
+  },
+  "kill": {
+    "text": "Stoppen",
+    "scope": "site_processes"
+  },
+  "kill_confirm": {
+    "text": "Het proces wordt onmiddellijk beëindigd.",
+    "scope": "site_processes"
+  },
+  "last_run_failed": {
+    "text": "Laatste uitvoering mislukt",
+    "scope": "attention_detail"
+  },
+  "lines": {
+    "text": "Regels",
+    "scope": "site_processes"
+  },
+  "match_type": [
+    {
+      "text": "Overeenkomsttype",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Overeenkomsttype",
+      "scope": "field"
+    },
+    {
+      "text": "Hoe de hostnaam wordt vergeleken: exact, wildcard of reguliere expressie.",
+      "scope": "help"
+    }
+  ],
+  "memory": {
+    "text": "Geheugen",
+    "scope": "site_processes"
+  },
+  "no_logs": {
+    "text": "Nog geen opgeslagen logs.",
+    "scope": "site_processes"
+  },
+  "none": {
+    "text": "Geen",
+    "scope": "site_domains"
+  },
+  "none_running": {
+    "text": "Er draaien geen processen.",
+    "scope": "site_processes"
+  },
+  "off": {
+    "text": "Uit",
+    "scope": "site_domains"
+  },
+  "password": {
+    "text": "Wachtwoord",
+    "scope": "database_tab"
+  },
+  "payload_url": {
+    "text": "Payload-URL",
+    "scope": "site_deployments"
+  },
+  "pid": {
+    "text": "PID",
+    "scope": "site_processes"
+  },
+  "port": [
+    {
+      "text": "Poort",
+      "scope": "dns_remote"
+    },
+    {
+      "text": "Poort",
+      "scope": "site_processes"
+    }
+  ],
+  "primary": {
+    "text": "Primair",
+    "scope": "site_databases"
+  },
+  "provisioning": {
+    "text": "Wordt aangemaakt",
+    "scope": "site_databases"
+  },
+  "provisioning_failed": {
+    "text": "Aanmaken mislukt",
+    "scope": "attention_detail"
+  },
+  "ready": [
+    {
+      "text": "Gereed",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Gereed",
+      "scope": "spamservice"
+    }
+  ],
+  "request_certificate": [
+    {
+      "text": "Certificaat aanvragen",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Let's Encrypt-certificaat aanvragen",
+      "scope": "certificate_request"
+    }
+  ],
+  "restore": [
+    {
+      "text": "Herstellen",
+      "scope": "database_tab"
+    },
+    {
+      "text": "Terugzetten",
+      "scope": "database"
+    }
+  ],
+  "restore_description": {
+    "text": "Uploadt een dumpbestand en laadt het in de draaiende database.",
+    "scope": "database_tab"
+  },
+  "restore_dump": {
+    "text": "Uit dump herstellen",
+    "scope": "database_tab"
+  },
+  "restored": {
+    "text": "Back-up hersteld in '{$name}'.",
+    "scope": "database_tab"
+  },
+  "rollback": [
+    {
+      "text": "Terugrollen",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Terugrollen",
+      "scope": "stack"
+    }
+  ],
+  "rollback_confirm": [
+    {
+      "text": "De vorige deploymentsleuf activeren? De huidige versie stopt met serveren.",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "De laatste geslaagde deployment opnieuw deployen? Huidige wijzigingen blijven bewaard maar zijn niet gedeployed.",
+      "scope": "stack"
+    }
+  ],
+  "secret": {
+    "text": "Geheim",
+    "scope": "site_deployments"
+  },
+  "site": {
+    "text": "Site {$name}",
+    "scope": "attention_title"
+  },
+  "ssl": {
+    "text": "SSL",
+    "scope": "site_domains"
+  },
+  "start": [
+    {
+      "text": "Proces starten",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Starten",
+      "scope": "spamservice"
+    }
+  ],
+  "started": [
+    {
+      "text": "Gestart",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Gestart",
+      "scope": "stack_deployments"
+    }
+  ],
+  "starting": {
+    "text": "Start",
+    "scope": "site_processes"
+  },
+  "status": [
+    {
+      "text": "Status: {$status}",
+      "scope": "database_tab"
+    },
+    {
+      "text": "Status",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Status",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Status",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Status",
+      "scope": "stack_deployments"
+    }
+  ],
+  "stored_log": {
+    "text": "Opgeslagen log {$title}",
+    "scope": "site_processes"
+  },
+  "stored_logs": {
+    "text": "Opgeslagen proceslogs",
+    "scope": "site_processes"
+  },
+  "task": {
+    "text": "Taak {$name}",
+    "scope": "attention_title"
+  },
+  "terminal": {
+    "text": "Terminal",
+    "scope": "site_processes"
+  },
+  "terminal_description": {
+    "text": "Live stdout/stderr voor pid {$pid}. Toetsaanslagen gaan naar stdin van het proces.",
+    "scope": "site_processes"
+  },
+  "trigger": [
+    {
+      "text": "Trigger",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Aanleiding",
+      "scope": "stack_deployments"
+    }
+  ],
+  "unisolate": {
+    "text": "Isolatie opheffen",
+    "scope": "site_processes"
+  },
+  "unmanaged": {
+    "text": "Geen beheerde site",
+    "scope": "site_processes"
+  },
+  "unmanaged_description": {
+    "text": "Alleen node-, alchemy-, command-, java- en docker-sites draaien beheerde processen.",
+    "scope": "site_processes"
+  },
+  "used_by": {
+    "text": "Gebruikt door",
+    "scope": "database_tab"
+  },
+  "user": [
+    {
+      "text": "Gebruiker",
+      "scope": "database_tab"
+    },
+    {
+      "text": "Gebruiker",
+      "scope": "site_access"
+    }
+  ],
+  "variables": {
+    "text": "Geïnjecteerde variabelen",
+    "scope": "site_databases"
+  },
+  "webhook": {
+    "text": "Push-webhook",
+    "scope": "site_deployments"
+  },
+  "webhook_description": {
+    "text": "Configureer deze URL en dit geheim bij je Git-host (GitHub, GitLab of Gitea) om bij elke push uit te rollen.",
+    "scope": "site_deployments"
+  },
+  "onboarding": {
+    "text": "Aan de slag",
+    "scope": "dashboard"
+  },
+  "title": [
+    {
+      "text": "Deployments",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Processen",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Maak je eerste site",
+      "scope": "onboarding"
+    },
+    {
+      "text": "Hohenheim-beheer",
+      "scope": "admin"
+    },
+    {
+      "text": "Instellingen",
+      "scope": "settings"
+    },
+    {
+      "text": "Sitebeheer",
+      "scope": "manage"
+    }
+  ],
+  "description": [
+    {
+      "text": "Draaiende processen voor deze site.",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Kies hoe de applicatie draait, voeg een domein toe en vraag daarna een certificaat aan. Hohenheim begeleidt elke stap vanaf de sitepagina.",
+      "scope": "onboarding"
+    },
+    {
+      "text": "Beschrijving",
+      "scope": "field"
+    }
+  ],
+  "create_site": {
+    "text": "Site maken",
+    "scope": "onboarding"
+  },
+  "publish_records": {
+    "text": "Publiceer de DNS TXT-records",
+    "scope": "certificate_request"
+  },
+  "publish_description": {
+    "text": "Voeg elke waarde hieronder toe bij je DNS-provider. Waarden met dezelfde naam moeten naast elkaar bestaan; vervang de ene niet door de andere.",
+    "scope": "certificate_request"
+  },
+  "manual_ephemeral": {
+    "text": "Deze aanvraag blijft 30 minuten beschikbaar en gaat verloren bij een herstart. Handmatige DNS-certificaten worden niet automatisch vernieuwd.",
+    "scope": "certificate_request"
+  },
+  "record_name": [
+    {
+      "text": "Naam van TXT-record",
+      "scope": "certificate_request"
+    },
+    {
+      "text": "Naam",
+      "scope": "field"
+    },
+    {
+      "text": "Eigenaarsnaam relatief aan de zone: @ voor de zone zelf, www voor een subdomein, * voor een wildcard",
+      "scope": "help"
+    }
+  ],
+  "record_value": [
+    {
+      "text": "Waarde van TXT-record",
+      "scope": "certificate_request"
+    },
+    {
+      "text": "Waarde",
+      "scope": "field"
+    },
+    {
+      "text": "A/AAAA: een IP-adres. CNAME/NS/MX/SRV: een hostnaam. TXT: de tekst. CAA: vlaggen tag waarde, bv. 0 issue letsencrypt.org",
+      "scope": "help"
+    }
+  ],
+  "copy_record_name": {
+    "text": "Naam van TXT-record kopiëren",
+    "scope": "certificate_request"
+  },
+  "copy_record_value": {
+    "text": "Waarde van TXT-record kopiëren",
+    "scope": "certificate_request"
+  },
+  "verify_dns": {
+    "text": "DNS controleren en certificaat uitgeven",
+    "scope": "certificate_request"
+  },
+  "start_over": {
+    "text": "Opnieuw beginnen",
+    "scope": "certificate_request"
+  },
+  "name": [
+    {
+      "text": "Naam",
+      "scope": "certificate_request"
+    },
+    {
+      "text": "Naam",
+      "scope": "dev_sessions"
+    },
+    {
+      "text": "Naam",
+      "scope": "field"
+    },
+    {
+      "text": "Naam",
+      "scope": "spamservice_client"
+    },
+    {
+      "text": "Naam",
+      "scope": "spamservice_key"
+    }
+  ],
+  "name_placeholder": {
+    "text": "Standaard het eerste domein",
+    "scope": "certificate_request"
+  },
+  "domains": [
+    {
+      "text": "Domeinen",
+      "scope": "certificate_request"
+    },
+    {
+      "text": "Domeinen",
+      "scope": "site"
+    }
+  ],
+  "domains_help": {
+    "text": "Voeg elke hostnaam afzonderlijk toe. Wildcards zoals *.example.com vereisen DNS-01 en dekken de kale naam example.com niet; voeg beide toe wanneer nodig.",
+    "scope": "certificate_request"
+  },
+  "validation": {
+    "text": "Validatiemethode",
+    "scope": "certificate_request"
+  },
+  "validation_help": {
+    "text": "HTTP-01 vereist dat elke exacte hostnaam naar deze proxy wijst. DNS-01 werkt voor exacte namen en wildcards.",
+    "scope": "certificate_request"
+  },
+  "dns_mode": {
+    "text": "DNS-publicatie (alleen DNS-01)",
+    "scope": "certificate_request"
+  },
+  "manual": {
+    "text": "Handmatige TXT-records (geen automatische vernieuwing)",
+    "scope": "certificate_request"
+  },
+  "automatic_hook": {
+    "text": "Automatische command-hook",
+    "scope": "certificate_request"
+  },
+  "hook_ready": {
+    "text": "De geconfigureerde hook publiceert en verwijdert TXT-waarden, zodat dit certificaat automatisch kan vernieuwen.",
+    "scope": "certificate_request"
+  },
+  "hook_missing": {
+    "text": "Configureer ssl.dns_hook_command in Instellingen voor automatische DNS-01-uitgifte en vernieuwing.",
+    "scope": "certificate_request"
+  },
+  "account_email": {
+    "text": "Account-e-mail (optioneel)",
+    "scope": "certificate_request"
+  },
+  "account_email_help": {
+    "text": "Overschrijft het globale Let's Encrypt-accountadres voor dit certificaat.",
+    "scope": "certificate_request"
+  },
+  "request": {
+    "text": "Certificaat aanvragen",
+    "scope": "certificate_request"
+  },
+  "any": {
+    "text": "Eén van beide (IP of Basic Auth)",
+    "scope": "access_satisfy"
+  },
+  "all": {
+    "text": "Beide (IP en Basic Auth)",
+    "scope": "access_satisfy"
+  },
+  "exact": {
+    "text": "Exacte hostnaam",
+    "scope": "domain_match"
+  },
+  "wildcard": {
+    "text": "Wildcard (* en ?)",
+    "scope": "domain_match"
+  },
+  "regex": {
+    "text": "Reguliere expressie",
+    "scope": "domain_match"
+  },
+  "local_files": {
+    "text": "Lokale bestanden",
+    "scope": "site_source"
+  },
+  "git_repository": {
+    "text": "Git-repository",
+    "scope": "site_source"
+  },
+  "server_local": {
+    "text": "{$name} (lokaal)",
+    "scope": "server_option"
+  },
+  "proxy_unavailable": {
+    "text": "De proxyserver is nog niet beschikbaar",
+    "scope": "certificate_request_error"
+  },
+  "dns_validation_failed": {
+    "text": "DNS-validatie is mislukt. Controleer elke TXT-waarde en start een nieuwe aanvraag.",
+    "scope": "certificate_request_error"
+  },
+  "invalid_email": {
+    "text": "Ongeldig e-mailadres voor het account: {$email}",
+    "scope": "certificate_request_error"
+  },
+  "domain_required": {
+    "text": "Er is minstens één domein vereist",
+    "scope": "certificate_request_error"
+  },
+  "unknown_validation": {
+    "text": "Onbekende validatiemethode: {$method}",
+    "scope": "certificate_request_error"
+  },
+  "wildcard_requires_dns": {
+    "text": "Wildcardcertificaten vereisen DNS-01-validatie",
+    "scope": "certificate_request_error"
+  },
+  "invalid_hostnames": {
+    "text": "Ongeldige hostnamen: {$hostnames}",
+    "scope": "certificate_request_error"
+  },
+  "excluded_hostnames": {
+    "text": "Uitgesloten van Let's Encrypt via hun domeininstellingen: {$hostnames}",
+    "scope": "certificate_request_error"
+  },
+  "dns_start_failed": {
+    "text": "DNS-validatie kon niet worden gestart: {$reason}",
+    "scope": "certificate_request_error"
+  },
+  "unknown_dns_mode": {
+    "text": "Onbekende DNS-publicatiemodus: {$mode}",
+    "scope": "certificate_request_error"
+  },
+  "hook_not_configured": {
+    "text": "De automatische DNS-hook is niet geconfigureerd in de SSL/TLS-instellingen",
+    "scope": "certificate_request_error"
+  },
+  "request_failed": {
+    "text": "De certificaataanvraag is mislukt: {$reason}",
+    "scope": "certificate_request_error"
+  },
+  "unknown_reason": {
+    "text": "Onbekende reden",
+    "scope": "certificate_request_error"
+  },
+  "manual_expired": {
+    "text": "De handmatige DNS-aanvraag is verlopen of de server is herstart. Start een nieuwe aanvraag.",
+    "scope": "certificate_request_error"
+  },
+  "plural": [
+    {
+      "text": "Toegangslijsten",
+      "scope": "access_list"
+    },
+    {
+      "text": "Authenticatieproviders",
+      "scope": "auth_provider"
+    },
+    {
+      "text": "Certificaten",
+      "scope": "certificate"
+    },
+    {
+      "text": "Databanken",
+      "scope": "database"
+    },
+    {
+      "text": "Meldingskanalen",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "Servers",
+      "scope": "server"
+    },
+    {
+      "text": "Sites",
+      "scope": "site"
+    },
+    {
+      "text": "Gekoppelde databanken",
+      "scope": "site_database"
+    },
+    {
+      "text": "Sitedomeinen",
+      "scope": "site_domain"
+    },
+    {
+      "text": "DNS-zones",
+      "scope": "dns_zone"
+    },
+    {
+      "text": "DNS-records",
+      "scope": "dns_record"
+    },
+    {
+      "text": "DNS-peers",
+      "scope": "dns_peer"
+    },
+    {
+      "text": "Zone-secondaries",
+      "scope": "dns_zone_peer"
+    },
+    {
+      "text": "IP-verbanningen",
+      "scope": "ban"
+    },
+    {
+      "text": "Spamservice-clients",
+      "scope": "spamservice_client"
+    },
+    {
+      "text": "Clientsleutels",
+      "scope": "spamservice_key"
+    },
+    {
+      "text": "Beveiligingsgebeurtenissen",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "Spamwoorden",
+      "scope": "spamservice_word"
+    },
+    {
+      "text": "Voorbeelden",
+      "scope": "spamservice_sample"
+    },
+    {
+      "text": "Stacks",
+      "scope": "stack"
+    },
+    {
+      "text": "Stack-services",
+      "scope": "stack_service"
+    },
+    {
+      "text": "Stack-bestanden",
+      "scope": "stack_file"
+    }
+  ],
+  "dashboard": {
+    "text": "Dashboard",
+    "scope": "admin"
+  },
+  "download": {
+    "text": "Downloaden",
+    "scope": "certificate"
+  },
+  "renewal_status": {
+    "text": "Vernieuwingsstatus",
+    "scope": "certificate"
+  },
+  "request_le": {
+    "text": "Aanvragen via Let's Encrypt",
+    "scope": "certificate"
+  },
+  "backup": {
+    "text": "Back-up downloaden",
+    "scope": "database"
+  },
+  "infra": {
+    "text": "Infrastructuur",
+    "scope": "nav"
+  },
+  "proxy": {
+    "text": "Proxy",
+    "scope": "nav"
+  },
+  "test": [
+    {
+      "text": "Test versturen",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "Verbinding testen",
+      "scope": "spamservice"
+    }
+  ],
+  "test_failed": {
+    "text": "Testbezorging mislukt",
+    "scope": "notification_channel"
+  },
+  "test_ok": [
+    {
+      "text": "Test bezorgd",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "Spamservice antwoordde: {$status}",
+      "scope": "spamservice"
+    }
+  ],
+  "host_status": {
+    "text": "Host",
+    "scope": "server"
+  },
+  "clone": {
+    "text": "Dupliceren",
+    "scope": "site"
+  },
+  "databases": {
+    "text": "Databanken",
+    "scope": "site"
+  },
+  "clone_confirm": {
+    "text": "Een kopie maken met dezelfde instellingen en domeinen (standaard uitgeschakeld)?",
+    "scope": "site"
+  },
+  "deployments": [
+    {
+      "text": "Deployments",
+      "scope": "site"
+    },
+    {
+      "text": "Deployments",
+      "scope": "stack"
+    }
+  ],
+  "disabled_toast": {
+    "text": "Site uitgeschakeld",
+    "scope": "site"
+  },
+  "enabled_toast": {
+    "text": "Site ingeschakeld",
+    "scope": "site"
+  },
+  "dev_sessions": {
+    "text": "Dev-sessies",
+    "scope": "site"
+  },
+  "processes": {
+    "text": "Processen",
+    "scope": "site"
+  },
+  "toggle": {
+    "text": "In-/uitschakelen",
+    "scope": "site"
+  },
+  "attention": {
+    "text": "Vraagt aandacht",
+    "scope": "dashboard"
+  },
+  "all_clear": {
+    "text": "Alles in orde - niets vraagt aandacht.",
+    "scope": "dashboard"
+  },
+  "recent_activity": {
+    "text": "Recente activiteit",
+    "scope": "dashboard"
+  },
+  "site_type": [
+    {
+      "text": "Sitetype",
+      "scope": "field"
+    },
+    {
+      "text": "Hoe deze site wordt bediend: beheerd proces, statische bestanden, proxy, redirect, ...",
+      "scope": "help"
+    }
+  ],
+  "enabled": [
+    {
+      "text": "Ingeschakeld",
+      "scope": "field"
+    },
+    {
+      "text": "Uitgeschakelde sites worden niet gerouteerd; verzoeken krijgen de offlinepagina.",
+      "scope": "help"
+    },
+    {
+      "text": "Ingeschakeld",
+      "scope": "spamservice_client"
+    }
+  ],
+  "settings": {
+    "text": "Instellingen",
+    "scope": "field"
+  },
+  "source_settings": {
+    "text": "Broninstellingen",
+    "scope": "field"
+  },
+  "access_list": [
+    {
+      "text": "Toegangslijst",
+      "scope": "field"
+    },
+    {
+      "text": "Optionele IP-toestaan/weigeren-lijst en basic auth, toegepast voor verzoeken de site bereiken.",
+      "scope": "help"
+    }
+  ],
+  "auth_provider": [
+    {
+      "text": "Auth-provider",
+      "scope": "field"
+    },
+    {
+      "text": "Optionele identiteitsprovider waarmee bezoekers zich eerst moeten aanmelden.",
+      "scope": "help"
+    }
+  ],
+  "listen_on": [
+    {
+      "text": "Luisteradres",
+      "scope": "field"
+    },
+    {
+      "text": "Bedien dit domein alleen op het gekozen lokale IP-adres. Leeg betekent alle interfaces.",
+      "scope": "help"
+    }
+  ],
+  "path_prefix": [
+    {
+      "text": "Padvoorvoegsel",
+      "scope": "field"
+    },
+    {
+      "text": "Alleen verzoeken waarvan het pad met dit voorvoegsel begint gebruiken deze regel. Leeg matcht alles.",
+      "scope": "help"
+    }
+  ],
+  "strip_path": [
+    {
+      "text": "Pad strippen",
+      "scope": "field"
+    },
+    {
+      "text": "Verwijder het gematchte padvoorvoegsel voordat het verzoek wordt doorgestuurd.",
+      "scope": "help"
+    }
+  ],
+  "force_ssl": [
+    {
+      "text": "SSL afdwingen",
+      "scope": "field"
+    },
+    {
+      "text": "Stuur gewone HTTP-verzoeken door naar HTTPS.",
+      "scope": "help"
+    }
+  ],
+  "hsts_enabled": [
+    {
+      "text": "HSTS",
+      "scope": "field"
+    },
+    {
+      "text": "Stuur de Strict-Transport-Security-header zodat browsers HTTP voor deze host weigeren.",
+      "scope": "help"
+    }
+  ],
+  "hsts_subdomains": [
+    {
+      "text": "HSTS-subdomeinen",
+      "scope": "field"
+    },
+    {
+      "text": "Breid HSTS uit naar alle subdomeinen (includeSubDomains).",
+      "scope": "help"
+    }
+  ],
+  "custom_headers": [
+    {
+      "text": "Verzoekheaders",
+      "scope": "field"
+    },
+    {
+      "text": "Headers gezet op het verzoek voordat het wordt doorgestuurd. Een lege waarde verwijdert de header.",
+      "scope": "help"
+    }
+  ],
+  "response_headers": [
+    {
+      "text": "Antwoordheaders",
+      "scope": "field"
+    },
+    {
+      "text": "Headers gezet op het antwoord naar de client. Een lege waarde verwijdert de header.",
+      "scope": "help"
+    }
+  ],
+  "exclude_from_letsencrypt": [
+    {
+      "text": "Uitsluiten van Let's Encrypt",
+      "scope": "field"
+    },
+    {
+      "text": "Laat deze hostnaam weg bij het aanvragen van Let's Encrypt-certificaten voor de site.",
+      "scope": "help"
+    }
+  ],
+  "database_name": {
+    "text": "Unieke naam voor deze beheerde database; benoemt ook de container en het volume. Kleine letters, cijfers en streepjes.",
+    "scope": "help"
+  },
+  "db_user": [
+    {
+      "text": "Databasegebruiker",
+      "scope": "field"
+    },
+    {
+      "text": "Gebruikersnaam aangemaakt in de databasecontainer en geinjecteerd in gekoppelde sites.",
+      "scope": "help"
+    }
+  ],
+  "db_password": [
+    {
+      "text": "Databasewachtwoord",
+      "scope": "field"
+    },
+    {
+      "text": "Wachtwoord voor de databasegebruiker. Leeg laten om er een te genereren.",
+      "scope": "help"
+    }
+  ],
+  "db_name": [
+    {
+      "text": "Databasenaam",
+      "scope": "field"
+    },
+    {
+      "text": "Naam van de initiele database binnen de engine.",
+      "scope": "help"
+    }
+  ],
+  "ephemeral": [
+    {
+      "text": "Vluchtig",
+      "scope": "field"
+    },
+    {
+      "text": "Bewaar data in een RAM-tmpfs: snel, maar ALLE data gaat verloren wanneer de container herstart.",
+      "scope": "help"
+    }
+  ],
+  "records": {
+    "text": "Records",
+    "scope": "dns_zone"
+  },
+  "records_hint": {
+    "text": "Open de A-, AAAA-, CNAME-, MX-, TXT- en andere DNS-records van deze zone.",
+    "scope": "dns_zone"
+  },
+  "zone_file": {
+    "text": "Zonebestand",
+    "scope": "dns_zone"
+  },
+  "origin": [
+    {
+      "text": "Zone-origin",
+      "scope": "field"
+    },
+    {
+      "text": "Het domein waarvoor deze zone autoritatief is, bv. example.com (zonder punt op het einde)",
+      "scope": "help"
+    }
+  ],
+  "soa_primary_ns": [
+    {
+      "text": "Primaire naamserver",
+      "scope": "field"
+    },
+    {
+      "text": "Hostnaam van de primaire naamserver (de MNAME in het SOA-record); leeg = ns1.<zone>",
+      "scope": "help"
+    }
+  ],
+  "soa_contact": [
+    {
+      "text": "Contact-e-mail",
+      "scope": "field"
+    },
+    {
+      "text": "Administratief contact voor de zone; leeg = hostmaster@<zone>",
+      "scope": "help"
+    }
+  ],
+  "serial": {
+    "text": "Serienummer",
+    "scope": "field"
+  },
+  "default_ttl": [
+    {
+      "text": "Standaard-TTL",
+      "scope": "field"
+    },
+    {
+      "text": "Seconden dat resolvers records zonder eigen TTL mogen cachen (3600 = 1 uur)",
+      "scope": "help"
+    }
+  ],
+  "negative_ttl": [
+    {
+      "text": "Negatieve TTL",
+      "scope": "field"
+    },
+    {
+      "text": "Seconden dat resolvers naam-bestaat-niet-antwoorden mogen cachen (300 = 5 minuten)",
+      "scope": "help"
+    }
+  ],
+  "soa_refresh": [
+    {
+      "text": "SOA-refresh",
+      "scope": "field"
+    },
+    {
+      "text": "Seconden voordat een secundaire naamserver deze zone opnieuw controleert (7200 = 2 uur)",
+      "scope": "help"
+    }
+  ],
+  "soa_retry": [
+    {
+      "text": "SOA-retry",
+      "scope": "field"
+    },
+    {
+      "text": "Seconden die een secundaire wacht na een mislukte refresh (3600 = 1 uur)",
+      "scope": "help"
+    }
+  ],
+  "soa_expire": [
+    {
+      "text": "SOA-expire",
+      "scope": "field"
+    },
+    {
+      "text": "Seconden waarna een secundaire die deze server niet bereikt stopt met antwoorden (1209600 = 2 weken)",
+      "scope": "help"
+    }
+  ],
+  "zone_enabled": [
+    {
+      "text": "Ingeschakeld",
+      "scope": "field"
+    },
+    {
+      "text": "Uitgeschakelde zones worden niet bediend; hun namen krijgen REFUSED-antwoorden",
+      "scope": "help"
+    }
+  ],
+  "record_zone": [
+    {
+      "text": "Zone",
+      "scope": "field"
+    },
+    {
+      "text": "De autoritatieve zone waartoe dit record behoort.",
+      "scope": "help"
+    }
+  ],
+  "record_type": [
+    {
+      "text": "Type",
+      "scope": "field"
+    },
+    {
+      "text": "Het recordtype; MX en SRV hebben ook een prioriteit nodig, SRV ook een poort",
+      "scope": "help"
+    }
+  ],
+  "record_ttl": [
+    {
+      "text": "TTL",
+      "scope": "field"
+    },
+    {
+      "text": "Seconden dat resolvers dit record mogen cachen; leeg = de zonestandaard",
+      "scope": "help"
+    }
+  ],
+  "record_priority": [
+    {
+      "text": "Prioriteit",
+      "scope": "field"
+    },
+    {
+      "text": "Verplicht voor MX- en SRV-records; lagere nummers worden eerst geprobeerd",
+      "scope": "help"
+    }
+  ],
+  "record_weight": [
+    {
+      "text": "Gewicht",
+      "scope": "field"
+    },
+    {
+      "text": "Alleen SRV: relatief gewicht voor records met dezelfde prioriteit (0 bij twijfel)",
+      "scope": "help"
+    }
+  ],
+  "record_port": [
+    {
+      "text": "Poort",
+      "scope": "field"
+    },
+    {
+      "text": "Alleen SRV: de TCP/UDP-poort waarop de dienst luistert",
+      "scope": "help"
+    }
+  ],
+  "record_enabled": [
+    {
+      "text": "Ingeschakeld",
+      "scope": "field"
+    },
+    {
+      "text": "Uitgeschakelde records blijven opgeslagen maar worden niet bediend",
+      "scope": "help"
+    }
+  ],
+  "managed_by": {
+    "text": "Beheerd door",
+    "scope": "field"
+  },
+  "record_count": {
+    "text": "Records",
+    "scope": "dns_zone"
+  },
+  "ds_title": {
+    "text": "DS-record (voor de registrar)",
+    "scope": "dns_zone"
+  },
+  "ds_description": {
+    "text": "Registreer dit DS-record bij je domeinregistrar om de DNSSEC-vertrouwensketen te sluiten. Het verandert wanneer je de ondertekeningssleutel opnieuw genereert.",
+    "scope": "dns_zone"
+  },
+  "dnssec_enabled": [
+    {
+      "text": "Deze zone ondertekenen (DNSSEC)",
+      "scope": "field"
+    },
+    {
+      "text": "Genereert bij eerste gebruik een sleutel en serveert ondertekende antwoorden. Vereist het registreren van het DS-record (zie het tabblad Zonebestand) bij je registrar.",
+      "scope": "help"
+    }
+  ],
+  "add_record": {
+    "text": "Record toevoegen",
+    "scope": "dns_zone"
+  },
+  "record_name_column": {
+    "text": "Naam",
+    "scope": "dns_zone"
+  },
+  "record_type_column": {
+    "text": "Type",
+    "scope": "dns_zone"
+  },
+  "record_ttl_column": {
+    "text": "TTL",
+    "scope": "dns_zone"
+  },
+  "record_value_column": {
+    "text": "Waarde",
+    "scope": "dns_zone"
+  },
+  "record_status_column": {
+    "text": "Status",
+    "scope": "dns_zone"
+  },
+  "record_enabled_badge": {
+    "text": "Actief",
+    "scope": "dns_zone"
+  },
+  "record_disabled_badge": {
+    "text": "Uitgeschakeld",
+    "scope": "dns_zone"
+  },
+  "record_managed_badge": {
+    "text": "ACME",
+    "scope": "dns_zone"
+  },
+  "records_empty": {
+    "text": "Nog geen records",
+    "scope": "dns_zone"
+  },
+  "records_empty_description": {
+    "text": "Voeg A/AAAA-records toe voor je hosts en NS-records voor de zone zelf.",
+    "scope": "dns_zone"
+  },
+  "zone_file_description": {
+    "text": "De zone in standaard master-bestandsformaat; uitgeschakelde rijen staan als commentaar.",
+    "scope": "dns_zone"
+  },
+  "import_zone_file": {
+    "text": "Zonebestand importeren",
+    "scope": "dns_zone"
+  },
+  "import_description": {
+    "text": "Plak standaard zonebestand-tekst om records in deze zone te laden.",
+    "scope": "dns_zone"
+  },
+  "zone_file_text": {
+    "text": "Zonebestand-tekst",
+    "scope": "dns_zone"
+  },
+  "import_replaces": {
+    "text": "Importeren vervangt elk record van deze zone behalve ACME-beheerde items. SOA-regels worden genegeerd; het zoneformulier beheert die waarden.",
+    "scope": "dns_zone"
+  },
+  "import_action": {
+    "text": "Importeren",
+    "scope": "dns_zone"
+  },
+  "import_done": {
+    "text": "{$count} records geimporteerd.",
+    "scope": "dns_zone"
+  },
+  "import_skipped": {
+    "text": "Overgeslagen: {$lines}",
+    "scope": "dns_zone"
+  },
+  "import_empty": {
+    "text": "Plak eerst zonebestand-tekst voor het importeren",
+    "scope": "dns_zone"
+  },
+  "dns_origin_format": {
+    "text": "Geef een kaal domein zoals example.com (letters, cijfers en koppeltekens; geen wildcard, geen punt op het einde)",
+    "scope": "violations"
+  },
+  "dns_origin_taken": {
+    "text": "Er bestaat al een zone voor die origin",
+    "scope": "violations"
+  },
+  "dns_zone_required": {
+    "text": "Kies de zone waartoe dit record behoort",
+    "scope": "violations"
+  },
+  "dns_name_format": {
+    "text": "Gebruik @ voor de zone zelf, of labels zoals www, *.dev of _acme-challenge",
+    "scope": "violations"
+  },
+  "dns_value_required": {
+    "text": "Het record heeft een waarde nodig",
+    "scope": "violations"
+  },
+  "dns_ipv4_format": {
+    "text": "Geef een geldig IPv4-adres zoals 203.0.113.10",
+    "scope": "violations"
+  },
+  "dns_ipv6_format": {
+    "text": "Geef een geldig IPv6-adres zoals 2001:db8::1",
+    "scope": "violations"
+  },
+  "dns_target_format": {
+    "text": "Geef een hostnaam zoals server.example.com",
+    "scope": "violations"
+  },
+  "dns_cname_apex": {
+    "text": "Een CNAME kan niet op de zone zelf staan; gebruik een A/AAAA-record",
+    "scope": "violations"
+  },
+  "dns_cname_exclusive": {
+    "text": "Een CNAME-eigenaar kan geen andere records bevatten; verwijder eerst de conflicterende records",
+    "scope": "violations"
+  },
+  "dns_ns_wildcard": {
+    "text": "NS-records kunnen geen wildcard-naam gebruiken",
+    "scope": "violations"
+  },
+  "dns_priority_required": {
+    "text": "MX- en SRV-records hebben een prioriteit tussen 0 en 65535 nodig",
+    "scope": "violations"
+  },
+  "dns_port_required": {
+    "text": "SRV-records hebben een poort tussen 0 en 65535 nodig",
+    "scope": "violations"
+  },
+  "dns_weight_format": {
+    "text": "Het gewicht moet tussen 0 en 65535 liggen",
+    "scope": "violations"
+  },
+  "dns_caa_format": {
+    "text": "CAA-waarden zien eruit als: 0 issue letsencrypt.org",
+    "scope": "violations"
+  },
+  "dns_caa_tag": {
+    "text": "De CAA-tag moet issue, issuewild of iodef zijn",
+    "scope": "violations"
+  },
+  "dns_type_unknown": {
+    "text": "Onbekend recordtype",
+    "scope": "violations"
+  },
+  "dns_interval_range": {
+    "text": "SOA-intervallen moeten tussen 0 en 2419200 seconden liggen (vier weken)",
+    "scope": "violations"
+  },
+  "dns_ttl_range": {
+    "text": "TTL-waarden moeten tussen 0 en 604800 seconden liggen (een week)",
+    "scope": "violations"
+  },
+  "dns_record_duplicate": {
+    "text": "Dat exacte record bestaat al in deze zone",
+    "scope": "violations"
+  },
+  "dns_contact_format": {
+    "text": "Geef een e-mailadres zoals hostmaster@example.com",
+    "scope": "violations"
+  },
+  "internal_dns": {
+    "text": "Gehoste DNS (deze server)",
+    "scope": "certificate_request"
+  },
+  "internal_ready": {
+    "text": "Gehoste DNS: beschikbaar wanneer de zone van het domein door deze server bediend wordt; validatierecords publiceren onmiddellijk.",
+    "scope": "certificate_request"
+  },
+  "internal_unavailable": {
+    "text": "Gehoste DNS: schakel de DNS-server in en maak een zone voor het domein om dit te gebruiken.",
+    "scope": "certificate_request"
+  },
+  "zone_not_hosted": {
+    "text": "Geen ingeschakelde gehoste DNS-zone dekt: {$hostnames}",
+    "scope": "certificate_request_error"
+  },
+  "dns_server_disabled": {
+    "text": "De DNS-server draait niet; schakel die eerst in bij de instellingen",
+    "scope": "certificate_request_error"
+  },
+  "dns_listener": {
+    "text": "DNS-server kon niet starten",
+    "scope": "attention_title"
+  },
+  "dns_zone_no_ns": [
+    {
+      "text": "Zone {$origin} heeft geen NS-records",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Delegatie vereist NS-records op de zone zelf; resolvers beschouwen de zone als defect.",
+      "scope": "attention_detail"
+    }
+  ],
+  "url": {
+    "text": "URL",
+    "scope": "dev_sessions"
+  },
+  "connected_since": {
+    "text": "Verbonden sinds",
+    "scope": "dev_sessions"
+  },
+  "active_streams": {
+    "text": "Actieve streams",
+    "scope": "dev_sessions"
+  },
+  "empty_hint": [
+    {
+      "text": "Start een Zenit-project met de dev-tunnel geconfigureerd en het verschijnt hier automatisch.",
+      "scope": "dev_sessions"
+    },
+    {
+      "text": "Voeg een peer toe om deze zone via geauthenticeerde AXFR naar hem te repliceren.",
+      "scope": "dns_secondaries"
+    }
+  ],
+  "registration_token": [
+    {
+      "text": "Registratietoken",
+      "scope": "field"
+    },
+    {
+      "text": "Geheim dat externe dev-servers aanbieden bij het registreren. Wordt automatisch gegenereerd wanneer leeg; plak het in de zenit-dev-configuratie van de dev-machine.",
+      "scope": "help"
+    }
+  ],
+  "secondaries": {
+    "text": "Secondaries",
+    "scope": "dns_zone"
+  },
+  "peer_name": [
+    {
+      "text": "Naam",
+      "scope": "field"
+    },
+    {
+      "text": "Een herkenbare naam voor deze DNS-peer.",
+      "scope": "help"
+    }
+  ],
+  "peer_base_url": [
+    {
+      "text": "Admin-basis-URL",
+      "scope": "field"
+    },
+    {
+      "text": "HTTPS-URL van de admin-server van een Hohenheim-peer, om bewerkingen van zones die het bezit door te sturen.",
+      "scope": "help"
+    }
+  ],
+  "peer_api_key": [
+    {
+      "text": "API-sleutel",
+      "scope": "field"
+    },
+    {
+      "text": "znit_ API-sleutel om de admin van de peer aan te roepen voor edit-forwarding.",
+      "scope": "help"
+    }
+  ],
+  "peer_transfer_host": [
+    {
+      "text": "Transfer-host",
+      "scope": "field"
+    },
+    {
+      "text": "Adres van de DNS-server van de peer voor AXFR/NOTIFY.",
+      "scope": "help"
+    }
+  ],
+  "peer_transfer_port": [
+    {
+      "text": "Transfer-poort",
+      "scope": "field"
+    },
+    {
+      "text": "DNS-poort voor AXFR en NOTIFY; normaal 53.",
+      "scope": "help"
+    }
+  ],
+  "peer_tsig_key_name": [
+    {
+      "text": "TSIG-sleutelnaam",
+      "scope": "field"
+    },
+    {
+      "text": "Gedeelde sleutelnaam die zone-transfers met deze peer authenticeert.",
+      "scope": "help"
+    }
+  ],
+  "peer_tsig_algorithm": [
+    {
+      "text": "TSIG-algoritme",
+      "scope": "field"
+    },
+    {
+      "text": "HMAC-algoritme, bijv. hmac-sha256.",
+      "scope": "help"
+    }
+  ],
+  "peer_tsig_secret": [
+    {
+      "text": "TSIG-geheim",
+      "scope": "field"
+    },
+    {
+      "text": "Base64 gedeeld geheim voor de TSIG-sleutel.",
+      "scope": "help"
+    }
+  ],
+  "peer_enabled": [
+    {
+      "text": "Ingeschakeld",
+      "scope": "field"
+    },
+    {
+      "text": "Uitgeschakelde peers worden niet benaderd voor transfers of doorgestuurde bewerkingen.",
+      "scope": "help"
+    }
+  ],
+  "zone_role": [
+    {
+      "text": "Rol",
+      "scope": "field"
+    },
+    {
+      "text": "Primaire zones worden hier bewerkt; secundaire zones worden gerepliceerd van hun eigenaar-peer.",
+      "scope": "help"
+    }
+  ],
+  "primary_peer": [
+    {
+      "text": "Eigenaar-peer",
+      "scope": "field"
+    },
+    {
+      "text": "Voor een secundaire zone: de peer die de zone bezit en recordbewerkingen ontvangt.",
+      "scope": "help"
+    }
+  ],
+  "role_primary": {
+    "text": "Primair (hier beheerd)",
+    "scope": "dns_role"
+  },
+  "role_secondary": {
+    "text": "Secundair (gerepliceerd)",
+    "scope": "dns_role"
+  },
+  "peer_none": {
+    "text": "Geen",
+    "scope": "dns_peer"
+  },
+  "peer": {
+    "text": "Peer",
+    "scope": "dns_secondaries"
+  },
+  "transfer_host": {
+    "text": "Transfer-host",
+    "scope": "dns_secondaries"
+  },
+  "dns_tsig_algorithm": {
+    "text": "Niet-ondersteund TSIG-algoritme",
+    "scope": "violations"
+  },
+  "dns_port_range": {
+    "text": "Poort moet tussen 1 en 65535 liggen",
+    "scope": "violations"
+  },
+  "dns_zone_missing": {
+    "text": "Die zone bestaat niet",
+    "scope": "violations"
+  },
+  "dns_peer_missing": {
+    "text": "Die peer bestaat niet",
+    "scope": "violations"
+  },
+  "dns_secondary_linked": {
+    "text": "Die peer is al een secondary van deze zone",
+    "scope": "violations"
+  },
+  "edits_forwarded": {
+    "text": "Deze zone is eigendom van peer \"{$peer}\": onderstaande records worden er live van gelezen en bewerkingen worden doorgestuurd.",
+    "scope": "dns_remote"
+  },
+  "edit_saved": {
+    "text": "Wijziging toegepast op de eigenaar-peer",
+    "scope": "dns_remote"
+  },
+  "edit_record": {
+    "text": "Record bewerken",
+    "scope": "dns_remote"
+  },
+  "save_remote": {
+    "text": "Opslaan op peer",
+    "scope": "dns_remote"
+  },
+  "cancel_remote": {
+    "text": "Annuleren",
+    "scope": "dns_remote"
+  },
+  "delete_remote": {
+    "text": "Verwijderen",
+    "scope": "dns_remote"
+  },
+  "delete_confirm": {
+    "text": "Dit record op de eigenaar-peer verwijderen?",
+    "scope": "dns_remote"
+  },
+  "priority": {
+    "text": "Prioriteit",
+    "scope": "dns_remote"
+  },
+  "weight": {
+    "text": "Gewicht",
+    "scope": "dns_remote"
+  },
+  "remote_empty_hint": {
+    "text": "De eigenaar-peer meldt geen records voor deze zone.",
+    "scope": "dns_remote"
+  },
+  "peer_not_configured": {
+    "text": "De primaire peer heeft geen admin-URL / API-sleutel geconfigureerd; records worden alleen-lezen uit de replica getoond.",
+    "scope": "dns_remote"
+  },
+  "peer_unreachable": {
+    "text": "De eigenaar-peer was onbereikbaar ({$message}); records worden alleen-lezen uit de replica getoond.",
+    "scope": "dns_remote"
+  },
+  "record_dynamic": [
+    {
+      "text": "Dynamische DNS",
+      "scope": "field"
+    },
+    {
+      "text": "Sta toe dat het adres van dit A/AAAA-record via het dyndns2-protocol wordt bijgewerkt; gebruik de rijactie om een updatetoken aan te maken",
+      "scope": "help"
+    }
+  ],
+  "dyndns_token": {
+    "text": "Dynamische DNS-token",
+    "scope": "dns_record"
+  },
+  "dyndns_token_hint": {
+    "text": "Maak een nieuw updatetoken voor dit record aan (maakt een eerder token ongeldig)",
+    "scope": "dns_record"
+  },
+  "dyndns_only_address": {
+    "text": "Dynamische DNS is alleen beschikbaar voor A- en AAAA-records",
+    "scope": "dns_record"
+  },
+  "dyndns_minted": {
+    "text": "Update-token gegenereerd -- het staat op het formulier van dit record",
+    "scope": "dns_record"
+  },
+  "record_dyndns_token": [
+    {
+      "text": "Dynamische DNS-token",
+      "scope": "field"
+    },
+    {
+      "text": "Het update-wachtwoord. Richt een dyndns2-client (router, ddclient) op <host>/nic/update?hostname=<FQDN van dit record> en stuur dit token als HTTP Basic-wachtwoord. Gebruik de rijactie om het (opnieuw) te genereren",
+      "scope": "help"
+    }
+  ],
+  "jar_path": [
+    {
+      "text": "Jar-bestand",
+      "scope": "field"
+    },
+    {
+      "text": "Pad naar het fat/shadow-jar-bestand van de applicatie.",
+      "scope": "help"
+    }
+  ],
+  "java_binary": [
+    {
+      "text": "Java-binary",
+      "scope": "field"
+    },
+    {
+      "text": "Pad naar de java-launcher. Leeg gebruikt java uit PATH (bijv. bin/java van een jlink-image).",
+      "scope": "help"
+    }
+  ],
+  "jvm_args": [
+    {
+      "text": "JVM-argumenten",
+      "scope": "field"
+    },
+    {
+      "text": "Extra argumenten voor de JVM voor -jar, bijv. -Xmx512m.",
+      "scope": "help"
+    }
+  ],
+  "app_args": [
+    {
+      "text": "Applicatie-argumenten",
+      "scope": "field"
+    },
+    {
+      "text": "Argumenten voor de applicatie na het jar-bestand.",
+      "scope": "help"
+    }
+  ],
+  "cert_nice_name": [
+    {
+      "text": "Naam",
+      "scope": "field"
+    },
+    {
+      "text": "Een herkenbare naam voor dit certificaat, bv. het hoofddomein dat het dekt.",
+      "scope": "help"
+    }
+  ],
+  "cert_certificate_pem": [
+    {
+      "text": "Certificaat (PEM)",
+      "scope": "field"
+    },
+    {
+      "text": "Plak het volledige PEM-gecodeerde certificaat, inclusief eventuele tussenliggende keten (de -----BEGIN CERTIFICATE----- blokken).",
+      "scope": "help"
+    }
+  ],
+  "cert_private_key_pem": [
+    {
+      "text": "Prive-sleutel (PEM)",
+      "scope": "field"
+    },
+    {
+      "text": "De PEM-gecodeerde prive-sleutel die bij het certificaat hoort. Opgeslagen als geheim: laat leeg om de huidige sleutel te behouden.",
+      "scope": "help"
+    }
+  ],
+  "cert_auto_renew": [
+    {
+      "text": "Automatisch vernieuwen",
+      "scope": "field"
+    },
+    {
+      "text": "Geldt alleen voor Let's Encrypt-certificaten; opgeladen certificaten worden nooit automatisch vernieuwd.",
+      "scope": "help"
+    }
+  ],
+  "cert_challenge_type": [
+    {
+      "text": "Validatietype",
+      "scope": "field"
+    },
+    {
+      "text": "Hoe Let's Encrypt dit certificaat valideerde. Ingesteld door de aanvraagpagina.",
+      "scope": "help"
+    }
+  ],
+  "cert_dns_publisher": [
+    {
+      "text": "DNS-publicatie",
+      "scope": "field"
+    },
+    {
+      "text": "Hoe DNS-01 TXT-records gepubliceerd worden bij vernieuwing. Ingesteld door de aanvraagpagina.",
+      "scope": "help"
+    }
+  ],
+  "cert_renewal_error": {
+    "text": "Laatste vernieuwingsfout",
+    "scope": "field"
+  },
+  "cert_error_count": {
+    "text": "Mislukte pogingen",
+    "scope": "field"
+  },
+  "cert_next_attempt_at": {
+    "text": "Volgende poging",
+    "scope": "field"
+  },
+  "cert_domain_names": {
+    "text": "Domeinen",
+    "scope": "field"
+  },
+  "enable": [
+    {
+      "text": "Inschakelen",
+      "scope": "site"
+    },
+    {
+      "text": "Inschakelen",
+      "scope": "spamservice_key"
+    }
+  ],
+  "disable": {
+    "text": "Uitschakelen",
+    "scope": "site"
+  },
+  "hohenheim_admin_access": {
+    "text": "Toegang tot het Hohenheim-beheerpaneel",
+    "scope": "permission"
+  },
+  "hohenheim_manage_access": {
+    "text": "Toegang tot het gedelegeerde sitebeheerpaneel",
+    "scope": "permission"
+  },
+  "access": {
+    "text": "Toegang",
+    "scope": "site"
+  },
+  "subject": {
+    "text": "Wie",
+    "scope": "site_access"
+  },
+  "capability": {
+    "text": "Bevoegdheid",
+    "scope": "site_access"
+  },
+  "allowed": {
+    "text": "Toegestaan",
+    "scope": "site_access"
+  },
+  "added": {
+    "text": "Toegevoegd",
+    "scope": "site_access"
+  },
+  "yes": {
+    "text": "Ja",
+    "scope": "site_access"
+  },
+  "no": {
+    "text": "Nee",
+    "scope": "site_access"
+  },
+  "remove": {
+    "text": "Verwijderen",
+    "scope": "site_access"
+  },
+  "remove_confirm": {
+    "text": "Deze toegang intrekken? De gebruiker verliest het beheerpaneel als dit de laatste site was.",
+    "scope": "site_access"
+  },
+  "add_title": {
+    "text": "Toegang verlenen",
+    "scope": "site_access"
+  },
+  "add_description": {
+    "text": "De gebruiker kan deze site (en haar domeinen) bekijken, bewerken en bedienen via het /manage-paneel.",
+    "scope": "site_access"
+  },
+  "add": {
+    "text": "Toegang verlenen",
+    "scope": "site_access"
+  },
+  "user_missing": {
+    "text": "Kies een actieve gebruiker",
+    "scope": "violations"
+  },
+  "security": {
+    "text": "Beveiliging",
+    "scope": "nav"
+  },
+  "lift": {
+    "text": "Verbanning opheffen",
+    "scope": "ban"
+  },
+  "lift_hint": {
+    "text": "Hef de verbanning onmiddellijk op, in de app en in de firewall.",
+    "scope": "ban"
+  },
+  "lift_confirm": {
+    "text": "Deze verbanning opheffen? Het IP-adres kan meteen alle sites weer bereiken.",
+    "scope": "ban"
+  },
+  "lifted": {
+    "text": "Verbanning opgeheven",
+    "scope": "ban"
+  },
+  "duration_1h": {
+    "text": "1 uur",
+    "scope": "ban"
+  },
+  "duration_24h": {
+    "text": "24 uur",
+    "scope": "ban"
+  },
+  "duration_7d": {
+    "text": "7 dagen",
+    "scope": "ban"
+  },
+  "duration_30d": {
+    "text": "30 dagen",
+    "scope": "ban"
+  },
+  "duration_permanent": {
+    "text": "Permanent",
+    "scope": "ban"
+  },
+  "ip": [
+    {
+      "text": "IP-adres",
+      "scope": "field"
+    },
+    {
+      "text": "IP-adres",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "IP-adres",
+      "scope": "spamservice_sample"
+    },
+    {
+      "text": "IP-adres",
+      "scope": "spamservice_reputation"
+    }
+  ],
+  "ban_reason": {
+    "text": "Reden",
+    "scope": "field"
+  },
+  "ban_source": {
+    "text": "Bron",
+    "scope": "field"
+  },
+  "ban_duration": {
+    "text": "Duur",
+    "scope": "field"
+  },
+  "event_type": {
+    "text": "Gebeurtenistype",
+    "scope": "field"
+  },
+  "expires_at": {
+    "text": "Vervalt",
+    "scope": "field"
+  },
+  "ban_ip_refused": {
+    "text": "Dit IP-adres kan niet verbannen worden: {$reason}",
+    "scope": "violations"
+  },
+  "active_bans": {
+    "text": "Actieve verbanningen",
+    "scope": "dashboard"
+  },
+  "bans_created_30d": {
+    "text": "Aangemaakte verbanningen (30 dagen)",
+    "scope": "dashboard"
+  },
+  "domain_miss": {
+    "text": "Onbekend domein opgevraagd",
+    "scope": "security_event_type"
+  },
+  "login_failed": {
+    "text": "Mislukte aanmelding",
+    "scope": "security_event_type"
+  },
+  "lockout": {
+    "text": "Account vergrendeld",
+    "scope": "security_event_type"
+  },
+  "rate_limited": {
+    "text": "Verzoekslimiet overschreden",
+    "scope": "security_event_type"
+  },
+  "csrf_failure": {
+    "text": "CSRF-fout",
+    "scope": "security_event_type"
+  },
+  "ws_origin_refused": {
+    "text": "WebSocket-origin geweigerd",
+    "scope": "security_event_type"
+  },
+  "ws_auth_refused": {
+    "text": "WebSocket-authenticatie geweigerd",
+    "scope": "security_event_type"
+  },
+  "overview": {
+    "text": "Spamservice-overzicht",
+    "scope": "spamservice"
+  },
+  "installation": {
+    "text": "Installatie",
+    "scope": "spamservice"
+  },
+  "reputation": {
+    "text": "Reputatie opzoeken",
+    "scope": "spamservice"
+  },
+  "disconnected": {
+    "text": "Spamservice is niet verbonden. Configureer en start de lokale installatie om beheer te gebruiken.",
+    "scope": "spamservice"
+  },
+  "runtime": {
+    "text": "Beheerde runtime",
+    "scope": "spamservice"
+  },
+  "configured": {
+    "text": "Geconfigureerd",
+    "scope": "spamservice"
+  },
+  "base_url": {
+    "text": "Basis-URL",
+    "scope": "spamservice"
+  },
+  "crashes": {
+    "text": "Opeenvolgende crashes",
+    "scope": "spamservice"
+  },
+  "readiness": {
+    "text": "Gereedheid",
+    "scope": "spamservice"
+  },
+  "not_ready": {
+    "text": "Niet gereed",
+    "scope": "spamservice"
+  },
+  "no_checks": {
+    "text": "Geen gereedheidscontroles beschikbaar",
+    "scope": "spamservice"
+  },
+  "samples": {
+    "text": "Voorbeelden",
+    "scope": "spamservice"
+  },
+  "security_events": {
+    "text": "Beveiligingsgebeurtenissen",
+    "scope": "spamservice"
+  },
+  "spam_words": {
+    "text": "Spamwoorden",
+    "scope": "spamservice"
+  },
+  "active_keys_count": {
+    "text": "{$count} actieve sleutels",
+    "scope": "spamservice"
+  },
+  "spam_samples_count": {
+    "text": "{$count} als spam gemarkeerd",
+    "scope": "spamservice"
+  },
+  "confirmed_counts": {
+    "text": "Bevestigd: {$spam} spam, {$ham} ham",
+    "scope": "spamservice"
+  },
+  "start_hint": {
+    "text": "Start het geconfigureerde lokale Spamservice-proces.",
+    "scope": "spamservice"
+  },
+  "stop": [
+    {
+      "text": "Stoppen",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Stoppen",
+      "scope": "stack"
+    }
+  ],
+  "stop_hint": {
+    "text": "Stop Spamservice zonder de instelling Ingeschakeld te wijzigen.",
+    "scope": "spamservice"
+  },
+  "stop_confirm": [
+    {
+      "text": "Spamservice nu stoppen? Scoring en reputatiebeheer worden onbeschikbaar.",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Alle containers van deze stack stoppen?",
+      "scope": "stack"
+    }
+  ],
+  "restart": {
+    "text": "Herstarten",
+    "scope": "spamservice"
+  },
+  "restart_hint": {
+    "text": "Herstart Spamservice en laad de runtimeconfiguratie opnieuw.",
+    "scope": "spamservice"
+  },
+  "restart_confirm": {
+    "text": "Spamservice nu herstarten? Verzoeken zijn kort onbeschikbaar.",
+    "scope": "spamservice"
+  },
+  "test_hint": {
+    "text": "Roep het strikte managementstatus-endpoint aan.",
+    "scope": "spamservice"
+  },
+  "start_ok": {
+    "text": "Start van Spamservice aangevraagd",
+    "scope": "spamservice"
+  },
+  "stop_ok": {
+    "text": "Spamservice gestopt",
+    "scope": "spamservice"
+  },
+  "restart_ok": {
+    "text": "Herstart van Spamservice aangevraagd",
+    "scope": "spamservice"
+  },
+  "search": {
+    "text": "Zoeken",
+    "scope": "spamservice"
+  },
+  "trusted": {
+    "text": "Vertrouwde rapporteur",
+    "scope": "spamservice_client"
+  },
+  "provisioner": {
+    "text": "Mag clients aanmaken",
+    "scope": "spamservice_client"
+  },
+  "manager": {
+    "text": "Managementtoegang",
+    "scope": "spamservice_client"
+  },
+  "external_id": {
+    "text": "Externe ID",
+    "scope": "spamservice_client"
+  },
+  "owner": {
+    "text": "Aangemaakt door",
+    "scope": "spamservice_client"
+  },
+  "allowed_languages": {
+    "text": "Toegestane talen",
+    "scope": "spamservice_client"
+  },
+  "spam_threshold": {
+    "text": "Spamdrempel",
+    "scope": "spamservice_client"
+  },
+  "notes": {
+    "text": "Notities",
+    "scope": "spamservice_client"
+  },
+  "keys": {
+    "text": "Sleutels",
+    "scope": "spamservice_client"
+  },
+  "keys_hint": {
+    "text": "Beheer de API-sleutels van deze client.",
+    "scope": "spamservice_client"
+  },
+  "client": [
+    {
+      "text": "Client",
+      "scope": "spamservice_key"
+    },
+    {
+      "text": "Client",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "Client",
+      "scope": "spamservice_sample"
+    }
+  ],
+  "raw_key": {
+    "text": "Bestaande sleutel (optioneel)",
+    "scope": "spamservice_key"
+  },
+  "raw_key_help": {
+    "text": "Laat leeg om een nieuwe sleutel te genereren. Een gegenereerde sleutel wordt na aanmaak eenmaal getoond.",
+    "scope": "spamservice_key"
+  },
+  "last_used": {
+    "text": "Laatst gebruikt",
+    "scope": "spamservice_key"
+  },
+  "created_at": [
+    {
+      "text": "Aangemaakt",
+      "scope": "spamservice_key"
+    },
+    {
+      "text": "Aangemaakt",
+      "scope": "spamservice_sample"
+    }
+  ],
+  "key_created": {
+    "text": "Sleutel aangemaakt. Kopieer hem nu; hij wordt niet opnieuw getoond: {$key}",
+    "scope": "spamservice_key"
+  },
+  "key_adopted": {
+    "text": "Bestaande sleutel overgenomen",
+    "scope": "spamservice_key"
+  },
+  "revoke": {
+    "text": "Intrekken",
+    "scope": "spamservice_key"
+  },
+  "revoke_confirm": {
+    "text": "Deze sleutel intrekken? Bestaande aanroepers verliezen onmiddellijk toegang.",
+    "scope": "spamservice_key"
+  },
+  "key_enabled": {
+    "text": "Sleutel ingeschakeld",
+    "scope": "spamservice_key"
+  },
+  "key_revoked": {
+    "text": "Sleutel ingetrokken",
+    "scope": "spamservice_key"
+  },
+  "type": {
+    "text": "Type",
+    "scope": "spamservice_event"
+  },
+  "day": {
+    "text": "Dag",
+    "scope": "spamservice_event"
+  },
+  "count": {
+    "text": "Aantal",
+    "scope": "spamservice_event"
+  },
+  "first_at": {
+    "text": "Eerst gezien",
+    "scope": "spamservice_event"
+  },
+  "last_at": {
+    "text": "Laatst gezien",
+    "scope": "spamservice_event"
+  },
+  "detail": {
+    "text": "Laatste detail",
+    "scope": "spamservice_event"
+  },
+  "from": {
+    "text": "Vanaf",
+    "scope": "spamservice_event"
+  },
+  "to": {
+    "text": "Tot",
+    "scope": "spamservice_event"
+  },
+  "word": {
+    "text": "Woord of zin",
+    "scope": "spamservice_word"
+  },
+  "score": [
+    {
+      "text": "Score",
+      "scope": "spamservice_word"
+    },
+    {
+      "text": "Score",
+      "scope": "spamservice_sample"
+    }
+  ],
+  "language": {
+    "text": "Taal",
+    "scope": "spamservice_word"
+  },
+  "leet": {
+    "text": "Leetspeak herkennen",
+    "scope": "spamservice_word"
+  },
+  "spam": {
+    "text": "Spam",
+    "scope": "spamservice_sample"
+  },
+  "confirmed": {
+    "text": "Bevestigd",
+    "scope": "spamservice_sample"
+  },
+  "flags": {
+    "text": "Vlaggen",
+    "scope": "spamservice_sample"
+  },
+  "languages": {
+    "text": "Talen",
+    "scope": "spamservice_sample"
+  },
+  "analysis": {
+    "text": "Analyse",
+    "scope": "spamservice_sample"
+  },
+  "mark_spam": {
+    "text": "Als spam markeren",
+    "scope": "spamservice_sample"
+  },
+  "mark_ham": {
+    "text": "Als ham markeren",
+    "scope": "spamservice_sample"
+  },
+  "rescore": {
+    "text": "Opnieuw scoren",
+    "scope": "spamservice_sample"
+  },
+  "marked_spam": {
+    "text": "Voorbeeld bevestigd als spam",
+    "scope": "spamservice_sample"
+  },
+  "marked_ham": {
+    "text": "Voorbeeld bevestigd als ham",
+    "scope": "spamservice_sample"
+  },
+  "rescored": {
+    "text": "Voorbeeld opnieuw gescoord op {$score}",
+    "scope": "spamservice_sample"
+  },
+  "verdict_spam": {
+    "text": "Spam",
+    "scope": "spamservice_sample"
+  },
+  "verdict_ham": {
+    "text": "Ham",
+    "scope": "spamservice_sample"
+  },
+  "score_threshold": {
+    "text": "Score {$score}, drempel {$threshold}",
+    "scope": "spamservice_sample"
+  },
+  "request_info": {
+    "text": "Verzoek",
+    "scope": "spamservice_sample"
+  },
+  "ip_analysis": {
+    "text": "IP-informatie",
+    "scope": "spamservice_sample"
+  },
+  "breakdown": {
+    "text": "Score-opbouw",
+    "scope": "spamservice_sample"
+  },
+  "no_breakdown": {
+    "text": "Geen score-opbouw",
+    "scope": "spamservice_sample"
+  },
+  "submitted_fields": {
+    "text": "Ingestuurde velden",
+    "scope": "spamservice_sample"
+  },
+  "useragent": {
+    "text": "User agent",
+    "scope": "spamservice_sample"
+  },
+  "lookup": {
+    "text": "Opzoeken",
+    "scope": "spamservice_reputation"
+  },
+  "lookup_result": {
+    "text": "{$ip} wordt beoordeeld als actorsubnet {$subnet}.",
+    "scope": "spamservice_reputation"
+  },
+  "datasets": {
+    "text": "Reputatiedatasets",
+    "scope": "spamservice_reputation"
+  },
+  "signals": {
+    "text": "Gedragssignalen",
+    "scope": "spamservice_reputation"
+  },
+  "category": {
+    "text": "Categorie",
+    "scope": "spamservice_reputation"
+  },
+  "negative": {
+    "text": "Negatief",
+    "scope": "spamservice_reputation"
+  },
+  "positive": {
+    "text": "Positief",
+    "scope": "spamservice_reputation"
+  },
+  "weighted_policy": {
+    "text": "Gewogen nettoscore van Hohenheim",
+    "scope": "spamservice_reputation"
+  },
+  "weighted_explanation": {
+    "text": "Binnen de eigen categorie compenseert elke positieve gebeurtenis maximaal {$weight} negatieve gebeurtenissen. De huidige totale nettoscore is {$net}; Hohenheim verbant zodra die {$threshold} bereikt. Risicovlaggen uit datasets zijn alleen diagnostisch.",
+    "scope": "spamservice_reputation"
+  },
+  "formula": {
+    "text": "Negatief - (positief x gewicht)",
+    "scope": "spamservice_reputation"
+  },
+  "net": {
+    "text": "Netto",
+    "scope": "spamservice_reputation"
+  },
+  "command": [
+    {
+      "text": "Commando",
+      "scope": "field"
+    },
+    {
+      "text": "Overschrijft het standaardcommando van de image; een argument per rij.",
+      "scope": "help"
+    }
+  ],
+  "stack_subnet": [
+    {
+      "text": "Subnet",
+      "scope": "field"
+    },
+    {
+      "text": "Optionele CIDR voor het prive-netwerk van de stack, bv. 172.30.0.0/24. Laat leeg om Docker te laten kiezen.",
+      "scope": "help"
+    }
+  ],
+  "stack_adopt": [
+    {
+      "text": "Bestaande resources adopteren",
+      "scope": "field"
+    },
+    {
+      "text": "Laat de deploy containers, netwerken en volumes met dezelfde naam hergebruiken of vervangen die niet van hohenheim zijn. Uit = weigeren, wat andere workloads beschermt.",
+      "scope": "help"
+    }
+  ],
+  "registry_server": [
+    {
+      "text": "Registry-server",
+      "scope": "field"
+    },
+    {
+      "text": "Registry-host voor prive-images, bv. ghcr.io. Laat leeg voor Docker Hub.",
+      "scope": "help"
+    }
+  ],
+  "registry_user": {
+    "text": "Registry-gebruikersnaam",
+    "scope": "field"
+  },
+  "registry_password": {
+    "text": "Registry-wachtwoord",
+    "scope": "field"
+  },
+  "mounts": {
+    "text": "Mounts",
+    "scope": "field"
+  },
+  "ports": {
+    "text": "Gepubliceerde poorten",
+    "scope": "field"
+  },
+  "depends_on": {
+    "text": "Afhankelijk van",
+    "scope": "field"
+  },
+  "container_path": {
+    "text": "Pad in container",
+    "scope": "field"
+  },
+  "mount_external_name": {
+    "text": "Externe volumenaam",
+    "scope": "field"
+  },
+  "host_port": {
+    "text": "Hostpoort",
+    "scope": "field"
+  },
+  "host_ip": {
+    "text": "Hostadres",
+    "scope": "field"
+  },
+  "depends_service": {
+    "text": "Service",
+    "scope": "field"
+  },
+  "health_cmd": [
+    {
+      "text": "Healthcheck-commando",
+      "scope": "field"
+    },
+    {
+      "text": "Shellcommando dat in de container draait; exit 0 = gezond. Laat leeg voor geen healthcheck.",
+      "scope": "help"
+    }
+  ],
+  "health_interval": {
+    "text": "Healthcheck-interval",
+    "scope": "field"
+  },
+  "health_timeout": {
+    "text": "Healthcheck-timeout",
+    "scope": "field"
+  },
+  "health_retries": {
+    "text": "Healthcheck-pogingen",
+    "scope": "field"
+  },
+  "health_start_period": {
+    "text": "Healthcheck-startperiode",
+    "scope": "field"
+  },
+  "restart_policy": {
+    "text": "Herstartbeleid",
+    "scope": "field"
+  },
+  "file_content": [
+    {
+      "text": "Inhoud",
+      "scope": "field"
+    },
+    {
+      "text": "Versleuteld opgeslagen; wordt voor de start in de container geplaatst.",
+      "scope": "help"
+    }
+  ],
+  "file_mode": [
+    {
+      "text": "Bestandsmodus",
+      "scope": "field"
+    },
+    {
+      "text": "Octale permissies, bv. 0600 voor geheimen.",
+      "scope": "help"
+    }
+  ],
+  "stack_name": {
+    "text": "Kleine letters, cijfers en streepjes; wordt het voorvoegsel van netwerk-, container- en volumenamen.",
+    "scope": "help"
+  },
+  "service_name": {
+    "text": "Kleine letters, cijfers en streepjes; ook de DNS-naam van de container op het stack-netwerk.",
+    "scope": "help"
+  },
+  "service_image": {
+    "text": "Vastgepinde image-referentie, bv. netbirdio/netbird-server:1.2.3.",
+    "scope": "help"
+  },
+  "service_command": {
+    "text": "Overschrijft het standaardcommando van de image; een argument per rij.",
+    "scope": "help"
+  },
+  "service_environment": {
+    "text": "Omgevingsvariabelen voor de container.",
+    "scope": "help"
+  },
+  "file_container_path": {
+    "text": "Absoluut pad in de container, bv. /etc/netbird/config.yaml.",
+    "scope": "help"
+  },
+  "services": {
+    "text": "Services",
+    "scope": "stack"
+  },
+  "deploy_hint": {
+    "text": "Maak of vervang de containers van de stack volgens de huidige configuratie",
+    "scope": "stack"
+  },
+  "deploy_confirm": {
+    "text": "Deze stack nu deployen? Gewijzigde services krijgen nieuwe containers.",
+    "scope": "stack"
+  },
+  "deploy_queued": {
+    "text": "Deploy in wachtrij",
+    "scope": "stack"
+  },
+  "stop_queued": {
+    "text": "Stop in wachtrij",
+    "scope": "stack"
+  },
+  "rollback_hint": {
+    "text": "Deploy de configuratie van de laatste geslaagde deployment opnieuw",
+    "scope": "stack"
+  },
+  "rollback_queued": {
+    "text": "Rollback in wachtrij",
+    "scope": "stack"
+  },
+  "refresh_status": {
+    "text": "Status verversen",
+    "scope": "stack"
+  },
+  "add_service": {
+    "text": "Service toevoegen",
+    "scope": "stack_services"
+  },
+  "service": {
+    "text": "Service",
+    "scope": "stack_services"
+  },
+  "state": {
+    "text": "Toestand",
+    "scope": "stack_services"
+  },
+  "add_file": {
+    "text": "Bestand toevoegen",
+    "scope": "stack_services"
+  },
+  "stack_name_format": {
+    "text": "Gebruik kleine letters, cijfers en streepjes (max 63 tekens)",
+    "scope": "violations"
+  },
+  "stack_name_taken": {
+    "text": "Er bestaat al een stack met deze naam",
+    "scope": "violations"
+  },
+  "stack_required": {
+    "text": "Een stack is verplicht",
+    "scope": "violations"
+  },
+  "stack_destroy_failed": {
+    "text": "Kon de containers van de stack niet verwijderen; controleer de Docker-daemon",
+    "scope": "violations"
+  },
+  "service_name_format": {
+    "text": "Gebruik kleine letters, cijfers en streepjes (max 63 tekens)",
+    "scope": "violations"
+  },
+  "service_name_taken": {
+    "text": "Deze stack heeft al een service met deze naam",
+    "scope": "violations"
+  },
+  "port_range": {
+    "text": "Poorten moeten tussen 1 en 65535 liggen",
+    "scope": "violations"
+  },
+  "file_path_absolute": {
+    "text": "Het pad moet absoluut zijn (beginnen met /) zonder ..",
+    "scope": "violations"
+  },
+  "file_mode_format": {
+    "text": "Gebruik octale permissies zoals 0644",
+    "scope": "violations"
+  },
+  "files": {
+    "text": "Bestanden",
+    "scope": "stack_services"
+  },
+  "disabled": {
+    "text": "Uitgeschakeld",
+    "scope": "stack_services"
+  },
+  "deploy_log": {
+    "text": "Deploylog",
+    "scope": "stack_deployments"
+  }
 }
