@@ -22,29 +22,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class NotificationAdminTest extends HohenheimTestBase {
 
+    /** List + create form render, event subscriptions stay a closed vocabulary, and CRUD round trips. */
     @Test
     @Order(1)
-    void notificationsListRendersEmptyState() {
+    void channelListFormAndCrudJourney() throws Exception {
         navigateToApp("/admin/notifications");
         waitForHydration();
 
         String body = page.locator("body").textContent();
         assertThat(body).contains("Notification Channels");
-    }
 
-    @Test
-    @Order(2)
-    void sidebarLinksToNotifications() {
-        navigateToApp("/admin");
-        waitForHydration();
-
+        // The shell sidebar carries the notifications entry.
         PlaywrightAssertions.assertThat(
             page.locator("pl-app-sidebar a[href='/admin/notifications']")).hasCount(1);
-    }
 
-    @Test
-    @Order(2)
-    void eventSubscriptionsAreClosedChoices() {
         navigateToApp("/admin/notifications/new");
         waitForHydration();
 
@@ -60,11 +51,7 @@ class NotificationAdminTest extends HohenheimTestBase {
             "he-bottom .pl-select-popup[data-open] div[role='option']").count())
             .isEqualTo(NotificationEvents.ALL.size());
         page.keyboard().press("Escape");
-    }
 
-    @Test
-    @Order(3)
-    void channelCreateAndEditRoundTrips() throws Exception {
         var create = postForm("/admin/notifications/new",
             "name=ops-room&format=slack&url=https%3A%2F%2Fhooks.example%2Fold");
         assertThat(create.statusCode()).isIn(200, 302, 303);
@@ -83,21 +70,17 @@ class NotificationAdminTest extends HohenheimTestBase {
         Row updated = Models.get(NotificationChannelModel.class).findById(id);
         assertThat((String) updated.get(NotificationChannelModel.URL)).isEqualTo("https://hooks.example/new");
         assertThat((String) updated.get(NotificationChannelModel.FORMAT)).isEqualTo("discord");
-    }
 
-    @Test
-    @Order(4)
-    void invalidUrlIsRejected() throws Exception {
-        var create = postForm("/admin/notifications/new",
-            "name=bad-hook&format=slack&url=ftp%3A%2F%2Fnope");
-        // Save fails: the resource rerenders the form with a violation.
-        Row row = Models.get(NotificationChannelModel.class).find()
+        // An unusable URL scheme fails the save: the resource rerenders the form with a violation.
+        postForm("/admin/notifications/new", "name=bad-hook&format=slack&url=ftp%3A%2F%2Fnope");
+        Row bad = Models.get(NotificationChannelModel.class).find()
             .where(NotificationChannelModel.NAME.eq("bad-hook")).first();
-        assertThat(row).isNull();
+        assertThat(bad).isNull();
     }
 
+    /** The test-send row action reports a delivery failure through the session flash. */
     @Test
-    @Order(5)
+    @Order(2)
     void testSendActionReportsDeliveryFailure() throws Exception {
         // A channel pointing at a port nothing listens on -> delivery must report failure.
         var create = postForm("/admin/notifications/new",

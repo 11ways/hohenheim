@@ -45,14 +45,10 @@ class DnsAdminTest extends HohenheimTestBase {
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    /** Zone creation with validation, record CRUD through the codec, and the records/zone-file tabs. */
     @Test
     @Order(1)
-    void zonesAppearInTheSidebarAndListRenders() {
-        navigateToApp("/admin/dns-zones");
-        waitForHydration();
-        assertThat(page.locator("pl-app-sidebar a[href='/admin/dns-zones']").count()).isEqualTo(1);
-        assertThat(page.locator("body").textContent()).contains("DNS Zones");
-
+    void zoneAndRecordAdminJourney() throws Exception {
         navigateToApp("/admin/dns-zones/new");
         waitForHydration();
         assertThat(page.locator("body").textContent())
@@ -61,11 +57,8 @@ class DnsAdminTest extends HohenheimTestBase {
             .contains("Role")
             .contains("Primary zones are edited here")
             .contains("Owning peer");
-    }
 
-    @Test
-    @Order(2)
-    void creatingAZoneNormalizesTheOrigin() throws Exception {
+        // Creating a zone normalizes the origin.
         var response = postForm("/admin/dns-zones/new",
             "origin=Admin-Zone.Example.&soa_primary_ns=&soa_contact="
             + "&default_ttl=3600&negative_ttl=300&soa_refresh=7200&soa_retry=3600&soa_expire=1209600"
@@ -76,32 +69,22 @@ class DnsAdminTest extends HohenheimTestBase {
         assertThat(zone).isNotNull();
         assertThat((Boolean) zone.get(DnsZoneModel.ENABLED)).isTrue();
         zoneId = zone.get(DnsZoneModel.ID);
-    }
 
-    @Test
-    @Order(3)
-    void invalidOriginsAreRefusedWithAViolation() throws Exception {
-        var response = postForm("/admin/dns-zones/new",
+        // Invalid origins are refused with a violation.
+        var invalidOrigin = postForm("/admin/dns-zones/new",
             "origin=*.bad-origin&default_ttl=3600&negative_ttl=300"
             + "&soa_refresh=7200&soa_retry=3600&soa_expire=1209600");
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("bare domain");
+        assertThat(invalidOrigin.statusCode()).isEqualTo(200);
+        assertThat(invalidOrigin.body()).contains("bare domain");
         assertThat(Models.get(DnsZoneModel.class).findByOrigin("*.bad-origin")).isNull();
-    }
 
-    @Test
-    @Order(4)
-    void duplicateOriginsAreRefused() throws Exception {
-        var response = postForm("/admin/dns-zones/new",
+        // Duplicate origins are refused too.
+        var duplicate = postForm("/admin/dns-zones/new",
             "origin=admin-zone.example&default_ttl=3600&negative_ttl=300"
             + "&soa_refresh=7200&soa_retry=3600&soa_expire=1209600");
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("already exists");
-    }
+        assertThat(duplicate.statusCode()).isEqualTo(200);
+        assertThat(duplicate.body()).contains("already exists");
 
-    @Test
-    @Order(5)
-    void recordsCreateThroughTheCodecValidation() throws Exception {
         var bad = postForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=www&type=A&value=not-an-ip");
         assertThat(bad.statusCode()).isEqualTo(200);
@@ -117,25 +100,21 @@ class DnsAdminTest extends HohenheimTestBase {
         assertThat((String) record.get(DnsRecordModel.NAME)).isEqualTo("www");
         recordId = record.get(DnsRecordModel.ID);
 
-        Row zone = Models.get(DnsZoneModel.class).find().where(DnsZoneModel.ID.eq(zoneId)).first();
-        assertThat((int) zone.get(DnsZoneModel.SERIAL)).isGreaterThan(1);
-    }
+        Row savedZone = Models.get(DnsZoneModel.class).find().where(DnsZoneModel.ID.eq(zoneId)).first();
+        assertThat((int) savedZone.get(DnsZoneModel.SERIAL)).isGreaterThan(1);
 
-    @Test
-    @Order(6)
-    void cnameExclusivityIsEnforced() throws Exception {
-        var response = postForm("/admin/dns-records/new",
+        // CNAME exclusivity is enforced.
+        var cname = postForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=www&type=CNAME&value=other.admin-zone.example");
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("CNAME");
+        assertThat(cname.statusCode()).isEqualTo(200);
+        assertThat(cname.body()).contains("CNAME");
         assertThat(Models.get(DnsRecordModel.class).findByZoneId(zoneId)).hasSize(1);
-    }
 
-    @Test
-    @Order(7)
-    void theRecordsTabListsRecordsWithEditLinks() {
+        // The zone list carries the sidebar entry and the row link into the records tab.
         navigateToApp("/admin/dns-zones");
         waitForHydration();
+        assertThat(page.locator("pl-app-sidebar a[href='/admin/dns-zones']").count()).isEqualTo(1);
+        assertThat(page.locator("body").textContent()).contains("DNS Zones");
         assertThat(page.locator(".cms-row-link[href='/admin/dns-zones/" + zoneId
             + "/page/records']").count()).isEqualTo(1);
 
@@ -144,22 +123,15 @@ class DnsAdminTest extends HohenheimTestBase {
         assertThat(page.locator("body").textContent()).contains("www").contains("192.0.2.10");
         assertThat(page.locator("a[href='/admin/dns-records/" + recordId + "']").count()).isEqualTo(1);
         assertThat(page.locator("#add-record-link").count()).isEqualTo(1);
-    }
 
-    @Test
-    @Order(8)
-    void theZoneFileTabExportsTheZone() {
         navigateToApp("/admin/dns-zones/" + zoneId + "/page/zonefile");
         waitForHydration();
-        String body = page.locator("body").textContent();
-        assertThat(body).contains("$ORIGIN admin-zone.example.");
-        assertThat(body).contains("192.0.2.10");
-        assertThat(body).contains("SOA");
-    }
+        String exported = page.locator("body").textContent();
+        assertThat(exported).contains("$ORIGIN admin-zone.example.");
+        assertThat(exported).contains("192.0.2.10");
+        assertThat(exported).contains("SOA");
 
-    @Test
-    @Order(9)
-    void importingAZoneFileReplacesOperatorRecords() throws Exception {
+        // Importing a zone file replaces the operator records.
         String zoneText = """
             $ORIGIN admin-zone.example.
             $TTL 3600
@@ -168,22 +140,23 @@ class DnsAdminTest extends HohenheimTestBase {
             mail 3600 IN MX 10 mx.admin-zone.example.
             _svc._tcp 3600 IN SRV 5 0 8443 www.admin-zone.example.
             """;
-        var response = postForm("/admin/dns-zones/" + zoneId + "/zonefile",
+        var imported = postForm("/admin/dns-zones/" + zoneId + "/zonefile",
             "zone_text=" + URLEncoder.encode(zoneText, StandardCharsets.UTF_8));
-        assertThat(response.statusCode()).isIn(302, 303);
+        assertThat(imported.statusCode()).isIn(302, 303);
 
-        List<Row> records = Models.get(DnsRecordModel.class).findByZoneId(zoneId);
-        assertThat(records).hasSize(4);
-        assertThat(records.stream().map(r -> (String) r.get(DnsRecordModel.TYPE)))
+        List<Row> importedRecords = Models.get(DnsRecordModel.class).findByZoneId(zoneId);
+        assertThat(importedRecords).hasSize(4);
+        assertThat(importedRecords.stream().map(r -> (String) r.get(DnsRecordModel.TYPE)))
             .containsExactlyInAnyOrder("NS", "A", "MX", "SRV");
-        Row srv = records.stream()
+        Row srv = importedRecords.stream()
             .filter(r -> DnsRecordModel.TYPE_SRV.equals(r.get(DnsRecordModel.TYPE)))
             .findFirst().orElseThrow();
         assertThat((Integer) srv.get(DnsRecordModel.PORT)).isEqualTo(8443);
     }
 
+    /** The certificate-request page only offers hosted DNS when a DNS server is serving. */
     @Test
-    @Order(10)
+    @Order(2)
     void certificateRequestOffersHostedDnsOnlyWhenServing() {
         navigateToApp("/admin/certificates-request");
         waitForHydration();

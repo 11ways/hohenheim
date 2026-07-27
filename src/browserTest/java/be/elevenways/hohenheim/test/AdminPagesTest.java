@@ -65,9 +65,10 @@ class AdminPagesTest extends HohenheimTestBase {
     // Settings
     // -----------------------------------------------------------------------
 
+    /** One settings page load: render, save, reset, path browser and a rejected raw POST. */
     @Test
     @Order(1)
-    void settingsPageShowsAllGroups() {
+    void settingsPageRendersSavesResetsAndRefusesInvalidValues() throws Exception {
         navigateToApp("/admin/settings");
         waitForHydration();
 
@@ -101,29 +102,6 @@ class AdminPagesTest extends HohenheimTestBase {
             ".cms-setting:has([data-path='app.auth_proteus.enabled']) .cms-setting-note-restart").count()).isEqualTo(1);
         assertThat(page.locator(
             ".cms-setting:has([data-path='app.auth_proteus.authenticator']) .cms-setting-note-restart").count()).isEqualTo(1);
-    }
-
-    @Test
-    @Order(1)
-    void filesystemPathBrowserSelectsAServerDirectory() {
-        navigateToApp("/admin/settings");
-        waitForHydration();
-
-        var field = page.locator("[data-path='app.storage.data_path']");
-        field.locator("[data-zf-path-browse]").click();
-        var dialog = page.locator("he-bottom .pl-dialog-modal[data-open]");
-        dialog.waitFor();
-        dialog.locator("pl-command-item div[role='option']").first().click();
-        dialog.locator("[data-zf-path-choose-directory]").click();
-
-        assertThat(field.locator("input").inputValue()).isEqualTo("/");
-    }
-
-    @Test
-    @Order(2)
-    void settingsSavePersistsToTheHohenheimDryFile() throws Exception {
-        navigateToApp("/admin/settings");
-        waitForHydration();
 
         var fallback = page.locator("[data-path='app.proxy.fallback_address'] input");
         fallback.fill("http://127.0.0.1:9999");
@@ -183,11 +161,21 @@ class AdminPagesTest extends HohenheimTestBase {
         parsed = (Map<?, ?>) Zenit.DRY.parse(Files.readString(settingsDry));
         security = (Map<?, ?>) parsed.get("security");
         assertThat(security.containsKey("never_ban")).isFalse();
-    }
 
-    @Test
-    @Order(3)
-    void settingsSaveRejectsAnInvalidValueWithoutHalfSaving() throws Exception {
+        // The save above PRG-reloads the page: the browse click below lands on a
+        // dead listener unless the reloaded page has finished hydrating first.
+        waitForHydration();
+
+        // The filesystem-path browser picks a server directory; the pick is
+        // deliberately left unsaved (it must never reach the settings file).
+        var pathField = page.locator("[data-path='app.storage.data_path']");
+        pathField.locator("[data-zf-path-browse]").click();
+        var dialog = page.locator("he-bottom .pl-dialog-modal[data-open]");
+        dialog.waitFor();
+        dialog.locator("pl-command-item div[role='option']").first().click();
+        dialog.locator("[data-zf-path-choose-directory]").click();
+        assertThat(pathField.locator("input").inputValue()).isEqualTo("/");
+
         // A number input sanitizes garbage client-side, so exercise the server
         // rejection with a raw POST: an uncoercible port must rerender with a
         // violation instead of persisting anything.
@@ -198,7 +186,6 @@ class AdminPagesTest extends HohenheimTestBase {
         // Validation failure rerenders the page (no PRG redirect).
         assertThat(response.statusCode()).isEqualTo(200);
 
-        Path settingsDry = Path.of(System.getProperty("hohenheim.settings"));
         String raw = Files.exists(settingsDry) ? Files.readString(settingsDry) : "";
         assertThat(raw).doesNotContain("not-a-port");
         assertThat(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT))
@@ -209,9 +196,10 @@ class AdminPagesTest extends HohenheimTestBase {
     // Activity log
     // -----------------------------------------------------------------------
 
+    /** Creating a record shows up in the activity list, the dashboard feed and the activity detail. */
     @Test
     @Order(10)
-    void activityLogRecordsCreation() throws Exception {
+    void activityLogDashboardFeedAndActivityDetailReflectACreation() throws Exception {
         var createResponse = post("/admin/sites/new",
             "name=Audit+Test+Site&site_type=hohenheim%3Adead&source=local");
         assertThat(createResponse.statusCode()).isIn(200, 302, 303);
@@ -234,14 +222,6 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator("a.widget-record-entry[href^='/admin/activity/']").count())
             .isGreaterThanOrEqualTo(1);
         assertThat(page.locator(".widget-records dl.widget-record").count()).isZero();
-    }
-
-    @Test
-    @Order(11)
-    void dashboardActivityEntriesCarryIconTitleAndTime() {
-        // Order(10) wrote at least one "create" activity row.
-        navigateToApp("/admin/dashboard");
-        waitForHydration();
 
         var firstEntry = page.locator("a.widget-record-entry[href^='/admin/activity/']").first();
         // Verb icon leads the row, a relative timestamp trails it.
@@ -263,44 +243,31 @@ class AdminPagesTest extends HohenheimTestBase {
         // The ANCHOR carries the row padding, so the whole item is clickable.
         var padding = firstEntry.evaluate("el => getComputedStyle(el).paddingLeft");
         assertThat(String.valueOf(padding)).isNotEqualTo("0px");
-    }
 
-    @Test
-    @Order(21)
-    void responseDelayFieldCarriesAMsUnitSuffix() {
-        var siteModel = Models.get(SiteModel.class);
-        Row site = siteModel.createEmptyRow();
-        site.set(SiteModel.NAME, "Suffix Site");
-        site.set(SiteModel.SLUG, "suffix-site");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:static");
-        site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
-        site.set(SiteModel.SOURCE, "local");
-        site.set(SiteModel.STATUS, "active");
-        site.set(SiteModel.ENABLED, true);
-        siteModel.save(site);
+        Row activity = Models.get(ActivityModel.class).find()
+            .orderBy(ActivityModel.ID, SortOrder.DESC)
+            .first();
+        assertThat(activity).isNotNull();
 
-        try {
-            navigateToApp("/admin/sites/" + site.get(SiteModel.ID));
-            waitForHydration();
+        navigateToApp("/admin/activity/" + activity.get(ActivityModel.ID));
+        waitForHydration();
 
-            var field = page.locator("pl-field[data-path='settings.delay']");
-            assertThat(field.locator("pl-input-group input[type='number']").count()).isEqualTo(1);
-            assertThat(field.locator("pl-input-group pl-input-group-addon").innerText().trim())
-                .isEqualTo("ms");
-            assertThat(page.locator(
-                "pl-field[data-path='settings.root_path'] zf-path-input [data-zf-path-browse]").count()).isEqualTo(1);
-        } finally {
-            siteModel.delete(site);
-        }
+        var heading = page.locator(".cms-activity-detail-heading");
+        assertThat(heading.locator(":scope > h1").count()).isEqualTo(1);
+        assertThat(heading.locator(":scope > h1 + pl-badge[data-activity-verb]").count()).isEqualTo(1);
+        assertThat(heading.locator("pl-badge[data-activity-verb] > pl-icon[data-activity-icon]").count())
+            .isEqualTo(1);
+        assertThat(heading.locator(":scope > pl-icon[data-activity-icon]").count()).isZero();
     }
 
     // -----------------------------------------------------------------------
     // Certificates
     // -----------------------------------------------------------------------
 
+    /** The request and upload forms render their fields and refuse impossible input. */
     @Test
     @Order(19)
-    void certificateRequestFormLoads() {
+    void certificateRequestAndUploadFormsRenderAndValidate() throws Exception {
         navigateToApp("/admin/certificates-request");
         waitForHydration();
 
@@ -311,6 +278,13 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator("pl-textarea[name='domains']").count()).isZero();
         assertThat(page.locator("zf-array pl-input[name='domains']").count()).isEqualTo(1);
 
+        // Hand-built form pages get their inter-field rhythm from the plumage
+        // card itself (pl-card-content > pl-field + pl-field); a regression
+        // here squishes every label against the previous description.
+        Object gap = page.evaluate(
+            "() => getComputedStyle(document.querySelector('pl-card-content .zf-entries')).gap");
+        assertThat(String.valueOf(gap)).isEqualTo("32px");
+
         // Item children portal into the overlay popup at hydration, so the
         // command option's disabled state is asserted inside the open popup.
         page.click("pl-select[name='dns_mode'] .pl-select-field");
@@ -320,61 +294,30 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(command.count()).isEqualTo(1);
         assertThat(command.getAttribute("aria-disabled")).isEqualTo("true");
         page.keyboard().press("Escape");
-    }
 
-    @Test
-    @Order(19)
-    void wildcardRequestRefusesHttpValidationBeforeContactingTheCa() throws Exception {
+        // A wildcard with HTTP validation is refused before the CA is contacted.
         var response = post("/admin/certificates-request",
             "nice_name=wildcard&domains=*.example.test&challenge_type=http&dns_mode=manual");
-
         assertThat(response.statusCode()).isIn(302, 303);
         assertThat(response.headers().firstValue("Location").orElse(""))
             .contains("Wildcard").contains("DNS-01");
-    }
 
-    @Test
-    @Order(19)
-    void certificateRequestKeepsEveryRepeatedDomainValue() throws Exception {
-        var response = post("/admin/certificates-request",
+        // Every repeated domain value is kept, so the wildcard is still seen.
+        response = post("/admin/certificates-request",
             "nice_name=wildcard&domains=&domains=example.test&domains=*.example.test"
                 + "&challenge_type=http&dns_mode=manual");
-
         assertThat(response.statusCode()).isIn(302, 303);
         assertThat(response.headers().firstValue("Location").orElse(""))
             .contains("Wildcard").contains("DNS-01");
-    }
 
-    @Test
-    @Order(20)
-    void certificateUploadValidatesPems() throws Exception {
         post("/admin/certificates/new",
             "nice_name=my-bad-cert&certificate_pem=NOT-A-PEM-BODY&private_key_pem=NOT-A-KEY");
-
         Row cert = Models.get(CertificateModel.class).find()
             .where(CertificateModel.NICE_NAME.eq("my-bad-cert")).first();
         assertThat(cert)
             .as("an invalid PEM must not be stored")
             .isNull();
-    }
 
-    @Test
-    @Order(19)
-    void certificateRequestFieldsAreVerticallySpaced() {
-        // Hand-built form pages get their inter-field rhythm from the plumage
-        // card itself (pl-card-content > pl-field + pl-field); a regression
-        // here squishes every label against the previous description.
-        navigateToApp("/admin/certificates-request");
-        waitForHydration();
-
-        Object gap = page.evaluate(
-            "() => getComputedStyle(document.querySelector('pl-card-content .zf-entries')).gap");
-        assertThat(String.valueOf(gap)).isEqualTo("32px");
-    }
-
-    @Test
-    @Order(20)
-    void certificateCreateFormUsesTextareasForPemFields() {
         // PEM blobs are multi-line: both fields must render as textareas, the
         // private key as a masked secret one.
         navigateToApp("/admin/certificates/new");
@@ -383,7 +326,7 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator("pl-textarea[name='certificate_pem']").count()).isEqualTo(1);
         assertThat(page.locator("pl-textarea[name='private_key_pem']").count()).isEqualTo(1);
 
-        String content = page.content();
+        content = page.content();
         assertThat(content).contains("Certificate (PEM)");
         assertThat(content).contains("Private key (PEM)");
         assertThat(content).contains("intermediate chain");
@@ -392,56 +335,10 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator("[data-path='auto_renew'], [data-group='renewal']").count()).isZero();
     }
 
+    /** A failed renewal is diagnosable from the list, the detail page and the dashboard. */
     @Test
     @Order(21)
-    void siteToggleActionLabelReflectsEnabledState() {
-        var siteModel = Models.get(SiteModel.class);
-        Row site = siteModel.createEmptyRow();
-        site.set(SiteModel.NAME, "Toggle Label Site");
-        site.set(SiteModel.SLUG, "toggle-label-site");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:static");
-        site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
-        site.set(SiteModel.SOURCE, "local");
-        site.set(SiteModel.STATUS, "active");
-        site.set(SiteModel.ENABLED, true);
-        siteModel.save(site);
-        Object siteId = site.get(SiteModel.ID);
-
-        try {
-            // Enabled record: the toolbar action reads "Disable", never "Enable/disable".
-            navigateToApp("/admin/sites/" + siteId);
-            waitForHydration();
-            var toggleButton = page.locator(
-                ".cms-record-toolbar pl-button[data-action-id='hohenheim:toggle_site']");
-            assertThat(toggleButton.count()).isEqualTo(1);
-            assertThat(toggleButton.innerText().trim()).isEqualTo("Disable");
-
-            site.set(SiteModel.ENABLED, false);
-            siteModel.save(site);
-
-            navigateToApp("/admin/sites/" + siteId);
-            waitForHydration();
-            assertThat(page.locator(
-                ".cms-record-toolbar pl-button[data-action-id='hohenheim:toggle_site']").innerText().trim())
-                .isEqualTo("Enable");
-        } finally {
-            siteModel.delete(site);
-        }
-    }
-
-    @Test
-    @Order(21)
-    void certificatesListLinksToRequestPage() {
-        navigateToApp("/admin/certificates");
-        waitForHydration();
-
-        assertThat(page.locator("a[href='/admin/certificates-request']").count())
-            .isGreaterThanOrEqualTo(1);
-    }
-
-    @Test
-    @Order(21)
-    void renewalErrorsAreVisibleInListAndDetail() throws Exception {
+    void certificateListDetailAndDashboardSurfaceRenewalFailures() throws Exception {
         // A cert whose last renewal failed: the diagnosis must be readable.
         var certModel = Models.get(CertificateModel.class);
         Row cert = certModel.createEmptyRow();
@@ -456,6 +353,8 @@ class AdminPagesTest extends HohenheimTestBase {
         try {
             navigateToApp("/admin/certificates");
             waitForHydration();
+            assertThat(page.locator("a[href='/admin/certificates-request']").count())
+                .isGreaterThanOrEqualTo(1);
             assertThat(page.content())
                 .as("the renewal error is a visible list column")
                 .contains("DNS problem: NXDOMAIN");
@@ -487,38 +386,78 @@ class AdminPagesTest extends HohenheimTestBase {
             + cert.get(CertificateModel.ID) + "']").count()).isZero();
     }
 
+    // -----------------------------------------------------------------------
+    // Site record pages
+    // -----------------------------------------------------------------------
+
+    /** Site detail fields, the toggle action label, the conditional processes tab and the domains tab. */
     @Test
-    @Order(22)
-    void activityDetailLeadsWithTheRecordTitleAndGroupsTheVerbIconInItsBadge() {
-        Row activity = Models.get(ActivityModel.class).find()
-            .orderBy(ActivityModel.ID, SortOrder.DESC)
-            .first();
-        assertThat(activity).isNotNull();
+    @Order(23)
+    void siteRecordPagesRenderFieldsActionsTabsAndDomains() throws Exception {
+        var siteModel = Models.get(SiteModel.class);
+        Row suffixSite = siteModel.createEmptyRow();
+        suffixSite.set(SiteModel.NAME, "Suffix Site");
+        suffixSite.set(SiteModel.SLUG, "suffix-site");
+        suffixSite.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        suffixSite.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        suffixSite.set(SiteModel.SOURCE, "local");
+        suffixSite.set(SiteModel.STATUS, "active");
+        suffixSite.set(SiteModel.ENABLED, true);
+        siteModel.save(suffixSite);
 
-        navigateToApp("/admin/activity/" + activity.get(ActivityModel.ID));
-        waitForHydration();
+        Row toggleSite = siteModel.createEmptyRow();
+        toggleSite.set(SiteModel.NAME, "Toggle Label Site");
+        toggleSite.set(SiteModel.SLUG, "toggle-label-site");
+        toggleSite.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        toggleSite.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        toggleSite.set(SiteModel.SOURCE, "local");
+        toggleSite.set(SiteModel.STATUS, "active");
+        toggleSite.set(SiteModel.ENABLED, true);
+        siteModel.save(toggleSite);
 
-        var heading = page.locator(".cms-activity-detail-heading");
-        assertThat(heading.locator(":scope > h1").count()).isEqualTo(1);
-        assertThat(heading.locator(":scope > h1 + pl-badge[data-activity-verb]").count()).isEqualTo(1);
-        assertThat(heading.locator("pl-badge[data-activity-verb] > pl-icon[data-activity-icon]").count())
-            .isEqualTo(1);
-        assertThat(heading.locator(":scope > pl-icon[data-activity-icon]").count()).isZero();
-    }
+        try {
+            navigateToApp("/admin/sites/" + suffixSite.get(SiteModel.ID));
+            waitForHydration();
 
-    @Test
-    @Order(22)
-    void processesTabOnlyRendersForManagedProcessSites() throws Exception {
+            var field = page.locator("pl-field[data-path='settings.delay']");
+            assertThat(field.locator("pl-input-group input[type='number']").count()).isEqualTo(1);
+            assertThat(field.locator("pl-input-group pl-input-group-addon").innerText().trim())
+                .isEqualTo("ms");
+            assertThat(page.locator(
+                "pl-field[data-path='settings.root_path'] zf-path-input [data-zf-path-browse]").count()).isEqualTo(1);
+
+            // Enabled record: the toolbar action reads "Disable", never "Enable/disable".
+            Object toggleId = toggleSite.get(SiteModel.ID);
+            navigateToApp("/admin/sites/" + toggleId);
+            waitForHydration();
+            var toggleButton = page.locator(
+                ".cms-record-toolbar pl-button[data-action-id='hohenheim:toggle_site']");
+            assertThat(toggleButton.count()).isEqualTo(1);
+            assertThat(toggleButton.innerText().trim()).isEqualTo("Disable");
+
+            toggleSite.set(SiteModel.ENABLED, false);
+            siteModel.save(toggleSite);
+
+            navigateToApp("/admin/sites/" + toggleId);
+            waitForHydration();
+            assertThat(page.locator(
+                ".cms-record-toolbar pl-button[data-action-id='hohenheim:toggle_site']").innerText().trim())
+                .isEqualTo("Enable");
+        } finally {
+            siteModel.delete(suffixSite);
+            siteModel.delete(toggleSite);
+        }
+
         Row site = Models.get(SiteModel.class).find()
             .where(SiteModel.NAME.eq("Audit Test Site")).first();
         assertThat(site).isNotNull();
+        Integer siteId = site.get(SiteModel.ID);
 
-        Integer unsupportedId = site.get(SiteModel.ID);
-        assertThat(get("/admin/sites/" + unsupportedId).body())
-            .doesNotContain("/admin/sites/" + unsupportedId + "/page/processes");
-        assertThat(get("/admin/sites/" + unsupportedId + "/page/processes").statusCode()).isEqualTo(404);
+        // The processes tab only exists for managed-process site types.
+        assertThat(get("/admin/sites/" + siteId).body())
+            .doesNotContain("/admin/sites/" + siteId + "/page/processes");
+        assertThat(get("/admin/sites/" + siteId + "/page/processes").statusCode()).isEqualTo(404);
 
-        var siteModel = Models.get(SiteModel.class);
         Row managed = siteModel.createEmptyRow();
         managed.set(SiteModel.NAME, "Managed Processes Site");
         managed.set(SiteModel.SLUG, "managed-processes-site");
@@ -539,53 +478,11 @@ class AdminPagesTest extends HohenheimTestBase {
         } finally {
             siteModel.delete(managed);
         }
-    }
 
-    @Test
-    @Order(23)
-    void domainsTabRendersForASite() throws Exception {
-        Row site = Models.get(SiteModel.class).find()
-            .where(SiteModel.NAME.eq("Audit Test Site")).first();
-        assertThat(site).isNotNull();
-
-        navigateToApp("/admin/sites/" + site.get(SiteModel.ID) + "/page/domains");
+        // The domains tab renders its empty state before any domain exists.
+        navigateToApp("/admin/sites/" + siteId + "/page/domains");
         waitForHydration();
-
-        String content = page.locator("body").textContent();
-        assertThat(content).contains("No domains configured");
-    }
-
-    @Test
-    @Order(24)
-    void expensiveEndpointsAreRateLimited() throws Exception {
-        // The base installs a disable-all resolver (suite-wide buckets would
-        // trip across classes); unset it so the DECLARED policies apply.
-        RateLimitMiddleware.setPolicyResolver(null);
-        try {
-            HttpClient client = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NEVER).build();
-            boolean limited = false;
-            for (int i = 0; i < 40 && !limited; i++) {
-                var response = client.send(HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl() + "/certificates/999999/download"))
-                    .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-                    .build(), HttpResponse.BodyHandlers.ofString());
-                limited = response.statusCode() == 429;
-            }
-            assertThat(limited)
-                .as("the declared download policy (30/min) must answer 429 under a hammer")
-                .isTrue();
-        } finally {
-            RateLimitMiddleware.setPolicyResolver((conduit, endpoint, declared) -> null);
-        }
-    }
-
-    @Test
-    @Order(25)
-    void domainsWeaveWithCertificates() throws Exception {
-        Row site = Models.get(SiteModel.class).find()
-            .where(SiteModel.NAME.eq("Audit Test Site")).first();
-        Integer siteId = site.get(SiteModel.ID);
+        assertThat(page.locator("body").textContent()).contains("No domains configured");
 
         var domainModel = Models.get(SiteDomainModel.class);
         Row covered = domainModel.createEmptyRow();
@@ -636,6 +533,27 @@ class AdminPagesTest extends HohenheimTestBase {
             certModel.delete(cert);
             domainModel.delete(covered);
             domainModel.delete(bare);
+        }
+
+        // The base installs a disable-all resolver (suite-wide buckets would
+        // trip across classes); unset it so the DECLARED policies apply.
+        RateLimitMiddleware.setPolicyResolver(null);
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NEVER).build();
+            boolean limited = false;
+            for (int i = 0; i < 40 && !limited; i++) {
+                var response = client.send(HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl() + "/certificates/999999/download"))
+                    .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+                    .build(), HttpResponse.BodyHandlers.ofString());
+                limited = response.statusCode() == 429;
+            }
+            assertThat(limited)
+                .as("the declared download policy (30/min) must answer 429 under a hammer")
+                .isTrue();
+        } finally {
+            RateLimitMiddleware.setPolicyResolver((conduit, endpoint, declared) -> null);
         }
     }
 }

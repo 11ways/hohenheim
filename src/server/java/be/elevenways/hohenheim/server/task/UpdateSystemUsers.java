@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.orm.datasource.DuplicateKeyException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
@@ -73,7 +74,15 @@ public class UpdateSystemUsers extends ScheduledTask {
                 row.set(SystemUserModel.GECOS, pu.gecos());
                 row.set(SystemUserModel.OBSOLETE, false);
                 row.set(SystemUserModel.LAST_SEEN_AT, now);
-                model.save(row);
+                try {
+                    model.save(row);
+                } catch (DuplicateKeyException lostRace) {
+                    // Two reconcilers can legitimately overlap (the boot-claimed run
+                    // and the cron/explicit one); the other writer inserted this user
+                    // between our read and write, which is exactly the end state we
+                    // wanted -- the update branch of the NEXT pass keeps it fresh.
+                    continue;
+                }
             } else {
                 existing.set(SystemUserModel.UID, pu.uid());
                 existing.set(SystemUserModel.GID, pu.gid());

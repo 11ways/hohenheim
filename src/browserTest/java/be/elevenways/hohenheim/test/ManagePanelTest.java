@@ -147,16 +147,13 @@ class ManagePanelTest extends HohenheimTestBase {
         return post(path, body, operatorSession, operatorCsrf);
     }
 
+    /** Ungranted -> granted through the Access tab: exactly one site's delegated surface opens up. */
     @Test
     @Order(1)
-    void ungrantedOperatorCannotEnterManage() throws Exception {
+    void grantingThroughTheAccessTabUnlocksExactlyTheGrantedSite() throws Exception {
         assertThat(operatorGet("/manage").statusCode()).isEqualTo(403);
         assertThat(operatorGet("/manage/sites").statusCode()).isEqualTo(403);
-    }
 
-    @Test
-    @Order(2)
-    void grantingThroughTheAccessTabUnlocksManage() throws Exception {
         HttpResponse<String> add = adminPost(
             "/admin/sites/" + siteAId + "/access/add", "user_id=" + operatorId);
         assertThat(add.statusCode()).isIn(302, 303);
@@ -173,11 +170,7 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(HohenheimAccess.managedSiteIds(principal)).containsExactly(siteAId);
         assertThat(GrantService.listDirectGrants("user", operatorId))
             .noneMatch(grant -> "hohenheim.manage.access".equals(grant.get(GrantModel.PERMISSION)));
-    }
 
-    @Test
-    @Order(3)
-    void manageListsOnlyGrantedSitesAndAdminStaysClosed() throws Exception {
         assertThat(operatorGet("/manage").statusCode()).isIn(200, 302, 303);
 
         HttpResponse<String> list = operatorGet("/manage/sites");
@@ -185,6 +178,9 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(list.body()).contains("Manage Site A");
         assertThat(list.body()).doesNotContain("Manage Site B");
         assertThat(list.body()).doesNotContain("data-column=\"site_type\"");
+        // Safe row actions only.
+        assertThat(list.body()).contains("toggle_site");
+        assertThat(list.body()).doesNotContain("clone_site");
 
         // Site B's manage detail URL reads as missing, not forbidden.
         assertThat(operatorGet("/manage/sites/" + siteBId).statusCode()).isEqualTo(404);
@@ -192,20 +188,27 @@ class ManagePanelTest extends HohenheimTestBase {
         // The admin panel stays closed to the operator.
         assertThat(operatorGet("/admin").statusCode()).isEqualTo(403);
         assertThat(operatorGet("/admin/sites").statusCode()).isEqualTo(403);
+
+        // The manage-scoped site picker offers only granted sites.
+        String body = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + "/zn/records/hohenheim.manage_site/query"))
+            .header("Content-Type", "application/dry")
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + operatorSession)
+            .header("X-Csrf-Token", operatorCsrf)
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build();
+        HttpResponse<String> picker = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(picker.statusCode()).isEqualTo(200);
+        assertThat(picker.body()).contains("Manage Site A");
+        assertThat(picker.body()).doesNotContain("Manage Site B");
     }
 
+    /** The delegated surface never exposes or accepts execution controls, secrets or domain writes. */
     @Test
-    @Order(4)
-    void operatorRowActionsOfferToggleButNeverClone() throws Exception {
-        HttpResponse<String> list = operatorGet("/manage/sites");
-        assertThat(list.statusCode()).isEqualTo(200);
-        assertThat(list.body()).contains("toggle_site");
-        assertThat(list.body()).doesNotContain("clone_site");
-    }
-
-    @Test
-    @Order(5)
-    void editingAGrantedSiteCannotOverwriteExecutionControls() throws Exception {
+    @Order(2)
+    void delegatedSurfaceStaysSafeAndReturnsToManage() throws Exception {
         HttpResponse<String> form = operatorGet("/manage/sites/" + siteAId);
         assertThat(form.statusCode()).isEqualTo(200);
         assertThat(form.body())
@@ -243,11 +246,7 @@ class ManagePanelTest extends HohenheimTestBase {
             "repository_url", "ssh://private/manage-a.git",
             "build_command", "private-build-command",
             "webhook_secret", "private-webhook-secret"));
-    }
 
-    @Test
-    @Order(6)
-    void deploymentWebhookSecretIsAdminOnly() throws Exception {
         HttpResponse<String> delegated = operatorGet(
             "/manage/sites/" + siteAId + "/page/deployments");
         assertThat(delegated.statusCode()).isEqualTo(200);
@@ -266,29 +265,7 @@ class ManagePanelTest extends HohenheimTestBase {
             "/admin/sites/" + siteAId + "/page/deployments");
         assertThat(admin.statusCode()).isEqualTo(200);
         assertThat(admin.body()).contains("private-webhook-secret").contains("data-webhook-secret");
-    }
 
-    @Test
-    @Order(7)
-    void manageScopedSitePickerOffersOnlyGrantedSites() throws Exception {
-        String body = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + "/zn/records/hohenheim.manage_site/query"))
-            .header("Content-Type", "application/dry")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + operatorSession)
-            .header("X-Csrf-Token", operatorCsrf)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("Manage Site A");
-        assertThat(response.body()).doesNotContain("Manage Site B");
-    }
-
-    @Test
-    @Order(7)
-    void operatorActionSubmittedFromManageReturnsToManage() throws Exception {
         // No proxy runs in this suite, so deploy is redirect-only: the handler
         // finds no git handler and just answers with the return redirect.
         String manageTarget = "/manage/sites/" + siteAId + "/page/deployments";
@@ -304,11 +281,7 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(forged.statusCode()).isIn(302, 303);
         assertThat(forged.headers().firstValue("Location"))
             .hasValue("/admin/sites/" + siteAId + "/page/deployments");
-    }
 
-    @Test
-    @Order(8)
-    void delegatedDomainsAreReadOnly() throws Exception {
         HttpResponse<String> subpage = operatorGet("/manage/sites/" + siteAId + "/page/domains");
         assertThat(subpage.statusCode()).isEqualTo(200);
         assertThat(subpage.body()).contains("managed.example.com").doesNotContain("add-domain-link");
@@ -340,9 +313,10 @@ class ManagePanelTest extends HohenheimTestBase {
             .where(SiteDomainModel.HOSTNAME.eq("hijack.example.com")).first()).isNull();
     }
 
+    /** Revocation, group/negative record grants and an explicit global deny all drive eligibility. */
     @Test
-    @Order(9)
-    void revokingRecordAccessDoesNotDeleteIndependentGlobalPermission() throws Exception {
+    @Order(3)
+    void recordAndGlobalGrantsDrivePanelEligibility() throws Exception {
         GrantService.createDirectGrant("user", operatorId, "hohenheim.manage.access", true);
         HttpResponse<String> remove = adminPost("/admin/sites/" + siteAId + "/access/remove",
             "subject_type=user&subject_id=" + operatorId + "&capability=" + HohenheimAccess.MANAGE);
@@ -365,11 +339,7 @@ class ManagePanelTest extends HohenheimTestBase {
         }
         assertThat(operatorGet("/manage").statusCode()).isEqualTo(403);
         assertThat(operatorGet("/manage/sites").statusCode()).isEqualTo(403);
-    }
 
-    @Test
-    @Order(10)
-    void groupAndNegativeRecordGrantsDrivePanelEligibility() throws Exception {
         Row group = AuthModels.permissionGroups().createEmptyRow();
         group.set(PermissionGroupModel.SLUG, "manage-operators");
         group.set(PermissionGroupModel.TITLE, "Manage Operators");
@@ -393,11 +363,8 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(operatorGet("/manage").statusCode()).isIn(200, 302, 303);
         RecordGrants.revoke("group", groupId, SiteModel.MODEL_ID, siteBId, HohenheimAccess.MANAGE);
         assertThat(operatorGet("/manage").statusCode()).isEqualTo(403);
-    }
 
-    @Test
-    @Order(11)
-    void explicitGlobalManageDenyBeatsRecordGrantWhileAbsenceFallsBack() throws Exception {
+        // An explicit global deny beats a record grant, while its absence falls back.
         RecordGrants.grant("user", operatorId, SiteModel.MODEL_ID, siteAId,
             HohenheimAccess.MANAGE, true);
         GrantService.createDirectGrant("user", operatorId, "hohenheim.manage.access", false);

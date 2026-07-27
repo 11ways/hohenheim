@@ -76,7 +76,7 @@ class ErrorHandlingTest extends HohenheimTestBase {
 
     @Test
     @Order(2)
-    void softNavErrorShowsActualErrorMessage() {
+    void softNavErrorStaysVisibleKeepsTheShellAndRecovers() {
         navigateToApp("/admin");
         waitForHydration();
 
@@ -87,32 +87,11 @@ class ErrorHandlingTest extends HohenheimTestBase {
         assertThat(bodyText).contains("Deliberate test error");
         assertThat(bodyText).doesNotContain("terminal content");
 
-        // Clear the expected browser error so the test framework doesn't fail on it
-        getCollectedErrors().clear();
-    }
-
-    @Test
-    @Order(3)
-    void sidebarSurvivesErrorDuringSoftNav() {
-        navigateToApp("/admin");
-        waitForHydration();
-
-        softNavToError();
-
         // Sidebar should still be intact -- the layout wasn't destroyed
         assertThat(page.locator("pl-app-sidebar").count()).isEqualTo(1);
         assertThat(page.locator(".cms-brand").textContent()).contains("Hohenheim");
 
-        getCollectedErrors().clear();
-    }
-
-    @Test
-    @Order(4)
-    void canRecoverFromErrorViaFullNavigation() {
-        navigateToApp("/admin");
-        waitForHydration();
-
-        softNavToError();
+        // Clear the expected browser error so the test framework doesn't fail on it
         getCollectedErrors().clear();
 
         // After an error, a full page navigation should still work

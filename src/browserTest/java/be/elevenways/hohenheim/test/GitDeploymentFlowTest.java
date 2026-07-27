@@ -41,7 +41,6 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
     private static Integer siteId;
     private static Integer plainSiteId;
     private static String firstCommit;
-    private static String secondCommit;
 
     @BeforeAll
     static void initRepoAndProxy() throws Exception {
@@ -177,9 +176,10 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    /** The initial deploy record, the Deployments tab it renders (gating, table, log, webhook card) and the failure icon. */
     @Test
     @Order(1)
-    void initialDeployIsRecordedWithLogAndCommit() throws Exception {
+    void initialDeployAndDeploymentsTab() throws Exception {
         await("initial deploy", () -> hasFinished(1));
 
         Row deploy = deployments().get(0);
@@ -195,51 +195,41 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
             .doesNotContain("build-command-secret-flow");
         assertThat((Integer) deploy.get(DeploymentModel.DURATION_MS)).isNotNull();
         assertThat(gitHandler().getCurrentCommit()).isEqualTo(firstCommit);
-    }
 
-    @Test
-    @Order(2)
-    void deploymentsPageRendersForGitSitesAnd404sForOthers() throws Exception {
-        var page = get("/admin/sites/" + siteId + "/page/deployments");
-        assertThat(page.statusCode()).isEqualTo(200);
-        assertThat(page.body()).contains("Deploy now");
-        assertThat(page.body()).contains(firstCommit.substring(0, 8));
+        var deployPage = get("/admin/sites/" + siteId + "/page/deployments");
+        assertThat(deployPage.statusCode()).isEqualTo(200);
+        assertThat(deployPage.body()).contains("Deploy now");
+        assertThat(deployPage.body()).contains(firstCommit.substring(0, 8));
 
         // The action forms carry the framework _return target of THIS page, so
         // their handlers redirect back to the panel that rendered it.
-        assertThat(page.body())
+        assertThat(deployPage.body())
             .contains("name=\"_return\"")
             .contains("value=\"/admin/sites/" + siteId + "/page/deployments\"")
             .doesNotContain("name=\"panel\"");
 
         // The accessible table leads with the Started column.
-        assertThat(page.body()).contains("<pl-table");
-        int head = page.body().indexOf("<pl-table-header");
+        assertThat(deployPage.body()).contains("<pl-table");
+        int head = deployPage.body().indexOf("<pl-table-header");
         assertThat(head).isPositive();
-        String headerRow = page.body().substring(head, page.body().indexOf("</pl-table-row>", head));
+        String headerRow = deployPage.body().substring(head, deployPage.body().indexOf("</pl-table-row>", head));
         assertThat(headerRow.indexOf("Started"))
             .as("Started is the first column")
             .isLessThan(headerRow.indexOf("Status"));
         // The successful initial deploy captured a build log, so its detail
         // row + collapsible log render (no error line: nothing failed).
-        assertThat(page.body()).contains("hh-deploy-detail");
-        assertThat(page.body()).contains("hh-deploy-log");
-        assertThat(page.body()).contains("Build log");
-        assertThat(page.body()).contains("Build started").contains("Build succeeded");
-        assertThat(page.body()).doesNotContain("build-command-secret-flow");
+        assertThat(deployPage.body()).contains("hh-deploy-detail");
+        assertThat(deployPage.body()).contains("hh-deploy-log");
+        assertThat(deployPage.body()).contains("Build log");
+        assertThat(deployPage.body()).contains("Build started").contains("Build succeeded");
+        assertThat(deployPage.body()).doesNotContain("build-command-secret-flow");
+        // This site was seeded without a webhook secret: no card yet.
+        assertThat(deployPage.body()).doesNotContain("Push webhook");
 
         var blocked = get("/admin/sites/" + plainSiteId + "/page/deployments");
         assertThat(blocked.statusCode()).isEqualTo(404);
-    }
 
-    @Test
-    @Order(2)
-    void webhookCardShowsUrlAndSecretOnceMinted() throws Exception {
-        // This site was seeded without a webhook secret: no card.
-        var before = get("/admin/sites/" + siteId + "/page/deployments");
-        assertThat(before.body()).doesNotContain("Push webhook");
-
-        // Mint one the way SiteResource.normalizeSource does on save.
+        // Mint a webhook secret the way SiteResource.normalizeSource does on save.
         var siteModel = Models.get(SiteModel.class);
         Row site = siteModel.find().where(SiteModel.ID.eq(siteId)).first();
         @SuppressWarnings("unchecked")
@@ -250,17 +240,14 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         site.set(SiteModel.SOURCE_SETTINGS, settings);
         siteModel.save(site);
 
-        var page = get("/admin/sites/" + siteId + "/page/deployments");
-        assertThat(page.statusCode()).isEqualTo(200);
-        assertThat(page.body()).contains("Push webhook");
-        assertThat(page.body()).contains("://git-flow.test/api/webhooks/git/git-flow-site");
-        assertThat(page.body()).contains("whsec-test-123");
-        assertThat(page.body()).doesNotContain("Auto-deploy is disabled");
-    }
+        var withSecret = get("/admin/sites/" + siteId + "/page/deployments");
+        assertThat(withSecret.statusCode()).isEqualTo(200);
+        assertThat(withSecret.body()).contains("Push webhook");
+        assertThat(withSecret.body()).contains("://git-flow.test/api/webhooks/git/git-flow-site");
+        assertThat(withSecret.body()).contains("whsec-test-123");
+        assertThat(withSecret.body()).doesNotContain("Auto-deploy is disabled");
 
-    @Test
-    @Order(2)
-    void failedDeploymentUsesTheSupportedWarningIcon() throws Exception {
+        // A failed deployment renders the supported warning icon, not a missing one.
         DeploymentModel model = Models.get(DeploymentModel.class);
         Row failed = model.createEmptyRow();
         failed.set(DeploymentModel.SITE_ID, siteId);
@@ -282,12 +269,13 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         }
     }
 
+    /** Manual deploy of a new commit, rollback to the previous slot, api-key automation and the return-target contract. */
     @Test
-    @Order(3)
-    void manualDeployPicksUpNewCommit() throws Exception {
+    @Order(2)
+    void deployRollbackAndAutomationJourney() throws Exception {
         Files.writeString(upstreamRepo.resolve("index.html"), "v2");
         gitIn(upstreamRepo, "commit", "-qam", "v2");
-        secondCommit = gitIn(upstreamRepo, "rev-parse", "HEAD").trim();
+        String secondCommit = gitIn(upstreamRepo, "rev-parse", "HEAD").trim();
 
         var response = postAction("/sites/" + siteId + "/deploy");
         assertThat(response.statusCode()).isIn(302, 303);
@@ -298,11 +286,53 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         assertThat((String) deploy.get(DeploymentModel.REASON)).isEqualTo("manual");
         assertThat((String) deploy.get(DeploymentModel.COMMIT_SHA)).isEqualTo(secondCommit);
         assertThat(gitHandler().getCurrentCommit()).isEqualTo(secondCommit);
-    }
 
-    @Test
-    @Order(6)
-    void actionRedirectsHonorReturnTargetAndRejectForgedOnes() throws Exception {
+        // Rollback re-activates the previous slot (the first commit).
+        assertThat(gitHandler().hasPreviousSlot()).isTrue();
+
+        response = postAction("/sites/" + siteId + "/rollback");
+        assertThat(response.statusCode()).isIn(302, 303);
+
+        await("rollback", () -> hasFinished(3));
+        deploy = deployments().get(0);
+        assertThat((String) deploy.get(DeploymentModel.STATUS)).isEqualTo(DeploymentModel.STATUS_SUCCESS);
+        assertThat((String) deploy.get(DeploymentModel.REASON)).isEqualTo(GitSiteRequestHandler.REASON_ROLLBACK);
+        assertThat((String) deploy.get(DeploymentModel.COMMIT_SHA)).isEqualTo(firstCommit);
+        assertThat(gitHandler().getCurrentCommit()).isEqualTo(firstCommit);
+
+        // A session cookie must NOT be able to act on the csrf-exempt API route.
+        var sessionDeploy = postAction("/api/sites/" + siteId + "/deploy");
+        assertThat(sessionDeploy.statusCode()).isEqualTo(403);
+
+        Row user = be.elevenways.zenit.auth.server.AuthModels.users().find()
+            .where(be.elevenways.zenit.auth.model.UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        var key = be.elevenways.zenit.auth.server.ApiKeyService.create(
+            user.get(be.elevenways.zenit.auth.model.UserModel.ID), "flow-test-key",
+            List.of("hohenheim.*"), null);
+
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+
+        // Bearer GET: the site list carries slug, health and git state.
+        var list = client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + "/api/sites"))
+            .header("Authorization", "Bearer " + key.plaintext())
+            .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(list.statusCode()).isEqualTo(200);
+        assertThat(list.body()).contains("git-flow-site").contains("current_commit");
+
+        // Bearer POST: the deploy queues and is attributed to the api origin.
+        int before = deployments().size();
+        var apiDeploy = client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + "/api/sites/" + siteId + "/deploy"))
+            .header("Authorization", "Bearer " + key.plaintext())
+            .POST(HttpRequest.BodyPublishers.ofString(""))
+            .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(apiDeploy.statusCode()).isEqualTo(200);
+        assertThat(apiDeploy.body()).contains("queued");
+
+        await("api deploy", () -> hasFinished(before + 1));
+        assertThat((String) deployments().get(0).get(DeploymentModel.REASON)).isEqualTo("api");
+
         // deploy/cancel is a no-op while nothing deploys, so this only
         // exercises the redirect contract of the six subpage handlers.
         String manageTarget = "/manage/sites/" + siteId + "/page/deployments";
@@ -330,58 +360,5 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         assertThat(forgedProcess.statusCode()).isIn(302, 303);
         assertThat(forgedProcess.headers().firstValue("Location"))
             .hasValue("/admin/sites/" + siteId + "/page/processes");
-    }
-
-    @Test
-    @Order(5)
-    void automationApiDeploysWithAnApiKeyOnly() throws Exception {
-        // A session cookie must NOT be able to act on the csrf-exempt API route.
-        var sessionDeploy = postAction("/api/sites/" + siteId + "/deploy");
-        assertThat(sessionDeploy.statusCode()).isEqualTo(403);
-
-        Row user = be.elevenways.zenit.auth.server.AuthModels.users().find()
-            .where(be.elevenways.zenit.auth.model.UserModel.EMAIL.eq("test@hohenheim.local")).first();
-        var key = be.elevenways.zenit.auth.server.ApiKeyService.create(
-            user.get(be.elevenways.zenit.auth.model.UserModel.ID), "flow-test-key",
-            List.of("hohenheim.*"), null);
-
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-
-        // Bearer GET: the site list carries slug, health and git state.
-        var list = client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + "/api/sites"))
-            .header("Authorization", "Bearer " + key.plaintext())
-            .build(), HttpResponse.BodyHandlers.ofString());
-        assertThat(list.statusCode()).isEqualTo(200);
-        assertThat(list.body()).contains("git-flow-site").contains("current_commit");
-
-        // Bearer POST: the deploy queues and is attributed to the api origin.
-        int before = deployments().size();
-        var deploy = client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + "/api/sites/" + siteId + "/deploy"))
-            .header("Authorization", "Bearer " + key.plaintext())
-            .POST(HttpRequest.BodyPublishers.ofString(""))
-            .build(), HttpResponse.BodyHandlers.ofString());
-        assertThat(deploy.statusCode()).isEqualTo(200);
-        assertThat(deploy.body()).contains("queued");
-
-        await("api deploy", () -> hasFinished(before + 1));
-        assertThat((String) deployments().get(0).get(DeploymentModel.REASON)).isEqualTo("api");
-    }
-
-    @Test
-    @Order(4)
-    void rollbackActivatesThePreviousSlot() throws Exception {
-        assertThat(gitHandler().hasPreviousSlot()).isTrue();
-
-        var response = postAction("/sites/" + siteId + "/rollback");
-        assertThat(response.statusCode()).isIn(302, 303);
-
-        await("rollback", () -> hasFinished(3));
-        Row deploy = deployments().get(0);
-        assertThat((String) deploy.get(DeploymentModel.STATUS)).isEqualTo(DeploymentModel.STATUS_SUCCESS);
-        assertThat((String) deploy.get(DeploymentModel.REASON)).isEqualTo(GitSiteRequestHandler.REASON_ROLLBACK);
-        assertThat((String) deploy.get(DeploymentModel.COMMIT_SHA)).isEqualTo(firstCommit);
-        assertThat(gitHandler().getCurrentCommit()).isEqualTo(firstCommit);
     }
 }

@@ -37,6 +37,12 @@ import java.util.List;
  * Browser test base for Hohenheim. Authenticates via zenit-auth: seeds an admin user and mints
  * a session, injected as the auth cookie so the (zenit-auth-gated) admin pages are reachable.
  */
+// The tag is @Inherited: every subclass lands in the shared-server gradle bucket
+// (parallel forks, one server per JVM). Standalone classes -- which re-point the
+// global Database.PATH and re-init the runtime for themselves -- run in the
+// browserTestIsolated bucket with a fresh JVM per class, because doing that
+// beside a live shared server yanks the database out from under it.
+@org.junit.jupiter.api.Tag("shared-server")
 public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
 
     private static ZenitHttpServer zenitServer;
@@ -136,11 +142,10 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
     }
 
     @Override
-    protected void stopServer() throws Exception {
-        if (zenitServer != null) {
-            zenitServer.stop();
-            zenitServer = null;
-        }
+    protected void stopServer() {
+        // Shared across the JVM (the CmsBrowserTestBase pattern): the first class to
+        // finish must NOT stop the server every later class in this fork still uses.
+        // Teardown rides on JVM shutdown.
     }
 
     @Override

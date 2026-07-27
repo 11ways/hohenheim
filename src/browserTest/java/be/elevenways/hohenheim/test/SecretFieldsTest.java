@@ -53,7 +53,8 @@ class SecretFieldsTest extends HohenheimTestBase {
 
     @Test
     @Order(1)
-    void storedWebhookUrlNeverReachesTheEditPageAndBlankSaveKeepsIt() throws Exception {
+    void storedSecretsStayServerSideAndBlankSavesKeepThem() throws Exception {
+        // Notification channel: a secret URL field on a plain resource form.
         var response = postForm("/admin/notifications/new",
             "name=Ops+alerts&format=slack&url=" + java.net.URLEncoder.encode(WEBHOOK_URL, "UTF-8"));
         assertThat(response.statusCode()).isIn(200, 302, 303);
@@ -61,26 +62,23 @@ class SecretFieldsTest extends HohenheimTestBase {
         Row row = Models.get(NotificationChannelModel.class).findByName("Ops alerts");
         assertThat(row).isNotNull();
         assertThat((String) row.get(NotificationChannelModel.URL)).isEqualTo(WEBHOOK_URL);
-        Integer id = row.get(NotificationChannelModel.ID);
+        Integer channelId = row.get(NotificationChannelModel.ID);
 
-        navigateToApp("/admin/notifications/" + id);
+        navigateToApp("/admin/notifications/" + channelId);
         waitForHydration();
         assertThat(page.content()).doesNotContain(WEBHOOK_URL);
         assertThat(page.content()).doesNotContain("xoxb-hook-token");
 
         // Blank url keeps the stored secret; other edits apply.
-        response = postForm("/admin/notifications/" + id, "name=Ops+alerts+renamed&format=slack&url=");
+        response = postForm("/admin/notifications/" + channelId, "name=Ops+alerts+renamed&format=slack&url=");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        Row stored = Models.get(NotificationChannelModel.class).findByName("Ops alerts renamed");
-        assertThat(stored).isNotNull();
-        assertThat((String) stored.get(NotificationChannelModel.URL)).isEqualTo(WEBHOOK_URL);
-    }
+        Row storedChannel = Models.get(NotificationChannelModel.class).findByName("Ops alerts renamed");
+        assertThat(storedChannel).isNotNull();
+        assertThat((String) storedChannel.get(NotificationChannelModel.URL)).isEqualTo(WEBHOOK_URL);
 
-    @Test
-    @Order(2)
-    void proteusAccessKeyIsMaskedInsideTheDynamicSubFormAndBlankSaveKeepsIt() throws Exception {
-        var response = postForm("/admin/auth-providers/new",
+        // Proteus access key: a secret inside the dynamic provider-config sub-form.
+        response = postForm("/admin/auth-providers/new",
             "name=Realm+gate&provider_type=hohenheim%3Aproteus"
             + "&config.endpoint=https%3A%2F%2Fproteus.example.com"
             + "&config.realm_client=hohenheim-realm"
@@ -88,18 +86,18 @@ class SecretFieldsTest extends HohenheimTestBase {
             + "&config.authenticator=password");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        Row row = Models.get(SiteAuthProviderModel.class).find()
+        row = Models.get(SiteAuthProviderModel.class).find()
             .where(SiteAuthProviderModel.NAME.eq("Realm gate")).first();
         assertThat(row).isNotNull();
         assertThat(configOf(row)).containsEntry("access_key", ACCESS_KEY);
-        Integer id = row.get(SiteAuthProviderModel.ID);
+        Integer providerId = row.get(SiteAuthProviderModel.ID);
 
-        navigateToApp("/admin/auth-providers/" + id);
+        navigateToApp("/admin/auth-providers/" + providerId);
         waitForHydration();
         assertThat(page.content()).doesNotContain(ACCESS_KEY);
 
         // Blank access key keeps the stored one; the endpoint edit applies.
-        response = postForm("/admin/auth-providers/" + id,
+        response = postForm("/admin/auth-providers/" + providerId,
             "name=Realm+gate&provider_type=hohenheim%3Aproteus"
             + "&config.endpoint=https%3A%2F%2Fproteus2.example.com"
             + "&config.realm_client=hohenheim-realm"
@@ -107,16 +105,40 @@ class SecretFieldsTest extends HohenheimTestBase {
             + "&config.authenticator=password");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        Row stored = Models.get(SiteAuthProviderModel.class).find()
-            .where(SiteAuthProviderModel.ID.eq(id)).first();
-        Map<String, Object> config = configOf(stored);
+        Row storedProvider = Models.get(SiteAuthProviderModel.class).find()
+            .where(SiteAuthProviderModel.ID.eq(providerId)).first();
+        Map<String, Object> config = configOf(storedProvider);
         assertThat(config).containsEntry("access_key", ACCESS_KEY);
         assertThat(config).containsEntry("endpoint", "https://proteus2.example.com");
-    }
 
-    @Test
-    @Order(3)
-    void gitWebhookSecretNeverReachesTheSiteEditPage() {
+        // Access list: a hashed secret, blank save keeps the hash untouched.
+        String password = "access-list-password-4c2a9e";
+        response = postForm("/admin/access-lists/new",
+            "name=Private+network&satisfy=any&basic_auth_user=operator&basic_auth_pass=" + password
+                + "&allowed_ips=10.0.0.0%2F8&denied_ips=");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+
+        row = Models.get(AccessListModel.class).find()
+            .where(AccessListModel.NAME.eq("Private network")).first();
+        assertThat(row).isNotNull();
+        Integer accessListId = row.get(AccessListModel.ID);
+        String storedHash = row.get(AccessListModel.BASIC_AUTH_PASS);
+        assertThat(storedHash).startsWith("$argon2");
+        assertThat(PasswordHasher.verify(password, storedHash)).isTrue();
+
+        navigateToApp("/admin/access-lists/" + accessListId);
+        waitForHydration();
+        assertThat(page.content()).doesNotContain(password);
+
+        response = postForm("/admin/access-lists/" + accessListId,
+            "name=Private+network&satisfy=any&basic_auth_user=operator&basic_auth_pass="
+                + "&allowed_ips=10.0.0.0%2F8&denied_ips=");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+
+        Row storedList = Models.get(AccessListModel.class).findById(accessListId);
+        assertThat(storedList.get(AccessListModel.BASIC_AUTH_PASS)).isEqualTo(storedHash);
+
+        // Git webhook secret: a secret inside a site's source settings map.
         SiteModel sites = Models.get(SiteModel.class);
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, "Secret git site");
@@ -136,7 +158,7 @@ class SecretFieldsTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(4)
+    @Order(2)
     void basicAuthCredentialsRemainVisibleAndEditable() throws Exception {
         var response = postForm("/admin/auth-providers/new",
             "name=Team+gate&provider_type=hohenheim%3Abasic"
@@ -170,36 +192,6 @@ class SecretFieldsTest extends HohenheimTestBase {
         String header = "Basic " + java.util.Base64.getEncoder()
             .encodeToString("alice:new-secret".getBytes());
         assertThat(BasicAuthProviderType.verify(header, updated)).isEqualTo("alice");
-    }
-
-    @Test
-    @Order(5)
-    void accessListPasswordNeverReachesTheEditPageAndBlankSaveKeepsIt() throws Exception {
-        String password = "access-list-password-4c2a9e";
-        var response = postForm("/admin/access-lists/new",
-            "name=Private+network&satisfy=any&basic_auth_user=operator&basic_auth_pass=" + password
-                + "&allowed_ips=10.0.0.0%2F8&denied_ips=");
-        assertThat(response.statusCode()).isIn(200, 302, 303);
-
-        Row row = Models.get(AccessListModel.class).find()
-            .where(AccessListModel.NAME.eq("Private network")).first();
-        assertThat(row).isNotNull();
-        Integer id = row.get(AccessListModel.ID);
-        String storedHash = row.get(AccessListModel.BASIC_AUTH_PASS);
-        assertThat(storedHash).startsWith("$argon2");
-        assertThat(PasswordHasher.verify(password, storedHash)).isTrue();
-
-        navigateToApp("/admin/access-lists/" + id);
-        waitForHydration();
-        assertThat(page.content()).doesNotContain(password);
-
-        response = postForm("/admin/access-lists/" + id,
-            "name=Private+network&satisfy=any&basic_auth_user=operator&basic_auth_pass="
-                + "&allowed_ips=10.0.0.0%2F8&denied_ips=");
-        assertThat(response.statusCode()).isIn(200, 302, 303);
-
-        Row stored = Models.get(AccessListModel.class).findById(id);
-        assertThat(stored.get(AccessListModel.BASIC_AUTH_PASS)).isEqualTo(storedHash);
     }
 
     @SuppressWarnings("unchecked")

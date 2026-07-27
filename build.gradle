@@ -366,11 +366,44 @@ task browserTest(type: Test) {
     testClassesDirs = sourceSets.browserTest.output.classesDirs
     classpath = sourceSets.browserTest.runtimeClasspath
 
-    useJUnitPlatform()
-    maxParallelForks = 1
+    // AIDEV-NOTE: two buckets. Shared-server classes (@Tag("shared-server"), inherited
+    // from HohenheimTestBase) share one booted server per JVM across parallel forks --
+    // forkEvery = 1 here was skeleton cargo cult that cost a JVM + full server boot per
+    // class (the whole 18-minute suite). Standalone classes re-point the GLOBAL
+    // Database.PATH and re-init the runtime for themselves, which yanks the database out
+    // from under a live shared server, so they stay isolated in browserTestIsolated.
+    useJUnitPlatform {
+        includeTags 'shared-server'
+    }
+    filter.failOnNoMatchingTests = false
+    maxParallelForks = Math.min(Math.max(Runtime.runtime.availableProcessors().intdiv(2) - 1, 1), 4)
+    timeout = java.time.Duration.ofMinutes(30)
+
+    systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')
+
+    testLogging {
+        showStandardStreams = true
+        exceptionFormat = 'full'
+        events "passed", "skipped", "failed"
+    }
+}
+
+// Standalone browser-test classes (no shared server): each re-initializes global
+// runtime state for itself, so every class gets a fresh JVM, exactly as before.
+task browserTestIsolated(type: Test) {
+    description = 'Run standalone browser tests needing per-class JVM isolation'
+    group = 'verification'
+    dependsOn 'copyClientJs'
+
+    testClassesDirs = sourceSets.browserTest.output.classesDirs
+    classpath = sourceSets.browserTest.runtimeClasspath
+
+    useJUnitPlatform {
+        excludeTags 'shared-server'
+    }
+    filter.failOnNoMatchingTests = false
+    maxParallelForks = Math.min(Math.max(Runtime.runtime.availableProcessors().intdiv(2) - 1, 1), 4)
     forkEvery = 1
-    // The full suite takes ~6 min on an idle machine but 2x+ under load
-    // (concurrent chain builds); keep headroom so a slow run isn't killed mid-suite.
     timeout = java.time.Duration.ofMinutes(30)
 
     systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')

@@ -24,11 +24,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SiteDatabaseAdminTest extends HohenheimTestBase {
 
-    private static Integer nodeSiteId;
-    private static Integer dockerSiteId;
-    private static Integer localDbId;
-    private static Integer remoteDbId;
-
     private String baseUrl() {
         return "http://localhost:" + getServerPort();
     }
@@ -84,13 +79,14 @@ class SiteDatabaseAdminTest extends HohenheimTestBase {
         return row.get(DatabaseModel.ID);
     }
 
+    /** Attach, render the tab, then every refusal (docker, remote, duplicate prefix, duplicate pair, delete guard). */
     @Test
     @Order(1)
-    void attachThroughTheCmsFormCreatesTheLink() throws Exception {
-        nodeSiteId = site("linkable", "hohenheim:node");
-        dockerSiteId = site("dockerized", "hohenheim:docker");
-        localDbId = database("linkdb", "local");
-        remoteDbId = database("remotedb", "db-host-2");
+    void attachmentJourneyWithEveryRefusal() throws Exception {
+        Integer nodeSiteId = site("linkable", "hohenheim:node");
+        Integer dockerSiteId = site("dockerized", "hohenheim:docker");
+        Integer localDbId = database("linkdb", "local");
+        Integer remoteDbId = database("remotedb", "db-host-2");
 
         var response = postForm("/admin/site-databases/new",
             "site_id=" + nodeSiteId + "&database_id=" + localDbId + "&env_prefix=DB");
@@ -100,11 +96,7 @@ class SiteDatabaseAdminTest extends HohenheimTestBase {
         assertThat(links).hasSize(1);
         assertThat((Integer) links.get(0).get(SiteDatabaseModel.DATABASE_ID)).isEqualTo(localDbId);
         assertThat((String) links.get(0).get(SiteDatabaseModel.ENV_PREFIX)).isEqualTo("DB");
-    }
 
-    @Test
-    @Order(2)
-    void databasesTabListsTheAttachmentWithInjectedVariablePreview() {
         navigateToApp("/admin/sites/" + nodeSiteId + "/page/databases");
         waitForHydration();
 
@@ -113,27 +105,19 @@ class SiteDatabaseAdminTest extends HohenheimTestBase {
         assertThat(body).contains("DB_HOST");
         assertThat(body).contains("DATABASE_URL");
         assertThat(page.locator("#attach-database-link").count()).isEqualTo(1);
-    }
 
-    @Test
-    @Order(3)
-    void dockerSitesGetNoDatabasesTabAndRefuseLinks() throws Exception {
         // visibleFor gates the tab AND 404s the route for container-backed sites.
         var tab = get("/admin/sites/" + dockerSiteId + "/page/databases");
         assertThat(tab.statusCode()).isEqualTo(404);
 
         // The refusal rerenders the form with the ACTUAL reason (persist-stage
         // Violations reach the browser since the pipeline honors them).
-        var response = postForm("/admin/site-databases/new",
+        var docker = postForm("/admin/site-databases/new",
             "site_id=" + dockerSiteId + "&database_id=" + localDbId + "&env_prefix=DB");
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("cannot receive database credentials");
+        assertThat(docker.statusCode()).isEqualTo(200);
+        assertThat(docker.body()).contains("cannot receive database credentials");
         assertThat(Models.get(SiteDatabaseModel.class).findBySiteId(dockerSiteId)).isEmpty();
-    }
 
-    @Test
-    @Order(4)
-    void remoteDatabasesAndDuplicatePrefixesAreRefused() throws Exception {
         // Each refusal carries its specific message, args resolved ({$server}, {$prefix}).
         var remote = postForm("/admin/site-databases/new",
             "site_id=" + nodeSiteId + "&database_id=" + remoteDbId + "&env_prefix=REMOTE");
@@ -153,11 +137,7 @@ class SiteDatabaseAdminTest extends HohenheimTestBase {
 
         // None of the three refusals persisted anything.
         assertThat(Models.get(SiteDatabaseModel.class).findBySiteId(nodeSiteId)).hasSize(1);
-    }
 
-    @Test
-    @Order(5)
-    void attachedDatabaseRefusesDeletionUntilDetached() throws Exception {
         var refused = postForm("/admin/databases/" + localDbId + "/delete", "");
         assertThat(refused.statusCode()).isEqualTo(200);   // rerender, not the post-delete redirect
         // The refusal names the dependent site ({$sites} arg resolved).

@@ -37,33 +37,24 @@ class AuthFlowTest extends HohenheimTestBase {
 
     @Test
     @Order(1)
-    void unauthenticatedRequestRedirectsToLogin() throws Exception {
+    void anonymousSurfaceGatesTheAdminOffersLoginAndServesAssets() throws Exception {
         HttpResponse<String> response = get("/", false);   // no session cookie
         assertThat(response.statusCode()).isEqualTo(302);
         assertThat(response.headers().firstValue("Location")).hasValue("/login");
+
+        response = get("/login", false);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("action=\"/login\"");
+        assertThat(response.body()).contains("name=\"password\"");
+
+        response = get("/hohenheim.css", true);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains(".hh-deploy-log");
     }
 
     @Test
     @Order(2)
-    void loginPageOffersPasswordLogin() throws Exception {
-        HttpResponse<String> response = get("/login", false);
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("action=\"/login\"");
-        assertThat(response.body()).contains("name=\"password\"");
-    }
-
-    @Test
-    @Order(3)
-    void authenticatedDashboardAccessWorks() {
-        // "/" redirects to the /admin panel, which lands on the dashboard.
-        navigateToApp("/admin");
-        waitForHydration();
-        assertThat(page.locator("pl-app-sidebar").count()).isEqualTo(1);
-    }
-
-    @Test
-    @Order(4)
-    void shellUserMenuOffersAccountAndSignOut() {
+    void authenticatedShellOffersAccountAndSignsOut() {
         // Sign out on a THROWAWAY session: the class-shared one must survive
         // for every later test class in this JVM.
         Row user = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
@@ -75,8 +66,13 @@ class AuthFlowTest extends HohenheimTestBase {
             AuthCookieSupport.sessionCookieName(), throwaway.id())
             .setDomain("localhost").setPath("/")));
 
-        navigateToApp("/admin");
+        // Navigate RAW, never through navigateToApp: the base helper re-injects the
+        // JVM-shared session cookie over the throwaway one, and the sign-out below
+        // would then revoke the session every later class in this JVM depends on
+        // (the fork-wide 403/hydration wedge this comment exists to prevent).
+        page.navigate("http://localhost:" + getServerPort() + "/admin");
         waitForHydration();
+        assertThat(page.locator("pl-app-sidebar").count()).isEqualTo(1);
 
         // The zenit-auth topbar contribution renders in the shell.
         assertThat(page.locator("zn-auth-user-menu").count()).isEqualTo(1);
@@ -96,13 +92,5 @@ class AuthFlowTest extends HohenheimTestBase {
         // The session really ended: the admin tree redirects again.
         page.navigate("http://localhost:" + getServerPort() + "/admin");
         page.waitForURL("**/login**");
-    }
-
-    @Test
-    @Order(5)
-    void staticAssetsAreAccessibleWithoutAuth() throws Exception {
-        HttpResponse<String> response = get("/hohenheim.css", true);
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains(".hh-deploy-log");
     }
 }

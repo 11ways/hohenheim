@@ -16,20 +16,13 @@ class CmsAdminSmokeTest extends HohenheimTestBase {
 
     @Test
     @Order(1)
-    void panelLandingRedirectsToDashboard() {
+    void panelShellSidebarListsAndSettingsRender() {
         navigateToApp("/admin");
         waitForHydration();
 
         String content = page.content();
         assertThat(content).contains("Hohenheim");
         assertThat(page.locator("pl-app-sidebar").count()).isEqualTo(1);
-    }
-
-    @Test
-    @Order(2)
-    void sidebarListsTheResources() {
-        navigateToApp("/admin");
-        waitForHydration();
 
         String sidebar = page.locator("pl-app-sidebar").textContent();
         assertThat(sidebar).contains("Sites");
@@ -41,25 +34,19 @@ class CmsAdminSmokeTest extends HohenheimTestBase {
         assertThat(sidebar).contains("Notification Channels");
         assertThat(sidebar).contains("Activity");
         assertThat(sidebar).contains("Settings");
-    }
 
-    @Test
-    @Order(3)
-    void sitesListRenders() {
-        navigateToApp("/admin/sites");
-        waitForHydration();
+        // Soft nav to the sites list keeps the page cost down.
+        page.locator("pl-app-sidebar a[href='/admin/sites']").click();
+        page.waitForCondition(() -> {
+            var el = page.querySelector("h1");
+            return el != null && el.textContent().contains("Sites");
+        });
+        assertThat(page.content()).contains("Sites");
 
-        String content = page.content();
-        assertThat(content).contains("Sites");
-    }
-
-    @Test
-    @Order(4)
-    void settingsPageRenders() {
         navigateToApp("/admin/settings");
         waitForHydration();
 
-        String content = page.content();
+        content = page.content();
         assertThat(content).contains("Proxy");
         assertThat(content).contains("Let's Encrypt");
     }

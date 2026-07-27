@@ -21,30 +21,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ServerAdminTest extends HohenheimTestBase {
 
+    /** The seeded local host renders in the list, the sidebar and its read-only detail overview. */
     @Test
     @Order(1)
-    void serversListShowsLocalHost() {
+    void serverInventoryRendersTheLocalHost() {
         navigateToApp("/admin/servers");
         waitForHydration();
 
         String body = page.locator("body").textContent();
         assertThat(body).contains("Servers");
         assertThat(body).contains("local");        // ensureLocal() seeded the implicit host
-    }
 
-    @Test
-    @Order(2)
-    void sidebarLinksToServers() {
-        navigateToApp("/admin");
-        waitForHydration();
-
+        // The shell sidebar carries the servers entry.
         PlaywrightAssertions.assertThat(
             page.locator("pl-app-sidebar a[href='/admin/servers']")).hasCount(1);
-    }
 
-    @Test
-    @Order(2)
-    void serverDetailShowsOneReadOnlyLiveDockerOverview() {
         Row local = Models.get(ServerModel.class).find()
             .where(ServerModel.NAME.eq("local")).first();
         assertThat(local).isNotNull();
@@ -58,9 +49,10 @@ class ServerAdminTest extends HohenheimTestBase {
         assertThat(overview.locator("input, textarea").count()).isZero();
     }
 
+    /** SSH-target round trip, argument-injection refusal and the implicit local host's guards. */
     @Test
-    @Order(3)
-    void serverCreateAndEditRoundTrips() throws Exception {
+    @Order(2)
+    void serverWritesRoundTripAndGuardTheLocalHost() throws Exception {
         var create = postForm("/admin/servers/new", "name=edge-9&ssh_target=deploy%40edge9.example");
         assertThat(create.statusCode()).isIn(200, 302, 303);
 
@@ -76,33 +68,26 @@ class ServerAdminTest extends HohenheimTestBase {
 
         Row updated = Models.get(ServerModel.class).findById(id);
         assertThat((String) updated.get(ServerModel.SSH_TARGET)).isEqualTo("ops@edge9.example");
-    }
 
-    @Test
-    @Order(4)
-    void sshTargetIsValidated() throws Exception {
+        // An argument-injecting SSH target is refused outright.
         postForm("/admin/servers/new", "name=evil&ssh_target=-oProxyCommand%3Dcalc");
-        Row row = Models.get(ServerModel.class).find()
+        Row evil = Models.get(ServerModel.class).find()
             .where(ServerModel.NAME.eq("evil")).first();
-        assertThat(row).isNull();
-    }
+        assertThat(evil).isNull();
 
-    @Test
-    @Order(5)
-    void localHostCannotBeEditedOrDeleted() throws Exception {
         Row local = Models.get(ServerModel.class).find()
             .where(ServerModel.NAME.eq("local")).first();
         assertThat(local).isNotNull();
-        Integer id = local.get(ServerModel.ID);
+        Integer localId = local.get(ServerModel.ID);
 
-        postForm("/admin/servers/" + id, "name=local&ssh_target=evil%40host");
-        Row after = Models.get(ServerModel.class).findById(id);
+        postForm("/admin/servers/" + localId, "name=local&ssh_target=evil%40host");
+        Row after = Models.get(ServerModel.class).findById(localId);
         assertThat((Object) after.get(ServerModel.SSH_TARGET))
             .as("the implicit local host must not accept an SSH target")
             .isNull();
 
-        postForm("/admin/servers/" + id + "/delete", "");
-        assertThat(Models.get(ServerModel.class).findById(id))
+        postForm("/admin/servers/" + localId + "/delete", "");
+        assertThat(Models.get(ServerModel.class).findById(localId))
             .as("the implicit local host must not be deletable")
             .isNotNull();
     }
