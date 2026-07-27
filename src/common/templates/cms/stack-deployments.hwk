@@ -1,0 +1,73 @@
+{#- Deployments tab on a stack: deploy history with captured logs. Deploy,
+    stop and rollback are the stack's row actions (record toolbar). -#}
+{% declare title: String %}
+{% declare stackName: String %}
+{% declare deployments: List %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare timeWording: RelativeTimeWording %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ stackName }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if deployments %}
+    <pl-table striped={% true %}>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("started", scope: "stack_deployments") }}</pl-table-head>
+            <pl-table-head>{{ t("status", scope: "stack_deployments") }}</pl-table-head>
+            <pl-table-head>{{ t("trigger", scope: "stack_deployments") }}</pl-table-head>
+            <pl-table-head>{{ t("duration", scope: "stack_deployments") }}</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each deployments as index, deploy %}
+            <pl-table-row>
+                <pl-table-cell>
+                    {% if deploy.get("startedAtIso") != "" %}
+                    <pl-relative-time datetime={% deploy.get("startedAtIso") %} wording={% timeWording %} title={% deploy.get("startedAtIso") %}></pl-relative-time>
+                    {% /if %}
+                </pl-table-cell>
+                <pl-table-cell>
+                    <pl-badge variant={% deploy.get("statusVariant") %}>{{ deploy.get("status") }}</pl-badge>
+                </pl-table-cell>
+                <pl-table-cell>{{ deploy.get("reason") }}</pl-table-cell>
+                <pl-table-cell>{{ deploy.get("duration") }}</pl-table-cell>
+            </pl-table-row>
+            {% if deploy.get("error") != "" or deploy.get("hasLog") == true %}
+            <pl-table-row data-detail>
+                <pl-table-cell colspan="4" class="hh-deploy-detail">
+                    {% if deploy.get("error") != "" %}
+                    <div class="hh-deploy-error">
+                        <pl-icon name="triangle-exclamation"></pl-icon>
+                        <span>{{ deploy.get("error") }}</span>
+                    </div>
+                    {% /if %}
+                    {% if deploy.get("hasLog") == true %}
+                    <pl-collapsible>
+                        <pl-collapsible-trigger>
+                            <pl-button variant={% "ghost" %} size={% "sm" %}>{{ t("deploy_log", scope: "stack_deployments") }}</pl-button>
+                        </pl-collapsible-trigger>
+                        <pl-collapsible-content>
+                            <pre class="hh-deploy-log">{{ deploy.get("log") }}</pre>
+                        </pl-collapsible-content>
+                    </pl-collapsible>
+                    {% /if %}
+                </pl-table-cell>
+            </pl-table-row>
+            {% /if %}
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="rocket">
+        <pl-empty-state-title>{{ t("empty", scope: "stack_deployments") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("empty_description", scope: "stack_deployments") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+</section>
+{% /block %}

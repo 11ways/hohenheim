@@ -9,6 +9,8 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -120,10 +122,41 @@ public class DockerClient {
      * @param tag   tag, e.g. {@code "latest"} (defaults to {@code latest} when null/blank)
      */
     public void pullImage(String image, String tag) throws IOException {
+        pullImage(image, tag, null);
+    }
+
+    /**
+     * Pull an image, optionally authenticating against a private registry via the
+     * {@code X-Registry-Auth} header.
+     */
+    public void pullImage(String image, String tag, RegistryAuth auth) throws IOException {
         String resolvedTag = (tag == null || tag.isBlank()) ? "latest" : tag;
         String path = "/images/create?fromImage=" + enc(image) + "&tag=" + enc(resolvedTag);
-        String body = request("POST", path, null, null, LONG_OP_TIMEOUT_MS).body();
+        Map<String, String> headers = auth == null ? null : Map.of("X-Registry-Auth", auth.encode());
+        String body = new String(
+            exchange("POST", path, null, null, headers, LONG_OP_TIMEOUT_MS).body(),
+            StandardCharsets.UTF_8);
         throwIfStreamError(body, "Docker image pull for " + image + ":" + resolvedTag);
+    }
+
+    /**
+     * Registry credentials for {@code X-Registry-Auth}: sent base64-encoded per the Engine
+     * API. {@code serverAddress} is the registry host (e.g. {@code "ghcr.io"}); null/blank
+     * targets Docker Hub.
+     */
+    public record RegistryAuth(String username, String password, String serverAddress) {
+
+        /** @return the base64-encoded JSON auth config the Engine API expects */
+        public String encode() {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("username", username);
+            config.put("password", password);
+            if (serverAddress != null && !serverAddress.isBlank()) {
+                config.put("serveraddress", serverAddress);
+            }
+            return Base64.getUrlEncoder().encodeToString(
+                toJson(config).getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     /**
@@ -158,6 +191,11 @@ public class DockerClient {
      * registry host:port (followed by {@code /}) is not treated as a tag separator.
      */
     public void ensureImage(String image, String tag) throws IOException {
+        ensureImage(image, tag, null);
+    }
+
+    /** Conditional pull with optional private-registry credentials. */
+    public void ensureImage(String image, String tag, RegistryAuth auth) throws IOException {
         String repo = image;
         String resolvedTag = tag;
         int colon = image.lastIndexOf(':');
@@ -175,16 +213,149 @@ public class DockerClient {
                 return;
             }
         }
-        pullImage(repo, resolvedTag);
+        pullImage(repo, resolvedTag, auth);
     }
 
     // -----------------------------------------------------------------------
     // Volumes
     // -----------------------------------------------------------------------
 
+    /**
+     * Create (or return, when it already exists with the same driver) a named volume.
+     * Docker's {@code /volumes/create} is idempotent per name.
+     *
+     * @param labels optional volume labels (null for none); hohenheim ownership labels
+     *               are how the stack tier marks volumes it may touch
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> createVolume(String name, Map<String, String> labels) throws IOException {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("Name", name);
+        if (labels != null && !labels.isEmpty()) {
+            spec.put("Labels", labels);
+        }
+        return (Map<String, Object>) parseJson(request("POST", "/volumes/create", toJson(spec)).body());
+    }
+
+    /**
+     * @return the volume's inspection payload (Name, Driver, Mountpoint, Labels, ...)
+     * @throws IOException when the volume does not exist (404)
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> inspectVolume(String name) throws IOException {
+        return (Map<String, Object>) parseJson(get("/volumes/" + enc(name)).body());
+    }
+
+    /**
+     * @return one map per volume ({@code /volumes} returns {Volumes: [...], Warnings: [...]})
+     */
+    public List<Object> listVolumes() throws IOException {
+        Object parsed = parseJson(get("/volumes").body());
+        Object volumes = parsed instanceof Map<?, ?> map ? map.get("Volumes") : null;
+        return volumes instanceof List<?> list ? new ArrayList<>(list) : List.of();
+    }
+
     /** Remove a named volume; {@code force} removes it even if in use by stopped containers. */
     public void removeVolume(String name, boolean force) throws IOException {
         request("DELETE", "/volumes/" + enc(name) + (force ? "?force=true" : ""), null, null, timeoutMillis);
+    }
+
+    // -----------------------------------------------------------------------
+    // Networks
+    // -----------------------------------------------------------------------
+
+    /**
+     * Create a bridge network. Unlike volumes, network creation is NOT idempotent per
+     * name (Docker allows duplicate names); callers wanting ensure-semantics use
+     * {@link #findNetworkByName} first.
+     *
+     * @param labels optional network labels (null for none)
+     * @param subnet optional IPAM subnet in CIDR form (null lets Docker pick)
+     * @param gateway optional IPAM gateway (null lets Docker pick; requires subnet)
+     * @return the new network's id
+     */
+    @SuppressWarnings("unchecked")
+    public String createNetwork(String name, Map<String, String> labels,
+                                String subnet, String gateway) throws IOException {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("Name", name);
+        spec.put("Driver", "bridge");
+        if (labels != null && !labels.isEmpty()) {
+            spec.put("Labels", labels);
+        }
+        if (subnet != null && !subnet.isBlank()) {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("Subnet", subnet);
+            if (gateway != null && !gateway.isBlank()) {
+                config.put("Gateway", gateway);
+            }
+            spec.put("IPAM", Map.of("Driver", "default", "Config", List.of(config)));
+        }
+        Map<String, Object> result = (Map<String, Object>) parseJson(
+            request("POST", "/networks/create", toJson(spec)).body());
+        return (String) result.get("Id");
+    }
+
+    /**
+     * @return the network's inspection payload (Id, Name, Driver, IPAM, Containers, Labels, ...)
+     * @throws IOException when the network does not exist (404)
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> inspectNetwork(String idOrName) throws IOException {
+        return (Map<String, Object>) parseJson(get("/networks/" + enc(idOrName)).body());
+    }
+
+    /**
+     * @return one map per network as returned by {@code /networks}
+     */
+    @SuppressWarnings("unchecked")
+    public List<Object> listNetworks() throws IOException {
+        return (List<Object>) parseJson(get("/networks").body());
+    }
+
+    /**
+     * @return the network with that exact name, or null when none exists (name lookup by
+     *         list-and-filter because {@code /networks/{name}} also matches id prefixes)
+     */
+    public Map<String, Object> findNetworkByName(String name) throws IOException {
+        for (Object entry : listNetworks()) {
+            if (entry instanceof Map<?, ?> network && name.equals(network.get("Name"))) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> typed = (Map<String, Object>) network;
+                return typed;
+            }
+        }
+        return null;
+    }
+
+    /** Remove a network by id or name; fails while containers are still connected. */
+    public void removeNetwork(String idOrName) throws IOException {
+        request("DELETE", "/networks/" + enc(idOrName), null);
+    }
+
+    /**
+     * Connect a container to a network, optionally with DNS aliases other containers on
+     * that network can resolve (the compose service-name convention).
+     */
+    public void connectContainerToNetwork(String network, String containerId,
+                                          List<String> aliases) throws IOException {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("Container", containerId);
+        if (aliases != null && !aliases.isEmpty()) {
+            spec.put("EndpointConfig", Map.of("Aliases", aliases));
+        }
+        request("POST", "/networks/" + enc(network) + "/connect", toJson(spec));
+    }
+
+    /** Disconnect a container from a network; {@code force} disconnects even a running one. */
+    public void disconnectContainerFromNetwork(String network, String containerId,
+                                               boolean force) throws IOException {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("Container", containerId);
+        if (force) {
+            spec.put("Force", true);
+        }
+        request("POST", "/networks/" + enc(network) + "/disconnect", toJson(spec));
     }
 
     // -----------------------------------------------------------------------
@@ -233,6 +404,11 @@ public class DockerClient {
      */
     public void stopContainer(String id, int graceSeconds) throws IOException {
         request("POST", "/containers/" + id + "/stop?t=" + graceSeconds, null);
+    }
+
+    /** Restart a container, giving it {@code graceSeconds} to stop before SIGKILL. */
+    public void restartContainer(String id, int graceSeconds) throws IOException {
+        request("POST", "/containers/" + id + "/restart?t=" + graceSeconds, null);
     }
 
     /** Remove a container; {@code force} kills it first if running. */
@@ -428,14 +604,26 @@ public class DockerClient {
     // endpoints (multiplexed log/exec streams, archive downloads) aren't corrupted by a UTF-8 decode.
     private RawResponse exchange(String method, String path, byte[] body, String contentType, long timeoutMs)
             throws IOException {
-        return parseHttpRaw(transport.roundTrip(buildRequest(method, path, body, contentType), timeoutMs));
+        return exchange(method, path, body, contentType, null, timeoutMs);
     }
 
-    private static byte[] buildRequest(String method, String path, byte[] body, String contentType) {
+    private RawResponse exchange(String method, String path, byte[] body, String contentType,
+                                 Map<String, String> extraHeaders, long timeoutMs) throws IOException {
+        return parseHttpRaw(transport.roundTrip(
+            buildRequest(method, path, body, contentType, extraHeaders), timeoutMs));
+    }
+
+    private static byte[] buildRequest(String method, String path, byte[] body, String contentType,
+                                       Map<String, String> extraHeaders) {
         StringBuilder head = new StringBuilder();
         head.append(method).append(' ').append(path).append(" HTTP/1.1\r\n");
         head.append("Host: docker\r\n");
         head.append("Accept: application/json\r\n");
+        if (extraHeaders != null) {
+            for (Map.Entry<String, String> header : extraHeaders.entrySet()) {
+                head.append(header.getKey()).append(": ").append(header.getValue()).append("\r\n");
+            }
+        }
         if (body != null) {
             head.append("Content-Type: ").append(contentType).append("\r\n");
             head.append("Content-Length: ").append(body.length).append("\r\n");

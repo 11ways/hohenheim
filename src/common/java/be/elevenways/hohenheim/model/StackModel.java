@@ -1,0 +1,125 @@
+package be.elevenways.hohenheim.model;
+
+import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.*;
+import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.Schema;
+
+/**
+ * A managed multi-container Docker stack: one private bridge network, named volumes,
+ * and an ordered set of services (see {@link StackServiceModel}). The record is the
+ * DESIRED state; deploys are explicit (never save-triggered) and live state is read
+ * from Docker on demand. Everything the deployer creates carries hohenheim ownership
+ * labels; unlabeled same-named resources are refused unless {@code adopt_resources}.
+ */
+public class StackModel extends Model {
+
+    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "stack");
+    public static final Schema SCHEMA = new Schema();
+
+    /** {@link #STATUS} value before the first deploy. */
+    public static final String STATUS_INACTIVE = "inactive";
+
+    /** {@link #STATUS} value while a deploy is running. */
+    public static final String STATUS_DEPLOYING = "deploying";
+
+    /** {@link #STATUS} value when every enabled service runs (and is healthy where checked). */
+    public static final String STATUS_ACTIVE = "active";
+
+    /** {@link #STATUS} value when some but not all services are running/healthy. */
+    public static final String STATUS_DEGRADED = "degraded";
+
+    /** {@link #STATUS} value when the last deploy failed or nothing runs. */
+    public static final String STATUS_FAILED = "failed";
+
+    /** {@link #STATUS} value after an explicit stop. */
+    public static final String STATUS_STOPPED = "stopped";
+
+    public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
+
+    public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
+        .required()
+        .label(HohenheimFormCopy.label("name"))
+        .help(HohenheimFormCopy.help("stack_name"))
+        .build());
+
+    public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled")
+        .defaultValue(true)
+        .label(HohenheimFormCopy.label("enabled"))
+        .build());
+
+    public static final StringField SERVER_NAME = SCHEMA.addField(StringField.builder().name("server_name")
+        .label(HohenheimFormCopy.label("server"))
+        .help(HohenheimFormCopy.help("server"))
+        .build());
+
+    public static final StringField SUBNET = SCHEMA.addField(StringField.builder().name("subnet")
+        .label(HohenheimFormCopy.label("stack_subnet"))
+        .help(HohenheimFormCopy.help("stack_subnet"))
+        .build());
+
+    public static final BooleanField ADOPT_RESOURCES = SCHEMA.addField(BooleanField.builder("adopt_resources")
+        .defaultValue(false)
+        .label(HohenheimFormCopy.label("stack_adopt"))
+        .help(HohenheimFormCopy.help("stack_adopt"))
+        .build());
+
+    public static final StringField REGISTRY_SERVER = SCHEMA.addField(StringField.builder().name("registry_server")
+        .label(HohenheimFormCopy.label("registry_server"))
+        .help(HohenheimFormCopy.help("registry_server"))
+        .build());
+
+    public static final StringField REGISTRY_USER = SCHEMA.addField(StringField.builder().name("registry_user")
+        .label(HohenheimFormCopy.label("registry_user"))
+        .build());
+
+    public static final StringField REGISTRY_PASSWORD = SCHEMA.addField(StringField.builder().name("registry_password")
+        .secret()
+        .encrypted()
+        .label(HohenheimFormCopy.label("registry_password"))
+        .build());
+
+    public static final TextField DESCRIPTION = SCHEMA.addField(TextField.builder().name("description")
+        .label(HohenheimFormCopy.label("description"))
+        .build());
+
+    public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
+        .value(STATUS_INACTIVE, v -> v.displayName("Inactive").icon("circle-pause").color("secondary"))
+        .value(STATUS_DEPLOYING, v -> v.displayName("Deploying").icon("rotate").color("warning"))
+        .value(STATUS_ACTIVE, v -> v.displayName("Active").icon("circle-check").color("success"))
+        .value(STATUS_DEGRADED, v -> v.displayName("Degraded").icon("triangle-exclamation").color("warning"))
+        .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-xmark").color("destructive"))
+        .value(STATUS_STOPPED, v -> v.displayName("Stopped").icon("circle-stop").color("secondary"))
+        .defaultValue(STATUS_INACTIVE)
+        .build());
+
+    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
+    public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
+
+    /** The stack with this unique name, or null if none. */
+    public Row findByName(String name) {
+        return find().where(NAME.eq(name)).first();
+    }
+
+    /** The stack with this id, or null if none. */
+    public Row findById(int id) {
+        return find().where(ID.eq(id)).first();
+    }
+
+    @Override
+    public Identifier getModelId() { return MODEL_ID; }
+
+    @Override
+    public Field<?, ?> getPrimaryKeyField() { return ID; }
+
+    @Override
+    public String getModelName() { return "Stack"; }
+
+    @Override
+    public String getTableName() { return "stacks"; }
+
+    @Override
+    public Schema getSchema() { return SCHEMA; }
+}

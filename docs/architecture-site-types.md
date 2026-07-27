@@ -259,6 +259,11 @@ policy; model validation refuses HTTP-only domain and site options.
 
 The architecture guarantees these CAN be built on the extension points (registry, handler lifecycle, custom settings templates) but their design is deferred to separate documents.
 
+NodeSiteType has since shipped (managed process pools). Multi-container
+deployments shipped as the STACK tier -- deliberately NOT a site type, since a
+stack is infrastructure a proxy site points at, not a request handler. See
+`architecture-stacks.md`.
+
 ## Framework Improvements
 
 ### Plumage: Schema-driven form component (future)
