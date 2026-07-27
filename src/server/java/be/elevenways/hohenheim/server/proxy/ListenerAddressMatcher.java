@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.security.IpLiterals;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -8,11 +9,15 @@ import java.util.LinkedHashSet;
 import java.util.List;
 
 /** Matches a domain's optional listener-address restriction against an accepted connection. */
-final class ListenerAddressMatcher {
+public final class ListenerAddressMatcher {
 
     private ListenerAddressMatcher() {}
 
-    static List<String> parse(String value) {
+    /**
+     * THE canonical listen_on parser: the domain editor's uniqueness check must compare
+     * with this exact function, or the editor and the route table disagree on identity.
+     */
+    public static List<String> parse(String value) {
         if (value == null || value.isBlank()) {
             return List.of();
         }
@@ -43,8 +48,12 @@ final class ListenerAddressMatcher {
         return false;
     }
 
-    /** @return the overlapping listener scope, empty for any, or null when disjoint */
-    static List<String> intersection(List<String> first, List<String> second) {
+    /**
+     * Shared with the domain editor's overlap check; addresses are already normalized.
+     *
+     * @return the overlapping listener scope, empty for any, or NULL when disjoint
+     */
+    public static @Nullable List<String> intersection(List<String> first, List<String> second) {
         if (first.isEmpty()) return second;
         if (second.isEmpty()) return first;
         List<String> overlap = new ArrayList<>();
