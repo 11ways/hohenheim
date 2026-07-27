@@ -408,14 +408,31 @@ class DockerClientTest {
         assumeTrue(digestRef != null, "local alpine has no RepoDigest");
         docker.ensureImage(digestRef, null);   // throws if it tried (and failed) to re-pull
 
-        // Presence is decided by the DIGEST, not the repo spelling: compose-style
-        // tag-carrying pins and registry-prefixed forms must be no-ops too (RepoDigests
-        // entries are tagless and registry-normalized, so exact-string matching never hit).
+        // Presence is decided by digest AND hub-normalized repo: compose-style
+        // tag-carrying pins and registry-prefixed hub forms must be no-ops too
+        // (RepoDigests entries are tagless and registry-normalized, so exact-string
+        // matching never hit).
         int at = digestRef.indexOf('@');
         String repo = digestRef.substring(0, at);
         String digest = digestRef.substring(at + 1);
         docker.ensureImage(repo + ":3.20@" + digest, null);
         docker.ensureImage("docker.io/library/" + repo + "@" + digest, null);
+    }
+
+    @Test
+    void digestMatchingComparesTheRepositoryToo() {
+        String digest = "sha256:0123456789abcdef";
+        // Hub-normalized spellings of one repo all match.
+        assertThat(DockerClient.digestRefMatches("nginx@" + digest, "nginx", digest)).isTrue();
+        assertThat(DockerClient.digestRefMatches("nginx@" + digest, "docker.io/library/nginx", digest)).isTrue();
+        assertThat(DockerClient.digestRefMatches("library/nginx@" + digest, "nginx", digest)).isTrue();
+        // The SAME digest under another repository is NOT presence: createContainer
+        // uses the user's spelling and would fail "No such image" on every retry.
+        assertThat(DockerClient.digestRefMatches("nginx@" + digest, "myregistry.local/nginx", digest)).isFalse();
+        assertThat(DockerClient.digestRefMatches("other/nginx@" + digest, "nginx", digest)).isFalse();
+        // A different digest never matches, and no digest is no match.
+        assertThat(DockerClient.digestRefMatches("nginx@sha256:feedface", "nginx", digest)).isFalse();
+        assertThat(DockerClient.digestRefMatches("nginx", "nginx", digest)).isFalse();
     }
 
     @Test

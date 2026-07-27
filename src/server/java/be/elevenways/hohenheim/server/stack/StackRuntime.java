@@ -36,6 +36,9 @@ public class StackRuntime {
     private static final StackRuntime INSTANCE = new StackRuntime();
 
     private final ConcurrentHashMap<Integer, ExecutorService> workers = new ConcurrentHashMap<>();
+
+    /** The stack id whose worker the current thread IS, for re-entrant onWorker calls. */
+    private static final ThreadLocal<Integer> CURRENT_STACK = new ThreadLocal<>();
     private final Function<String, DockerClient> clientFor;
     private final @Nullable Datasource datasource;
 
@@ -60,13 +63,13 @@ public class StackRuntime {
     /** Queue a deploy of the stack's CURRENT records. */
     public void deployAsync(int stackId, @NonNull String reason) {
         setStatus(stackId, StackModel.STATUS_DEPLOYING);
-        workerFor(stackId).submit(() -> runDeploy(stackId, reason, null));
+        submitAsync(stackId, () -> runDeploy(stackId, reason, null));
     }
 
     /** Queue a re-deploy of the newest successful deployment's spec snapshot. */
     public void rollbackAsync(int stackId) {
         setStatus(stackId, StackModel.STATUS_DEPLOYING);
-        workerFor(stackId).submit(() -> {
+        submitAsync(stackId, () -> {
             StackSpec snapshot = scoped(() -> latestSnapshot(stackId));
             if (snapshot == null) {
                 Blast.log("STACK: no successful deployment to roll back to for stack", stackId);
@@ -82,7 +85,7 @@ public class StackRuntime {
 
     /** Queue a stop of every stack container (reverse dependency order). */
     public void stopAsync(int stackId) {
-        workerFor(stackId).submit(() -> {
+        submitAsync(stackId, () -> {
             try {
                 StackSpec spec = scoped(() -> teardownSpec(stackId));
                 if (spec == null) {
@@ -137,29 +140,28 @@ public class StackRuntime {
 
     /**
      * Remove every owned container and the network; owned volumes only when
-     * {@code removeVolumes}. Used by the destroy action and record deletion.
-     * Serializes behind any queued deploy so the queued work cannot recreate
-     * containers after this removed them; the worker is retired afterwards.
+     * {@code removeVolumes}. Used by record deletion. Serializes behind any
+     * queued deploy so the queued work cannot recreate containers after this
+     * removed them.
+     *
+     * The worker is deliberately NOT retired: removing it from the map opens a
+     * window where a concurrent submission mints a SECOND executor (two threads
+     * mutating the same Docker resources) or hits RejectedExecutionException
+     * after a queue-time status claim (a permanently wedged "deploying" row). A
+     * parked virtual thread per ever-touched stack id is the cheaper bug.
      */
     public void destroy(int stackId, boolean removeVolumes) throws IOException {
-        try {
-            onWorker(stackId, () -> {
-                // Unordered on purpose: a broken dependency graph must not make a stack
-                // undeletable, and teardown does not need the order.
-                StackSpec spec = scoped(() -> teardownSpec(stackId));
-                if (spec == null) {
-                    return null;
-                }
-                new StackDeployer(clientFor.apply(spec.serverName()), null).destroy(spec, removeVolumes);
-                setStatus(stackId, StackModel.STATUS_INACTIVE);
+        onWorker(stackId, () -> {
+            // Unordered on purpose: a broken dependency graph must not make a stack
+            // undeletable, and teardown does not need the order.
+            StackSpec spec = scoped(() -> teardownSpec(stackId));
+            if (spec == null) {
                 return null;
-            });
-        } finally {
-            ExecutorService worker = this.workers.remove(stackId);
-            if (worker != null) {
-                worker.shutdown();
             }
-        }
+            new StackDeployer(clientFor.apply(spec.serverName()), null).destroy(spec, removeVolumes);
+            setStatus(stackId, StackModel.STATUS_INACTIVE);
+            return null;
+        });
     }
 
     /**
@@ -179,10 +181,28 @@ public class StackRuntime {
         }
     }
 
-    /** Run a stack operation on its worker and wait, unwrapping the checked failure. */
+    /** Run a stack operation on its worker and wait, unwrapping the checked failure.
+     *  Re-entrant: a call from within the same stack's worker runs inline, so worker
+     *  tasks (a rollback's status refresh) never deadlock the single lane. */
     private <T> T onWorker(int stackId, @NonNull Callable<T> body) throws IOException {
+        if (Integer.valueOf(stackId).equals(CURRENT_STACK.get())) {
+            try {
+                return body.call();
+            } catch (IOException | RuntimeException | Error direct) {
+                throw direct;
+            } catch (Exception other) {
+                throw new IOException(String.valueOf(other), other);
+            }
+        }
         try {
-            return workerFor(stackId).submit(body).get();
+            return workerFor(stackId).submit(() -> {
+                CURRENT_STACK.set(stackId);
+                try {
+                    return body.call();
+                } finally {
+                    CURRENT_STACK.remove();
+                }
+            }).get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted while operating on stack " + stackId, e);
@@ -201,28 +221,61 @@ public class StackRuntime {
         }
     }
 
+    /**
+     * How many containers currently carry the stack's ownership label, decided on
+     * its worker (the rename gate must not interleave with a running operation).
+     *
+     * @throws IOException when the stack is unknown or Docker cannot answer
+     */
+    public int ownedContainerCount(int stackId) throws IOException {
+        return onWorker(stackId, () -> {
+            StackSpec spec = scoped(() -> teardownSpec(stackId));
+            if (spec == null) {
+                throw new IOException("Stack " + stackId + " does not exist");
+            }
+            return new StackDeployer(clientFor.apply(spec.serverName()), null).countOwnedContainers(spec);
+        });
+    }
+
     /** Live per-service states, best-effort; empty when the stack is unknown. */
     public @NonNull Map<String, String> serviceStates(int stackId) {
-        // Unordered: an admin page must still show live state for a stack whose
-        // dependency graph is currently invalid.
-        StackSpec spec = scoped(() -> teardownSpec(stackId));
-        if (spec == null) {
-            return Map.of();
-        }
         try {
-            return new StackDeployer(clientFor.apply(spec.serverName()), null).status(spec);
-        } catch (Exception e) {
+            return onWorker(stackId, () -> {
+                // Unordered: an admin page must still show live state for a stack whose
+                // dependency graph is currently invalid.
+                StackSpec spec = scoped(() -> teardownSpec(stackId));
+                if (spec == null) {
+                    return Map.of();
+                }
+                try {
+                    return new StackDeployer(clientFor.apply(spec.serverName()), null).status(spec);
+                } catch (Exception e) {
+                    return Map.of();
+                }
+            });
+        } catch (IOException e) {
             return Map.of();
         }
     }
 
     /**
      * Recompute and persist the stack's aggregate status from live container states,
-     * alerting on a transition into degraded/failed.
+     * alerting on a transition into degraded/failed. Runs ON the stack's worker: a
+     * monitor tick that read "active" just before a stop or deploy must never stomp
+     * the operation's own status with a stale aggregate mid-mutation.
      *
      * @return the persisted status
      */
     public @NonNull String refreshStatus(int stackId) {
+        try {
+            return onWorker(stackId, () -> refreshStatusOnWorker(stackId));
+        } catch (IOException e) {
+            Blast.log("STACK: status refresh failed for stack", stackId, "-", e.getMessage());
+            return StackModel.STATUS_INACTIVE;
+        }
+    }
+
+    private @NonNull String refreshStatusOnWorker(int stackId) {
         Row stack = scoped(() -> Models.get(StackModel.class).findById(stackId));
         if (stack == null) {
             return StackModel.STATUS_INACTIVE;
@@ -233,19 +286,17 @@ public class StackRuntime {
         }
 
         StackSpec spec = scoped(() -> StackSpec.fromRecordsUnordered(stack));
-        String next;
-        Map<String, String> states = Map.of();
-        if (spec.services().isEmpty()) {
-            next = StackModel.STATUS_INACTIVE;
-        } else {
-            try {
-                states = new StackDeployer(clientFor.apply(spec.serverName()), null).status(spec);
-            } catch (Exception e) {
-                Blast.log("STACK: status refresh failed for stack", stackId, "-", e.getMessage());
-                return previous != null ? previous : StackModel.STATUS_INACTIVE;
-            }
-            next = aggregate(states, previous);
+        Map<String, String> states;
+        try {
+            // Even a spec with ZERO services runs the live status: the label sweep can
+            // still surface orphaned containers of deleted services, and reading such a
+            // stack as "inactive" would unlock renaming and orphan them permanently.
+            states = new StackDeployer(clientFor.apply(spec.serverName()), null).status(spec);
+        } catch (Exception e) {
+            Blast.log("STACK: status refresh failed for stack", stackId, "-", e.getMessage());
+            return previous != null ? previous : StackModel.STATUS_INACTIVE;
         }
+        String next = states.isEmpty() ? StackModel.STATUS_INACTIVE : aggregate(states, previous);
 
         if (!next.equals(previous)) {
             setStatus(stackId, next);
@@ -273,7 +324,9 @@ public class StackRuntime {
     /**
      * Every service good = active; none running = failed (or stays stopped after an
      * explicit stop); a mix = degraded. "starting" counts as good to avoid flapping
-     * while a healthcheck warms up.
+     * while a healthcheck warms up. "orphaned" entries (owned containers whose service
+     * left the records) are never good: records and reality disagree, and the operator
+     * must see that as degraded, not active.
      */
     private static @NonNull String aggregate(@NonNull Map<String, String> states, @Nullable String previous) {
         int good = 0;
@@ -368,23 +421,34 @@ public class StackRuntime {
     }
 
     private void setStatus(int stackId, String status) {
+        // ONE-column atomic write: a load-mutate-save here writes the whole stale row
+        // back and silently reverts an admin's concurrent form save.
         scoped(() -> {
-            StackModel model = Models.get(StackModel.class);
-            Row row = model.findById(stackId);
-            if (row != null) {
-                row.set(StackModel.STATUS, status);
-                model.save(row);
-            }
+            Models.get(StackModel.class).find()
+                .where(StackModel.ID.eq(stackId))
+                .assign(StackModel.STATUS, status)
+                .updateAll();
             return null;
         });
     }
 
+    /** Queue fire-and-forget work on the stack's lane, stamped for re-entrant onWorker calls. */
+    private void submitAsync(int stackId, @NonNull Runnable body) {
+        workerFor(stackId).submit(() -> {
+            CURRENT_STACK.set(stackId);
+            try {
+                body.run();
+            } finally {
+                CURRENT_STACK.remove();
+            }
+        });
+    }
+
     private ExecutorService workerFor(int stackId) {
-        return workers.computeIfAbsent(stackId, id -> Executors.newSingleThreadExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "stack-" + id);
-            thread.setDaemon(true);
-            return thread;
-        }));
+        // Virtual threads: lanes are never retired (see destroy), so a parked lane per
+        // ever-touched stack id must cost next to nothing.
+        return workers.computeIfAbsent(stackId, id -> Executors.newSingleThreadExecutor(
+            Thread.ofVirtual().name("stack-" + id).factory()));
     }
 
     /** Run model access on the injected datasource when one is set (tests). */

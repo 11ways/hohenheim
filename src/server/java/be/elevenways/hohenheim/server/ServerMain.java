@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.security.KnownPermission;
 import be.elevenways.zenit.common.security.KnownPermissions;
 import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
@@ -82,8 +83,12 @@ public class ServerMain {
         // (the panel's resources resolve model singletons from the MODELS stage).
         HohenheimHandlers.init();
         // A restart mid-deploy leaves stacks claiming "deploying", which would
-        // disable their monitoring forever; sweep before the monitor's first run.
-        StackRuntime.get().resetInterruptedDeploys();
+        // disable their monitoring forever. Swept on a virtual thread: the sweep
+        // does live Docker inspects (60s timeout each), and a wedged daemon --
+        // a common reason for the restart -- must never hold the proxy, DNS and
+        // security engine off the wire for it. A monitor tick racing the sweep
+        // is safe: both serialize on the per-stack worker.
+        JobRunner.startVirtualThread(() -> StackRuntime.get().resetInterruptedDeploys());
         installShutdownHook();
         // The manager owns its own platform-thread lifecycle lane. Queue it before
         // panel construction, but never hold HTTP/proxy/DNS startup on readiness.
