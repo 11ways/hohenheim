@@ -4,6 +4,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.sitetype.types.TlsPassthroughSiteType;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -35,6 +36,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Site domain entries: hostname matching, TLS/HSTS toggles, per-domain
@@ -134,18 +136,39 @@ public class SiteDomainResource extends RowResource {
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        validate(coerced, null);
-        return super.persistRow(coerced, accessContext);
+        Map<String, Object> values = canonicalizePath(coerced);
+        validate(values, null);
+        return super.persistRow(values, accessContext);
     }
 
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        validate(coerced, existing);
-        super.updateRow(existing, coerced, accessContext);
+        Map<String, Object> values = canonicalizePath(coerced);
+        validate(values, existing);
+        super.updateRow(existing, values, accessContext);
     }
 
-    /** Hostname required and unique per site. */
+    /**
+     * Store the path exactly as the dispatcher will route it, so a stored row cannot
+     * spell a route differently than it resolves ("app" -> "/app", "/app/" -> "/app",
+     * "/" -> null catch-all). Absent key = untouched, for partial updates.
+     */
+    private static @NonNull Map<String, Object> canonicalizePath(@NonNull Map<String, Object> coerced) {
+        if (!coerced.containsKey("path")) {
+            return coerced;
+        }
+        Object raw = coerced.get("path");
+        String canonical = SiteDispatcher.normalizeRoutePath(raw != null ? String.valueOf(raw) : null);
+        if (Objects.equals(raw, canonical)) {
+            return coerced;
+        }
+        Map<String, Object> values = new LinkedHashMap<>(coerced);
+        values.put("path", canonical);
+        return values;
+    }
+
+    /** Hostname required, and unique per site per canonical path. */
     private void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
         Object hostnameValue = coerced.get("hostname");
         String hostname = hostnameValue != null ? String.valueOf(hostnameValue).trim() : "";
@@ -162,14 +185,28 @@ public class SiteDomainResource extends RowResource {
                 .equals(site.get(SiteModel.SITE_TYPE))) {
             validateTlsPassthroughDomain(coerced);
         }
-        Row duplicate = this.model().find()
-            .where(SiteDomainModel.SITE_ID.eq(siteId))
-            .where(SiteDomainModel.HOSTNAME.eq(hostname))
-            .first();
-        if (duplicate != null
-            && (existing == null || !duplicate.get(SiteDomainModel.ID).equals(existing.get(SiteDomainModel.ID)))) {
-            throw Violations.ofField("hostname", hostname, CmsSupport.violationText("hostname_taken"));
+        // Uniqueness is per (hostname, canonical path): the dispatcher routes host+path pairs,
+        // so several rows may share a hostname as long as their canonical paths differ.
+        // Comparison MUST use the dispatcher's own normalizer -- see normalizeRoutePath.
+        String path = normalizedPath(coerced.containsKey("path") ? coerced.get("path")
+            : existing != null ? existing.get(SiteDomainModel.PATH) : null);
+        for (Row candidate : this.model().find()
+                .where(SiteDomainModel.SITE_ID.eq(siteId))
+                .where(SiteDomainModel.HOSTNAME.eq(hostname))
+                .all()) {
+            if (existing != null
+                && candidate.get(SiteDomainModel.ID).equals(existing.get(SiteDomainModel.ID))) {
+                continue;
+            }
+            if (Objects.equals(normalizedPath(candidate.get(SiteDomainModel.PATH)), path)) {
+                throw Violations.ofField("hostname", hostname, CmsSupport.violationText("hostname_taken"));
+            }
         }
+    }
+
+    /** Canonical route path for uniqueness, delegated to the routing authority. */
+    private static @Nullable String normalizedPath(@Nullable Object value) {
+        return SiteDispatcher.normalizeRoutePath(value != null ? String.valueOf(value) : null);
     }
 
     private static void validateTlsPassthroughDomain(Map<String, Object> values) {

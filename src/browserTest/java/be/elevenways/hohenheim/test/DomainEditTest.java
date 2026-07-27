@@ -147,23 +147,115 @@ class DomainEditTest extends HohenheimTestBase {
             .isEqualTo("edit-test.example.com");
     }
 
+    /** The stored domain is edit-test.example.com on path /app by this point. */
     @Test
     @Order(6)
-    void duplicateHostnameOnSameSiteIsRejected() throws Exception {
+    void duplicateHostnameAndPathOnSameSiteIsRejected() throws Exception {
         postForm("/admin/domains/new",
-            "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=exact");
+            "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=exact&path=%2Fapp");
 
-        long count = Models.get(SiteDomainModel.class).find()
+        assertThat(domainsNamed("edit-test.example.com"))
+            .as("the same hostname on the same path is one route, so the second row is refused")
+            .isEqualTo(1);
+    }
+
+    /**
+     * Uniqueness must compare CANONICAL paths: "app", "/app" and "/app/" are one
+     * route to the dispatcher, so the editor has to refuse all three as duplicates.
+     */
+    @Test
+    @Order(7)
+    void duplicatePathIsRejectedRegardlessOfSlashSpelling() throws Exception {
+        for (String spelling : new String[] {"app", "%2Fapp%2F", "+%2Fapp+"}) {
+            postForm("/admin/domains/new",
+                "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=exact"
+                + "&path=" + spelling);
+
+            assertThat(domainsNamed("edit-test.example.com"))
+                .as("path spelling '" + spelling + "' canonicalizes to /app and must be refused")
+                .isEqualTo(1);
+        }
+    }
+
+    /**
+     * The dispatcher routes host+path pairs, so one hostname may legitimately fan out
+     * over several paths on the same site (how the NetBird gRPC/API split is configured).
+     */
+    @Test
+    @Order(8)
+    void sameHostnameOnADifferentPathIsAccepted() throws Exception {
+        var response = postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=exact"
+            + "&path=%2Fmanagement.ProxyService");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+
+        assertThat(domainsNamed("edit-test.example.com"))
+            .as("a different path is a different route and must be accepted")
+            .isEqualTo(2);
+
+        Row added = Models.get(SiteDomainModel.class).find()
             .where(SiteDomainModel.HOSTNAME.eq("edit-test.example.com"))
-            .count();
-        assertThat(count).isEqualTo(1);
+            .where(SiteDomainModel.PATH.eq("/management.ProxyService"))
+            .first();
+        assertThat(added).isNotNull();
+    }
+
+    /** A catch-all row alongside path rows is also a distinct route. */
+    @Test
+    @Order(9)
+    void catchAllAlongsidePathRowsIsAccepted() throws Exception {
+        var response = postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=exact&path=");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+
+        assertThat(domainsNamed("edit-test.example.com")).isEqualTo(3);
+
+        // ...but only once: blank and "/" are the same catch-all route.
+        postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=exact&path=%2F");
+        assertThat(domainsNamed("edit-test.example.com"))
+            .as("blank and \"/\" are the same catch-all route")
+            .isEqualTo(3);
+    }
+
+    /** Editing a row must not treat the row's own stored path as a conflict. */
+    @Test
+    @Order(10)
+    void updatingARowKeepingItsPathIsAllowed() throws Exception {
+        var response = postForm("/admin/domains/" + domainId,
+            "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=wildcard"
+            + "&path=%2Fapp&force_ssl=true");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+
+        Row domain = Models.get(SiteDomainModel.class).findById(domainId);
+        assertThat((String) domain.get(SiteDomainModel.PATH)).isEqualTo("/app");
+    }
+
+    /** Moving a row onto a sibling's path is still a conflict. */
+    @Test
+    @Order(11)
+    void updatingARowOntoASiblingPathIsRejected() throws Exception {
+        postForm("/admin/domains/" + domainId,
+            "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=exact"
+            + "&path=%2Fmanagement.ProxyService");
+
+        Row domain = Models.get(SiteDomainModel.class).findById(domainId);
+        assertThat((String) domain.get(SiteDomainModel.PATH))
+            .as("the conflicting update must not be persisted")
+            .isEqualTo("/app");
     }
 
     @Test
-    @Order(7)
+    @Order(12)
     void deleteRemovesTheDomain() throws Exception {
         var response = postForm("/admin/domains/" + domainId + "/delete", "");
         assertThat(response.statusCode()).isIn(200, 302, 303);
         assertThat(Models.get(SiteDomainModel.class).findById(domainId)).isNull();
+    }
+
+    private static long domainsNamed(String hostname) {
+        return Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.HOSTNAME.eq(hostname))
+            .count();
     }
 }

@@ -116,6 +116,25 @@ public class SiteDispatcher implements HttpHandler {
     private final String instanceId = UUID.randomUUID().toString().substring(0, 8);
 
     /**
+     * Canonical route path: leading slash enforced, trailing slash stripped,
+     * root/empty collapsed to null (= catch-all).
+     *
+     * <p>AIDEV-NOTE: THE single definition of route-path identity. Domain uniqueness in
+     * SiteDomainResource must compare with this exact function, or the editor can accept two
+     * rows ("api" and "/api") that collapse to one route here and lose one to first-wins.
+     */
+    public static @Nullable String normalizeRoutePath(@Nullable String raw) {
+        if (raw == null) return null;
+        String path = raw.trim();
+        if (path.isEmpty() || path.equals("/")) return null;
+        if (!path.startsWith("/")) path = "/" + path;
+        while (path.length() > 1 && path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+        return path;
+    }
+
+    /**
      * Immutable snapshot of all route tables. Swapped atomically via volatile reference
      * so concurrent requests never see a partially-loaded state. A hostname maps to a LIST
      * of entries (one per configured path prefix); selection picks the longest matching path.
@@ -231,7 +250,7 @@ public class SiteDispatcher implements HttpHandler {
             this.authGate = authGate;
             this.authProviderName = authProviderName;
 
-            this.path = normalizePath(domain != null ? domain.get(SiteDomainModel.PATH) : null);
+            this.path = normalizeRoutePath(domain != null ? domain.get(SiteDomainModel.PATH) : null);
             this.stripPath = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.STRIP_PATH));
             this.forceSsl = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL));
             this.requestDelayMs = parsePositiveInt(siteSettings != null ? siteSettings.get("delay") : null);
@@ -263,21 +282,6 @@ public class SiteDispatcher implements HttpHandler {
 
         boolean hasAccessList() {
             return accessListSatisfy != null;
-        }
-
-        /**
-         * Canonical path prefix: leading slash enforced, trailing slash stripped,
-         * root/empty collapsed to null (= catch-all).
-         */
-        static @Nullable String normalizePath(String raw) {
-            if (raw == null) return null;
-            String path = raw.trim();
-            if (path.isEmpty() || path.equals("/")) return null;
-            if (!path.startsWith("/")) path = "/" + path;
-            while (path.length() > 1 && path.endsWith("/")) {
-                path = path.substring(0, path.length() - 1);
-            }
-            return path;
         }
 
         /**
