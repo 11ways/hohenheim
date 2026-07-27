@@ -38,14 +38,10 @@ class HohenheimTaskBootstrapTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        File db = File.createTempFile("hohenheim-taskboot", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-
         SiteTypes.boot();
         HohenheimEndpoints.init();
-        HohenheimDatabase.init();   // auto-discovery creates system_task + the M0xx tables
+        // auto-discovery creates system_task + the M0xx tables
+        TestDatabases.freshDatabase();
 
         service = TaskBootstrap.start(HohenheimDatabase.datasource());
     }

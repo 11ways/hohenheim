@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
@@ -23,7 +24,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
@@ -39,25 +39,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AlertsTest {
 
     @BeforeAll
-    static void boot() {
+    static void boot() throws Exception {
         // The shared browserTest runtime registers models and runs migrations
         // (comms tables included, via migration auto-discovery).
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, tempDbPath());
         SiteTypes.boot();
         HohenheimEndpoints.init();
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
-    }
-
-    private static String tempDbPath() {
-        try {
-            File db = File.createTempFile("hohenheim-alerts-test", ".db");
-            db.delete();
-            db.deleteOnExit();
-            return db.getAbsolutePath();
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
-        }
     }
 
     @BeforeEach

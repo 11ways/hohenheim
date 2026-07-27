@@ -47,14 +47,9 @@ class ManagedProcessSiteHandlerTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        File db = File.createTempFile("hohenheim-procmgmt", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-
         SiteTypes.boot();
         HohenheimEndpoints.init();
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
 
         monitor = new ProcessMonitor();

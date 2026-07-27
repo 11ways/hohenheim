@@ -37,14 +37,9 @@ class TlsCertificateTest {
         if (initialized) return;
         initialized = true;
 
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-
         SiteTypes.boot();
         HohenheimEndpoints.init();
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
         Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
@@ -112,11 +107,7 @@ class TlsCertificateTest {
     @Order(5)
     void httpsNotStartedWithoutCertificates() throws Exception {
         // Use a fresh DB with no certs
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
 
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         ProxyServer proxy = new ProxyServer();
@@ -133,11 +124,7 @@ class TlsCertificateTest {
     @Order(6)
     void httpsStartsWhenCertificatesAvailable() throws Exception {
         // Re-init DB and insert a cert
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
 
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
@@ -168,11 +155,7 @@ class TlsCertificateTest {
     @Test
     @Order(7)
     void certificateModelHasLifecycleFields() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
 
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
@@ -284,11 +267,7 @@ class TlsCertificateTest {
     @Test
     @Order(10)
     void wildcardCertResolvesSubdomains() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
 
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
@@ -321,11 +300,7 @@ class TlsCertificateTest {
     @Test
     @Order(11)
     void certificateRemovalClearsFromStore() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
 
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
@@ -367,11 +342,7 @@ class TlsCertificateTest {
     @Test
     @Order(13)
     void acmeAccountKeyRowExcludedFromStore() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
 
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
@@ -395,11 +366,7 @@ class TlsCertificateTest {
     @Test
     @Order(13)
     void forceSslRedirectsHttpToHttps() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
 
         var ds = HohenheimDatabase.datasource();
         var siteModel = Models.get(SiteModel.class);
@@ -475,11 +442,7 @@ class TlsCertificateTest {
     @Test
     @Order(14)
     void httpsActuallyAcceptsTlsConnections() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
 
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
@@ -537,11 +500,7 @@ class TlsCertificateTest {
     @Test
     @Order(15)
     void preferredCertificateAliasOverridesHostnameSelection() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
 
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);

@@ -43,14 +43,9 @@ class ProxyDispatchTest {
         if (initialized) return;
         initialized = true;
 
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-
         SiteTypes.boot();
         HohenheimEndpoints.init();
-        HohenheimDatabase.init();
+        File db = TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
         Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
@@ -106,11 +101,7 @@ class ProxyDispatchTest {
     @Order(1)
     void customHeadersModifyUpstreamRequest() throws Exception {
         // Reset DB
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        File db = TestDatabases.freshDatabase();
 
         AtomicReference<String> seenHeader = new AtomicReference<>();
         AtomicReference<String> removedHeader = new AtomicReference<>("present");
@@ -168,11 +159,7 @@ class ProxyDispatchTest {
     @Test
     @Order(2)
     void hstsHeaderOnResponse() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        File db = TestDatabases.freshDatabase();
 
         // RFC 6797 §7.2: HSTS is emitted only over HTTPS, so this exercises a real TLS
         // connection. A cert must exist for the HTTPS listener to start; SNI resolves it.
@@ -246,11 +233,7 @@ class ProxyDispatchTest {
     @Test
     @Order(3)
     void websocketUpgradeBlockedWhenDisabled() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        File db = TestDatabases.freshDatabase();
 
         // Create site with websocket_upgrade=false
         setupSiteWithDomain("nows.test",
@@ -286,11 +269,7 @@ class ProxyDispatchTest {
     @Test
     @Order(4)
     void websocketUpgradeAllowedWhenEnabled() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        File db = TestDatabases.freshDatabase();
 
         // Create site with websocket_upgrade=true (default)
         setupSiteWithDomain("ws.test",
@@ -326,11 +305,7 @@ class ProxyDispatchTest {
     @Test
     @Order(5)
     void booleanSettingCanBeToggledOff() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        File db = TestDatabases.freshDatabase();
 
         // Verify that extractTypeSettings correctly handles unchecked booleans
         // by creating a site, then checking its settings persist correctly
@@ -358,11 +333,7 @@ class ProxyDispatchTest {
     @Test
     @Order(6)
     void regexRouteMatchesHostname() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        File db = TestDatabases.freshDatabase();
 
         AtomicReference<String> seenHost = new AtomicReference<>();
         CountDownLatch upstreamHit = new CountDownLatch(1);
@@ -431,11 +402,7 @@ class ProxyDispatchTest {
     @Test
     @Order(8)
     void locationHeaderRewrittenToPublicHost() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        File db = TestDatabases.freshDatabase();
 
         HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         int upstreamPort = upstream.getAddress().getPort();
@@ -473,11 +440,7 @@ class ProxyDispatchTest {
     @Test
     @Order(9)
     void locationRewriteCanBeDisabled() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        File db = TestDatabases.freshDatabase();
 
         HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         int upstreamPort = upstream.getAddress().getPort();
@@ -509,11 +472,7 @@ class ProxyDispatchTest {
     @Test
     @Order(10)
     void responseHeadersInjectedAndRemoved() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        File db = TestDatabases.freshDatabase();
 
         HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         upstream.createContext("/", ex -> {
@@ -551,11 +510,7 @@ class ProxyDispatchTest {
     @Test
     @Order(11)
     void httpsListenerNegotiatesH2() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        File db = TestDatabases.freshDatabase();
 
         var certModel = Models.get(CertificateModel.class);
         KeyPair keyPair = TlsCertificateTest.generateKeyPair();
@@ -605,11 +560,7 @@ class ProxyDispatchTest {
     @Test
     @Order(7)
     void listenOnBlocksMismatchedListenerAddress() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
 
         setupSiteWithDomain("listen.test", Map.of("forward_host", "127.0.0.1", "forward_port", 9999),
             Map.of("listen_on", "192.0.2.25", "force_ssl", false));

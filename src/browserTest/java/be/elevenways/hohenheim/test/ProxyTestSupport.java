@@ -31,21 +31,18 @@ final class ProxyTestSupport {
 
     /** One-time runtime boot for a test class; pair with a per-class initialized guard. */
     static void bootRuntime() throws Exception {
-        resetDatabase();
         SiteTypes.boot();
         HohenheimEndpoints.init();
-        HohenheimDatabase.init();
+        // resetDatabase() already points the runtime at a fresh database AND initializes
+        // it; the second HohenheimDatabase.init() this used to make was pure duplication.
+        resetDatabase();
         HohenheimTestRuntime.ensureBooted();
         Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
 
     /** Point the runtime at a fresh temp SQLite file and re-init. */
     static void resetDatabase() throws Exception {
-        File db = File.createTempFile("hohenheim-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
     }
 
     /** Persist an enabled site of the given type with one domain. */

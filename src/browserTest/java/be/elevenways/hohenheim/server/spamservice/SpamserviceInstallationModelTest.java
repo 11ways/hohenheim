@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.spamservice;
 
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
@@ -20,11 +21,7 @@ class SpamserviceInstallationModelTest {
 
     @BeforeAll
     static void initDb() throws Exception {
-        File db = File.createTempFile("hohenheim-spamservice-installation", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
     }
 

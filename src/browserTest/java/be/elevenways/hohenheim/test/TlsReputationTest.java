@@ -44,11 +44,7 @@ class TlsReputationTest {
     static void initDb() throws Exception {
         if (initialized) return;
         initialized = true;
-        File db = File.createTempFile("hohenheim-tlsrep-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
-        HohenheimDatabase.init();
+        TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
     }
 
