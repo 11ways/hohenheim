@@ -202,27 +202,31 @@ public class DockerClient {
         if (at > 0) {
             String repo = image.substring(0, at);
             String digest = image.substring(at + 1);
-            // A digest is content-addressed, so presence is decided by the digest ALONE:
-            // RepoDigests entries are tagless and registry-normalized ("nginx@sha256:..."),
-            // which an exact-string match against the user's spelling ("nginx:1.27@...",
-            // "docker.io/library/nginx@...") could never hit -- that re-pulled on every
-            // deploy and failed offline deploys with the image already present.
-            for (Object entry : listImages()) {
-                Object repoDigests = ((Map<?, ?>) entry).get("RepoDigests");
-                if (!(repoDigests instanceof List<?> digests)) {
-                    continue;
-                }
-                for (Object stored : digests) {
-                    if (String.valueOf(stored).endsWith("@" + digest)) {
-                        return;
-                    }
-                }
+            if (digest.isBlank()) {
+                throw new IOException("Malformed digest-pinned image reference: " + image);
             }
             // Compose-style pins carry a tag before the digest (repo:tag@sha256:...);
             // the engine pulls by digest, so the tag must be stripped from fromImage.
             int colon = repo.lastIndexOf(':');
             if (colon > repo.lastIndexOf('/')) {
                 repo = repo.substring(0, colon);
+            }
+            // Presence needs digest AND repository: createContainer uses the user's
+            // spelling, so a same-digest image known only under ANOTHER repo (hub vs a
+            // private mirror) would pass this check and then fail create with "No such
+            // image" -- identically on every retry. Repos compare hub-normalized
+            // ("nginx" == "docker.io/library/nginx"), never by raw string, because
+            // RepoDigests entries are registry-normalized while the spec is not.
+            for (Object entry : listImages()) {
+                Object repoDigests = ((Map<?, ?>) entry).get("RepoDigests");
+                if (!(repoDigests instanceof List<?> digests)) {
+                    continue;
+                }
+                for (Object stored : digests) {
+                    if (digestRefMatches(String.valueOf(stored), repo, digest)) {
+                        return;
+                    }
+                }
             }
             String path = "/images/create?fromImage=" + enc(repo) + "&tag=" + enc(digest);
             Map<String, String> headers = auth == null ? null : Map.of("X-Registry-Auth", auth.encode());
@@ -251,6 +255,27 @@ public class DockerClient {
             }
         }
         pullImage(repo, resolvedTag, auth);
+    }
+
+    /** Whether a RepoDigests entry names the same (hub-normalized) repo and digest. */
+    public static boolean digestRefMatches(String stored, String wantedRepo, String digest) {
+        int storedAt = stored.indexOf('@');
+        if (storedAt <= 0 || !stored.substring(storedAt + 1).equals(digest)) {
+            return false;
+        }
+        return normalizeRepo(stored.substring(0, storedAt)).equals(normalizeRepo(wantedRepo));
+    }
+
+    /** Canonical hub form: "nginx" == "docker.io/library/nginx" == "library/nginx". */
+    private static String normalizeRepo(String repo) {
+        String normalized = repo;
+        if (normalized.startsWith("docker.io/")) {
+            normalized = normalized.substring("docker.io/".length());
+        }
+        if (!normalized.contains("/")) {
+            normalized = "library/" + normalized;
+        }
+        return normalized;
     }
 
     // -----------------------------------------------------------------------

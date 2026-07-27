@@ -236,4 +236,32 @@ class StackRuntimeFlowTest {
                 .isEqualTo(StackModel.STATUS_ACTIVE);
         });
     }
+
+    /**
+     * The worker lane survives a destroy: retiring it opened a window where a
+     * concurrent submission minted a SECOND executor (two threads on one stack's
+     * Docker resources) or was rejected after claiming "deploying" -- a permanently
+     * wedged status row. A destroy must simply be another serialized operation.
+     */
+    @Test
+    void operationsAfterDestroyStillRunOnTheSameLane() throws IOException {
+        requireDocker();
+        String stackName = "hhflow-relane-" + Long.toHexString(System.nanoTime());
+        stackId = createStackRecords(stackName, "one");
+
+        runtime.deploy(stackId, "initial");
+        runtime.destroy(stackId, true);
+        Db.run(datasource, () -> {
+            Row stack = Models.get(StackModel.class).findById(stackId);
+            assertThat(stack.get(StackModel.STATUS)).isEqualTo(StackModel.STATUS_INACTIVE);
+        });
+
+        // A deploy AFTER the destroy is legal (the record still exists) and must
+        // work on the same serialized lane instead of being rejected.
+        runtime.deploy(stackId, "again");
+        Db.run(datasource, () -> {
+            Row stack = Models.get(StackModel.class).findById(stackId);
+            assertThat(stack.get(StackModel.STATUS)).isEqualTo(StackModel.STATUS_ACTIVE);
+        });
+    }
 }

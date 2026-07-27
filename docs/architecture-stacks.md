@@ -34,10 +34,12 @@ deployment (netbird-server + dashboard + netbird-proxy).
   verbatim, ignoring current record edits.
 - **A deploy CONVERGES on the records.** Containers carrying the stack's
   ownership label whose service is no longer in the spec (deleted, disabled or
-  renamed) are pruned at the end of the deploy, and stop/destroy sweep by label
-  too. Without that, a dropped service keeps running under its restart policy
-  while status, stop and destroy -- which all walk the current spec -- can no
-  longer see it.
+  renamed) are pruned BEFORE anything is created (a renamed service's old
+  container still holds its published host ports), stop/destroy sweep by label
+  too (destroy also sweeps owned networks and, with removeVolumes, owned
+  volumes by label), and STATUS reports such strays as `orphaned` entries --
+  never good, so a stack with an orphan reads degraded, keeps its rename gate
+  closed, and stays visible until the next deploy prunes it.
 - **Localization:** stacks hold no localized content. Names, images and paths
   are machine identifiers stored once; only their labels and the status,
   container-state and deploy-reason vocabularies are microcopy, so a stack
@@ -69,14 +71,28 @@ deployment (netbird-server + dashboard + netbird-proxy).
   cascades exist on those tables, and deployment snapshots carry secrets).
 - Deploy replaces every service's container (create new after removing old);
   named volumes persist across replacements.
-- Renaming a stack is refused once it has been deployed: the name is embedded
-  in every container, network and volume name plus the ownership label, so a
-  rename would orphan the whole running deployment. Destroy first, then rename.
-- Every operation (deploy, rollback, stop, destroy) runs on the stack's single
-  worker thread, so a delete can never race a queued deploy. A destroy
-  therefore BLOCKS until a running deploy finishes -- correct, but a slow admin
-  request when the deploy is mid health-gate.
+- Renaming a stack is refused while it still OWNS containers: the name is
+  embedded in every container, network and volume name plus the ownership
+  label, so a rename would orphan them all. The gate is a live owned-container
+  count decided on the stack's worker (a status string alone both misses
+  orphans and locks out failed-first-deploy stacks); when Docker cannot
+  answer, the rename is refused rather than assumed safe.
+- Every operation (deploy, rollback, stop, destroy, status refresh,
+  service-state reads) runs on the stack's single worker lane (a virtual
+  thread), so a monitor tick can never stomp a mid-operation status and a
+  delete can never race a queued deploy. The lane is NEVER retired -- retiring
+  it on destroy opened a second-executor race and a rejected-submission wedge.
+  A destroy therefore BLOCKS until a running deploy finishes -- correct, but a
+  slow admin request when the deploy is mid health-gate.
+- Status writes are one-column atomic updates (`assign().updateAll()`), never
+  load-mutate-save: the worker finishing a deploy must not write a stale whole
+  row over an admin's concurrent form save.
 - A deploy interrupted by a crash or restart leaves its row claiming
   `deploying`, which suppresses status refresh; `StackRuntime
-  .resetInterruptedDeploys()` runs at boot and recomputes those from the live
-  containers.
+  .resetInterruptedDeploys()` runs at boot ON A VIRTUAL THREAD (the sweep does
+  live Docker inspects and must never hold the proxy/DNS off the wire) and
+  recomputes those from the live containers. With Docker down the swept stacks
+  read `failed` until the monitor's next successful refresh. A crash mid-STOP
+  or mid-DESTROY is not swept: the row keeps its pre-operation status and the
+  next monitor tick recomputes an honest aggregate from what is actually
+  running.

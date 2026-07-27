@@ -76,13 +76,18 @@ public class StackDeployer {
         ensureNetwork(spec);
         ensureVolumes(spec);
 
+        // Prune BEFORE creating anything: a renamed service's old container still holds
+        // its published host ports, so pruning last would fail the new container's start
+        // on a port conflict, skip the prune (it sat after the failing loop), and leave
+        // every subsequent deploy failing the same way.
+        pruneOrphanedContainers(spec);
+
         DockerClient.RegistryAuth auth = registryAuthOf(spec);
 
         for (StackSpec.ServiceSpec service : spec.services()) {
             awaitDependencies(spec, service);
             deployService(spec, service, auth);
         }
-        pruneOrphanedContainers(spec);
         log.accept("Stack '" + spec.name() + "' deployed");
     }
 
@@ -106,6 +111,16 @@ public class StackDeployer {
             log.accept("Pruning orphaned container " + name + " (service no longer in the stack)");
             docker.removeContainer(String.valueOf(summary.get("Id")), true);
         }
+    }
+
+    /**
+     * How many containers (running or not) carry this stack's ownership label.
+     *
+     * @throws IOException when the daemon cannot answer -- callers gating a
+     *         destructive decision must refuse on failure, never assume zero
+     */
+    public int countOwnedContainers(@NonNull StackSpec spec) throws IOException {
+        return listOwnedContainerSummaries(spec).size();
     }
 
     /** Every container (running or not) carrying this stack's ownership label. */
@@ -183,44 +198,65 @@ public class StackDeployer {
             docker.removeContainer(String.valueOf(summary.get("Id")), true);
         }
 
-        Map<String, Object> network = docker.findNetworkByName(networkName(spec));
-        if (network != null && isOwned(labelsOf(network), spec)) {
-            log.accept("Removing network " + networkName(spec));
-            docker.removeNetwork(networkName(spec));
+        // Networks and volumes sweep by ownership label, exactly like containers: a
+        // deleted service's named volume is not in the spec's mounts anymore, but it
+        // still belongs to this stack. Adopted (external) resources never carry our
+        // label and are therefore never removed.
+        for (Object entry : docker.listNetworks()) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> network = entry instanceof Map<?, ?> ? (Map<String, Object>) entry : null;
+            if (network != null && isOwned(labelsOf(network), spec)) {
+                String name = String.valueOf(network.get("Name"));
+                log.accept("Removing network " + name);
+                docker.removeNetwork(name);
+            }
         }
 
         if (removeVolumes) {
-            for (StackSpec.ServiceSpec service : spec.services()) {
-                for (StackSpec.MountSpec mount : service.mounts()) {
-                    if (!StackServiceModelSupport.isVolume(mount) || mount.externalName() != null) {
-                        continue;
-                    }
-                    String volume = volumeName(spec, mount);
-                    try {
-                        Map<String, Object> inspected = docker.inspectVolume(volume);
-                        if (isOwned(labelsOf(inspected), spec)) {
-                            log.accept("Removing volume " + volume);
-                            docker.removeVolume(volume, true);
-                        }
-                    } catch (IOException missing) {
-                        // Already gone.
-                    }
+            for (Object entry : docker.listVolumes()) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> volume = entry instanceof Map<?, ?> ? (Map<String, Object>) entry : null;
+                if (volume != null && isOwned(labelsOf(volume), spec)) {
+                    String name = String.valueOf(volume.get("Name"));
+                    log.accept("Removing volume " + name);
+                    docker.removeVolume(name, true);
                 }
             }
         }
     }
 
-    /** Live per-service state, best-effort ("missing", "running", "healthy", "unhealthy", "stopped", "starting"). */
+    /**
+     * Live per-service state, best-effort ("missing", "running", "healthy",
+     * "unhealthy", "stopped", "starting"). Containers carrying this stack's
+     * ownership label whose service is NO LONGER in the spec are reported too,
+     * keyed by container name with state "orphaned": a deleted service's
+     * still-running container must stay visible to status (and keep the stack
+     * from reading as inactive, which would unlock renaming and orphan it for
+     * good), not only to the next deploy's prune.
+     */
     public @NonNull Map<String, String> status(@NonNull StackSpec spec) {
         Map<String, String> result = new LinkedHashMap<>();
+        Set<String> specNames = new HashSet<>();
         for (StackSpec.ServiceSpec service : spec.services()) {
             String name = containerName(spec, service.name());
+            specNames.add(name);
             try {
                 Map<String, Object> inspected = docker.inspectContainer(name);
                 result.put(service.name(), stateOf(inspected));
             } catch (IOException missing) {
                 result.put(service.name(), "missing");
             }
+        }
+        try {
+            for (Map<String, Object> summary : listOwnedContainerSummaries(spec)) {
+                String name = summaryName(summary);
+                if (name == null || specNames.contains(name)) {
+                    continue;
+                }
+                result.put(name, "orphaned");
+            }
+        } catch (IOException listFailed) {
+            log.accept("Could not sweep for orphaned containers: " + listFailed.getMessage());
         }
         return result;
     }
