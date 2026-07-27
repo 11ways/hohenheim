@@ -502,6 +502,128 @@ class UpstreamProtocolTest {
     }
 
     // -------------------------------------------------------------------
+    // Streamed response headers
+    // -------------------------------------------------------------------
+
+    /**
+     * h2c upstream that commits its response headers immediately and only writes the
+     * body {@code delayMs} later -- the shape of every long-lived streaming gRPC
+     * service (NetBird's SignalExchange sends a registration header on stream open,
+     * then nothing until a peer message arrives).
+     */
+    private int startHeadersThenDelayedBodyUpstream(long delayMs) {
+        undertowUpstream = Undertow.builder()
+            .addHttpListener(0, "127.0.0.1")
+            .setServerOption(UndertowOptions.ENABLE_HTTP2, true)
+            .setHandler(exchange -> {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/grpc");
+                exchange.getResponseHeaders().put(new HttpString("x-stream-open"), "1");
+                exchange.dispatch(() -> {
+                    try {
+                        var channel = exchange.getResponseChannel();
+                        // Commit the HEADERS frame with no body yet.
+                        while (!channel.flush()) {
+                            Thread.onSpinWait();
+                        }
+                        Thread.sleep(delayMs);
+                        var buffer = java.nio.ByteBuffer.wrap(
+                            "stream-payload".getBytes(StandardCharsets.UTF_8));
+                        while (buffer.hasRemaining()) channel.write(buffer);
+                        channel.shutdownWrites();
+                        while (!channel.flush()) {
+                            Thread.onSpinWait();
+                        }
+                        exchange.endExchange();
+                    } catch (IOException | InterruptedException e) {
+                        exchange.endExchange();
+                    }
+                });
+            })
+            .build();
+        undertowUpstream.start();
+        return ((InetSocketAddress) undertowUpstream.getListenerInfo().get(0).getAddress()).getPort();
+    }
+
+    /** Milliseconds until the response HEADERS arrive, measured with an h2c client. */
+    private static long millisToResponseHeaders(int port, String host, String path) throws Exception {
+        XnioWorker worker = Xnio.getInstance().createWorker(
+            OptionMap.create(Options.WORKER_IO_THREADS, 2));
+        DefaultByteBufferPool pool = new DefaultByteBufferPool(true, 8192);
+        ClientConnection connection = null;
+        try {
+            connection = UndertowClient.getInstance()
+                .connect(URI.create("h2c-prior://127.0.0.1:" + port), worker, pool, OptionMap.EMPTY)
+                .get();
+
+            CompletableFuture<Long> headersAt = new CompletableFuture<>();
+            ClientRequest request = new ClientRequest();
+            request.setMethod(Methods.GET);
+            request.setPath(path);
+            request.getRequestHeaders()
+                .put(Headers.HOST, host)
+                .put(Headers.CONTENT_TYPE, "application/grpc");
+
+            long start = System.nanoTime();
+            connection.sendRequest(request, new ClientCallback<ClientExchange>() {
+                @Override
+                public void completed(ClientExchange exchange) {
+                    exchange.setResponseListener(new ClientCallback<ClientExchange>() {
+                        @Override
+                        public void completed(ClientExchange response) {
+                            headersAt.complete((System.nanoTime() - start) / 1_000_000);
+                        }
+
+                        @Override
+                        public void failed(IOException e) {
+                            headersAt.completeExceptionally(e);
+                        }
+                    });
+                }
+
+                @Override
+                public void failed(IOException e) {
+                    headersAt.completeExceptionally(e);
+                }
+            });
+            return headersAt.get(20, TimeUnit.SECONDS);
+        } finally {
+            if (connection != null) connection.close();
+            worker.shutdownNow();
+        }
+    }
+
+    /**
+     * A streaming response must hand its headers to the client as soon as the upstream
+     * sends them, not when the first body byte shows up. gRPC clients read the opening
+     * metadata to consider the stream established: holding the HEADERS frame until data
+     * arrives deadlocks any stream that is idle by design (NetBird's signal service sat
+     * for 50s and then gave up with "didn't receive a registration header").
+     */
+    @Test
+    void streamedResponseHeadersReachTheClientBeforeTheBody() throws Exception {
+        resetDatabase();
+        long bodyDelayMs = 4000;
+        int upstreamPort = startHeadersThenDelayedBodyUpstream(bodyDelayMs);
+
+        setupSiteWithDomain("hohenheim:proxy", "stream.test", "exact",
+            h2Settings(upstreamPort, 0));
+
+        proxy = startProxy();
+
+        // Control: the upstream itself commits headers immediately, so a slow
+        // measurement below can only be the proxy holding them back.
+        long directMs = millisToResponseHeaders(upstreamPort, "stream.test", "/direct");
+        assertThat(directMs)
+            .as("fixture sanity: the upstream commits its headers before the body")
+            .isLessThan(bodyDelayMs / 2);
+
+        long proxiedMs = millisToResponseHeaders(httpPort(proxy), "stream.test", "/proxied");
+        assertThat(proxiedMs)
+            .as("the proxy must forward response headers on arrival, not on first body byte")
+            .isLessThan(bodyDelayMs / 2);
+    }
+
+    // -------------------------------------------------------------------
     // Compression bypass
     // -------------------------------------------------------------------
 

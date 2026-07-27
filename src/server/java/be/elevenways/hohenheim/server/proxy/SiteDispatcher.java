@@ -1257,6 +1257,8 @@ public class SiteDispatcher implements HttpHandler {
 
     private void dispatchToRoute(RouteEntry entry, HttpServerExchange exchange) {
         exchange.addResponseCommitListener(ex -> applyResponseMutations(entry, ex));
+        // Streaming upstreams must reach the client the moment their headers do.
+        EagerResponseCommit.install(exchange);
 
         ProxyHandler timedProxyHandler = proxyHandlerFor(entry.requestTimeoutMs);
         Runnable dispatch = () -> entry.handler.handleRequest(exchange, upstream -> {
