@@ -211,6 +211,59 @@ class StackDeployerTest {
             .isInstanceOf(IOException.class);
     }
 
+    /**
+     * Declarative convergence: a service dropped from the spec (deleted, disabled or
+     * renamed) leaves a container that status/stop/destroy would never see again,
+     * running forever under its restart policy. The redeploy must prune it.
+     */
+    @Test
+    void redeployPrunesContainersOfServicesNoLongerInTheSpec() throws IOException {
+        requireDocker();
+        String stackName = uniqueStackName();
+
+        StackSpec.ServiceSpec kept = sleeper("kept", List.of(), List.of(), List.of(), null);
+        StackSpec.ServiceSpec dropped = sleeper("dropped", List.of(), List.of(), List.of(), null);
+
+        StackSpec both = spec(stackName, false, kept, dropped);
+        deployedSpecs.add(both);
+        deployer(null).deploy(both);
+        assertThat(docker.inspectContainer(StackDeployer.containerName(both, "dropped"))).isNotNull();
+
+        StackSpec reduced = spec(stackName, false, kept);
+        deployedSpecs.add(reduced);
+        StringBuilder log = new StringBuilder();
+        deployer(log).deploy(reduced);
+
+        assertThat(docker.inspectContainer(StackDeployer.containerName(reduced, "kept"))).isNotNull();
+        assertThatThrownBy(() -> docker.inspectContainer(StackDeployer.containerName(both, "dropped")))
+            .as("the dropped service's container must not survive the redeploy")
+            .isInstanceOf(IOException.class);
+        assertThat(log.toString()).contains("Pruning orphaned container");
+    }
+
+    /** Pruning is label-scoped: an unrelated container with no stack label is untouched. */
+    @Test
+    void pruningNeverTouchesContainersOutsideTheStack() throws IOException {
+        requireDocker();
+        String stackName = uniqueStackName();
+        String bystander = "hhtest-bystander-" + Long.toHexString(System.nanoTime());
+
+        docker.createContainer(bystander, Map.of(
+            "Image", TEST_IMAGE,
+            "Cmd", List.of("sleep", "600")));
+        strayContainers.add(bystander);
+        docker.startContainer(bystander);
+
+        StackSpec spec = spec(stackName, false,
+            sleeper("app", List.of(), List.of(), List.of(), null));
+        deployedSpecs.add(spec);
+        deployer(null).deploy(spec);
+
+        assertThat(docker.inspectContainer(bystander))
+            .as("a container without this stack's ownership label must survive a deploy")
+            .isNotNull();
+    }
+
     @Test
     void stopHaltsContainersWithoutRemovingThem() throws IOException {
         requireDocker();

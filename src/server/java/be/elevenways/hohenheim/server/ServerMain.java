@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
+import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.security.KnownPermission;
 import be.elevenways.zenit.common.security.KnownPermissions;
@@ -80,6 +81,9 @@ public class ServerMain {
         // Register handlers + the admin panel after the runtime is ready
         // (the panel's resources resolve model singletons from the MODELS stage).
         HohenheimHandlers.init();
+        // A restart mid-deploy leaves stacks claiming "deploying", which would
+        // disable their monitoring forever; sweep before the monitor's first run.
+        StackRuntime.get().resetInterruptedDeploys();
         installShutdownHook();
         // The manager owns its own platform-thread lifecycle lane. Queue it before
         // panel construction, but never hold HTTP/proxy/DNS startup on readiness.

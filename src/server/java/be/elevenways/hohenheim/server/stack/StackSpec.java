@@ -72,6 +72,10 @@ public record StackSpec(
      * @throws IllegalStateException on unknown dependencies or dependency cycles
      */
     public static @NonNull StackSpec fromRecords(@NonNull Row stack) {
+        return fromRecords(stack, true);
+    }
+
+    private static @NonNull StackSpec fromRecords(@NonNull Row stack, boolean ordered) {
         int stackId = stack.get(StackModel.ID);
         StackServiceModel serviceModel = Models.get(StackServiceModel.class);
         StackFileModel fileModel = Models.get(StackFileModel.class);
@@ -94,7 +98,20 @@ public record StackSpec(
             blankToNull(stack.get(StackModel.REGISTRY_SERVER)),
             blankToNull(stack.get(StackModel.REGISTRY_USER)),
             blankToNull(stack.get(StackModel.REGISTRY_PASSWORD)),
-            topologicallySorted(services));
+            ordered ? topologicallySorted(services) : List.copyOf(services));
+    }
+
+    /**
+     * Resolve the records WITHOUT ordering the services.
+     *
+     * <p>AIDEV-NOTE: teardown must never depend on a valid dependency graph. Two
+     * individually-valid saves can still form a cycle (A depends on B, then B on A),
+     * and {@link #topologicallySorted} rightly refuses that -- but if destroy resolved
+     * through it, such a stack could no longer be deleted or cleaned up at all. Deploy
+     * keeps the ordered path; stop/destroy use this one.
+     */
+    public static @NonNull StackSpec fromRecordsUnordered(@NonNull Row stack) {
+        return fromRecords(stack, false);
     }
 
     private static ServiceSpec serviceOf(Row serviceRow, StackFileModel fileModel) {
