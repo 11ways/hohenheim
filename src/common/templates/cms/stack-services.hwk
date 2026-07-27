@@ -40,7 +40,7 @@
                 </pl-table-cell>
                 <pl-table-cell><code>{{ service.get("image") }}</code></pl-table-cell>
                 <pl-table-cell>
-                    <pl-badge variant={% service.get("stateVariant") %}>{{ service.get("state") }}</pl-badge>
+                    <pl-badge variant={% service.get("stateVariant") %}>{{ service.get("stateLabel") }}</pl-badge>
                 </pl-table-cell>
                 <pl-table-cell>{{ service.get("ports") }}</pl-table-cell>
                 <pl-table-cell class="hh-stack-files">

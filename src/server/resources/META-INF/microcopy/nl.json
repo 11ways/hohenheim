@@ -867,6 +867,10 @@
     {
       "text": "Actief",
       "scope": "spamservice_key"
+    },
+    {
+      "text": "Actief",
+      "scope": "stack_status"
     }
   ],
   "add_domain": {
@@ -983,10 +987,16 @@
     "text": "Gekoppelde database {$name} is {$status}",
     "scope": "attention_detail"
   },
-  "degraded": {
-    "text": "Verminderd beschikbaar",
-    "scope": "attention_detail"
-  },
+  "degraded": [
+    {
+      "text": "Verminderd beschikbaar",
+      "scope": "attention_detail"
+    },
+    {
+      "text": "Verminderd",
+      "scope": "stack_status"
+    }
+  ],
   "deploy": [
     {
       "text": "Deployment van {$name}",
@@ -1111,10 +1121,20 @@
       "scope": "help"
     }
   ],
-  "failed": {
-    "text": "Mislukt",
-    "scope": "site_databases"
-  },
+  "failed": [
+    {
+      "text": "Mislukt",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Mislukt",
+      "scope": "stack_status"
+    },
+    {
+      "text": "Mislukt",
+      "scope": "stack_deploy_status"
+    }
+  ],
   "forced": {
     "text": "Verplicht",
     "scope": "site_domains"
@@ -1275,6 +1295,10 @@
     {
       "text": "Terugrollen",
       "scope": "stack"
+    },
+    {
+      "text": "Terugrol",
+      "scope": "stack_deploy_reason"
     }
   ],
   "rollback_confirm": [
@@ -1319,10 +1343,16 @@
       "scope": "stack_deployments"
     }
   ],
-  "starting": {
-    "text": "Start",
-    "scope": "site_processes"
-  },
+  "starting": [
+    {
+      "text": "Start",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Opstarten",
+      "scope": "stack_state"
+    }
+  ],
   "status": [
     {
       "text": "Status: {$status}",
@@ -1569,10 +1599,16 @@
     "text": "DNS-publicatie (alleen DNS-01)",
     "scope": "certificate_request"
   },
-  "manual": {
-    "text": "Handmatige TXT-records (geen automatische vernieuwing)",
-    "scope": "certificate_request"
-  },
+  "manual": [
+    {
+      "text": "Handmatige TXT-records (geen automatische vernieuwing)",
+      "scope": "certificate_request"
+    },
+    {
+      "text": "Handmatig",
+      "scope": "stack_deploy_reason"
+    }
+  ],
   "automatic_hook": {
     "text": "Automatische command-hook",
     "scope": "certificate_request"
@@ -2681,10 +2717,16 @@
     "text": "Verwijderen",
     "scope": "dns_remote"
   },
-  "delete_confirm": {
-    "text": "Dit record op de eigenaar-peer verwijderen?",
-    "scope": "dns_remote"
-  },
+  "delete_confirm": [
+    {
+      "text": "Dit record op de eigenaar-peer verwijderen?",
+      "scope": "dns_remote"
+    },
+    {
+      "text": "Deze stack verwijderen? De containers en het netwerk worden vernietigd; volumes blijven behouden.",
+      "scope": "stack"
+    }
+  ],
   "priority": {
     "text": "Prioriteit",
     "scope": "dns_remote"
@@ -3704,5 +3746,109 @@
   "deploy_log": {
     "text": "Deploylog",
     "scope": "stack_deployments"
+  },
+  "stack_rename_deployed": {
+    "text": "Verwijder eerst de containers van de stack voor je ze hernoemt; de naam zit in elke container-, netwerk- en volumenaam",
+    "scope": "violations"
+  },
+  "subnet_format": {
+    "text": "Gebruik een IPv4-CIDR zoals 172.30.7.0/24",
+    "scope": "violations"
+  },
+  "mount_name_format": {
+    "text": "Gebruik kleine letters, cijfers en streepjes (max 63 tekens)",
+    "scope": "violations"
+  },
+  "mount_path_absolute": {
+    "text": "Het pad in de container moet absoluut zijn",
+    "scope": "violations"
+  },
+  "mount_path_taken": {
+    "text": "Deze service koppelt al iets op dat pad",
+    "scope": "violations"
+  },
+  "port_container_required": {
+    "text": "Een containerpoort is verplicht",
+    "scope": "violations"
+  },
+  "host_port_taken": {
+    "text": "Een andere service in deze stack publiceert die hostpoort al",
+    "scope": "violations"
+  },
+  "depends_unknown_service": {
+    "text": "Er bestaat geen service met die naam in deze stack",
+    "scope": "violations"
+  },
+  "depends_on_self": {
+    "text": "Een service kan niet van zichzelf afhangen",
+    "scope": "violations"
+  },
+  "health_positive": {
+    "text": "Gebruik een positief getal",
+    "scope": "violations"
+  },
+  "service_required": {
+    "text": "Een service is verplicht",
+    "scope": "violations"
+  },
+  "file_path_taken": {
+    "text": "Deze service heeft al een bestand op dat pad",
+    "scope": "violations"
+  },
+  "file_path_shadowed": {
+    "text": "Een volume koppelt over dit pad, dus het bestand is verborgen zodra de container start",
+    "scope": "violations"
+  },
+  "healthy": {
+    "text": "Gezond",
+    "scope": "stack_state"
+  },
+  "running": [
+    {
+      "text": "Actief",
+      "scope": "stack_state"
+    },
+    {
+      "text": "Bezig",
+      "scope": "stack_deploy_status"
+    }
+  ],
+  "unhealthy": {
+    "text": "Ongezond",
+    "scope": "stack_state"
+  },
+  "stopped": [
+    {
+      "text": "Gestopt",
+      "scope": "stack_state"
+    },
+    {
+      "text": "Gestopt",
+      "scope": "stack_status"
+    }
+  ],
+  "missing": {
+    "text": "Ontbreekt",
+    "scope": "stack_state"
+  },
+  "unknown": {
+    "text": "Onbekend",
+    "scope": "stack_state"
+  },
+  "inactive": {
+    "text": "Inactief",
+    "scope": "stack_status"
+  },
+  "deploying": {
+    "text": "Bezig met uitrollen",
+    "scope": "stack_status"
+  },
+  "success": {
+    "text": "Geslaagd",
+    "scope": "stack_deploy_status"
+  },
+  "scheduled": {
+    "text": "Gepland",
+    "scope": "stack_deploy_reason"
   }
 }

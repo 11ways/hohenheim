@@ -867,6 +867,10 @@
     {
       "text": "Active",
       "scope": "spamservice_key"
+    },
+    {
+      "text": "Active",
+      "scope": "stack_status"
     }
   ],
   "add_domain": {
@@ -983,10 +987,16 @@
     "text": "Attached database {$name} is {$status}",
     "scope": "attention_detail"
   },
-  "degraded": {
-    "text": "Degraded",
-    "scope": "attention_detail"
-  },
+  "degraded": [
+    {
+      "text": "Degraded",
+      "scope": "attention_detail"
+    },
+    {
+      "text": "Degraded",
+      "scope": "stack_status"
+    }
+  ],
   "deploy": [
     {
       "text": "Deploy of {$name}",
@@ -1111,10 +1121,20 @@
       "scope": "help"
     }
   ],
-  "failed": {
-    "text": "Failed",
-    "scope": "site_databases"
-  },
+  "failed": [
+    {
+      "text": "Failed",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Failed",
+      "scope": "stack_status"
+    },
+    {
+      "text": "Failed",
+      "scope": "stack_deploy_status"
+    }
+  ],
   "forced": {
     "text": "Forced",
     "scope": "site_domains"
@@ -1275,6 +1295,10 @@
     {
       "text": "Roll back",
       "scope": "stack"
+    },
+    {
+      "text": "Rollback",
+      "scope": "stack_deploy_reason"
     }
   ],
   "rollback_confirm": [
@@ -1319,10 +1343,16 @@
       "scope": "stack_deployments"
     }
   ],
-  "starting": {
-    "text": "Starting",
-    "scope": "site_processes"
-  },
+  "starting": [
+    {
+      "text": "Starting",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Starting",
+      "scope": "stack_state"
+    }
+  ],
   "status": [
     {
       "text": "Status: {$status}",
@@ -1573,10 +1603,16 @@
     "text": "DNS publishing (DNS-01 only)",
     "scope": "certificate_request"
   },
-  "manual": {
-    "text": "Manual TXT records (no auto-renewal)",
-    "scope": "certificate_request"
-  },
+  "manual": [
+    {
+      "text": "Manual TXT records (no auto-renewal)",
+      "scope": "certificate_request"
+    },
+    {
+      "text": "Manual",
+      "scope": "stack_deploy_reason"
+    }
+  ],
   "automatic_hook": {
     "text": "Automatic command hook",
     "scope": "certificate_request"
@@ -2685,10 +2721,16 @@
     "text": "Delete",
     "scope": "dns_remote"
   },
-  "delete_confirm": {
-    "text": "Delete this record on the owning peer?",
-    "scope": "dns_remote"
-  },
+  "delete_confirm": [
+    {
+      "text": "Delete this record on the owning peer?",
+      "scope": "dns_remote"
+    },
+    {
+      "text": "Delete this stack? Its containers and network are destroyed; volumes are kept.",
+      "scope": "stack"
+    }
+  ],
   "priority": {
     "text": "Priority",
     "scope": "dns_remote"
@@ -3708,5 +3750,109 @@
   "deploy_log": {
     "text": "Deploy log",
     "scope": "stack_deployments"
+  },
+  "stack_rename_deployed": {
+    "text": "Destroy the stack's containers before renaming it; the name is part of every container, network and volume name",
+    "scope": "violations"
+  },
+  "subnet_format": {
+    "text": "Use an IPv4 CIDR such as 172.30.7.0/24",
+    "scope": "violations"
+  },
+  "mount_name_format": {
+    "text": "Use lowercase letters, digits and dashes (max 63 characters)",
+    "scope": "violations"
+  },
+  "mount_path_absolute": {
+    "text": "The container path must be absolute",
+    "scope": "violations"
+  },
+  "mount_path_taken": {
+    "text": "This service already mounts something at that path",
+    "scope": "violations"
+  },
+  "port_container_required": {
+    "text": "A container port is required",
+    "scope": "violations"
+  },
+  "host_port_taken": {
+    "text": "Another service in this stack already publishes that host port",
+    "scope": "violations"
+  },
+  "depends_unknown_service": {
+    "text": "No service with that name exists in this stack",
+    "scope": "violations"
+  },
+  "depends_on_self": {
+    "text": "A service cannot depend on itself",
+    "scope": "violations"
+  },
+  "health_positive": {
+    "text": "Use a positive number",
+    "scope": "violations"
+  },
+  "service_required": {
+    "text": "A service is required",
+    "scope": "violations"
+  },
+  "file_path_taken": {
+    "text": "This service already has a file at that path",
+    "scope": "violations"
+  },
+  "file_path_shadowed": {
+    "text": "A volume mounts over this path, so the file would be hidden once the container starts",
+    "scope": "violations"
+  },
+  "healthy": {
+    "text": "Healthy",
+    "scope": "stack_state"
+  },
+  "running": [
+    {
+      "text": "Running",
+      "scope": "stack_state"
+    },
+    {
+      "text": "Running",
+      "scope": "stack_deploy_status"
+    }
+  ],
+  "unhealthy": {
+    "text": "Unhealthy",
+    "scope": "stack_state"
+  },
+  "stopped": [
+    {
+      "text": "Stopped",
+      "scope": "stack_state"
+    },
+    {
+      "text": "Stopped",
+      "scope": "stack_status"
+    }
+  ],
+  "missing": {
+    "text": "Missing",
+    "scope": "stack_state"
+  },
+  "unknown": {
+    "text": "Unknown",
+    "scope": "stack_state"
+  },
+  "inactive": {
+    "text": "Inactive",
+    "scope": "stack_status"
+  },
+  "deploying": {
+    "text": "Deploying",
+    "scope": "stack_status"
+  },
+  "success": {
+    "text": "Success",
+    "scope": "stack_deploy_status"
+  },
+  "scheduled": {
+    "text": "Scheduled",
+    "scope": "stack_deploy_reason"
   }
 }

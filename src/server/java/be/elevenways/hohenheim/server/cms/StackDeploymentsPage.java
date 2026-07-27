@@ -44,9 +44,9 @@ public final class StackDeploymentsPage implements RecordScopedPage<Row> {
         for (Row row : Models.get(StackDeploymentModel.class).findByStackId(stackId, 50)) {
             Map<String, Object> entry = new HashMap<>();
             entry.put("id", row.get(StackDeploymentModel.ID));
-            entry.put("status", orEmpty(row.get(StackDeploymentModel.STATUS)));
+            entry.put("statusLabel", scopedLabel(row.get(StackDeploymentModel.STATUS), "stack_deploy_status"));
             entry.put("statusVariant", statusVariant(row.get(StackDeploymentModel.STATUS)));
-            entry.put("reason", orEmpty(row.get(StackDeploymentModel.REASON)));
+            entry.put("reasonLabel", scopedLabel(row.get(StackDeploymentModel.REASON), "stack_deploy_reason"));
             entry.put("duration", durationLabel(row.get(StackDeploymentModel.DURATION_MS)));
             entry.put("error", orEmpty(row.get(StackDeploymentModel.ERROR)));
             Instant startedAt = row.get(StackDeploymentModel.STARTED_AT);
@@ -58,7 +58,7 @@ public final class StackDeploymentsPage implements RecordScopedPage<Row> {
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", stack.get(StackModel.NAME) + " - Deployments");
+        vars.put("title", stack.get(StackModel.NAME));
         vars.put("stackName", stack.get(StackModel.NAME));
         vars.put("deployments", deployments);
         vars.put("recordTabs", recordTabs(conduit));
@@ -69,6 +69,14 @@ public final class StackDeploymentsPage implements RecordScopedPage<Row> {
 
     private static String orEmpty(@Nullable Object value) {
         return value != null ? String.valueOf(value) : "";
+    }
+
+    /** Known status/reason tokens localize; null renders empty. */
+    private static @Nullable Microcopy scopedLabel(@Nullable Object value, @NonNull String scope) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return null;
+        }
+        return Microcopy.of(String.valueOf(value)).withFilter("scope", scope);
     }
 
     private static String statusVariant(@Nullable Object status) {

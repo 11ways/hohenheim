@@ -53,6 +53,7 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
             entry.put("enabled", Boolean.TRUE.equals(service.get(StackServiceModel.ENABLED)));
             String state = liveStates.getOrDefault(name, "missing");
             entry.put("state", state);
+            entry.put("stateLabel", stateLabel(state));
             entry.put("stateVariant", stateVariant(state));
             entry.put("editUrl", basePath + "/stack-services/" + serviceId);
 
@@ -82,13 +83,18 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", stack.get(StackModel.NAME) + " - Services");
+        vars.put("title", stack.get(StackModel.NAME));
         vars.put("stackId", stackId);
         vars.put("stackName", stack.get(StackModel.NAME));
         vars.put("services", services);
         vars.put("addServiceUrl", basePath + "/stack-services/new?stack_id=" + stackId);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/stack-services"), vars);
+    }
+
+    /** Container states are a closed vocabulary, so they localize as scoped microcopy. */
+    static Microcopy stateLabel(String state) {
+        return Microcopy.of(state).withFilter("scope", "stack_state");
     }
 
     private static String stateVariant(String state) {

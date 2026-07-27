@@ -33,9 +33,9 @@
                     {% /if %}
                 </pl-table-cell>
                 <pl-table-cell>
-                    <pl-badge variant={% deploy.get("statusVariant") %}>{{ deploy.get("status") }}</pl-badge>
+                    <pl-badge variant={% deploy.get("statusVariant") %}>{{ deploy.get("statusLabel") }}</pl-badge>
                 </pl-table-cell>
-                <pl-table-cell>{{ deploy.get("reason") }}</pl-table-cell>
+                <pl-table-cell>{{ deploy.get("reasonLabel") }}</pl-table-cell>
                 <pl-table-cell>{{ deploy.get("duration") }}</pl-table-cell>
             </pl-table-row>
             {% if deploy.get("error") != "" or deploy.get("hasLog") == true %}

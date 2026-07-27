@@ -1,8 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.StackDeploymentModel;
+import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -118,6 +121,50 @@ public class StackResource extends RowResource {
             && (existing == null || !duplicate.get(StackModel.ID).equals(existing.get(StackModel.ID)))) {
             throw Violations.ofField("name", name, CmsSupport.violationText("stack_name_taken"));
         }
+        Object subnetValue = coerced.get("subnet");
+        String subnet = subnetValue != null ? String.valueOf(subnetValue).trim() : "";
+        if (!subnet.isEmpty() && !isCidr(subnet)) {
+            // Without this the mistake only surfaces inside the deploy worker, as a failed
+            // deployment record rather than a form violation next to the offending input.
+            throw Violations.ofField("subnet", subnet, CmsSupport.violationText("subnet_format"));
+        }
+        if (existing != null && !name.equals(existing.get(StackModel.NAME))) {
+            // The name is embedded in every ownership label, container, network and volume
+            // name: renaming a deployed stack would orphan ALL of them (deploy, status,
+            // stop and destroy only see the new name). Destroy first, then rename.
+            String status = existing.get(StackModel.STATUS);
+            boolean neverDeployed = status == null || status.isBlank()
+                || StackModel.STATUS_INACTIVE.equals(status);
+            if (!neverDeployed) {
+                throw Violations.ofField("name", name, CmsSupport.violationText("stack_rename_deployed"));
+            }
+        }
+    }
+
+    /**
+     * A CIDR Docker's network driver accepts: an IP literal (v4 or v6, parsed by the
+     * shared {@link IpLiterals} authority) plus a prefix length valid for its family.
+     */
+    private static boolean isCidr(@NonNull String value) {
+        int slash = value.indexOf('/');
+        if (slash < 0) {
+            return false;
+        }
+        byte[] address = IpLiterals.parse(value.substring(0, slash));
+        if (address == null) {
+            return false;
+        }
+        try {
+            int prefix = Integer.parseInt(value.substring(slash + 1));
+            return prefix >= 0 && prefix <= address.length * 8;
+        } catch (NumberFormatException notANumber) {
+            return false;
+        }
+    }
+
+    @Override
+    public @Nullable Microcopy deleteConfirmationBody() {
+        return Microcopy.of("delete_confirm").withFilter("scope", "stack");
     }
 
     /** Deleting the record first removes owned containers and the network (volumes stay). */
@@ -130,8 +177,22 @@ public class StackResource extends RowResource {
             } catch (IOException e) {
                 throw Violations.ofForm(CmsSupport.violationText("stack_destroy_failed"));
             }
+            // No FK cascades on these tables: files hang off the services and deployment
+            // history (with encrypted credential-bearing snapshots) off the stack, and
+            // both would linger unreachable forever without an explicit sweep.
+            List<Integer> serviceIds = new ArrayList<>();
+            for (Row service : Models.get(StackServiceModel.class).find()
+                    .where(StackServiceModel.STACK_ID.eq(stackId)).all()) {
+                serviceIds.add(service.get(StackServiceModel.ID));
+            }
+            if (!serviceIds.isEmpty()) {
+                Models.get(StackFileModel.class).find()
+                    .where(StackFileModel.STACK_SERVICE_ID.in(serviceIds)).delete();
+            }
             Models.get(StackServiceModel.class).find()
                 .where(StackServiceModel.STACK_ID.eq(stackId)).delete();
+            Models.get(StackDeploymentModel.class).find()
+                .where(StackDeploymentModel.STACK_ID.eq(stackId)).delete();
         }
         super.deleteRow(row, accessContext);
     }
@@ -176,6 +237,8 @@ public class StackResource extends RowResource {
                 .title(Microcopy.of("rollback").withFilter("scope", "stack"))
                 .body(Microcopy.of("rollback_confirm").withFilter("scope", "stack"))
                 .build())
+            .visibleFor((row, ctx) -> Models.get(StackDeploymentModel.class)
+                .findLatestSuccessful(row.get(StackModel.ID)) != null)
             .handler((row, ctx) -> {
                 StackRuntime.get().rollbackAsync(row.get(StackModel.ID));
                 return CmsActionResult.refreshWithToast(
@@ -187,7 +250,8 @@ public class StackResource extends RowResource {
             .icon(Icon.of("rotate"))
             .handler((row, ctx) -> {
                 String status = StackRuntime.get().refreshStatus(row.get(StackModel.ID));
-                return CmsActionResult.refreshWithToast(Microcopy.literal(status));
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of(status).withFilter("scope", "stack_status"));
             })
             .build());
         return actions;
