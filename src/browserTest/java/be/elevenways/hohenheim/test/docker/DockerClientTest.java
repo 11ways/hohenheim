@@ -387,6 +387,29 @@ class DockerClientTest {
     }
 
     @Test
+    void ensureImageRecognizesDigestPinnedReferences() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+
+        // Find the locally-present alpine's digest and ensure it: must be a no-op
+        // (no network), proving digest refs are matched against RepoDigests.
+        String digestRef = null;
+        for (Object image : docker.listImages()) {
+            Object tags = ((Map<?, ?>) image).get("RepoTags");
+            if (tags instanceof List<?> list && list.contains(TEST_IMAGE)) {
+                Object digests = ((Map<?, ?>) image).get("RepoDigests");
+                if (digests instanceof List<?> refs && !refs.isEmpty()) {
+                    digestRef = String.valueOf(refs.get(0));
+                }
+                break;
+            }
+        }
+        assumeTrue(digestRef != null, "local alpine has no RepoDigest");
+        docker.ensureImage(digestRef, null);   // throws if it tried (and failed) to re-pull
+    }
+
+    @Test
     void registryAuthEncodesBase64Json() {
         DockerClient.RegistryAuth auth =
             new DockerClient.RegistryAuth("robot", "s3cret\"quote", "ghcr.io");
