@@ -118,9 +118,10 @@ class SiteAccessControlTest extends HohenheimTestBase {
         return getServerPort();
     }
 
+    /** Refused everywhere, then a manage grant on site A unlocks only site A, on HTTP and on the terminal socket. */
     @Test
     @Order(1)
-    void ungratedNonAdminIsRefusedEverywhere() throws Exception {
+    void manageGrantJourney() throws Exception {
         assertThat(limitedPost("/sites/" + siteAId + "/deploy").statusCode()).isEqualTo(403);
         assertThat(limitedPost("/sites/" + siteAId + "/rollback").statusCode()).isEqualTo(403);
         assertThat(limitedPost("/sites/" + siteAId + "/processes/start").statusCode()).isEqualTo(403);
@@ -128,11 +129,7 @@ class SiteAccessControlTest extends HohenheimTestBase {
         assertThat(limitedGet("/certificates/1/download").statusCode()).isEqualTo(403);
         assertThat(limitedGet("/databases/somedb/backup").statusCode()).isEqualTo(403);
         assertThat(limitedPost("/admin/certificates-request").statusCode()).isEqualTo(403);
-    }
 
-    @Test
-    @Order(2)
-    void manageGrantUnlocksOnlyThatSite() throws Exception {
         RecordGrants.grant("user", limitedUserId, SiteModel.MODEL_ID, siteAId,
             HohenheimAccess.MANAGE, true);
 
@@ -149,14 +146,11 @@ class SiteAccessControlTest extends HohenheimTestBase {
         assertThat(HohenheimAccess.managedSiteIds(principal)).containsExactly(siteAId);
         assertThat(HohenheimAccess.canManageSite(principal, siteAId)).isTrue();
         assertThat(HohenheimAccess.canManageSite(principal, siteBId)).isFalse();
-    }
 
-    @Test
-    @Order(3)
-    void terminalWebSocketRefusesAnonymousHandshake() {
-        HttpClient client = HttpClient.newHttpClient();
+        // The terminal socket refuses an anonymous handshake outright.
+        HttpClient anonymous = HttpClient.newHttpClient();
         try {
-            client.newWebSocketBuilder()
+            anonymous.newWebSocketBuilder()
                 .buildAsync(URI.create("ws://localhost:" + port() + "/ws/terminal/" + siteBId + "/1"),
                     new WebSocket.Listener() {})
                 .get(15, TimeUnit.SECONDS);
@@ -166,11 +160,7 @@ class SiteAccessControlTest extends HohenheimTestBase {
             assertThat(cause).isInstanceOf(WebSocketHandshakeException.class);
             assertThat(((WebSocketHandshakeException) cause).getResponse().statusCode()).isEqualTo(401);
         }
-    }
 
-    @Test
-    @Order(4)
-    void terminalWebSocketClosesUngrantedNonAdmin() throws Exception {
         CompletableFuture<Integer> closeCode = new CompletableFuture<>();
         WebSocket.Listener listener = new WebSocket.Listener() {
             @Override

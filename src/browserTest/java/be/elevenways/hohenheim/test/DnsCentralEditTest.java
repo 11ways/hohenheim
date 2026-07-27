@@ -97,9 +97,10 @@ class DnsCentralEditTest extends HohenheimTestBase {
     // The owner-side record API
     // ------------------------------------------------------------------
 
+    /** Full record CRUD over the owner API, plus its refusals on secondary and unknown zones. */
     @Test
     @Order(1)
-    void apiRecordCrudOnAPrimaryZone() throws Exception {
+    void ownerSideRecordApiJourney() throws Exception {
         ownedZoneId = createZone("owned.example", DnsZoneModel.ROLE_PRIMARY, null);
 
         Row user = AuthModels.users().find()
@@ -155,11 +156,8 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat(deleted.statusCode()).isEqualTo(200);
         assertThat(deleted.body()).isEqualTo("{\"status\":\"deleted\"}");
         assertThat(Models.get(DnsRecordModel.class).findById(recordId)).isNull();
-    }
 
-    @Test
-    @Order(2)
-    void apiRefusesSecondaryZones() throws Exception {
+        // Secondary zones are not writable through the API, unknown zones 404.
         int peerId = createPeer("api-refusal-peer", null);
         createZone("replica.example", DnsZoneModel.ROLE_SECONDARY, peerId);
 
@@ -175,17 +173,18 @@ class DnsCentralEditTest extends HohenheimTestBase {
     // The viewing-side read-through + forwarding
     // ------------------------------------------------------------------
 
+    /** The viewing instance reads through the owning peer, forwards edits, and degrades gracefully. */
     @Test
-    @Order(3)
-    void remoteRecordsTabReadsThroughTheOwningPeer() throws Exception {
+    @Order(2)
+    void centralEditThroughTheOwningPeerJourney() throws Exception {
         stub = new PeerStub();
-        int peerId = createPeer("central-peer", stub.baseUrl());
-        int zoneId = createZone("central.example", DnsZoneModel.ROLE_SECONDARY, peerId);
+        int centralPeerId = createPeer("central-peer", stub.baseUrl());
+        int zoneId = createZone("central.example", DnsZoneModel.ROLE_SECONDARY, centralPeerId);
 
         stub.body = "{\"zone\":\"central.example\",\"serial\":9,\"records\":["
             + "{\"id\":5,\"name\":\"www\",\"type\":\"A\",\"ttl\":300,\"value\":\"198.51.100.9\",\"enabled\":true}]}";
 
-        DnsPeerApi api = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class).findById(peerId));
+        DnsPeerApi api = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class).findById(centralPeerId));
         assertThat(api).isNotNull();
         assertThat(api.listRecords("central.example")).singleElement().satisfies(record -> {
             assertThat(record).isInstanceOf(DnsRecordDto.class);
@@ -193,10 +192,10 @@ class DnsCentralEditTest extends HohenheimTestBase {
             assertThat(record.ttl()).isEqualTo(300);
         });
 
-        var page = get("/admin/dns-zones/" + zoneId + "/page/records");
-        assertThat(page.statusCode()).isEqualTo(200);
-        assertThat(page.body()).contains("198.51.100.9");
-        assertThat(page.body()).contains("central-peer"); // the forwarded-edits banner names the owner
+        var recordsTab = get("/admin/dns-zones/" + zoneId + "/page/records");
+        assertThat(recordsTab.statusCode()).isEqualTo(200);
+        assertThat(recordsTab.body()).contains("198.51.100.9");
+        assertThat(recordsTab.body()).contains("central-peer"); // the forwarded-edits banner names the owner
 
         StubCall listCall = stub.calls.get(stub.calls.size() - 1);
         assertThat(listCall.method()).isEqualTo("GET");
@@ -207,13 +206,8 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat(editPage.statusCode()).isEqualTo(200);
         assertThat(editPage.body()).contains("name=\"record_id\" value=\"5\"")
             .contains("198.51.100.9");
-    }
 
-    @Test
-    @Order(4)
-    void remoteRecordEditsAreForwardedToTheOwner() throws Exception {
-        int zoneId = zoneIdOf("central.example");
-
+        // Remote record edits are forwarded to the owner.
         stub.calls.clear();
         stub.status = 200;
         stub.body = "{\"id\":6}";
@@ -244,23 +238,20 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat(stub.calls.get(0).path()).isEqualTo("/api/dns/zones/central.example/records/6/delete");
 
         stub.body = "{\"records\":[{\"name\":\"missing-id\",\"type\":\"A\",\"value\":\"192.0.2.1\",\"enabled\":true}]}";
-        DnsPeerApi api = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class)
+        DnsPeerApi staleApi = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class)
             .findById(zonePeerId("central.example")));
-        assertThatThrownBy(() -> api.listRecords("central.example"))
+        assertThatThrownBy(() -> staleApi.listRecords("central.example"))
             .isInstanceOf(DnsPeerApi.PeerApiException.class)
             .hasMessage("Unexpected response from peer");
-    }
 
-    @Test
-    @Order(5)
-    void peerClientMapsCreateUpdateAndDeleteValidationRefusals() {
-        DnsPeerApi api = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class)
+        // The peer client maps create/update/delete validation refusals.
+        DnsPeerApi refusalApi = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class)
             .findById(zonePeerId("central.example")));
-        assertThat(api).isNotNull();
+        assertThat(refusalApi).isNotNull();
         stub.status = 422;
 
         stub.body = validationRefusal("name", "create_refused", "Create refused");
-        assertThatThrownBy(() -> api.createRecord("central.example", Map.of("name", "www")))
+        assertThatThrownBy(() -> refusalApi.createRecord("central.example", Map.of("name", "www")))
             .isInstanceOfSatisfying(DnsPeerApi.PeerApiException.class, refusal -> {
                 assertThat(refusal.getViolationField()).isEqualTo("name");
                 assertThat(refusal.getViolationKey()).isEqualTo("create_refused");
@@ -268,7 +259,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
             });
 
         stub.body = validationRefusal("value", "update_refused", "Update refused");
-        assertThatThrownBy(() -> api.updateRecord("central.example", 5, Map.of("value", "bad")))
+        assertThatThrownBy(() -> refusalApi.updateRecord("central.example", 5, Map.of("value", "bad")))
             .isInstanceOfSatisfying(DnsPeerApi.PeerApiException.class, refusal -> {
                 assertThat(refusal.getViolationField()).isEqualTo("value");
                 assertThat(refusal.getViolationKey()).isEqualTo("update_refused");
@@ -276,18 +267,12 @@ class DnsCentralEditTest extends HohenheimTestBase {
             });
 
         stub.body = validationRefusal("id", "delete_refused", "Delete refused");
-        assertThatThrownBy(() -> api.deleteRecord("central.example", 5))
+        assertThatThrownBy(() -> refusalApi.deleteRecord("central.example", 5))
             .isInstanceOfSatisfying(DnsPeerApi.PeerApiException.class, refusal -> {
                 assertThat(refusal.getViolationField()).isEqualTo("id");
                 assertThat(refusal.getViolationKey()).isEqualTo("delete_refused");
                 assertThat(refusal.getMessage()).isEqualTo("Delete refused");
             });
-    }
-
-    @Test
-    @Order(6)
-    void peerRefusalsRoundTripAsLocalizedErrors() throws Exception {
-        int zoneId = zoneIdOf("central.example");
 
         // The owner's validation refusal (by microcopy key) resolves locally.
         stub.calls.clear();

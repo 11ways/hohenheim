@@ -38,17 +38,24 @@ class SiteCrudTest extends HohenheimTestBase {
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
-    @Test
-    @Order(1)
-    void sitesListShowsEmptyState() {
-        navigateToApp("/admin/sites");
-        waitForHydration();
-        assertThat(page.locator("pl-empty-state").count()).isEqualTo(1);
+    private Row crudSite() {
+        return Models.get(SiteModel.class).find()
+            .where(SiteModel.NAME.eq("Crud Test Site"))
+            .first();
     }
 
+    /** List render, create form, create, edit render, list render and soft delete in one pass. */
     @Test
-    @Order(2)
-    void createSiteFormLoads() {
+    @Order(1)
+    void siteCrudJourney() throws Exception {
+        navigateToApp("/admin/sites");
+        waitForHydration();
+        // Order-independent on purpose: this JVM's server is shared with other
+        // classes, so sites may already exist. The zero-row empty state itself is
+        // framework behavior pinned by zenit-cms's list tests; here we only need
+        // the list page to render (either the empty state or the table).
+        assertThat(page.locator("pl-empty-state, pl-table").count()).isGreaterThan(0);
+
         navigateToApp("/admin/sites/new");
         waitForHydration();
         assertThat(page.locator("form").count()).isGreaterThan(0);
@@ -56,56 +63,27 @@ class SiteCrudTest extends HohenheimTestBase {
         assertThat(page.locator("pl-button").count()).isGreaterThan(0);
         // The type-discriminated settings sub-form renders a type selector.
         assertThat(page.content()).contains("site_type");
-    }
 
-    @Test
-    @Order(3)
-    void createSitePersistsWithSlugAndStatus() throws Exception {
         HttpResponse<String> response = post("/admin/sites/new",
             "name=Crud+Test+Site&site_type=hohenheim%3Adead&enabled=true&source=local");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        Row site = Models.get(SiteModel.class).find()
-            .where(SiteModel.NAME.eq("Crud Test Site"))
-            .first();
+        Row site = crudSite();
         assertThat(site).isNotNull();
         assertThat((String) site.get(SiteModel.SLUG)).isEqualTo("crud-test-site");
         assertThat((String) site.get(SiteModel.STATUS)).isEqualTo(SiteModel.STATUS_ACTIVE);
-    }
+        Integer siteId = site.get(SiteModel.ID);
 
-    @Test
-    @Order(4)
-    void editFormShowsTheSite() {
-        Row site = Models.get(SiteModel.class).find()
-            .where(SiteModel.NAME.eq("Crud Test Site"))
-            .first();
-        assertThat(site).isNotNull();
-
-        navigateToApp("/admin/sites/" + site.get(SiteModel.ID));
+        navigateToApp("/admin/sites/" + siteId);
         waitForHydration();
-
         assertThat(page.content()).contains("Crud Test Site");
         assertThat(page.locator("form").count()).isGreaterThan(0);
-    }
 
-    @Test
-    @Order(5)
-    void siteListShowsTheCreatedSite() {
         navigateToApp("/admin/sites");
         waitForHydration();
         assertThat(page.content()).contains("Crud Test Site");
-    }
 
-    @Test
-    @Order(6)
-    void deleteSoftDeletesTheSite() throws Exception {
-        Row site = Models.get(SiteModel.class).find()
-            .where(SiteModel.NAME.eq("Crud Test Site"))
-            .first();
-        assertThat(site).isNotNull();
-        Integer siteId = site.get(SiteModel.ID);
-
-        HttpResponse<String> response = post("/admin/sites/" + siteId + "/delete", "");
+        response = post("/admin/sites/" + siteId + "/delete", "");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row after = Models.get(SiteModel.class).findById(siteId);

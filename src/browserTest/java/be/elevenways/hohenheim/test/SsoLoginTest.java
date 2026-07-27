@@ -40,20 +40,18 @@ class SsoLoginTest extends HohenheimTestBase {
             HttpResponse.BodyHandlers.ofString());
     }
 
+    /** The login page offers the provider next to password login, and its start route enters the flow. */
     @Test
-    void loginPageOffersBothPasswordAndProvider() throws Exception {
-        HttpResponse<String> response = get("/login", false);
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("name=\"password\"");          // password login option
-        assertThat(response.body()).contains("/login/sso-test/start");      // provider login option
-        assertThat(response.body()).contains("SSO Test");
-    }
+    void registeredProviderIsOfferedAndStartsItsFlow() throws Exception {
+        HttpResponse<String> loginPage = get("/login", false);
+        assertThat(loginPage.statusCode()).isEqualTo(200);
+        assertThat(loginPage.body()).contains("name=\"password\"");          // password login option
+        assertThat(loginPage.body()).contains("/login/sso-test/start");      // provider login option
+        assertThat(loginPage.body()).contains("SSO Test");
 
-    @Test
-    void providerStartRedirectsIntoTheFlow() throws Exception {
-        HttpResponse<String> response = get("/login/sso-test/start", false);
-        assertThat(response.statusCode()).isEqualTo(302);
-        assertThat(response.headers().firstValue("Location")).hasValue("/login/sso-test/callback");
+        HttpResponse<String> start = get("/login/sso-test/start", false);
+        assertThat(start.statusCode()).isEqualTo(302);
+        assertThat(start.headers().firstValue("Location")).hasValue("/login/sso-test/callback");
     }
 
     /** Minimal stand-in for a real provider (Proteus/OIDC); no external server required. */

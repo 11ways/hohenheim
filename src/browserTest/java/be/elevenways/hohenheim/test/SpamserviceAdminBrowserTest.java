@@ -7,18 +7,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Browser coverage for disconnected Spamservice administration and canonical /admin routes. */
 class SpamserviceAdminBrowserTest extends HohenheimTestBase {
 
+    /** Overview, installation, settings and reputation all live inside the hohenheim admin. */
     @Test
-    void disconnectedOverviewIsGracefulAndUsesPlumage() {
+    void disconnectedSpamserviceAdminJourney() {
         navigateToApp("/admin/spamservice");
         waitForHydration();
 
         assertThat(page.locator("h1").innerText()).contains("Spamservice");
         assertThat(page.locator("pl-alert").innerText()).contains("not connected");
         assertThat(page.locator("pl-card").count()).isGreaterThanOrEqualTo(2);
-    }
 
-    @Test
-    void installationNeverRendersTheControllerKey() {
+        // The installation form never renders the controller key.
         navigateToApp("/admin/spamservice-installation");
         waitForHydration();
 
@@ -30,10 +29,7 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
         assertThat(page.locator("pl-input[name='max_heap_mb'][type='number']").count()).isEqualTo(1);
         assertThat(page.locator("[name='controller_key']").count()).isZero();
         assertThat(page.content()).doesNotContain("controller_key");
-    }
 
-    @Test
-    void settingsAndReputationLiveInsideTheHohenheimAdmin() {
         navigateToApp("/admin/settings");
         waitForHydration();
         assertThat(page.locator("body").innerText()).contains("Spamservice");

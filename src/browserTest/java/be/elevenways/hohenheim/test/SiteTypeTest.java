@@ -30,11 +30,15 @@ class SiteTypeTest extends HohenheimTestBase {
         waitForReactiveIdle();
     }
 
+    /** One create-form load walked through every type variant and the git source swap. */
     @Test
     @Order(1)
-    void typeDropdownHasAllElevenTypes() {
+    void createFormSwapsEverySettingsVariant() {
         navigateToApp("/admin/sites/new");
         waitForHydration();
+
+        // Initial state: no source is git, so the git source settings stay out of the form.
+        assertThat(page.locator("pl-input[name='source_settings.repository_url']").count()).isZero();
 
         openPlSelect("pl-select[name='site_type']");
 
@@ -56,42 +60,16 @@ class SiteTypeTest extends HohenheimTestBase {
 
         // Close the dropdown again so later interactions start clean.
         page.keyboard().press("Escape");
-    }
-
-    @Test
-    @Order(2)
-    void selectingProxyShowsItsSettingsSubForm() {
-        navigateToApp("/admin/sites/new");
-        waitForHydration();
 
         selectSiteType("hohenheim:proxy");
-
         page.waitForSelector("pl-input[name='settings.forward_host']");
         assertThat(page.locator("pl-input[name='settings.forward_host']").count()).isEqualTo(1);
         assertThat(page.locator("pl-input[name='settings.forward_port']").count()).isEqualTo(1);
-    }
-
-    @Test
-    @Order(3)
-    void switchingToRedirectSwapsTheSubForm() {
-        navigateToApp("/admin/sites/new");
-        waitForHydration();
-
-        selectSiteType("hohenheim:proxy");
-        page.waitForSelector("pl-input[name='settings.forward_host']");
 
         selectSiteType("hohenheim:redirect");
         page.waitForSelector("pl-input[name='settings.target_url']");
-
         assertThat(page.locator("pl-input[name='settings.target_url']").count()).isEqualTo(1);
         assertThat(page.locator("pl-input[name='settings.forward_host']").count()).isEqualTo(0);
-    }
-
-    @Test
-    @Order(4)
-    void nodeVariantCarriesEnvVarAndTransportControls() {
-        navigateToApp("/admin/sites/new");
-        waitForHydration();
 
         selectSiteType("hohenheim:node");
         page.waitForSelector("pl-input[name='settings.script']");
@@ -101,45 +79,23 @@ class SiteTypeTest extends HohenheimTestBase {
         assertThat(content).contains("use_ports");
         assertThat(content).contains("wait_for_ready");
         assertThat(content).contains("api_keys");
-    }
 
-    @Test
-    @Order(5)
-    void gitSettingsOnlyRenderForGitSources() {
-        navigateToApp("/admin/sites/new");
-        waitForHydration();
+        selectSiteType("hohenheim:docker");
+        openPlSelect("pl-select[name='settings.server']");
+        assertThat(page.locator(OPEN_SELECT_POPUP
+            + " div[role='option'][data-value='hohenheim:local']").count()).isEqualTo(1);
+        page.keyboard().press("Escape");
 
-        assertThat(page.locator("pl-input[name='source_settings.repository_url']").count()).isZero();
+        selectSiteType("hohenheim:tls_passthrough");
+        page.waitForSelector("pl-input[name='settings.forward_host']");
+        assertThat(page.locator("pl-input[name='settings.forward_port']").count()).isEqualTo(1);
+        assertThat(page.locator("pl-switch[name='settings.proxy_protocol_v2']").count()).isEqualTo(1);
+        assertThat(page.locator("pl-input[name='settings.connect_timeout']").count()).isEqualTo(1);
 
         openPlSelect("pl-select[name='source']");
         page.click(OPEN_SELECT_POPUP + " div[role='option'][data-value='git']");
         waitForReactiveIdle();
         page.waitForSelector("pl-input[name='source_settings.repository_url']");
         assertThat(page.locator("pl-input[name='source_settings.repository_url']").count()).isEqualTo(1);
-    }
-
-    @Test
-    @Order(6)
-    void dockerPlacementUsesTheServerRegistry() {
-        navigateToApp("/admin/sites/new");
-        waitForHydration();
-        selectSiteType("hohenheim:docker");
-
-        openPlSelect("pl-select[name='settings.server']");
-        assertThat(page.locator(OPEN_SELECT_POPUP
-            + " div[role='option'][data-value='hohenheim:local']").count()).isEqualTo(1);
-    }
-
-    @Test
-    @Order(7)
-    void tlsPassthroughUsesTypedConnectionSettings() {
-        navigateToApp("/admin/sites/new");
-        waitForHydration();
-        selectSiteType("hohenheim:tls_passthrough");
-
-        page.waitForSelector("pl-input[name='settings.forward_host']");
-        assertThat(page.locator("pl-input[name='settings.forward_port']").count()).isEqualTo(1);
-        assertThat(page.locator("pl-switch[name='settings.proxy_protocol_v2']").count()).isEqualTo(1);
-        assertThat(page.locator("pl-input[name='settings.connect_timeout']").count()).isEqualTo(1);
     }
 }

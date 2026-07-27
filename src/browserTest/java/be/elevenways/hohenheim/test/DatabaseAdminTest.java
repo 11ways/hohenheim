@@ -16,19 +16,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DatabaseAdminTest extends HohenheimTestBase {
 
+    /** The list, the sidebar entry and the create form's engine/storage fields. */
     @Test
     @Order(1)
-    void databasesListRendersEmptyState() {
+    void databaseListAndCreateFormRender() {
         navigateToApp("/admin/databases");
         waitForHydration();
 
         String body = page.locator("body").textContent();
         assertThat(body).contains("Databases");
-    }
 
-    @Test
-    @Order(2)
-    void createFormShowsEngineAndStorageFields() {
+        // The shell sidebar carries the databases entry.
+        PlaywrightAssertions.assertThat(
+            page.locator("pl-app-sidebar a[href='/admin/databases']")).hasCount(1);
+
         navigateToApp("/admin/databases/new");
         waitForHydration();
 
@@ -38,19 +39,10 @@ class DatabaseAdminTest extends HohenheimTestBase {
         assertThat(content).contains("ephemeral");
     }
 
+    /** An existing database is a read-only detail with a delete form and a restore tab. */
     @Test
-    @Order(3)
-    void sidebarLinksToDatabases() {
-        navigateToApp("/admin");
-        waitForHydration();
-
-        PlaywrightAssertions.assertThat(
-            page.locator("pl-app-sidebar a[href='/admin/databases']")).hasCount(1);
-    }
-
-    @Test
-    @Order(4)
-    void restoreTabShowsConnectionInfoAndUploadForm() {
+    @Order(2)
+    void existingDatabaseDetailAndRestoreTab() {
         // Insert a record directly (no real container) so the render test stays fast.
         DatabaseModel model = Models.get(DatabaseModel.class);
         String name = "detailtest";
@@ -77,28 +69,23 @@ class DatabaseAdminTest extends HohenheimTestBase {
         } finally {
             model.find().where(DatabaseModel.NAME.eq(name)).delete();
         }
-    }
 
-    @Test
-    @Order(5)
-    void existingDatabaseIsAReadonlyDetailWithDeleteStillAvailable() {
-        DatabaseModel model = Models.get(DatabaseModel.class);
-        Row row = model.createEmptyRow();
-        row.set(DatabaseModel.NAME, "readonlydb");
-        row.set(DatabaseModel.ENGINE, "postgres");
-        row.set(DatabaseModel.DB_USER, "readonlyuser");
-        row.set(DatabaseModel.DB_PASSWORD, "readonlypass");
-        row.set(DatabaseModel.DB_NAME, "readonlydb");
-        model.save(row);
+        Row readonly = model.createEmptyRow();
+        readonly.set(DatabaseModel.NAME, "readonlydb");
+        readonly.set(DatabaseModel.ENGINE, "postgres");
+        readonly.set(DatabaseModel.DB_USER, "readonlyuser");
+        readonly.set(DatabaseModel.DB_PASSWORD, "readonlypass");
+        readonly.set(DatabaseModel.DB_NAME, "readonlydb");
+        model.save(readonly);
         try {
-            navigateToApp("/admin/databases/" + row.get(DatabaseModel.ID));
+            navigateToApp("/admin/databases/" + readonly.get(DatabaseModel.ID));
             waitForHydration();
 
             assertThat(page.locator(".cms-form-actions pl-button[type='submit']").count()).isZero();
             assertThat(page.locator("form.cms-delete-form pl-button").count()).isEqualTo(1);
             assertThat(page.locator("input[name='name']").count()).isZero();
         } finally {
-            model.delete(row);
+            model.delete(readonly);
         }
     }
 }

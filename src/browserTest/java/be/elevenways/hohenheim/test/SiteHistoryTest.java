@@ -25,8 +25,6 @@ class SiteHistoryTest extends HohenheimTestBase {
         "site_type=hohenheim%3Aproxy&source=local"
         + "&settings.forward_host=127.0.0.1&settings.forward_port=9090";
 
-    private static Integer siteId;
-
     private HttpResponse<String> postForm(String path, String body) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)
@@ -41,16 +39,17 @@ class SiteHistoryTest extends HohenheimTestBase {
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    /** Create, rename, read the feed deltas and restore the first revision without leaving the history page. */
     @Test
     @Order(1)
-    void cmsEditsAppearAsFeedEntriesWithDeltas() throws Exception {
+    void historyFeedShowsDeltasAndRestores() throws Exception {
         var created = postForm("/admin/sites/new", "name=History+Site&" + SITE_FORM);
         assertThat(created.statusCode()).isIn(200, 302, 303);
 
         Row site = Models.get(SiteModel.class).find()
             .where(SiteModel.NAME.eq("History Site")).first();
         assertThat(site).isNotNull();
-        siteId = site.get(SiteModel.ID);
+        Integer siteId = site.get(SiteModel.ID);
 
         var updated = postForm("/admin/sites/" + siteId, "name=Renamed+Site&" + SITE_FORM);
         assertThat(updated.statusCode()).isIn(200, 302, 303);
@@ -75,14 +74,8 @@ class SiteHistoryTest extends HohenheimTestBase {
         assertThat(page.locator(
                 "pl-timeline-item[data-activity-action='update'] pl-table-row[data-diff-field='name'] .cms-diff-after")
             .textContent()).contains("Renamed Site");
-    }
 
-    @Test
-    @Order(2)
-    void restoreFromTheFeedBringsTheOldNameBack() {
-        navigateToApp("/admin/sites/" + siteId + "/page/history");
-        waitForHydration();
-
+        // Restoring revision 1 from the same feed render brings the old name back.
         click("pl-timeline-item[data-activity-action='create'] pl-button[data-cms-restore-revision='1']");
         waitForSelector("pl-button[data-cms-confirm-ok]");
         click("pl-button[data-cms-confirm-ok]");
@@ -90,9 +83,9 @@ class SiteHistoryTest extends HohenheimTestBase {
         waitForSelector(".cms-record-history-page");
         waitForSelector("pl-timeline-item[data-activity-action='restore']");
 
-        Row site = Models.get(SiteModel.class).find()
+        Row restored = Models.get(SiteModel.class).find()
             .where(SiteModel.ID.eq(siteId)).first();
-        assertThat(site).isNotNull();
-        assertThat((String) site.get(SiteModel.NAME)).isEqualTo("History Site");
+        assertThat(restored).isNotNull();
+        assertThat((String) restored.get(SiteModel.NAME)).isEqualTo("History Site");
     }
 }
