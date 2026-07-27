@@ -27,19 +27,23 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Captures incoming HTTP/2 response trailers, which Undertow's h2 client otherwise DROPS
- * (nothing in stock Undertow calls setTrailersHandler): without this, gRPC's grpc-status
- * never reaches the downstream client.
+ * Adapts Undertow's client for streaming upstreams, which stock Undertow proxying cannot
+ * carry. Two defects, both fatal to gRPC:
  *
- * The captured map is stored under REQUEST_TRAILERS on the client exchange because
+ * <p>Response trailers: Undertow's h2 client DROPS them (nothing in stock Undertow calls
+ * setTrailersHandler), so gRPC's grpc-status never reaches the downstream client. The
+ * captured map is stored under REQUEST_TRAILERS on the client exchange because
  * ProxyHandler's trailer-copy listener reads that key from its source attachable when
  * emitting response trailers downstream.
+ *
+ * <p>Request commit: the upstream request is never put on the wire until a request BODY
+ * byte shows up -- see {@link #commitRequestHeaders}.
  */
-final class TrailerCapturingClientConnection implements ClientConnection {
+final class StreamingProxyClientConnection implements ClientConnection {
 
     private final ClientConnection delegate;
 
-    TrailerCapturingClientConnection(ClientConnection delegate) {
+    StreamingProxyClientConnection(ClientConnection delegate) {
         this.delegate = delegate;
     }
 
@@ -49,11 +53,44 @@ final class TrailerCapturingClientConnection implements ClientConnection {
             @Override
             public void completed(ClientExchange exchange) {
                 callback.completed(new TrailerCapturingExchange(exchange));
+                // The callback above is ProxyHandler wiring up the request-body relay, so
+                // the request is fully described by now and safe to put on the wire.
+                commitRequestHeaders(exchange);
             }
 
             @Override
             public void failed(IOException e) {
                 callback.failed(e);
+            }
+        });
+    }
+
+    /**
+     * Sends the upstream request headers without waiting for a request body.
+     *
+     * <p>AIDEV-NOTE: Undertow writes a request's HEADERS frame lazily, on the first write to
+     * the request channel, and for an incomplete downstream request ProxyHandler only calls
+     * {@code Transfer.initiateTransfer}, which writes NOTHING while no body bytes are
+     * buffered (it reads 0 bytes and breaks out). A bidirectional gRPC client opens its
+     * stream with headers alone and sends no message until it has one, so the upstream never
+     * saw the request at all: NetBird's signal stream hung for 50s and gave up, and the
+     * upstream connection was observed on the wire carrying SETTINGS and GOAWAY but never a
+     * HEADERS frame. Only the requiresContinueResponse path in ProxyHandler flushes, which
+     * is why ordinary unary gRPC and normal requests (complete on arrival, so ProxyHandler
+     * shuts down writes and flushes) always worked.
+     *
+     * <p>Deliberately a flush and NOT shutdownWrites: the request half must stay open for a
+     * client that will send messages later. A flush is a no-op once anything else has
+     * written, so complete requests are unaffected.
+     */
+    private static void commitRequestHeaders(ClientExchange exchange) {
+        XnioIoThread ioThread = exchange.getConnection().getIoThread();
+        ioThread.execute(() -> {
+            try {
+                exchange.getRequestChannel().flush();
+            } catch (IOException | RuntimeException ignored) {
+                // Already failing or finished; ProxyHandler owns the error path and a failed
+                // courtesy flush must never surface as a new error.
             }
         });
     }
