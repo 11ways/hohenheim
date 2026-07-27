@@ -125,21 +125,25 @@ public class SiteDispatcher implements HttpHandler {
      */
     public static @Nullable String normalizeRoutePath(@Nullable String raw) {
         if (raw == null) return null;
-        String path = raw.trim();
-        if (path.isEmpty()) return null;
-        if (!path.startsWith("/")) path = "/" + path;
-        // Collapse duplicate slashes and strip trailing ones BEFORE the root check, so the
-        // function is a fixpoint: "//" must canonicalize to null exactly like "/". The old
-        // order returned "/" for "//", which the editor accepted as distinct from an existing
-        // catch-all and the route build then collapsed first-wins, silently losing a row.
-        while (path.contains("//")) {
-            path = path.replace("//", "/");
+        // Iterated to a TRUE fixpoint: single-pass ordering leaves residue for inputs
+        // like "/a /" (trailing-slash strip exposes a trailing space the earlier trim
+        // already ran past), and a non-fixpoint canonical form is exactly the identity
+        // drift the editor/dispatcher agreement cannot afford.
+        String path = raw;
+        while (true) {
+            String before = path;
+            path = path.trim();
+            if (path.isEmpty()) return null;
+            if (!path.startsWith("/")) path = "/" + path;
+            while (path.contains("//")) {
+                path = path.replace("//", "/");
+            }
+            while (path.length() > 1 && path.endsWith("/")) {
+                path = path.substring(0, path.length() - 1);
+            }
+            if (path.equals("/")) return null;
+            if (path.equals(before)) return path;
         }
-        while (path.length() > 1 && path.endsWith("/")) {
-            path = path.substring(0, path.length() - 1);
-        }
-        if (path.equals("/")) return null;
-        return path;
     }
 
     /**
@@ -496,15 +500,21 @@ public class SiteDispatcher implements HttpHandler {
                     settings, authGate, authProviderName);
 
                 String kind;
-                if ("regex".equals(matchType)) {
-                    kind = "regex";
-                } else if ("wildcard".equals(matchType) || WildcardHostname.isWildcard(hostname)) {
-                    kind = "wildcard";
+                if (SiteDomainModel.MATCH_REGEX.equals(matchType)) {
+                    kind = SiteDomainModel.MATCH_REGEX;
+                } else if (SiteDomainModel.MATCH_WILDCARD.equals(matchType)
+                        || WildcardHostname.isWildcard(hostname)) {
+                    kind = SiteDomainModel.MATCH_WILDCARD;
                 } else {
-                    kind = "exact";
+                    kind = SiteDomainModel.MATCH_EXACT;
                 }
 
-                String claimKey = kind + "|" + hostname.toLowerCase(Locale.ROOT) + "|"
+                // Canonical hostname, NOT a blanket lowercase: regex sources are
+                // case-sensitive patterns, so "^App\." and "^app\." are two distinct
+                // routes -- lowercasing the claim key dropped one of them here while
+                // both matched at request time.
+                String claimKey = kind + "|"
+                    + SiteDomainModel.canonicalHostname(hostname, matchType) + "|"
                     + (entry.path != null ? entry.path : "") + "|" + entry.listenOnAddresses;
                 String owner = claimedRoutes.putIfAbsent(claimKey, siteName);
                 if (owner != null && !owner.equals(siteName)) {
@@ -515,7 +525,7 @@ public class SiteDispatcher implements HttpHandler {
                 }
 
                 switch (kind) {
-                    case "regex" -> {
+                    case SiteDomainModel.MATCH_REGEX -> {
                         Pattern pattern = compileHostnameRegex(hostname);
                         if (pattern != null) {
                             newRegex.add(new RegexRoute(hostname, pattern,
@@ -523,7 +533,7 @@ public class SiteDispatcher implements HttpHandler {
                             siteRouteAdded = true;
                         }
                     }
-                    case "wildcard" -> {
+                    case SiteDomainModel.MATCH_WILDCARD -> {
                         String glob = hostname.toLowerCase(Locale.ROOT);
                         newWildcard.add(new WildcardRoute(WildcardHostname.compile(glob), entry));
                         siteRouteAdded = true;

@@ -140,6 +140,15 @@ public class SiteResource extends RowResource {
         normalizeSource(values);
         normalizeDevNamespace(values);
         validateTlsPassthrough(values);
+        // Enabling a site puts its domain rows into the global route table; rows that
+        // were exempt from the route-identity check while the site was disabled
+        // (clones, staged drafts) must be re-judged NOW, not silently first-wins-ed.
+        boolean wasEnabled = Boolean.TRUE.equals(existing.get(SiteModel.ENABLED));
+        boolean willBeEnabled = values.containsKey("enabled")
+            ? Boolean.TRUE.equals(values.get("enabled")) : wasEnabled;
+        if (!wasEnabled && willBeEnabled) {
+            SiteDomainResource.refuseEnableRouteConflicts(existing.get(SiteModel.ID));
+        }
         super.updateRow(existing, values, accessContext);
     }
 

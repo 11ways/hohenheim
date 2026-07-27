@@ -88,24 +88,30 @@ public class StackFileResource extends RowResource {
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        validate(coerced, null);
-        return super.persistRow(coerced, accessContext);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
+        validate(values, null);
+        return super.persistRow(values, accessContext);
     }
 
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        validate(coerced, existing);
-        super.updateRow(existing, coerced, accessContext);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
+        validate(values, existing);
+        super.updateRow(existing, values, accessContext);
     }
 
-    /** Paths must be absolute, traversal-free, unshadowed and unique; modes must be octal. */
+    /** Paths must be absolute, traversal-free, unshadowed and unique; modes must be octal.
+     *  The trimmed path is written BACK so the validated value is the stored value. */
     private void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
         Object pathValue = coerced.get("container_path");
         String path = pathValue != null ? String.valueOf(pathValue).trim() : "";
         if (!path.startsWith("/") || path.contains("..")) {
             throw Violations.ofField("container_path", path,
                 CmsSupport.violationText("file_path_absolute"));
+        }
+        if (coerced.containsKey("container_path")) {
+            coerced.put("container_path", path);
         }
         Object modeValue = coerced.get("mode");
         if (modeValue != null && !String.valueOf(modeValue).isBlank()) {

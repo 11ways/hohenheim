@@ -24,6 +24,17 @@
         padding-bottom: var(--pl-space-md);
     }
 
+    .hh-stack-files {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--pl-space-2xs);
+    }
+
+    .hh-stack-add-file {
+        text-decoration: none;
+    }
+
     .hh-deploy-error {
         display: flex;
         align-items: baseline;

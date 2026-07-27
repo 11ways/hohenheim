@@ -177,8 +177,74 @@ class StackAdminTest extends HohenheimTestBase {
             .isEqualTo(0);
     }
 
+    /**
+     * Validation runs on the TRIMMED value and the trimmed value is what is stored:
+     * "web2 " passing the pattern check while " web2 " lands raw in the row is how
+     * invalid Docker names (and unmatchable sibling checks) used to ship.
+     */
     @Test
     @Order(9)
+    void trailingWhitespaceServiceNameIsStoredTrimmed() throws Exception {
+        var response = postForm("/admin/stack-services/new",
+            "stack_id=" + stackId + "&name=web2%20&enabled=false&enabled=true"
+            + "&image=alpine%3Alatest&command=&restart_policy=no");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+        assertThat(Models.get(StackServiceModel.class).find()
+            .where(StackServiceModel.NAME.eq("web2")).count())
+            .as("the canonical trimmed name is the stored name")
+            .isEqualTo(1);
+
+        postForm("/admin/stack-services/new",
+            "stack_id=" + stackId + "&name=%20web2&enabled=false&enabled=true"
+            + "&image=alpine%3Alatest&command=&restart_policy=no");
+        assertThat(Models.get(StackServiceModel.class).find()
+            .where(StackServiceModel.NAME.eq("web2")).count())
+            .as("a whitespace variant is the same name and must be refused")
+            .isEqualTo(1);
+    }
+
+    /** Docker rejects zero-period healthchecks at container create -- exactly the
+     *  deploy-time failure form validation exists to prevent. */
+    @Test
+    @Order(10)
+    void zeroHealthIntervalIsRefused() throws Exception {
+        postForm("/admin/stack-services/new",
+            "stack_id=" + stackId + "&name=sick&enabled=false&enabled=true"
+            + "&image=alpine%3Alatest&command=&restart_policy=no"
+            + "&health_cmd=true&health_interval_seconds=0");
+        assertThat(Models.get(StackServiceModel.class).find()
+            .where(StackServiceModel.NAME.eq("sick")).count())
+            .as("a zero healthcheck interval must fail the form, not the deploy")
+            .isEqualTo(0);
+    }
+
+    /**
+     * The mirror of the file-side shadow refusal: adding the MOUNT after the file
+     * must be refused exactly like adding the file after the mount (the service has
+     * a staged file at /etc/app.conf from the earlier test).
+     */
+    @Test
+    @Order(11)
+    void mountShadowingAStagedFileIsRefused() throws Exception {
+        navigateToApp("/admin/stack-services/" + serviceId);
+        waitForHydration();
+        String snapshot = page.locator("input[name='cms__snapshot']").inputValue();
+
+        postForm("/admin/stack-services/" + serviceId,
+            "stack_id=" + stackId + "&name=web&enabled=false&enabled=true"
+            + "&image=alpine%3Alatest&command=&restart_policy=no"
+            + "&mounts.0.type=volume&mounts.0.name=data&mounts.0.container_path=%2Fdata"
+            + "&mounts.1.type=volume&mounts.1.name=etc&mounts.1.container_path=%2Fetc"
+            + "&cms__snapshot=" + java.net.URLEncoder.encode(snapshot, java.nio.charset.StandardCharsets.UTF_8));
+
+        Row service = Models.get(StackServiceModel.class).findById(serviceId);
+        assertThat(service.getRecords(StackServiceModel.MOUNTS))
+            .as("the shadowing mount must be refused, keeping the original single mount")
+            .hasSize(1);
+    }
+
+    @Test
+    @Order(99)
     void deletingTheStackCascadesToServicesAndFiles() throws Exception {
         var response = postForm("/admin/stacks/" + stackId + "/delete", "");
         assertThat(response.statusCode()).isIn(200, 302, 303);

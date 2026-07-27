@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.model.Models;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.zenit.common.validation.Violations;
 
 public class SiteDomainModel extends Model {
@@ -25,6 +26,19 @@ public class SiteDomainModel extends Model {
 
     /** {@link #MATCH_TYPE} value for a regex hostname match (hostname stays case-sensitive). */
     public static final String MATCH_REGEX = "regex";
+
+    /**
+     * THE stored/canonical hostname form, shared by the beforeValidate hook, the
+     * route-identity check and the dispatcher: trimmed, lowercased except for regex
+     * sources (patterns are case-sensitive).
+     */
+    public static @Nullable String canonicalHostname(@Nullable String hostname, @Nullable String matchType) {
+        if (hostname == null) {
+            return null;
+        }
+        String trimmed = hostname.trim();
+        return MATCH_REGEX.equals(matchType) ? trimmed : trimmed.toLowerCase(Locale.ROOT);
+    }
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());
@@ -96,11 +110,7 @@ public class SiteDomainModel extends Model {
             if (row == null) return;
             String hostname = (String) effective(row, HOSTNAME);
             if (hostname != null) {
-                String normalized = hostname.trim();
-                if (!"regex".equals(effective(row, MATCH_TYPE))) {
-                    normalized = normalized.toLowerCase(Locale.ROOT);
-                }
-                row.set(HOSTNAME, normalized);
+                row.set(HOSTNAME, canonicalHostname(hostname, (String) effective(row, MATCH_TYPE)));
             }
             Integer siteId = (Integer) effective(row, SITE_ID);
             Row site = siteId != null ? Models.get(SiteModel.class).findById(siteId) : null;

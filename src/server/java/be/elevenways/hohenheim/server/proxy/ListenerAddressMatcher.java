@@ -68,7 +68,7 @@ public final class ListenerAddressMatcher {
     }
 
     private static String normalize(String value) {
-        String normalized = value.trim().toLowerCase();
+        String normalized = value.trim().toLowerCase(java.util.Locale.ROOT);
         if (normalized.startsWith("::ffff:")) {
             normalized = normalized.substring("::ffff:".length());
         }

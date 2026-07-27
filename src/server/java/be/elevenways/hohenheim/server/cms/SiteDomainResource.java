@@ -34,9 +34,9 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -50,9 +50,9 @@ public class SiteDomainResource extends RowResource {
     static final List<FieldOption<String>> MATCH_OPTIONS = List.of(
         FieldOption.of(SiteDomainModel.MATCH_EXACT,
             Microcopy.of("exact").withFilter("scope", "domain_match")),
-        FieldOption.of("wildcard",
+        FieldOption.of(SiteDomainModel.MATCH_WILDCARD,
             Microcopy.of("wildcard").withFilter("scope", "domain_match")),
-        FieldOption.of("regex",
+        FieldOption.of(SiteDomainModel.MATCH_REGEX,
             Microcopy.of("regex").withFilter("scope", "domain_match")));
 
     /** Discovered local addresses (refreshed hourly by UpdateSystemIpAddresses); blank = all interfaces. */
@@ -188,36 +188,65 @@ public class SiteDomainResource extends RowResource {
             validateTlsPassthroughDomain(coerced);
         }
         // Uniqueness compares CANONICAL route components: the hostname as the model hook
-        // stores it (trimmed, lowercased for non-regex kinds), the path as the dispatcher
-        // routes it (normalizeRoutePath), and listener restrictions as ListenerAddressMatcher
-        // parses them. Two rows conflict when their listener sets can OVERLAP (an empty set
-        // means every address); disjoint sets are genuinely distinct routes. Match type is
-        // deliberately NOT part of the identity: an exact and a wildcard row with the same
-        // literal hostname shadow each other in the tiered lookup, which is a config mistake
-        // worth refusing, not two routes.
+        // stores it (SiteDomainModel.canonicalHostname -- ONE definition), the path as
+        // the dispatcher routes it (normalizeRoutePath), and listener restrictions as
+        // ListenerAddressMatcher parses them. Two rows conflict when their listener sets
+        // can OVERLAP (an empty set means every address); disjoint sets are genuinely
+        // distinct routes. Match type is deliberately NOT part of the identity: an exact
+        // and a wildcard row with the same literal hostname shadow each other in the
+        // tiered lookup, which is a config mistake worth refusing, not two routes.
+        //
+        // The check is GLOBAL, not per-site: the dispatcher's route table spans every
+        // enabled site and silently drops the loser of a duplicate claim (first-wins by
+        // site name), so a same-route row on ANOTHER site is exactly as broken as one on
+        // this site. Rows of DISABLED other sites (clones, staged drafts) are exempt --
+        // they hold no routes; the conflict is refused again on the site-enable edit.
         String matchType = stringValue(coerced.containsKey("match_type") ? coerced.get("match_type")
             : existing != null ? existing.get(SiteDomainModel.MATCH_TYPE) : null);
-        String canonicalHostname = canonicalHostname(hostname, matchType);
+        String canonicalHostname = SiteDomainModel.canonicalHostname(hostname, matchType);
         String path = normalizedPath(coerced.containsKey("path") ? coerced.get("path")
             : existing != null ? existing.get(SiteDomainModel.PATH) : null);
         List<String> listenOn = ListenerAddressMatcher.parse(
             stringValue(coerced.containsKey("listen_on") ? coerced.get("listen_on")
                 : existing != null ? existing.get(SiteDomainModel.LISTEN_ON) : null));
 
-        for (Row candidate : this.model().find()
-                .where(SiteDomainModel.SITE_ID.eq(siteId))
-                .all()) {
+        Map<Integer, Row> sitesById = new HashMap<>();
+        for (Row candidateSite : Models.get(SiteModel.class).find().all()) {
+            sitesById.put(candidateSite.get(SiteModel.ID), candidateSite);
+        }
+        // A row on a DISABLED site holds no routes, in either direction: staging a
+        // duplicate on a draft/clone site is legal, and only the site-enable edit
+        // re-judges it against the live table. Same-site duplicates are always a
+        // config mistake, enabled or not.
+        boolean ownSiteEnabled = site != null && Boolean.TRUE.equals(site.get(SiteModel.ENABLED));
+
+        for (Row candidate : this.model().find().all()) {
             if (existing != null
                 && candidate.get(SiteDomainModel.ID).equals(existing.get(SiteDomainModel.ID))) {
                 continue;
             }
-            String candidateHostname = canonicalHostname(
+            Integer candidateSiteId = candidate.get(SiteDomainModel.SITE_ID);
+            boolean sameSite = Objects.equals(candidateSiteId, siteId);
+            Row candidateSite = sitesById.get(candidateSiteId);
+            boolean candidateEnabled = candidateSite != null
+                && Boolean.TRUE.equals(candidateSite.get(SiteModel.ENABLED));
+            if (!sameSite && (!candidateEnabled || !ownSiteEnabled)) {
+                continue;
+            }
+            String candidateHostname = SiteDomainModel.canonicalHostname(
                 candidate.get(SiteDomainModel.HOSTNAME), candidate.get(SiteDomainModel.MATCH_TYPE));
             if (!Objects.equals(canonicalHostname, candidateHostname)
                 || !Objects.equals(path, normalizedPath(candidate.get(SiteDomainModel.PATH)))
                 || !listenersOverlap(listenOn,
                     ListenerAddressMatcher.parse(candidate.get(SiteDomainModel.LISTEN_ON)))) {
                 continue;
+            }
+            if (!sameSite) {
+                String siteName = candidateSite != null
+                    ? String.valueOf(candidateSite.get(SiteModel.NAME)) : "#" + candidateSiteId;
+                throw Violations.ofField(path == null ? "hostname" : "path",
+                    path == null ? hostname : path,
+                    CmsSupport.violationText("route_taken_other_site").withArg("site", siteName));
             }
             if (path == null) {
                 throw Violations.ofField("hostname", hostname, CmsSupport.violationText("hostname_taken"));
@@ -226,14 +255,49 @@ public class SiteDomainResource extends RowResource {
         }
     }
 
-    /** The hostname exactly as the model's beforeValidate hook stores it. */
-    private static @Nullable String canonicalHostname(@Nullable String hostname, @Nullable String matchType) {
-        if (hostname == null) {
-            return null;
+    /**
+     * The site-ENABLE side of the global route check: rows of a disabled site are
+     * exempt while it stays disabled, so enabling it must re-run the comparison
+     * against every other enabled site's rows.
+     *
+     * @throws Violations anchored on {@code enabled} naming the conflicting site
+     */
+    static void refuseEnableRouteConflicts(int siteId) {
+        Map<Integer, Row> sitesById = new HashMap<>();
+        for (Row site : Models.get(SiteModel.class).find().all()) {
+            sitesById.put(site.get(SiteModel.ID), site);
         }
-        String trimmed = hostname.trim();
-        return SiteDomainModel.MATCH_REGEX.equals(matchType)
-            ? trimmed : trimmed.toLowerCase(Locale.ROOT);
+        List<Row> allRows = Models.get(SiteDomainModel.class).find().all();
+        for (Row own : allRows) {
+            if (!Objects.equals(own.get(SiteDomainModel.SITE_ID), siteId)) {
+                continue;
+            }
+            String ownHostname = SiteDomainModel.canonicalHostname(
+                own.get(SiteDomainModel.HOSTNAME), own.get(SiteDomainModel.MATCH_TYPE));
+            String ownPath = normalizedPath(own.get(SiteDomainModel.PATH));
+            List<String> ownListen = ListenerAddressMatcher.parse(own.get(SiteDomainModel.LISTEN_ON));
+            for (Row candidate : allRows) {
+                Integer candidateSiteId = candidate.get(SiteDomainModel.SITE_ID);
+                if (Objects.equals(candidateSiteId, siteId)) {
+                    continue;
+                }
+                Row candidateSite = sitesById.get(candidateSiteId);
+                if (candidateSite == null || !Boolean.TRUE.equals(candidateSite.get(SiteModel.ENABLED))) {
+                    continue;
+                }
+                if (!Objects.equals(ownHostname, SiteDomainModel.canonicalHostname(
+                        candidate.get(SiteDomainModel.HOSTNAME), candidate.get(SiteDomainModel.MATCH_TYPE)))
+                    || !Objects.equals(ownPath, normalizedPath(candidate.get(SiteDomainModel.PATH)))
+                    || !listenersOverlap(ownListen,
+                        ListenerAddressMatcher.parse(candidate.get(SiteDomainModel.LISTEN_ON)))) {
+                    continue;
+                }
+                throw Violations.ofField("enabled", true,
+                    CmsSupport.violationText("enable_route_conflict")
+                        .withArg("hostname", String.valueOf(own.get(SiteDomainModel.HOSTNAME)))
+                        .withArg("site", String.valueOf(candidateSite.get(SiteModel.NAME))));
+            }
+        }
     }
 
     /**

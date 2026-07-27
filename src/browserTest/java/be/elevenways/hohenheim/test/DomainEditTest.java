@@ -319,8 +319,98 @@ class DomainEditTest extends HohenheimTestBase {
             .isEqualTo(2);
     }
 
+    /**
+     * normalizeRoutePath must be a TRUE fixpoint: "/fx /" (trailing space exposed
+     * by the trailing-slash strip) canonicalizes to "/fx", is STORED canonical,
+     * and a later "/fx" row is the same route.
+     */
     @Test
     @Order(15)
+    void trailingWhitespacePathCanonicalizesToTheSameRoute() throws Exception {
+        String host = "fixpoint-test.example.com";
+        var first = postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=" + host + "&match_type=exact&path=%2Ffx%20%2F");
+        assertThat(first.statusCode()).isIn(200, 302, 303);
+        Row stored = Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.HOSTNAME.eq(host)).first();
+        assertThat(stored).isNotNull();
+        assertThat((String) stored.get(SiteDomainModel.PATH))
+            .as("the canonical path is stored, residue like \"/fx \" never routes")
+            .isEqualTo("/fx");
+
+        postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=" + host + "&match_type=exact&path=%2Ffx");
+        assertThat(domainsNamed(host))
+            .as("\"/fx /\" and \"/fx\" are one route")
+            .isEqualTo(1);
+    }
+
+    /**
+     * Route identity is GLOBAL: the dispatcher's table spans every enabled site and
+     * silently drops the loser of a duplicate claim, so the editor must refuse the
+     * same route on another ENABLED site while exempting disabled ones (clones,
+     * staged drafts) until they are enabled.
+     */
+    @Test
+    @Order(16)
+    void sameRouteOnAnotherEnabledSiteIsRejected() throws Exception {
+        var siteResponse = postForm("/admin/sites/new",
+            "name=Second+Route+Site&site_type=hohenheim%3Aproxy&source=local"
+            + "&settings.forward_host=127.0.0.1&settings.forward_port=9091");
+        assertThat(siteResponse.statusCode()).isIn(200, 302, 303);
+        Row second = Models.get(SiteModel.class).find()
+            .where(SiteModel.NAME.eq("Second Route Site")).first();
+        assertThat(second).isNotNull();
+
+        postForm("/admin/domains/new",
+            "site_id=" + second.get(SiteModel.ID)
+            + "&hostname=edit-test.example.com&match_type=exact");
+        assertThat(Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.SITE_ID.eq(second.get(SiteModel.ID))).count())
+            .as("the same host+path on another enabled site is one route and must be refused")
+            .isEqualTo(0);
+    }
+
+    @Test
+    @Order(17)
+    void disabledSiteRowsAreExemptUntilEnabling() throws Exception {
+        var siteResponse = postForm("/admin/sites/new",
+            "name=Draft+Route+Site&site_type=hohenheim%3Aproxy&source=local"
+            + "&enabled=false&settings.forward_host=127.0.0.1&settings.forward_port=9092");
+        assertThat(siteResponse.statusCode()).isIn(200, 302, 303);
+        Row draft = Models.get(SiteModel.class).find()
+            .where(SiteModel.NAME.eq("Draft Route Site")).first();
+        assertThat(draft).isNotNull();
+        assertThat((Boolean) draft.get(SiteModel.ENABLED)).isFalse();
+        Integer draftId = draft.get(SiteModel.ID);
+
+        var domainResponse = postForm("/admin/domains/new",
+            "site_id=" + draftId + "&hostname=edit-test.example.com&match_type=exact");
+        assertThat(domainResponse.statusCode()).isIn(200, 302, 303);
+        assertThat(Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.SITE_ID.eq(draftId)).count())
+            .as("a DISABLED site's rows hold no routes yet, so the duplicate is allowed")
+            .isEqualTo(1);
+
+        // Enabling the draft site would put the duplicate into the route table:
+        // the enable edit must be refused and the site must stay disabled.
+        navigateToApp("/admin/sites/" + draftId);
+        waitForHydration();
+        String snapshot = page.locator("input[name='cms__snapshot']").inputValue();
+        var enableResponse = postForm("/admin/sites/" + draftId,
+            "name=Draft+Route+Site&site_type=hohenheim%3Aproxy&source=local"
+            + "&enabled=false&enabled=true"
+            + "&settings.forward_host=127.0.0.1&settings.forward_port=9092"
+            + "&cms__snapshot=" + java.net.URLEncoder.encode(snapshot, java.nio.charset.StandardCharsets.UTF_8));
+        assertThat(enableResponse.statusCode()).isIn(200, 302, 303);
+        Row after = Models.get(SiteModel.class).findById(draftId);
+        assertThat((Boolean) after.get(SiteModel.ENABLED))
+            .as("enabling must be refused while the duplicate route exists")
+            .isFalse();
+    }
+
+    @Test
+    @Order(99)
     void deleteRemovesTheDomain() throws Exception {
         var response = postForm("/admin/domains/" + domainId + "/delete", "");
         assertThat(response.statusCode()).isIn(200, 302, 303);
