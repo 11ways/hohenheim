@@ -202,19 +202,34 @@ public class DockerClient {
         if (at > 0) {
             String repo = image.substring(0, at);
             String digest = image.substring(at + 1);
-            String ref = repo + "@" + digest;
+            // A digest is content-addressed, so presence is decided by the digest ALONE:
+            // RepoDigests entries are tagless and registry-normalized ("nginx@sha256:..."),
+            // which an exact-string match against the user's spelling ("nginx:1.27@...",
+            // "docker.io/library/nginx@...") could never hit -- that re-pulled on every
+            // deploy and failed offline deploys with the image already present.
             for (Object entry : listImages()) {
                 Object repoDigests = ((Map<?, ?>) entry).get("RepoDigests");
-                if (repoDigests instanceof List<?> digests && digests.contains(ref)) {
-                    return;
+                if (!(repoDigests instanceof List<?> digests)) {
+                    continue;
                 }
+                for (Object stored : digests) {
+                    if (String.valueOf(stored).endsWith("@" + digest)) {
+                        return;
+                    }
+                }
+            }
+            // Compose-style pins carry a tag before the digest (repo:tag@sha256:...);
+            // the engine pulls by digest, so the tag must be stripped from fromImage.
+            int colon = repo.lastIndexOf(':');
+            if (colon > repo.lastIndexOf('/')) {
+                repo = repo.substring(0, colon);
             }
             String path = "/images/create?fromImage=" + enc(repo) + "&tag=" + enc(digest);
             Map<String, String> headers = auth == null ? null : Map.of("X-Registry-Auth", auth.encode());
             String body = new String(
                 exchange("POST", path, null, null, headers, LONG_OP_TIMEOUT_MS).body(),
                 StandardCharsets.UTF_8);
-            throwIfStreamError(body, "Docker image pull for " + ref);
+            throwIfStreamError(body, "Docker image pull for " + repo + "@" + digest);
             return;
         }
 

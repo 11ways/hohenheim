@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.stack;
 
 import be.elevenways.hohenheim.migration.M042_CreateStacks;
+import be.elevenways.hohenheim.migration.M043_StackUniqueKeys;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -57,7 +58,7 @@ class StackRuntimeFlowTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner((MigrationCapableDatasource) datasource,
-            List.of(M042_CreateStacks::new)).migrate();
+            List.of(M042_CreateStacks::new, M043_StackUniqueKeys::new)).migrate();
         HohenheimTestRuntime.ensureBooted();
 
         docker = new DockerClient();
@@ -199,5 +200,40 @@ class StackRuntimeFlowTest {
         });
         Map<String, String> serviceStates = runtime.serviceStates(stackId);
         assertThat(serviceStates.get("app")).isEqualTo("stopped");
+    }
+
+    /**
+     * A deploy interrupted by a crash or restart leaves the row claiming "deploying",
+     * and refreshStatus defers to a running deploy -- so without a boot sweep that
+     * stack is never monitored or alerted on again.
+     */
+    @Test
+    void interruptedDeployStatusIsSweptAtBoot() throws IOException {
+        requireDocker();
+        String stackName = "hhflow-swept-" + Long.toHexString(System.nanoTime());
+        stackId = createStackRecords(stackName, "one");
+
+        runtime.deploy(stackId, "initial");
+
+        // Simulate the crash: the status row is left mid-deploy.
+        Db.run(datasource, () -> {
+            StackModel stacks = Models.get(StackModel.class);
+            Row stack = stacks.findById(stackId);
+            stack.set(StackModel.STATUS, StackModel.STATUS_DEPLOYING);
+            stacks.save(stack);
+        });
+
+        assertThat(runtime.refreshStatus(stackId))
+            .as("a deploying claim blocks status refresh, which is why the sweep exists")
+            .isEqualTo(StackModel.STATUS_DEPLOYING);
+
+        runtime.resetInterruptedDeploys();
+
+        Db.run(datasource, () -> {
+            Row stack = Models.get(StackModel.class).findById(stackId);
+            assertThat(stack.get(StackModel.STATUS))
+                .as("the sweep recomputes from live containers, which are still running")
+                .isEqualTo(StackModel.STATUS_ACTIVE);
+        });
     }
 }

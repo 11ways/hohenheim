@@ -17,7 +17,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
@@ -68,7 +70,10 @@ public class StackRuntime {
             StackSpec snapshot = scoped(() -> latestSnapshot(stackId));
             if (snapshot == null) {
                 Blast.log("STACK: no successful deployment to roll back to for stack", stackId);
-                setStatus(stackId, StackModel.STATUS_FAILED);
+                // Nothing was touched, so "failed" would lie about possibly-healthy
+                // containers: release the deploying claim and recompute from live state.
+                setStatus(stackId, StackModel.STATUS_INACTIVE);
+                refreshStatus(stackId);
                 return;
             }
             runDeploy(stackId, "rollback", snapshot);
@@ -79,7 +84,7 @@ public class StackRuntime {
     public void stopAsync(int stackId) {
         workerFor(stackId).submit(() -> {
             try {
-                StackSpec spec = scoped(() -> currentSpec(stackId));
+                StackSpec spec = scoped(() -> teardownSpec(stackId));
                 if (spec == null) {
                     return;
                 }
@@ -93,10 +98,13 @@ public class StackRuntime {
     }
 
     // -- synchronous operations ----------------------------------------------
+    // Every synchronous operation ALSO runs on the stack's worker: a caller-thread
+    // Docker mutation racing a queued deploy is exactly the interleaving the
+    // one-worker-per-stack design exists to prevent.
 
     /** Deploy synchronously (tests, scripted use); throws on failure. */
     public void deploy(int stackId, @NonNull String reason) throws IOException {
-        IOException failure = runDeploy(stackId, reason, null);
+        IOException failure = onWorker(stackId, () -> runDeploy(stackId, reason, null));
         if (failure != null) {
             throw failure;
         }
@@ -108,7 +116,7 @@ public class StackRuntime {
         if (snapshot == null) {
             throw new IOException("No successful deployment to roll back to");
         }
-        IOException failure = runDeploy(stackId, "rollback", snapshot);
+        IOException failure = onWorker(stackId, () -> runDeploy(stackId, "rollback", snapshot));
         if (failure != null) {
             throw failure;
         }
@@ -116,30 +124,88 @@ public class StackRuntime {
 
     /** Stop synchronously; throws on failure. */
     public void stop(int stackId) throws IOException {
-        StackSpec spec = scoped(() -> currentSpec(stackId));
-        if (spec == null) {
-            throw new IOException("Stack " + stackId + " does not exist");
-        }
-        new StackDeployer(clientFor.apply(spec.serverName()), null).stop(spec);
-        setStatus(stackId, StackModel.STATUS_STOPPED);
+        onWorker(stackId, () -> {
+            StackSpec spec = scoped(() -> teardownSpec(stackId));
+            if (spec == null) {
+                throw new IOException("Stack " + stackId + " does not exist");
+            }
+            new StackDeployer(clientFor.apply(spec.serverName()), null).stop(spec);
+            setStatus(stackId, StackModel.STATUS_STOPPED);
+            return null;
+        });
     }
 
     /**
      * Remove every owned container and the network; owned volumes only when
      * {@code removeVolumes}. Used by the destroy action and record deletion.
+     * Serializes behind any queued deploy so the queued work cannot recreate
+     * containers after this removed them; the worker is retired afterwards.
      */
     public void destroy(int stackId, boolean removeVolumes) throws IOException {
-        StackSpec spec = scoped(() -> currentSpec(stackId));
-        if (spec == null) {
-            return;
+        try {
+            onWorker(stackId, () -> {
+                // Unordered on purpose: a broken dependency graph must not make a stack
+                // undeletable, and teardown does not need the order.
+                StackSpec spec = scoped(() -> teardownSpec(stackId));
+                if (spec == null) {
+                    return null;
+                }
+                new StackDeployer(clientFor.apply(spec.serverName()), null).destroy(spec, removeVolumes);
+                setStatus(stackId, StackModel.STATUS_INACTIVE);
+                return null;
+            });
+        } finally {
+            ExecutorService worker = this.workers.remove(stackId);
+            if (worker != null) {
+                worker.shutdown();
+            }
         }
-        new StackDeployer(clientFor.apply(spec.serverName()), null).destroy(spec, removeVolumes);
-        setStatus(stackId, StackModel.STATUS_INACTIVE);
+    }
+
+    /**
+     * Boot sweep: a deploy interrupted by a crash or restart must not own the status
+     * forever -- {@code refreshStatus} defers to a "running" deploy, so a stale
+     * {@code deploying} row would disable monitoring and alerting permanently.
+     */
+    public void resetInterruptedDeploys() {
+        List<Row> stuck = scoped(() -> Models.get(StackModel.class)
+            .find().where(StackModel.STATUS.eq(StackModel.STATUS_DEPLOYING)).all());
+        for (Row stack : stuck) {
+            Integer stackId = stack.get(StackModel.ID);
+            Blast.log("STACK: deploy of stack", stackId,
+                "was interrupted by a restart; recomputing status from live containers");
+            setStatus(stackId, StackModel.STATUS_FAILED);
+            refreshStatus(stackId);
+        }
+    }
+
+    /** Run a stack operation on its worker and wait, unwrapping the checked failure. */
+    private <T> T onWorker(int stackId, @NonNull Callable<T> body) throws IOException {
+        try {
+            return workerFor(stackId).submit(body).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while operating on stack " + stackId, e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof IOException io) {
+                throw io;
+            }
+            if (cause instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            if (cause instanceof Error error) {
+                throw error;
+            }
+            throw new IOException(String.valueOf(cause), cause);
+        }
     }
 
     /** Live per-service states, best-effort; empty when the stack is unknown. */
     public @NonNull Map<String, String> serviceStates(int stackId) {
-        StackSpec spec = scoped(() -> currentSpec(stackId));
+        // Unordered: an admin page must still show live state for a stack whose
+        // dependency graph is currently invalid.
+        StackSpec spec = scoped(() -> teardownSpec(stackId));
         if (spec == null) {
             return Map.of();
         }
@@ -166,12 +232,12 @@ public class StackRuntime {
             return previous;   // a running deploy owns the status until it finishes
         }
 
-        StackSpec spec = scoped(() -> StackSpec.fromRecords(stack));
+        StackSpec spec = scoped(() -> StackSpec.fromRecordsUnordered(stack));
         String next;
+        Map<String, String> states = Map.of();
         if (spec.services().isEmpty()) {
             next = StackModel.STATUS_INACTIVE;
         } else {
-            Map<String, String> states;
             try {
                 states = new StackDeployer(clientFor.apply(spec.serverName()), null).status(spec);
             } catch (Exception e) {
@@ -186,8 +252,10 @@ public class StackRuntime {
             boolean turnedBad = (StackModel.STATUS_DEGRADED.equals(next) || StackModel.STATUS_FAILED.equals(next))
                 && StackModel.STATUS_ACTIVE.equals(previous);
             if (turnedBad) {
+                // The states that TRIGGERED the transition, not a fresh Docker round-trip
+                // that may already show something else.
                 Alerts.send("stack_health", "Stack '" + spec.name() + "' is " + next,
-                    "Service states: " + serviceStates(stackId));
+                    "Service states: " + states);
             }
         }
         return next;
@@ -233,6 +301,10 @@ public class StackRuntime {
      * @return the failure, or null on success (async callers log it, sync rethrow)
      */
     private @Nullable IOException runDeploy(int stackId, String reason, @Nullable StackSpec snapshot) {
+        // Claim the status HERE, not only at queue time: a deploy queued behind another
+        // one must re-claim it when it actually starts, or the monitor sees the first
+        // deploy's "active" while containers are mid-replace and fires a false alert.
+        setStatus(stackId, StackModel.STATUS_DEPLOYING);
         StringBuilder log = new StringBuilder();
         Integer recordId = scoped(() -> StackDeploymentRecords.started(stackId, reason));
         try {
@@ -252,21 +324,34 @@ public class StackRuntime {
             });
             setStatus(stackId, StackModel.STATUS_ACTIVE);
             return null;
-        } catch (Exception e) {
-            log.append("FAILED: ").append(e.getMessage()).append('\n');
+        } catch (Throwable e) {
+            // Throwable, not Exception: an Error thrown on the worker would otherwise
+            // vanish into the executor's unread future and leave the status stuck.
+            String failure = e.getMessage() != null ? e.getMessage() : e.toString();
+            log.append("FAILED: ").append(failure).append('\n');
             scoped(() -> {
-                StackDeploymentRecords.finished(recordId, false, e.getMessage(), log.toString(), null);
+                StackDeploymentRecords.finished(recordId, false, failure, log.toString(), null);
                 return null;
             });
             setStatus(stackId, StackModel.STATUS_FAILED);
-            Blast.log("STACK: deploy failed for stack", stackId, "-", e.getMessage());
-            return e instanceof IOException io ? io : new IOException(e.getMessage(), e);
+            Blast.log("STACK: deploy failed for stack", stackId, "-", failure);
+            if (e instanceof Error error) {
+                throw error;
+            }
+            return e instanceof IOException io ? io : new IOException(failure, e);
         }
     }
 
     private @Nullable StackSpec currentSpec(int stackId) {
         Row stack = Models.get(StackModel.class).findById(stackId);
         return stack != null ? StackSpec.fromRecords(stack) : null;
+    }
+
+    /** Spec for stop/destroy: resolved without dependency ordering, so a broken graph
+     *  can still be torn down. */
+    private @Nullable StackSpec teardownSpec(int stackId) {
+        Row stack = Models.get(StackModel.class).findById(stackId);
+        return stack != null ? StackSpec.fromRecordsUnordered(stack) : null;
     }
 
     @SuppressWarnings("unchecked")

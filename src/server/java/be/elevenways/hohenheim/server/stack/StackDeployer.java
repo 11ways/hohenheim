@@ -11,9 +11,11 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -80,11 +82,60 @@ public class StackDeployer {
             awaitDependencies(spec, service);
             deployService(spec, service, auth);
         }
+        pruneOrphanedContainers(spec);
         log.accept("Stack '" + spec.name() + "' deployed");
+    }
+
+    /**
+     * Declarative convergence: remove owned containers whose service is no longer in
+     * the spec (deleted, disabled or renamed services). Without this they keep running
+     * forever -- restart policy unless-stopped -- invisible to status, stop and destroy,
+     * which all iterate the CURRENT spec. Only containers carrying THIS stack's
+     * ownership label are ever touched.
+     */
+    private void pruneOrphanedContainers(@NonNull StackSpec spec) throws IOException {
+        Set<String> wanted = new HashSet<>();
+        for (StackSpec.ServiceSpec service : spec.services()) {
+            wanted.add(containerName(spec, service.name()));
+        }
+        for (Map<String, Object> summary : listOwnedContainerSummaries(spec)) {
+            String name = summaryName(summary);
+            if (name == null || wanted.contains(name)) {
+                continue;
+            }
+            log.accept("Pruning orphaned container " + name + " (service no longer in the stack)");
+            docker.removeContainer(String.valueOf(summary.get("Id")), true);
+        }
+    }
+
+    /** Every container (running or not) carrying this stack's ownership label. */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> listOwnedContainerSummaries(@NonNull StackSpec spec) throws IOException {
+        List<Map<String, Object>> owned = new ArrayList<>();
+        for (Object entry : docker.listContainers(true)) {
+            if (!(entry instanceof Map<?, ?> summary)) {
+                continue;
+            }
+            if (summary.get("Labels") instanceof Map<?, ?> labels
+                && spec.name().equals(labels.get(LABEL_STACK))) {
+                owned.add((Map<String, Object>) summary);
+            }
+        }
+        return owned;
+    }
+
+    /** First name of a /containers/json summary, without the leading slash. */
+    private static @Nullable String summaryName(@NonNull Map<String, Object> summary) {
+        if (summary.get("Names") instanceof List<?> names && !names.isEmpty()) {
+            String name = String.valueOf(names.get(0));
+            return name.startsWith("/") ? name.substring(1) : name;
+        }
+        return null;
     }
 
     /** Stop every owned container, dependents first (reverse dependency order). */
     public void stop(@NonNull StackSpec spec) throws IOException {
+        Set<String> stopped = new HashSet<>();
         List<StackSpec.ServiceSpec> reversed = new ArrayList<>(spec.services());
         java.util.Collections.reverse(reversed);
         for (StackSpec.ServiceSpec service : reversed) {
@@ -93,7 +144,18 @@ public class StackDeployer {
             if (existing != null) {
                 log.accept("Stopping " + name);
                 docker.stopContainer(idOf(existing), STOP_GRACE_SECONDS);
+                stopped.add(name);
             }
+        }
+        // A service disabled or removed since the last deploy still has a running
+        // container; "stop the stack" must mean the whole stack, not just its spec.
+        for (Map<String, Object> summary : listOwnedContainerSummaries(spec)) {
+            String name = summaryName(summary);
+            if (name != null && stopped.contains(name)) {
+                continue;
+            }
+            log.accept("Stopping " + (name != null ? name : String.valueOf(summary.get("Id"))));
+            docker.stopContainer(String.valueOf(summary.get("Id")), STOP_GRACE_SECONDS);
         }
     }
 
@@ -111,6 +173,14 @@ public class StackDeployer {
                 log.accept("Removing " + name);
                 docker.removeContainer(idOf(existing), true);
             }
+        }
+
+        // Sweep by ownership label: containers of services REMOVED from the records
+        // are not in the spec's service list but still belong to this stack.
+        for (Map<String, Object> summary : listOwnedContainerSummaries(spec)) {
+            String name = summaryName(summary);
+            log.accept("Removing " + (name != null ? name : String.valueOf(summary.get("Id"))));
+            docker.removeContainer(String.valueOf(summary.get("Id")), true);
         }
 
         Map<String, Object> network = docker.findNetworkByName(networkName(spec));
@@ -165,6 +235,10 @@ public class StackDeployer {
                 return;
             }
             if (spec.adoptResources()) {
+                // AIDEV-NOTE: adoption deliberately does NOT relabel networks or volumes, so
+                // they stay un-owned: every later deploy re-logs "Adopting", and destroy leaves
+                // them alone. We never remove what we did not create. Containers differ -- they
+                // are RECREATED on deploy and so come back carrying our labels.
                 log.accept("Adopting existing network " + name);
                 return;
             }
@@ -325,9 +399,11 @@ public class StackDeployer {
                 String relative = file.containerPath().startsWith("/")
                     ? file.containerPath().substring(1)
                     : file.containerPath();
-                if (relative.isBlank() || relative.contains("..")) {
+                if (relative.isBlank()) {
                     throw new IOException("Refusing config file path '" + file.containerPath() + "'");
                 }
+                // Escape check by NORMALIZED containment only: a literal ".." substring test
+                // also rejects legitimate names like "/etc/app..conf".
                 Path target = staging.resolve(relative).normalize();
                 if (!target.startsWith(staging)) {
                     throw new IOException("Refusing config file path '" + file.containerPath() + "'");
@@ -343,7 +419,7 @@ public class StackDeployer {
         }
     }
 
-    private static void applyMode(Path file, String mode) throws IOException {
+    private void applyMode(Path file, String mode) throws IOException {
         try {
             int octal = Integer.parseInt(mode, 8);
             StringBuilder permissions = new StringBuilder(9);
@@ -354,8 +430,11 @@ public class StackDeployer {
             Files.setPosixFilePermissions(file, PosixFilePermissions.fromString(permissions.toString()));
         } catch (NumberFormatException error) {
             throw new IOException("Bad file mode '" + mode + "' (expected octal like 0644)");
-        } catch (UnsupportedOperationException ignored) {
-            // Non-POSIX staging filesystem: the tar will carry default modes.
+        } catch (UnsupportedOperationException unsupported) {
+            // Non-POSIX staging filesystem: the tar carries default modes instead. Say so --
+            // a 0600 secret silently landing as 0644 inside the container is worth knowing.
+            log.accept("Cannot apply mode " + mode + " to " + file.getFileName()
+                + " on this filesystem; the container will see default permissions");
         }
     }
 
