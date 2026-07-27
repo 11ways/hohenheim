@@ -17,6 +17,11 @@ public/cms.css
 # Checked-in template: settings/local.dry.example
 settings/local.dry
 
+# Field-encryption keyring: auto-generated on first use (also by a local test
+# run), holds the keys for every .encrypted() column. Never commit it.
+settings/field-encryption.keys
+settings/field-encryption.keys.lock
+
 # Git-provisioned site slots. Anchored to the repo root so a `data/` folder
 # anywhere else (tests, fixtures, docs) is NOT ignored. If you reconfigure
 # storage.data_path to somewhere outside the repo, add that path to

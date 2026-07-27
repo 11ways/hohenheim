@@ -88,19 +88,19 @@ public class StackFileResource extends RowResource {
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        validate(coerced);
+        validate(coerced, null);
         return super.persistRow(coerced, accessContext);
     }
 
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        validate(coerced);
+        validate(coerced, existing);
         super.updateRow(existing, coerced, accessContext);
     }
 
-    /** Paths must be absolute and traversal-free; modes must be octal. */
-    private void validate(@NonNull Map<String, Object> coerced) {
+    /** Paths must be absolute, traversal-free, unshadowed and unique; modes must be octal. */
+    private void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
         Object pathValue = coerced.get("container_path");
         String path = pathValue != null ? String.valueOf(pathValue).trim() : "";
         if (!path.startsWith("/") || path.contains("..")) {
@@ -114,6 +114,45 @@ public class StackFileResource extends RowResource {
             } catch (NumberFormatException error) {
                 throw Violations.ofField("mode", modeValue,
                     CmsSupport.violationText("file_mode_format"));
+            }
+        }
+
+        Object serviceIdValue = coerced.containsKey("stack_service_id")
+            ? coerced.get("stack_service_id")
+            : existing != null ? existing.get(StackFileModel.STACK_SERVICE_ID) : null;
+        if (!(serviceIdValue instanceof Integer serviceId)) {
+            throw Violations.ofField("stack_service_id", serviceIdValue,
+                CmsSupport.violationText("service_required"));
+        }
+
+        Integer existingId = existing != null ? existing.get(StackFileModel.ID) : null;
+        for (Row sibling : this.model().find()
+                .where(StackFileModel.STACK_SERVICE_ID.eq(serviceId)).all()) {
+            if (sibling.get(StackFileModel.ID).equals(existingId)) {
+                continue;
+            }
+            if (path.equals(String.valueOf(sibling.get(StackFileModel.CONTAINER_PATH)).trim())) {
+                throw Violations.ofField("container_path", path,
+                    CmsSupport.violationText("file_path_taken"));
+            }
+        }
+
+        // Files are staged into the container BEFORE it starts, so a mount covering the
+        // path silently hides the file the moment the container runs -- an operator would
+        // deploy a secret that simply is not there.
+        Row service = Models.get(StackServiceModel.class).findById(serviceId);
+        if (service == null) {
+            return;
+        }
+        for (Row mount : service.getRecords(StackServiceModel.MOUNTS)) {
+            String mountPath = String.valueOf(mount.get(StackServiceModel.MOUNT_PATH)).trim();
+            if (mountPath.isEmpty() || !mountPath.startsWith("/")) {
+                continue;
+            }
+            String prefix = mountPath.endsWith("/") ? mountPath : mountPath + "/";
+            if (path.equals(mountPath) || path.startsWith(prefix)) {
+                throw Violations.ofField("container_path", path,
+                    CmsSupport.violationText("file_path_shadowed"));
             }
         }
     }
