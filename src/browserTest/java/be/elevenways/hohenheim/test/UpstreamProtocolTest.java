@@ -741,6 +741,29 @@ class UpstreamProtocolTest {
             .isEqualTo("/proxied");
     }
 
+    /**
+     * The streaming adapter claims EVERY upstream connection, so the header-only commit
+     * must also hold when the upstream side speaks HTTP/1 (the default protocol).
+     */
+    @Test
+    void requestHeadersReachAnHttp1UpstreamWithoutARequestBody() throws Exception {
+        resetDatabase();
+        int upstreamPort = startRecordingUpstream();
+
+        setupSiteWithDomain("hohenheim:proxy", "bidi-h1.test", "exact", Map.of(
+            "forward_host", "127.0.0.1",
+            "forward_port", upstreamPort,
+            "request_timeout", 0));
+
+        proxy = startProxy();
+
+        upstreamSawPaths.clear();
+        sendRawH2cHeadersOnly(httpPort(proxy), "bidi-h1.test", "/proxied-h1", 1500);
+        assertThat(upstreamSawPaths.poll(5, TimeUnit.SECONDS))
+            .as("an h1 upstream must see a headers-only request before any body arrives")
+            .isEqualTo("/proxied-h1");
+    }
+
     // -------------------------------------------------------------------
     // Compression bypass
     // -------------------------------------------------------------------

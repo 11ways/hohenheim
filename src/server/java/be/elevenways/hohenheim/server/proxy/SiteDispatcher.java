@@ -126,11 +126,19 @@ public class SiteDispatcher implements HttpHandler {
     public static @Nullable String normalizeRoutePath(@Nullable String raw) {
         if (raw == null) return null;
         String path = raw.trim();
-        if (path.isEmpty() || path.equals("/")) return null;
+        if (path.isEmpty()) return null;
         if (!path.startsWith("/")) path = "/" + path;
+        // Collapse duplicate slashes and strip trailing ones BEFORE the root check, so the
+        // function is a fixpoint: "//" must canonicalize to null exactly like "/". The old
+        // order returned "/" for "//", which the editor accepted as distinct from an existing
+        // catch-all and the route build then collapsed first-wins, silently losing a row.
+        while (path.contains("//")) {
+            path = path.replace("//", "/");
+        }
         while (path.length() > 1 && path.endsWith("/")) {
             path = path.substring(0, path.length() - 1);
         }
+        if (path.equals("/")) return null;
         return path;
     }
 

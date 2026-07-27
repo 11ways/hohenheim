@@ -4,6 +4,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.proxy.ListenerAddressMatcher;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.sitetype.types.TlsPassthroughSiteType;
@@ -35,6 +36,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -185,23 +187,68 @@ public class SiteDomainResource extends RowResource {
                 .equals(site.get(SiteModel.SITE_TYPE))) {
             validateTlsPassthroughDomain(coerced);
         }
-        // Uniqueness is per (hostname, canonical path): the dispatcher routes host+path pairs,
-        // so several rows may share a hostname as long as their canonical paths differ.
-        // Comparison MUST use the dispatcher's own normalizer -- see normalizeRoutePath.
+        // Uniqueness compares CANONICAL route components: the hostname as the model hook
+        // stores it (trimmed, lowercased for non-regex kinds), the path as the dispatcher
+        // routes it (normalizeRoutePath), and listener restrictions as ListenerAddressMatcher
+        // parses them. Two rows conflict when their listener sets can OVERLAP (an empty set
+        // means every address); disjoint sets are genuinely distinct routes. Match type is
+        // deliberately NOT part of the identity: an exact and a wildcard row with the same
+        // literal hostname shadow each other in the tiered lookup, which is a config mistake
+        // worth refusing, not two routes.
+        String matchType = stringValue(coerced.containsKey("match_type") ? coerced.get("match_type")
+            : existing != null ? existing.get(SiteDomainModel.MATCH_TYPE) : null);
+        String canonicalHostname = canonicalHostname(hostname, matchType);
         String path = normalizedPath(coerced.containsKey("path") ? coerced.get("path")
             : existing != null ? existing.get(SiteDomainModel.PATH) : null);
+        List<String> listenOn = ListenerAddressMatcher.parse(
+            stringValue(coerced.containsKey("listen_on") ? coerced.get("listen_on")
+                : existing != null ? existing.get(SiteDomainModel.LISTEN_ON) : null));
+
         for (Row candidate : this.model().find()
                 .where(SiteDomainModel.SITE_ID.eq(siteId))
-                .where(SiteDomainModel.HOSTNAME.eq(hostname))
                 .all()) {
             if (existing != null
                 && candidate.get(SiteDomainModel.ID).equals(existing.get(SiteDomainModel.ID))) {
                 continue;
             }
-            if (Objects.equals(normalizedPath(candidate.get(SiteDomainModel.PATH)), path)) {
+            String candidateHostname = canonicalHostname(
+                candidate.get(SiteDomainModel.HOSTNAME), candidate.get(SiteDomainModel.MATCH_TYPE));
+            if (!Objects.equals(canonicalHostname, candidateHostname)
+                || !Objects.equals(path, normalizedPath(candidate.get(SiteDomainModel.PATH)))
+                || !listenersOverlap(listenOn,
+                    ListenerAddressMatcher.parse(candidate.get(SiteDomainModel.LISTEN_ON)))) {
+                continue;
+            }
+            if (path == null) {
                 throw Violations.ofField("hostname", hostname, CmsSupport.violationText("hostname_taken"));
             }
+            throw Violations.ofField("path", path, CmsSupport.violationText("route_taken"));
         }
+    }
+
+    /** The hostname exactly as the model's beforeValidate hook stores it. */
+    private static @Nullable String canonicalHostname(@Nullable String hostname, @Nullable String matchType) {
+        if (hostname == null) {
+            return null;
+        }
+        String trimmed = hostname.trim();
+        return SiteDomainModel.MATCH_REGEX.equals(matchType)
+            ? trimmed : trimmed.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * An empty restriction listens everywhere, so it overlaps every other set.
+     * {@code intersection} answers NULL (not empty) for disjoint sets.
+     */
+    private static boolean listenersOverlap(@NonNull List<String> first, @NonNull List<String> second) {
+        if (first.isEmpty() || second.isEmpty()) {
+            return true;
+        }
+        return ListenerAddressMatcher.intersection(first, second) != null;
+    }
+
+    private static @Nullable String stringValue(@Nullable Object value) {
+        return value != null ? String.valueOf(value) : null;
     }
 
     /** Canonical route path for uniqueness, delegated to the routing authority. */

@@ -20,6 +20,12 @@ public class SiteDomainModel extends Model {
     /** {@link #MATCH_TYPE} value for an exact hostname match. */
     public static final String MATCH_EXACT = "exact";
 
+    /** {@link #MATCH_TYPE} value for a glob-style wildcard hostname match. */
+    public static final String MATCH_WILDCARD = "wildcard";
+
+    /** {@link #MATCH_TYPE} value for a regex hostname match (hostname stays case-sensitive). */
+    public static final String MATCH_REGEX = "regex";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());
     public static final StringField HOSTNAME = SCHEMA.addField(StringField.builder().name("hostname")

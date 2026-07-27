@@ -245,8 +245,82 @@ class DomainEditTest extends HohenheimTestBase {
             .isEqualTo("/app");
     }
 
+    /**
+     * The dispatcher lowercases non-regex hostnames into one exact bucket, so a
+     * case-variant spelling is the SAME route and must be refused -- the model hook
+     * lowercases on save, and comparing raw input used to slip past the check.
+     */
     @Test
     @Order(12)
+    void caseVariantHostnameIsRejected() throws Exception {
+        postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=Edit-Test.EXAMPLE.com&match_type=exact&path=%2Fapp");
+
+        assertThat(domainsNamed("edit-test.example.com"))
+            .as("a case-variant hostname collapses to the same route and must be refused")
+            .isEqualTo(3);
+    }
+
+    /**
+     * normalizeRoutePath must be a fixpoint: "//" canonicalizes to the catch-all
+     * (null) exactly like "/" -- it used to canonicalize to "/", which the editor
+     * accepted as a distinct row and the route build then collapsed first-wins.
+     */
+    @Test
+    @Order(13)
+    void doubleSlashIsTheSameCatchAll() throws Exception {
+        postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=edit-test.example.com&match_type=exact&path=%2F%2F");
+
+        assertThat(domainsNamed("edit-test.example.com"))
+            .as("\"//\" is the same catch-all route as blank and \"/\"")
+            .isEqualTo(3);
+    }
+
+    /**
+     * Listener restrictions are part of route identity: two rows sharing host+path
+     * are distinct only while their listener sets cannot overlap. Uses its own
+     * hostname so no earlier ordered test's listen_on state leaks in.
+     */
+    @Test
+    @Order(14)
+    void listenAddressesDecideRouteIdentity() throws Exception {
+        String host = "listen-test.example.com";
+
+        var first = postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=" + host + "&match_type=exact"
+            + "&path=%2Fapp&listen_on=127.0.0.1");
+        assertThat(first.statusCode()).isIn(200, 302, 303);
+        assertThat(domainsNamed(host)).isEqualTo(1);
+
+        // ::1 always exists in the discovered set (the listen_on select validates
+        // against it), so the disjoint case does not depend on this machine's NICs.
+        var second = postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=" + host + "&match_type=exact"
+            + "&path=%2Fapp&listen_on=%3A%3A1");
+        assertThat(second.statusCode()).isIn(200, 302, 303);
+        assertThat(domainsNamed(host))
+            .as("a disjoint listen_on set is a distinct route")
+            .isEqualTo(2);
+
+        // Same address as the first row: one route, so the row must be refused.
+        postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=" + host + "&match_type=exact"
+            + "&path=%2Fapp&listen_on=127.0.0.1");
+        assertThat(domainsNamed(host))
+            .as("an overlapping listen_on set is the same route")
+            .isEqualTo(2);
+
+        // An UNRESTRICTED row listens everywhere, so it overlaps both restricted ones.
+        postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=" + host + "&match_type=exact&path=%2Fapp");
+        assertThat(domainsNamed(host))
+            .as("an unrestricted listener set overlaps every restricted one")
+            .isEqualTo(2);
+    }
+
+    @Test
+    @Order(15)
     void deleteRemovesTheDomain() throws Exception {
         var response = postForm("/admin/domains/" + domainId + "/delete", "");
         assertThat(response.statusCode()).isIn(200, 302, 303);
