@@ -43,6 +43,10 @@
     "text": "That hostname is already configured for this site",
     "scope": "violations"
   },
+  "route_taken": {
+    "text": "That hostname and path are already routed on this site",
+    "scope": "violations"
+  },
   "key_pem_invalid": {
     "text": "Invalid private key PEM: {$detail}",
     "scope": "violations"
@@ -3727,6 +3731,10 @@
     "text": "This stack already has a service with this name",
     "scope": "violations"
   },
+  "service_still_depended_upon": {
+    "text": "Service {$service} still depends on this service; update its dependencies first",
+    "scope": "violations"
+  },
   "port_range": {
     "text": "Ports must be between 1 and 65535",
     "scope": "violations"
@@ -3755,8 +3763,12 @@
     "text": "Destroy the stack's containers before renaming it; the name is part of every container, network and volume name",
     "scope": "violations"
   },
+  "stack_rename_unverifiable": {
+    "text": "Cannot verify the stack has no containers left (Docker is unreachable); rename refused",
+    "scope": "violations"
+  },
   "subnet_format": {
-    "text": "Use an IPv4 CIDR such as 172.30.7.0/24",
+    "text": "Use a CIDR such as 172.30.7.0/24",
     "scope": "violations"
   },
   "mount_name_format": {
@@ -3771,12 +3783,20 @@
     "text": "This service already mounts something at that path",
     "scope": "violations"
   },
+  "mount_shadows_file": {
+    "text": "This mount would hide the staged file {$file} once the container starts",
+    "scope": "violations"
+  },
   "port_container_required": {
     "text": "A container port is required",
     "scope": "violations"
   },
   "host_port_taken": {
     "text": "Another service in this stack already publishes that host port",
+    "scope": "violations"
+  },
+  "host_port_taken_other_stack": {
+    "text": "This host port is already published by service {$service} of another stack on this server",
     "scope": "violations"
   },
   "depends_unknown_service": {
@@ -3835,6 +3855,10 @@
     "text": "Missing",
     "scope": "stack_state"
   },
+  "orphaned": {
+    "text": "Orphaned",
+    "scope": "stack_state"
+  },
   "unknown": {
     "text": "Unknown",
     "scope": "stack_state"
@@ -3851,8 +3875,12 @@
     "text": "Success",
     "scope": "stack_deploy_status"
   },
-  "scheduled": {
-    "text": "Scheduled",
-    "scope": "stack_deploy_reason"
+  "route_taken_other_site": {
+    "text": "This route is already claimed by site {$site}",
+    "scope": "violations"
+  },
+  "enable_route_conflict": {
+    "text": "Cannot enable this site: {$hostname} is already routed by site {$site}",
+    "scope": "violations"
   }
 }

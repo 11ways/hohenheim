@@ -98,31 +98,41 @@ public class StackResource extends RowResource {
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        validate(coerced, null);
-        return super.persistRow(coerced, accessContext);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
+        validate(values, null);
+        return super.persistRow(values, accessContext);
     }
 
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        validate(coerced, existing);
-        super.updateRow(existing, coerced, accessContext);
+        Map<String, Object> values = CmsSupport.mutable(coerced);
+        validate(values, existing);
+        super.updateRow(existing, values, accessContext);
     }
 
-    /** Names become Docker resource names: enforce the safe shape and uniqueness. */
+    /** Names become Docker resource names: enforce the safe shape and uniqueness.
+     *  Canonical (trimmed) values are written BACK so the stored value is the
+     *  validated one -- "web " passing the pattern on its trimmed copy but being
+     *  stored raw is how invalid Docker names ship. */
     private void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
-        Object nameValue = coerced.get("name");
-        String name = nameValue != null ? String.valueOf(nameValue).trim() : "";
+        String name = trimmedValue(coerced.containsKey("name") ? coerced.get("name")
+            : existing != null ? existing.get(StackModel.NAME) : null);
         if (!NAME_PATTERN.matcher(name).matches()) {
             throw Violations.ofField("name", name, CmsSupport.violationText("stack_name_format"));
+        }
+        if (coerced.containsKey("name")) {
+            coerced.put("name", name);
         }
         Row duplicate = Models.get(StackModel.class).findByName(name);
         if (duplicate != null
             && (existing == null || !duplicate.get(StackModel.ID).equals(existing.get(StackModel.ID)))) {
             throw Violations.ofField("name", name, CmsSupport.violationText("stack_name_taken"));
         }
-        Object subnetValue = coerced.get("subnet");
-        String subnet = subnetValue != null ? String.valueOf(subnetValue).trim() : "";
+        String subnet = trimmedValue(coerced.get("subnet"));
+        if (coerced.containsKey("subnet")) {
+            coerced.put("subnet", subnet);
+        }
         if (!subnet.isEmpty() && !isCidr(subnet)) {
             // Without this the mistake only surfaces inside the deploy worker, as a failed
             // deployment record rather than a form violation next to the offending input.
@@ -130,15 +140,34 @@ public class StackResource extends RowResource {
         }
         if (existing != null && !name.equals(existing.get(StackModel.NAME))) {
             // The name is embedded in every ownership label, container, network and volume
-            // name: renaming a deployed stack would orphan ALL of them (deploy, status,
-            // stop and destroy only see the new name). Destroy first, then rename.
-            String status = existing.get(StackModel.STATUS);
-            boolean neverDeployed = status == null || status.isBlank()
-                || StackModel.STATUS_INACTIVE.equals(status);
-            if (!neverDeployed) {
+            // name: renaming a stack with LIVE resources would orphan ALL of them (deploy,
+            // status, stop and destroy only see the new name). The gate is the live
+            // container count, decided on the stack's worker so it cannot interleave with
+            // a running operation -- a status string alone both misses orphans (deleted
+            // services under an "inactive" stack) and locks out failed-first-deploy
+            // stacks that never created anything.
+            // AIDEV-NOTE: a deploy QUEUED after this check but before the form persists
+            // can still race the rename; the worker check narrows the window, it cannot
+            // close it without moving the persist itself onto the worker.
+            Integer stackId = existing.get(StackModel.ID);
+            if (StackModel.STATUS_DEPLOYING.equals(existing.get(StackModel.STATUS))) {
                 throw Violations.ofField("name", name, CmsSupport.violationText("stack_rename_deployed"));
             }
+            try {
+                if (stackId != null && StackRuntime.get().ownedContainerCount(stackId) > 0) {
+                    throw Violations.ofField("name", name,
+                        CmsSupport.violationText("stack_rename_deployed"));
+                }
+            } catch (IOException dockerUnavailable) {
+                // Cannot PROVE the rename is safe: refuse rather than orphan.
+                throw Violations.ofField("name", name,
+                    CmsSupport.violationText("stack_rename_unverifiable"));
+            }
         }
+    }
+
+    private static @NonNull String trimmedValue(@Nullable Object value) {
+        return value != null ? String.valueOf(value).trim() : "";
     }
 
     /**
@@ -154,8 +183,13 @@ public class StackResource extends RowResource {
         if (address == null) {
             return false;
         }
+        String prefixText = value.substring(slash + 1);
+        // Digits only: Integer.parseInt would accept "+24", which Docker refuses.
+        if (prefixText.isEmpty() || !prefixText.chars().allMatch(Character::isDigit)) {
+            return false;
+        }
         try {
-            int prefix = Integer.parseInt(value.substring(slash + 1));
+            int prefix = Integer.parseInt(prefixText);
             return prefix >= 0 && prefix <= address.length * 8;
         } catch (NumberFormatException notANumber) {
             return false;
@@ -163,8 +197,8 @@ public class StackResource extends RowResource {
     }
 
     @Override
-    public @Nullable Microcopy deleteConfirmationBody() {
-        return Microcopy.of("delete_confirm").withFilter("scope", "stack");
+    public @NonNull ConfirmationSpec deleteConfirmation() {
+        return deleteConfirmation(Microcopy.of("delete_confirm").withFilter("scope", "stack"));
     }
 
     /** Deleting the record first removes owned containers and the network (volumes stay). */
@@ -179,20 +213,27 @@ public class StackResource extends RowResource {
             }
             // No FK cascades on these tables: files hang off the services and deployment
             // history (with encrypted credential-bearing snapshots) off the stack, and
-            // both would linger unreachable forever without an explicit sweep.
-            List<Integer> serviceIds = new ArrayList<>();
-            for (Row service : Models.get(StackServiceModel.class).find()
-                    .where(StackServiceModel.STACK_ID.eq(stackId)).all()) {
-                serviceIds.add(service.get(StackServiceModel.ID));
-            }
-            if (!serviceIds.isEmpty()) {
-                Models.get(StackFileModel.class).find()
-                    .where(StackFileModel.STACK_SERVICE_ID.in(serviceIds)).delete();
-            }
-            Models.get(StackServiceModel.class).find()
-                .where(StackServiceModel.STACK_ID.eq(stackId)).delete();
-            Models.get(StackDeploymentModel.class).find()
-                .where(StackDeploymentModel.STACK_ID.eq(stackId)).delete();
+            // both would linger unreachable forever without an explicit sweep. ONE
+            // transaction around the whole cascade plus the stack row itself, so a
+            // failure mid-sweep never leaves a stack alive with its children gone (or
+            // the reverse). The Docker destroy above deliberately stays OUTSIDE it.
+            inMutationTransaction(() -> {
+                List<Integer> serviceIds = new ArrayList<>();
+                for (Row service : Models.get(StackServiceModel.class).find()
+                        .where(StackServiceModel.STACK_ID.eq(stackId)).all()) {
+                    serviceIds.add(service.get(StackServiceModel.ID));
+                }
+                if (!serviceIds.isEmpty()) {
+                    Models.get(StackFileModel.class).find()
+                        .where(StackFileModel.STACK_SERVICE_ID.in(serviceIds)).delete();
+                }
+                Models.get(StackServiceModel.class).find()
+                    .where(StackServiceModel.STACK_ID.eq(stackId)).delete();
+                Models.get(StackDeploymentModel.class).find()
+                    .where(StackDeploymentModel.STACK_ID.eq(stackId)).delete();
+                super.deleteRow(row, accessContext);
+            });
+            return;
         }
         super.deleteRow(row, accessContext);
     }
