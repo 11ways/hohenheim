@@ -1257,12 +1257,16 @@ public class SiteDispatcher implements HttpHandler {
 
     private void dispatchToRoute(RouteEntry entry, HttpServerExchange exchange) {
         exchange.addResponseCommitListener(ex -> applyResponseMutations(entry, ex));
-        // Streaming upstreams must reach the client the moment their headers do.
-        EagerResponseCommit.install(exchange);
 
         ProxyHandler timedProxyHandler = proxyHandlerFor(entry.requestTimeoutMs);
         Runnable dispatch = () -> entry.handler.handleRequest(exchange, upstream -> {
             exchange.putAttachment(UPSTREAM_URI, upstream);
+            // Only the proxy path may commit early: ProxyHandler copies the upstream status
+            // and headers before it acquires the response channel, so a flush can never
+            // publish a half-built response. Handlers that build their OWN response (a
+            // redirect's 302 + Location, a static file, an error page) must not be committed
+            // out from under them.
+            EagerResponseCommit.install(exchange);
             try {
                 timedProxyHandler.handleRequest(exchange);
             } catch (Exception e) {
@@ -1566,12 +1570,12 @@ public class SiteDispatcher implements HttpHandler {
                     String path = uri.getPath();
                     if (path == null || path.isEmpty()) path = "/";
 
-                    // Capture response trailers (e.g. grpc-status) that the stock Undertow
-                    // h2 client would otherwise drop. Applied to EVERY upstream connection:
-                    // the hook only engages on HTTP/2 response channels, so h1 connections
-                    // pass through untouched and no protocol combination is left out.
+                    // Streaming adapter: captures response trailers (e.g. grpc-status) that
+                    // the stock Undertow h2 client drops, and commits the upstream request
+                    // headers without waiting for a request body. Applied to EVERY upstream
+                    // connection so no protocol combination is left out.
                     callback.completed(exchange, new ProxyConnection(
-                        new TrailerCapturingClientConnection(connection), path));
+                        new StreamingProxyClientConnection(connection), path));
                 }
 
                 @Override

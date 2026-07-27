@@ -39,8 +39,11 @@ final class EagerResponseCommit {
     }
 
     /**
-     * Must be called BEFORE the proxy handler runs: {@code addResponseWrapper} throws once
-     * the response channel has been handed out.
+     * Must be called BEFORE the proxy handler runs -- {@code addResponseWrapper} throws once
+     * the response channel has been handed out -- and ONLY for a request that is about to be
+     * proxied. A handler that builds its own response sets its status and headers after this
+     * point, and committing early would publish a half-built response (a redirect losing its
+     * 302 and Location was the way that showed up).
      */
     static void install(HttpServerExchange exchange) {
         exchange.addResponseWrapper((factory, ex) -> {

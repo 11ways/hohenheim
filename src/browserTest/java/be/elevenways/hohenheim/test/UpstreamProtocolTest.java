@@ -623,6 +623,124 @@ class UpstreamProtocolTest {
             .isLessThan(bodyDelayMs / 2);
     }
 
+    /** Records the path of every request the upstream actually receives. */
+    private final java.util.concurrent.BlockingQueue<String> upstreamSawPaths =
+        new java.util.concurrent.LinkedBlockingQueue<>();
+
+    /**
+     * Upstream that reports each request the moment its headers arrive, whether or not a
+     * request body follows -- a bidirectional gRPC service is invoked on stream open
+     * (NetBird's SignalExchange registers the peer from the request metadata alone).
+     */
+    private int startRecordingUpstream() {
+        undertowUpstream = Undertow.builder()
+            .addHttpListener(0, "127.0.0.1")
+            .setServerOption(UndertowOptions.ENABLE_HTTP2, true)
+            .setHandler(exchange -> {
+                upstreamSawPaths.add(exchange.getRequestPath());
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/grpc");
+                exchange.setStatusCode(200);
+                exchange.endExchange();
+            })
+            .build();
+        undertowUpstream.start();
+        return ((InetSocketAddress) undertowUpstream.getListenerInfo().get(0).getAddress()).getPort();
+    }
+
+    /**
+     * Opens an h2c stream with HEADERS only: no END_STREAM, no DATA -- exactly how a
+     * bidirectional gRPC client starts a stream before it has a message to send.
+     *
+     * <p>Hand-rolled because neither Undertow client can express it: they write the HEADERS
+     * frame lazily, on the first body write, so a body-less request never reaches the wire
+     * at all. That same laziness is what the proxy trips over, which is why this test needs
+     * to own the bytes. HPACK here is literal-without-indexing (0x00) and never Huffman,
+     * which every HTTP/2 implementation must accept.
+     */
+    private static void sendRawH2cHeadersOnly(int port, String host, String path,
+                                              long holdOpenMs) throws Exception {
+        try (java.net.Socket socket = new java.net.Socket("127.0.0.1", port)) {
+            socket.setTcpNoDelay(true);
+            var out = socket.getOutputStream();
+
+            out.write("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+            writeFrame(out, 0x4, 0x0, 0, new byte[0]);                  // empty SETTINGS
+            writeFrame(out, 0x4, 0x1, 0, new byte[0]);                  // SETTINGS ACK
+
+            var hpack = new java.io.ByteArrayOutputStream();
+            writeLiteralHeader(hpack, ":method", "POST");
+            writeLiteralHeader(hpack, ":path", path);
+            writeLiteralHeader(hpack, ":scheme", "http");
+            writeLiteralHeader(hpack, ":authority", host);
+            writeLiteralHeader(hpack, "content-type", "application/grpc");
+            writeLiteralHeader(hpack, "te", "trailers");
+            // END_HEADERS (0x4) only: END_STREAM is deliberately NOT set.
+            writeFrame(out, 0x1, 0x4, 1, hpack.toByteArray());
+            out.flush();
+
+            Thread.sleep(holdOpenMs);
+        }
+    }
+
+    private static void writeFrame(java.io.OutputStream out, int type, int flags, int streamId,
+                                   byte[] payload) throws IOException {
+        out.write(new byte[] {
+            (byte) (payload.length >>> 16), (byte) (payload.length >>> 8), (byte) payload.length,
+            (byte) type, (byte) flags,
+            (byte) (streamId >>> 24), (byte) (streamId >>> 16),
+            (byte) (streamId >>> 8), (byte) streamId});
+        out.write(payload);
+    }
+
+    private static void writeLiteralHeader(java.io.ByteArrayOutputStream out, String name,
+                                           String value) {
+        byte[] n = name.getBytes(StandardCharsets.US_ASCII);
+        byte[] v = value.getBytes(StandardCharsets.US_ASCII);
+        if (n.length > 126 || v.length > 126) {
+            throw new IllegalArgumentException("test helper only encodes short header fields");
+        }
+        out.write(0x00);                // literal header field, never indexed, new name
+        out.write(n.length);            // 7-bit prefix length, no Huffman
+        out.write(n, 0, n.length);
+        out.write(v.length);
+        out.write(v, 0, v.length);
+    }
+
+    /**
+     * A bidirectional stream must reach the upstream as soon as its headers are sent, even
+     * though the client has not sent a single body byte. Undertow's proxy relays the request
+     * body with a transfer that writes nothing when no bytes are buffered, and nothing else
+     * flushes the upstream request channel, so the upstream never saw the request at all --
+     * the client then waited forever on opening metadata that could not exist. NetBird's
+     * signal stream died this way (proven on the wire: the upstream connection carried
+     * SETTINGS and GOAWAY but never a HEADERS frame) while a body-less curl POST, which
+     * half-closes immediately and completes the request, succeeded.
+     */
+    @Test
+    void requestHeadersReachTheUpstreamWithoutARequestBody() throws Exception {
+        resetDatabase();
+        int upstreamPort = startRecordingUpstream();
+
+        setupSiteWithDomain("hohenheim:proxy", "bidi.test", "exact",
+            h2Settings(upstreamPort, 0));
+
+        proxy = startProxy();
+
+        // Control: the upstream sees a headers-only stream when spoken to directly, so a
+        // miss below can only mean the proxy withheld it.
+        upstreamSawPaths.clear();
+        sendRawH2cHeadersOnly(upstreamPort, "bidi.test", "/direct", 600);
+        assertThat(upstreamSawPaths.poll(5, TimeUnit.SECONDS))
+            .as("fixture sanity: a headers-only stream reaches the upstream directly")
+            .isEqualTo("/direct");
+
+        upstreamSawPaths.clear();
+        sendRawH2cHeadersOnly(httpPort(proxy), "bidi.test", "/proxied", 1500);
+        assertThat(upstreamSawPaths.poll(5, TimeUnit.SECONDS))
+            .as("the proxy must forward the request headers before any body arrives")
+            .isEqualTo("/proxied");
+    }
+
     // -------------------------------------------------------------------
     // Compression bypass
     // -------------------------------------------------------------------
