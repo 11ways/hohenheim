@@ -140,16 +140,29 @@ public class SiteResource extends RowResource {
         normalizeSource(values);
         normalizeDevNamespace(values);
         validateTlsPassthrough(values);
-        // Enabling a site puts its domain rows into the global route table; rows that
-        // were exempt from the route-identity check while the site was disabled
-        // (clones, staged drafts) must be re-judged NOW, not silently first-wins-ed.
         boolean wasEnabled = Boolean.TRUE.equals(existing.get(SiteModel.ENABLED));
-        boolean willBeEnabled = values.containsKey("enabled")
-            ? Boolean.TRUE.equals(values.get("enabled")) : wasEnabled;
-        if (!wasEnabled && willBeEnabled) {
-            SiteDomainResource.refuseEnableRouteConflicts(existing.get(SiteModel.ID));
-        }
+        refuseConflictingEnable(existing, values.containsKey("enabled")
+            ? Boolean.TRUE.equals(values.get("enabled")) : wasEnabled);
         super.updateRow(existing, values, accessContext);
+    }
+
+    /**
+     * THE enable invariant, shared by every path that can flip a site live.
+     *
+     * AIDEV-NOTE: enabling puts a site's domain rows into the global route table, and
+     * disabled sites are EXEMPT from the cross-site route-identity check -- so a site
+     * staged on someone else's hostname seizes it the moment it goes live. The form
+     * path and the toggle action must both run this; toggle is the only row action a
+     * delegated /manage tenant has, so a second copy of the check is a takeover
+     * waiting for the two copies to drift.
+     *
+     * @throws Violations when going live would collide with an enabled site's route
+     */
+    protected static void refuseConflictingEnable(@NonNull Row existing, boolean willBeEnabled) {
+        if (!willBeEnabled || Boolean.TRUE.equals(existing.get(SiteModel.ENABLED))) {
+            return;
+        }
+        SiteDomainResource.refuseEnableRouteConflicts(existing.get(SiteModel.ID));
     }
 
     private static void validateTlsPassthrough(Map<String, Object> values) {
@@ -241,6 +254,7 @@ public class SiteResource extends RowResource {
             .icon(Icon.of("power-off"))
             .handler((row, ctx) -> {
                 boolean current = Boolean.TRUE.equals(row.get(SiteModel.ENABLED));
+                refuseConflictingEnable(row, !current);
                 row.set(SiteModel.ENABLED, !current);
                 ActivityLog.withAction(current ? "disabled" : "enabled", null,
                     () -> this.model().save(row));
