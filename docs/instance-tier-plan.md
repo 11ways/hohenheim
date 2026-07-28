@@ -336,16 +336,97 @@ consumer, and its route collides with hohenheim's real terminal.
 Two problems, one theme: secret handling is not a platform property yet, and
 the instance tier will multiply it.
 
-- Only 3 hohenheim fields are `.encrypted()`. Plaintext at rest: TLS private
-  keys (`CertificateModel:59`), DNSSEC private keys (`DnsZoneModel:73`), TSIG
-  secrets + peer API keys (`DnsPeerModel:28,39`), DB passwords
-  (`DatabaseModel:52-56`), spamservice controller key, site security tokens,
-  site `api_keys`. `architecture-stacks.md:24-27`'s "secrets are encrypted at
-  rest" is true for stacks and misleading as a platform claim.
-  - Fix: encrypt these fields. This is straightforward per-field work but it is
-    a release blocker because the DB is a backup/exfil target for a public
-    product. Update `architecture-stacks.md` to stop implying platform-wide
-    encryption until it is true.
+RECON CORRECTION (verified 2026-07-28): "encrypt these fields" is NOT
+per-field work. Phase 0.6 splits into three parts of very different size, and
+only the first two are release blockers.
+
+- **0.6a -- Redaction in derived surfaces (CHEAP, and the ONLY protection some
+  fields can ever have). RELEASE BLOCKER.**
+  Key everything off `isSecret()`, not `isEncrypted()`: they are orthogonal
+  (`Field.java:316-331`) -- secret is a presentation contract, encrypted is a
+  storage representation, and every field at risk is `.secret()`-only.
+  `ActivityLog.isRedacted` (`:481-483`) already has the right predicate
+  (`isSecret() || isEncrypted()`); the other three sites must adopt it.
+  - `RevisionableBehaviour.java:319` and `:329` skip localized+encrypted but
+    NOT secret. SiteModel is the only revisionable hohenheim model and keeps 50
+    revisions, so `zenit_revisions` holds `security_report_token`, the whole
+    settings map and source_settings in CLEARTEXT today.
+  - `DiffRendering.java:38-55` has the `Field` in hand and never checks. This
+    is a SECOND independent leak: a raw revision snapshot flows through it even
+    if the stored delta were redacted. Consumers: `RevisionHistoryPageRenderer.java:139`,
+    `ActivityHistoryPageRenderer.java:129`, `ActivityDetailPageRenderer.java:80`.
+  - `ActivityLog.computeDelta` (`:431-472`) redacts TOP-LEVEL only, with no
+    recursion. A SchemaField is one entry, so a non-secret parent carries every
+    `.secret()` sub-field into the delta verbatim. CONFIRMED leaking today: git
+    `webhook_secret`, dev-namespace `registration_token`. CORRECTION: Proteus
+    `access_key` does NOT leak today -- deltas need `ActivityPolicy.ALL` and
+    hohenheim sets that for SiteModel only (`HohenheimSources.java:109`). It is
+    one `setPolicy` line from leaking; fix it, but do not cite it in a gate test.
+  - This part is HIGHER priority than the plan implied, because sub-schema
+    fields CANNOT be encrypted at all (see 0.6c) -- recursive redaction is
+    their only control, ever.
+
+- **0.6b -- Hash what should never have been stored recoverably. RELEASE BLOCKER.**
+  Site `api_keys` (confirmed on all four counts: `ListField<String>` with no
+  `.secret()` in `NodeSiteType:72-74`/`JavaSiteType:74-76`/`CommandSiteType:64-66`,
+  compared with `HashSet.contains` at `ManagedProcessSiteHandler.java:773` which
+  is `String.equals` and not constant-time, no throttle anywhere on that path,
+  cloned verbatim at `SiteResource.java:276`). Fix by copying `ApiKeyService`'s
+  shape (mint once, store `sha256Hex`, constant-time compare, one-shot
+  disclosure -- `SpamserviceClientKeysResource.java:47-51` is the in-repo
+  precedent for showing a raw key once). Note `cloneSite` already regenerates
+  `webhook_secret` at `:283` but not this -- a half-fix that reads as handled.
+  Also one-word fixes: `DnsRecordModel.java:75-76` `DYNDNS_TOKEN` is a bearer
+  credential that is not even `.secret()` (missed by the original list, cheapest
+  fix in the phase); same for `NotificationChannelModel.java:36` `URL` (a
+  webhook URL IS the bearer token) and `AccessListModel.java:27-31`
+  `BASIC_AUTH_PASS`.
+
+- **0.6c -- At-rest encryption. A WORKSTREAM, NOT A FLAG. Schedule deliberately.**
+  Adding `.encrypted()` to a populated column THROWS on every read:
+  `FieldEncryption.java:93-102` refuses any stored value lacking the `zenc$`
+  envelope, with no lenient mode and no fallback. There is NO framework
+  backfill helper, and `MigrationBuilder` cannot do it (`execute(String sql)`
+  is fire-and-forget; encryption needs the Java keyring + AES + DRY stringify).
+  `.encrypted()` exists nowhere else in the tree except three Stack fields that
+  were BORN encrypted, so there is zero precedent to copy. Per field the work
+  is: widen the column to TEXT (MigrationBuilder only auto-selects TEXT for
+  freshly CREATED tables, `:157,210,259`; envelope overhead is ~35 chars plus
+  4/3 expansion, so a VARCHAR(255) overflows), then a Java backfill that runs
+  BEFORE the field constant carries `.encrypted()`, then deploy ordering that
+  guarantees the keyring file exists on the box before the new jar boots.
+  - `SiteModel.SECURITY_REPORT_TOKEN` is the trap: SiteModel is Revisionable
+    AND `ActivityPolicy.ALL`, and both hooks load the prior row before EVERY
+    save (`ActivityLog.java:283`). An un-migrated row becomes unsaveable, not
+    merely unreadable. Migrate it first or not at all.
+  - HARD LIMIT: `Schema.refuseEncryptedJsonSubFields` (`Schema.java:151-163`)
+    means site `api_keys`, git `webhook_secret`, dev `registration_token`,
+    Proteus `access_key` and every `environment_variables` map CANNOT be
+    encrypted while they live inside JSON SchemaFields. For them the answer is
+    0.6a redaction plus, eventually, real columns or table-stored sub-schemas
+    (the Phase 3 `instance_variables` shape).
+  - Correct declaration for a secret column is `.secret().encrypted()` TOGETHER
+    (the `StackModel.java:78-81` precedent); encryption alone does not hide a
+    value from editors.
+  - Operational: `FieldEncryption` auto-generates the keyring on first use, so
+    it must be backed up WITH the database or encrypted rows are permanently
+    unrecoverable (this is the cross-cutting control-plane backup item, and
+    0.6c is blocked on it). Also `FieldEncryption.java:22-28` states there is NO
+    AAD, so an attacker with DB write access can graft an envelope between rows
+    or columns -- swapping one site's TLS private key for another's. Decide that
+    explicitly for TLS/TSIG keys rather than inheriting it silently.
+
+- **`environment_variables` is the largest plaintext-secret surface in
+  hohenheim and the original list missed it entirely.** Present on every site
+  type (`NodeSiteType:67-69`, `JavaSiteType:70-72`, `CommandSiteType:60-62`,
+  `DockerSiteType:52-54`) plus `build_environment_variables`: no `.secret()`,
+  unencryptable (JSON), copied by `cloneSite`, and written verbatim into both
+  `zenit_activity` deltas and 50 retained `zenit_revisions` snapshots on every
+  save. 0.6a is what contains it.
+
+- `architecture-stacks.md:24-27`'s "secrets are encrypted at rest" is true for
+  stacks and misleading as a platform claim -- update it now rather than when
+  0.6c lands, since 0.6c is no longer imminent.
 - Secrets leak through revisions and activity deltas (mechanism, zenit core):
   `RevisionableBehaviour.java:319` skips localized+encrypted but NOT `isSecret()`;
   `DiffRendering.java:41-55` has no secret check; `ActivityLog.computeDelta`
