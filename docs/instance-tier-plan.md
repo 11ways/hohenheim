@@ -417,9 +417,32 @@ only the first two are release blockers.
   `webhook_secret` at `:283` but not this -- a half-fix that reads as handled.
   Also one-word fixes: `DnsRecordModel.java:75-76` `DYNDNS_TOKEN` is a bearer
   credential that is not even `.secret()` (missed by the original list, cheapest
-  fix in the phase); same for `NotificationChannelModel.java:36` `URL` (a
-  webhook URL IS the bearer token) and `AccessListModel.java:27-31`
-  `BASIC_AUTH_PASS`.
+  fix in the phase). CORRECTION (git blame, 2026-07-28):
+  `NotificationChannelModel.URL` has been `.secret()` since `69be8b6` and
+  `AccessListModel.BASIC_AUTH_PASS` since `284ffab` -- that half of the bullet
+  was stale.
+
+  STATUS: 0.6b LANDED (`9ef5c2f`, `6f133b0`). Findings worth carrying forward:
+  - The plaintext-key defect was LATENT, not live: `SiteDispatcher.continueAfterAuth`
+    strips `X-Hohenheim-Key` from the request headers BEFORE `dispatchToRoute`,
+    so the managed-process control API is currently UNREACHABLE through the
+    public proxy listener. The strip was deliberately NOT removed -- doing so
+    would make a privileged endpoint publicly reachable, the opposite of a
+    security fix. AIDEV-NOTEs mark both sites so whoever revisits does it
+    deliberately. Treat the hashing as defence in depth for whoever makes that
+    path reachable again.
+  - Core `Endpoint.rateLimit` / `rate_limit.*` / the weight-15 middleware CANNOT
+    reach this path: `SiteDispatcher` is an Undertow handler on the proxy
+    listener and never runs the zenit conduit middleware chain. Core's
+    `RateLimiter` primitive was used directly instead, keyed on site + resolved
+    client IP. Any future proxy-path throttling has the same constraint.
+  - Existing configured keys were preserved: hashing a plaintext key IN PLACE
+    keeps it valid, swept once via `SeedContext.once` (a MigrationBuilder
+    migration cannot do it -- the keys live in a JSON SchemaField, `execute` has
+    no read-back, and SQLite has no sha256).
+  - OLD REVISIONS AND ACTIVITY DELTAS STILL CONTAIN THE PLAINTEXT KEYS written
+    before the change. Hashing forward does not scrub history -- that is 0.6a's
+    job, and it is a second reason 0.6a is the higher-priority half.
 
 - **0.6c -- At-rest encryption. A WORKSTREAM, NOT A FLAG. Schedule deliberately.**
   Adding `.encrypted()` to a populated column THROWS on every read:
