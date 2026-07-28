@@ -58,7 +58,8 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     protected final boolean waitForReady;
     protected final boolean usePorts;
     protected final Map<String, String> environmentVariables;
-    protected final Set<String> apiKeys;
+    /** SHA-256 digests of the site's control-API keys; the plaintext is never held. */
+    protected final Set<String> apiKeyDigests;
 
     // Process state
     private final CopyOnWriteArrayList<ManagedProcess> processList = new CopyOnWriteArrayList<>();
@@ -154,6 +155,11 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         return waitForReady;
     }
 
+    /** The digests this handler will admit on; never the plaintext keys. */
+    public Set<String> getApiKeyDigests() {
+        return Collections.unmodifiableSet(apiKeyDigests);
+    }
+
     protected ManagedProcessSiteHandler(int siteId, String siteName, Map<String, Object> settings,
                                          PortAllocator portAllocator, ProcessMonitor monitor) {
         this.siteId = siteId;
@@ -173,16 +179,11 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         // support (no allocateSocketPath) fall back to port mode automatically.
         this.usePorts = Boolean.TRUE.equals(settings.get("use_ports"));
 
-        // Parse API keys (stored as a JSON list of strings)
-        this.apiKeys = new LinkedHashSet<>();
-        Object apiKeysObj = settings.get("api_keys");
-        if (apiKeysObj instanceof List<?> list) {
-            for (Object item : list) {
-                if (item == null) continue;
-                String key = item.toString().trim();
-                if (!key.isEmpty()) apiKeys.add(key);
-            }
-        }
+        // API keys are stored as digests. AIDEV-NOTE: normalize() also hashes a
+        // legacy PLAINTEXT entry, so a key configured before the hashing change
+        // keeps authenticating even on a datasource the seeder has not swept yet.
+        this.apiKeyDigests = new LinkedHashSet<>(
+            SiteApiKeys.normalize(settings.get(SiteApiKeys.SETTING_NAME)));
 
         // Parse environment variables from settings
         this.environmentVariables = EnvVars.toMap(settings.get("environment_variables"));
@@ -769,15 +770,34 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
     @Override
     public void handleRequest(HttpServerExchange exchange, UpstreamForwarder forwarder) {
-        // Check for API key control requests
-        if (!apiKeys.isEmpty()) {
-            String key = exchange.getRequestHeaders().getFirst(X_HOHENHEIM_KEY);
-            String actions = exchange.getRequestHeaders().getFirst(X_HOHENHEIM_ACTION);
-
-            if (key != null && actions != null && apiKeys.contains(key)) {
+        // Control-API requests: a request carrying BOTH headers is claiming the
+        // control API, so it is answered here and never proxied on -- a wrong key
+        // is an authentication failure, not ordinary traffic to hand upstream.
+        // AIDEV-NOTE: SiteDispatcher.continueAfterAuth strips X-Hohenheim-Key
+        // before dispatching, so this branch is currently unreachable through the
+        // public proxy listener. The admission policy is hardened anyway: whoever
+        // makes it reachable again must not also have to rediscover that the check
+        // needs hashing, constant-time compare and a throttle.
+        String key = exchange.getRequestHeaders().getFirst(X_HOHENHEIM_KEY);
+        String actions = exchange.getRequestHeaders().getFirst(X_HOHENHEIM_ACTION);
+        switch (SiteApiKeys.decide(siteId, apiKeyDigests, key, actions,
+                ResolvedClientIp.get(exchange))) {
+            case THROTTLED -> {
+                exchange.setStatusCode(429);
+                exchange.getResponseHeaders().put(Headers.RETRY_AFTER, "60");
+                exchange.getResponseSender().send("Too many API key attempts");
+                return;
+            }
+            case REFUSED -> {
+                exchange.setStatusCode(403);
+                exchange.getResponseSender().send("Invalid API key");
+                return;
+            }
+            case ALLOWED -> {
                 handleApiRequest(exchange, actions);
                 return;
             }
+            case NOT_CONTROL -> { }
         }
 
         // Wait for at least one process to be ready. Snapshot the latch before awaiting:

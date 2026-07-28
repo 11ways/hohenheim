@@ -820,6 +820,10 @@ public class SiteDispatcher implements HttpHandler {
         // These headers form one trust boundary and must be canonicalized after custom rules.
         // Undertow's reuseXForwarded behavior then appends the connected peer to the sanitized
         // chain, preserving only a chain authenticated by X-Hohenheim-Key.
+        // AIDEV-NOTE: this strip happens BEFORE dispatchToRoute, so the managed-process
+        // control API (ManagedProcessSiteHandler's X-Hohenheim-Key branch) is unreachable
+        // through this listener today. Moving the strip later would make a privileged
+        // endpoint publicly reachable -- a deliberate decision, never a side effect.
         requestHeaders.remove(X_HOHENHEIM_KEY);
         requestHeaders.put(X_FORWARDED_PROTO,
             trustedForwardedProto != null && !trustedForwardedProto.isBlank()

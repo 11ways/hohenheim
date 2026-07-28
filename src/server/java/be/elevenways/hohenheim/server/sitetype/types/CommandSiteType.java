@@ -63,7 +63,8 @@ public class CommandSiteType implements SiteTypeHandler {
 
     public static final ListField<String> API_KEYS = SETTINGS_SCHEMA.addField(
         ListField.<String>builder(StringField.builder().name("api_key").build()).name("api_keys")
-            .label(HohenheimFormCopy.label("api_keys")).help(HohenheimFormCopy.help("api_keys")).build());
+            .label(HohenheimFormCopy.label("api_keys")).help(HohenheimFormCopy.help("api_keys"))
+            .secret().build());
 
     // Discovered system user ("hohenheim:<username>" registry key); null = current user.
     public static final EnumField USER = SETTINGS_SCHEMA.addField(

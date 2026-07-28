@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype;
 
+import be.elevenways.hohenheim.server.process.SiteApiKeys;
 import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
 import be.elevenways.hohenheim.sitetype.SiteTypeRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -37,6 +38,8 @@ public class SiteTypes {
     /** One-time boot of the shared process-management infrastructure. */
     public static void boot() {
         NodeSiteType.initSharedInfrastructure();
+        // Before any site row can be written: no plaintext api key reaches the datasource.
+        SiteApiKeys.install();
     }
 
     public static SiteTypeHandler getHandler(String typeIdentifier) {
