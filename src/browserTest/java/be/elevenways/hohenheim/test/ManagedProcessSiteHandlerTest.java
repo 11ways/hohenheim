@@ -398,11 +398,14 @@ class ManagedProcessSiteHandlerTest {
         @Override
         protected List<String> buildCommand(String listenTarget) {
             // The original Node IPC envelope ({"alchemy":{"ready":true}}) over the TCP
-            // bridge -- exactly what a pre-migration alchemy child would emit.
+            // bridge -- exactly what a pre-migration alchemy child would emit, behind
+            // the mandatory auth line.
             return List.of("node", "-e",
                 "const net=require('net');"
-                    + "const s=net.connect(parseInt(process.env.HOHENHEIM_IPC_PORT),'127.0.0.1');"
+                    + "const s=net.connect(parseInt(process.env.HOHENHEIM_IPC_PORT),'127.0.0.1',()=>{"
+                    + "s.write(JSON.stringify({type:'auth',token:process.env.HOHENHEIM_IPC_TOKEN})+'\\n');"
                     + "s.write(JSON.stringify({alchemy:{ready:true}})+'\\n');"
+                    + "});"
                     + "setInterval(()=>{},10000);");
         }
 

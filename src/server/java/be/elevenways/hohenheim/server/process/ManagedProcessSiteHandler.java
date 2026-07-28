@@ -383,6 +383,10 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
                 env.put("PATH_TO_SOCKET", socketPath);
             }
             env.put("HOHENHEIM_IPC_PORT", String.valueOf(ipc.getPort()));
+            // The IPC port is reachable by every local user (children run as DISTINCT
+            // system users), so the token travels with it: only this child's process
+            // environment holds it, and the channel refuses everyone else.
+            env.put("HOHENHEIM_IPC_TOKEN", ipc.getSecret());
             // Attached-database credentials resolve fresh per spawn (live published port);
             // operator-authored variables come after so an explicit value always wins.
             env.putAll(resolveInjectedEnvironment());
