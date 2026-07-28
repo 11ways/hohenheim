@@ -1857,6 +1857,14 @@
     "text": "Testbezorging mislukt",
     "scope": "notification_channel"
   },
+  "test_subject": {
+    "text": "Hohenheim-test",
+    "scope": "notification_channel"
+  },
+  "test_body": {
+    "text": "Als je dit kan lezen, werkt het kanaal.",
+    "scope": "notification_channel"
+  },
   "test_ok": [
     {
       "text": "Test bezorgd",
@@ -1869,6 +1877,22 @@
   ],
   "host_status": {
     "text": "Host",
+    "scope": "server"
+  },
+  "host_unreachable": {
+    "text": "onbereikbaar",
+    "scope": "server"
+  },
+  "host_docker_unavailable": {
+    "text": "Docker niet beschikbaar",
+    "scope": "server"
+  },
+  "host_unknown_platform": {
+    "text": "onbekend platform",
+    "scope": "server"
+  },
+  "host_summary": {
+    "text": "{$docker} | {$os} | {$cpus} CPU | {$memory} GiB RAM | {$running}/{$total} containers | {$images} images",
     "scope": "server"
   },
   "clone": {
@@ -3672,11 +3696,15 @@
     "scope": "stack"
   },
   "purge_volumes_hint": {
-    "text": "Stop de stack en verwijder de volumes die hij bezit. De data is definitief weg.",
+    "text": "Breek de stack af en verwijder de volumes die hij bezit. De data is definitief weg; de volgende deploy bouwt de stack leeg opnieuw op.",
     "scope": "stack"
   },
   "purge_volumes_confirm": {
-    "text": "Stop {$name} en VERWIJDER elk volume dat hij bezit? De data is niet meer terug te halen. Externe volumes blijven ongemoeid.",
+    "text": "Breek {$name} af en VERWIJDER elk volume dat hij bezit? De data is niet meer terug te halen. Externe volumes blijven ongemoeid.",
+    "scope": "stack"
+  },
+  "purge_volumes_confirm_generic": {
+    "text": "Deze stack afbreken en elk volume dat hij bezit VERWIJDEREN? De data is niet meer terug te halen. Externe volumes blijven ongemoeid.",
     "scope": "stack"
   },
   "purge_volumes_ok": {
@@ -3701,6 +3729,10 @@
   },
   "reclaim_images_done": {
     "text": "{$images} images opgeruimd, {$megabytes} MiB vrij",
+    "scope": "stack"
+  },
+  "reclaim_images_started": {
+    "text": "Images opruimen gestart; het resultaat verschijnt in de serverlog",
     "scope": "stack"
   },
   "deploy_queued": {

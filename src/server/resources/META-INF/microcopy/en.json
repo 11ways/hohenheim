@@ -1861,6 +1861,14 @@
     "text": "Test delivery failed",
     "scope": "notification_channel"
   },
+  "test_subject": {
+    "text": "Hohenheim test",
+    "scope": "notification_channel"
+  },
+  "test_body": {
+    "text": "If you can read this, the channel works.",
+    "scope": "notification_channel"
+  },
   "test_ok": [
     {
       "text": "Test delivered",
@@ -1873,6 +1881,22 @@
   ],
   "host_status": {
     "text": "Host",
+    "scope": "server"
+  },
+  "host_unreachable": {
+    "text": "unreachable",
+    "scope": "server"
+  },
+  "host_docker_unavailable": {
+    "text": "Docker unavailable",
+    "scope": "server"
+  },
+  "host_unknown_platform": {
+    "text": "unknown platform",
+    "scope": "server"
+  },
+  "host_summary": {
+    "text": "{$docker} | {$os} | {$cpus} CPU | {$memory} GiB RAM | {$running}/{$total} containers | {$images} images",
     "scope": "server"
   },
   "clone": {
@@ -3676,11 +3700,15 @@
     "scope": "stack"
   },
   "purge_volumes_hint": {
-    "text": "Stop the stack and destroy the volumes it owns. The data is gone for good.",
+    "text": "Tear the stack down and destroy the volumes it owns. The data is gone for good; the next deploy rebuilds the stack empty.",
     "scope": "stack"
   },
   "purge_volumes_confirm": {
-    "text": "Stop {$name} and DESTROY every volume it owns? The data cannot be recovered. External volumes are left alone.",
+    "text": "Tear down {$name} and DESTROY every volume it owns? The data cannot be recovered. External volumes are left alone.",
+    "scope": "stack"
+  },
+  "purge_volumes_confirm_generic": {
+    "text": "Tear this stack down and DESTROY every volume it owns? The data cannot be recovered. External volumes are left alone.",
     "scope": "stack"
   },
   "purge_volumes_ok": {
@@ -3705,6 +3733,10 @@
   },
   "reclaim_images_done": {
     "text": "Reclaimed {$images} images, {$megabytes} MiB",
+    "scope": "stack"
+  },
+  "reclaim_images_started": {
+    "text": "Image reclaim started; the result lands in the server log",
     "scope": "stack"
   },
   "deploy_queued": {
