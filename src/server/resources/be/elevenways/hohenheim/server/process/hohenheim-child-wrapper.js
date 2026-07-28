@@ -12,6 +12,11 @@
 //   1. fork() the real entry script, giving IT a proper Node IPC channel.
 //   2. Connect to HOHENHEIM_IPC_PORT ourselves and bridge both directions.
 //
+// The IPC port lives on loopback, which every local user can reach, so the
+// channel is authenticated: the FIRST line we write must be
+// {"type":"auth","token":<HOHENHEIM_IPC_TOKEN>}. Without it the parent drops
+// the connection and keeps accepting, so a hostile local peer cannot squat it.
+//
 // Server -> child: newline-delimited flat JSON lines from the TCP socket
 // get dispatched into the fork via child.send(msg), arriving as a normal
 // process.on('message') event. This is exactly what pre-bridge alchemy
@@ -52,11 +57,16 @@ const child = child_process.fork(resolved, scriptArgs, {
 // ----- Bridge the server TCP socket into the child's fork IPC -----
 
 const ipcPort = parseInt(process.env.HOHENHEIM_IPC_PORT, 10);
+const ipcToken = process.env.HOHENHEIM_IPC_TOKEN || '';
 let socket = null;
 
 if (ipcPort > 0) {
     try {
-        socket = net.connect(ipcPort, '127.0.0.1');
+        socket = net.connect(ipcPort, '127.0.0.1', function onIpcConnect() {
+            // Authenticate before anything else; the parent reads exactly one
+            // line and drops the connection when it does not carry the token.
+            socket.write(JSON.stringify({ type: 'auth', token: ipcToken }) + '\n');
+        });
         socket.setEncoding('utf8');
         let buffer = '';
         socket.on('data', function onData(chunk) {

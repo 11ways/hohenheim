@@ -1,11 +1,13 @@
 package be.elevenways.hohenheim.server.process;
 
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.server.security.SecureTokens;
 
 import java.io.*;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -14,11 +16,23 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
  * IPC channel between the parent process and a child process.
  * Uses a TCP loopback socket with newline-delimited JSON messages.
+ *
+ * AIDEV-NOTE: loopback is NOT an authorization boundary here -- managed processes
+ * run under DISTINCT system users, so every other tenant on the box can reach this
+ * port. The channel therefore authenticates: the child's FIRST line must be the
+ * per-channel secret handed to it in HOHENHEIM_IPC_TOKEN, compared constant-time.
+ * Shape adopted from DevTunnelServerHandler (pre-auth cap + auth window + the
+ * accept loop surviving a refused peer), because the old single accept() let any
+ * local user connect first and wedge the victim's channel forever.
+ *
+ * Handshake (from the child, first line):
+ * {"type":"auth","token":"<HOHENHEIM_IPC_TOKEN>"}
  *
  * Message format (newline-delimited JSON):
  * {"type":"ready"}                       (legacy envelope {"alchemy":{"ready":true}} also accepted)
@@ -32,12 +46,23 @@ import java.util.function.Consumer;
  */
 public class IpcChannel implements AutoCloseable {
 
+    /** How long an accepted peer has to present the token before it is dropped. */
+    private static final long AUTH_TIMEOUT_MS = 10_000;
+
+    /** Concurrent unauthenticated handshakes tolerated; further peers are dropped at once. */
+    private static final int MAX_PRE_AUTH_CONNECTIONS = 8;
+
+    /** Longest handshake line accepted, so a peer cannot stream unbounded pre-auth data. */
+    private static final int MAX_AUTH_LINE_CHARS = 4096;
+
     private final ServerSocket serverSocket;
     private final int port;
+    private final String secret;
+    private final Object peerLock = new Object();
     private volatile Socket clientSocket;
-    private volatile BufferedReader reader;
     private volatile PrintWriter writer;
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final AtomicInteger preAuthConnections = new AtomicInteger();
     private final CountDownLatch connected = new CountDownLatch(1);
 
     private volatile Consumer<Map<String, Object>> messageHandler;
@@ -48,12 +73,18 @@ public class IpcChannel implements AutoCloseable {
     private static final int PENDING_CAP = 64;
 
     public IpcChannel() throws IOException {
-        this.serverSocket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
+        this.serverSocket = new ServerSocket(0, 16, InetAddress.getLoopbackAddress());
         this.port = serverSocket.getLocalPort();
+        this.secret = SecureTokens.randomToken(24);
     }
 
     public int getPort() {
         return port;
+    }
+
+    /** The per-child secret; hand it to the child exactly like the port. */
+    public String getSecret() {
+        return secret;
     }
 
     public void setMessageHandler(Consumer<Map<String, Object>> handler) {
@@ -69,26 +100,126 @@ public class IpcChannel implements AutoCloseable {
     }
 
     /**
-     * Start accepting a connection in a background thread.
+     * Start accepting connections in a background thread.
      * Call this before spawning the child process.
      */
     public void startAccepting() {
-        Thread.startVirtualThread(() -> {
+        Thread.startVirtualThread(this::acceptLoop);
+    }
+
+    /**
+     * Accepts for the channel's whole lifetime: a peer that fails the handshake, or
+     * an authenticated peer that disconnects, leaves the channel connectable again.
+     */
+    private void acceptLoop() {
+        while (!closed.get()) {
+            Socket socket;
             try {
-                clientSocket = serverSocket.accept();
-                reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                writer = new PrintWriter(new OutputStreamWriter(clientSocket.getOutputStream()), true);
-                connected.countDown();
-                readLoop();
+                socket = serverSocket.accept();
             } catch (IOException e) {
                 if (!closed.get()) {
                     Blast.log("IPC: accept failed:", e.getMessage());
                 }
+                return;
             }
-        });
+            if (preAuthConnections.incrementAndGet() > MAX_PRE_AUTH_CONNECTIONS) {
+                preAuthConnections.decrementAndGet();
+                closeQuietly(socket);
+                continue;
+            }
+            // Off the accept lane: a peer that stalls mid-handshake must not delay
+            // the real child's connection.
+            Thread.startVirtualThread(() -> {
+                try {
+                    handshakeAndServe(socket);
+                } finally {
+                    preAuthConnections.decrementAndGet();
+                }
+            });
+        }
     }
 
-    private void readLoop() {
+    /** Authenticate one accepted peer and, if it is the child, serve it. */
+    private void handshakeAndServe(Socket socket) {
+        BufferedReader reader;
+        try {
+            socket.setSoTimeout((int) AUTH_TIMEOUT_MS);
+            reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            if (!authenticate(reader)) {
+                closeQuietly(socket);
+                return;
+            }
+            socket.setSoTimeout(0);
+        } catch (SocketTimeoutException e) {
+            Blast.log("IPC: dropped a peer that never authenticated");
+            closeQuietly(socket);
+            return;
+        } catch (IOException e) {
+            closeQuietly(socket);
+            return;
+        }
+
+        PrintWriter peerWriter = new PrintWriter(
+            new OutputStreamWriter(quietOutputStream(socket)), true);
+        synchronized (peerLock) {
+            if (closed.get() || clientSocket != null) {
+                // The child is already attached; an authenticated latecomer waits for
+                // the current peer to go away rather than displacing it.
+                closeQuietly(socket);
+                return;
+            }
+            clientSocket = socket;
+            writer = peerWriter;
+        }
+        connected.countDown();
+        try {
+            readLoop(reader);
+        } finally {
+            synchronized (peerLock) {
+                if (clientSocket == socket) {
+                    clientSocket = null;
+                    writer = null;
+                }
+            }
+            closeQuietly(socket);
+        }
+    }
+
+    /**
+     * @return true when the peer's first line carries this channel's secret
+     */
+    private boolean authenticate(BufferedReader reader) throws IOException {
+        String line = readBoundedLine(reader);
+        Map<String, Object> message = line != null ? parseJsonLine(line) : null;
+        Object token = message != null ? message.get("token") : null;
+        boolean ok = token instanceof String presented
+            && SecureTokens.constantTimeEquals(secret, presented);
+        if (!ok) {
+            Blast.log("IPC: refused an unauthenticated peer on port", port);
+        }
+        return ok;
+    }
+
+    /** Reads one line, refusing a peer that streams past the handshake budget. */
+    private static String readBoundedLine(BufferedReader reader) throws IOException {
+        StringBuilder line = new StringBuilder();
+        int read;
+        while ((read = reader.read()) >= 0) {
+            char c = (char) read;
+            if (c == '\n') {
+                return line.toString();
+            }
+            if (line.length() >= MAX_AUTH_LINE_CHARS) {
+                return null;
+            }
+            if (c != '\r') {
+                line.append(c);
+            }
+        }
+        return null;
+    }
+
+    private void readLoop(BufferedReader reader) {
         try {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -117,6 +248,18 @@ public class IpcChannel implements AutoCloseable {
                 Blast.log("IPC: read loop ended:", e.getMessage());
             }
         }
+    }
+
+    private static OutputStream quietOutputStream(Socket socket) {
+        try {
+            return socket.getOutputStream();
+        } catch (IOException e) {
+            return OutputStream.nullOutputStream();
+        }
+    }
+
+    private static void closeQuietly(Socket socket) {
+        try { socket.close(); } catch (IOException ignored) {}
     }
 
     /**

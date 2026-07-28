@@ -151,7 +151,8 @@ public class NodeSiteType implements SiteTypeHandler {
      * Whether to launch the site through the hohenheim-child-wrapper fork shim.
      * Only needed for frameworks (alchemy) that expect a native Node IPC channel
      * via process.on('message'). Plain Node sites talk to HOHENHEIM_IPC_PORT
-     * directly if they care.
+     * directly if they care, sending {@code {"type":"auth","token":...}} from
+     * HOHENHEIM_IPC_TOKEN as their first line.
      */
     protected boolean useChildWrapper() {
         return false;
