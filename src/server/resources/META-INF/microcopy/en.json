@@ -145,7 +145,7 @@
       "scope": "field"
     },
     {
-      "text": "Keys accepted by the managed process API. Add one key per row.",
+      "text": "Keys accepted by the managed process API. Only a digest is stored, so a key is never shown again: leave this empty to keep the stored keys, add a row to adopt a key you already hold, or use the row action to generate one.",
       "scope": "help"
     }
   ],
@@ -1908,7 +1908,23 @@
     "scope": "site"
   },
   "clone_confirm": {
-    "text": "Create a copy with the same settings and domains (disabled by default)?",
+    "text": "Create a copy with the same settings and domains (disabled by default)? API keys are not copied.",
+    "scope": "site"
+  },
+  "generate_api_key": {
+    "text": "Generate API key",
+    "scope": "site"
+  },
+  "generate_api_key_hint": {
+    "text": "Generate a key for the managed process API; it is shown once",
+    "scope": "site"
+  },
+  "api_key_minted": {
+    "text": "API key generated. Copy it now; it will not be shown again: {$key}",
+    "scope": "site"
+  },
+  "api_keys_unsupported": {
+    "text": "This site type has no managed process API",
     "scope": "site"
   },
   "deployments": [

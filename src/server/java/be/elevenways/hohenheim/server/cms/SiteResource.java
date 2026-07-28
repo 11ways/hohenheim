@@ -5,6 +5,9 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.process.SiteApiKeys;
+import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
+import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.sitetype.types.DevNamespaceSiteType;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -40,6 +43,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -242,7 +246,49 @@ public class SiteResource extends RowResource {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
         actions.add(this.toggleAction());
         actions.add(this.cloneAction());
+        actions.add(this.generateApiKeyAction());
         return actions;
+    }
+
+    /**
+     * Mint a control-API key for a managed-process site. Only the digest is
+     * stored, so the toast is the ONE disclosure of the plaintext.
+     */
+    private @NonNull RowAction<Row> generateApiKeyAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "generate_api_key"))
+            .label(Microcopy.of("generate_api_key").withFilter("scope", "site"))
+            .icon(Icon.of("key"))
+            .description(Microcopy.of("generate_api_key_hint").withFilter("scope", "site"))
+            .visibleFor((row, ctx) -> supportsApiKeys(row))
+            .handler((row, ctx) -> generateApiKey(row))
+            .build();
+    }
+
+    /** @return true when this site's type declares an {@code api_keys} setting */
+    private static boolean supportsApiKeys(@NonNull Row site) {
+        SiteTypeHandler handler = SiteTypes.getHandler((String) site.get(SiteModel.SITE_TYPE));
+        return handler != null && handler.getSchema().getField(SiteApiKeys.SETTING_NAME) != null;
+    }
+
+    private @NonNull CmsActionResult generateApiKey(@NonNull Row site) {
+        if (!supportsApiKeys(site)) {
+            return CmsActionResult.errorToast(
+                Microcopy.of("api_keys_unsupported").withFilter("scope", "site"));
+        }
+
+        String plaintext = SiteApiKeys.mint();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> settings = site.get(SiteModel.SETTINGS) != null
+            ? new LinkedHashMap<>((Map<String, Object>) site.get(SiteModel.SETTINGS))
+            : new LinkedHashMap<>();
+        List<String> keys = new ArrayList<>(SiteApiKeys.normalize(settings.get(SiteApiKeys.SETTING_NAME)));
+        keys.add(SiteApiKeys.digest(plaintext));
+        settings.put(SiteApiKeys.SETTING_NAME, keys);
+        site.set(SiteModel.SETTINGS, settings);
+        ActivityLog.withAction("api_key_minted", null, () -> this.model().save(site));
+
+        return CmsActionResult.refreshWithToast(
+            Microcopy.of("api_key_minted").withFilter("scope", "site").withArg("key", plaintext));
     }
 
     /** The enable/disable operate action, shared with the delegated manage panel. */
@@ -277,7 +323,10 @@ public class SiteResource extends RowResource {
             .build();
     }
 
-    /** Clone a site + its domains; the copy starts disabled with a fresh webhook secret. */
+    /**
+     * Clone a site + its domains; the copy starts disabled and carries NO bearer
+     * credentials of its own: a fresh webhook secret and no api keys at all.
+     */
     private @NonNull CmsActionResult cloneSite(@NonNull Row site, @NonNull AccessContext access) {
         SiteModel siteModel = (SiteModel) this.model();
         SiteDomainModel domainModel = Models.get(SiteDomainModel.class);
@@ -287,7 +336,16 @@ public class SiteResource extends RowResource {
         clone.set(SiteModel.NAME, name);
         clone.set(SiteModel.SLUG, slugify(name));
         clone.set(SiteModel.SITE_TYPE, site.get(SiteModel.SITE_TYPE));
-        clone.set(SiteModel.SETTINGS, site.get(SiteModel.SETTINGS));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> clonedSettings = site.get(SiteModel.SETTINGS) != null
+            ? new LinkedHashMap<>((Map<String, Object>) site.get(SiteModel.SETTINGS))
+            : null;
+        if (clonedSettings != null) {
+            // AIDEV-NOTE: the source's keys authenticate the source's processes;
+            // handing them to a second site silently widens what each key unlocks.
+            clonedSettings.remove(SiteApiKeys.SETTING_NAME);
+        }
+        clone.set(SiteModel.SETTINGS, clonedSettings);
         clone.set(SiteModel.SOURCE, site.get(SiteModel.SOURCE));
         @SuppressWarnings("unchecked")
         Map<String, Object> clonedSourceSettings = site.get(SiteModel.SOURCE_SETTINGS) != null

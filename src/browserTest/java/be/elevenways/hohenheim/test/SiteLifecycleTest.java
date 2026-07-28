@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.process.SiteApiKeys;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -99,9 +100,11 @@ class SiteLifecycleTest extends HohenheimTestBase {
             .containsEntry("NODE_ENV", "production")
             .containsEntry("APP_PORT", "3000");
 
+        // Typed api keys are ADOPTED as digests: the plaintext is never stored.
         @SuppressWarnings("unchecked")
         List<String> apiKeys = (List<String>) nodeSettings.get("api_keys");
-        assertThat(apiKeys).containsExactly("alpha-key", "beta-key");
+        assertThat(apiKeys).containsExactly(
+            SiteApiKeys.digest("alpha-key"), SiteApiKeys.digest("beta-key"));
         assertThat(nodeSettings.get("use_ports")).isEqualTo(true);
 
         Row nodeRow = site("Node App");
@@ -113,12 +116,18 @@ class SiteLifecycleTest extends HohenheimTestBase {
         assertThat(content).contains("environment_variables");
         assertThat(content).contains("NODE_ENV");
         assertThat(content).contains("production");
-        assertThat(content).contains("alpha-key");
+        assertThat(content)
+            .as("a secret() api key is never echoed back into the form")
+            .doesNotContain("alpha-key");
 
         response = postForm(nodePath,
             "name=Node+App&site_type=hohenheim%3Anode&source=local&settings.use_ports=false");
         assertThat(response.statusCode()).isIn(200, 302, 303);
         assertThat(settingsOf("Node App").get("use_ports")).isEqualTo(false);
+        // An edit that never mentions the secret list must keep the stored keys.
+        assertThat((List<String>) settingsOf("Node App").get("api_keys"))
+            .as("a submit with no api_keys entry keeps the stored digests")
+            .containsExactly(SiteApiKeys.digest("alpha-key"), SiteApiKeys.digest("beta-key"));
 
         response = postForm(nodePath,
             "name=Node+App&site_type=hohenheim%3Anode&source=local&settings.use_ports=true");
@@ -195,6 +204,41 @@ class SiteLifecycleTest extends HohenheimTestBase {
         assertThat((Boolean) clone.get(SiteModel.ENABLED))
             .as("clones start disabled")
             .isEqualTo(false);
+
+        // Cloning a site that HAS api keys must not hand them to the copy: they
+        // are per-site bearer credentials, like the regenerated webhook secret.
+        Integer nodeId = site("Node App").get(SiteModel.ID);
+        response = postForm("/admin/sites/" + nodeId + "/action/clone_site", "");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+        assertThat(settingsOf("Node App (copy)").get("api_keys"))
+            .as("a clone must carry none of the source's api keys")
+            .isNull();
+
+        // Minting discloses the plaintext ONCE, in the toast; only the digest lands.
+        int keysBefore = ((List<?>) settingsOf("Node App").get("api_keys")).size();
+        response = postForm("/admin/sites/" + nodeId + "/action/generate_api_key", "");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+        List<String> keysAfter = (List<String>) settingsOf("Node App").get("api_keys");
+        assertThat(keysAfter)
+            .as("generating a key must append exactly one digest")
+            .hasSize(keysBefore + 1);
+        assertThat(keysAfter.get(keysAfter.size() - 1))
+            .as("a generated key must be stored as a digest, never as plaintext")
+            .startsWith("sha256:")
+            .doesNotContain(SiteApiKeys.KEY_MARKER);
+
+        navigateToApp("/admin/sites/" + nodeId);
+        waitForHydration();
+        String minted = page.content();
+        int markerAt = minted.indexOf(SiteApiKeys.KEY_MARKER);
+        assertThat(markerAt)
+            .as("the mint toast is the one disclosure of the plaintext key")
+            .isGreaterThan(-1);
+        navigateToApp("/admin/sites/" + nodeId);
+        waitForHydration();
+        assertThat(page.content())
+            .as("a reload must not re-disclose the generated key")
+            .doesNotContain(minted.substring(markerAt, markerAt + 20));
 
         Integer gitId = gitRow.get(SiteModel.ID);
         response = postForm("/admin/sites/" + gitId + "/delete", "");

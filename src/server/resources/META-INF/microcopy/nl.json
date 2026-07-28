@@ -145,7 +145,7 @@
       "scope": "field"
     },
     {
-      "text": "Sleutels die de proces-API aanvaardt. Voeg één sleutel per rij toe.",
+      "text": "Sleutels die de proces-API aanvaardt. Alleen een digest wordt bewaard, dus een sleutel wordt nooit opnieuw getoond: laat dit leeg om de bewaarde sleutels te behouden, voeg een rij toe om een sleutel die je al hebt over te nemen, of gebruik de rijactie om er een te genereren.",
       "scope": "help"
     }
   ],
@@ -1904,7 +1904,23 @@
     "scope": "site"
   },
   "clone_confirm": {
-    "text": "Een kopie maken met dezelfde instellingen en domeinen (standaard uitgeschakeld)?",
+    "text": "Een kopie maken met dezelfde instellingen en domeinen (standaard uitgeschakeld)? API-sleutels worden niet gekopieerd.",
+    "scope": "site"
+  },
+  "generate_api_key": {
+    "text": "API-sleutel genereren",
+    "scope": "site"
+  },
+  "generate_api_key_hint": {
+    "text": "Genereer een sleutel voor de proces-API; hij wordt één keer getoond",
+    "scope": "site"
+  },
+  "api_key_minted": {
+    "text": "API-sleutel gegenereerd. Kopieer hem nu; hij wordt niet opnieuw getoond: {$key}",
+    "scope": "site"
+  },
+  "api_keys_unsupported": {
+    "text": "Dit sitetype heeft geen proces-API",
     "scope": "site"
   },
   "deployments": [

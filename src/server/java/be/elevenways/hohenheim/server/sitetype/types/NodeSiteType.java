@@ -68,10 +68,12 @@ public class NodeSiteType implements SiteTypeHandler {
         StringMapField.builder("environment_variables").label(HohenheimFormCopy.label("environment_variables"))
             .help(HohenheimFormCopy.help("environment_variables")).build());
 
-    // API keys for X-Hohenheim-Key header validation — stored as a JSON list of strings
+    // API keys for X-Hohenheim-Key header validation; SiteApiKeys stores only
+    // sha256 digests, so a typed key is adopted (hashed) and never echoed back.
     public static final ListField<String> API_KEYS = SETTINGS_SCHEMA.addField(
         ListField.<String>builder(StringField.builder().name("api_key").build()).name("api_keys")
-            .label(HohenheimFormCopy.label("api_keys")).help(HohenheimFormCopy.help("api_keys")).build());
+            .label(HohenheimFormCopy.label("api_keys")).help(HohenheimFormCopy.help("api_keys"))
+            .secret().build());
 
     // Discovered system user ("hohenheim:<username>" registry key); null means
     // "run as the current user". The registry drives the admin dropdown live.
