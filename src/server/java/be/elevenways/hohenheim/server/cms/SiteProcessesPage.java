@@ -91,15 +91,20 @@ public final class SiteProcessesPage implements RecordScopedPage<Row> {
         vars.put("proclogs", proclogs);
 
         String selectedLog = conduit.getQueryParam("log");
-        String selectedLogHtml = "";
+        String selectedLogText = "";
         String selectedLogTitle = "";
         if (selectedLog != null && !selectedLog.isBlank()) {
             try {
                 Row log = Models.get(ProclogModel.class).findById(Integer.parseInt(selectedLog));
                 // Ownership guard: a proclog id from another site must not render here.
                 if (log != null && siteId.equals(log.get(ProclogModel.SITE_ID))) {
-                    String html = log.get(ProclogModel.LOG_HTML);
-                    selectedLogHtml = html != null ? html : "";
+                    // AIDEV-NOTE: the log_html column name is historical -- the payload is
+                    // the child's stdout VERBATIM, which an anonymous visitor to a proxied
+                    // site controls (request path, User-Agent). It leaves here as TEXT and
+                    // the template renders it as a text node. Never hand it to a raw-HTML
+                    // render.
+                    String text = log.get(ProclogModel.LOG_HTML);
+                    selectedLogText = text != null ? text : "";
                     selectedLogTitle = "PID " + log.get(ProclogModel.PID)
                         + " (" + log.get(ProclogModel.CREATED_AT) + ")";
                 }
@@ -107,7 +112,7 @@ public final class SiteProcessesPage implements RecordScopedPage<Row> {
                 // Bad id: just render the page without a selected log.
             }
         }
-        vars.put("selectedLogHtml", selectedLogHtml);
+        vars.put("selectedLogText", selectedLogText);
         vars.put("selectedLogTitle", selectedLogTitle);
         vars.put("basePath", CmsSupport.panelBase(conduit));
         // The start/kill/isolate forms echo this as _return so their handlers

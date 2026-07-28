@@ -938,8 +938,11 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
                 row.set(ProclogModel.CREATED_AT, managed.startTime());
             }
 
-            // Column is still LOG_HTML but the payload is raw ANSI text; the
-            // proclog viewer feeds it through ghostty-web just like the live view.
+            // AIDEV-NOTE: the log_html column name is historical. What is stored is the
+            // child's stdout VERBATIM (raw ANSI text), and an anonymous visitor to a
+            // proxied site dictates part of it (request path, User-Agent land in the
+            // child's access log). It is therefore UNTRUSTED TEXT and every reader must
+            // treat it as text -- the proclog viewer renders it into a text node.
             row.set(ProclogModel.LOG_HTML, logText);
             row.set(ProclogModel.LINE_COUNT, countLines(logText));
             row.set(ProclogModel.SAVED_AT, Instant.now());
