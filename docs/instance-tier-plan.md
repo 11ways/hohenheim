@@ -197,6 +197,45 @@ are none anywhere in zenit/zenit-cms/zenit-forms/plumage/zenit-widget/zenit-auth
   hohenheim, and (b) treat log content as TEXT, not HTML -- the proclog viewer
   renders ANSI client-side into escaped nodes, never via `{%=`. The `{%=`
   usage is deleted.
+- CSP RECON (verified 2026-07-28): a strict `script-src 'self'` is ONE LINE
+  away from shippable, and that line fails SILENTLY.
+  - THE BLOCKER: `zenit-cms/src/common/templates/shell.hwk:27` is
+    `<body onload="main()">`, and that inline handler is the ONLY thing that
+    starts the TeaVM bundle (it ends with `$rt_exports.main = ...` and never
+    self-invokes). Under `script-src 'self'` every admin page renders correctly
+    and is completely INERT: no hydration, no custom elements, no soft
+    navigation, no confirm dialogs. Every hohenheim admin template extends
+    `zenitcms:shell`, so that is 100% of the admin surface. Fix by moving the
+    bootstrap to where bundle injection already lives
+    (`RenderEngine.preloadScriptsToElement`, `RenderEngine.java:409-429`, which
+    already emits a clean same-origin `<script src>`), then update the ~40
+    test templates that copy the `onload` shape so production and tests do not
+    diverge.
+  - Everything else in the stack is already CSP-clean: zero `<script>` tags,
+    zero `javascript:` URLs, zero other `on*=` handlers in production
+    templates; the hydration payload is an `application/dry` data block which
+    CSP does not police (expect scanners to flag it anyway).
+  - Concessions that must be accepted, not fought: `style-src` keeps
+    `'unsafe-inline'` because `style:` bindings serialize to `style="..."` in
+    SSR and the framework itself does it -- `RenderContext.java:2684` puts
+    `position:fixed` on the `<he-bottom>` portal target, so blocking it
+    corrupts layout on EVERY overlay-bearing page. `script-src` needs
+    `'wasm-unsafe-eval'` for `pl-terminal`'s ghostty wasm (used at
+    `cms/site-processes.hwk:97`), and `img-src` needs `data:` for
+    `Brand.BLANK_ICON`.
+  - Shippable policy: `default-src 'self'; script-src 'self' 'wasm-unsafe-eval';
+    style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';
+    connect-src 'self'; frame-ancestors 'none'; base-uri 'self';
+    object-src 'none'; form-action 'self'`. This DOES stop the 0.1 payload:
+    an injected `<script>` has no `'unsafe-inline'` and an injected
+    `<img onerror>` has no `'unsafe-hashes'`.
+  - MECHANISM HOME: NOT a global zenit default. A global CSP would leak the
+    admin policy onto public zenit-pages surfaces on a shared host. The correct
+    home is a panel-prefix `Middleware` in zenit-cms (weight 1, path prefix =
+    panel slug; `Middleware` already supports prefixes and null-return
+    chaining) plus a `cms.csp` setting. Hohenheim's tenant proxy is a separate
+    raw TCP layer that never passes through `HttpConduit`, so proxied tenant
+    sites are unaffected either way.
 - Consumer: hohenheim proclog + live-process viewer.
 - Gate: a browser test plants `<script>`/`<img onerror>` through a proxied
   request's path and User-Agent, opens the log viewer as admin, asserts no
