@@ -14,7 +14,8 @@ public class M018_AddDatabaseServer extends Migration {
     public void up(MigrationBuilder schema) {
         // Which host (servers.name) the database container runs on; defaults to the local daemon.
         schema.alterTable("managed_databases", table ->
-            table.addColumn("server_name", ColumnType.STRING, col -> col.maxLength(128).defaultValue("local")));
+            table.addColumn("server_name", ColumnType.STRING,
+                col -> col.maxLength(128).defaultValue("local").ifNotExists()));
     }
 
     @Override

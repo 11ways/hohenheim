@@ -16,8 +16,9 @@ public class M038_AddDynamicDns extends Migration {
     @Override
     public void up(MigrationBuilder schema) {
         schema.alterTable("dns_records", table -> {
-            table.addColumn("dynamic", ColumnType.BOOLEAN, col -> col.defaultValue(false));
-            table.addColumn("dyndns_token", ColumnType.STRING, col -> col.maxLength(96).nullable(true));
+            table.addColumn("dynamic", ColumnType.BOOLEAN, col -> col.defaultValue(false).ifNotExists());
+            table.addColumn("dyndns_token", ColumnType.STRING,
+                col -> col.maxLength(96).nullable(true).ifNotExists());
         });
     }
 

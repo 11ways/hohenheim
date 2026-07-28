@@ -13,10 +13,11 @@ public class M008_AddCertificateLifecycleFields extends Migration {
     @Override
     public void up(MigrationBuilder schema) {
         schema.alterTable("certificates", table -> {
-            table.addColumn("status", ColumnType.STRING, col -> col.maxLength(20).defaultValue("active"));
-            table.addColumn("issued_on", ColumnType.DATETIME, col -> col.nullable(true));
-            table.addColumn("renewal_error", ColumnType.TEXT, col -> col.nullable(true));
-            table.addColumn("domain_names_text", ColumnType.TEXT, col -> col.nullable(true));
+            table.addColumn("status", ColumnType.STRING,
+                col -> col.maxLength(20).defaultValue("active").ifNotExists());
+            table.addColumn("issued_on", ColumnType.DATETIME, col -> col.nullable(true).ifNotExists());
+            table.addColumn("renewal_error", ColumnType.TEXT, col -> col.nullable(true).ifNotExists());
+            table.addColumn("domain_names_text", ColumnType.TEXT, col -> col.nullable(true).ifNotExists());
         });
     }
 

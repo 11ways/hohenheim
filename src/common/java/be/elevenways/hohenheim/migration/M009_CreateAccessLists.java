@@ -24,7 +24,7 @@ public class M009_CreateAccessLists extends Migration {
         });
 
         schema.alterTable("sites", table -> {
-            table.addColumn("access_list_id", ColumnType.INTEGER, col -> col.nullable(true));
+            table.addColumn("access_list_id", ColumnType.INTEGER, col -> col.nullable(true).ifNotExists());
         });
     }
 

@@ -15,7 +15,7 @@ public class M024_AddProclogSavedAt extends Migration {
         // When the rolling log was last flushed to this row (periodic UPSERT while the
         // process is alive, so a hard crash loses at most one flush interval).
         schema.alterTable("proclogs", table -> {
-            table.addColumn("saved_at", ColumnType.DATETIME, col -> col.nullable(true));
+            table.addColumn("saved_at", ColumnType.DATETIME, col -> col.nullable(true).ifNotExists());
             table.addIndex("site_id", "created_at");
         });
     }

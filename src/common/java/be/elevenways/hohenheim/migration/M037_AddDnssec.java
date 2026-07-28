@@ -16,11 +16,11 @@ public class M037_AddDnssec extends Migration {
     @Override
     public void up(MigrationBuilder schema) {
         schema.alterTable("dns_zones", table -> {
-            table.addColumn("dnssec_enabled", ColumnType.BOOLEAN, col -> col.defaultValue(false));
-            table.addColumn("dnssec_algorithm", ColumnType.INTEGER, col -> col.defaultValue(13));
-            table.addColumn("dnssec_private_key", ColumnType.TEXT, col -> col.nullable(true));
-            table.addColumn("dnssec_public_key", ColumnType.TEXT, col -> col.nullable(true));
-            table.addColumn("dnssec_key_tag", ColumnType.INTEGER, col -> col.nullable(true));
+            table.addColumn("dnssec_enabled", ColumnType.BOOLEAN, col -> col.defaultValue(false).ifNotExists());
+            table.addColumn("dnssec_algorithm", ColumnType.INTEGER, col -> col.defaultValue(13).ifNotExists());
+            table.addColumn("dnssec_private_key", ColumnType.TEXT, col -> col.nullable(true).ifNotExists());
+            table.addColumn("dnssec_public_key", ColumnType.TEXT, col -> col.nullable(true).ifNotExists());
+            table.addColumn("dnssec_key_tag", ColumnType.INTEGER, col -> col.nullable(true).ifNotExists());
         });
     }
 

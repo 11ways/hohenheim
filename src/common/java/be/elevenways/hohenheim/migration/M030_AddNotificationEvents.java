@@ -13,7 +13,7 @@ public class M030_AddNotificationEvents extends Migration {
     @Override
     public void up(MigrationBuilder schema) {
         schema.alterTable("notification_channels", table ->
-            table.addColumn("events", ColumnType.JSON, col -> col.nullable(true)));
+            table.addColumn("events", ColumnType.JSON, col -> col.nullable(true).ifNotExists()));
     }
 
     @Override

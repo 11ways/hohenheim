@@ -13,8 +13,8 @@ public class M029_AddDatabaseLimits extends Migration {
     @Override
     public void up(MigrationBuilder schema) {
         schema.alterTable("managed_databases", table -> {
-            table.addColumn("memory_limit_mb", ColumnType.INTEGER, col -> col.nullable(true));
-            table.addColumn("cpu_limit", ColumnType.DOUBLE, col -> col.nullable(true));
+            table.addColumn("memory_limit_mb", ColumnType.INTEGER, col -> col.nullable(true).ifNotExists());
+            table.addColumn("cpu_limit", ColumnType.DOUBLE, col -> col.nullable(true).ifNotExists());
         });
     }
 

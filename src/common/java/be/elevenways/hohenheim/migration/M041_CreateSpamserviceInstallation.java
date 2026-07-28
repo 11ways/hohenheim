@@ -27,6 +27,12 @@ public class M041_CreateSpamserviceInstallation extends Migration {
             table.timestamps();
         });
         // Structural singleton stub: every mutation updates id=1, so concurrent first saves cannot insert twins.
+        // AIDEV-NOTE: This INSERT is deliberately NOT guarded with a NOT EXISTS clause. The
+        // 2026-07-29 integrity pass made every ALTER-only migration replayable via .ifNotExists(),
+        // but a migration that CREATES a table can never be replayed: MigrationBuilder.createTable
+        // has no IF NOT EXISTS, so a replay dies on the CREATE above and the INSERT is never
+        // reached. Guarding it would only have moved this migration's recorded checksum for an
+        // unreachable benefit. If createTable ever grows an ifNotExists option, guard both together.
         schema.execute("INSERT INTO spamservice_installations (id, enabled, port, max_heap_mb)"
             + " VALUES (1, FALSE, 8095, 512)");
     }

@@ -14,7 +14,8 @@ public class M023_AddDomainResponseHeaders extends Migration {
     public void up(MigrationBuilder schema) {
         // Header rules applied to the OUTGOING response (custom_headers targets upstream requests).
         schema.alterTable("site_domains", table ->
-            table.addColumn("response_headers", ColumnType.JSON, col -> col.nullable(true)));
+            table.addColumn("response_headers", ColumnType.JSON,
+                col -> col.nullable(true).ifNotExists()));
     }
 
     @Override

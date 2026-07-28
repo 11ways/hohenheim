@@ -61,7 +61,7 @@ public class M039_CreateSecurityTables extends Migration {
 
         schema.alterTable("sites", table -> {
             table.addColumn("security_report_token", ColumnType.STRING,
-                col -> col.maxLength(96).nullable(true));
+                col -> col.maxLength(96).nullable(true).ifNotExists());
         });
     }
 

@@ -17,6 +17,13 @@ public class M025_MapShapedSettings extends Migration {
         super("2026_07_07_000025", "Map-shaped env vars, headers, credentials + registry-keyed user/node");
     }
 
+    // AIDEV-NOTE: Every statement below is already re-run safe and must stay that way: each one
+    // is guarded by a WHERE that its own effect falsifies (json_type(...) = 'array' stops matching
+    // once the value is an object; the id keys are removed after being translated). Re-applying
+    // this migration against an already-converted database is a no-op, so it was deliberately NOT
+    // edited during the 2026-07-29 migration-integrity pass -- editing it would have moved its
+    // recorded checksum for nothing.
+
     @Override
     public void up(MigrationBuilder schema) {
         // Site settings: environment_variables list -> map.

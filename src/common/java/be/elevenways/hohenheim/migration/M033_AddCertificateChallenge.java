@@ -14,8 +14,10 @@ public class M033_AddCertificateChallenge extends Migration {
     @Override
     public void up(MigrationBuilder schema) {
         schema.alterTable("certificates", table -> {
-            table.addColumn("challenge_type", ColumnType.STRING, column -> column.maxLength(20));
-            table.addColumn("dns_publisher", ColumnType.STRING, column -> column.maxLength(80));
+            table.addColumn("challenge_type", ColumnType.STRING,
+                column -> column.maxLength(20).ifNotExists());
+            table.addColumn("dns_publisher", ColumnType.STRING,
+                column -> column.maxLength(80).ifNotExists());
         });
     }
 
