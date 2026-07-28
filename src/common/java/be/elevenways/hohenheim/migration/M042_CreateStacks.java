@@ -1,11 +1,27 @@
 package be.elevenways.hohenheim.migration;
 
-import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
+import be.elevenways.zenit.common.orm.migration.ForeignKeyAction;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
+/**
+ * Creates the managed stack tables.
+ *
+ * The three table-stored SchemaField child tables are spelled out literally rather than
+ * derived from StackServiceModel: a shipped migration must mean the same thing forever.
+ */
 public class M042_CreateStacks extends Migration {
+
+    // AIDEV-NOTE: This migration used to call `new StackServiceModel()` +
+    // createSchemaTableFor(...), which derives its DDL from the model AS IT IS TODAY. Editing a
+    // sub-schema (adding a mount field, say) therefore silently changed an ALREADY APPLIED
+    // migration: existing installs kept the old columns, new installs got the new ones, and the
+    // structural checksum moved under integrity checking. The literal DDL below is byte-identical
+    // in effect to what the model produced on 2026-07-29: the structural checksum is unchanged,
+    // pinned by MigrationIntegrityTest.m042StaysFrozen. A future sub-schema change adds a NEW
+    // migration; this one never moves again.
+    // Same caveat applies to createTranslationsTableFor and any other model-derived helper.
 
     public M042_CreateStacks() {
         super("2026_07_27_000042", "Create the managed stack tables");
@@ -49,10 +65,47 @@ public class M042_CreateStacks extends Migration {
             table.addIndex("stack_id");
         });
 
-        StackServiceModel services = new StackServiceModel();
-        schema.createSchemaTableFor(services, "mounts");
-        schema.createSchemaTableFor(services, "ports");
-        schema.createSchemaTableFor(services, "depends_on");
+        // Table-stored SchemaField child tables (StackServiceModel.MOUNTS / PORTS / DEPENDS_ON),
+        // frozen at the shape createSchemaTableFor derived on 2026-07-29.
+        schema.createTable("stack_services_mounts", table -> {
+            table.id();
+            table.addColumn("stack_service_id", ColumnType.INTEGER, col -> col
+                .nullable(false)
+                .references("stack_services", "id").onDelete(ForeignKeyAction.CASCADE));
+            table.addColumn("order_key", ColumnType.LONG, col -> col.nullable(false));
+            table.addColumn("type", ColumnType.STRING, col -> col.nullable());
+            table.addColumn("name", ColumnType.STRING, col -> col.nullable());
+            table.addColumn("container_path", ColumnType.STRING, col -> col.nullable());
+            table.addColumn("external_name", ColumnType.STRING, col -> col.nullable());
+            table.timestamps();
+            table.addIndex("stack_service_id", "order_key");
+        });
+
+        schema.createTable("stack_services_ports", table -> {
+            table.id();
+            table.addColumn("stack_service_id", ColumnType.INTEGER, col -> col
+                .nullable(false)
+                .references("stack_services", "id").onDelete(ForeignKeyAction.CASCADE));
+            table.addColumn("order_key", ColumnType.LONG, col -> col.nullable(false));
+            table.addColumn("container_port", ColumnType.INTEGER, col -> col.nullable());
+            table.addColumn("host_port", ColumnType.INTEGER, col -> col.nullable());
+            table.addColumn("protocol", ColumnType.STRING, col -> col.nullable());
+            table.addColumn("host_ip", ColumnType.STRING, col -> col.nullable());
+            table.timestamps();
+            table.addIndex("stack_service_id", "order_key");
+        });
+
+        schema.createTable("stack_services_depends_on", table -> {
+            table.id();
+            table.addColumn("stack_service_id", ColumnType.INTEGER, col -> col
+                .nullable(false)
+                .references("stack_services", "id").onDelete(ForeignKeyAction.CASCADE));
+            table.addColumn("order_key", ColumnType.LONG, col -> col.nullable(false));
+            table.addColumn("service", ColumnType.STRING, col -> col.nullable());
+            table.addColumn("condition", ColumnType.STRING, col -> col.nullable());
+            table.timestamps();
+            table.addIndex("stack_service_id", "order_key");
+        });
 
         schema.createTable("stack_files", table -> {
             table.id();
@@ -84,10 +137,9 @@ public class M042_CreateStacks extends Migration {
 
     @Override
     public void down(MigrationBuilder schema) {
-        StackServiceModel services = new StackServiceModel();
-        schema.dropSchemaTableFor(services, "depends_on");
-        schema.dropSchemaTableFor(services, "ports");
-        schema.dropSchemaTableFor(services, "mounts");
+        schema.dropTable("stack_services_depends_on");
+        schema.dropTable("stack_services_ports");
+        schema.dropTable("stack_services_mounts");
         schema.dropTable("stack_deployments");
         schema.dropTable("stack_files");
         schema.dropTable("stack_services");
