@@ -7,7 +7,7 @@
 {% declare isManaged: Boolean = false %}
 {% declare processes: List %}
 {% declare proclogs: List %}
-{% declare selectedLogHtml: String = "" %}
+{% declare selectedLogText: String = "" %}
 {% declare selectedLogTitle: String = "" %}
 {% declare basePath: String = "/admin" %}
 {% declare returnUrl: String = "" %}
@@ -137,13 +137,19 @@
         </pl-card-content>
     </pl-card>
 
-    {% if selectedLogHtml != "" %}
+    {% if selectedLogText != "" %}
     <pl-card>
         <pl-card-header>
             <pl-card-title>{{ t("stored_log", scope: "site_processes", title: selectedLogTitle) }}</pl-card-title>
         </pl-card-header>
         <pl-card-content>
-            <div class="hh-proclog-content">{%= selectedLogHtml %}</div>
+            {#- A stored proclog is the child's stdout VERBATIM, and an anonymous
+                visitor controls what a proxied site writes there (request path,
+                User-Agent). It is TEXT: {{ }} builds a text node, so nothing in it
+                can ever become markup. Never render it as HTML. Colouring the ANSI
+                codes, if ever wanted, is a client-side pass that builds escaped
+                nodes (textContent / spans), never an HTML string. -#}
+            <div class="hh-proclog-content">{{ selectedLogText }}</div>
         </pl-card-content>
     </pl-card>
     {% /if %}
