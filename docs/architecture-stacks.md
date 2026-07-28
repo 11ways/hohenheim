@@ -108,10 +108,17 @@ ATTRIBUTION-based because Hohenheim shares its daemon: the input is every image
 reference the stacks DECLARE on that server, an image is removed only when every
 reference it carries (tags AND repo digests) names one of those repositories
 while no declared reference resolves to it, and an image referenced by any
-container (running or stopped) is never touched. Two further guards: the age
-guard (`stacks.reclaim_min_age_hours`, default 24, floor 1) protects an image a
-concurrent deploy has just pulled but not yet started, and a failure to remove
-one image is logged and skipped rather than aborting the sweep.
+container (running or stopped) is never touched. All comparison happens on the
+HUB-NORMALIZED form (`nginx` == `docker.io/library/nginx`; a compose-style
+`repo:tag@digest` pin canonicalizes to its digest form), because the daemon and
+the operator spell the same reference differently. Deploys are protected by the
+in-flight check: a server with a DEPLOYING stack is skipped, and the sweep
+re-checks before every removal (a deploy claims its status before it pulls).
+Two further guards: the age guard (`stacks.reclaim_min_age_hours`, default 24,
+floor 1) keeps freshly BUILT images -- a pulled image's Created stamp is its
+upstream build time, so it cannot protect pulls -- and a failure to remove one
+image is logged and skipped rather than aborting the sweep. Removal goes by
+reference, not id, so a multi-tagged superseded image goes too.
 
 An image carrying NO reference at all cannot be attributed to anyone -- it may be
 an external build's leftover -- so it is kept unless
@@ -120,16 +127,17 @@ an external build's leftover -- so it is kept unless
 
 The nightly `ReclaimDockerImages` task runs the sweep on every server hosting a
 stack (`stacks.reclaim_images`, default on); the `reclaim_images` header action
-on the stack list runs the identical sweep on demand and reports what it freed.
-Reclaim is per DAEMON, not per stack, so it deliberately does not run on a
-stack's worker lane -- there is no stack whose queue it belongs in, and a
-concurrent deploy is safe by the two guards above.
+on the stack list starts the identical sweep in the background and logs what it
+freed. Reclaim is per DAEMON, not per stack, so it deliberately does not run on
+a stack's worker lane -- there is no stack whose queue it belongs in.
 
 **Volumes (explicit).** A volume is the one Docker resource whose removal
 destroys data that cannot be re-fetched, so nothing removes one automatically.
-`StackRuntime.purgeVolumes` stops the stack and then removes every volume
-carrying its ownership label; external (adopted) volumes never carry the label
-and survive. Stopping first is required, not polite -- Docker refuses to remove
-an attached volume, so a purge that skipped the stop would silently reclaim
-nothing. The `purge_stack_volumes` row action guards it with a typed
-confirmation demanding the stack's own name.
+`StackRuntime.purgeVolumes` tears the stack DOWN -- containers, network and
+every volume carrying its ownership label; external (adopted) volumes never
+carry the label and survive. The teardown is required, not polite: Docker
+refuses to remove a volume attached to any container, stopped ones included,
+so a stop-only purge would fail on every mounted volume. The next deploy
+rebuilds the stack from the records, minus the data. The
+`purge_stack_volumes` row action guards it with a typed confirmation demanding
+the stack's own name.

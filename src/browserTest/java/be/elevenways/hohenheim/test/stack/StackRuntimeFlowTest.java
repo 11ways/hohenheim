@@ -203,6 +203,60 @@ class StackRuntimeFlowTest {
     }
 
     /**
+     * The purge must remove the CONTAINERS too: Docker refuses to remove a volume
+     * attached to any container, stopped ones included, so a stop-only purge would
+     * fail on every mounted volume. The next deploy rebuilds the stack empty.
+     */
+    @Test
+    void purgeVolumesTearsTheStackDownAndDestroysItsData() throws IOException {
+        requireDocker();
+        String stackName = "hhflow-purge-" + Long.toHexString(System.nanoTime());
+        stackId = createStackRecords(stackName, "one");
+        String container = "hohenheim-stack-" + stackName + "-app";
+        String volume = "hohenheim-stack-" + stackName + "-data";
+
+        // 1. Give the service a named volume and deploy.
+        Db.run(datasource, () -> {
+            StackServiceModel services = Models.get(StackServiceModel.class);
+            Row service = services.findByStackId(stackId).get(0);
+            Row mount = new Row();
+            mount.set(StackServiceModel.MOUNT_TYPE, StackServiceModel.MOUNT_VOLUME);
+            mount.set(StackServiceModel.MOUNT_NAME, "data");
+            mount.set(StackServiceModel.MOUNT_PATH, "/data");
+            service.setRecords(StackServiceModel.MOUNTS, List.of(mount));
+            services.save(service);
+        });
+        runtime.deploy(stackId, "with-volume");
+        docker.exec(container, List.of("sh", "-c", "echo marker > /data/marker.txt"));
+        assertThat(volumeExists(volume)).as("step 1: the owned volume exists").isTrue();
+
+        // 2. Purge: container and volume both go, the stack reads inactive.
+        runtime.purgeVolumes(stackId);
+        assertThat(volumeExists(volume)).as("step 2: the owned volume is destroyed").isFalse();
+        Db.run(datasource, () -> {
+            Row stack = Models.get(StackModel.class).findById(stackId);
+            assertThat(stack.get(StackModel.STATUS))
+                .as("step 2: nothing of the stack remains")
+                .isEqualTo(StackModel.STATUS_INACTIVE);
+        });
+
+        // 3. The next deploy rebuilds from the records, with an EMPTY volume.
+        runtime.deploy(stackId, "after-purge");
+        DockerClient.ExecResult listing = docker.exec(container, List.of("ls", "/data"));
+        assertThat(listing.stdout()).as("step 3: the data did not survive the purge")
+            .doesNotContain("marker.txt");
+    }
+
+    private boolean volumeExists(String name) throws IOException {
+        for (Object entry : docker.listVolumes()) {
+            if (entry instanceof Map<?, ?> volume && name.equals(String.valueOf(volume.get("Name")))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * A deploy interrupted by a crash or restart leaves the row claiming "deploying",
      * and refreshStatus defers to a running deploy -- so without a boot sweep that
      * stack is never monitored or alerted on again.

@@ -9,7 +9,9 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -298,7 +300,14 @@ public class StackResource extends RowResource {
             .inlineInRow(false)
             // The one stack operation that destroys data instead of processes, so it
             // asks for the stack's OWN name rather than a reflex click. External
-            // volumes are unowned and survive it.
+            // volumes are unowned and survive it. The static spec is the record-less
+            // fallback the builder demands next to a dynamic confirmation.
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("purge_volumes").withFilter("scope", "stack"))
+                .body(Microcopy.of("purge_volumes_confirm_generic").withFilter("scope", "stack"))
+                .confirmLabel(Microcopy.of("purge_volumes_ok").withFilter("scope", "stack"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .build())
             .dynamicConfirmation(row -> ConfirmationSpec.builder()
                 .title(Microcopy.of("purge_volumes").withFilter("scope", "stack"))
                 .body(Microcopy.of("purge_volumes_confirm").withFilter("scope", "stack")
@@ -339,15 +348,20 @@ public class StackResource extends RowResource {
                 .body(Microcopy.of("reclaim_images_confirm").withFilter("scope", "stack"))
                 .build())
             .handler(ctx -> {
-                Map<String, DockerReclaim.Outcome> outcomes =
-                    StackRuntime.get().reclaimImages(ReclaimDockerImages.minimumAge(),
-                        ReclaimDockerImages.includeUnattributed());
-                DockerReclaim.Outcome total = outcomes.values().stream()
-                    .reduce(DockerReclaim.Outcome.EMPTY, DockerReclaim.Outcome::plus);
+                // A sweep visits every daemon and can remove multi-GB images; that
+                // does not belong on the request thread. The outcome lands in the
+                // server log, exactly like the nightly task's.
+                JobRunner.startVirtualThread(() -> {
+                    Map<String, DockerReclaim.Outcome> outcomes =
+                        StackRuntime.get().reclaimImages(ReclaimDockerImages.minimumAge(),
+                            ReclaimDockerImages.includeUnattributed());
+                    DockerReclaim.Outcome total = outcomes.values().stream()
+                        .reduce(DockerReclaim.Outcome.EMPTY, DockerReclaim.Outcome::plus);
+                    Blast.log("DOCKER RECLAIM: manual sweep removed", total.removed(),
+                        "images,", total.megabytes(), "MiB, skipped", total.skipped());
+                });
                 return CmsActionResult.refreshWithToast(
-                    Microcopy.of("reclaim_images_done").withFilter("scope", "stack")
-                        .withArg("images", String.valueOf(total.removed()))
-                        .withArg("megabytes", String.valueOf(total.megabytes())));
+                    Microcopy.of("reclaim_images_started").withFilter("scope", "stack"));
             })
             .build());
         return actions;
