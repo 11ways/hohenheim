@@ -654,6 +654,69 @@ hohenheim (consumer proof):
 - Gate: all existing site-access tests pass; a delegated user logs in and lands
   on a working /manage with only the peers they can touch.
 
+RECON CORRECTIONS (verified 2026-07-28, against POST-Phase-0 code):
+
+- **RISKIEST ITEM, with the mitigation that makes it safe.** Promoting
+  `PermissionChecker` to tri-state is the one change that can cause a SILENT
+  authorization regression. It is a process-global mutable singleton with a
+  `@FunctionalInterface` contract, and ~30 call sites across zenit, zenit-cms,
+  zenit-forms, zenit-media, zenit-widget, QQ and proteus build it as a two-arg
+  lambda. No existing test would catch abstain-meaning-something-other-than-deny,
+  because every current test installs a TOTAL (never-abstaining) checker.
+  Required shape: keep `hasPermission` as the boolean method so every lambda
+  still compiles, add `decide` as a DEFAULT returning `hasPermission(...) ?
+  TRUE : null` -- never `FALSE` from a boolean-only impl, since that is the only
+  encoding that cannot silently convert a legacy deny into an abstain. Pin the
+  precedence truth table with a test BEFORE any consumer reads `decide`.
+- **`AuthModels` refactor is WASTED WORK -- do not do it.** The plan blamed
+  new-Model-per-call for defeating the query cache. Wrong: `Model.queryCache()`
+  resolves through the process-global `Caches` registry BY MODEL ID
+  (`Model.java:292-295`, `Caches.java:41-45`), so every instance shares one
+  cache. The cache is dead because `model_query_cache_duration_ms` DEFAULTS TO 0
+  (`DataSettings.java:18-23`) and neither grant model overrides it. Only batching
+  helps. Also `managedSiteIds` has 3 production call sites, not 5 -- instrument
+  before quoting a per-render number.
+- **There is NO subpage registry. This is unbudgeted Phase 1 work.**
+  `subpages()` is an override list scanned linearly (`findSubpage`,
+  `ResourcePageEndpoints.java:1180`); grep finds no registry of any kind. So
+  "attaches to any Resource via the subpages seam" is a mechanism to BUILD
+  (a model-Identifier-keyed registry consulted by `RowResource.frameworkSubpages()`),
+  not one to use. It blocks the generic access page.
+- **The matrix is a NEW plumage component, not a variant.**
+  `pl-permissions-editor` is a ONE-dimensional list of free-text permission
+  strings with a single allow/deny select. A subjects x capabilities matrix needs
+  an enumerated capability axis, a subject picker, and allow/deny/unset cells.
+  Reusable: the `PermissionExtraColumn` open-column seam and the datalist
+  suggestion pattern. Not the layout -- do not bend it.
+- **Grant cleanup on soft delete is worse than stated.** `SiteModel` has NO
+  `SoftDeleteBehaviour` at all (`SiteModel.java:112` adds only Revisionable);
+  the soft delete is hand-rolled in `SiteResource.deleteRow:233-241` via
+  `save()`. So it fires WRITE hooks, never remove hooks -- an after-remove hook
+  is useless there. Needs an explicit call in `deleteRow` or a save-hook that
+  detects the `deleted_at` transition. GOOD NEWS: the audit claim that
+  `addAfterRemoveHook` cannot supply ids is WRONG -- `RemoveFromDatasource`
+  carries the query context and count, and the same instance is passed to
+  before- and after-hooks, so `ActivityLog.java:327-377`'s before-capture /
+  after-consume pattern is a straight copy for HARD deletes.
+- **`createPermission` CANNOT be record-aware** -- it is checked at
+  `ResourcePageEndpoints.java:566,580` with no record in existence. Drop it from
+  the record-aware overload list; create authority is Phase 3's quota problem.
+  The claim holds for update/delete/subpage/row-action/field-access, all of
+  which run inside `dispatchRow` with the row already loaded.
+- **zenit-auth has no server-side zenit-cms compile path.** `build.gradle:153`
+  is `commonCompileOnly` only, and zenit-auth has never registered a CMS
+  Resource or page -- `AuthCmsBridge` is a slot contribution. Add
+  `serverCompileOnly zenit-cms-common`. This is new ground, not a copy.
+- `RecordScopedPage.visibleFor(T)` today takes the record but NOT an
+  `AccessContext`; the record-aware overload must add it.
+- M006 has THREE indexes (`M006:32-34`, incl. `(model, capability)`), not two.
+  "Not covering" still holds.
+- `ManagePanel`'s constructor hack has an ordering BUG worth naming when it is
+  deleted: `ZenitAuth.configureDataBoundServices` (`ZenitAuth.java:82`)
+  overwrites the wrapper unconditionally, so any test rebind or re-init silently
+  un-installs it.
+- Phase 0.8 and 0.3 are ALREADY LANDED; Phase 1 builds on them, not around them.
+
 Phase 0 and Phase 1 are largely independent of Phase 2+ and can interleave with
 each other; Phase 1's record-capability SPI is a hard dependency for Phase 3.
 
