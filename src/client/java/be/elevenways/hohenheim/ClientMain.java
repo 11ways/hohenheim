@@ -1,7 +1,5 @@
 package be.elevenways.hohenheim;
 
-import be.elevenways.plumage.component.BrowserSortableBridge;
-import be.elevenways.plumage.component.BrowserTableSelectionBridge;
 import be.elevenways.plumage.component.BrowserTerminalBridge;
 import be.elevenways.plumage.component.SortableFunctions;
 import be.elevenways.plumage.component.TableSelectionFunctions;
@@ -21,8 +19,6 @@ public class ClientMain {
         // Plumage browser bridges: a missing bridge is silent (terminal never
         // connects, sortable never dispatches reorder), so install them all.
         TerminalFunctions.setBridge(new BrowserTerminalBridge());
-        SortableFunctions.setBridge(new BrowserSortableBridge());
-        TableSelectionFunctions.setBridge(new BrowserTableSelectionBridge());
         ClientZenitRuntime.main(null);
         Zenit.ROOT_STAGE.launch();
     }
