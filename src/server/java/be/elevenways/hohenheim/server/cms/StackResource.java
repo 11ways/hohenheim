@@ -4,13 +4,17 @@ import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.server.docker.DockerReclaim;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
+import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -286,6 +290,29 @@ public class StackResource extends RowResource {
                     Microcopy.of("rollback_queued").withFilter("scope", "stack"));
             })
             .build());
+        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "purge_stack_volumes"))
+            .label(Microcopy.of("purge_volumes").withFilter("scope", "stack"))
+            .description(Microcopy.of("purge_volumes_hint").withFilter("scope", "stack"))
+            .icon(Icon.of("hard-drive"))
+            .style(ActionStyle.DESTRUCTIVE)
+            .inlineInRow(false)
+            // The one stack operation that destroys data instead of processes, so it
+            // asks for the stack's OWN name rather than a reflex click. External
+            // volumes are unowned and survive it.
+            .dynamicConfirmation(row -> ConfirmationSpec.builder()
+                .title(Microcopy.of("purge_volumes").withFilter("scope", "stack"))
+                .body(Microcopy.of("purge_volumes_confirm").withFilter("scope", "stack")
+                    .withArg("name", row.get(StackModel.NAME)))
+                .confirmLabel(Microcopy.of("purge_volumes_ok").withFilter("scope", "stack"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .requireTypedConfirmation(row.get(StackModel.NAME))
+                .build())
+            .handler((row, ctx) -> {
+                StackRuntime.get().purgeVolumesAsync(row.get(StackModel.ID));
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("purge_volumes_queued").withFilter("scope", "stack"));
+            })
+            .build());
         actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "refresh_stack"))
             .label(Microcopy.of("refresh_status").withFilter("scope", "stack"))
             .icon(Icon.of("rotate"))
@@ -293,6 +320,34 @@ public class StackResource extends RowResource {
                 String status = StackRuntime.get().refreshStatus(row.get(StackModel.ID));
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of(status).withFilter("scope", "stack_status"));
+            })
+            .build());
+        return actions;
+    }
+
+    @Override
+    public @NonNull List<HeaderAction> headerActions() {
+        List<HeaderAction> actions = new ArrayList<>(super.headerActions());
+        // Disk reclaim is per DAEMON, not per stack, so it belongs on the page rather
+        // than on a row. The nightly ReclaimDockerImages task runs the same sweep.
+        actions.add(HeaderAction.Invoke.builder(Identifier.of("hohenheim", "reclaim_images"))
+            .label(Microcopy.of("reclaim_images").withFilter("scope", "stack"))
+            .description(Microcopy.of("reclaim_images_hint").withFilter("scope", "stack"))
+            .icon(Icon.of("broom"))
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("reclaim_images").withFilter("scope", "stack"))
+                .body(Microcopy.of("reclaim_images_confirm").withFilter("scope", "stack"))
+                .build())
+            .handler(ctx -> {
+                Map<String, DockerReclaim.Outcome> outcomes =
+                    StackRuntime.get().reclaimImages(ReclaimDockerImages.minimumAge(),
+                        ReclaimDockerImages.includeUnattributed());
+                DockerReclaim.Outcome total = outcomes.values().stream()
+                    .reduce(DockerReclaim.Outcome.EMPTY, DockerReclaim.Outcome::plus);
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("reclaim_images_done").withFilter("scope", "stack")
+                        .withArg("images", String.valueOf(total.removed()))
+                        .withArg("megabytes", String.valueOf(total.megabytes())));
             })
             .build());
         return actions;

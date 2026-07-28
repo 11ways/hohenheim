@@ -96,3 +96,40 @@ deployment (netbird-server + dashboard + netbird-proxy).
   or mid-DESTROY is not swept: the row keeps its pre-operation status and the
   next monitor tick recomputes an honest aggregate from what is actually
   running.
+
+## Disk reclaim
+
+Two operations reclaim the disk a stack occupies, split by whether the removal
+can be undone.
+
+**Images (automatic).** `DockerReclaim` removes the previous pin of a re-pinned
+image, so a host that keeps updating stacks does not fill up. It is
+ATTRIBUTION-based because Hohenheim shares its daemon: the input is every image
+reference the stacks DECLARE on that server, an image is removed only when every
+reference it carries (tags AND repo digests) names one of those repositories
+while no declared reference resolves to it, and an image referenced by any
+container (running or stopped) is never touched. Two further guards: the age
+guard (`stacks.reclaim_min_age_hours`, default 24, floor 1) protects an image a
+concurrent deploy has just pulled but not yet started, and a failure to remove
+one image is logged and skipped rather than aborting the sweep.
+
+An image carrying NO reference at all cannot be attributed to anyone -- it may be
+an external build's leftover -- so it is kept unless
+`stacks.reclaim_untracked` is on. That setting is the equivalent of
+`docker image prune`, and belongs off on a shared host, on a dedicated one.
+
+The nightly `ReclaimDockerImages` task runs the sweep on every server hosting a
+stack (`stacks.reclaim_images`, default on); the `reclaim_images` header action
+on the stack list runs the identical sweep on demand and reports what it freed.
+Reclaim is per DAEMON, not per stack, so it deliberately does not run on a
+stack's worker lane -- there is no stack whose queue it belongs in, and a
+concurrent deploy is safe by the two guards above.
+
+**Volumes (explicit).** A volume is the one Docker resource whose removal
+destroys data that cannot be re-fetched, so nothing removes one automatically.
+`StackRuntime.purgeVolumes` stops the stack and then removes every volume
+carrying its ownership label; external (adopted) volumes never carry the label
+and survive. Stopping first is required, not polite -- Docker refuses to remove
+an attached volume, so a purge that skipped the stop would silently reclaim
+nothing. The `purge_stack_volumes` row action guards it with a typed
+confirmation demanding the stack's own name.
