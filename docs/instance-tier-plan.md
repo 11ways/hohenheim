@@ -254,14 +254,34 @@ password/disable paths) and revoke all sessions.
 
 ### 0.4 Ungated RecordSources leak installation data (boundary 4)
 
-`RecordSource` defaults to login-only, no permission (`RecordSource.java:238-247,706-709`).
-`HohenheimSources.java:51-105` registers 10 sources with no permission and no
-accessCriteria; `zenit.activity` (`ActivitySources.java:40-54`) has no
-permission parameter at all and exposes the whole audit log to any `/manage`
-operator. `RecordSourceRegistry.register` is last-write-wins, so an ungated
-declaration silently overrides a gated one (`CmsRecordSources`, `zenit-media`).
-Same class in proteus, orcono. This is a default that leans wrong, not one
-careless author.
+`RecordSource` defaults to login-only, no permission (`RecordSource.java:238-247,706-709`;
+`authorizes()` at `:238` is the ONLY gate). `HohenheimSources.java:51-105`
+registers 11 sources with no permission and no accessCriteria (the audit said
+10; it missed `AccessListModel` and `SiteAuthProviderModel`); `zenit.activity`
+(`ActivitySources.java:46-56`) has no permission parameter at all and exposes
+the whole audit log to any `/manage` operator. Same class in proteus, orcono,
+zenit-media. This is a default that leans wrong, not one careless author.
+
+RECON CORRECTION (verified 2026-07-28) -- the shadowing works the OPPOSITE way
+from the original finding, and boot order cannot fix it:
+
+- `RecordSourceRegistry.register` (`:32-37`) IS silent last-write-wins, but that
+  is not what causes the hohenheim leak. The GATED registrar is FIRST-write-wins:
+  `CmsRecordSources.java:73-75` returns early when an id is already registered.
+  Hohenheim registers at the MODULES boot stage, BEFORE `ensureRegistered`
+  (`CmsBoot.java:31`), so hohenheim's ungated sources permanently shadow the
+  permission+accessCriteria sources the CMS would otherwise install. Both
+  directions need fixing.
+- Four call sites reach a source with NO gate at all (they never call
+  `authorizes()`): `MediaEndpointHandlers.java:115-116`,
+  `FormRenderDefaults.java:229,264,485`, `SubmittedValueCoercion.java:589,637`,
+  `ResourceListPageRenderer.java:388-389`.
+- The VOCABULARY endpoint (`RecordSourceHandlers.java:199`) passes NO access
+  context, leaking the queryable variable set to anyone past the coarse gate.
+  `vocabulary()`, `project()` and `item()` have no access-aware overload at all.
+- The non-access overloads of `buildQuery/resolveRow/resolveRows/existsId`
+  (`:350,428,456,511`) are still public and silently skip `accessCriteria`.
+  Gating only the access-aware overloads leaves the bypass wide open.
 
 - Structural fix (mechanism, zenit core `common/data`): make the wrong thing
   impossible to declare silently.
@@ -281,8 +301,16 @@ careless author.
   serve as the reference.
 - Also: `RecordSource` gains a `.secret()` gate (finding 28 -- it guards
   `isEncrypted()` only) so a projected secret is neither returned nor turned
-  into a queryable rule variable (the `icontains` value oracle). Filter in
-  `deriveVocabulary` the way `SchemaVocabulary.java:43` does.
+  into a queryable rule variable (the `icontains` value oracle). The mechanism
+  already exists: `Field.isFilterable()` (`Field.java:338-345`) is already
+  `isSecret() || isEncrypted() -> false`, and `SchemaVocabulary.java:41-45` is
+  the reference consumer. The secret surface is WIDER than deriveVocabulary:
+  `project()` (`:533-546`) and `item()` (`:554-581`) copy every projected field
+  verbatim; derived `sortable` (`:115-118`) and `search()` (`:962-964`) filter
+  encrypted but NOT secret, giving order-by, bucket-count (the sortable
+  whitelist doubles as bucketable, `RecordSourceHandlers.java:76-81`) and
+  `icontains` oracles; and the `displayTitle` fallback (`:604-614`) can emit a
+  secret as a record's title. Fix all of them through `isFilterable()`.
 - Gate: a test asserting a source with no access declaration fails to register;
   a logged-in non-operator gets 403/empty on each hohenheim source; a re-register
   attempt without explicit override is refused.
@@ -806,17 +834,50 @@ Each names its home and its first consumer.
   the DB + keyring to an off-host target (and a written restore procedure,
   exercised once) lands no later than Phase 4, alongside instance backups.
 - **Rollout / upgrade for existing installs.** Once other people run installs,
-  migrations and behavior changes must be safe on live data. Migration
-  integrity is currently OFF and cannot be turned on (M001/M002/M007 deleted
-  with history rows remaining, `acknowledgeMissingMigrationVersions` never
-  called, six migrations edited after apply, `M042` builds DDL from the LIVE
-  model so editing the model silently changes an applied checksum, `M043`'s
-  `assertUnique` can hard-fail a live boot in a `.requireSuccess()` chain, only
-  2 of ~40 addColumn sites carry `.ifNotExists()`). Before public, run a
-  migration-integrity remediation workstream: acknowledge the deleted versions,
-  stop building DDL from live models, make column adds idempotent, and turn
-  integrity checking ON. This is a release-adjacent blocker for a public
-  product with foreign installs -- schedule it alongside Phase 0.
+  migrations and behavior changes must be safe on live data. RECON CORRECTION
+  (verified 2026-07-28) -- integrity is NOT off, and the blocker is not what the
+  audit said:
+  - `database.migration_integrity` is `off|warn|fail` and defaults to **warn**
+    (`ServerSettings.java:404-408`); hohenheim never overrides it. Every install
+    today LOGS its findings and boots anyway. For a public product, silently
+    continuing past "your schema does not match your migrations" is arguably
+    worse than either extreme -- the shipped default is a deliberate decision,
+    not an inherited one.
+  - The real blocker to `fail` is **26 of 56 history rows carrying NULL
+    checksums** (only `2026_07_07_000025` onward have any). The runner skips
+    comparison entirely on null (`MigrationRunner.java:338-343`), so drift is
+    invisible for that reason, not because checking is disabled.
+  - "Six migrations edited after apply" is misleading: 10 files changed
+    post-creation, but 5 of those edits are `down()`-only and the checksum
+    covers `up()` only. Five surviving migrations have real `up()` drift
+    (M003-M006, M026).
+  - CONFIRMED: M001/M002/M007 deleted (commit `3678bd9`) with history rows
+    remaining and `acknowledgeMissingMigrationVersions` never called; `M042` is
+    the SOLE migration building DDL from a live model (`new StackServiceModel()`);
+    2 of 46 alter-table `addColumn` sites carry `.ifNotExists()`.
+  - `M043`'s `assertUnique` is an AVAILABILITY bug, not hygiene: it throws on
+    the first duplicate, propagates through `.requireSuccess()`
+    (`HohenheimDatabase.java:39`) and KILLS BOOT, telling the operator to
+    renumber history from a dead control plane. Fix regardless of this arc.
+  - ORDERING TRAP: `.ifNotExists()` is stamped INTO the checksum
+    (`MigrationChecksum.java:206-209`). Retrofitting it across the 46 sites
+    changes the checksum of every migration touched, so doing it AFTER enabling
+    integrity manufactures ~21 false findings. Retrofit and checksum-stamping
+    are one coupled step, in that order.
+  - Also unguarded and not re-run safe: `M041:30-31` raw `INSERT`, `M025`/`M026`
+    raw `schema.execute` DDL/DML, `M026:56` `DROP TABLE audit_log`. And
+    `database.schema_drift_check` (`ServerSettings.java:410-414`, also `warn`)
+    is a second independent drift signal nobody is watching -- it would catch
+    the M042 class of problem from the other side.
+  - Remediation ORDER: snapshot the live DB first; capture one real boot's
+    findings at `warn` (remediate against the real list, not an inferred one);
+    acknowledge the three deleted versions; freeze M042 to literal DDL; fix
+    M043; then the coupled ifNotExists + `repairNullChecksums()` step (which
+    BLESSES current source as truth -- verify the live schema per table first);
+    only then consider `fail`. No foreign installs exist yet, which makes this
+    repair cheap now and expensive later.
+  - Unrelated but found: 7 browserTest classes hand-list migrations, violating
+    the auto-discovery hard rule. Not release-blocking; fix opportunistically.
 - **Destructive-operation audit.** Every destroy/purge/snapshot-restore is a
   data-loss surface. Reuse the typed-confirmation + ownership-label pattern the
   stack tier already proved (`purge_stack_volumes`), and log every destructive
