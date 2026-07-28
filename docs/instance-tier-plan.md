@@ -1114,6 +1114,43 @@ Each names its home and its first consumer.
     repair cheap now and expensive later.
   - Unrelated but found: 7 browserTest classes hand-list migrations, violating
     the auto-discovery hard rule. Not release-blocking; fix opportunistically.
+
+  STATUS (2026-07-29): the CODE half of this workstream LANDED. What changed:
+  - `M043` heals instead of asserting: duplicate `(stack_id, name)` /
+    `(stack_service_id, container_path)` rows are renamed to `<value>__dup<id>`
+    before the unique index is created, and `assertUnique` is gone. An install
+    carrying duplicates now boots.
+  - The three retired versions are acknowledged in `HohenheimDatabase` from a
+    public `RETIRED_MIGRATION_VERSIONS` constant (also consumed by the test).
+  - `M042` is frozen to literal DDL. Its structural checksum is UNCHANGED
+    (`cd499511042cc811111f668ee815a9e1548861bd486aec244548c3ddb67397b4`, pinned
+    by a test), so the freeze costs the live install nothing.
+  - All 46 alter-table `addColumn` sites carry `.ifNotExists()`.
+  - `database.migration_integrity` is now pinned explicitly at `warn` in
+    `settings/default.dry`, so hohenheim's posture no longer silently follows
+    whatever zenit's default happens to be.
+  - The 7 hand-listing browserTest classes use auto-discovery.
+  - New `MigrationIntegrityTest` (browserTest) covers: fresh migrate + re-migrate
+    no-op + a green run at `migration_integrity=fail`; replaying every ALTER-only
+    migration onto an existing schema; the duplicate-rows heal; retired-version
+    acknowledgement in both directions; the M042 checksum pin.
+
+  STILL OPEN, deliberately NOT done here (they need Jelle):
+  - The checksum stamping against the live database. `repairNullChecksums()`
+    covers the 26 NULL rows only. Editing `M043` and the 8 alter migrations that
+    already carry checksums (M029/M030/M031/M033/M035/M037/M038/M039) produced
+    "modified after applied" findings that NO framework API can clear -- zenit
+    has half of Flyway `repair`. Snapshot the DB, capture one real boot's
+    findings at `warn`, verify the live schema per table, then stamp.
+  - `migration_integrity=fail` as the shipped default. It is the right
+    destination and a clean install already passes it, but flipping it today
+    would refuse to boot the one live install. Flip it in the same change that
+    stamps the checksums.
+  - FRAMEWORK GAP found: `MigrationBuilder.createTable` has no `ifNotExists`
+    option, so a migration that CREATES a table can never be replayed onto an
+    existing schema. That caps the column-level `.ifNotExists()` work at
+    ALTER-only migrations, and is why `M041`'s INSERT was left unguarded (its
+    CREATE dies first, so the guard could never be reached or tested).
 - **Destructive-operation audit.** Every destroy/purge/snapshot-restore is a
   data-loss surface. Reuse the typed-confirmation + ownership-label pattern the
   stack tier already proved (`purge_stack_volumes`), and log every destructive
