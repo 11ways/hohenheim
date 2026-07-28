@@ -30,9 +30,6 @@ public final class ManagePanel extends Panel {
 
     public static final Permission ACCESS = Permission.of("hohenheim.manage.access");
 
-    /** The manage-scoped site record source id (per-principal picker + coercion scope). */
-    public static final Identifier MANAGE_SITE_SOURCE = Identifier.of("hohenheim", "manage_site");
-
     private static volatile boolean sourceRegistered = false;
 
     public ManagePanel() {
@@ -68,22 +65,26 @@ public final class ManagePanel extends Panel {
 
     @Override
     public @NonNull List<PanelPeer> buildPeers() {
-        registerManageSiteSource();
+        registerSiteSource();
         return List.of(new ManageSiteResource(), new ManageDomainResource());
     }
 
     /**
-     * Registered server-side (not in HohenheimSources) because the access
-     * scope reads zenit-auth record grants; pickers reach it by token through
-     * the record-source endpoints, so the browser registry never needs it.
+     * THE SiteModel default source, serving the admin pickers AND the /manage
+     * tenant surface through one per-principal scope (admins unconstrained,
+     * tenants their granted sites, everyone else nothing). Registered
+     * server-side (not in HohenheimSources) because the scope reads zenit-auth
+     * record grants; pickers reach it by token through the record-source
+     * endpoints, so the browser registry never needs it. AIDEV-NOTE: this
+     * replaced the separate "hohenheim.manage_site" source -- two sources with
+     * identical semantics over one model were a shadowing hazard.
      */
-    public static synchronized void registerManageSiteSource() {
+    public static synchronized void registerSiteSource() {
         if (sourceRegistered) {
             return;
         }
         sourceRegistered = true;
         RecordSourceRegistry.INSTANCE.register(RecordSource.of(SiteModel.class)
-            .id(MANAGE_SITE_SOURCE)
             .search(SiteModel.NAME, SiteModel.SLUG)
             .baseCriteria(() -> SiteModel.DELETED_AT.isNull())
             .accessCriteria(ManagePanel::siteScope)

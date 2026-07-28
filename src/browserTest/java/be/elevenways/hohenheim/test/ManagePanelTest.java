@@ -14,6 +14,7 @@ import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.data.RecordSourceBucketQuery;
 import be.elevenways.zenit.common.data.RecordSourceQuery;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -30,6 +31,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -193,7 +195,7 @@ class ManagePanelTest extends HohenheimTestBase {
         String body = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
         HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + "/zn/records/hohenheim.manage_site/query"))
+            .uri(URI.create(baseUrl() + "/zn/records/hohenheim.site/query"))
             .header("Content-Type", "application/dry")
             .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + operatorSession)
             .header("X-Csrf-Token", operatorCsrf)
@@ -382,6 +384,78 @@ class ManagePanelTest extends HohenheimTestBase {
         }
         assertThat(operatorGet("/manage").statusCode()).isIn(200, 302, 303);
         RecordGrants.revoke("user", operatorId, SiteModel.MODEL_ID, siteAId, HohenheimAccess.MANAGE);
+    }
+
+    /**
+     * Boundary 4 (tenant A data <- tenant B): a logged-in principal with NO
+     * grants gets 403 or provably empty results on EVERY hohenheim source,
+     * for EVERY record-source operation -- query, item, vocabulary, buckets.
+     */
+    @Test
+    @Order(5)
+    void ungrantedLoginGetsNothingFromAnyHohenheimSource() throws Exception {
+        Row outsider = AuthModels.users().createEmptyRow();
+        outsider.set(UserModel.EMAIL, "outsider@hohenheim.local");
+        outsider.set(UserModel.DISPLAY_NAME, "No Grants");
+        outsider.set(UserModel.ENABLED, true);
+        outsider.set(UserModel.CREATED_AT, Instant.now());
+        outsider.set(UserModel.UPDATED_AT, Instant.now());
+        AuthModels.users().save(outsider);
+
+        Session session = Zenit.getSessionStore().create();
+        session.set(AuthKeys.USER_ID, outsider.get(UserModel.ID).longValue());
+        String csrf = ZenitAuth.randomToken();
+        session.set(CsrfTokens.TOKEN, csrf);
+        Zenit.getSessionStore().save(session);
+        String outsiderSession = session.id();
+
+        String query = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
+        String buckets = Zenit.DRY.stringify(
+            new RecordSourceBucketQuery(null, "created_at", 7, null));
+
+        // Every installation-wide source is admin-gated: all four operations 403.
+        List<String> adminOnly = List.of(
+            "hohenheim.certificate", "hohenheim.access_list", "hohenheim.database",
+            "hohenheim.site_auth_provider", "hohenheim.system_user",
+            "hohenheim.spamservice_system_users", "hohenheim.dns_zone",
+            "hohenheim.ban", "zenit.activity");
+        for (String token : adminOnly) {
+            assertThat(dryPost("/zn/records/" + token + "/query", query, outsiderSession, csrf).statusCode())
+                .as("query on %s", token).isEqualTo(403);
+            assertThat(get("/zn/records/" + token + "/item/1", outsiderSession).statusCode())
+                .as("item on %s", token).isEqualTo(403);
+            assertThat(get("/zn/records/" + token + "/vocabulary", outsiderSession).statusCode())
+                .as("vocabulary on %s", token).isEqualTo(403);
+            assertThat(dryPost("/zn/records/" + token + "/buckets", buckets, outsiderSession, csrf).statusCode())
+                .as("buckets on %s", token).isEqualTo(403);
+        }
+
+        // The site source is grant-scoped instead of 403: an ungranted login
+        // gets an EMPTY result set, and ids read as missing.
+        HttpResponse<String> sites = dryPost("/zn/records/hohenheim.site/query", query, outsiderSession, csrf);
+        assertThat(sites.statusCode()).isEqualTo(200);
+        assertThat(sites.body()).doesNotContain("Manage Site");
+        assertThat(get("/zn/records/hohenheim.site/item/" + siteAId, outsiderSession).statusCode())
+            .isEqualTo(404);
+        // Search-only source: the vocabulary carries no variables and buckets
+        // have no whitelisted date field.
+        HttpResponse<String> siteVocabulary = get("/zn/records/hohenheim.site/vocabulary", outsiderSession);
+        assertThat(siteVocabulary.statusCode()).isEqualTo(200);
+        assertThat(siteVocabulary.body()).doesNotContain("created_at");
+        assertThat(dryPost("/zn/records/hohenheim.site/buckets", buckets, outsiderSession, csrf).statusCode())
+            .isEqualTo(400);
+    }
+
+    private HttpResponse<String> dryPost(String path, String body, String session, String csrf) throws Exception {
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + path))
+            .header("Content-Type", "application/dry")
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
+            .header("X-Csrf-Token", csrf)
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     /**
