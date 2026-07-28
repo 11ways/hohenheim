@@ -7,11 +7,139 @@ a first-class INSTANCE record (container, later VM, or supervised process)
 that is grant-scoped, console-attachable, port-allocated, backup-able and
 schedulable, with NO domain attachment unless one is explicitly linked.
 
-Doctrines already settled (do not re-litigate):
+**Context change that reframes everything (2026-07-28): the project is going
+PUBLIC.** Other operators will run it against tenants they have not vetted.
+Every earlier design note that assumed a trusted-friends deployment is void.
+This plan is written for HOSTILE tenants. The consequences are concrete:
+
+- The plan needs a stated threat model. It is the first section below, and it
+  is load-bearing: every unresolved argument in the old plan (tenant-supplied
+  images, whether `exec` is an ordinary capability, free-form env, advisory vs
+  enforced ports, shared hosts) is really a question the threat model answers.
+- Publishing the source publishes the vulnerabilities. The live defects that a
+  friends-only deployment could carry as maintenance debt are now RELEASE
+  BLOCKERS. They are Phase 0, and Phase 0 gates any public tag.
+
+Mechanism-home rule applies throughout (see `/home/skerit/projects/javaweb/CLAUDE.md`
+capability-to-home map): a generic MECHANISM lands as close to core as its
+mechanics allow, WITH hohenheim as the first wired consumer in the same phase.
+Nothing ships unwired. Nothing lands without a test.
+
+---
+
+## Threat model and trust boundaries
+
+This section is normative. Later phases refer back to it by name. If a phase
+cannot state which boundary it defends, it is not ready to build.
+
+### Actors
+
+- **Operator / admin.** Runs the hohenheim install. Holds `hohenheim.admin.access`.
+  Trusted with the host. Not the threat.
+- **Delegated tenant.** A logged-in user granted record capabilities over some
+  instances (a game-server renter, a sub-admin, a customer). ADVERSARIAL. May
+  control the software running inside their own instance. May be many, may
+  collude, may register freely if the operator opens signup.
+- **Anonymous internet.** Visitors to any site hohenheim proxies, and callers
+  of any public endpoint (webhooks, API, MCP host, ACME). ADVERSARIAL and
+  unauthenticated.
+- **Guest workload.** Code running INSIDE an instance (a game server, a build,
+  a tenant container). Assume fully attacker-controlled: a tenant who can run a
+  container can run arbitrary native code as the container's root.
+
+### Boundaries and what defends each
+
+1. **Host <- guest workload.** The strongest boundary we must hold. A tenant's
+   code must not reach the host, other tenants' data, or the control plane.
+   - A Docker/Incus SYSTEM container is NOT a security boundary against a
+     determined hostile root-in-container. Shared kernel, historical escape
+     surface. **State this in every place the plan offers containers to
+     untrusted tenants.** The isolation we actually rely on for hostile
+     multi-tenant is one of: (a) user-namespace-remapped, capability-dropped,
+     seccomp/apparmor-confined containers on a host that runs NOTHING else of
+     value, or (b) a VM per tenant (Phase 7), or (c) one dedicated host per
+     tenant. The control plane must be able to REFUSE to co-locate untrusted
+     tenants on a host that also runs the hohenheim control process or another
+     tenant, unless the operator explicitly accepts the risk per host.
+   - Concretely for Phase 3: the Docker driver runs tenant containers with
+     `--cap-drop=ALL` plus a minimal add-back set, `--security-opt=no-new-privileges`,
+     a seccomp profile, read-only rootfs where the template allows, no host
+     bind mounts (the stack tier already forbids these -- reuse), user-ns
+     remap on for tenant-owned instances. Incus (Phase 4) gets unprivileged
+     containers by default; privileged containers are an admin-only template
+     flag with a stated warning.
+
+2. **Control plane <- guest workload.** The IPC channel, the shared cache, the
+   port allocator, the metrics stream. A guest must not be able to read or
+   corrupt another tenant's state or the control plane's. (Live defect: the
+   process IPC channel is unauthenticated -- Phase 0.)
+
+3. **Admin session <- anonymous internet.** An unauthenticated visitor to a
+   hosted site must not be able to run script in an admin's browser or ride an
+   admin's credentials. (Live defect: stored XSS in the log viewer -- Phase 0.)
+
+4. **Tenant A data <- tenant B.** Record grants are the boundary. It must be
+   impossible for a tenant to see, enumerate, or act on a record they hold no
+   grant for -- including via ungated RecordSources, revision/activity
+   subpages, WebSocket handshakes, or route-conflict takeover. (Live defects
+   4, 6, 9 -- Phase 0/1.)
+
+5. **Owner authority <- API key.** A scoped API key must never exceed the
+   authority its owner delegated, and must never be a path to
+   security-sensitive account changes (TOTP re-enroll, session revoke).
+   (Live defect 3 -- Phase 0.)
+
+6. **Federatable authority <- app-local authority.** The two authz systems
+   stay separate by tuple position (see doctrines). A record capability must
+   never resolve through PermissionResolver and never enter KnownPermissions.
+
+### Explicit non-goals / accepted risks (state them, do not pretend)
+
+- We do not defend a shared host against a hostile tenant with pure container
+  isolation. That configuration is offered only with an explicit per-host
+  operator acknowledgement, and the VM tier (Phase 7) is the real answer.
+- We do not sandbox the game/app code a tenant chooses to run inside their own
+  instance. The blast radius of that code is the instance and whatever the
+  instance can reach; the boundaries above bound the reach.
+- Denial of service by resource exhaustion is bounded by quotas and resource
+  limits, not eliminated.
+
+### Capability sensitivity classes (drives Phase 3 capability design)
+
+- `view`, `console` (stdin/stdout of the instance's OWN primary process),
+  `power` (start/stop/restart), `files.read` -- ordinary tenant capabilities.
+- `files.write`, `snapshots`, `backups`, `config` -- elevated tenant
+  capabilities (can change what runs or exfiltrate).
+- `exec` (run an ARBITRARY command as an arbitrary user inside the container)
+  -- this is effectively root-in-container and therefore a host-escape
+  amplifier. It is NOT an ordinary capability and is NOT the same thing as
+  `console`. It is admin/type-level by default; delegating it to a tenant is a
+  deliberate operator choice with the escape risk stated. The old plan
+  conflated console and exec; that conflation is corrected here and is the
+  reason the Phase 3 gate ("delegate console+power, prove they cannot change
+  config") is only meaningful once the two are distinct.
+- Tenant-supplied arbitrary images are equivalent to `exec`: a hostile image
+  is arbitrary native code. Tenants create instances from TEMPLATES (curated,
+  operator-approved image sources) by default. Pulling an arbitrary image is
+  an admin/type-level capability (`hohenheim.instances.image_any` or similar),
+  never a default tenant grant.
+
+---
+
+## Doctrines already settled (do not re-litigate)
 
 - Plain Debian is the canonical host; hohenheim is the SOLE manager of any
-  host it runs on. Proxmox, where it exists, sits BELOW and hands over full
-  VMs (never LXC guests, never a shared host).
+  host it runs on. There are TWO install kinds, and the doctrine "never take an
+  LXC guest" applies only to the first:
+  - **Managed compute node:** owns its host, runs instances, needs Docker/Incus,
+    ports, nftables. Never itself an LXC guest on someone else's Proxmox.
+  - **Control-plane / auxiliary appliance:** a DNS-only or proxy-only or
+    control-only install that legitimately runs INSIDE an LXC guest on
+    someone else's Proxmox and manages compute nodes remotely or nothing at
+    all. This is the "DNS-only LXC guest" scenario, and it is an appliance,
+    not a compute node. Install roles (Phase 2) are what make the two kinds
+    one codebase.
+  Proxmox, where it exists, sits BELOW a compute node and hands over full VMs.
 - The site stops being the only spine. Sites remain the HTTP/domain tier;
   instances are the compute tier; a domain link between them is optional.
 - Minecraft traffic always flows through Velocity (it is also the chat layer).
@@ -22,235 +150,683 @@ Doctrines already settled (do not re-litigate):
   sourced) and record grants (app-local, exact-match, per-record). The real
   boundary is FEDERATABLE vs APP-LOCAL, not type-level vs record-level.
   Separation is by tuple position, not syntax: record capabilities MAY be
-  dotted (`files.read`) but never resolve through PermissionResolver and
-  never enter KnownPermissions.
+  dotted (`files.read`) but never resolve through PermissionResolver and never
+  enter KnownPermissions.
 - Runtime support is a PER-HOST seam: docker | incus | (later) proxmox-lxc,
-  plus the existing managed-process supervisor. Incus is the LXC integration
-  point (REST over unix socket / SSH -- the DockerClient pattern), and later
-  provides KVM VMs through the same API.
-
-Mechanism-home rule applies throughout: generic mechanisms land in zenit core /
-zenit-auth / zenit-cms / plumage WITH hohenheim as the first wired consumer in
-the same phase. Nothing ships unwired.
+  plus the existing managed-process supervisor. The runtime is DATA on the
+  server record.
+  - Docker transport: hand-rolled HTTP over the local socket or over SSH (the
+    existing DockerClient pattern). SSH host-key pinning is REQUIRED (see the
+    Phase 0 note: `accept-new` with no fingerprint column is a live gap).
+  - Incus transport is NOT "the DockerClient pattern". Corrected doctrine:
+    Incus is a unix socket locally and HTTPS with a TLS CLIENT CERTIFICATE on
+    port 8443 remotely, enrolled with a trust token. This is good news: Incus
+    supplies node identity and enrollment for free, so we do NOT build a
+    bespoke Wings-style node agent. Node identity = Incus TLS enrollment for
+    Incus hosts, SSH host-key pin for Docker hosts.
+- Containers first, VMs later -- with the threat-model caveat that VMs are the
+  only strong isolation boundary against hostile tenants on shared iron.
 
 ---
 
-## Phase 0 -- Auth foundations and live-defect fixes (framework)
+## Phase 0 -- Public-launch security baseline (RELEASE BLOCKERS)
 
-Everything here is either a live defect or a mechanism the whole arc depends
-on. No new product surface; the wired consumer is hohenheim's EXISTING site
-access feature, migrated onto the new mechanisms.
+None of these are new product surface. All are live, exploitable-today defects
+verified at file:line. Going public without them ships the exploit alongside
+the source. Phase 0 gates the first public tag. Each item names the boundary
+it defends (see threat model) and the structural fix, not a spot patch.
 
-zenit-auth:
+Ordering within Phase 0 is by blast radius, not dependency; they are largely
+independent.
 
-- Grant lifecycle (review C1, HIGH): `RecordGrants.revokeAllForRecord(model,
-  id)` + `revokeAllForSubject(type, id)`; wire record cleanup through
-  `GlobalModelHooks.addAfterRemoveHook`, subject cleanup into user/group
-  deletion. Without this, hard-delete + id reuse = privilege resurrection.
-- API-key scope coherence (C3, HIGH): one scope list currently has two
-  matchers (`["*"]` = all permissions, zero capabilities). Decide: record
-  capabilities in scopes ride a distinguishing prefix (`cap:<model>:<name>`,
-  wildcardable) so a scoped key's reach is explicit and consistent.
-- Covering index `(subject_type, subject_id, model, capability)` on
-  auth_record_grants; batch the subject walk (expand once, one
-  `SUBJECT_ID.in(...)` query per subject type) and cache the expansion on the
-  conduit for the request (C5). Revocation stays next-request-effective.
-- Columns `granted_by` and nullable `expires_at` now, while the table is
-  young (C8); expiry enforced in the check path, sweeper prunes.
-- Matcher unification (C6): PermissionResolver adopts WildcardPermissions'
-  tie-break (or documents the divergence with a test pinning it).
-- Record-id contract (C9): grant() validates the record exists (symmetric
-  with requireSubject) and the stringified pk is deterministic and <= 64.
+### 0.1 Stored XSS in the admin log viewer (boundary 3)
+
+`ManagedProcessSiteHandler.java:941-943` stores raw child stdout;
+`cms/site-processes.hwk:146` renders it with `{%=` (raw HTML). An anonymous
+visitor plants a payload via request path / User-Agent; it runs in the admin
+session, on a page carrying the CSRF token. The in-code comment claiming
+ghostty renders it is STALE -- this is the only `{%=` in hohenheim, and there
+are none anywhere in zenit/zenit-cms/zenit-forms/plumage/zenit-widget/zenit-auth.
+
+- Structural fix (mechanism, zenit / hawkeye): there is NO HTML sanitizer in
+  the stack and `security_headers.csp` defaults to empty. Both are platform
+  gaps a public product cannot have. Add (a) a default non-empty CSP that
+  forbids inline script for the admin panel, set by zenit-cms / applied by
+  hohenheim, and (b) treat log content as TEXT, not HTML -- the proclog viewer
+  renders ANSI client-side into escaped nodes, never via `{%=`. The `{%=`
+  usage is deleted.
+- Consumer: hohenheim proclog + live-process viewer.
+- Gate: a browser test plants `<script>`/`<img onerror>` through a proxied
+  request's path and User-Agent, opens the log viewer as admin, asserts no
+  script execution and escaped rendering.
+
+### 0.2 Process IPC channel is unauthenticated (boundary 2)
+
+`IpcChannel.java:51` `ServerSocket(0,1,loopback)`, `:78` a single `accept()`,
+no token, port handed to the child via `HOHENHEIM_IPC_PORT`. Processes run
+under DISTINCT system users, so this is cross-tenant: another tenant on the
+box reads/writes a victim's shared cache (`remcache_*`), forces
+`markAddressInUse()`+`kill()`, or connects first to permanently wedge the
+victim (accept() never runs again).
+
+- Structural fix: adopt the dev tunnel's proven shape verbatim
+  (`DevTunnelServerHandler.java:43,251-265`): a per-child secret passed
+  alongside the port, constant-time compared, a small pre-auth connection cap,
+  and re-accept after a failed/closed peer so one bad client cannot wedge.
+- Gate: a test connects without the token (refused, victim survives), with the
+  token (works), and a second connection cannot starve the first.
+
+### 0.3 API-key privilege escalation (boundary 5)
+
+Confirmed end to end: `ApiKeyPrincipal` is non-anonymous; `/account/**` is
+`requiresLogin()` only; core authz accepts any non-anonymous principal;
+`ApiKeyResolverMiddleware` runs weight 12 on prefix `/`. An API-key GET
+manufactures a session (`SessionCsrfTokenStore.issueOrRead` ->
+`conduit.sessionOrCreate()`), returning both the CSRF token (rendered at
+`auth/api-keys.hwk:49`) and the `Set-Cookie`. Blank scope == full owner
+authority (`parseScopes` accepts blank; empty scopes satisfy every check).
+`AuthFlowIntegrationTest.java:878-880` already proves the pivot. An API key can
+also silently re-enroll the owner's TOTP (no current-password check, unlike the
+password/disable paths) and revoke all sessions.
+
+- Structural fixes (zenit-auth):
+  1. Security-sensitive account routes (TOTP enroll/disable, session revoke,
+     password, API-key management) require an INTERACTIVE session principal,
+     not merely non-anonymous. Add a route/endpoint marker
+     ("requiresInteractiveLogin" or an `ApiKeyPrincipal`-excluding guard);
+     `ApiKeyPrincipal` is refused there regardless of scope.
+  2. CSRF token issuance must not mint a session for a non-interactive
+     principal. An API-key request gets no session cookie and no token.
+  3. Blank/empty scope stops meaning "everything". Empty scope is refused at
+     parse time; a key's authority is the explicit intersection of owner
+     authority and declared scopes. This dovetails with the scope-coherence
+     work in Phase 1 (`cap:` prefix). Until Phase 1 lands the prefix, the
+     minimum here is: empty scope == no authority, not full authority.
+- Gate: extend `AuthFlowIntegrationTest` -- an API key gets 401/403 on TOTP
+  enroll, session revoke, and any `/account` mutation; a blank-scope key is
+  rejected at creation.
+
+### 0.4 Ungated RecordSources leak installation data (boundary 4)
+
+`RecordSource` defaults to login-only, no permission (`RecordSource.java:238-247,706-709`).
+`HohenheimSources.java:51-105` registers 10 sources with no permission and no
+accessCriteria; `zenit.activity` (`ActivitySources.java:40-54`) has no
+permission parameter at all and exposes the whole audit log to any `/manage`
+operator. `RecordSourceRegistry.register` is last-write-wins, so an ungated
+declaration silently overrides a gated one (`CmsRecordSources`, `zenit-media`).
+Same class in proteus, orcono. This is a default that leans wrong, not one
+careless author.
+
+- Structural fix (mechanism, zenit core `common/data`): make the wrong thing
+  impossible to declare silently.
+  1. Registration requires an EXPLICIT access decision: a permission, an
+     `accessCriteria`, or an explicit `.internalOnly()` / `.publicRead()`
+     opt-out. A source with none refuses to register (loud boot failure in
+     dev; logged-and-denied in prod). The permissive default is removed.
+  2. `RecordSourceRegistry.register` stops being silent last-write-wins: a
+     second registration for an id must be an explicit override or it is
+     refused, so a gated source can never be shadowed by an ungated one
+     regardless of boot order.
+  3. `zenit.activity` and every framework-owned source declares its gate.
+- Consumers migrated in the same phase: hohenheim's 10 sources
+  (`hohenheim.ban`, sites, dns zones, system users, databases, certificates,
+  activity) get permission + accessCriteria; zenit-media, proteus, orcono
+  sources get theirs. QQ/thoth/spamservice/zenit-ai already gate correctly and
+  serve as the reference.
+- Also: `RecordSource` gains a `.secret()` gate (finding 28 -- it guards
+  `isEncrypted()` only) so a projected secret is neither returned nor turned
+  into a queryable rule variable (the `icontains` value oracle). Filter in
+  `deriveVocabulary` the way `SchemaVocabulary.java:43` does.
+- Gate: a test asserting a source with no access declaration fails to register;
+  a logged-in non-operator gets 403/empty on each hohenheim source; a re-register
+  attempt without explicit override is refused.
+
+### 0.5 Plumage publishes an unauthenticated root shell (boundary 1/3)
+
+`plumage/.../TerminalEndpoint.java` declares `/ws/terminal` with no login, no
+permission, no revalidation, and spawns `$SHELL` on a PTY with the server's
+full environment. It is in the published `plumage-server` artifact. Dormant
+only because nothing loads the class outside plumage's own browserTest, and
+endpoints self-register from static initialisers -- one class-load away in any
+consumer, and its route collides with hohenheim's real terminal.
+
+- Structural fix: the demo terminal endpoint must not be in the published
+  server artifact. Move it to plumage's test source set (browserTest), or gut
+  it to a fake that does not spawn a shell. A published framework artifact
+  never ships a self-registering endpoint that spawns a shell with no auth.
+- Gate: a test asserting no endpoint spawns a shell without a permission check
+  in the published artifact; the route is free for hohenheim's real terminal.
+
+### 0.6 Secrets at rest and in derived surfaces (boundaries 1, 4)
+
+Two problems, one theme: secret handling is not a platform property yet, and
+the instance tier will multiply it.
+
+- Only 3 hohenheim fields are `.encrypted()`. Plaintext at rest: TLS private
+  keys (`CertificateModel:59`), DNSSEC private keys (`DnsZoneModel:73`), TSIG
+  secrets + peer API keys (`DnsPeerModel:28,39`), DB passwords
+  (`DatabaseModel:52-56`), spamservice controller key, site security tokens,
+  site `api_keys`. `architecture-stacks.md:24-27`'s "secrets are encrypted at
+  rest" is true for stacks and misleading as a platform claim.
+  - Fix: encrypt these fields. This is straightforward per-field work but it is
+    a release blocker because the DB is a backup/exfil target for a public
+    product. Update `architecture-stacks.md` to stop implying platform-wide
+    encryption until it is true.
+- Secrets leak through revisions and activity deltas (mechanism, zenit core):
+  `RevisionableBehaviour.java:319` skips localized+encrypted but NOT `isSecret()`;
+  `DiffRendering.java:41-55` has no secret check; `ActivityLog.computeDelta`
+  (`:439-451`) redacts TOP-LEVEL only, so `.secret()` SUB-fields in JSON schema
+  fields (git `webhook_secret`, dev-namespace `registration_token`, Proteus
+  `access_key`) land plaintext in `zenit_activity`.
+  - Fix in core: revision snapshots and activity deltas honor `isSecret()` at
+    every level, including sub-schema fields. This is a HARD prerequisite for
+    Phase 3, because the plan makes instances a GENERATED resource and a
+    generated RowResource gets revision + activity subpages by DEFAULT
+    (`RowResource.java:189-198`). Today tenants are spared only by accident
+    (`ManageSiteResource.subpages()` omits `frameworkSubpages()`). Do not rely
+    on that accident.
+- Site `api_keys` (finding 11): plaintext bearer, `List.contains` (not
+  constant-time), unrate-limited public endpoint, cloned verbatim by
+  `SiteResource.cloneSite:276`. Fix: hash them (SecureTokens, the zenit-auth
+  pattern), constant-time compare, rate-limit the endpoint, do not clone.
+
+### 0.7 WebSocket admission and revalidation (boundaries 1, 4)
+
+WS upgrades bypass `HttpConduit` (`ZenitHttpServer.java:91-101`): no admission
+limiter, no rate limiter, no CSRF, and `WebSocketEndpoint` has no `rateLimit`
+builder. Terminal opens cost a session lookup + grants query BEFORE the 1008
+refusal, uncapped -- a cheap DoS and a pre-auth resource cost. And
+`WebSocketRevalidator` never re-checks session validity, logout,
+`UserModel.ENABLED`, or user existence; with no FK on grants, a socket outlives
+a deleted user.
+
+- Structural fix (mechanism, zenit core): a pre-upgrade admission + rate limit
+  for WS handshakes (reuse the HTTP limiter), a `WebSocketEndpoint.Builder.rateLimit`,
+  and a revalidation path that re-checks session/enabled/existence, not just
+  declared permissions. `AuthWebSocketAuthenticator` stays session-cookie-only
+  (correct).
+- This is a Phase 0 blocker because Phase 3's console is another WS terminal
+  and multiplies the surface.
+- Gate: a test flooding handshakes is capped before the auth query; logging out
+  drops a live terminal within the revalidation window.
+
+### 0.8 Authorization correctness bugs (boundary 4/6)
+
+- Null grant `value` reads as ALLOW (`RecordGrants.java:211-218,259-264`;
+  `PermissionResolver.java:124,131`). SQL `DEFAULT true` masks it; Mongo and
+  Couchbase have no DDL defaults, so a null-valued grant on those backends is a
+  silent allow. Fix: null == deny in the check path, independent of backend
+  DDL.
+- `grantWithConflictRecovery` (`RecordGrants.java:99-110`) lets the losing
+  thread of a concurrent re-grant overwrite the winner, so a deliberate DENY
+  can be silently upgraded to ALLOW. Fix: the recovery path must re-read and
+  refuse to weaken an existing deny (deny beats allow, always).
+
+### 0.9 Route-conflict takeover via toggleAction (boundary 4)
+
+`SiteResource.updateRow:143-151` calls `refuseEnableRouteConflicts` on
+disabled->enabled and explains why; `toggleAction:236-251` just flips and
+saves; toggle is the ONLY row action a `/manage` tenant has. A delegated
+operator enabling a staged site can seize another tenant's hostname
+(disabled sites are exempt from the cross-site conflict check). Fix: toggle
+enable runs the same conflict invariant as updateRow.
+
+### Phase 0 gate
+
+All of the above have passing tests, the public CSP is set, and a hostile-tenant
+red-team checklist (documented in this repo) passes: anonymous XSS, cross-tenant
+IPC, API-key escalation, RecordSource enumeration, plumage shell reachability,
+secret-in-revision, WS flood, null-grant allow, route takeover. Phase 0
+completing is the precondition for tagging anything public.
+
+---
+
+## Phase 1 -- Record-capability auth foundations (framework)
+
+The mechanism the whole instance arc depends on. No new product surface; the
+wired consumer is hohenheim's EXISTING site access feature, migrated onto the
+new mechanisms. This is where the record-grant system becomes a real,
+composable, public-grade authorization primitive.
 
 zenit core (`common/security`):
 
+- Promote `PermissionChecker` and the whole decision path to TRI-STATE
+  (allow / deny / abstain). Precedent exists: `WildcardPermissions.decide`
+  already returns nullable Boolean, and zenit-auth's `PermissionResolver.decide`
+  is already tri-state while `GrantAuthorizationPolicy` throws the third state
+  away. Today hohenheim recovers the third state by MUTATING the process-global
+  checker from a Panel CONSTRUCTOR (`ManagePanel.java:38-67`) and reaching
+  around the SPI. That hack is deleted here.
+- `AccessContext` gains a record notion: `hasCapability(model, recordId, capability)`
+  (it has none today, 93 lines). Backed by a new `RecordCapabilityChecker` SPI
+  (the CsrfTokenStore pattern): core interface, deny-all default, zenit-auth
+  installs the RecordGrants-backed impl. `WebSocketAuthenticator` gets the
+  matching default method.
 - `KnownCapabilities`: model-Identifier-keyed registry of capability entries
-  with Microcopy descriptions (the KnownPermissions emergent contract:
-  absence never denies). This is what UIs enumerate.
-- `RecordCapabilityChecker` SPI (the CsrfTokenStore pattern): core interface,
-  deny-all default, zenit-auth installs the RecordGrants-backed impl.
-  `AccessContext.hasCapability(model, recordId, capability)` rides it, and
-  `WebSocketAuthenticator` gains the matching default method.
-- The COMPOSITION RULES live in this SPI, declared not prose (C2): per model,
-  a gate permission (global deny kills all grants; possession of any grant
-  satisfies the gate -- the ManagePanel pattern, now named), an admin
-  permission (bypasses grants; stated divergence from IAM's deny-wins), and
-  an optional type-level permission meaning "all records of this model"
-  (C7 -- the funnel's unrestricted branch keys on it, not on admin).
-  Ownership: an optional owner-field declaration on the model gives the
-  owning principal full capabilities implicitly -- owner lives ON the record,
-  never as grant rows.
-- Publish the precedence chain as one ordered list in the javadoc + docs
-  (everyone -> groups -> group grants -> user grants -> negative grants ->
-  gate deny -> type-level permission -> owner -> admin bypass).
+  with Microcopy descriptions (the KnownPermissions emergent contract: absence
+  never denies). This is what UIs enumerate. Capabilities are NOT permissions
+  and never enter KnownPermissions.
+- COMPOSITION RULES live in the SPI, declared not prose. Per model: a gate
+  permission (global deny kills all grants; any grant satisfies the gate -- the
+  ManagePanel pattern, now named), an admin permission (bypasses grants), an
+  optional type-level permission ("all records of this model"), and an optional
+  owner-field declaration (the owning principal has full capabilities
+  implicitly; owner lives ON the record, never as grant rows).
+- Precedence is a TRUTH TABLE with a test, NOT the old prose "chain". The old
+  chain (lines 83-85 of the previous plan) mixed subject-expansion order with
+  decision precedence, put admin bypass last, and referenced an "everyone"
+  subject that does not exist (`Subject` is user|group only). Replace it with:
+  for a given (principal, model, record, capability), evaluate admin bypass
+  first (allow), then type-level permission (allow), then owner match (allow),
+  then negative grants (deny), then positive grants via expanded subjects
+  (allow), then gate permission absent (deny), else abstain->deny. Pin every
+  row with a test.
+- Record-aware overloads where the record is ALREADY loaded at the enforcement
+  point (so they cost a parameter, not a load): `Resource.writePermission/
+  createPermission/updatePermission/deletePermission`, `RecordScopedPage.
+  requiredPermission()`/`visibleFor(record, context)`, `FieldAccess.decide`
+  (`dispatchRow:1644-1661` already loads the row first).
 
-zenit-cms + plumage:
+zenit-auth (RecordGrants hardening -- builds on the Phase 0 correctness fixes):
 
-- Generic record-access page: a subjects-x-capabilities matrix over
-  `RecordGrants.listForRecord` + `KnownCapabilities`, attachable to any
-  Resource (the subpages seam), with add/remove/expiry, preset support
-  (presets expand to concrete rows at grant time, never stored as a name),
-  and a "who can touch this record" view spanning both tiers (the expand
-  equivalent, C8). Component work (matrix editor) lands in plumage.
-- Naming discipline (C11): API identifiers always record-scoped
-  (hasRecordCapability, KnownCapabilities); admin UI says "record access",
-  never bare "capabilities".
+- Grant lifecycle: `revokeAllForRecord(model, id)` + `revokeAllForSubject(type,
+  id)`; wire record cleanup through `GlobalModelHooks.addAfterRemoveHook`
+  (which DOES carry criteria + count -- the audit claim that it cannot supply
+  ids is wrong; before-capture/after-consume is the documented pattern
+  `ActivityLog.java:107-108,327-374` already uses). The real gap: soft-deletable
+  models fire NO remove hooks (`Model.java:619-627`) and hohenheim soft-deletes
+  sites by hand-stamping (`SiteResource.java:215-225`), so grant cleanup on
+  soft delete needs an explicit hook, not the remove hook. Without cleanup,
+  hard-delete + id reuse = privilege resurrection.
+- API-key scope coherence (completes Phase 0.3): record capabilities in scopes
+  ride a distinguishing prefix (`cap:<model>:<name>`, wildcardable) so a key's
+  reach is explicit and cannot collide with permission scopes. The two matchers
+  (PermissionResolver's specificity tie-break vs WildcardPermissions'
+  exact-node-first) diverge in principle but never on the same string set
+  today; document the divergence with a pinning test rather than force a risky
+  unification, and note the stores that CAN hold false through WildcardPermissions
+  (`ProteusPermissions`, `McpApiKeys`).
+- New migration (NOT an edit to M006 -- `MigrationChecksum` detects post-apply
+  edits and an applied migration never re-runs): covering index
+  `(subject_type, subject_id, model, capability)`, columns `granted_by` and
+  nullable `expires_at`. Expiry enforced in the check path; the Phase 2
+  scheduler's sweeper prunes. Note: `(subject_type, subject_id)` and
+  `(model, record_id)` indexes already exist (M006), so the finding is
+  "not covering", not "no index". A cascade FK is NOT available (the subject
+  column is polymorphic; siblings `auth_grants` also lack one; FKs are
+  unenforced on Mongo/Couchbase) -- lifecycle hooks are the only cleanup path.
+- Batch the subject walk (expand once, one `SUBJECT_ID.in(...)` per subject
+  type) and cache the expansion on the conduit for the request. Today authz
+  costs ~3N+2 SELECTs per check and `managedSiteIds` is called 5x per /manage
+  render over a structurally dead query cache (`AuthModels.java:39-60` allocates
+  a new Model per call, ~55 uncached SELECTs per render). This matters more
+  once every instance list page runs the same path. Revocation stays
+  next-request-effective.
+
+zenit-auth + plumage (the generic UI, via the bridge -- NOT in zenit-cms):
+
+- CORRECTION to the old plan: the generic record-access page cannot live in
+  zenit-cms, because zenit-cms must not depend on zenit-auth (verified: zero
+  references). It consumes RecordGrants, so it belongs in zenit-auth,
+  contributed through the `@ZenitAutoLoad(whenPresent=...)` bridge
+  (`AuthCmsBridge` pattern, `zenit-auth/build.gradle:149-157`). The matrix
+  EDITOR component (subjects x capabilities) lands in plumage; the page
+  mechanism lands in zenit-auth and attaches to any Resource via the subpages
+  seam. Features: add/remove, `granted_by` provenance, expiry, preset support
+  (presets expand to concrete rows at grant time, never stored as a name), and
+  a "who can touch this record" cross-tier view.
+- Record-scoped POST: `RecordScopedPage` is GET-only by policy, which is why
+  hohenheim's grant editor posts to hand-written endpoints with a hardcoded
+  redirect. The missing piece is small: `RowAction.Invoke` is ALREADY a generic
+  per-record POST carrying the full form body, and `RowAction.visibleFor(row,
+  AccessContext)` is already enforced as a 404 on invoke. Add one POST route +
+  a `submit` default method rather than a whole new mechanism.
 
 hohenheim (consumer proof):
 
-- Sites migrate: KnownCapabilities registers the site vocabulary ("manage"
-  today), HohenheimAccess collapses onto the core SPI (gate =
-  hohenheim.manage.access, admin = hohenheim.admin.access, type-level =
-  NEW hohenheim.sites.manage_all), SiteAccessPage is DELETED in favor of the
-  generic page, ManagePanel's checker/impossible() move onto the core
-  helpers (C10: no side-effecting Panel constructor, Model.matchNone()).
-- All existing site-access tests keep passing; that is the phase gate.
+- Sites migrate onto the new mechanisms: KnownCapabilities registers the site
+  vocabulary ("manage"), HohenheimAccess collapses onto the core SPI (gate =
+  `hohenheim.manage.access`, admin = `hohenheim.admin.access`, type-level =
+  new `hohenheim.sites.manage_all`), SiteAccessPage is DELETED for the generic
+  page, ManagePanel's constructor hack and `impossible()` move onto the core
+  helpers (no side-effecting Panel constructor; `Model.matchNone()`).
+- Post-login routing for delegated users (finding: `/` -> `/admin` -> bare 403
+  for a manage-only principal): a manage-only principal lands on `/manage`, not
+  a 403. `PanelNav.mayAccess` must HIDE (not show-empty) peers a principal has
+  no scope for, so an instance-only user does not see empty Sites/Domains nav.
+- Gate: all existing site-access tests pass; a delegated user logs in and lands
+  on a working /manage with only the peers they can touch.
 
-## Phase 1 -- Install roles (hohenheim)
+Phase 0 and Phase 1 are largely independent of Phase 2+ and can interleave with
+each other; Phase 1's record-capability SPI is a hard dependency for Phase 3.
 
-- Settings group `roles.*`: proxy, dns, firewall, stacks, instances,
-  processes, game -- each a boolean with restartRequired.
+---
+
+## Phase 2 -- Install roles (hohenheim + one zenit core change)
+
+- Settings group `roles.*`: proxy, dns, firewall, stacks, instances, processes,
+  game -- each a boolean with restartRequired. These realize the two install
+  kinds from the doctrine (compute node vs control-plane appliance).
+- BLOCKER the old plan missed (zenit core change, required BEFORE roles work):
+  `TaskService.reconcileDeclaredSchedules:134-201` DELETES schedule rows whose
+  checksum is absent from the BOOTING node's catalog. A role-gated node that
+  omits a task therefore disables that task CLUSTER-WIDE. Roles cannot be done
+  by trimming the catalog per node. Fix in core: scoped reconciliation -- a
+  node reconciles only the schedules it declares/owns and never deletes another
+  node's, or schedules carry an owning-node/role scope. This is a genuine core
+  design point; resolve it before shipping roles.
+- Boot ordering fixes (`ServerMain.java:46-123`): `SiteTypes.boot()` runs
+  before settings load (load settings FIRST so a role can gate a boot step),
+  and handlers/panels register AFTER `init().join()`, i.e. after the HTTP
+  server accepts requests (move wiring into a discovered `ZenitModule.init()`).
+  Note `Panel.peers()` is memoized, so roles are boot-time-immutable -- a role
+  change is a restart, which matches restartRequired.
 - Boot becomes role-conditional: no Docker probe / port-53 bind / nftables
-  wiring for disabled roles; attention collectors and scheduled tasks gate
-  on their role; admin nav hides panels of absent roles.
-- Phase gate: a DNS-only install (the "LXC guest on an existing Proxmox"
-  scenario) boots green with no Docker socket, no proxy ports, no nftables,
-  and its admin shows only DNS/domains/settings.
+  wiring for disabled roles; attention collectors and scheduled tasks gate on
+  their role; admin nav hides panels of absent roles.
+- Gate: a DNS-only appliance install boots green with no Docker socket, no
+  proxy ports, no nftables, its admin shows only DNS/domains/settings, and it
+  does NOT delete other nodes' schedule rows.
 
-## Phase 2 -- Instance tier core, Docker driver, ports, console
+---
 
-The fork itself. New model `InstanceModel` (instances): name, kind
-(`container` now; `vm` reserved), server_id (host), runtime (`docker` now),
-image/source config (SchemaField by runtime type -- the site_type pattern),
-env (typed via template later; free map v1), resource limits, restart policy,
-status, owner principal id. Soft delete. Localized: labels/descriptions come
-from microcopy; instance names are user data (not localized) -- stated per
-the localization rule.
+## Phase 3 -- Instance tier core: Docker driver, ports, console, quotas
+
+The fork. New model `InstanceModel` (instances): name, kind (`container` now;
+`vm` reserved), server_id (host), runtime (`docker` now), image/source config
+(SchemaField by runtime type -- the site_type pattern), resource limits,
+restart policy, status, owner principal id. Soft delete (with the grant-cleanup
+hook from Phase 1). Localized: labels/descriptions from microcopy; instance
+names are user data (not localized).
+
+Design gaps the old Phase 2 left open, now resolved for a public product:
+
+- **Create authority and quota (the whole abuse story).** All 8 capabilities
+  govern records that already exist; NOBODY says who may CREATE an instance, on
+  which host, or how many. For a public product this is mandatory, not
+  deferrable. Introduce:
+  - a `hohenheim.instances.create` permission (federatable, who may create at
+    all), plus per-owner QUOTA (max instances, max cpu/mem/disk sum) enforced
+    at create time. Quota lives on a per-owner record (simplest: an
+    `instance_quota` row keyed by principal, admin-editable). This is the
+    minimum tenancy; the full aggregate project/tenant model with hierarchical
+    quotas can stay later (see cross-cutting), but a public host cannot ship
+    without a create gate and a per-owner cap.
+  - Placement authority: which hosts a creator may place on. A creator without
+    an explicit host grant cannot pick an arbitrary server.
+- **Capabilities (KnownCapabilities registers the instance vocabulary),
+  enforced by an InstanceAccess funnel on the core SPI**, split by the threat
+  model's sensitivity classes:
+  - ordinary: `view`, `power`, `console` (stdin/stdout of the instance's own
+    primary process), `files.read`.
+  - elevated: `files.write`, `snapshots`, `backups`, `config`, `destroy`
+    (the old plan offered delete via the generated resource with no matching
+    capability -- fixed: `destroy` is its own elevated capability).
+  - admin/type-level, NOT default tenant grants: `exec` (arbitrary command in
+    the container -- root-in-container, host-escape amplifier), and
+    `image_any` (pull an arbitrary, non-template image -- equivalent to exec).
+  Per-capability action gating uses the zenit-cms permission seams (Phase 1
+  record-aware overloads), not hand-rolled ifs.
+- **Instances join /manage as a GENERATED grant-scoped resource** (accessCriteria
+  = `RecordGrants.recordIds -> ID.in(...)`, the `ManagePanel.siteScope` pattern;
+  `AccessDecision.ALL/NONE/criteria` reused for list/count/load, out-of-scope
+  ids as 404). The admin panel gets the full resource. CRITICAL: because it is
+  generated, it inherits revision + activity subpages by DEFAULT -- so the
+  Phase 0.6 secret-redaction fixes are a hard prerequisite here, and the
+  resource must NOT expose a whole-Row wire path (none exists today; keep it
+  that way). An "Overview" home instead of the edit form as record home needs a
+  new mechanism (`RecordTabs.java:34-62` hardcodes Edit first) -- add it here.
+- **Env / secrets: table-backed, not a free map.** The free env map cannot hold
+  secrets because zenit REFUSES `.encrypted()` inside JSON sub-schemas by design
+  (`Schema.java:143-163`, a loud refusal). Instance variables are therefore
+  table-backed rows (an `instance_variables` table: instance_id, key, value,
+  secret flag) so a secret variable is a real encrypted column. Free plain env
+  can stay a map; secret env cannot.
+
+Driver and infrastructure:
 
 - `InstanceRuntime` driver seam (server): create/start/stop/kill/destroy,
   status, stats, console attach, exec, logs-follow. First driver wraps
-  DockerClient, which gains the missing primitives: `/containers/{id}/stats`,
-  follow-logs streaming, attach (stdin/TTY) and TTY exec. Containers carry
-  hohenheim instance labels (the stack ownership pattern).
-- PERSISTENT port allocation registry (replaces the in-memory PortAllocator,
-  which is lost on restart -- a live defect): table `port_allocations`
-  (server_id, ip nullable, port, protocol, owner model+record, note),
-  claim/release API, OS-probe on claim, existing consumers (managed
-  processes, docker sites, stacks validation) migrate onto it. UDP is just a
-  protocol value -- games need allocation bookkeeping, not proxying.
-- Capabilities: KnownCapabilities registers the instance vocabulary -- view,
-  power, console, files.read, files.write, snapshots, backups, config --
-  enforced by an InstanceAccess funnel on the core SPI. Instances join the
-  /manage tenant panel as a generated grant-scoped resource (accessCriteria);
-  the admin panel gets the full resource. Per-capability action gating uses
-  the zenit-cms permission seams, not hand-rolled ifs.
-- Console: a terminal WebSocket handler over the driver's attach/exec,
-  speaking the existing pl-terminal wire contract, grant-checked
-  (capability `console`) with revalidateEvery -- the ProcessTerminalHandler
-  pattern generalized. Process instances reuse the existing handler.
-- Per-record scheduling (mechanism in zenit core `server/task`): a
-  `record_schedules` table (model, record_id, cron, action token, payload,
-  enabled) executed by ONE global sweeper ScheduledTask; action vocabulary
-  registered per model (power actions, backup) with per-action capability
-  requirements (the Pterodactyl schedule-authorization lesson: scheduling an
-  action requires the capability the action itself needs). Consumer:
-  instance nightly restart/backup.
-- Stacks stay untouched: a stack remains the multi-service deployment unit
-  (NetBird-class). An instance is a SINGLE runtime unit with delegation.
-  Later phases may link a stack service to an instance view; not now.
-  (Fix in passing: StackRuntime's `stack_health` alert string joins
-  NotificationEvents.ALL.)
-- Phase gate: create a Debian container instance from the admin, delegate
-  console+power (not config) to a second user, that user operates it from
-  /manage through the live terminal, reboot survives (allocations persist,
-  containers re-adopted), full browser-test journey.
+  DockerClient, hardened per the threat model (cap-drop, no-new-privileges,
+  seccomp, user-ns remap for tenant-owned, no host bind mounts). DockerClient
+  gains the missing primitives: `/containers/{id}/stats`, follow-logs streaming,
+  attach (stdin/TTY), TTY exec. Note the current `DockerTransport` buffers every
+  response to EOF, re-encodes through a String (3-4x resident), and opens a new
+  connection per call -- streaming primitives require fixing that, not layering
+  on it. SSH host-key PINNING (a fingerprint column on the server record;
+  `accept-new` is a live gap). Containers carry hohenheim instance labels (the
+  stack ownership pattern).
+- **PERSISTENT, single-authority port allocation** (replaces the in-memory
+  `PortAllocator`, lost on restart, TCP-only, racy -- and note the container
+  tier currently uses a SECOND, unrelated authority: `ManagedDatabase` reads
+  back Docker's published port, so the two can collide). One table
+  `port_allocations` (server_id, ip nullable, port, protocol, owner model+record,
+  note), claim/release API, OS-probe on claim, remote-host aware. All existing
+  consumers migrate (managed processes, docker sites, stacks validation, and
+  the database tier's published-port readback). UDP is a protocol value; games
+  need allocation bookkeeping, not proxying.
+- **Console vs exec are DISTINCT handlers.** Console is a WS terminal over the
+  driver's ATTACH to the instance's primary process (stdin to a game server),
+  grant-checked `console`, over the hardened WS admission/revalidation from
+  Phase 0.7. Exec is a separate WS/handler requiring `exec`, admin/type-level.
+  Both speak the existing pl-terminal wire contract (the ProcessTerminalHandler
+  pattern generalized). Per-record WS handshake gating: `WebSocketEndpoint.Builder`
+  supports only static login+dotted permissions today, but `WebSocketHandshake`
+  already carries route params and the upgrade path can return a pre-upgrade
+  403; add a declarative per-record handshake gate so authorization happens
+  BEFORE resource acquisition, not after (today hohenheim completes the upgrade
+  and closes 1008 in onOpen).
+- **Per-record scheduling reuses the existing cluster-safe claim protocol.**
+  Zenit already has `SystemTaskModel`, `CronExpression`, and atomic cluster
+  claiming in `TaskService`. The old plan's "ONE global sweeper ScheduledTask"
+  MUST run through that claim protocol or it loses multi-process safety that
+  already exists. A `record_schedules` table (model, record_id, cron, TIMEZONE
+  -- new, "restart nightly at 4am" needs it, nothing has one today, action
+  token, payload, enabled); the executor is a TaskService task using the
+  existing claim, not a naked loop. Action vocabulary registered per model with
+  per-action capability requirements (scheduling an action requires the
+  capability the action itself needs -- the Pterodactyl lesson). Decide at
+  build time whether this is a new table or a facet of `SystemTaskModel`
+  (leaning new table: record schedules are user data, system tasks are
+  code-declared).
+- Stacks stay untouched (a stack is a multi-service deployment unit; an instance
+  is a single runtime unit with delegation). Fix in passing: `StackRuntime`'s
+  `stack_health` alert string is not in `NotificationEvents.ALL` and is
+  therefore unroutable -- register it so admins can route it.
+- Destructive-operation safety (the tier multiplies today's database-tier bugs:
+  `ManagedDatabase.status` conflates absent with unreachable, `destroy` swallows
+  IOException and deletes the row regardless, no per-name lock, backups read
+  wholly into memory). The instance driver's destroy MUST distinguish
+  unreachable from absent, hold a per-instance lock, and never delete the record
+  (with its only copy of credentials) on an ambiguous failure. See cross-cutting
+  "durable operations".
 
-## Phase 3 -- Incus driver, snapshots, backups
+Phase gate: create a Debian container instance from the admin as a quota-limited
+creator; the container runs cap-dropped/no-new-privileges; delegate console+power
+(NOT exec, NOT config) to a second user; that user operates it from /manage
+through the live terminal but PROVABLY cannot change config or run exec; a reboot
+survives (allocations persist, containers re-adopted by label); full
+browser-test journey. Prove a tenant cannot enumerate another tenant's instance
+via any RecordSource or subpage.
 
-- `IncusClient` (hand-rolled REST over unix socket / SSH, the DockerClient
-  pattern; no SDK). Driver #2: system containers -- images from image
-  servers, profiles, limits, exec/console websockets (this driver gets the
-  TTY almost free).
-- Server records declare their runtimes (docker socket/ssh, incus
-  socket/ssh) -- the per-host seam becomes data.
-- Snapshots: driver-level (Incus native; Docker driver = volume archive via
-  the existing archive API), surfaced as capability-gated actions + rows.
-- Backups: per-instance scheduled backups ride Phase 2's record schedules;
-  retention per instance (the database backup retention pattern); restore
-  flow with the settle-then-refuse status guards (the Pterodactyl
-  restoring_backup lesson: a protected status gates power actions).
-- Phase gate: an Incus Debian container with nightly snapshot schedule,
-  snapshot-restore round trip proven in a browser test on a real Incus
-  daemon (testcontainer or dedicated CI host; if neither is feasible the
-  driver gets a fake + one live smoke script, stated honestly).
+---
 
-## Phase 4 -- Templates and the game surface
+## Phase 4 -- Incus driver, snapshots, backups
 
-- Instance TEMPLATES (the egg analogue, hohenheim-owned): a template
-  declares runtime+image/source, typed variable schema (zenit-forms fields
-  -- real typed validation instead of Pterodactyl's rule-strings), port
-  requirements, config files (StackFileModel generalized to instances),
-  startup/env mapping, optional install step, and console line matchers:
-  readiness ("done" line -> status Running) and graceful-stop (console
-  command or signal) -- the config_startup/config_stop analogue, running on
-  the driver's log stream; an observed stop command suppresses crash
-  detection. Crash policy per instance (clean-exit-as-crash default for game
-  templates, flap protection -- the supervisor already has the pattern).
+- `IncusClient`: HTTPS + TLS client certificate on port 8443 remotely, unix
+  socket locally, trust-token enrollment (NOT the DockerClient socket/SSH
+  pattern -- corrected doctrine). Incus supplies node identity and enrollment,
+  so this driver also gives us the node-identity story the audits wanted a
+  bespoke agent for. Driver #2: system containers -- images from image servers,
+  profiles, limits, exec/console websockets (the TTY comes almost free).
+  Unprivileged containers by default; privileged is an admin template flag with
+  a stated escape warning (threat model boundary 1).
+- Server records declare their runtimes as data (docker socket/ssh + host-key
+  pin, incus socket / https+cert). The per-host seam is fully data-driven.
+- Snapshots: driver-level (Incus native; Docker driver = volume archive via the
+  existing archive API), surfaced as capability-gated actions + rows.
+- Backups: per-instance scheduled backups ride Phase 3's record schedules;
+  retention per instance (the database-backup retention pattern); restore flow
+  with settle-then-refuse status guards (a protected status gates power actions
+  -- the Pterodactyl restoring_backup lesson).
+- Gate: an Incus Debian container with a nightly snapshot schedule, a
+  snapshot-restore round trip proven in a browser test on a real Incus daemon
+  (testcontainer or dedicated CI host; if neither is feasible, a fake + one
+  live smoke script, stated honestly -- see open decision 3).
+
+---
+
+## Phase 5 -- Templates and the game surface
+
+- Instance TEMPLATES (the egg analogue, hohenheim-owned): runtime+image/source,
+  typed variable schema (zenit-forms fields -- real typed validation instead of
+  Pterodactyl's rule-strings), port requirements, config files (StackFileModel
+  generalized to instances), startup/env mapping, optional install step, and
+  console line matchers -- readiness ("done" -> Running) and graceful-stop
+  (console command or signal), running on the driver's log stream; an observed
+  stop command suppresses crash detection. Crash policy per instance
+  (clean-exit-as-crash default for game templates, flap protection -- the
+  supervisor already has the pattern).
+- Templates are the DEFAULT source of instance images (threat model: tenants
+  create from operator-approved templates; arbitrary images need `image_any`).
 - Template catalog admin + "create instance from template" flow (variables
   render as a normal zenit-form). Distribution format can wait; catalogs are
   rows first.
-- Game wiring: Minecraft server template + Velocity template; a
-  game-domains mapping (domain record -> backend instance) that MATERIALIZES
-  as generated Velocity forced-hosts config (through the instance config-file
-  mechanism) and DNS records (SRV/A via the existing DNS role) on change.
-- Phase gate: Velocity + one Minecraft backend created from templates,
-  reachable through a domain, readiness detected from console, graceful stop
-  via console command, delegated player-admin operates the backend's console
-  from /manage.
+- Game wiring: Minecraft server template + Velocity template; a game-domains
+  mapping (domain record -> backend instance) that MATERIALIZES as generated
+  Velocity forced-hosts config (via the instance config-file mechanism) and DNS
+  records (SRV/A via the existing DNS role) on change. Minecraft traffic flows
+  through Velocity; no in-house MC protocol.
+- Localization: game audiences are the LEAST English-safe, and today's /manage
+  subpages hardcode English titles by concatenation (`SiteProcessesPage.java:53`,
+  `SiteDeploymentsPage.java:53`, `SiteDomainsPage.java:58`). Fix these to
+  microcopy in this phase (they are the exact subpages a delegated player-admin
+  sees).
+- Gate: Velocity + one Minecraft backend from templates, reachable through a
+  domain, readiness detected from console, graceful stop via console command, a
+  delegated player-admin operates the backend console from a fully localized
+  /manage.
 
-## Phase 5 -- Files, live stats, polish
+---
+
+## Phase 6 -- Files, live stats, polish
 
 - File manager over the driver seam (list/read/write/upload/download/rename/
-  delete, capability files.read/files.write, size caps, per-template
-  denylist), UI in zenit-cms/plumage as a generic component; SFTP is OUT of
-  scope (revisit only with a concrete need).
-- Live per-instance stats (docker stats / Incus metrics) streamed to the
-  detail page (pl-chart/pl-sparkline); servers page gains storage/capacity
-  awareness.
+  delete), capabilities `files.read`/`files.write`, size caps, per-template
+  denylist. `zenit-forms` `FilesystemBrowserRegistry`/`FilesystemBrowserSource`
+  already exists and hohenheim already wires it, but it takes a flat Permission,
+  not a record capability -- EXTEND it to accept a record-capability gate (or
+  state why a new source is warranted). SFTP OUT of scope (revisit with a
+  concrete need).
+- Live per-instance stats (docker stats / Incus metrics) streamed to the detail
+  page (pl-chart/pl-sparkline); servers page gains storage/capacity awareness
+  (feeds placement, Phase 3 quota).
 - Attention collectors for instances (crashed, backup failed, disk high).
 
-## Phase 6 -- VMs (deferred until Jelle green-lights)
+---
+
+## Phase 7 -- VMs (deferred until Jelle green-lights)
+
+VMs are the ONLY strong isolation boundary against hostile tenants on shared
+iron (threat model boundary 1), so this phase is what makes multi-tenant-hostile
+shared hosting actually safe -- it is deferred in ORDER, not in importance.
 
 - Incus VM support through the same driver (kind=vm), cloud-init for Linux;
   Windows via PREPARED TEMPLATES (virtio + RDP pre-enabled) -- template-based
   provisioning, no in-panel OS install initially.
-- Framebuffer console: grant-checked WS proxy over Incus VGA/SPICE + a
-  plumage viewer component (the one genuinely new UI primitive). Until it
-  ships, option 2 (raw console websocket for external clients) is the
-  rescue hatch.
+- Framebuffer console: grant-checked WS proxy over Incus VGA/SPICE + a plumage
+  viewer component (the one genuinely new UI primitive; SPICE/VNC hypervisor-
+  side is the requirement, RDP is guest-side and not a substitute). Until it
+  ships, a raw console websocket for external clients is the rescue hatch.
 - Proxmox driver only when a concrete shared-iron host needs it.
+
+---
+
+## Cross-cutting foundations (missing from the old plan, needed for public)
+
+These are not phases; they are models/mechanisms several phases depend on.
+Each names its home and its first consumer.
+
+- **Durable operations + reconciliation.** Hohenheim has TWO precedents to
+  generalize (`DeploymentModel`, `StackDeploymentModel`): a record of
+  desired-vs-actual with a worker lane, interrupted-op recovery at boot, and
+  status recompute from live truth. The instance tier needs the same shape
+  (a create/start/destroy that survives a control-plane crash without orphaning
+  a container or deleting the only record of its credentials). Generalize the
+  stack worker-lane + `resetInterruptedDeploys` pattern into an instance
+  operation model in Phase 3, not a bespoke retry.
+- **Image identity.** Mutable Docker tags and Incus aliases are NOT deployment
+  identities. An instance pins a digest (the `DockerReclaim` code already
+  canonicalizes to digest form -- reuse). Record the resolved digest per
+  instance so "what is actually running" is answerable and reclaim is safe.
+- **Secret model.** Phase 0.6 encrypts existing fields; the instance tier adds
+  table-backed secret variables (Phase 3). State once, centrally, that secrets
+  are encrypted columns, never JSON sub-schema fields, never revisioned/logged
+  in cleartext (Phase 0.6 makes that true framework-wide).
+- **Host capacity / placement.** Quota (Phase 3) needs per-host capacity
+  (Phase 6 stats feed it). Placement authority (which creator on which host) is
+  part of the create story. The full IPAM/network model is deferred, but a
+  minimal "which host, is there room" check lands with Phase 3.
+- **Storage / network models.** Deferred as full models, but named here so they
+  are not forgotten: named volumes already exist for stacks; instances reuse
+  that. A full network/IPAM model waits for a concrete multi-host need.
+- **Rollout / upgrade for existing installs.** Once other people run installs,
+  migrations and behavior changes must be safe on live data. Migration
+  integrity is currently OFF and cannot be turned on (M001/M002/M007 deleted
+  with history rows remaining, `acknowledgeMissingMigrationVersions` never
+  called, six migrations edited after apply, `M042` builds DDL from the LIVE
+  model so editing the model silently changes an applied checksum, `M043`'s
+  `assertUnique` can hard-fail a live boot in a `.requireSuccess()` chain, only
+  2 of ~40 addColumn sites carry `.ifNotExists()`). Before public, run a
+  migration-integrity remediation workstream: acknowledge the deleted versions,
+  stop building DDL from live models, make column adds idempotent, and turn
+  integrity checking ON. This is a release-adjacent blocker for a public
+  product with foreign installs -- schedule it alongside Phase 0.
+- **Destructive-operation audit.** Every destroy/purge/snapshot-restore is a
+  data-loss surface. Reuse the typed-confirmation + ownership-label pattern the
+  stack tier already proved (`purge_stack_volumes`), and log every destructive
+  op with accountability.
 
 ---
 
 ## Cross-cutting rules
 
-- Every phase lands with tests at the level it changes (unit + browser
-  journeys for UI; the driver seams get fakes plus at least one real-daemon
-  journey each, the DockerReclaimTest precedent).
-- Localization: all new UI copy through microcopy catalogs (short keys +
-  filters); instance/template names are user data and never localized;
-  template descriptions ARE localizable (Microcopy on the template row).
-- Docs/skills: zenit-cms-resources skill gains the record-access page;
-  a new hohenheim skill for the instance/driver seam when Phase 2 lands.
-- Order within the plan is dependency order, but Phase 0 and Phase 1 are
-  independent and can interleave; Phases 4+ each assume the previous gate.
+- Every phase lands with tests at the level it changes (unit + browser journeys
+  for UI; driver seams get fakes plus at least one real-daemon journey each --
+  the DockerReclaimTest precedent).
+- Test budget: the house rule is a 5-minute targeted suite. The per-phase
+  real-daemon and browser journeys go in an OPT-IN suite (the `--datasources
+  all` precedent), not the default run. All-8-backend grant coverage needs
+  `TestDatasources` promoted from `zenit/src/test` to a published test-support
+  artifact (it is not published today) -- do that when Phase 1 touches grants
+  on non-SQLite/Postgres backends.
+- Localization: all new UI copy through microcopy (short keys + filters);
+  instance/template/server names are user data and never localized; template
+  descriptions ARE localizable. Every new capability states its localized
+  behavior before it ships. The hardcoded-English /manage subpage titles are
+  fixed in Phase 5.
+- Docs/skills: zenit-cms-resources skill gains the record-access page; a new
+  hohenheim skill for the instance/driver seam when Phase 3 lands; update
+  `architecture-stacks.md` when Phase 0.6 makes platform-wide encryption true.
+- Order is dependency order. Phase 0 gates any public tag. Phase 0 and Phase 1
+  can interleave. The migration-integrity workstream runs alongside Phase 0.
+  Phases 3+ each assume the previous gate.
 
 ## Open decisions (need Jelle, flagged not assumed)
 
-1. Capability naming in UI copy ("record access" vs "toegangsrechten" etc.)
-   -- pick at Phase 0 UI time.
-2. Whether stack services eventually BECOME instances or stay a separate
-   tier forever -- deliberately deferred; revisit after Phase 3 with real
-   usage.
-3. Incus testing strategy if no daemon can run in CI (fake + live smoke vs
-   testcontainer-in-privileged) -- decide at Phase 3 start.
+1. Capability naming in UI copy ("record access" vs a localized term) -- pick at
+   the Phase 1 UI stage.
+2. Whether stack services eventually BECOME instances or stay a separate tier
+   -- deferred; revisit after Phase 4 with real usage.
+3. Incus testing strategy if no daemon runs in CI (fake + live smoke vs
+   privileged testcontainer) -- decide at Phase 4 start.
+4. The tenancy boundary shape: per-owner quota (Phase 3 minimum) vs a full
+   hierarchical project/tenant model with aggregate quotas. The public shift
+   makes the create-gate + per-owner cap non-negotiable; the full project model
+   is a real design fork -- decide when Phase 3 quota work starts.
+5. Shared-host untrusted multi-tenancy posture: do we ever offer container-only
+   isolation to hostile tenants with a per-host operator acknowledgement, or is
+   the answer always VM-per-tenant / dedicated host (Phase 7)? This is a product
+   risk decision, not a technical one.
+6. `record_schedules` as a new table vs a facet of `SystemTaskModel` -- leaning
+   new table; confirm at Phase 3.
