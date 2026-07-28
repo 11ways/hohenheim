@@ -2,7 +2,9 @@ package be.elevenways.hohenheim.server.stack;
 
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.DockerReclaim;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.protoblast.common.Blast;
@@ -15,8 +17,13 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -319,6 +326,102 @@ public class StackRuntime {
         for (Row stack : stacks) {
             refreshStatus(stack.get(StackModel.ID));
         }
+    }
+
+    // -- volume purge ---------------------------------------------------------
+
+    /**
+     * Stop the stack and destroy every volume it owns: the operator's way to reclaim
+     * the disk a stack's DATA occupies. Stopping first is not a convenience -- Docker
+     * refuses to remove a volume that is still attached, so a purge that did not stop
+     * would silently reclaim nothing.
+     *
+     * External (adopted) volumes never carry our ownership label and survive.
+     *
+     * @throws IOException when the stack does not exist, or Docker refuses
+     */
+    public void purgeVolumes(int stackId) throws IOException {
+        onWorker(stackId, () -> {
+            StackSpec spec = scoped(() -> teardownSpec(stackId));
+            if (spec == null) {
+                throw new IOException("Stack " + stackId + " does not exist");
+            }
+            StackDeployer deployer = new StackDeployer(clientFor.apply(spec.serverName()), null);
+            deployer.stop(spec);
+            deployer.removeOwnedVolumes(spec);
+            setStatus(stackId, StackModel.STATUS_STOPPED);
+            return null;
+        });
+    }
+
+    /** Queue a stop-and-purge of the stack's owned volumes. */
+    public void purgeVolumesAsync(int stackId) {
+        submitAsync(stackId, () -> {
+            try {
+                purgeVolumes(stackId);
+            } catch (Exception e) {
+                Blast.log("STACK: volume purge failed for stack", stackId, "-", e.getMessage());
+                refreshStatus(stackId);
+            }
+        });
+    }
+
+    // -- disk reclaim ---------------------------------------------------------
+
+    /**
+     * Reclaim superseded and dangling images on every daemon that hosts a stack.
+     * {@link DockerReclaim} owns the rules; this owns the WIRING -- which image
+     * references count as declared, which is every image any stack service names on
+     * that server, enabled or not (a disabled stack's image must stay pinned so
+     * re-enabling it does not have to re-pull).
+     *
+     * Deliberately NOT on a stack worker: image storage is per DAEMON, not per
+     * stack, so there is no stack whose queue this belongs in. A deploy running
+     * concurrently is safe -- the image it just pulled is protected by the age
+     * guard, and the one it superseded is exactly what should go.
+     *
+     * @param minimumAge images younger than this are kept
+     * @param includeUnattributed also remove images carrying no reference at all
+     * @return per-server outcomes, keyed by server name; a server whose daemon
+     *         cannot be reached is logged and absent rather than failing the sweep
+     */
+    public @NonNull Map<String, DockerReclaim.Outcome> reclaimImages(@NonNull Duration minimumAge,
+                                                                    boolean includeUnattributed) {
+        Map<String, Set<String>> referencesByServer = scoped(this::declaredImagesByServer);
+        Map<String, DockerReclaim.Outcome> outcomes = new LinkedHashMap<>();
+        Instant now = Instant.now();
+
+        for (Map.Entry<String, Set<String>> entry : referencesByServer.entrySet()) {
+            String serverName = entry.getKey();
+            try {
+                DockerReclaim reclaim = new DockerReclaim(
+                    this.clientFor.apply(serverName), minimumAge, includeUnattributed);
+                outcomes.put(serverName, reclaim.reclaimImages(entry.getValue(), now));
+            } catch (IOException e) {
+                Blast.log("STACK: image reclaim failed on server", serverName, "-", e.getMessage());
+            }
+        }
+        return outcomes;
+    }
+
+    /** Every image reference declared by a stack service, grouped by the stack's server. */
+    private @NonNull Map<String, Set<String>> declaredImagesByServer() {
+        Map<String, Set<String>> byServer = new LinkedHashMap<>();
+        for (Row stack : Models.get(StackModel.class).find().all()) {
+            String serverName = stack.get(StackModel.SERVER_NAME);
+            if (serverName == null || serverName.isBlank()) {
+                continue;
+            }
+            Set<String> references = byServer.computeIfAbsent(serverName, key -> new LinkedHashSet<>());
+            for (Row service : Models.get(StackServiceModel.class)
+                    .findByStackId(stack.get(StackModel.ID))) {
+                String image = service.get(StackServiceModel.IMAGE);
+                if (image != null && !image.isBlank()) {
+                    references.add(image.trim());
+                }
+            }
+        }
+        return byServer;
     }
 
     /**

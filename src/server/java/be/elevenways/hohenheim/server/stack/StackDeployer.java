@@ -213,14 +213,26 @@ public class StackDeployer {
         }
 
         if (removeVolumes) {
-            for (Object entry : docker.listVolumes()) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> volume = entry instanceof Map<?, ?> ? (Map<String, Object>) entry : null;
-                if (volume != null && isOwned(labelsOf(volume), spec)) {
-                    String name = String.valueOf(volume.get("Name"));
-                    log.accept("Removing volume " + name);
-                    docker.removeVolume(name, true);
-                }
+            removeOwnedVolumes(spec);
+        }
+    }
+
+    /**
+     * Remove every volume carrying this stack's ownership label. IRREVERSIBLE: this is
+     * the one Docker resource whose contents cannot be re-fetched, so callers guard it
+     * (the admin action requires the operator to type the stack's name). Volumes
+     * declared with an external name, and adopted ones, never carry our label and are
+     * therefore never removed. A volume still attached to a container refuses to go --
+     * stop the stack first.
+     */
+    public void removeOwnedVolumes(@NonNull StackSpec spec) throws IOException {
+        for (Object entry : docker.listVolumes()) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> volume = entry instanceof Map<?, ?> ? (Map<String, Object>) entry : null;
+            if (volume != null && isOwned(labelsOf(volume), spec)) {
+                String name = String.valueOf(volume.get("Name"));
+                log.accept("Removing volume " + name);
+                docker.removeVolume(name, true);
             }
         }
     }

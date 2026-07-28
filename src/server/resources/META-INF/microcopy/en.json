@@ -3671,6 +3671,42 @@
     "text": "Deploy this stack now? Changed services get their containers replaced.",
     "scope": "stack"
   },
+  "purge_volumes": {
+    "text": "Purge volumes",
+    "scope": "stack"
+  },
+  "purge_volumes_hint": {
+    "text": "Stop the stack and destroy the volumes it owns. The data is gone for good.",
+    "scope": "stack"
+  },
+  "purge_volumes_confirm": {
+    "text": "Stop {$name} and DESTROY every volume it owns? The data cannot be recovered. External volumes are left alone.",
+    "scope": "stack"
+  },
+  "purge_volumes_ok": {
+    "text": "Purge the data",
+    "scope": "stack"
+  },
+  "purge_volumes_queued": {
+    "text": "Volume purge queued",
+    "scope": "stack"
+  },
+  "reclaim_images": {
+    "text": "Reclaim images",
+    "scope": "stack"
+  },
+  "reclaim_images_hint": {
+    "text": "Remove dangling and superseded images on every server that hosts a stack",
+    "scope": "stack"
+  },
+  "reclaim_images_confirm": {
+    "text": "Remove dangling images and superseded versions of managed images? Images in use are kept, and anything removed is re-pulled on the next deploy that needs it.",
+    "scope": "stack"
+  },
+  "reclaim_images_done": {
+    "text": "Reclaimed {$images} images, {$megabytes} MiB",
+    "scope": "stack"
+  },
   "deploy_queued": {
     "text": "Deploy queued",
     "scope": "stack"

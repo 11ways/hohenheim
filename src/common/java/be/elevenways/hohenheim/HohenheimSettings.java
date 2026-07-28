@@ -298,6 +298,42 @@ public class HohenheimSettings {
             .build();
     }
 
+    // --- Stacks ---
+    public abstract class Stacks {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("stacks")
+            .label("Stacks")
+            .describe("Managed Docker stacks and the disk they reclaim")
+            .icon("cubes");
+
+        public static final SettingDefinition<Boolean> RECLAIM_IMAGES = GROUP
+            .buildSetting("reclaim_images", Boolean.class)
+            .defaultValue(true)
+            .description("Periodically remove superseded images of the repositories managed "
+                + "stacks declare, on every server that hosts a stack. An image with any "
+                + "reference outside those repositories is left alone, an image any container "
+                + "still references is never removed, and volumes are never touched here "
+                + "(that is the one removal which destroys data)")
+            .build();
+
+        public static final SettingDefinition<Boolean> RECLAIM_UNTRACKED = GROUP
+            .buildSetting("reclaim_untracked", Boolean.class)
+            .defaultValue(false)
+            .description("Also remove images that carry no tag or digest at all. Hohenheim "
+                + "cannot prove those are its own -- they may be an external build's "
+                + "leftovers -- so this is what a shared host keeps off and a dedicated one "
+                + "turns on (the equivalent of docker image prune)")
+            .build();
+
+        public static final SettingDefinition<Integer> RECLAIM_MIN_AGE_HOURS = GROUP
+            .buildSetting("reclaim_min_age_hours", Integer.class)
+            .defaultValue(24)
+            .suffix("h")
+            .description("Images created more recently than this are kept, so a reclaim can "
+                + "never remove an image a deploy just pulled but has not started yet "
+                + "(minimum 1)")
+            .build();
+    }
+
     // --- Database ---
     public abstract class Database {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("database")

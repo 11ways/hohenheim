@@ -3667,6 +3667,42 @@
     "text": "Deze stack nu deployen? Gewijzigde services krijgen nieuwe containers.",
     "scope": "stack"
   },
+  "purge_volumes": {
+    "text": "Volumes wissen",
+    "scope": "stack"
+  },
+  "purge_volumes_hint": {
+    "text": "Stop de stack en verwijder de volumes die hij bezit. De data is definitief weg.",
+    "scope": "stack"
+  },
+  "purge_volumes_confirm": {
+    "text": "Stop {$name} en VERWIJDER elk volume dat hij bezit? De data is niet meer terug te halen. Externe volumes blijven ongemoeid.",
+    "scope": "stack"
+  },
+  "purge_volumes_ok": {
+    "text": "Wis de data",
+    "scope": "stack"
+  },
+  "purge_volumes_queued": {
+    "text": "Volumes wissen staat in de wachtrij",
+    "scope": "stack"
+  },
+  "reclaim_images": {
+    "text": "Images opruimen",
+    "scope": "stack"
+  },
+  "reclaim_images_hint": {
+    "text": "Verwijder losse en vervangen images op elke server die een stack draait",
+    "scope": "stack"
+  },
+  "reclaim_images_confirm": {
+    "text": "Losse images en vervangen versies van beheerde images verwijderen? Images die in gebruik zijn blijven staan, en wat verdwijnt wordt bij de volgende deploy die het nodig heeft opnieuw gedownload.",
+    "scope": "stack"
+  },
+  "reclaim_images_done": {
+    "text": "{$images} images opgeruimd, {$megabytes} MiB vrij",
+    "scope": "stack"
+  },
   "deploy_queued": {
     "text": "Deploy in wachtrij",
     "scope": "stack"
