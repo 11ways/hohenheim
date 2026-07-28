@@ -1,7 +1,5 @@
 package be.elevenways.hohenheim.test.stack;
 
-import be.elevenways.hohenheim.migration.M042_CreateStacks;
-import be.elevenways.hohenheim.migration.M043_StackUniqueKeys;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -12,7 +10,6 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
@@ -57,8 +54,7 @@ class StackRuntimeFlowTest {
         db.delete();
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner((MigrationCapableDatasource) datasource,
-            List.of(M042_CreateStacks::new, M043_StackUniqueKeys::new)).migrate();
+        new MigrationRunner(datasource).migrate().requireSuccess();
         HohenheimTestRuntime.ensureBooted();
 
         docker = new DockerClient();
