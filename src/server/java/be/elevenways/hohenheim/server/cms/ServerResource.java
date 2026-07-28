@@ -5,7 +5,10 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.options.ServerOptions;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
@@ -120,7 +123,7 @@ public final class ServerResource extends RowResource {
         Map<String, String> status = new LinkedHashMap<>();
         for (ServerService.Summary summary : this.serverService.summaries()) {
             if (!summary.reachable()) {
-                status.put(summary.name(), "unreachable");
+                status.put(summary.name(), hostCopy(Microcopy.of("host_unreachable")));
                 continue;
             }
             status.put(summary.name(), formatSummary(summary));
@@ -130,7 +133,9 @@ public final class ServerResource extends RowResource {
 
     private @NonNull String serverOverview(@NonNull String name) {
         ServerService.Summary summary = this.serverService.summary(name);
-        return summary == null || !summary.reachable() ? "Docker unavailable" : formatSummary(summary);
+        return summary == null || !summary.reachable()
+            ? hostCopy(Microcopy.of("host_docker_unavailable"))
+            : formatSummary(summary);
     }
 
     private static @NonNull String formatSummary(ServerService.@NonNull Summary summary) {
@@ -144,11 +149,27 @@ public final class ServerResource extends RowResource {
             operatingSystem += " (" + platform + ")";
         }
         if (operatingSystem.isBlank()) {
-            operatingSystem = "unknown platform";
+            operatingSystem = hostCopy(Microcopy.of("host_unknown_platform"));
         }
-        return String.format("%s | %s | %d CPU | %.1f GiB RAM | %d/%d containers | %d images",
-            docker, operatingSystem, summary.cpus(), summary.memoryBytes() / 1_073_741_824.0,
-            summary.containersRunning(), summary.containersTotal(), summary.images());
+        double memoryGib = Math.round(summary.memoryBytes() / 1_073_741_824.0 * 10) / 10.0;
+        return hostCopy(Microcopy.of("host_summary")
+            .withArg("docker", docker)
+            .withArg("os", operatingSystem)
+            .withArg("cpus", String.valueOf(summary.cpus()))
+            .withArg("memory", String.valueOf(memoryGib))
+            .withArg("running", String.valueOf(summary.containersRunning()))
+            .withArg("total", String.valueOf(summary.containersTotal()))
+            .withArg("images", String.valueOf(summary.images())));
+    }
+
+    /**
+     * Host stats are computed once per list render without a requesting conduit, so
+     * they speak the server's default locale.
+     */
+    private static @NonNull String hostCopy(@NonNull Microcopy microcopy) {
+        return microcopy.withFilter("scope", "server")
+            .resolve(LocaleChain.of(RouteLocales.get().getDefaultLocale()),
+                Zenit.getMessageResolver());
     }
 
     @Override

@@ -4,7 +4,10 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.edit.Array;
+import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.OptionSource;
@@ -118,8 +121,14 @@ public final class NotificationChannelResource extends RowResource {
             .icon(Icon.of("paper-plane"))
             .handler((row, ctx) -> {
                 String name = row.get(NotificationChannelModel.NAME);
+                // Outbound copy has no requesting user to follow: it speaks the
+                // server's default locale, like every other alert should.
+                LocaleChain locales = LocaleChain.of(RouteLocales.get().getDefaultLocale());
                 boolean delivered = Alerts.testChannel(row,
-                    "Hohenheim test", "If you can read this, the channel works.");
+                    Microcopy.of("test_subject").withFilter("scope", "notification_channel")
+                        .resolve(locales, Zenit.getMessageResolver()),
+                    Microcopy.of("test_body").withFilter("scope", "notification_channel")
+                        .resolve(locales, Zenit.getMessageResolver()));
                 ActivityLog.record(this.model(), row.get(NotificationChannelModel.ID), "tested", name);
                 return delivered
                     ? CmsActionResult.refreshWithToast(Microcopy.of("test_ok").withFilter("scope", "notification_channel"))
