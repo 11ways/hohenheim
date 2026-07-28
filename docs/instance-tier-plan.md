@@ -108,8 +108,10 @@ cannot state which boundary it defends, it is not ready to build.
 
 - `view`, `console` (stdin/stdout of the instance's OWN primary process),
   `power` (start/stop/restart), `files.read` -- ordinary tenant capabilities.
-- `files.write`, `snapshots`, `backups`, `config` -- elevated tenant
-  capabilities (can change what runs or exfiltrate).
+- `files.write`, `snapshots`, `backups`, `config`, `access.manage` (edit the
+  record's own grants -- delegation of delegation, Pterodactyl's most
+  sensitive subuser permission) -- elevated tenant capabilities (can change
+  what runs, exfiltrate, or widen access).
 - `exec` (run an ARBITRARY command as an arbitrary user inside the container)
   -- this is effectively root-in-container and therefore a host-escape
   amplifier. It is NOT an ordinary capability and is NOT the same thing as
@@ -242,6 +244,10 @@ password/disable paths) and revoke all sessions.
      authority and declared scopes. This dovetails with the scope-coherence
      work in Phase 1 (`cap:` prefix). Until Phase 1 lands the prefix, the
      minimum here is: empty scope == no authority, not full authority.
+     EXISTING keys with blank scopes get stated migration semantics, not a
+     silent behavior flip: on upgrade they are treated as no-authority until
+     the owner re-scopes them (surfaced on the api-keys page), never silently
+     kept at full authority.
 - Gate: extend `AuthFlowIntegrationTest` -- an API key gets 401/403 on TOTP
   enroll, session revoke, and any `/account` mutation; a blank-scope key is
   rejected at creation.
@@ -439,8 +445,11 @@ zenit-auth (RecordGrants hardening -- builds on the Phase 0 correctness fixes):
   soft delete needs an explicit hook, not the remove hook. Without cleanup,
   hard-delete + id reuse = privilege resurrection.
 - API-key scope coherence (completes Phase 0.3): record capabilities in scopes
-  ride a distinguishing prefix (`cap:<model>:<name>`, wildcardable) so a key's
-  reach is explicit and cannot collide with permission scopes. The two matchers
+  ride a distinguishing prefix so a key's reach is explicit and cannot collide
+  with permission scopes. GRAMMAR NOTE: model Identifiers themselves contain
+  `:`, so `cap:<model>:<name>` is ambiguous -- pick a separator that appears in
+  neither part (e.g. `cap:<model>#<name>`, capability names are dotted words,
+  never `#`) and pin it with a parse test before any key is minted. The two matchers
   (PermissionResolver's specificity tie-break vs WildcardPermissions'
   exact-node-first) diverge in principle but never on the same string set
   today; document the divergence with a pinning test rather than force a risky
@@ -504,9 +513,11 @@ each other; Phase 1's record-capability SPI is a hard dependency for Phase 3.
 
 ## Phase 2 -- Install roles (hohenheim + one zenit core change)
 
-- Settings group `roles.*`: proxy, dns, firewall, stacks, instances, processes,
-  game -- each a boolean with restartRequired. These realize the two install
-  kinds from the doctrine (compute node vs control-plane appliance).
+- Settings group `roles.*`: proxy, dns, firewall, stacks, processes, databases
+  -- each a boolean with restartRequired. These realize the two install kinds
+  from the doctrine (compute node vs control-plane appliance). The `instances`
+  and `game` role flags land WITH their consumers (Phases 3 and 5) per the
+  no-unwired rule -- Phase 2 only builds the gating mechanism they plug into.
 - BLOCKER the old plan missed (zenit core change, required BEFORE roles work):
   `TaskService.reconcileDeclaredSchedules:134-201` DELETES schedule rows whose
   checksum is absent from the BOOTING node's catalog. A role-gated node that
@@ -561,7 +572,10 @@ Design gaps the old Phase 2 left open, now resolved for a public product:
     primary process), `files.read`.
   - elevated: `files.write`, `snapshots`, `backups`, `config`, `destroy`
     (the old plan offered delete via the generated resource with no matching
-    capability -- fixed: `destroy` is its own elevated capability).
+    capability -- fixed: `destroy` is its own elevated capability), and
+    `access.manage` (open the record's access page and edit its grants; the
+    generic Phase 1 access page gates on it -- owner and admin hold it
+    implicitly, nobody else by default).
   - admin/type-level, NOT default tenant grants: `exec` (arbitrary command in
     the container -- root-in-container, host-escape amplifier), and
     `image_any` (pull an arbitrary, non-template image -- equivalent to exec).
@@ -570,7 +584,10 @@ Design gaps the old Phase 2 left open, now resolved for a public product:
 - **Instances join /manage as a GENERATED grant-scoped resource** (accessCriteria
   = `RecordGrants.recordIds -> ID.in(...)`, the `ManagePanel.siteScope` pattern;
   `AccessDecision.ALL/NONE/criteria` reused for list/count/load, out-of-scope
-  ids as 404). The admin panel gets the full resource. CRITICAL: because it is
+  ids as 404). The admin panel gets the full resource. The /manage resource is
+  a SAFE PROJECTION (the `ManageSiteResource` precedent): no server id, no
+  socket/daemon addresses, no host filesystem paths, no raw runtime errors, no
+  other tenants' usage -- field-level, not just the wire path. CRITICAL: because it is
   generated, it inherits revision + activity subpages by DEFAULT -- so the
   Phase 0.6 secret-redaction fixes are a hard prerequisite here, and the
   resource must NOT expose a whole-Row wire path (none exists today; keep it
@@ -664,13 +681,21 @@ via any RecordSource or subpage.
 - Server records declare their runtimes as data (docker socket/ssh + host-key
   pin, incus socket / https+cert). The per-host seam is fully data-driven.
 - Snapshots: driver-level (Incus native; Docker driver = volume archive via the
-  existing archive API), surfaced as capability-gated actions + rows.
-- Backups: per-instance scheduled backups ride Phase 3's record schedules;
-  retention per instance (the database-backup retention pattern); restore flow
-  with settle-then-refuse status guards (a protected status gates power actions
-  -- the Pterodactyl restoring_backup lesson).
+  existing archive API), surfaced as capability-gated actions + rows. A
+  snapshot is NOT a backup: it lives in the same storage pool as the instance
+  and dies with the host/pool. Snapshot rows and backup rows are distinct
+  records with distinct capabilities.
+- Backups EXPORT OFF-HOST: per-instance scheduled backups ride Phase 3's
+  record schedules and produce a portable export (Incus `export` / Docker
+  volume archive) written to a backup target OFF the instance's host (operator-
+  configured target; a directory on the control-plane host is the floor,
+  remote targets can follow). Retention per instance (the database-backup
+  retention pattern); restore flow with settle-then-refuse status guards (a
+  protected status gates power actions -- the Pterodactyl restoring_backup
+  lesson) and restore-to-NEW-instance supported, not just in-place.
 - Gate: an Incus Debian container with a nightly snapshot schedule, a
-  snapshot-restore round trip proven in a browser test on a real Incus daemon
+  snapshot-restore round trip, AND an off-host backup exported then restored
+  to a NEW instance -- proven in a browser test on a real Incus daemon
   (testcontainer or dedicated CI host; if neither is feasible, a fake + one
   live smoke script, stated honestly -- see open decision 3).
 
@@ -702,10 +727,15 @@ via any RecordSource or subpage.
   `SiteDeploymentsPage.java:53`, `SiteDomainsPage.java:58`). Fix these to
   microcopy in this phase (they are the exact subpages a delegated player-admin
   sees).
+- Velocity's player-info forwarding secret rides the Phase 3 secret-variable
+  mechanism (an encrypted instance variable materialized into both configs),
+  never a plaintext config literal.
 - Gate: Velocity + one Minecraft backend from templates, reachable through a
   domain, readiness detected from console, graceful stop via console command, a
   delegated player-admin operates the backend console from a fully localized
-  /manage.
+  /manage -- AND the negative half: a direct connection to the backend
+  instance's port from outside FAILS (the Velocity-fronts-everything doctrine
+  is proven, not assumed).
 
 ---
 
@@ -770,6 +800,11 @@ Each names its home and its first consumer.
 - **Storage / network models.** Deferred as full models, but named here so they
   are not forgotten: named volumes already exist for stacks; instances reuse
   that. A full network/IPAM model waits for a concrete multi-host need.
+- **Control-plane backup.** After Phase 0.6 the hohenheim database plus the
+  encryption keyring hold every secret in the fleet; losing the controller
+  must not mean losing every credential. A scheduled, documented backup of
+  the DB + keyring to an off-host target (and a written restore procedure,
+  exercised once) lands no later than Phase 4, alongside instance backups.
 - **Rollout / upgrade for existing installs.** Once other people run installs,
   migrations and behavior changes must be safe on live data. Migration
   integrity is currently OFF and cannot be turned on (M001/M002/M007 deleted
@@ -830,3 +865,7 @@ Each names its home and its first consumer.
    risk decision, not a technical one.
 6. `record_schedules` as a new table vs a facet of `SystemTaskModel` -- leaning
    new table; confirm at Phase 3.
+7. Incus CLUSTERING is a stated deferral, not an omission: "runtime = data on
+   the server record" bakes in a 1:1 runtime-to-host assumption that an Incus
+   cluster breaks (placement, quorum, shared storage). Standalone daemons only
+   until a concrete cluster need exists; revisit the schema assumption then.
