@@ -16,7 +16,7 @@ public class M021_AddCertLetsencryptEmail extends Migration {
         // by this column (NULL = the global default account).
         schema.alterTable("certificates", table ->
             table.addColumn("letsencrypt_email", ColumnType.STRING,
-                col -> col.maxLength(255).nullable(true)));
+                col -> col.maxLength(255).nullable(true).ifNotExists()));
     }
 
     @Override

@@ -13,7 +13,8 @@ public class M031_AddCertExpiryStamp extends Migration {
     @Override
     public void up(MigrationBuilder schema) {
         schema.alterTable("certificates", table ->
-            table.addColumn("expiry_notified_at", ColumnType.DATETIME, col -> col.nullable(true)));
+            table.addColumn("expiry_notified_at", ColumnType.DATETIME,
+                col -> col.nullable(true).ifNotExists()));
     }
 
     @Override

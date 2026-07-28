@@ -19,6 +19,12 @@ public class M026_MigrateAuditLogToActivity extends Migration {
         super("2026_07_07_000026", "Move audit_log into the framework activity log");
     }
 
+    // AIDEV-NOTE: This migration is NOT re-run safe and cannot be made so. The copy is an
+    // INSERT ... SELECT FROM audit_log with no row identity to dedup on, and the final DROP TABLE
+    // means a second run fails at the first ALTER with "no such table: audit_log" -- a loud,
+    // correct refusal. Adding IF EXISTS to the DROP would only move the recorded checksum without
+    // ever being reached. Left as-is deliberately during the 2026-07-29 integrity pass.
+
     @Override
     public void up(MigrationBuilder schema) {
         // Installs that predate the migration system carry the original audit_log

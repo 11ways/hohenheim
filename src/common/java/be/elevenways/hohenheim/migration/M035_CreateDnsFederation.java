@@ -36,15 +36,18 @@ public class M035_CreateDnsFederation extends Migration {
 
         schema.alterTable("dns_zones", table -> {
             // 'primary' (owned + edited here) or 'secondary' (replicated from a peer).
-            table.addColumn("role", ColumnType.STRING, col -> col.maxLength(20).defaultValue("primary"));
-            table.addColumn("primary_peer_id", ColumnType.INTEGER, col -> col.nullable(true));
-            table.addColumn("transfer_status", ColumnType.STRING, col -> col.maxLength(20).nullable(true));
-            table.addColumn("transfer_message", ColumnType.STRING, col -> col.maxLength(500).nullable(true));
-            table.addColumn("last_checked_at", ColumnType.DATETIME, col -> col.nullable(true));
-            table.addColumn("last_transfer_at", ColumnType.DATETIME, col -> col.nullable(true));
+            table.addColumn("role", ColumnType.STRING,
+                col -> col.maxLength(20).defaultValue("primary").ifNotExists());
+            table.addColumn("primary_peer_id", ColumnType.INTEGER, col -> col.nullable(true).ifNotExists());
+            table.addColumn("transfer_status", ColumnType.STRING,
+                col -> col.maxLength(20).nullable(true).ifNotExists());
+            table.addColumn("transfer_message", ColumnType.STRING,
+                col -> col.maxLength(500).nullable(true).ifNotExists());
+            table.addColumn("last_checked_at", ColumnType.DATETIME, col -> col.nullable(true).ifNotExists());
+            table.addColumn("last_transfer_at", ColumnType.DATETIME, col -> col.nullable(true).ifNotExists());
             // Master-file text of the last successful transfer, so a secondary
             // keeps serving across restarts even when its primary is down.
-            table.addColumn("replica_records", ColumnType.TEXT, col -> col.nullable(true));
+            table.addColumn("replica_records", ColumnType.TEXT, col -> col.nullable(true).ifNotExists());
         });
 
         // The secondaries a primary zone notifies and authorizes AXFR for.

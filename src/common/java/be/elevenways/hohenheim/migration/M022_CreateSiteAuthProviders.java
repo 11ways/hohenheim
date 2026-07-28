@@ -32,7 +32,8 @@ public class M022_CreateSiteAuthProviders extends Migration {
         });
 
         schema.alterTable("sites", table -> {
-            table.addColumn("auth_provider_id", ColumnType.INTEGER, col -> col.nullable(true));
+            table.addColumn("auth_provider_id", ColumnType.INTEGER,
+                col -> col.nullable(true).ifNotExists());
         });
     }
 

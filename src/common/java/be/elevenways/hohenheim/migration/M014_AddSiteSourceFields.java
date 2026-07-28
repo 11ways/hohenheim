@@ -13,8 +13,9 @@ public class M014_AddSiteSourceFields extends Migration {
     @Override
     public void up(MigrationBuilder schema) {
         schema.alterTable("sites", table -> {
-            table.addColumn("source", ColumnType.STRING, col -> col.maxLength(20).nullable(true));
-            table.addColumn("source_settings", ColumnType.JSON, col -> col.nullable(true));
+            table.addColumn("source", ColumnType.STRING,
+                col -> col.maxLength(20).nullable(true).ifNotExists());
+            table.addColumn("source_settings", ColumnType.JSON, col -> col.nullable(true).ifNotExists());
         });
     }
 

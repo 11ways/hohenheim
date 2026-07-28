@@ -15,8 +15,8 @@ public class M020_AddCertRetryFields extends Migration {
         // Escalating-backoff state for failed ACME orders: how often issuance/renewal has
         // failed in a row, and when the renewal sweep may retry this certificate.
         schema.alterTable("certificates", table -> {
-            table.addColumn("error_count", ColumnType.INTEGER, col -> col.defaultValue(0));
-            table.addColumn("next_attempt_at", ColumnType.DATETIME, col -> col.nullable(true));
+            table.addColumn("error_count", ColumnType.INTEGER, col -> col.defaultValue(0).ifNotExists());
+            table.addColumn("next_attempt_at", ColumnType.DATETIME, col -> col.nullable(true).ifNotExists());
         });
     }
 

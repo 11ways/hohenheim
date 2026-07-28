@@ -14,7 +14,8 @@ public class M016_AddDatabaseStatus extends Migration {
     public void up(MigrationBuilder schema) {
         // provisioning -> active | failed; defaults to active for records created synchronously.
         schema.alterTable("managed_databases", table ->
-            table.addColumn("status", ColumnType.STRING, col -> col.maxLength(20).defaultValue("active")));
+            table.addColumn("status", ColumnType.STRING,
+                col -> col.maxLength(20).defaultValue("active").ifNotExists()));
     }
 
     @Override
