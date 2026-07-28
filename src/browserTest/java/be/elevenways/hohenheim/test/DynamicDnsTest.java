@@ -55,8 +55,9 @@ class DynamicDnsTest extends HohenheimTestBase {
 
     @Test
     void tokenIsStoredRetrievablyNotHashed() {
-        // The operator must be able to re-read the update token any time (it
-        // lives in a router config), so it is stored as-is, not as a digest.
+        // DynamicDnsService looks the record UP by token, so the column holds the
+        // token itself, not a digest. The field is secret(), so the admin form no
+        // longer echoes it; the mint action is the one disclosure.
         String token = seedDynamicRecord("dyn-store.example", "home", DnsRecordModel.TYPE_A, "192.0.2.1");
         int zoneId = Models.get(DnsZoneModel.class).findByOrigin("dyn-store.example").get(DnsZoneModel.ID);
         Row record = Models.get(DnsRecordModel.class).find()

@@ -68,12 +68,18 @@ public class DnsRecordModel extends Model {
     public static final BooleanField DYNAMIC = SCHEMA.addField(BooleanField.builder("dynamic").defaultValue(false)
         .label(HohenheimFormCopy.label("record_dynamic")).help(HohenheimFormCopy.help("record_dynamic")).build());
     /**
-     * The update token, stored as-is so the operator can re-read the update URL
-     * any time (a low-value credential that lives in a router config, like
-     * FreeDNS). It is the HTTP Basic password the dyndns client presents.
+     * The HTTP Basic password a dyndns client presents; a live bearer credential,
+     * so it is {@code secret()}: never echoed into the form (and thus never into
+     * revisions, activity deltas or diff rendering), and a blank submit keeps the
+     * stored value. The mint row action discloses it ONCE in its toast.
+     *
+     * AIDEV-NOTE: still stored as-is rather than hashed, because
+     * DynamicDnsService looks the record UP by token; hashing it is a separate
+     * change (hash the presented token and look that up), not a presentation one.
      */
     public static final StringField DYNDNS_TOKEN = SCHEMA.addField(StringField.builder().name("dyndns_token")
-        .label(HohenheimFormCopy.label("record_dyndns_token")).help(HohenheimFormCopy.help("record_dyndns_token")).build());
+        .label(HohenheimFormCopy.label("record_dyndns_token")).help(HohenheimFormCopy.help("record_dyndns_token"))
+        .secret().build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
