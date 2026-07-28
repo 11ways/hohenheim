@@ -143,7 +143,7 @@ public final class DnsRecordResource extends RowResource {
         return actions;
     }
 
-    /** Marks an A/AAAA record dynamic and (re)generates its update token; the token stays visible on the form. */
+    /** Marks an A/AAAA record dynamic and (re)generates its update token, disclosed ONCE in the toast. */
     private CmsActionResult mintDynamicToken(@NonNull Row row) {
         String type = row.get(DnsRecordModel.TYPE);
         if (!DnsRecordModel.TYPE_A.equals(type) && !DnsRecordModel.TYPE_AAAA.equals(type)) {
@@ -151,14 +151,15 @@ public final class DnsRecordResource extends RowResource {
                 Microcopy.of("dyndns_only_address").withFilter("scope", "dns_record"));
         }
 
+        String token = DynamicDnsService.mintToken();
         row.set(DnsRecordModel.DYNAMIC, true);
-        row.set(DnsRecordModel.DYNDNS_TOKEN, DynamicDnsService.mintToken());
+        row.set(DnsRecordModel.DYNDNS_TOKEN, token);
         this.model().save(row);
         ActivityLog.record(this.model(), row.get(DnsRecordModel.ID), "dyndns_token_minted", null);
 
-        // The record's edit form now shows the token and the full update URL, so
-        // this just confirms and points there -- nothing is lost if the toast fades.
+        // AIDEV-NOTE: the field is secret(), so the edit form no longer echoes the
+        // token -- this toast is the ONLY disclosure. Re-mint is the recovery path.
         return CmsActionResult.refreshWithToast(
-            Microcopy.of("dyndns_minted").withFilter("scope", "dns_record"));
+            Microcopy.of("dyndns_minted").withFilter("scope", "dns_record").withArg("token", token));
     }
 }

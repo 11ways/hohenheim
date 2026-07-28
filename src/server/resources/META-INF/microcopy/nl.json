@@ -2798,7 +2798,7 @@
     "scope": "dns_record"
   },
   "dyndns_minted": {
-    "text": "Update-token gegenereerd -- het staat op het formulier van dit record",
+    "text": "Update-token gegenereerd. Kopieer het nu; het wordt niet opnieuw getoond: {$token}",
     "scope": "dns_record"
   },
   "record_dyndns_token": [
@@ -2807,7 +2807,7 @@
       "scope": "field"
     },
     {
-      "text": "Het update-wachtwoord. Richt een dyndns2-client (router, ddclient) op <host>/nic/update?hostname=<FQDN van dit record> en stuur dit token als HTTP Basic-wachtwoord. Gebruik de rijactie om het (opnieuw) te genereren",
+      "text": "Het update-wachtwoord. Richt een dyndns2-client (router, ddclient) op <host>/nic/update?hostname=<FQDN van dit record> en stuur dit token als HTTP Basic-wachtwoord. Het wordt nooit meer getoond zodra het is ingesteld: laat dit leeg om het bewaarde token te behouden, of gebruik de rijactie om een nieuw token te genereren",
       "scope": "help"
     }
   ],
