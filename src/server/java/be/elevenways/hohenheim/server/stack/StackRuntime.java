@@ -331,10 +331,11 @@ public class StackRuntime {
     // -- volume purge ---------------------------------------------------------
 
     /**
-     * Stop the stack and destroy every volume it owns: the operator's way to reclaim
-     * the disk a stack's DATA occupies. Stopping first is not a convenience -- Docker
-     * refuses to remove a volume that is still attached, so a purge that did not stop
-     * would silently reclaim nothing.
+     * Tear the stack down and destroy every volume it owns: the operator's way to
+     * reclaim the disk a stack's DATA occupies. The containers must GO, not merely
+     * stop -- Docker refuses to remove a volume attached to any container, stopped
+     * ones included, so a stop-only purge would fail on every mounted volume. The
+     * next deploy recreates everything from the records, minus the data.
      *
      * External (adopted) volumes never carry our ownership label and survive.
      *
@@ -347,9 +348,8 @@ public class StackRuntime {
                 throw new IOException("Stack " + stackId + " does not exist");
             }
             StackDeployer deployer = new StackDeployer(clientFor.apply(spec.serverName()), null);
-            deployer.stop(spec);
-            deployer.removeOwnedVolumes(spec);
-            setStatus(stackId, StackModel.STATUS_STOPPED);
+            deployer.destroy(spec, true);
+            setStatus(stackId, StackModel.STATUS_INACTIVE);
             return null;
         });
     }
@@ -376,9 +376,10 @@ public class StackRuntime {
      * re-enabling it does not have to re-pull).
      *
      * Deliberately NOT on a stack worker: image storage is per DAEMON, not per
-     * stack, so there is no stack whose queue this belongs in. A deploy running
-     * concurrently is safe -- the image it just pulled is protected by the age
-     * guard, and the one it superseded is exactly what should go.
+     * stack, so there is no stack whose queue this belongs in. Deploys are kept
+     * safe by the in-flight check instead: a server with a DEPLOYING stack is
+     * skipped, and the sweep re-checks before every removal (a deploy claims its
+     * status before it pulls, so a mid-pull image can never be swept).
      *
      * @param minimumAge images younger than this are kept
      * @param includeUnattributed also remove images carrying no reference at all
@@ -393,15 +394,28 @@ public class StackRuntime {
 
         for (Map.Entry<String, Set<String>> entry : referencesByServer.entrySet()) {
             String serverName = entry.getKey();
+            if (deployInFlightOn(serverName)) {
+                Blast.log("STACK: image reclaim skipped on server", serverName, "- deploy in flight");
+                continue;
+            }
             try {
                 DockerReclaim reclaim = new DockerReclaim(
-                    this.clientFor.apply(serverName), minimumAge, includeUnattributed);
+                    this.clientFor.apply(serverName), minimumAge, includeUnattributed,
+                    () -> deployInFlightOn(serverName));
                 outcomes.put(serverName, reclaim.reclaimImages(entry.getValue(), now));
             } catch (IOException e) {
                 Blast.log("STACK: image reclaim failed on server", serverName, "-", e.getMessage());
             }
         }
         return outcomes;
+    }
+
+    /** Whether any stack on this server is currently deploying (or rolling back). */
+    private boolean deployInFlightOn(@NonNull String serverName) {
+        return scoped(() -> !Models.get(StackModel.class).find()
+            .where(StackModel.SERVER_NAME.eq(serverName))
+            .where(StackModel.STATUS.eq(StackModel.STATUS_DEPLOYING))
+            .all().isEmpty());
     }
 
     /** Every image reference declared by a stack service, grouped by the stack's server. */

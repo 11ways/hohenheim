@@ -13,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 
 /**
  * Reclaims disk on one Docker daemon by removing images nothing can reach any more:
@@ -32,11 +33,19 @@ import java.util.Set;
  * is only reclaimed when the operator opts in: it may just as well be an external
  * build's. That opt-in is what {@code docker image prune} does unconditionally.
  *
+ * All reference comparison happens on the HUB-NORMALIZED form
+ * ({@link DockerClient#normalizeRepo}): the daemon reports "nginx" where a stack
+ * may declare "docker.io/library/nginx", and comparing raw strings would make
+ * every hub-prefixed declaration invisible to attribution.
+ *
  * Three guards on top: an image referenced by ANY container (running or stopped)
- * is never removed, an image younger than the age guard is never removed (a
- * concurrent deploy has just pulled it and has not created its container yet),
- * and a failure to remove one image never aborts the sweep -- a layer held by
- * something the daemon knows about and we do not is a skip, not an incident.
+ * is never removed, nothing is removed while a deploy is in flight on this daemon
+ * (checked immediately before every removal -- a deploy claims its status before
+ * it pulls, so the pull window is covered), and a failure to remove one image
+ * never aborts the sweep -- a layer held by something the daemon knows about and
+ * we do not is a skip, not an incident. The age guard is defense in depth for
+ * locally BUILT images only: a pulled image's Created stamp is its upstream
+ * build time, which says nothing about when it arrived here.
  *
  * Volumes are deliberately NOT reclaimed here. An unreferenced volume is the one
  * Docker resource whose removal destroys data that cannot be re-fetched, so it
@@ -64,17 +73,24 @@ public final class DockerReclaim {
     private final DockerClient docker;
     private final Duration minimumAge;
     private final boolean includeUnattributed;
+    private final @Nullable BooleanSupplier deployInFlight;
 
     /**
-     * @param minimumAge images created more recently than this are never removed
+     * @param minimumAge images whose Created stamp is more recent than this are
+     *        never removed -- only meaningful for locally built images, since a
+     *        pulled image's stamp is its upstream build time
      * @param includeUnattributed also remove images carrying no reference at all,
      *        which cannot be proven to be ours
+     * @param deployInFlight consulted immediately before every removal; while it
+     *        reports true the sweep stops removing (a deploy may be mid-pull)
      */
     public DockerReclaim(@NonNull DockerClient docker, @NonNull Duration minimumAge,
-                         boolean includeUnattributed) {
+                         boolean includeUnattributed,
+                         @Nullable BooleanSupplier deployInFlight) {
         this.docker = docker;
         this.minimumAge = minimumAge;
         this.includeUnattributed = includeUnattributed;
+        this.deployInFlight = deployInFlight;
     }
 
     /**
@@ -111,10 +127,16 @@ public final class DockerReclaim {
                 skipped++;
                 continue;
             }
+            if (this.deployInFlight != null && this.deployInFlight.getAsBoolean()) {
+                Blast.log("DOCKER RECLAIM: deploy in flight, stopping the sweep early");
+                skipped++;
+                break;
+            }
 
+            // Size sums shared layers too, so the reported total is an upper bound.
             long size = longOf(image.get("Size"));
             try {
-                docker.removeImage(id, false);
+                removeByEveryReference(image, id);
                 removed++;
                 bytes += size;
                 Blast.log("DOCKER RECLAIM: removed image", shortId(id), "(" + size / (1024L * 1024L) + " MiB)");
@@ -130,12 +152,40 @@ public final class DockerReclaim {
     }
 
     /**
+     * Deleting a multi-referenced image by id 409s without force; untagging every
+     * reference removes the image with the last one. Unattributed images have no
+     * reference to untag and go by id.
+     */
+    private void removeByEveryReference(@NonNull Map<String, Object> image,
+                                        @NonNull String id) throws IOException {
+        List<String> references = references(image);
+        if (references.isEmpty()) {
+            docker.removeImage(id, false);
+            return;
+        }
+        for (String reference : references) {
+            try {
+                docker.removeImage(reference, false);
+            } catch (IOException e) {
+                // Untagging the last tag deletes the image, so a later reference
+                // 404s: that IS the wanted end state, not a failure.
+                String message = e.getMessage();
+                if (message != null && message.contains("No such image")) {
+                    continue;
+                }
+                throw e;
+            }
+        }
+    }
+
+    /**
      * The decision, pure so the whole matrix is unit-testable: reclaim an image
      * whose every reference names a managed repository while no DECLARED reference
      * resolves to it, or an unreferenced image when the caller opted into those.
      *
      * @param references every tag and repo digest the image carries
      * @param isDeclared whether a declared reference resolves to this image
+     * @param managedRepositories hub-normalized, as {@link #repositoriesOf} builds them
      */
     public static boolean isReclaimable(@NonNull List<String> references,
                                         boolean isDeclared,
@@ -148,9 +198,10 @@ public final class DockerReclaim {
             return false;
         }
         // Every reference must sit inside a repository we manage: one pointing into
-        // someone else's repository makes this image theirs as well as ours.
+        // someone else's repository makes this image theirs as well as ours. The
+        // managed set holds normalized repositories, so normalize before comparing.
         for (String reference : references) {
-            if (!managedRepositories.contains(repositoryOf(reference))) {
+            if (!managedRepositories.contains(DockerClient.normalizeRepo(repositoryOf(reference)))) {
                 return false;
             }
         }
@@ -173,6 +224,11 @@ public final class DockerReclaim {
      */
     private static @NonNull Set<String> declaredImageIds(@NonNull List<Map<String, Object>> images,
                                                          @NonNull Set<String> declaredReferences) {
+        Set<String> canonicalDeclared = new HashSet<>();
+        for (String reference : declaredReferences) {
+            canonicalDeclared.add(canonicalReference(reference));
+        }
+
         Set<String> declared = new HashSet<>();
         for (Map<String, Object> image : images) {
             String id = stringOf(image.get("Id"));
@@ -180,8 +236,7 @@ public final class DockerReclaim {
                 continue;
             }
             for (String reference : references(image)) {
-                if (declaredReferences.contains(reference)
-                    || declaredReferences.contains(withoutImpliedLatest(reference))) {
+                if (canonicalDeclared.contains(canonicalReference(reference))) {
                     declared.add(id);
                     break;
                 }
@@ -190,23 +245,32 @@ public final class DockerReclaim {
         return declared;
     }
 
-    /** The repositories the declared references live in. */
+    /** The hub-normalized repositories the declared references live in. */
     public static @NonNull Set<String> repositoriesOf(@NonNull Set<String> references) {
         Set<String> repositories = new LinkedHashSet<>();
         for (String reference : references) {
-            repositories.add(repositoryOf(reference));
+            repositories.add(DockerClient.normalizeRepo(repositoryOf(reference)));
         }
         return repositories;
     }
 
     /**
-     * {@code repo:latest} also answers to the bare {@code repo} a stack may declare:
-     * Docker implies the latest tag, so both spellings name one reference.
+     * One comparable spelling per reference: hub-normalized repository plus the tag
+     * (implied {@code latest} made explicit) or the digest. A compose-style pin
+     * ({@code repo:tag@sha256:...}) canonicalizes to its digest form, because that
+     * is how the daemon stores it in RepoDigests.
      */
-    private static @NonNull String withoutImpliedLatest(@NonNull String reference) {
-        return reference.endsWith(":latest")
-            ? reference.substring(0, reference.length() - ":latest".length())
-            : reference;
+    public static @NonNull String canonicalReference(@NonNull String reference) {
+        int at = reference.indexOf('@');
+        if (at >= 0) {
+            return DockerClient.normalizeRepo(repositoryOf(reference))
+                + "@" + reference.substring(at + 1);
+        }
+        String repository = repositoryOf(reference);
+        String tag = reference.length() > repository.length()
+            ? reference.substring(repository.length() + 1)
+            : "latest";
+        return DockerClient.normalizeRepo(repository) + ":" + tag;
     }
 
     /** Every image id a container references, running or stopped. */

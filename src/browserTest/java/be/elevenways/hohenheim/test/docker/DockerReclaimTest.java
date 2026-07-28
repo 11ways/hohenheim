@@ -29,7 +29,9 @@ class DockerReclaimTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String BASE_IMAGE = "alpine:latest";
-    private static final Set<String> MANAGED = Set.of("ghcr.io/org/app", "alpine");
+    // Built the same way production builds it, so the set is hub-normalized.
+    private static final Set<String> MANAGED =
+        DockerReclaim.repositoriesOf(Set.of("ghcr.io/org/app", "alpine"));
     private static final String DIGEST = "sha256:" + "a".repeat(64);
 
     @Test
@@ -42,6 +44,28 @@ class DockerReclaimTest {
         assertThat(DockerReclaim.repositoryOf("registry:5000/app:v2")).isEqualTo("registry:5000/app");
         // A digest pin addresses the same repository as its tagged form.
         assertThat(DockerReclaim.repositoryOf("org/app@sha256:" + "0".repeat(64))).isEqualTo("org/app");
+    }
+
+    /**
+     * One comparable spelling per reference: the daemon says "nginx:1.27" where a
+     * stack may declare "docker.io/library/nginx:1.27", and attribution must see
+     * those as the same thing.
+     */
+    @Test
+    void canonicalReferenceNormalizesEverySpellingToOneForm() {
+        assertThat(DockerReclaim.canonicalReference("nginx:1.27"))
+            .isEqualTo(DockerReclaim.canonicalReference("docker.io/library/nginx:1.27"))
+            .isEqualTo(DockerReclaim.canonicalReference("library/nginx:1.27"));
+        // Docker implies the latest tag: the bare repo and :latest are one reference.
+        assertThat(DockerReclaim.canonicalReference("alpine"))
+            .isEqualTo(DockerReclaim.canonicalReference("alpine:latest"));
+        // A compose-style pin (repo:tag@digest) canonicalizes to its digest form,
+        // which is how the daemon stores it in RepoDigests.
+        assertThat(DockerReclaim.canonicalReference("org/app:1.2@" + DIGEST))
+            .isEqualTo(DockerReclaim.canonicalReference("org/app@" + DIGEST));
+        // A registry port is never mistaken for a tag, and non-hub repos keep their host.
+        assertThat(DockerReclaim.canonicalReference("registry:5000/app"))
+            .isEqualTo("registry:5000/app:latest");
     }
 
     /**
@@ -77,6 +101,11 @@ class DockerReclaimTest {
         // swept only when the operator opts in.
         assertThat(DockerReclaim.isReclaimable(List.of(), false, MANAGED, false)).isFalse();
         assertThat(DockerReclaim.isReclaimable(List.of(), false, MANAGED, true)).isTrue();
+
+        // Spelling never decides attribution: the hub-prefixed form of a managed
+        // repository is the same repository.
+        assertThat(DockerReclaim.isReclaimable(
+            List.of("docker.io/library/alpine:3.19"), false, MANAGED, false)).isTrue();
     }
 
     /**
@@ -114,8 +143,9 @@ class DockerReclaimTest {
             String unmanaged = build(docker, context, unmanagedTag, "unmanaged");
             assertThat(superseded).as("each build is its own image").isNotEqualTo(current);
 
-            // 2. The age guard alone keeps everything: these images are seconds old.
-            DockerReclaim.Outcome guarded = new DockerReclaim(docker, Duration.ofHours(1), false)
+            // 2. The age guard alone keeps everything: these images are seconds old
+            // (a BUILD stamps Created with the build time, so the guard is real here).
+            DockerReclaim.Outcome guarded = new DockerReclaim(docker, Duration.ofHours(1), false, null)
                 .reclaimImages(declared, Instant.now());
             assertThat(guarded.removed()).as("nothing may be removed under the age guard").isZero();
             assertThat(guarded.skipped()).as("the guard reports what it kept").isPositive();
@@ -124,16 +154,24 @@ class DockerReclaimTest {
             // 3. A container pins the older image, so even unreferenced it stays.
             containerId = docker.createContainer("hohenheim-reclaim-test-" + System.nanoTime(),
                 Map.of("Image", supersededTag, "Cmd", List.of("sleep", "30")));
-            new DockerReclaim(docker, Duration.ZERO, false).reclaimImages(declared, Instant.now());
+            new DockerReclaim(docker, Duration.ZERO, false, null).reclaimImages(declared, Instant.now());
             assertThat(imageIds(docker))
                 .as("an image a container references is never removed")
                 .contains(superseded);
 
-            // 4. Without the container, the superseded image goes; the newest one and
-            // the unmanaged repository both stay.
+            // 4. A deploy in flight halts every removal, whatever else would decide.
             docker.removeContainer(containerId, true);
             containerId = null;
-            DockerReclaim.Outcome swept = new DockerReclaim(docker, Duration.ZERO, false)
+            DockerReclaim.Outcome halted = new DockerReclaim(docker, Duration.ZERO, false, () -> true)
+                .reclaimImages(declared, Instant.now());
+            assertThat(halted.removed()).as("a deploy in flight halts the sweep").isZero();
+            assertThat(imageIds(docker)).contains(superseded);
+
+            // 5. A second reference in the SAME repository must not save the image:
+            // removal goes by reference, so a multi-tagged superseded image still
+            // goes (removal by id would 409 on it).
+            docker.tagImage(supersededTag, repository, "one-alias");
+            DockerReclaim.Outcome swept = new DockerReclaim(docker, Duration.ZERO, false, null)
                 .reclaimImages(declared, Instant.now());
             assertThat(swept.removed()).as("the superseded image was reclaimed").isPositive();
             assertThat(swept.bytes()).as("reclaimed size is reported").isPositive();
@@ -147,6 +185,7 @@ class DockerReclaimTest {
                 remove(() -> docker.removeContainer(created, true));
             }
             remove(() -> docker.removeImage(supersededTag, true));
+            remove(() -> docker.removeImage(repository + ":one-alias", true));
             remove(() -> docker.removeImage(currentTag, true));
             remove(() -> docker.removeImage(unmanagedTag, true));
             Files.deleteIfExists(context.resolve("Dockerfile"));

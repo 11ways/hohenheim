@@ -328,9 +328,23 @@ public class HohenheimSettings {
             .buildSetting("reclaim_min_age_hours", Integer.class)
             .defaultValue(24)
             .suffix("h")
-            .description("Images created more recently than this are kept, so a reclaim can "
-                + "never remove an image a deploy just pulled but has not started yet "
-                + "(minimum 1)")
+            .description("Images whose build stamp is more recent than this are kept: the "
+                + "guard for freshly BUILT images (a pulled image's stamp is its upstream "
+                + "build time; deploys are protected by the in-flight check instead). "
+                + "Minimum 1")
+            .coercer(raw -> {
+                Integer value = raw instanceof Number number ? number.intValue()
+                    : raw instanceof String text && !text.isBlank() ? Integer.parseInt(text.trim())
+                    : null;
+                if (value == null) {
+                    return SettingDefinition.CoercionResult.rejected();
+                }
+                if (value < 1) {
+                    throw new IllegalArgumentException(
+                        "stacks.reclaim_min_age_hours must be at least 1");
+                }
+                return SettingDefinition.CoercionResult.accepted(value);
+            })
             .build();
     }
 

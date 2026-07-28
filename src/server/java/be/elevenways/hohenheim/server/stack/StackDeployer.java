@@ -222,8 +222,9 @@ public class StackDeployer {
      * the one Docker resource whose contents cannot be re-fetched, so callers guard it
      * (the admin action requires the operator to type the stack's name). Volumes
      * declared with an external name, and adopted ones, never carry our label and are
-     * therefore never removed. A volume still attached to a container refuses to go --
-     * stop the stack first.
+     * therefore never removed. A volume attached to ANY container -- stopped ones
+     * included -- refuses to go, so callers must remove the containers first
+     * (StackRuntime.purgeVolumes destroys the whole stack for exactly that reason).
      */
     public void removeOwnedVolumes(@NonNull StackSpec spec) throws IOException {
         for (Object entry : docker.listVolumes()) {

@@ -185,6 +185,12 @@ public class DockerClient {
         request("DELETE", "/images/" + name + (force ? "?force=true" : ""), null, null, timeoutMillis);
     }
 
+    /** Add {@code repo:tag} as an additional reference to an existing image. */
+    public void tagImage(String name, String repo, String tag) throws IOException {
+        request("POST", "/images/" + name + "/tag?repo=" + enc(repo) + "&tag=" + enc(tag),
+            null, null, timeoutMillis);
+    }
+
     /**
      * Pull {@code image:tag} only if it is not already present locally. {@code image} may
      * embed the tag (e.g. {@code "postgres:17-alpine"}); a colon that is part of a
@@ -267,7 +273,7 @@ public class DockerClient {
     }
 
     /** Canonical hub form: "nginx" == "docker.io/library/nginx" == "library/nginx". */
-    private static String normalizeRepo(String repo) {
+    public static String normalizeRepo(String repo) {
         String normalized = repo;
         if (normalized.startsWith("docker.io/")) {
             normalized = normalized.substring("docker.io/".length());
