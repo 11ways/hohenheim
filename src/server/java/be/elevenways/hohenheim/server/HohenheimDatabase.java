@@ -7,12 +7,29 @@ import be.elevenways.zenit.server.orm.DatabaseEngine;
 import be.elevenways.zenit.server.orm.DatasourceFactory;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 
+import java.util.List;
+
 /**
  * Database initialization and datasource management. SQLite is the zero-config
  * default; any of the framework's relational engines can be used instead by
  * setting {@code database.url} (and, for CockroachDB, {@code database.engine}).
  */
 public class HohenheimDatabase {
+
+    /**
+     * Versions of migrations that were deleted from the source tree while their history rows
+     * stayed behind; every runner must acknowledge them or report them as integrity findings.
+     */
+    // AIDEV-NOTE: M001_CreateUsers, M002_CreateOrganizations and M007_CreateSessions were deleted
+    // in 3678bd9 (the zenit-auth cutover). Without this acknowledgement every boot logs an
+    // integrity finding for each of them, and switching database.migration_integrity to "fail"
+    // would refuse to start. Do NOT delete the rows: they are the audit trail of what actually ran
+    // on that install. Anything retired in the future is appended here in the same commit.
+    public static final List<String> RETIRED_MIGRATION_VERSIONS = List.of(
+        "2026_03_31_000001",    // M001_CreateUsers
+        "2026_03_31_000002",    // M002_CreateOrganizations
+        "2026_04_02_000007"     // M007_CreateSessions
+    );
 
     private static SqlDatasource datasource;
 
@@ -36,7 +53,10 @@ public class HohenheimDatabase {
         // Migrations are auto-discovered from the classpath: every public Migration subclass with a
         // public no-arg ctor whose datasource identifier matches, ordered by declared dependencies.
         // This covers Hohenheim's M0xx plus zenit-auth (auth_*) and zenit (system_task*) migrations.
-        new MigrationRunner(datasource).migrate().requireSuccess();
+        new MigrationRunner(datasource)
+            .acknowledgeMissingMigrationVersions(RETIRED_MIGRATION_VERSIONS.toArray(new String[0]))
+            .migrate()
+            .requireSuccess();
     }
 
     public static SqlDatasource datasource() {
