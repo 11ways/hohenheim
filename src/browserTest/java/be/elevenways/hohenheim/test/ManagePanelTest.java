@@ -383,4 +383,130 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(operatorGet("/manage").statusCode()).isIn(200, 302, 303);
         RecordGrants.revoke("user", operatorId, SiteModel.MODEL_ID, siteAId, HohenheimAccess.MANAGE);
     }
+
+    /**
+     * Route-conflict takeover: a disabled site is exempt from the cross-site route
+     * check, so every path that flips one live must re-judge it. Toggle is the only
+     * row action a delegated tenant has, and the delegated form has an enabled
+     * checkbox.
+     */
+    @Test
+    @Order(4)
+    void enablingAStagedConflictingSiteIsRefusedOnEveryDelegatedPath() throws Exception {
+        var siteModel = Models.get(SiteModel.class);
+        var domainModel = Models.get(SiteDomainModel.class);
+
+        // A victim: live, and holding the contested hostname.
+        Row victim = siteModel.createEmptyRow();
+        victim.set(SiteModel.NAME, "Takeover Victim");
+        victim.set(SiteModel.SLUG, "takeover-victim");
+        victim.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        victim.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        victim.set(SiteModel.STATUS, "active");
+        victim.set(SiteModel.ENABLED, true);
+        siteModel.save(victim);
+        Row victimDomain = domainModel.createEmptyRow();
+        victimDomain.set(SiteDomainModel.SITE_ID, victim.get(SiteModel.ID));
+        victimDomain.set(SiteDomainModel.HOSTNAME, "takeover.example.com");
+        victimDomain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domainModel.save(victimDomain);
+
+        // The tenant's staged site: disabled, so it was allowed to claim the same
+        // hostname, and granted to the operator.
+        Row staged = siteModel.createEmptyRow();
+        staged.set(SiteModel.NAME, "Staged Takeover");
+        staged.set(SiteModel.SLUG, "staged-takeover");
+        staged.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        staged.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        staged.set(SiteModel.STATUS, "active");
+        staged.set(SiteModel.ENABLED, false);
+        siteModel.save(staged);
+        Integer stagedId = staged.get(SiteModel.ID);
+        Row stagedDomain = domainModel.createEmptyRow();
+        stagedDomain.set(SiteDomainModel.SITE_ID, stagedId);
+        stagedDomain.set(SiteDomainModel.HOSTNAME, "takeover.example.com");
+        stagedDomain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domainModel.save(stagedDomain);
+
+        // ...and an innocent staged site on a hostname nobody else claims.
+        Row innocent = siteModel.createEmptyRow();
+        innocent.set(SiteModel.NAME, "Staged Innocent");
+        innocent.set(SiteModel.SLUG, "staged-innocent");
+        innocent.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        innocent.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        innocent.set(SiteModel.STATUS, "active");
+        innocent.set(SiteModel.ENABLED, false);
+        siteModel.save(innocent);
+        Integer innocentId = innocent.get(SiteModel.ID);
+        Row innocentDomain = domainModel.createEmptyRow();
+        innocentDomain.set(SiteDomainModel.SITE_ID, innocentId);
+        innocentDomain.set(SiteDomainModel.HOSTNAME, "no-conflict.example.com");
+        innocentDomain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domainModel.save(innocentDomain);
+
+        RecordGrants.grant("user", operatorId, SiteModel.MODEL_ID, stagedId,
+            HohenheimAccess.MANAGE, true);
+        RecordGrants.grant("user", operatorId, SiteModel.MODEL_ID, innocentId,
+            HohenheimAccess.MANAGE, true);
+
+        try {
+            // 1. The toggle action refuses to seize the victim's hostname.
+            assertThat(operatorPost("/manage/sites/" + stagedId + "/action/toggle_site", "")
+                .statusCode()).isIn(302, 303);
+            assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
+                .as("toggle must not enable a route-conflicting site").isEqualTo(false);
+
+            // 2. Neither does the delegated form's enabled checkbox.
+            assertThat(operatorPost("/manage/sites/" + stagedId,
+                "name=Staged+Takeover&enabled=true&description=").statusCode())
+                .isIn(200, 302, 303, 422);
+            assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
+                .as("the delegated form must not enable a route-conflicting site")
+                .isEqualTo(false);
+
+            // 3. A site with no conflict still toggles live.
+            assertThat(operatorPost("/manage/sites/" + innocentId + "/action/toggle_site", "")
+                .statusCode()).isIn(302, 303);
+            assertThat(siteModel.findById(innocentId).get(SiteModel.ENABLED))
+                .as("a non-conflicting site still enables").isEqualTo(true);
+
+            // 4. Disabling is never blocked -- not even for the site that now owns a
+            //    hostname somebody else also staged.
+            assertThat(operatorPost("/manage/sites/" + innocentId + "/action/toggle_site", "")
+                .statusCode()).isIn(302, 303);
+            assertThat(siteModel.findById(innocentId).get(SiteModel.ENABLED))
+                .as("disabling is never refused").isEqualTo(false);
+
+            // 5. The admin form path refuses the same takeover (the invariant is shared,
+            //    not per-panel).
+            String adminEnableBody = "name=Staged+Takeover&site_type=hohenheim%3Astatic"
+                + "&enabled=true&settings.root_path=%2Ftmp&source=local&description=";
+            assertThat(adminPost("/admin/sites/" + stagedId, adminEnableBody).statusCode())
+                .isIn(200, 302, 303, 422);
+            assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
+                .as("the admin form must not enable a route-conflicting site either")
+                .isEqualTo(false);
+
+            // 6. Once the victim stands down, that very same submit goes through -- so
+            //    step 5 was refused by the invariant, not by a malformed body.
+            victim.set(SiteModel.ENABLED, false);
+            siteModel.save(victim);
+            assertThat(adminPost("/admin/sites/" + stagedId, adminEnableBody).statusCode())
+                .isIn(302, 303);
+            assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
+                .as("with the conflict gone the same submit enables the site")
+                .isEqualTo(true);
+        } finally {
+            RecordGrants.revoke("user", operatorId, SiteModel.MODEL_ID, stagedId,
+                HohenheimAccess.MANAGE);
+            RecordGrants.revoke("user", operatorId, SiteModel.MODEL_ID, innocentId,
+                HohenheimAccess.MANAGE);
+            siteModel.delete(staged);
+            siteModel.delete(innocent);
+            siteModel.delete(victim);
+            domainModel.delete(stagedDomain);
+            domainModel.delete(innocentDomain);
+            domainModel.delete(victimDomain);
+        }
+    }
 }
