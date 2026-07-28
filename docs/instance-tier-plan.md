@@ -354,6 +354,36 @@ from the original finding, and boot order cannot fix it:
   a logged-in non-operator gets 403/empty on each hohenheim source; a re-register
   attempt without explicit override is refused.
 
+  STATUS: 0.4 LANDED (zenit 3180c23, zenit-cms 83ea08d, zenit-media 991b468,
+  proteus e5b6095, orcono 580af4f, hohenheim d905bd2). Shape notes:
+  - Opt-outs are `.openToAllLoggedIn()` / `.openToAnonymous()`; an explicit
+    `loginRequired(...)` call also counts as a declaration (kept the untouched
+    test fixtures of sibling repos green). Refusals are slog-and-skip by
+    default and THROW when `debugging.debug` is true (`setStrictRegistration`,
+    set by ServerZenitRuntime before ROOT_STAGE).
+  - Shadowing: `register` refuses a held id, `override` replaces deliberately,
+    `registerDefault` (the zenit-cms auto-glue rank) yields to any existing
+    registration and is replaced by a later explicit one -- explicit beats
+    derived in either boot order.
+  - The non-access overloads were KEPT and answer as the ANONYMOUS audience;
+    `authorizes()` is enforced inside every query/resolve/exists/vocabulary
+    call, so the four ungated call sites are closed in the mechanism, not per
+    caller.
+  - The `hohenheim.manage_site` source was DELETED: the SiteModel DEFAULT
+    source (ManagePanel.registerSiteSource) now carries the grant scope for
+    admins and /manage tenants alike.
+  - Known follow-ups in repos outside this phase's edit set: 3 zenit-forms and
+    2 zenit-widget TESTS pin the removed permissive default or rely on silent
+    same-id re-registration (one-line fixes: add a declaration / use
+    `override(...)`): InlineCreateEndpointsTest.loginRequiredSourceRejects
+    AnonymousCreates, RelationPickTranslationTest.thumbnailAndEntryTemplate...,
+    RelationMultiPickTranslationTest.accessScopedMultiPick...,
+    RecordsAccessThreadingTest.sourcePermissionIsRequiredBeforeQuerying,
+    RecordsWidgetTest.aSortOutsideTheSortableWhitelistIsRejected.
+  - Pre-existing failure NOT from this phase (stash-bisected): AdminPagesTest.
+    settingsPageRendersSavesResetsAndRefusesInvalidValues (array-editor reset,
+    the 0.6a/settings workstream's surface).
+
 ### 0.5 Plumage publishes an unauthenticated root shell (boundary 1/3)
 
 `plumage/.../TerminalEndpoint.java` declares `/ws/terminal` with no login, no
