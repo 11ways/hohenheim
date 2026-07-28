@@ -1,14 +1,9 @@
 package be.elevenways.hohenheim.test.database;
 
-import be.elevenways.hohenheim.migration.M015_CreateManagedDatabases;
-import be.elevenways.hohenheim.migration.M016_AddDatabaseStatus;
-import be.elevenways.hohenheim.migration.M018_AddDatabaseServer;
-import be.elevenways.hohenheim.migration.M029_AddDatabaseLimits;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -16,14 +11,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Isolated round-trip test for {@link DatabaseModel}: builds a temp SQLite with only the
- * managed_databases migration applied and scopes model access to it via {@link Db}, so it never
- * touches the shared runtime datasource. (M015's place in the chain is exercised by server tests.)
+ * Isolated round-trip test for {@link DatabaseModel}: builds a temp SQLite with the full
+ * auto-discovered migration set and scopes model access to it via {@link Db}, so it never touches
+ * the shared runtime datasource.
  */
 class DatabaseModelTest {
 
@@ -35,9 +29,7 @@ class DatabaseModelTest {
         db.delete();
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner((MigrationCapableDatasource) datasource,
-            List.of(M015_CreateManagedDatabases::new, M016_AddDatabaseStatus::new,
-                M018_AddDatabaseServer::new, M029_AddDatabaseLimits::new)).migrate();
+        new MigrationRunner(datasource).migrate().requireSuccess();
         HohenheimTestRuntime.ensureBooted();
     }
 

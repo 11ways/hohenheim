@@ -1,14 +1,9 @@
 package be.elevenways.hohenheim.test.database;
 
-import be.elevenways.hohenheim.migration.M015_CreateManagedDatabases;
-import be.elevenways.hohenheim.migration.M016_AddDatabaseStatus;
-import be.elevenways.hohenheim.migration.M018_AddDatabaseServer;
-import be.elevenways.hohenheim.migration.M029_AddDatabaseLimits;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import org.junit.jupiter.api.Test;
@@ -206,9 +201,7 @@ class BinaryBackupTest {
         db.delete();
         db.deleteOnExit();
         SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner((MigrationCapableDatasource) ds,
-            List.of(M015_CreateManagedDatabases::new, M016_AddDatabaseStatus::new,
-                M018_AddDatabaseServer::new, M029_AddDatabaseLimits::new)).migrate();
+        new MigrationRunner(ds).migrate().requireSuccess();
         HohenheimTestRuntime.ensureBooted();
         return ds;
     }

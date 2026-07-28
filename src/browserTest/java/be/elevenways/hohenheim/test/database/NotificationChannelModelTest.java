@@ -1,11 +1,9 @@
 package be.elevenways.hohenheim.test.database;
 
-import be.elevenways.hohenheim.migration.M019_CreateNotificationChannels;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -13,7 +11,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,8 +25,7 @@ class NotificationChannelModelTest {
         db.delete();
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner((MigrationCapableDatasource) datasource,
-            List.of(M019_CreateNotificationChannels::new)).migrate();
+        new MigrationRunner(datasource).migrate().requireSuccess();
         HohenheimTestRuntime.ensureBooted();
     }
 
