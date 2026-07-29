@@ -60,64 +60,114 @@ const ipcPort = parseInt(process.env.HOHENHEIM_IPC_PORT, 10);
 const ipcToken = process.env.HOHENHEIM_IPC_TOKEN || '';
 let socket = null;
 
-if (ipcPort > 0) {
+// A BOUNDED reconnect loop. A single net.connect that only tolerates errors turns
+// any transient refusal (parent restarting, or a hostile local peer briefly
+// saturating the parent's pre-auth cap) into a PERMANENT loss of the IPC bridge:
+// no ready signal, no remcache, for the child's whole life. So we retry with
+// exponential backoff, but only a bounded number of times and never after the
+// child exits, so a genuinely-gone parent does not make us spin forever.
+const IPC_MAX_ATTEMPTS = 12;           // hard cap: give up rather than spin
+const IPC_BACKOFF_BASE_MS = 100;
+const IPC_BACKOFF_MAX_MS = 5000;
+const IPC_HEALTHY_MS = 30000;          // a connection older than this earns a fresh budget
+let ipcAttempts = 0;
+let childExited = false;
+let reconnectTimer = null;
+
+function scheduleReconnect() {
+    // Never race the child's own lifecycle: once it is gone there is nothing to bridge.
+    if (childExited || ipcPort <= 0) return;
+    if (reconnectTimer) return;
+    if (ipcAttempts >= IPC_MAX_ATTEMPTS) return;
+    const delay = Math.min(IPC_BACKOFF_BASE_MS * Math.pow(2, ipcAttempts), IPC_BACKOFF_MAX_MS);
+    ipcAttempts++;
+    reconnectTimer = setTimeout(function () {
+        reconnectTimer = null;
+        connectIpc();
+    }, delay);
+    if (reconnectTimer.unref) reconnectTimer.unref();
+}
+
+function connectIpc() {
+    if (childExited || ipcPort <= 0) return;
+    let healthyTimer = null;
+    let localSocket;
     try {
-        socket = net.connect(ipcPort, '127.0.0.1', function onIpcConnect() {
+        localSocket = net.connect(ipcPort, '127.0.0.1', function onIpcConnect() {
             // Authenticate before anything else; the parent reads exactly one
             // line and drops the connection when it does not carry the token.
-            socket.write(JSON.stringify({ type: 'auth', token: ipcToken }) + '\n');
-        });
-        socket.setEncoding('utf8');
-        let buffer = '';
-        socket.on('data', function onData(chunk) {
-            buffer += chunk;
-            let idx;
-            while ((idx = buffer.indexOf('\n')) >= 0) {
-                const line = buffer.slice(0, idx);
-                buffer = buffer.slice(idx + 1);
-                if (!line) continue;
-                let msg;
-                try {
-                    msg = JSON.parse(line);
-                } catch (e) {
-                    continue;
-                }
-                // Child may not be alive yet if a message arrives very early.
-                if (child.connected) {
-                    try { child.send(msg); } catch (e) { /* ignore */ }
-                }
-            }
-        });
-        socket.on('error', function onSocketErr() { /* tolerate */ });
-
-        // Forward child-initiated messages back to Hohenheim. Because our
-        // IpcChannel parser is flat, stringify only top-level scalars and
-        // drop nested objects (they would cause malformed lines).
-        child.on('message', function onChildMessage(msg) {
-            if (!socket || socket.destroyed) return;
-            const flat = {};
-            if (typeof msg === 'string') {
-                flat.type = msg;
-            } else if (msg && typeof msg === 'object') {
-                for (const key in msg) {
-                    const v = msg[key];
-                    if (v == null || typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
-                        flat[key] = v;
-                    }
-                }
-            } else {
-                return;
-            }
-            try { socket.write(JSON.stringify(flat) + '\n'); } catch (e) { /* ignore */ }
+            try { localSocket.write(JSON.stringify({ type: 'auth', token: ipcToken }) + '\n'); }
+            catch (e) { /* the close handler drives the retry */ }
+            // A connection that survives IPC_HEALTHY_MS is a real attach, not a
+            // reject loop, so it earns a fresh reconnect budget for a later drop.
+            healthyTimer = setTimeout(function () { ipcAttempts = 0; }, IPC_HEALTHY_MS);
+            if (healthyTimer.unref) healthyTimer.unref();
         });
     } catch (e) {
-        // Bridge is best-effort: child must still run.
+        scheduleReconnect();
+        return;
     }
+    socket = localSocket;
+    localSocket.setEncoding('utf8');
+    let buffer = '';
+    localSocket.on('data', function onData(chunk) {
+        buffer += chunk;
+        let idx;
+        while ((idx = buffer.indexOf('\n')) >= 0) {
+            const line = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 1);
+            if (!line) continue;
+            let msg;
+            try {
+                msg = JSON.parse(line);
+            } catch (e) {
+                continue;
+            }
+            // Child may not be alive yet if a message arrives very early.
+            if (child.connected) {
+                try { child.send(msg); } catch (e) { /* ignore */ }
+            }
+        }
+    });
+    localSocket.on('error', function onSocketErr() { /* the close handler drives the retry */ });
+    localSocket.on('close', function onSocketClose() {
+        if (healthyTimer) { clearTimeout(healthyTimer); healthyTimer = null; }
+        if (socket === localSocket) socket = null;
+        scheduleReconnect();
+    });
 }
+
+// Forward child-initiated messages back to Hohenheim. Because our IpcChannel
+// parser is flat, stringify only top-level scalars and drop nested objects
+// (they would cause malformed lines). Registered once, over whichever socket
+// is currently connected.
+child.on('message', function onChildMessage(msg) {
+    if (!socket || socket.destroyed) return;
+    const flat = {};
+    if (typeof msg === 'string') {
+        flat.type = msg;
+    } else if (msg && typeof msg === 'object') {
+        for (const key in msg) {
+            const v = msg[key];
+            if (v == null || typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+                flat[key] = v;
+            }
+        }
+    } else {
+        return;
+    }
+    try { socket.write(JSON.stringify(flat) + '\n'); } catch (e) { /* ignore */ }
+});
+
+connectIpc();
 
 // ----- Lifecycle plumbing: exit codes and signals -----
 
 child.on('exit', function onChildExit(code, signal) {
+    // The child is gone: stop the bridge and cancel any pending reconnect so the
+    // wrapper never outlives its child chasing a connection nothing will read.
+    childExited = true;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     if (socket && !socket.destroyed) socket.end();
     if (signal) {
         // Re-raise the original signal with our listener detached so the
