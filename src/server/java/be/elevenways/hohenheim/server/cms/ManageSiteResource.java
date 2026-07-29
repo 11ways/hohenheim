@@ -78,11 +78,12 @@ public final class ManageSiteResource extends SiteResource {
         if (name.isEmpty()) {
             throw Violations.ofField(SiteModel.NAME.getName(), name, CmsSupport.violationText("name_required"));
         }
-        // This override deliberately skips the admin normalizers, but the enable
-        // invariant is not one of them: a delegated tenant flipping this checkbox
-        // goes live in the shared route table exactly like the toggle action does.
+        // This override deliberately skips the admin normalizers. The enable
+        // invariant is NOT one of them and is NOT re-checked here: a delegated tenant
+        // flipping this checkbox goes live through model.save below, which the
+        // write-pipeline enable invariant (SiteResource.installEnableInvariant)
+        // funnels through exactly like every other writer.
         Boolean enabled = (Boolean) coerced.get(SiteModel.ENABLED.getName());
-        refuseConflictingEnable(existing, Boolean.TRUE.equals(enabled));
         existing.set(SiteModel.NAME, name);
         existing.set(SiteModel.ENABLED, enabled);
         existing.set(SiteModel.DESCRIPTION, (String) coerced.get(SiteModel.DESCRIPTION.getName()));
