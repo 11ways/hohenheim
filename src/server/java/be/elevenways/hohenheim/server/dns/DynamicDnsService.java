@@ -26,6 +26,18 @@ public final class DynamicDnsService {
     /** Wire token prefix, so a presented credential is recognizably ours. */
     public static final String TOKEN_MARKER = "hdyn_";
 
+    /**
+     * Marks a STORED value as a SHA-256 digest rather than a legacy plaintext
+     * token. The token is a live HTTP-Basic password that drives DNS updates, so
+     * only its digest is ever at rest (the {@code SiteApiKeys} shape). The client
+     * still presents the same plaintext {@code hdyn_} token; the service hashes
+     * what it is handed and looks up the record BY DIGEST, which is what lets an
+     * existing token keep working after the stored value is hashed in place.
+     */
+    private static final String DIGEST_PREFIX = "sha256:";
+
+    private static volatile boolean hookInstalled;
+
     /** dyndns2 status codes returned to the client (text/plain). */
     public enum Status {
         GOOD, NOCHG, BADAUTH, NOHOST, NOTFQDN, DNSERR, NOTPRIMARY
@@ -53,9 +65,69 @@ public final class DynamicDnsService {
         this.store = store;
     }
 
-    /** @return a fresh update token to store on a record's {@code dyndns_token} column */
+    /** @return a fresh plaintext update token; only the mint action's one-shot toast ever sees it */
     public static @NonNull String mintToken() {
         return TOKEN_MARKER + SecureTokens.randomToken();
+    }
+
+    /** @return the stored form (digest) of a plaintext dyndns token */
+    public static @NonNull String digest(@NonNull String plaintext) {
+        return DIGEST_PREFIX + SecureTokens.sha256Hex(plaintext);
+    }
+
+    /** @return true when the stored value is already a digest, not a legacy plaintext token */
+    public static boolean isDigest(@Nullable String stored) {
+        return stored != null && stored.startsWith(DIGEST_PREFIX);
+    }
+
+    /**
+     * Register the write-time normalization hook so no plaintext dyndns token ever
+     * reaches the datasource, whichever path writes the record (mint action, admin
+     * form, clone). Idempotent, and runs BEFORE validation so revisions and activity
+     * deltas see the digest too.
+     */
+    public static synchronized void installTokenHashing() {
+        if (hookInstalled) {
+            return;
+        }
+        hookInstalled = true;
+        DnsRecordModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row == null || !row.has(DnsRecordModel.DYNDNS_TOKEN.getName())) {
+                return;
+            }
+            Object stored = row.get(DnsRecordModel.DYNDNS_TOKEN.getName());
+            if (stored == null) {
+                return;
+            }
+            String value = String.valueOf(stored);
+            if (value.isBlank() || isDigest(value)) {
+                return;
+            }
+            row.set(DnsRecordModel.DYNDNS_TOKEN, digest(value.trim()));
+        });
+    }
+
+    /**
+     * Rewrite every stored plaintext dyndns token to its digest, in place. NO TOKEN
+     * IS INVALIDATED: the plaintext its client presents still hashes to the stored
+     * digest. Idempotent, so it is safe to run again at any time.
+     *
+     * @return the number of records rewritten
+     */
+    public static int hashStoredTokens() {
+        DnsRecordModel model = Models.get(DnsRecordModel.class);
+        int rewritten = 0;
+        for (Row record : model.find().where(DnsRecordModel.DYNDNS_TOKEN.isNotNull()).all()) {
+            String stored = record.get(DnsRecordModel.DYNDNS_TOKEN);
+            if (stored == null || stored.isBlank() || isDigest(stored)) {
+                continue;
+            }
+            record.set(DnsRecordModel.DYNDNS_TOKEN, digest(stored));
+            model.save(record);
+            rewritten++;
+        }
+        return rewritten;
     }
 
     /**
@@ -117,13 +189,17 @@ public final class DynamicDnsService {
         if (presented == null || !presented.startsWith(TOKEN_MARKER) || presented.length() < 16) {
             return null;
         }
+        // The column holds the DIGEST, so hash the presented plaintext and look up
+        // by that. An existing client keeps working because it still presents the
+        // same plaintext, which hashes to the stored digest.
+        String digest = digest(presented);
         Row record = Models.get(DnsRecordModel.class).find()
-            .where(DnsRecordModel.DYNDNS_TOKEN.eq(presented)).first();
+            .where(DnsRecordModel.DYNDNS_TOKEN.eq(digest)).first();
         if (record == null || !Boolean.TRUE.equals(record.get(DnsRecordModel.DYNAMIC))) {
             return null;
         }
         // Re-check under constant time; the indexed lookup above is the fast path.
-        if (!SecureTokens.constantTimeEquals(presented, record.get(DnsRecordModel.DYNDNS_TOKEN))) {
+        if (!SecureTokens.constantTimeEquals(digest, record.get(DnsRecordModel.DYNDNS_TOKEN))) {
             return null;
         }
         return record;

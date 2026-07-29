@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -56,35 +57,38 @@ class SecretFieldFormTest extends HohenheimTestBase {
         int recordId = seedRecord();
         String editPath = "/admin/dns-records/" + recordId;
 
-        // 1. The stored bearer credential is on the record to begin with.
+        // 1. The stored bearer credential is HASHED at rest: the seed wrote the
+        //    plaintext, the write hook stored only its digest.
+        String storedDigest = DynamicDnsService.digest(STORED_TOKEN);
         assertThat(tokenOf(recordId))
-            .as("1. the seeded record must hold the plaintext update token")
-            .isEqualTo(STORED_TOKEN);
+            .as("1. the seeded record must hold the digest, never the recoverable plaintext")
+            .isEqualTo(storedDigest);
 
-        // 2. The edit form still OFFERS the field, but never echoes its value.
+        // 2. The edit form still OFFERS the field, but echoes NEITHER plaintext nor digest.
         HttpResponse<String> form = get(editPath);
         assertThat(form.statusCode()).as("2. the edit form must render").isEqualTo(200);
         assertThat(form.body())
             .as("2. the form must still offer the dyndns_token entry")
             .contains("dyndns_token");
         assertThat(form.body())
-            .as("2. a secret() field must NEVER be echoed into the rendered form")
-            .doesNotContain(STORED_TOKEN);
+            .as("2. a secret() field must NEVER echo the plaintext OR its digest into the form")
+            .doesNotContain(STORED_TOKEN)
+            .doesNotContain(storedDigest);
 
         // 3. A submit that leaves the secret blank KEEPS the stored value.
         HttpResponse<String> blank = post(editPath, recordBody(""));
         assertThat(blank.statusCode()).as("3. the blank submit must be accepted").isIn(200, 302, 303);
         assertThat(tokenOf(recordId))
             .as("3. a blank secret submit must keep the stored value, not wipe it")
-            .isEqualTo(STORED_TOKEN);
+            .isEqualTo(storedDigest);
 
-        // 4. A submitted value REPLACES the stored one (keep-blank is not keep-forever).
+        // 4. A submitted value REPLACES the stored one and is itself hashed at rest.
         String replacement = "hdyn_secretform02.replacementtokenvalue";
         HttpResponse<String> replaced = post(editPath, recordBody(replacement));
         assertThat(replaced.statusCode()).as("4. the replacing submit must be accepted").isIn(200, 302, 303);
         assertThat(tokenOf(recordId))
-            .as("4. a non-blank secret submit must replace the stored value")
-            .isEqualTo(replacement);
+            .as("4. a non-blank secret submit must replace the stored value, hashed")
+            .isEqualTo(DynamicDnsService.digest(replacement));
 
         // 5. The __clear companion is the one way to EMPTY a secret.
         HttpResponse<String> cleared = post(editPath, recordBody("") + "&dyndns_token__clear=true");
@@ -93,22 +97,26 @@ class SecretFieldFormTest extends HohenheimTestBase {
             .as("5. the __clear companion must empty the stored secret")
             .isNull();
 
-        // 6. Minting discloses the new token ONCE, in the flash toast.
+        // 6. Minting discloses the PLAINTEXT token ONCE in the flash toast, while the
+        //    record stores only its digest.
         HttpResponse<String> mint = post(editPath + "/action/dyndns_token", "");
         assertThat(mint.statusCode()).as("6. the mint row action must be accepted").isIn(200, 302, 303);
-        String minted = tokenOf(recordId);
-        assertThat(minted).as("6. minting must store a fresh token").isNotNull().startsWith("hdyn_");
 
         HttpResponse<String> afterMint = get(editPath);
-        assertThat(afterMint.body())
-            .as("6. the mint toast must disclose the plaintext token exactly once")
-            .contains(minted);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("hdyn_[A-Za-z0-9._-]+")
+            .matcher(afterMint.body());
+        assertThat(m.find()).as("6. the mint toast must disclose the plaintext token once").isTrue();
+        String disclosed = m.group();
+        assertThat(tokenOf(recordId))
+            .as("6. the record must store only the digest of the minted token")
+            .isEqualTo(DynamicDnsService.digest(disclosed))
+            .doesNotContain(disclosed);
 
         // 7. The disclosure is consumed: a reload shows the record without the token.
         HttpResponse<String> reload = get(editPath);
         assertThat(reload.body())
             .as("7. a reload must not re-disclose the minted token")
-            .doesNotContain(minted);
+            .doesNotContain(disclosed);
     }
 
     // ------------------------------------------------------------------

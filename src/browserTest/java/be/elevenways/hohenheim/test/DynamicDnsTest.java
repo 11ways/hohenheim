@@ -54,16 +54,52 @@ class DynamicDnsTest extends HohenheimTestBase {
     }
 
     @Test
-    void tokenIsStoredRetrievablyNotHashed() {
-        // DynamicDnsService looks the record UP by token, so the column holds the
-        // token itself, not a digest. The field is secret(), so the admin form no
-        // longer echoes it; the mint action is the one disclosure.
+    void tokenIsStoredHashedNotInPlaintext() {
+        // The token is a bearer credential, so only its digest is at rest: a DB read
+        // cannot recover a working token. The client still presents the plaintext,
+        // which hashes to the stored digest, so authentication is unaffected.
         String token = seedDynamicRecord("dyn-store.example", "home", DnsRecordModel.TYPE_A, "192.0.2.1");
         int zoneId = Models.get(DnsZoneModel.class).findByOrigin("dyn-store.example").get(DnsZoneModel.ID);
         Row record = Models.get(DnsRecordModel.class).find()
             .where(DnsRecordModel.ZONE_ID.eq(zoneId)).first();
-        assertThat(record.get(DnsRecordModel.DYNDNS_TOKEN)).isEqualTo(token);
-        assertThat(token).startsWith("hdyn_");
+        String stored = record.get(DnsRecordModel.DYNDNS_TOKEN);
+        assertThat(token).as("the minted token is a plaintext hdyn_ token").startsWith("hdyn_");
+        assertThat(stored)
+            .as("the stored value is a digest, never the recoverable plaintext")
+            .startsWith("sha256:")
+            .isEqualTo(DynamicDnsService.digest(token))
+            .doesNotContain(token);
+        // The digest still admits the plaintext its holder presents.
+        assertThat(service.update(token, null, "203.0.113.8", null).status()).isEqualTo(Status.GOOD);
+    }
+
+    @Test
+    void existingPlaintextTokenSurvivesTheHashingSweep() {
+        // A record configured BEFORE hashing holds its token in plaintext -- the shape
+        // every existing install has on disk. bypassBehaviours skips the write hook,
+        // the only way to reproduce it now.
+        String token = seedDynamicRecord("dyn-sweep.example", "home", DnsRecordModel.TYPE_A, "192.0.2.1");
+        int zoneId = Models.get(DnsZoneModel.class).findByOrigin("dyn-sweep.example").get(DnsZoneModel.ID);
+        int recordId = Models.get(DnsRecordModel.class).find()
+            .where(DnsRecordModel.ZONE_ID.eq(zoneId)).first().get(DnsRecordModel.ID);
+        Models.get(DnsRecordModel.class).find().where(DnsRecordModel.ID.eq(recordId))
+            .assign(DnsRecordModel.DYNDNS_TOKEN, token).bypassBehaviours().updateAll();
+        assertThat(Models.get(DnsRecordModel.class).findById(recordId).get(DnsRecordModel.DYNDNS_TOKEN))
+            .as("the pre-migration datasource holds the token in plaintext").isEqualTo(token);
+
+        // The sweep rewrites the plaintext to its digest, in place, and is a no-op on rerun.
+        assertThat(DynamicDnsService.hashStoredTokens())
+            .as("the sweep rewrites exactly the one record holding plaintext").isGreaterThanOrEqualTo(1);
+        String stored = Models.get(DnsRecordModel.class).findById(recordId).get(DnsRecordModel.DYNDNS_TOKEN);
+        assertThat(stored).as("the sweep replaces the plaintext with its digest")
+            .isEqualTo(DynamicDnsService.digest(token)).doesNotContain(token);
+
+        // The configured client keeps working: the same plaintext still authenticates.
+        assertThat(service.update(token, null, "203.0.113.9", null).status())
+            .as("an existing token still authenticates after the sweep").isEqualTo(Status.GOOD);
+        // A wrong token is refused.
+        assertThat(service.update("hdyn_wrongtoken00.nope", null, "203.0.113.9", null).status())
+            .isEqualTo(Status.BADAUTH);
     }
 
     @Test
