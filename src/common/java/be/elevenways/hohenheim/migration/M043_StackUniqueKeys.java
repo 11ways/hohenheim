@@ -22,10 +22,17 @@ public class M043_StackUniqueKeys extends Migration {
     // The rename suffix is the row's own primary key, which is unique per table, so two losers
     // can never collide with each other. The one residual collision is a row that ALREADY
     // carries the exact healed name (a service literally called "web__dup17" beside a duplicated
-    // "web" whose losing row is id 17); that case falls through to the database's own UNIQUE
-    // constraint error, which names the table and columns. assertUnique was removed rather than
-    // kept as a second gate: after the heal it can only fire on that residual case, where it
-    // would brick boot again with worse advice.
+    // "web" whose losing row is id 17). What happens then depends on id order, because SQLite
+    // evaluates the EXISTS against the table's in-statement state as rows are visited by rowid:
+    // if the pre-named row's id is HIGHER than the loser's, the loser's rename makes the
+    // pre-named row match the predicate later in the same statement and it is SILENTLY renamed
+    // too ("web__dup17" -> "web__dup17__dup20") -- a mutation of a non-duplicate row, not an
+    // error; only when the pre-named row's id is LOWER do both rows end up as "web__dup17" and
+    // the unique-index creation fail loudly. Accepted as-is: a collision-proof suffix would
+    // change this raw SQL and move the recorded checksum of an already-applied migration
+    // (manufactured drift finding) for an astronomically unlikely case that is non-lossy either
+    // way. assertUnique was removed rather than kept as a second gate: after the heal it can
+    // only fire on that residual case, where it would brick boot again with worse advice.
     //
     // Raw SQL because MigrationBuilder has no data-transform operation and no Java hook; `||`
     // concatenation is SQLite/Postgres syntax, and hohenheim is SQLite-only (see M025).
