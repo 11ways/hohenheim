@@ -291,6 +291,42 @@ password/disable paths) and revoke all sessions.
   enroll, session revoke, and any `/account` mutation; a blank-scope key is
   rejected at creation.
 
+  STATUS: 0.3 LANDED IN TWO PARTS. The first pass (`9bdd914`, `644f4ac`,
+  `d0fea22`) marked the 13 `/account` routes interactive-only, stopped
+  `issueOrRead` minting a session for a non-interactive principal, and made
+  blank scopes inert. A hostile RE-REVIEW on 2026-07-29 found that pass left
+  the escalation HALF OPEN, and the plan wrongly recorded it as closed:
+  - `verify()` was never gated, only `issueOrRead`. It compared the submitted
+    token against `conduit.session()` without binding it to the principal.
+  - An anonymous `GET /login` mints a session AND a CSRF token (`AuthHandlers`
+    calls `conduit.csrfToken()` with no principal), `SessionResolverMiddleware`
+    attaches an anonymous session without setting a principal, so
+    `ApiKeyResolverMiddleware` then installs the `ApiKeyPrincipal`.
+  - The five state-changing `/admin` POSTs never got the marker, carrying only
+    `requiresPermission`. So a key whose owner holds `auth.roles.edit` could
+    replay the anonymous cookie+token beside the key and grant itself any
+    permission in three requests -- a LARGER escalation than the account
+    routes the first pass closed.
+  - The five POST assertions meant to pin the markers were VACUOUS: the helper
+    sent no cookie and no token, so `CsrfMiddleware` (weight 25) answered 403
+    before authorization (weight 50) ever ran, and the test asserted only the
+    bare status. Reverting the markers left it green. Both middlewares return
+    403, which is exactly how the defect hid.
+  FIXED (`2a5d36a`, `6208824`, `a0ea02d`, `7b2d15a`, zenit `761caff`):
+  `verify()` now mirrors the `issueOrRead` guard; the five `/admin` mutations
+  are interactive-only; `Principal.isInteractive()` now defaults to FALSE so an
+  implementation that never considered the question fails CLOSED (sweep found
+  exactly three implementors ecosystem-wide, all handled); the test walks the
+  real attack shape and asserts the specific refusal code plus the absence of
+  the grant row, with an interactive positive control. Compatibility checked:
+  every API-key POST surface in every repo is already `csrfExempt()`, which
+  short-circuits before `verify()`, so no real consumer regresses.
+  DELIBERATELY NOT DONE: the `/admin` GETs stay reachable by an admin-scoped
+  key. Whether they become interactive-only is open decision (3) below.
+  LESSON: two layers each assuming the other covers the case. Assert the
+  SPECIFIC refusal code whenever two middlewares can answer with the same
+  status, or the test cannot tell you which one refused.
+
 ### 0.4 Ungated RecordSources leak installation data (boundary 4)
 
 `RecordSource` defaults to login-only, no permission (`RecordSource.java:238-247,706-709`;
@@ -583,6 +619,18 @@ enable runs the same conflict invariant as updateRow.
 All nine items landed, both hostile review passes are closed, and a chain-wide
 integration pass across 21 projects is green. Nothing is pushed.
 
+AMENDED 2026-07-29 after a THIRD (independent) hostile review of the whole
+Phase 0 diff: six of seven surfaces held up under adversarial reading, but 0.3
+was found HALF OPEN and is now genuinely fixed -- see the 0.3 STATUS block for
+the chain, the fix, and the vacuous test that hid it. Treat the per-item
+"LANDED" notes as claims to re-verify, not as evidence; this one was wrong.
+Also corrected in that pass: two migration comments asserted behaviour the code
+does not have (`37623ee` M043's residual-collision case is a silent rename, not
+the promised loud constraint error, and the outcome depends on row id ordering;
+`991cf6a` HohenheimDatabase claimed any relational engine works while M025 uses
+SQLite `json_type` and M043 uses `||`, which is boolean OR on MySQL and would
+silently write 0/1 into `name`).
+
 What the reviews and the integration pass caught that the per-item tests did
 NOT -- these are the lessons worth carrying into later phases:
 
@@ -638,6 +686,12 @@ red-team checklist (documented in this repo) passes: anonymous XSS, cross-tenant
 IPC, API-key escalation, RecordSource enumeration, plumage shell reachability,
 secret-in-revision, WS flood, null-grant allow, route takeover. Phase 0
 completing is the precondition for tagging anything public.
+
+CAVEAT ON THIS GATE (2026-07-29): the API-key escalation line above was TRUE of
+the account routes and FALSE of the `/admin` mutations until `2a5d36a`/`6208824`
+landed. A checklist item passes only against the test that discriminates it --
+this one was pinned by an assertion that could not fail. Before the public tag,
+re-run the checklist asserting SPECIFIC refusal codes, not bare statuses.
 
 ---
 
