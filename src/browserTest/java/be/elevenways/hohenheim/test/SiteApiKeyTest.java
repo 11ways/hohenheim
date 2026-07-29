@@ -1,13 +1,17 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.HohenheimWriteHooks;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.SiteApiKeySeeder;
 import be.elevenways.hohenheim.server.process.SiteApiKeys;
 import be.elevenways.hohenheim.server.process.SiteApiKeys.Decision;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.zenit.common.ZenitModules;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violation;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.seed.Seeds;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -21,6 +25,7 @@ import java.util.Set;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * Site control-API keys: a key configured before hashing keeps working, the
@@ -134,6 +139,92 @@ class SiteApiKeyTest {
         assertThat(Seeds.discovered())
             .as("9. the migration must run itself at boot")
             .anyMatch(seeder -> seeder instanceof SiteApiKeySeeder);
+    }
+
+    /**
+     * The digest marker validates its COMPLETE shape, adoption enforces the
+     * entropy floor, and the write hooks are owned by the discovered
+     * HohenheimWriteHooks module (the structural before-STARTHTTP seam).
+     */
+    @Test
+    void digestShapeAndAdoptionPolicy() {
+        // 1. Only the complete sha256:<64 lowercase hex> shape is a digest.
+        String realDigest = SiteApiKeys.digest("any-key");
+        assertThat(SiteApiKeys.isDigest(realDigest))
+            .as("1. a real digest must be recognized").isTrue();
+        assertThat(SiteApiKeys.isDigest("sha256:looks-like-a-digest-but-is-a-key"))
+            .as("1. a plaintext key that merely starts with sha256: is NOT a digest").isFalse();
+        assertThat(SiteApiKeys.isDigest("sha256:" + "a".repeat(63)))
+            .as("1. 63 hex chars are not a digest").isFalse();
+        assertThat(SiteApiKeys.isDigest(realDigest.toUpperCase()))
+            .as("1. uppercase hex is not the stored shape").isFalse();
+
+        // 2. A LEGACY plaintext key that happens to start with "sha256:" is hashed
+        //    by the sweep like any other plaintext -- it must keep authenticating,
+        //    never be misclassified as a digest and silently invalidated.
+        String trickyKey = "sha256:looks-like-a-digest-but-is-a-key";
+        Row site = setupSite("hohenheim:command", "Tricky Key Site", "tricky-key-site", baseSettings());
+        int siteId = site.get(SiteModel.ID);
+        Map<String, Object> legacy = baseSettings();
+        legacy.put(SiteApiKeys.SETTING_NAME, List.of(trickyKey));
+        Models.get(SiteModel.class).find().where(SiteModel.ID.eq(siteId))
+            .assign(SiteModel.SETTINGS, legacy).bypassBehaviours().updateAll();
+
+        assertThat(SiteApiKeys.hashStoredKeys())
+            .as("2. the sweep must rewrite the sha256:-prefixed plaintext key")
+            .isGreaterThanOrEqualTo(1);
+        assertThat(storedKeys(siteId))
+            .as("2. the stored value must be the full digest of the tricky key")
+            .containsExactly(SiteApiKeys.digest(trickyKey));
+        assertThat(SiteApiKeys.decide(siteId, digestsOf(siteId), trickyKey, "broadcast", IP))
+            .as("2. the operator's tricky key must still authenticate after the sweep")
+            .isEqualTo(Decision.ALLOWED);
+
+        // 3. Adopting a WEAK operator-typed key is refused with the specific
+        //    violation: its fast digest would be dictionary-recoverable.
+        SiteModel model = Models.get(SiteModel.class);
+        Row weakSite = model.findById(siteId);
+        Map<String, Object> weakSettings = baseSettings();
+        weakSettings.put(SiteApiKeys.SETTING_NAME,
+            List.of(SiteApiKeys.digest(trickyKey), "hunter2-password"));
+        weakSite.set(SiteModel.SETTINGS, weakSettings);
+        Violations violations = catchThrowableOfType(() -> model.save(weakSite), Violations.class);
+        assertThat((Object) violations)
+            .as("3. adopting a weak key must throw Violations").isNotNull();
+        Violation violation = violations.all().get(0);
+        assertThat(violation.fieldName())
+            .as("3. the violation targets the api_keys field")
+            .isEqualTo("settings.api_keys");
+        assertThat(violation.message().key())
+            .as("3. the violation carries the weak_api_key message")
+            .isEqualTo("weak_api_key");
+        assertThat(violation.value())
+            .as("3. the violation must never echo the credential")
+            .isEqualTo("");
+        assertThat(storedKeys(siteId))
+            .as("3. the refused save must leave the stored keys untouched")
+            .containsExactly(SiteApiKeys.digest(trickyKey));
+
+        // 4. A strong operator key (>= 32 chars, varied) is adopted as a digest.
+        String strongKey = "operator-key-0123456789abcdefghijklmnop";
+        Row strongSite = model.findById(siteId);
+        Map<String, Object> strongSettings = baseSettings();
+        strongSettings.put(SiteApiKeys.SETTING_NAME, List.of(strongKey));
+        strongSite.set(SiteModel.SETTINGS, strongSettings);
+        model.save(strongSite);
+        assertThat(storedKeys(siteId))
+            .as("4. the strong key must be adopted as its digest, never stored plaintext")
+            .containsExactly(SiteApiKeys.digest(strongKey));
+        assertThat(SiteApiKeys.decide(siteId, digestsOf(siteId), strongKey, "broadcast", IP))
+            .as("4. the adopted strong key must authenticate")
+            .isEqualTo(Decision.ALLOWED);
+
+        // 5. The write hooks install through the DISCOVERED module, so the ordering
+        //    (MODULES stage, before STARTHTTP binds) is structural: this very
+        //    refusal in step 3 came from that install path.
+        assertThat(ZenitModules.all())
+            .as("5. HohenheimWriteHooks must be a discovered ZenitModule")
+            .anyMatch(module -> module instanceof HohenheimWriteHooks);
     }
 
     // ------------------------------------------------------------------

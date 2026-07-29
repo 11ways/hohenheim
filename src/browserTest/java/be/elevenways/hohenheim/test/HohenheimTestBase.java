@@ -72,7 +72,6 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         HohenheimSettingsFiles.load();
 
         SiteTypes.boot();
-        be.elevenways.hohenheim.server.dns.DynamicDnsService.installTokenHashing();
         HohenheimEndpoints.init();
         // Force-load the zenit-cms panel routes (all /{panel}/... endpoints).
         Object cmsRoutes = ResourcePageEndpoints.LIST;

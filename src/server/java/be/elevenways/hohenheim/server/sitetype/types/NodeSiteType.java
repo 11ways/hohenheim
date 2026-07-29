@@ -64,10 +64,23 @@ public class NodeSiteType implements SiteTypeHandler {
         IntegerField.builder().name("delay").suffix("ms").label(HohenheimFormCopy.label("delay"))
             .help(HohenheimFormCopy.help("delay")).build());
 
-    // Environment variables as an ordered name -> value map
+    // Environment variables as an ordered name -> value map.
+    // AIDEV-NOTE: secret() is the chosen redaction shape (plan 0.6b, option "a"):
+    // the map is the largest plaintext-secret surface in hohenheim (operators put
+    // DATABASE_PASSWORD-grade values in it) and it lives in a JSON SchemaField, so
+    // encryption is impossible and derived-surface redaction is its ONLY control.
+    // Consequences: revision snapshots OMIT the map, activity deltas collapse it to
+    // one [redacted] pair (other settings keys still diff per key, and the fact that
+    // env changed stays visible), restore keeps the CURRENT values (legacy plaintext
+    // revisions can never reactivate), and the admin form still shows the KEYS with
+    // per-key keep-if-blank password values. The rejected shape (typed rows with a
+    // plain/secret kind, the Phase 3 instance_variables table) would keep per-key
+    // diffs for plain vars but needs a storage migration plus an unanswerable
+    // which-existing-values-are-secret classification. Same flag on Java/Command/
+    // Docker site types and GitSourceSchema.BUILD_ENVIRONMENT_VARIABLES.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
         StringMapField.builder("environment_variables").label(HohenheimFormCopy.label("environment_variables"))
-            .help(HohenheimFormCopy.help("environment_variables")).build());
+            .help(HohenheimFormCopy.help("environment_variables")).secret().build());
 
     // API keys for X-Hohenheim-Key header validation; SiteApiKeys stores only
     // sha256 digests, so a typed key is adopted (hashed) and never echoed back.

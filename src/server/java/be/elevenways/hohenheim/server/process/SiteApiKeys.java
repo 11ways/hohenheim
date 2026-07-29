@@ -1,8 +1,11 @@
 package be.elevenways.hohenheim.server.process;
 
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.security.SecretShapes;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.RateLimiter;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -74,6 +77,7 @@ public final class SiteApiKeys {
             if (!(settings instanceof Map<?, ?> map) || !map.containsKey(SETTING_NAME)) {
                 return;
             }
+            refuseWeakPlaintext(map.get(SETTING_NAME));
             List<String> digests = normalize(map.get(SETTING_NAME));
             if (digests.equals(map.get(SETTING_NAME))) {
                 return;
@@ -92,14 +96,52 @@ public final class SiteApiKeys {
         return KEY_MARKER + SecureTokens.randomToken();
     }
 
+    /**
+     * Entropy floor for ADOPTING operator-typed keys: a weak value would be
+     * dictionary-recoverable from its fast SHA-256 digest in a copied database,
+     * so it is refused with a violation instead of silently accepted. Runs on
+     * the WRITE path only -- already-stored legacy values arrive here as digests
+     * (the seeder hashes before save) and pass through untouched.
+     *
+     * @throws Violations when a plaintext entry fails {@link SecretShapes#isAdoptablePlaintext}
+     */
+    private static void refuseWeakPlaintext(@Nullable Object raw) {
+        if (!(raw instanceof Collection<?> entries)) {
+            return;
+        }
+        for (Object entry : entries) {
+            if (entry == null) {
+                continue;
+            }
+            String value = String.valueOf(entry).trim();
+            if (value.isEmpty() || isDigest(value)) {
+                continue;
+            }
+            if (!SecretShapes.isAdoptablePlaintext(value)) {
+                // Never echo the credential back; the violation value stays blank.
+                throw Violations.ofField("settings." + SETTING_NAME, "",
+                    Microcopy.of("weak_api_key")
+                        .withFilter("scope", "violations")
+                        .withArg("min_length", String.valueOf(SecretShapes.MIN_ADOPTABLE_LENGTH)));
+            }
+        }
+    }
+
     /** @return the stored form of a plaintext key */
     public static @NonNull String digest(@NonNull String plaintext) {
         return DIGEST_PREFIX + SecureTokens.sha256Hex(plaintext);
     }
 
-    /** @return true when the stored entry is already a digest rather than a legacy plaintext key */
+    /**
+     * @return true when the stored entry is already a digest rather than a legacy plaintext key
+     *
+     * AIDEV-NOTE: the COMPLETE shape is validated ({@code sha256:} + exactly 64
+     * lowercase hex chars), never just the prefix -- a legacy plaintext key that
+     * happens to start with "sha256:" must be hashed like any other plaintext,
+     * not misclassified as a digest and silently invalidated.
+     */
     public static boolean isDigest(@Nullable String stored) {
-        return stored != null && stored.startsWith(DIGEST_PREFIX);
+        return SecretShapes.isSha256Digest(stored, DIGEST_PREFIX);
     }
 
     /**

@@ -52,8 +52,9 @@ public class GitSourceSchema {
             .help(HohenheimFormCopy.help("submodules")).build());
 
     // Build-only environment variables as an ordered name -> value map.
+    // secret(): redacted on derived surfaces; see NodeSiteType.ENVIRONMENT_VARIABLES.
     public static final StringMapField BUILD_ENVIRONMENT_VARIABLES = SCHEMA.addField(
         StringMapField.builder("build_environment_variables")
             .label(HohenheimFormCopy.label("build_environment_variables"))
-            .help(HohenheimFormCopy.help("build_environment_variables")).build());
+            .help(HohenheimFormCopy.help("build_environment_variables")).secret().build());
 }

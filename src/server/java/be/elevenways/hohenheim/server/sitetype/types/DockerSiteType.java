@@ -49,9 +49,10 @@ public class DockerSiteType implements SiteTypeHandler {
             .label(HohenheimFormCopy.label("server")).help(HohenheimFormCopy.help("server")).build());
 
     // Environment variables as an ordered name -> value map
+    // secret(): redacted on derived surfaces; see NodeSiteType.ENVIRONMENT_VARIABLES.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
         StringMapField.builder("environment_variables").label(HohenheimFormCopy.label("environment_variables"))
-            .help(HohenheimFormCopy.help("environment_variables")).build());
+            .help(HohenheimFormCopy.help("environment_variables")).secret().build());
 
     // Persistent named volumes: logical name -> container path. Each entry mounts the
     // named volume hohenheim-site-{id}-vol-{name}, which survives redeploys.

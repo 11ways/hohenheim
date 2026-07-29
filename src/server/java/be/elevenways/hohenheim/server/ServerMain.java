@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
-import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
@@ -114,10 +113,11 @@ public class ServerMain {
         proxyServer.start();
         ProxyReloadHooks.install();
 
-        // No plaintext dyndns token ever reaches the datasource, whichever path
-        // writes the record; the one-time sweep of pre-existing tokens rides
-        // DyndnsTokenSeeder at the SEED stage.
-        DynamicDnsService.installTokenHashing();
+        // The secret-normalization hooks (site api keys, dyndns tokens, reserved
+        // env, enable invariant) install via the discovered HohenheimWriteHooks
+        // ZenitModule at the MODULES stage inside ServerZenitRuntime.main() above,
+        // BEFORE the HTTP server binds; the one-time sweeps of pre-existing
+        // plaintext ride SiteApiKeySeeder/DyndnsTokenSeeder at the SEED stage.
 
         // The zone store loads regardless of the listeners so zones stay
         // editable (and the internal ACME publisher functional in tests)

@@ -143,6 +143,14 @@
     "text": "The URL must start with http:// or https://",
     "scope": "violations"
   },
+  "weak_api_key": {
+    "text": "This API key is too easy to guess: it would be recoverable from a database copy. Use the generate action, or paste a random key of at least {$min_length} characters",
+    "scope": "violations"
+  },
+  "weak_dyndns_token": {
+    "text": "Dynamic DNS tokens cannot be typed in by hand: use the token row action to generate a {$marker} token",
+    "scope": "violations"
+  },
   "api_keys": [
     {
       "text": "API keys",

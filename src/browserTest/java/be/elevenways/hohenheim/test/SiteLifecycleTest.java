@@ -88,8 +88,8 @@ class SiteLifecycleTest extends HohenheimTestBase {
             + "&settings.environment_variables.1.value=3000"
             // Arrays post as repeated same-name fields (the array-item partial
             // renders every item input with the entry path, unindexed).
-            + "&settings.api_keys=alpha-key"
-            + "&settings.api_keys=beta-key");
+            + "&settings.api_keys=alpha-adopted-key-0123456789abcdefgh"
+            + "&settings.api_keys=beta-adopted-key-zyxwvutsrq9876543210");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Map<String, Object> nodeSettings = settingsOf("Node App");
@@ -104,7 +104,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
         @SuppressWarnings("unchecked")
         List<String> apiKeys = (List<String>) nodeSettings.get("api_keys");
         assertThat(apiKeys).containsExactly(
-            SiteApiKeys.digest("alpha-key"), SiteApiKeys.digest("beta-key"));
+            SiteApiKeys.digest("alpha-adopted-key-0123456789abcdefgh"), SiteApiKeys.digest("beta-adopted-key-zyxwvutsrq9876543210"));
         assertThat(nodeSettings.get("use_ports")).isEqualTo(true);
 
         Row nodeRow = site("Node App");
@@ -114,11 +114,15 @@ class SiteLifecycleTest extends HohenheimTestBase {
 
         String content = page.content();
         assertThat(content).contains("environment_variables");
-        assertThat(content).contains("NODE_ENV");
-        assertThat(content).contains("production");
+        assertThat(content)
+            .as("the secret env map still shows its KEYS in the form")
+            .contains("NODE_ENV");
+        assertThat(content)
+            .as("a secret() env map never echoes its VALUES back into the form")
+            .doesNotContain("production");
         assertThat(content)
             .as("a secret() api key is never echoed back into the form")
-            .doesNotContain("alpha-key");
+            .doesNotContain("alpha-adopted-key-0123456789abcdefgh");
 
         response = postForm(nodePath,
             "name=Node+App&site_type=hohenheim%3Anode&source=local&settings.use_ports=false");
@@ -127,7 +131,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
         // An edit that never mentions the secret list must keep the stored keys.
         assertThat((List<String>) settingsOf("Node App").get("api_keys"))
             .as("a submit with no api_keys (ABSENT) entry keeps the stored digests")
-            .containsExactly(SiteApiKeys.digest("alpha-key"), SiteApiKeys.digest("beta-key"));
+            .containsExactly(SiteApiKeys.digest("alpha-adopted-key-0123456789abcdefgh"), SiteApiKeys.digest("beta-adopted-key-zyxwvutsrq9876543210"));
 
         // The other blank shape: a submit that DOES carry the field but EMPTY
         // (settings.api_keys= with no value) coerces to an empty list. A secret
@@ -139,7 +143,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
         assertThat(response.statusCode()).isIn(200, 302, 303);
         assertThat((List<String>) settingsOf("Node App").get("api_keys"))
             .as("a submit with an EMPTY api_keys list keeps the stored digests, not clears them")
-            .containsExactly(SiteApiKeys.digest("alpha-key"), SiteApiKeys.digest("beta-key"));
+            .containsExactly(SiteApiKeys.digest("alpha-adopted-key-0123456789abcdefgh"), SiteApiKeys.digest("beta-adopted-key-zyxwvutsrq9876543210"));
 
         response = postForm(nodePath,
             "name=Node+App&site_type=hohenheim%3Anode&source=local&settings.use_ports=true");

@@ -2,8 +2,11 @@ package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.security.SecretShapes;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -75,9 +78,16 @@ public final class DynamicDnsService {
         return DIGEST_PREFIX + SecureTokens.sha256Hex(plaintext);
     }
 
-    /** @return true when the stored value is already a digest, not a legacy plaintext token */
+    /**
+     * @return true when the stored value is already a digest, not a legacy plaintext token
+     *
+     * AIDEV-NOTE: the COMPLETE shape is validated ({@code sha256:} + exactly 64
+     * lowercase hex chars), never just the prefix -- a legacy plaintext token that
+     * happens to start with "sha256:" must be hashed like any other plaintext,
+     * not misclassified as a digest and silently invalidated.
+     */
     public static boolean isDigest(@Nullable String stored) {
-        return stored != null && stored.startsWith(DIGEST_PREFIX);
+        return SecretShapes.isSha256Digest(stored, DIGEST_PREFIX);
     }
 
     /**
@@ -104,7 +114,21 @@ public final class DynamicDnsService {
             if (value.isBlank() || isDigest(value)) {
                 return;
             }
-            row.set(DnsRecordModel.DYNDNS_TOKEN, digest(value.trim()));
+            // Adoption entropy floor: a weak operator-typed token is dictionary-
+            // recoverable from its fast SHA-256 digest, and a token without the
+            // hdyn_ marker could never authenticate anyway (authenticate() requires
+            // it), so both are refused instead of silently stored. Legacy stored
+            // plaintext is unaffected: the seeder hashes it BEFORE save, so this
+            // hook only sees digests for grandfathered values.
+            String plaintext = value.trim();
+            if (!plaintext.startsWith(TOKEN_MARKER) || !SecretShapes.isAdoptablePlaintext(plaintext)) {
+                // Never echo the credential back; the violation value stays blank.
+                throw Violations.ofField("dyndns_token", "",
+                    Microcopy.of("weak_dyndns_token")
+                        .withFilter("scope", "violations")
+                        .withArg("marker", TOKEN_MARKER));
+            }
+            row.set(DnsRecordModel.DYNDNS_TOKEN, digest(plaintext));
         });
     }
 
