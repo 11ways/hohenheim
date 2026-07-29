@@ -52,6 +52,9 @@ public class ServerMain {
         if (args != null && java.util.Arrays.asList(args).contains("--run-migrations")) {
             HohenheimSettingsFiles.load();
             HohenheimDatabase.init();
+            // Upgrade transition: an install that already has sites keeps the lenient
+            // workload-identity behaviour until the operator enables it deliberately.
+            WorkloadIdentity.applyLegacyDefault(HohenheimSettingsFiles.settingsFile());
             return;
         }
 
@@ -75,6 +78,12 @@ public class ServerMain {
         ZenitAuth.init(HohenheimDatabase.datasource());
         installAuthBaselines();
         registerProteusIfConfigured();
+
+        // Workload identity: the legacy transition runs before any site handler exists,
+        // and the settings gate (which needs the database plus RecordGrants) refuses
+        // enabling require_dedicated_user while a site would fault.
+        WorkloadIdentity.applyLegacyDefault(HohenheimSettingsFiles.settingsFile());
+        WorkloadIdentity.installSettingsGate();
 
         // main() does the HTTP-server side of startup; init() is idempotent.
         ServerZenitRuntime.main(args);

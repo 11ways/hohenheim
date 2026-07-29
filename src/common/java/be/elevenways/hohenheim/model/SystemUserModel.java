@@ -26,6 +26,12 @@ public class SystemUserModel extends Model {
     public static final StringField HOME = SCHEMA.addField(StringField.builder().name("home").build());
     public static final StringField GECOS = SCHEMA.addField(StringField.builder().name("gecos").build());
     public static final BooleanField OBSOLETE = SCHEMA.addField(BooleanField.builder("obsolete").defaultValue(false).build());
+    // Workload-identity claim: the ONE site whose child processes run as this uid
+    // (unique index; null = unclaimed). Written only through WorkloadIdentity.
+    public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());
+    // True for rows Hohenheim provisioned itself; the /etc/passwd reconciler never
+    // marks a managed row obsolete, whatever the discovery scan says.
+    public static final BooleanField MANAGED = SCHEMA.addField(BooleanField.builder("managed").defaultValue(false).build());
     public static final DateTimeField LAST_SEEN_AT = SCHEMA.addField(DateTimeField.builder().name("last_seen_at").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

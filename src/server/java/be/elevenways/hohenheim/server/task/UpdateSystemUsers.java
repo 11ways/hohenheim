@@ -96,9 +96,13 @@ public class UpdateSystemUsers extends ScheduledTask {
 
         // Mark rows that didn't appear in this scan as obsolete — keeping them
         // in the table so sites still referencing them resolve to *something*.
+        // Rows Hohenheim provisioned itself (managed=true) are never re-classified
+        // by discovery: their lifecycle is owned by the provisioning code, and the
+        // eligibility filter above (uid >= 1000) would otherwise obsolete a
+        // deliberately-created system-range uid.
         for (Row row : model.find().where(SystemUserModel.OBSOLETE.eq(false)).all()) {
             String name = row.get(SystemUserModel.NAME);
-            if (!seen.contains(name)) {
+            if (!seen.contains(name) && !Boolean.TRUE.equals(row.get(SystemUserModel.MANAGED))) {
                 row.set(SystemUserModel.OBSOLETE, true);
                 model.save(row);
             }

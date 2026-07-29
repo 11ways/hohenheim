@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermissions;
 
 /**
  * Lazily extracts the Node IPC fork-wrapper (hohenheim-child-wrapper.js) from
@@ -40,6 +41,11 @@ public final class ChildWrapper {
             Path dir = Files.createTempDirectory("hohenheim-wrapper-");
             Path file = dir.resolve(RESOURCE);
             Files.copy(in, file, StandardCopyOption.REPLACE_EXISTING);
+            // createTempDirectory yields 0700 owned by the daemon, which a
+            // privilege-dropped (sudo -u) child cannot traverse; the wrapper holds
+            // no secrets (the token rides the environment), so world-readable is fine.
+            Files.setPosixFilePermissions(dir, PosixFilePermissions.fromString("rwxr-xr-x"));
+            Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-r--r--"));
             file.toFile().deleteOnExit();
             dir.toFile().deleteOnExit();
             cachedPath = file;

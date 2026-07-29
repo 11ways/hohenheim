@@ -4,8 +4,10 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.WorkloadIdentity;
 import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
+import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -99,8 +101,16 @@ public class CommandSiteType implements SiteTypeHandler {
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
         int siteId = site.get(SiteModel.ID);
         String siteName = site.get(SiteModel.NAME);
-        return new CommandProcessHandler(siteId, siteName, settings);
+        try {
+            return new CommandProcessHandler(siteId, siteName, settings);
+        } catch (IllegalArgumentException e) {
+            // Fail fast: a misconfigured site serves an explicit 503 instead of half-starting.
+            return new FaultedSiteHandler(siteId, e.getMessage());
+        }
     }
+
+    @Override
+    public boolean managedProcessEnvironment() { return true; }
 
     // -----------------------------------------------------------------------
 
@@ -118,7 +128,7 @@ public class CommandSiteType implements SiteTypeHandler {
             this.startCommand = (String) settings.getOrDefault("start_command", "");
             this.workingDirectory = (String) settings.get("working_directory");
             this.portArgument = (String) settings.get("port_argument");
-            this.runAs = SystemUsers.resolve(settings.get("user"));
+            this.runAs = WorkloadIdentity.forSite(siteId, settings.get("user"));
 
             if (!startCommand.isEmpty()) {
                 startMinimumServers();
