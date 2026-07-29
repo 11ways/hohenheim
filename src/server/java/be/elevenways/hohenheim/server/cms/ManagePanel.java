@@ -36,6 +36,9 @@ public final class ManagePanel extends Panel {
         super(Identifier.of("hohenheim", "manage"), "manage",
             Microcopy.of("title").withFilter("scope", "manage"), ACCESS);
         installEffectiveAccessPolicy();
+        // Eager, not lazy-in-buildPeers: the source must exist the moment the
+        // server accepts requests, not after the first panel render.
+        registerSiteSource();
     }
 
     /** Derives panel eligibility from effective record grants while preserving explicit global grants. */
@@ -65,7 +68,6 @@ public final class ManagePanel extends Panel {
 
     @Override
     public @NonNull List<PanelPeer> buildPeers() {
-        registerSiteSource();
         return List.of(new ManageSiteResource(), new ManageDomainResource());
     }
 
@@ -74,10 +76,21 @@ public final class ManagePanel extends Panel {
      * tenant surface through one per-principal scope (admins unconstrained,
      * tenants their granted sites, everyone else nothing). Registered
      * server-side (not in HohenheimSources) because the scope reads zenit-auth
-     * record grants; pickers reach it by token through the record-source
-     * endpoints, so the browser registry never needs it. AIDEV-NOTE: this
-     * replaced the separate "hohenheim.manage_site" source -- two sources with
-     * identical semantics over one model were a shadowing hazard.
+     * record grants, which common code cannot see.
+     * AIDEV-NOTE: the browser registry legitimately lacks this source, and
+     * that is SAFE only because the framework treats the browser registry as
+     * a subset: widget-config revival tolerates browser-unresolvable tokens
+     * and client re-renders reach /zn/records/{token} by TOKEN (zenit-widget
+     * RecordsFunctions/ChartFunctions). Naming this token in a widget config
+     * used to kill soft navigation onto /admin/dashboard (revival rejected
+     * 'hohenheim.site' against the browser registry) -- pinned by
+     * NavigationTest.softNavDashboardKeepsStatTitlesIconsAndAttentionEntries
+     * and zenit-cms's ServerOnlySourceSoftNavBrowserTest. The trade-off of
+     * staying server-only: client-side source pickers and rule vocabularies
+     * cannot offer it.
+     * AIDEV-NOTE: this replaced the separate "hohenheim.manage_site" source --
+     * two sources with identical semantics over one model were a shadowing
+     * hazard.
      */
     public static synchronized void registerSiteSource() {
         if (sourceRegistered) {
