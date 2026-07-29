@@ -163,7 +163,10 @@ public final class DnsRecordResource extends RowResource {
 
         // AIDEV-NOTE: the field is secret(), so the edit form no longer echoes the
         // token -- this toast is the ONLY disclosure. Re-mint is the recovery path.
+        // withSecretArg parks the plaintext server-side (SecretDisclosures): the
+        // flash and durable session data only ever carry a single-use handle.
         return CmsActionResult.refreshWithToast(
-            Microcopy.of("dyndns_minted").withFilter("scope", "dns_record").withArg("token", token));
+                Microcopy.of("dyndns_minted").withFilter("scope", "dns_record"))
+            .withSecretArg("token", token);
     }
 }

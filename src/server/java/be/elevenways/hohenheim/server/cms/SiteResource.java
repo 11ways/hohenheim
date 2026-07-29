@@ -287,8 +287,13 @@ public class SiteResource extends RowResource {
         site.set(SiteModel.SETTINGS, settings);
         ActivityLog.withAction("api_key_minted", null, () -> this.model().save(site));
 
+        // AIDEV-NOTE: withSecretArg, never withArg — the toast is the ONLY
+        // disclosure and flash toasts are session data; the flash carries a
+        // single-use SecretDisclosures handle so the plaintext never rests in
+        // auth_sessions.data. Re-mint stays the documented recovery.
         return CmsActionResult.refreshWithToast(
-            Microcopy.of("api_key_minted").withFilter("scope", "site").withArg("key", plaintext));
+                Microcopy.of("api_key_minted").withFilter("scope", "site"))
+            .withSecretArg("key", plaintext);
     }
 
     /** The enable/disable operate action, shared with the delegated manage panel. */
