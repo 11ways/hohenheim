@@ -10,9 +10,11 @@ import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import java.util.List;
 
 /**
- * Database initialization and datasource management. SQLite is the zero-config
- * default; any of the framework's relational engines can be used instead by
- * setting {@code database.url} (and, for CockroachDB, {@code database.engine}).
+ * Database initialization and datasource management. SQLite only: several
+ * migrations run raw SQLite SQL (M025 {@code json_type}, M043 {@code ||}
+ * concatenation, which MySQL parses as logical OR and silently corrupts data),
+ * so {@code database.url} must stay a SQLite URL despite DatasourceFactory
+ * accepting other engines.
  */
 public class HohenheimDatabase {
 
