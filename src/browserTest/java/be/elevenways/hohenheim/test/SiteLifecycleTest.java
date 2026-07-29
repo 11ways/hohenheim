@@ -126,7 +126,19 @@ class SiteLifecycleTest extends HohenheimTestBase {
         assertThat(settingsOf("Node App").get("use_ports")).isEqualTo(false);
         // An edit that never mentions the secret list must keep the stored keys.
         assertThat((List<String>) settingsOf("Node App").get("api_keys"))
-            .as("a submit with no api_keys entry keeps the stored digests")
+            .as("a submit with no api_keys (ABSENT) entry keeps the stored digests")
+            .containsExactly(SiteApiKeys.digest("alpha-key"), SiteApiKeys.digest("beta-key"));
+
+        // The other blank shape: a submit that DOES carry the field but EMPTY
+        // (settings.api_keys= with no value) coerces to an empty list. A secret
+        // ListField must treat an empty submit as "keep stored", not "clear" --
+        // otherwise every admin save that does not re-enter keys silently wipes them.
+        response = postForm(nodePath,
+            "name=Node+App&site_type=hohenheim%3Anode&source=local&settings.use_ports=false"
+            + "&settings.api_keys=");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+        assertThat((List<String>) settingsOf("Node App").get("api_keys"))
+            .as("a submit with an EMPTY api_keys list keeps the stored digests, not clears them")
             .containsExactly(SiteApiKeys.digest("alpha-key"), SiteApiKeys.digest("beta-key"));
 
         response = postForm(nodePath,
