@@ -363,17 +363,16 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<String> URL = GROUP.buildSetting("url", String.class)
-            .description("Full JDBC URL to use instead of the SQLite file, e.g. "
-                + "jdbc:postgresql://host/hohenheim or jdbc:mysql://host/hohenheim. "
-                + "The engine is inferred from the URL scheme")
+            .description("Full SQLite JDBC URL to use instead of 'path', e.g. "
+                + "jdbc:sqlite:/var/lib/hohenheim/hohenheim.db. Hohenheim refuses any "
+                + "other engine at boot: its migrations contain SQLite-only raw SQL")
             .restartRequired()
             .build();
 
         public static final SettingDefinition<String> ENGINE = GROUP.buildSetting("engine", String.class)
             .defaultValue("auto")
-            .description("Database engine: auto (infer from url) or one of sqlite, duckdb, "
-                + "postgres, mysql, mariadb, firebird, cockroach. Set explicitly for CockroachDB, "
-                + "which shares the postgres URL scheme")
+            .description("Database engine: auto (infer from url) or sqlite. Anything else is "
+                + "refused at boot because Hohenheim's migrations contain SQLite-only raw SQL")
             .restartRequired()
             .build();
 
