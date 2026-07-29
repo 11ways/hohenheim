@@ -379,27 +379,29 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             SystemUsers.RunAsUser runAs = getRunAsUser();
             Map<String, String> env = new LinkedHashMap<>(SystemUsers.safeEnvironment(
                 runAs != null ? runAs.home() : System.getProperty("user.home")));
-            env.put("PORT", listenTarget);
-            if (socketMode) {
-                env.put("PATH_TO_SOCKET", socketPath);
-            }
-            env.put("HOHENHEIM_IPC_PORT", String.valueOf(ipc.getPort()));
-            // The IPC port is reachable by every local user (children run as DISTINCT
-            // system users), so the token travels with it: only this child's process
-            // environment holds it, and the channel refuses everyone else.
-            env.put("HOHENHEIM_IPC_TOKEN", ipc.getSecret());
             // Attached-database credentials resolve fresh per spawn (live published port);
-            // operator-authored variables come after so an explicit value always wins.
-            env.putAll(resolveInjectedEnvironment());
+            // operator-authored variables may override the NON-reserved injected values
+            // (e.g. pointing a site at an external DATABASE_*), which is warned, not refused.
+            Map<String, String> injected = resolveInjectedEnvironment();
+            env.putAll(injected);
             env.putAll(environmentVariables);
             env.putAll(buildRuntimeEnvironment(port));
-            if (runAs != null) {
-                if (runAs.home() != null && !runAs.home().isBlank()) {
-                    env.put("HOME", runAs.home());
-                } else {
-                    env.remove("HOME");
-                }
-            }
+            ReservedEnv.warnOverriddenInjected(injected, environmentVariables, siteName);
+
+            // The IPC port is reachable by every local user, so the token travels with
+            // it: only this child's process environment holds it, and the channel
+            // refuses everyone else (WorkloadIdentity keeps that environment private
+            // by refusing shared run-as users). Stamped LAST -- see ReservedEnv.stamp.
+            Map<String, String> reserved = new LinkedHashMap<>();
+            reserved.put("PORT", listenTarget);
+            reserved.put("PATH_TO_SOCKET", socketMode ? socketPath : null);
+            reserved.put("HOHENHEIM_IPC_PORT", String.valueOf(ipc.getPort()));
+            reserved.put("HOHENHEIM_IPC_TOKEN", ipc.getSecret());
+            reserved.put(SecurityReportEnv.URL_VAR, injected.get(SecurityReportEnv.URL_VAR));
+            reserved.put(SecurityReportEnv.TOKEN_VAR, injected.get(SecurityReportEnv.TOKEN_VAR));
+            String home = runAs != null ? runAs.home() : System.getProperty("user.home");
+            reserved.put("HOME", home != null && !home.isBlank() ? home : null);
+            ReservedEnv.stamp(env, reserved, siteName);
 
             ProcessBuilder pb = SystemUsers.executionBuilder(runAs, env, command, true);
             if (workDir != null && workDir.exists()) {
@@ -605,8 +607,9 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
                     proc.markAddressInUse();
                     proc.kill();
                 } else {
+                    // e.g. the wrapper's IPC_OUTBOX_OVERFLOW report carries a dropped count.
                     Blast.log("PROCESS: child error via IPC for", siteName,
-                        "pid=" + proc.pid(), "-", msg.get("code"));
+                        "pid=" + proc.pid(), "-", msg);
                 }
             }
             case "remcache_set" -> {

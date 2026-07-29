@@ -23,10 +23,13 @@ import java.util.function.Consumer;
  * IPC channel between the parent process and a child process.
  * Uses a TCP loopback socket with newline-delimited JSON messages.
  *
- * AIDEV-NOTE: loopback is NOT an authorization boundary here -- managed processes
- * run under DISTINCT system users, so every other tenant on the box can reach this
- * port. The channel therefore authenticates: the child's FIRST line must be the
- * per-channel secret handed to it in HOHENHEIM_IPC_TOKEN, compared constant-time.
+ * AIDEV-NOTE: loopback is NOT an authorization boundary here -- every local user can
+ * reach this port. The channel therefore authenticates: the child's FIRST line must
+ * be an auth message carrying the per-channel secret handed to it in
+ * HOHENHEIM_IPC_TOKEN, compared constant-time. The complementary half is
+ * WorkloadIdentity: it ENFORCES (not merely documents) that managed processes run
+ * under distinct, per-site-claimed system users, because with a shared uid the token
+ * is readable from /proc/<pid>/environ and this handshake authenticates the thief.
  * Shape adopted from DevTunnelServerHandler (pre-auth cap + auth window + the
  * accept loop surviving a refused peer), because the old single accept() let any
  * local user connect first and wedge the victim's channel forever.
@@ -209,13 +212,17 @@ public class IpcChannel implements AutoCloseable {
     }
 
     /**
-     * @return true when the peer's first line carries this channel's secret
+     * @return true when the peer's first line is an auth message carrying this
+     *         channel's secret; a correct token inside any other message type is
+     *         refused, so "auth is the first line" is a real wire contract
      */
     private boolean authenticate(BufferedReader reader) throws IOException {
         String line = readBoundedLine(reader);
         Map<String, Object> message = line != null ? parseJsonLine(line) : null;
         Object token = message != null ? message.get("token") : null;
-        boolean ok = token instanceof String presented
+        boolean ok = message != null
+            && "auth".equals(message.get("type"))
+            && token instanceof String presented
             && SecureTokens.constantTimeEquals(secret, presented);
         if (!ok) {
             Blast.log("IPC: refused an unauthenticated peer on port", port);

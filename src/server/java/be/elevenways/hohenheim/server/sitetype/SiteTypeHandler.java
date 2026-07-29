@@ -22,6 +22,16 @@ public interface SiteTypeHandler extends SiteTypeInfo {
     SiteRequestHandler createHandler(Row site, Map<String, Object> settings);
 
     /**
+     * Whether sites of this type spawn OS processes through the managed-process
+     * pipeline (workload identity claims, reserved control variables). Docker and
+     * proxy-only types stay false: their environment never carries generated
+     * control variables.
+     */
+    default boolean managedProcessEnvironment() {
+        return false;
+    }
+
+    /**
      * Called when a site's configuration changes.
      * Default: destroy old handler and create a new one.
      */

@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.WorkloadIdentity;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -54,7 +55,25 @@ public final class AttentionCollector {
         failedTasks(items);
         dnsIssues(items);
         spamserviceIssue(items);
+        identityIssues(items);
         return items;
+    }
+
+    /**
+     * Managed-process sites without their own exclusively-claimed system user. An
+     * "error" means the site faults (enforcement applies to it right now); a
+     * "warning" means it still runs leniently but blocks enabling
+     * process.require_dedicated_user.
+     */
+    private static void identityIssues(List<AttentionItem> items) {
+        for (WorkloadIdentity.Finding finding : WorkloadIdentity.auditAll()) {
+            boolean enforced = WorkloadIdentity.enforcementRequired(finding.siteId());
+            items.add(item(enforced ? "error" : "warning", "user-lock",
+                copy("workload_identity", "attention_title", "name",
+                    finding.siteName() != null ? finding.siteName() : finding.siteId()),
+                literal(finding.problem()),
+                "/admin/sites/" + finding.siteId()));
+        }
     }
 
     /** Surfaces an enabled managed Spamservice that is not currently ready. */

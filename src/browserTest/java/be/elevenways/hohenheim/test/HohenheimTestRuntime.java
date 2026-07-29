@@ -20,6 +20,10 @@ public final class HohenheimTestRuntime {
     public static void ensureBooted() {
         ensureDatasource();
         ServerSettings.VALUES.setValue(ServerSettings.Network.AUTO_START_HTTP, false);
+        // The suite mirrors an upgraded (legacy) install: sites spawn without a
+        // dedicated system user. WorkloadIdentityTest flips this on explicitly.
+        HohenheimSettings.VALUES.setValue(
+            HohenheimSettings.Process.REQUIRE_DEDICATED_USER, false);
         ServerZenitRuntime.init().join();
     }
 

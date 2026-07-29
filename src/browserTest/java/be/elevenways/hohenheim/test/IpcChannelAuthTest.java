@@ -16,10 +16,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The process IPC channel as a cross-tenant boundary: managed children run under
- * DISTINCT system users, so every local user can reach the loopback port. Only the
- * child holding HOHENHEIM_IPC_TOKEN may drive the channel, and no other peer can
- * wedge it.
+ * The process IPC channel as a cross-tenant boundary: every local user can reach the
+ * loopback port (WorkloadIdentity enforces that managed children run under distinct
+ * system users, so only the intended child can read the token). Only the child
+ * holding HOHENHEIM_IPC_TOKEN may drive the channel, and no other peer can wedge it.
+ * A raw Socket is the correct instrument here: this file pins the CHANNEL protocol;
+ * the real-wrapper journeys live in IpcChannelChildJourneyTest.
  */
 class IpcChannelAuthTest {
 
@@ -129,116 +131,42 @@ class IpcChannelAuthTest {
     }
 
     /**
-     * @return true when the parent is still HOLDING the peer (a short read times out
-     *         because the parent is blocked awaiting the handshake), false when the
-     *         parent has DROPPED it (the read hits EOF because the socket was closed)
-     */
-    private static boolean stillHeld(Socket socket) throws Exception {
-        socket.setSoTimeout(300);
-        try {
-            return socket.getInputStream().read() != -1;
-        } catch (java.net.SocketTimeoutException held) {
-            return true;
-        }
-    }
-
-    /**
-     * Saturates the pre-auth cap with stalling peers WHILE a child is attached, the
-     * case the happy-path test never exercises. It proves all three properties of
-     * the fix: (i) an already-attached child keeps working under a full cap, (ii) a
-     * newly starting child gets through once a stall is reaped, and (iii) the stalls
-     * are reaped at the auth timeout rather than wedging the channel forever.
-     *
-     * AIDEV-NOTE: the crisp counterfactual is the EIGHTH concurrent stall. With the
-     * fix the attached child holds NO pre-auth slot, so all 8 stalls are held at
-     * once; against the pre-fix code the attached child held a slot for its lifetime
-     * (effective budget 7), so the eighth stall is dropped and this step fails.
+     * The auth handshake is a real wire contract, not a decorative field: a correct
+     * token smuggled inside a NON-auth first line must not authenticate, otherwise
+     * "auth is the first line" would be unfalsifiable (any message type carrying the
+     * token would count) and the wrapper's ordering guarantee would have no subject.
      */
     @Test
-    void anAttachedChildSurvivesAFullPreAuthCapAndAReplacementGetsThroughAfterReaping() throws Exception {
+    void aCorrectTokenInsideANonAuthMessageDoesNotAuthenticate() throws Exception {
         List<Map<String, Object>> received = new CopyOnWriteArrayList<>();
-        List<Socket> stalls = new CopyOnWriteArrayList<>();
 
         try (IpcChannel channel = new IpcChannel()) {
             channel.setMessageHandler(received::add);
             channel.startAccepting();
 
-            // 1. The real child attaches and is served.
-            Socket child = connect(channel);
-            write(child, auth(channel.getSecret()));
-            assertThat(channel.waitForConnection(5_000)).as("1. the child attaches").isTrue();
-            write(child, "{\"type\":\"ready\"}");
-            awaitCondition("1. the child's ready arrived", () -> !received.isEmpty());
-
-            // 2. Eight stalling peers connect and say NOTHING, saturating the entire
-            //    pre-auth cap (8) alongside the attached child. Give the parent a
-            //    moment to accept each into its handshake vthread.
-            for (int i = 0; i < 8; i++) {
-                stalls.add(connect(channel));
+            // 1. A peer presents the CORRECT token, but as a remcache message instead
+            //    of an auth line. The parent hangs up: type must be "auth".
+            try (Socket smuggler = connect(channel)) {
+                write(smuggler, "{\"type\":\"remcache_set\",\"key\":\"x\",\"value\":\"y\",\"token\":\""
+                    + channel.getSecret() + "\"}");
+                assertThat(readLine(smuggler))
+                    .as("1. a correct token inside a non-auth message is hung up on")
+                    .isNull();
             }
-            Thread.sleep(300);
+            assertThat(channel.isConnected())
+                .as("1. the smuggler never attached").isFalse();
+            assertThat(received)
+                .as("1. nothing the smuggler sent was handled").isEmpty();
 
-            // 3. THE COUNTERFACTUAL: every one of the eight stalls is still held.
-            //    Only possible when the attached child consumes no pre-auth budget.
-            for (int i = 0; i < stalls.size(); i++) {
-                assertThat(stillHeld(stalls.get(i)))
-                    .as("3. stall #" + i + " is held, so the attached child holds no pre-auth slot")
-                    .isTrue();
-            }
-
-            // 4. The attached child keeps working with every pre-auth slot occupied.
-            write(child, "{\"type\":\"remcache_remove\",\"key\":\"mine\"}");
-            awaitCondition("4. the attached child is still served under a full cap",
-                () -> received.size() == 2);
-            assertThat(received.get(1)).containsEntry("type", "remcache_remove");
-            assertThat(channel.isConnected()).as("4. the child stays attached under a full cap").isTrue();
-
-            // 5. The stalls are eventually REAPED at the auth timeout: a peer that
-            //    never authenticates does not hold its slot forever. After the reap
-            //    window, a fresh child (the bounded-reconnect wrapper's retry) gets
-            //    through where it was refused under saturation.
-            child.close();
-            awaitCondition("5. the closed child released the channel", () -> !channel.isConnected());
-
-            // Detect re-attach by a message ARRIVING (received grows to 3), not by
-            // waitForConnection: that latch is one-shot and already fired for the
-            // first child, so it would report success without a real re-attach.
-            boolean reattached = false;
-            for (int attempt = 0; attempt < 40 && !reattached; attempt++) {
-                Socket replacement = null;
-                try {
-                    replacement = new Socket(InetAddress.getLoopbackAddress(), channel.getPort());
-                    replacement.setSoTimeout(1_000);
-                    write(replacement, auth(channel.getSecret()));
-                    write(replacement, "{\"type\":\"ready\"}");
-                    for (int poll = 0; poll < 12 && received.size() < 3; poll++) {
-                        Thread.sleep(50);
-                    }
-                    reattached = received.size() == 3;
-                } catch (Exception retryable) {
-                    // refused while the cap is still saturated; the stalls reap shortly
-                } finally {
-                    if (replacement != null && !reattached) replacement.close();
-                }
-                if (!reattached) Thread.sleep(400);
-            }
-            assertThat(reattached)
-                .as("5. a replacement child re-attaches once the stalls are reaped")
-                .isTrue();
-            assertThat(received.get(2)).containsEntry("type", "ready");
-
-            // 6. Reaping is complete: the stalls the parent dropped are now closed.
-            boolean anyReaped = false;
-            for (Socket stall : stalls) {
-                if (!stillHeld(stall)) {
-                    anyReaped = true;
-                    break;
-                }
-            }
-            assertThat(anyReaped).as("6. stalling peers are eventually reaped").isTrue();
-        } finally {
-            for (Socket stall : stalls) {
-                try { stall.close(); } catch (Exception ignored) {}
+            // 2. The same token in a proper auth line still works, so step 1 refused
+            //    the SHAPE, not the token.
+            try (Socket child = connect(channel)) {
+                write(child, auth(channel.getSecret()));
+                assertThat(channel.waitForConnection(5_000))
+                    .as("2. the proper auth line attaches").isTrue();
+                write(child, "{\"type\":\"ready\"}");
+                awaitCondition("2. the authenticated child is served", () -> !received.isEmpty());
+                assertThat(received.get(0)).containsEntry("type", "ready");
             }
         }
     }

@@ -83,6 +83,10 @@
     "text": "Env prefix '{$prefix}' is already used by another database on this site",
     "scope": "violations"
   },
+  "reserved_env_var": {
+    "text": "'{$name}' is a reserved control variable Hohenheim generates per process; it cannot be configured",
+    "scope": "violations"
+  },
   "site_missing": {
     "text": "That site does not exist",
     "scope": "violations"
@@ -3958,6 +3962,10 @@
   "success": {
     "text": "Success",
     "scope": "stack_deploy_status"
+  },
+  "workload_identity": {
+    "text": "Site {$name} workload identity",
+    "scope": "attention_title"
   },
   "route_taken_other_site": {
     "text": "This route is already claimed by site {$site}",

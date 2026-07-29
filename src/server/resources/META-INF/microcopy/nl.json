@@ -83,6 +83,10 @@
     "text": "Env-prefix '{$prefix}' wordt al gebruikt door een andere databank op deze site",
     "scope": "violations"
   },
+  "reserved_env_var": {
+    "text": "'{$name}' is een gereserveerde controlevariabele die Hohenheim per proces genereert; ze kan niet geconfigureerd worden",
+    "scope": "violations"
+  },
   "site_missing": {
     "text": "Die site bestaat niet",
     "scope": "violations"
@@ -3954,6 +3958,10 @@
   "success": {
     "text": "Geslaagd",
     "scope": "stack_deploy_status"
+  },
+  "workload_identity": {
+    "text": "Workload-identiteit van site {$name}",
+    "scope": "attention_title"
   },
   "route_taken_other_site": {
     "text": "Deze route is al geclaimd door site {$site}",

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.WorkloadIdentity;
 import be.elevenways.hohenheim.server.options.NodeVersionOptions;
 import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.hohenheim.server.process.ChildWrapper;
@@ -127,6 +128,9 @@ public class NodeSiteType implements SiteTypeHandler {
     public boolean supportsEnvInjection() { return true; }
 
     @Override
+    public boolean managedProcessEnvironment() { return true; }
+
+    @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
 
     @Override
@@ -177,11 +181,15 @@ public class NodeSiteType implements SiteTypeHandler {
             super(siteId, siteName, settings, portAllocator, processMonitor);
             this.script = (String) settings.getOrDefault("script", "");
             this.nodePath = NodeVersionOptions.resolvePath(settings.get("node"));
-            this.runAs = SystemUsers.resolve(settings.get("user"));
             this.defaultArgs = defaultArgs;
             this.useChildWrapper = useChildWrapper;
 
             validatePreconditions();
+
+            // After the cheap checks so a blank script still reports as such; refusal
+            // (missing/shared/daemon identity) throws IllegalArgumentException here and
+            // becomes a FaultedSiteHandler BEFORE any spawn attempt.
+            this.runAs = WorkloadIdentity.forSite(siteId, settings.get("user"));
 
             startMinimumServers();
         }

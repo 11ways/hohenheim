@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.WorkloadIdentity;
 import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
@@ -103,6 +104,9 @@ public class JavaSiteType implements SiteTypeHandler {
     public boolean supportsEnvInjection() { return true; }
 
     @Override
+    public boolean managedProcessEnvironment() { return true; }
+
+    @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
 
     @Override
@@ -136,9 +140,13 @@ public class JavaSiteType implements SiteTypeHandler {
             this.jvmArgs = (String) settings.getOrDefault("jvm_args", "");
             this.appArgs = (String) settings.getOrDefault("app_args", "");
             this.workingDirectory = (String) settings.get("working_directory");
-            this.runAs = SystemUsers.resolve(settings.get("user"));
 
             validatePreconditions();
+
+            // After the cheap checks so a blank jar still reports as such; refusal
+            // throws IllegalArgumentException and becomes a FaultedSiteHandler.
+            this.runAs = WorkloadIdentity.forSite(siteId, settings.get("user"));
+
             startMinimumServers();
         }
 

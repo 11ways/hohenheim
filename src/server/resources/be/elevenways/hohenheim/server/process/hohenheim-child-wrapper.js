@@ -60,6 +60,69 @@ const ipcPort = parseInt(process.env.HOHENHEIM_IPC_PORT, 10);
 const ipcToken = process.env.HOHENHEIM_IPC_TOKEN || '';
 let socket = null;
 
+// AIDEV-NOTE: the outbox gates on AUTH WRITTEN, not on socket-exists. The old code
+// keyed child->server forwarding on `socket` alone, which failed in two ways: (1)
+// `socket` was assigned while the TCP connect was still in flight, so a fast child's
+// message entered the Writable queue BEFORE the auth line and the parent (which
+// requires auth as the first line) refused the peer; (2) with no usable socket the
+// message was dropped outright, so a one-shot `ready` emitted during a reconnect was
+// lost forever and the parent killed the child at the ready timeout. Messages queue
+// here until the auth line has actually been written, flush FIFO, and survive
+// reconnects. The one-shot `ready` is held OUTSIDE the bounded buffer as a sticky
+// value replayed on every fresh attach (markProcessReady is idempotent), so overflow
+// can never evict the one message the parent's lifecycle depends on.
+const OUTBOX_MAX_MESSAGES = 256;
+const OUTBOX_MAX_BYTES = 256 * 1024;
+const OUTBOX_MAX_LINE_BYTES = 64 * 1024;
+const outbox = [];              // serialized lines, oldest first
+let outboxBytes = 0;
+let droppedCount = 0;           // reported once after the next successful attach
+let stickyReadyLine = null;     // latest ready line, replayed per attach
+let authWritten = false;
+
+function enqueueLine(line) {
+    if (Buffer.byteLength(line) > OUTBOX_MAX_LINE_BYTES) {
+        droppedCount++;
+        return;
+    }
+    outbox.push(line);
+    outboxBytes += Buffer.byteLength(line);
+    while (outbox.length > OUTBOX_MAX_MESSAGES || outboxBytes > OUTBOX_MAX_BYTES) {
+        const oldest = outbox.shift();
+        outboxBytes -= Buffer.byteLength(oldest);
+        droppedCount++;
+    }
+}
+
+function writeLine(line) {
+    if (!authWritten || !socket || socket.destroyed) return false;
+    try {
+        socket.write(line);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+// After auth is on the wire: report drops once, replay the sticky ready, then the
+// buffered backlog in FIFO order.
+function flushAfterAuth() {
+    if (droppedCount > 0) {
+        const dropped = droppedCount;
+        droppedCount = 0;
+        writeLine(JSON.stringify({ type: 'error', code: 'IPC_OUTBOX_OVERFLOW', dropped: dropped }) + '\n');
+    }
+    if (stickyReadyLine) {
+        writeLine(stickyReadyLine);
+    }
+    while (outbox.length > 0) {
+        const line = outbox[0];
+        if (!writeLine(line)) return;   // socket died mid-flush; keep the rest queued
+        outbox.shift();
+        outboxBytes -= Buffer.byteLength(line);
+    }
+}
+
 // A BOUNDED reconnect loop. A single net.connect that only tolerates errors turns
 // any transient refusal (parent restarting, or a hostile local peer briefly
 // saturating the parent's pre-auth cap) into a PERMANENT loss of the IPC bridge:
@@ -90,14 +153,19 @@ function scheduleReconnect() {
 
 function connectIpc() {
     if (childExited || ipcPort <= 0) return;
+    authWritten = false;
     let healthyTimer = null;
     let localSocket;
     try {
         localSocket = net.connect(ipcPort, '127.0.0.1', function onIpcConnect() {
             // Authenticate before anything else; the parent reads exactly one
-            // line and drops the connection when it does not carry the token.
+            // line and drops the connection when it does not carry the auth
+            // message. Child messages never overtake it: forwarding gates on
+            // authWritten, which only flips AFTER this write is issued.
             try { localSocket.write(JSON.stringify({ type: 'auth', token: ipcToken }) + '\n'); }
             catch (e) { /* the close handler drives the retry */ }
+            authWritten = true;
+            flushAfterAuth();
             // A connection that survives IPC_HEALTHY_MS is a real attach, not a
             // reject loop, so it earns a fresh reconnect budget for a later drop.
             healthyTimer = setTimeout(function () { ipcAttempts = 0; }, IPC_HEALTHY_MS);
@@ -132,17 +200,21 @@ function connectIpc() {
     localSocket.on('error', function onSocketErr() { /* the close handler drives the retry */ });
     localSocket.on('close', function onSocketClose() {
         if (healthyTimer) { clearTimeout(healthyTimer); healthyTimer = null; }
-        if (socket === localSocket) socket = null;
+        if (socket === localSocket) {
+            socket = null;
+            // Gate closed again; the outbox is deliberately NOT cleared, so
+            // whatever queued during this attach survives into the next one.
+            authWritten = false;
+        }
         scheduleReconnect();
     });
 }
 
 // Forward child-initiated messages back to Hohenheim. Because our IpcChannel
 // parser is flat, stringify only top-level scalars and drop nested objects
-// (they would cause malformed lines). Registered once, over whichever socket
-// is currently connected.
+// (they would cause malformed lines). Registered once; delivery rides the
+// auth-gated outbox so nothing is written before auth or lost between attaches.
 child.on('message', function onChildMessage(msg) {
-    if (!socket || socket.destroyed) return;
     const flat = {};
     if (typeof msg === 'string') {
         flat.type = msg;
@@ -156,7 +228,17 @@ child.on('message', function onChildMessage(msg) {
     } else {
         return;
     }
-    try { socket.write(JSON.stringify(flat) + '\n'); } catch (e) { /* ignore */ }
+    const line = JSON.stringify(flat) + '\n';
+    if (flat.type === 'ready') {
+        // Sticky, never buffered: replayed on every fresh attach so the parent's
+        // ready-gated lifecycle can never lose it to buffer bounds.
+        stickyReadyLine = line;
+        writeLine(line);
+        return;
+    }
+    if (!writeLine(line)) {
+        enqueueLine(line);
+    }
 });
 
 connectIpc();
