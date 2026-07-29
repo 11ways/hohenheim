@@ -153,7 +153,11 @@ public final class DnsRecordResource extends RowResource {
 
         String token = DynamicDnsService.mintToken();
         row.set(DnsRecordModel.DYNAMIC, true);
-        row.set(DnsRecordModel.DYNDNS_TOKEN, token);
+        // Store the DIGEST, never the plaintext: the token is a bearer credential
+        // recoverable from any DB read otherwise. authenticate() hashes the presented
+        // token and matches on the digest. (The write hook would hash it anyway; this
+        // is explicit so the intent reads at the write site.)
+        row.set(DnsRecordModel.DYNDNS_TOKEN, DynamicDnsService.digest(token));
         this.model().save(row);
         ActivityLog.record(this.model(), row.get(DnsRecordModel.ID), "dyndns_token_minted", null);
 

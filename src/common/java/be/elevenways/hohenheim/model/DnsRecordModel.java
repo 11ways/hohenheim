@@ -68,14 +68,15 @@ public class DnsRecordModel extends Model {
     public static final BooleanField DYNAMIC = SCHEMA.addField(BooleanField.builder("dynamic").defaultValue(false)
         .label(HohenheimFormCopy.label("record_dynamic")).help(HohenheimFormCopy.help("record_dynamic")).build());
     /**
-     * The HTTP Basic password a dyndns client presents; a live bearer credential,
-     * so it is {@code secret()}: never echoed into the form (and thus never into
-     * revisions, activity deltas or diff rendering), and a blank submit keeps the
-     * stored value. The mint row action discloses it ONCE in its toast.
-     *
-     * AIDEV-NOTE: still stored as-is rather than hashed, because
-     * DynamicDnsService looks the record UP by token; hashing it is a separate
-     * change (hash the presented token and look that up), not a presentation one.
+     * The HTTP Basic password a dyndns client presents; a live bearer credential.
+     * It is {@code secret()} (never echoed into the form, revisions, activity deltas
+     * or diff rendering; a blank submit keeps the stored value) AND stored HASHED --
+     * only the {@code sha256:} digest is at rest, so a DB read (backup, another
+     * process, revision history) cannot recover a working token. {@code DynamicDnsService}
+     * hashes the presented token and looks the record up by digest; the mint row
+     * action discloses the plaintext ONCE in its toast. {@code DynamicDnsService.installTokenHashing}
+     * normalizes any write, and {@code DyndnsTokenSeeder} hashes pre-existing tokens
+     * in place (which keeps configured clients working, since they present the same plaintext).
      */
     public static final StringField DYNDNS_TOKEN = SCHEMA.addField(StringField.builder().name("dyndns_token")
         .label(HohenheimFormCopy.label("record_dyndns_token")).help(HohenheimFormCopy.help("record_dyndns_token"))
