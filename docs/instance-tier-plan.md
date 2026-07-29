@@ -578,6 +578,59 @@ operator enabling a staged site can seize another tenant's hostname
 (disabled sites are exempt from the cross-site conflict check). Fix: toggle
 enable runs the same conflict invariant as updateRow.
 
+### STATUS: Phase 0 COMPLETE and integration-verified (2026-07-29)
+
+All nine items landed, both hostile review passes are closed, and a chain-wide
+integration pass across 21 projects is green. Nothing is pushed.
+
+What the reviews and the integration pass caught that the per-item tests did
+NOT -- these are the lessons worth carrying into later phases:
+
+- **The IPC fix initially downgraded a permanent wedge to a FLOOD wedge.** The
+  pre-auth counter conflated pre-auth with connected, so an attached child held
+  a slot for life. Fixed by releasing on auth + a bounded wrapper reconnect.
+  Residual, stated honestly: a determined co-located tenant can still degrade
+  reconnect LATENCY. The real boundary for hostile co-tenancy is the isolation
+  tier (boundary 1), never a loopback port.
+- **The `.ifNotExists()` retrofit poisoned the integrity baseline** with ~15
+  self-inflicted checksum findings that would have blocked the very flip to
+  `fail` it was working toward. Fixed by excluding `ifNotExists` from the
+  STRUCTURAL signature (it changes idempotency, never resulting schema) plus a
+  legacy-compat clause, because zenit-ai M003/M004 already carried the flag at
+  apply time and a naive removal would have manufactured the same defect class
+  on thoth. Consequence: the ~15 migrations revert to their ORIGINAL checksums,
+  so NO hand-stamping is needed for the retrofit. The prepared procedure now
+  covers only the 26 NULL rows and the 5 genuinely drifted migrations.
+- **Redaction can DESTROY data, not just leak it.** Omitting secrets from
+  snapshots wipes them on restore unless the current values are grafted back.
+  The rule: graft only where correspondence is UNAMBIGUOUS (single-element
+  lists, per-locale pairing); otherwise REFUSE and keep the current value. A
+  positional graft over a reordered list would move a secret BETWEEN records,
+  which is worse than losing it.
+- **A sourceset move broke the browser.** 0.4 moved the site RecordSource to
+  server-only; `WidgetInstance` DRY revival validates widget config sources
+  against the BROWSER registry, so soft-nav to the dashboard died while hard
+  loads worked. Root cause was a FRAMEWORK defect: 0.4 legitimately made the
+  browser registry a SUBSET of the server's, but three browser paths still
+  treated their partial registry as authority on existence -- and even past the
+  crash, `Records.count` would have silently rendered 0. Now registry
+  membership is server-authoritative and the browser delegates by token.
+  spamservice had the identical latent bug and was rescued with no app change.
+- **Two tests were passing VACUOUSLY** (one registered a source that was
+  silently refused, so it re-asserted a leftover). Every implementing agent was
+  required to revert its own fix and confirm the test failed; that is what
+  caught them.
+
+Known pre-existing and NOT from this arc: hohenheim
+`AdminPagesTest.settingsPageRendersSavesResetsAndRefusesInvalidValues`
+(settings array-editor reset). Next bisect point if chased: zenit-cms `c5dc2d7`.
+
+Decisions still open for Jelle: (1) scrub historical plaintext secrets from
+production `zenit_revisions`/`zenit_activity`, or leave and document -- render-
+time redaction already masks them in the UI; (2) make WS revalidation default-on
+for authorization-gated endpoints; (3) whether `/admin/**` GETs should be
+interactive-only (an admin-scoped API key can read admin HTML today).
+
 ### Phase 0 gate
 
 All of the above have passing tests, the public CSP is set, and a hostile-tenant
