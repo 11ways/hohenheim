@@ -13,8 +13,7 @@ import java.util.List;
  * Database initialization and datasource management. SQLite only: several
  * migrations run raw SQLite SQL (M025 {@code json_type}, M043 {@code ||}
  * concatenation, which MySQL parses as logical OR and silently corrupts data),
- * so {@code database.url} must stay a SQLite URL despite DatasourceFactory
- * accepting other engines.
+ * so {@code init()} refuses to construct anything but a SQLite datasource.
  */
 public class HohenheimDatabase {
 
@@ -46,6 +45,7 @@ public class HohenheimDatabase {
         String password = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.PASSWORD);
 
         DatabaseEngine engine = DatabaseEngine.resolve(engineName, url);
+        requireSqlite(engine, url);
         datasource = DatasourceFactory.create(engine, url, username, password);
 
         // Make this the framework's default datasource so model singletons resolve it. Done here
@@ -63,5 +63,31 @@ public class HohenheimDatabase {
 
     public static SqlDatasource datasource() {
         return datasource;
+    }
+
+    /**
+     * Refuses any non-SQLite engine before a datasource exists.
+     *
+     * @throws IllegalStateException when the resolved engine is not SQLite
+     */
+    // AIDEV-NOTE: This guard is deliberately ABSOLUTE (no settings override). The migration
+    // history contains SQLite-only raw SQL: M025 uses the JSON1 json_type() function and
+    // M043 uses || string concatenation, which MySQL parses as logical OR and silently
+    // turns a stack service name into 0/1 -- data corruption, not a syntax error. Every
+    // control-plane boot path (ServerMain, tests) funnels through init(), so refusing here
+    // cannot be bypassed. Lifting this requires porting the raw SQL in every applied
+    // migration first, never a config flag.
+    private static void requireSqlite(DatabaseEngine engine, String url) {
+        if (engine == DatabaseEngine.SQLITE) {
+            return;
+        }
+        throw new IllegalStateException(
+            "Hohenheim's own database must be SQLite, but database.url/database.engine resolved to "
+            + engine + " (" + url + "). The migration history contains SQLite-only raw SQL: "
+            + "M025 uses the JSON1 json_type() function, and M043 uses || string concatenation, "
+            + "which MySQL parses as logical OR and would silently corrupt stack service names. "
+            + "Leave database.url blank and set database.path to a SQLite file instead. "
+            + "There is deliberately no override: running these migrations on another engine "
+            + "either fails or corrupts data.");
     }
 }
