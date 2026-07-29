@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.sitetype;
 
-import be.elevenways.hohenheim.server.process.SiteApiKeys;
 import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
 import be.elevenways.hohenheim.sitetype.SiteTypeRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -35,17 +34,18 @@ public class SiteTypes {
         HANDLERS.put(id, handler);
     }
 
-    /** One-time boot of the shared process-management infrastructure. */
+    /**
+     * One-time boot of the shared process-management infrastructure.
+     *
+     * AIDEV-NOTE: the model-funnel write hooks (SiteApiKeys, ReservedEnv, dyndns
+     * token hashing, the site enable invariant) deliberately do NOT install here
+     * anymore: they live in the discovered {@code HohenheimWriteHooks} ZenitModule,
+     * whose MODULES boot stage runs before STARTHTTP structurally. Installing them
+     * from an explicitly-ordered call site is what let the dyndns hook land AFTER
+     * the server had bound.
+     */
     public static void boot() {
         NodeSiteType.initSharedInfrastructure();
-        // Before any site row can be written: no plaintext api key reaches the datasource.
-        SiteApiKeys.install();
-        // ...and no reserved control variable (HOHENHEIM_*, PORT, the security-report
-        // pair) can be persisted as an operator environment variable, on ANY write path.
-        be.elevenways.hohenheim.server.process.ReservedEnv.install();
-        // ...and no disabled site can go live on a hostname an enabled site already
-        // owns, on ANY write path (form, toggle, delegated save, revision restore).
-        be.elevenways.hohenheim.server.cms.SiteResource.installEnableInvariant();
     }
 
     public static SiteTypeHandler getHandler(String typeIdentifier) {

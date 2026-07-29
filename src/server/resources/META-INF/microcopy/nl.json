@@ -143,6 +143,14 @@
     "text": "De URL moet met http:// of https:// beginnen",
     "scope": "violations"
   },
+  "weak_api_key": {
+    "text": "Deze API-sleutel is te makkelijk te raden: ze zou uit een databankkopie te achterhalen zijn. Gebruik de genereeractie, of plak een willekeurige sleutel van minstens {$min_length} tekens",
+    "scope": "violations"
+  },
+  "weak_dyndns_token": {
+    "text": "Dynamische-DNS-tokens kunnen niet met de hand ingetypt worden: gebruik de rijactie om een {$marker}-token te genereren",
+    "scope": "violations"
+  },
   "api_keys": [
     {
       "text": "API-sleutels",

@@ -21,11 +21,15 @@ deployment (netbird-server + dashboard + netbird-proxy).
   `adopt_resources` (the explicit takeover of a pre-existing deployment).
   External volumes are adopted per mount via `external_name` and are never
   removed.
-- **Secrets are encrypted at rest.** `registry_password`, config file
+- **STACK secrets are encrypted at rest -- this is a stacks-only claim, not a
+  platform one.** `registry_password`, config file
   `content`, and deployment `spec` snapshots use zenit's `.encrypted()` field
   modifier (AES-256-GCM envelopes, keyring at
   `database.encryption.key_file`). Back the keyring file up separately from
-  the database; losing it makes those values unreadable.
+  the database; losing it makes those values unreadable. Everything else
+  (site settings, environment variables, hashed api keys/tokens) is NOT
+  encrypted: site secrets rely on hashing plus `secret()` derived-surface
+  redaction until the 0.6c at-rest encryption workstream lands.
 - **Config files travel over the archive API**, uploaded into the created
   container before start with their declared octal mode. No host bind mounts,
   so remote (SSH) daemons work identically.

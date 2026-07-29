@@ -59,9 +59,10 @@ public class CommandSiteType implements SiteTypeHandler {
             .help(HohenheimFormCopy.help("delay")).build());
 
     // Environment variables as an ordered name -> value map
+    // secret(): redacted on derived surfaces; see NodeSiteType.ENVIRONMENT_VARIABLES.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
         StringMapField.builder("environment_variables").label(HohenheimFormCopy.label("environment_variables"))
-            .help(HohenheimFormCopy.help("environment_variables")).build());
+            .help(HohenheimFormCopy.help("environment_variables")).secret().build());
 
     public static final ListField<String> API_KEYS = SETTINGS_SCHEMA.addField(
         ListField.<String>builder(StringField.builder().name("api_key").build()).name("api_keys")

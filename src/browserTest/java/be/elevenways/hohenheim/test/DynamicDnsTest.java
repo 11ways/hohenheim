@@ -7,6 +7,8 @@ import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService.Status;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violation;
+import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
@@ -17,6 +19,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * Dynamic DNS (dyndns2): token minting, the update state machine (good / nochg
@@ -100,6 +104,77 @@ class DynamicDnsTest extends HohenheimTestBase {
         // A wrong token is refused.
         assertThat(service.update("hdyn_wrongtoken00.nope", null, "203.0.113.9", null).status())
             .isEqualTo(Status.BADAUTH);
+    }
+
+    @Test
+    void operatorTypedTokensMustBeMintedShapeAndStrong() {
+        seedDynamicRecord("dyn-adopt.example", "home", DnsRecordModel.TYPE_A, "192.0.2.1");
+        DnsRecordModel records = Models.get(DnsRecordModel.class);
+        int zoneId = Models.get(DnsZoneModel.class).findByOrigin("dyn-adopt.example").get(DnsZoneModel.ID);
+        Row record = records.find().where(DnsRecordModel.ZONE_ID.eq(zoneId)).first();
+        String storedDigest = record.get(DnsRecordModel.DYNDNS_TOKEN);
+
+        // 1. A weak operator-typed value is refused with the specific violation:
+        //    its fast digest would be dictionary-recoverable from a copied DB.
+        record.set(DnsRecordModel.DYNDNS_TOKEN, "my-router-password");
+        Violations weak = catchThrowableOfType(() -> records.save(record), Violations.class);
+        assertThat((Object) weak)
+            .as("1. adopting a weak dyndns token must throw Violations").isNotNull();
+        Violation violation = weak.all().get(0);
+        assertThat(violation.fieldName())
+            .as("1. the violation targets the dyndns_token field")
+            .isEqualTo("dyndns_token");
+        assertThat(violation.message().key())
+            .as("1. the violation carries the weak_dyndns_token message")
+            .isEqualTo("weak_dyndns_token");
+        assertThat(violation.value())
+            .as("1. the violation must never echo the credential")
+            .isEqualTo("");
+
+        // 2. A strong value WITHOUT the hdyn_ marker is refused too: authenticate()
+        //    requires the marker, so storing it would be silently dead weight.
+        record.set(DnsRecordModel.DYNDNS_TOKEN, "markerless-0123456789abcdefghijklmnopqrs");
+        assertThatThrownBy(() -> records.save(record))
+            .as("2. a markerless token can never authenticate and must be refused")
+            .isInstanceOf(Violations.class)
+            .hasMessageContaining("weak_dyndns_token");
+
+        // 3. A marker-shaped strong value is adopted (hashed) and the stored value
+        //    it replaced is untouched by the refused attempts.
+        assertThat(Models.get(DnsRecordModel.class).findById(record.get(DnsRecordModel.ID))
+            .get(DnsRecordModel.DYNDNS_TOKEN))
+            .as("3. the refused saves must leave the stored digest untouched")
+            .isEqualTo(storedDigest);
+        String adopted = "hdyn_operator-0123456789abcdefghijklmn";
+        Row fresh = Models.get(DnsRecordModel.class).findById(record.get(DnsRecordModel.ID));
+        fresh.set(DnsRecordModel.DYNDNS_TOKEN, adopted);
+        records.save(fresh);
+        assertThat(Models.get(DnsRecordModel.class).findById(record.get(DnsRecordModel.ID))
+            .get(DnsRecordModel.DYNDNS_TOKEN))
+            .as("3. a strong hdyn_ token must be adopted as its digest")
+            .isEqualTo(DynamicDnsService.digest(adopted));
+    }
+
+    @Test
+    void sha256PrefixedLegacyPlaintextIsSweptNotMisclassified() {
+        // A legacy plaintext token that happens to start with "sha256:" must be
+        // hashed by the sweep like any other plaintext, never treated as already
+        // migrated because of its prefix.
+        seedDynamicRecord("dyn-tricky.example", "home", DnsRecordModel.TYPE_A, "192.0.2.1");
+        int zoneId = Models.get(DnsZoneModel.class).findByOrigin("dyn-tricky.example").get(DnsZoneModel.ID);
+        int recordId = Models.get(DnsRecordModel.class).find()
+            .where(DnsRecordModel.ZONE_ID.eq(zoneId)).first().get(DnsRecordModel.ID);
+        String tricky = "sha256:legacy-router-token";
+        Models.get(DnsRecordModel.class).find().where(DnsRecordModel.ID.eq(recordId))
+            .assign(DnsRecordModel.DYNDNS_TOKEN, tricky).bypassBehaviours().updateAll();
+
+        assertThat(DynamicDnsService.hashStoredTokens())
+            .as("the sweep must rewrite the sha256:-prefixed plaintext token")
+            .isGreaterThanOrEqualTo(1);
+        assertThat(Models.get(DnsRecordModel.class).findById(recordId).get(DnsRecordModel.DYNDNS_TOKEN))
+            .as("the stored value must become the full digest of the tricky plaintext")
+            .isEqualTo(DynamicDnsService.digest(tricky))
+            .doesNotContain("legacy-router-token");
     }
 
     @Test
