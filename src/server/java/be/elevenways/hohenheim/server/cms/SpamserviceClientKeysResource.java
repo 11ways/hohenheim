@@ -33,6 +33,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -147,8 +148,12 @@ public final class SpamserviceClientKeysResource extends SpamserviceRemoteResour
             ? Microcopy.of("key_created").withFilter("scope", "spamservice_key").withArg("key", created.key())
             : Microcopy.of("key_adopted").withFilter("scope", "spamservice_key");
         if (context.conduit() != null) {
+            // AIDEV-NOTE: the generated key is a one-shot disclosure; the secret-arg
+            // variant parks it in SecretDisclosures so only a single-use handle
+            // rides the session (an adopted key was operator-entered, not disclosed).
             CmsPageContext.stashFlashToast(context.conduit(),
-                new FlashToast(message, CmsActionResult.Toast.Level.SUCCESS));
+                new FlashToast(message, CmsActionResult.Toast.Level.SUCCESS),
+                created.generated() ? Set.of("key") : Set.of());
         }
         return created.clientId() + "~" + created.id();
     }
