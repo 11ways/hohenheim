@@ -28,7 +28,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * The migration set as an upgrade contract: a fresh install migrates and re-migrates cleanly,
  * every ALTER-only migration survives being re-applied to a schema that already has its columns,
- * a database carrying duplicate stack rows still boots, and M042 stays frozen.
+ * a database carrying duplicate stack rows still boots, and every shipped migration's
+ * structural checksum stays pinned (M042 doubly so).
  */
 class MigrationIntegrityTest {
 
@@ -232,6 +233,46 @@ class MigrationIntegrityTest {
                     failureDetail(acknowledged))
                 .isTrue();
         });
+    }
+
+    @Test
+    void everyShippedMigrationChecksumStaysPinned() throws Exception {
+        // 1. Compute the structural checksum of every discovered hohenheim migration.
+        List<Migration> migrations = new ArrayList<>();
+        for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations("default")) {
+            Migration migration = supplier.get();
+            if (migration.getClass().getName().startsWith("be.elevenways.hohenheim.migration.")) {
+                migrations.add(migration);
+            }
+        }
+        migrations.sort(java.util.Comparator.comparing(Migration::getVersion));
+        assertThat(migrations).as("discovery finds the shipped migrations").isNotEmpty();
+
+        StringBuilder computed = new StringBuilder();
+        for (Migration migration : migrations) {
+            computed.append(migration.getVersion())
+                .append(' ').append(migration.getClass().getSimpleName())
+                .append(' ').append(MigrationChecksum.compute(migration))
+                .append('\n');
+        }
+
+        // 2. The golden file pins them all: an edit-after-apply anywhere in the set fails here,
+        //    not on the live install's integrity check.
+        String golden;
+        try (var stream = MigrationIntegrityTest.class.getResourceAsStream("/migration-checksums.txt")) {
+            assertThat(stream).as("src/browserTest/resources/migration-checksums.txt exists").isNotNull();
+            golden = new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                .replace("\r\n", "\n");
+        }
+        assertThat(computed.toString())
+            .as("Shipped migration checksums are pinned in src/browserTest/resources/"
+                + "migration-checksums.txt. A NEW migration appends its own line (copy it from "
+                + "the computed content below). A CHANGED line means an applied migration was "
+                + "edited after it shipped -- write a new migration instead; never retro-edit "
+                + "the pinned line. A MISSING migration must also be appended to "
+                + "HohenheimDatabase.RETIRED_MIGRATION_VERSIONS in the same commit. "
+                + "Computed content:\n%s", computed)
+            .isEqualTo(golden);
     }
 
     @Test
