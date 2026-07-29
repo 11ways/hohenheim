@@ -129,59 +129,82 @@ public class IpcChannel implements AutoCloseable {
             }
             // Off the accept lane: a peer that stalls mid-handshake must not delay
             // the real child's connection.
-            Thread.startVirtualThread(() -> {
-                try {
-                    handshakeAndServe(socket);
-                } finally {
-                    preAuthConnections.decrementAndGet();
-                }
-            });
+            Thread.startVirtualThread(() -> handshakeAndServe(socket));
         }
     }
 
-    /** Authenticate one accepted peer and, if it is the child, serve it. */
+    /**
+     * Authenticate one accepted peer and, if it is the child, serve it.
+     *
+     * AIDEV-NOTE: the pre-auth slot is released the MOMENT authentication succeeds
+     * (a genuine pre-auth -> connected transition), NOT when the peer disconnects.
+     * The old code decremented only after readLoop returned, so an authenticated,
+     * SERVING child held a pre-auth slot for its entire lifetime -- the counter
+     * conflated pre-auth with connected, leaving an effective pre-auth budget of 7
+     * while a child was attached and letting a local peer that connected first
+     * permanently occupy a slot. A separate cap on CONNECTED peers is unnecessary:
+     * only one peer is ever attached (the peerLock guard closes any authenticated
+     * latecomer at once), and only the token holder can pass authenticate(), so the
+     * pre-auth cap already bounds every token-less flood.
+     */
     private void handshakeAndServe(Socket socket) {
-        BufferedReader reader;
-        try {
-            socket.setSoTimeout((int) AUTH_TIMEOUT_MS);
-            reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            if (!authenticate(reader)) {
-                closeQuietly(socket);
-                return;
+        AtomicBoolean preAuthReleased = new AtomicBoolean(false);
+        Runnable releasePreAuth = () -> {
+            if (preAuthReleased.compareAndSet(false, true)) {
+                preAuthConnections.decrementAndGet();
             }
-            socket.setSoTimeout(0);
-        } catch (SocketTimeoutException e) {
-            Blast.log("IPC: dropped a peer that never authenticated");
-            closeQuietly(socket);
-            return;
-        } catch (IOException e) {
-            closeQuietly(socket);
-            return;
-        }
-
-        PrintWriter peerWriter = new PrintWriter(
-            new OutputStreamWriter(quietOutputStream(socket)), true);
-        synchronized (peerLock) {
-            if (closed.get() || clientSocket != null) {
-                // The child is already attached; an authenticated latecomer waits for
-                // the current peer to go away rather than displacing it.
-                closeQuietly(socket);
-                return;
-            }
-            clientSocket = socket;
-            writer = peerWriter;
-        }
-        connected.countDown();
+        };
         try {
-            readLoop(reader);
-        } finally {
-            synchronized (peerLock) {
-                if (clientSocket == socket) {
-                    clientSocket = null;
-                    writer = null;
+            BufferedReader reader;
+            try {
+                socket.setSoTimeout((int) AUTH_TIMEOUT_MS);
+                reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                if (!authenticate(reader)) {
+                    closeQuietly(socket);
+                    return;
                 }
+                socket.setSoTimeout(0);
+            } catch (SocketTimeoutException e) {
+                Blast.log("IPC: dropped a peer that never authenticated");
+                closeQuietly(socket);
+                return;
+            } catch (IOException e) {
+                closeQuietly(socket);
+                return;
             }
-            closeQuietly(socket);
+
+            // Authenticated: this peer is CONNECTED, not pre-auth. Free its slot now
+            // so an attached child never consumes pre-auth budget for its lifetime.
+            releasePreAuth.run();
+
+            PrintWriter peerWriter = new PrintWriter(
+                new OutputStreamWriter(quietOutputStream(socket)), true);
+            synchronized (peerLock) {
+                if (closed.get() || clientSocket != null) {
+                    // The child is already attached; an authenticated latecomer waits for
+                    // the current peer to go away rather than displacing it.
+                    closeQuietly(socket);
+                    return;
+                }
+                clientSocket = socket;
+                writer = peerWriter;
+            }
+            connected.countDown();
+            try {
+                readLoop(reader);
+            } finally {
+                synchronized (peerLock) {
+                    if (clientSocket == socket) {
+                        clientSocket = null;
+                        writer = null;
+                    }
+                }
+                closeQuietly(socket);
+            }
+        } finally {
+            // Idempotent: covers every failure path (auth refusal, timeout, IOException)
+            // that returned before the connected transition released the slot.
+            releasePreAuth.run();
         }
     }
 
