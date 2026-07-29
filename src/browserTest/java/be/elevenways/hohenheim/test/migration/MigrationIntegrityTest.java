@@ -1,24 +1,13 @@
 package be.elevenways.hohenheim.test.migration;
 
-import be.elevenways.hohenheim.migration.M008_AddCertificateLifecycleFields;
-import be.elevenways.hohenheim.migration.M010_AddDomainLeExclude;
-import be.elevenways.hohenheim.migration.M014_AddSiteSourceFields;
-import be.elevenways.hohenheim.migration.M016_AddDatabaseStatus;
-import be.elevenways.hohenheim.migration.M018_AddDatabaseServer;
-import be.elevenways.hohenheim.migration.M020_AddCertRetryFields;
-import be.elevenways.hohenheim.migration.M021_AddCertLetsencryptEmail;
-import be.elevenways.hohenheim.migration.M023_AddDomainResponseHeaders;
-import be.elevenways.hohenheim.migration.M029_AddDatabaseLimits;
-import be.elevenways.hohenheim.migration.M030_AddNotificationEvents;
-import be.elevenways.hohenheim.migration.M031_AddCertExpiryStamp;
-import be.elevenways.hohenheim.migration.M033_AddCertificateChallenge;
-import be.elevenways.hohenheim.migration.M037_AddDnssec;
-import be.elevenways.hohenheim.migration.M038_AddDynamicDns;
 import be.elevenways.hohenheim.migration.M042_CreateStacks;
 import be.elevenways.hohenheim.migration.M043_StackUniqueKeys;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.zenit.common.orm.migration.Migration;
+import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 import be.elevenways.zenit.common.orm.migration.MigrationDirection;
+import be.elevenways.zenit.common.orm.migration.operation.AddColumnOperation;
+import be.elevenways.zenit.common.orm.migration.operation.MigrationOperation;
 import be.elevenways.zenit.common.orm.migration.MigrationResult;
 import be.elevenways.zenit.common.orm.migration.MigrationRunnerResult;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -29,6 +18,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -54,26 +44,35 @@ class MigrationIntegrityTest {
         "cd499511042cc811111f668ee815a9e1548861bd486aec244548c3ddb67397b4";
 
     /**
-     * Every migration whose {@code up()} is nothing but ALTER TABLE ADD COLUMN, so re-applying it
-     * to an already-migrated schema must be a clean no-op. Migrations that also CREATE tables or
-     * indexes are excluded: those are not re-runnable and never claimed to be.
+     * Every hohenheim migration whose {@code up()} is nothing but ALTER TABLE ADD COLUMN, so
+     * re-applying it to an already-migrated schema must be a clean no-op. Migrations that also
+     * CREATE tables or indexes are excluded: those are not re-runnable and never claimed to be.
+     *
+     * @return the ALTER-only subset of the runner's own discovery, so a new migration is
+     *         covered automatically instead of rotting out of a hand-maintained list
      */
-    private static final List<Supplier<Migration>> ALTER_ONLY_MIGRATIONS = List.of(
-        M008_AddCertificateLifecycleFields::new,
-        M010_AddDomainLeExclude::new,
-        M014_AddSiteSourceFields::new,
-        M016_AddDatabaseStatus::new,
-        M018_AddDatabaseServer::new,
-        M020_AddCertRetryFields::new,
-        M021_AddCertLetsencryptEmail::new,
-        M023_AddDomainResponseHeaders::new,
-        M029_AddDatabaseLimits::new,
-        M030_AddNotificationEvents::new,
-        M031_AddCertExpiryStamp::new,
-        M033_AddCertificateChallenge::new,
-        M037_AddDnssec::new,
-        M038_AddDynamicDns::new
-    );
+    // AIDEV-NOTE: Scoped to be.elevenways.hohenheim.migration on purpose: zenit's own
+    // M002_AddSystemTaskBootClaim and M002_AddActivityRecordTitle are also ADD-COLUMN-only
+    // but lack .ifNotExists(), so their replay posture is upstream's contract, not this
+    // repo's. up() only RECORDS operations into a fresh builder (the MigrationChecksum
+    // pattern); nothing executes here.
+    private static List<Supplier<Migration>> alterOnlyMigrations() {
+        List<Supplier<Migration>> result = new ArrayList<>();
+        for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations("default")) {
+            Migration migration = supplier.get();
+            if (!migration.getClass().getName().startsWith("be.elevenways.hohenheim.migration.")) {
+                continue;
+            }
+            MigrationBuilder recorded = new MigrationBuilder();
+            migration.up(recorded);
+            List<MigrationOperation> operations = recorded.getOperations();
+            if (!operations.isEmpty()
+                    && operations.stream().allMatch(op -> op instanceof AddColumnOperation)) {
+                result.add(supplier);
+            }
+        }
+        return result;
+    }
 
     @Test
     void aFreshInstallMigratesReMigratesAndPassesStrictIntegrity() throws Exception {
@@ -124,18 +123,26 @@ class MigrationIntegrityTest {
     void alterOnlyMigrationsReApplyToADivergentInstall() throws Exception {
         SqliteDatasource datasource = emptyDatabase("divergent");
 
-        // 1. Bring the database fully up to date the normal way.
+        // 1. The derived list really derives: 14 ALTER-only migrations existed when the
+        //    hand-list was replaced (2026-07-29), and migrations are never deleted, so a
+        //    smaller set means the derivation itself broke.
+        List<Supplier<Migration>> alterOnly = alterOnlyMigrations();
+        assertThat(alterOnly)
+            .as("the derived ALTER-only migration set")
+            .hasSizeGreaterThanOrEqualTo(14);
+
+        // 2. Bring the database fully up to date the normal way.
         new MigrationRunner(datasource).migrate().requireSuccess();
 
-        // 2. Lose the history rows of every ALTER-only migration while keeping the schema: the
+        // 3. Lose the history rows of every ALTER-only migration while keeping the schema: the
         //    state an operator lands in after restoring a populated database into a fresh install,
         //    or after hand-repairing zenit_migrations.
-        for (Supplier<Migration> supplier : ALTER_ONLY_MIGRATIONS) {
+        for (Supplier<Migration> supplier : alterOnly) {
             datasource.rawUpdate("DELETE FROM zenit_migrations WHERE version = ?",
                 supplier.get().getVersion());
         }
 
-        // 3. The normal boot path replays exactly those versions. Without .ifNotExists() the first
+        // 4. The normal boot path replays exactly those versions. Without .ifNotExists() the first
         //    one dies on "duplicate column name" and the whole batch stops.
         MigrationRunnerResult replay = new MigrationRunner(datasource).migrate();
         assertThat(replay.isSuccess())
@@ -143,9 +150,9 @@ class MigrationIntegrityTest {
             .isTrue();
         assertThat(replay.getAppliedCount())
             .as("every deleted version was replayed")
-            .isEqualTo(ALTER_ONLY_MIGRATIONS.size());
+            .isEqualTo(alterOnly.size());
 
-        // 4. The replay was a pure no-op: the data those tables already held is untouched.
+        // 5. The replay was a pure no-op: the data those tables already held is untouched.
         assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM spamservice_installations"))
             .as("a replay never rewrites data").isEqualTo(1L);
     }
