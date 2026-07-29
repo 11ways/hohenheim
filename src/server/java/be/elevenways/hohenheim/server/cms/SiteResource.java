@@ -144,21 +144,63 @@ public class SiteResource extends RowResource {
         normalizeSource(values);
         normalizeDevNamespace(values);
         validateTlsPassthrough(values);
-        boolean wasEnabled = Boolean.TRUE.equals(existing.get(SiteModel.ENABLED));
-        refuseConflictingEnable(existing, values.containsKey("enabled")
-            ? Boolean.TRUE.equals(values.get("enabled")) : wasEnabled);
+        // The enable invariant is NOT re-checked here: it runs in the SiteModel
+        // write pipeline (installEnableInvariant), which super.updateRow's save
+        // funnels through -- one enforcement point for every writer.
         super.updateRow(existing, values, accessContext);
     }
 
+    private static volatile boolean enableInvariantInstalled;
+
     /**
-     * THE enable invariant, shared by every path that can flip a site live.
+     * Install THE enable invariant on the SiteModel write pipeline so every writer
+     * of a live transition passes through exactly one check: the admin form, the
+     * toggle action, the delegated /manage save, the generic revision-restore
+     * endpoint, seeds, and any future writer.
+     *
+     * AIDEV-NOTE: this MUST live in the write pipeline, never in the resource layer.
+     * The framework's RESTORE_REVISION endpoint is registered for EVERY revisionable
+     * RowResource -- callable even when the resource hides its revision subpage --
+     * and it restores a snapshot via RevisionableBehaviour.restore -> model.save
+     * DIRECTLY, running no resource-layer hook. A delegated tenant could restore a
+     * formerly-enabled revision after another site took the hostname and silently
+     * seize the route (SiteDispatcher resolves first-wins). A before-write hook is
+     * the one seam every save funnels through. Do NOT move this back into updateRow
+     * / toggleAction as a per-path check -- that is the very bypass this closes.
+     */
+    public static synchronized void installEnableInvariant() {
+        if (enableInvariantInstalled) {
+            return;
+        }
+        enableInvariantInstalled = true;
+        SiteModel.SCHEMA.addBeforeWriteHook(context -> {
+            Row row = context.getRow();
+            // enabled absent from the write means the flag is not changing; a create
+            // has no id and no domains yet. Only an UPDATE writing enabled=true can
+            // put a site into the shared route table, so only that is validated.
+            if (row == null || !row.has(SiteModel.ENABLED.getName())
+                    || !Boolean.TRUE.equals(row.get(SiteModel.ENABLED))) {
+                return;
+            }
+            if (!row.has(SiteModel.ID.getName()) || row.get(SiteModel.ID) == null) {
+                return;
+            }
+            Row stored = Models.get(SiteModel.class).findById(row.get(SiteModel.ID));
+            if (stored == null) {
+                return;
+            }
+            refuseConflictingEnable(stored, true);
+        });
+    }
+
+    /**
+     * THE enable invariant, invoked only from the write-pipeline hook above.
      *
      * AIDEV-NOTE: enabling puts a site's domain rows into the global route table, and
      * disabled sites are EXEMPT from the cross-site route-identity check -- so a site
-     * staged on someone else's hostname seizes it the moment it goes live. The form
-     * path and the toggle action must both run this; toggle is the only row action a
-     * delegated /manage tenant has, so a second copy of the check is a takeover
-     * waiting for the two copies to drift.
+     * staged on someone else's hostname seizes it the moment it goes live. Skips a
+     * site that is ALREADY enabled so an already-live re-save never self-conflicts;
+     * only the disabled->enabled transition is validated.
      *
      * @throws Violations when going live would collide with an enabled site's route
      */
@@ -305,7 +347,9 @@ public class SiteResource extends RowResource {
             .icon(Icon.of("power-off"))
             .handler((row, ctx) -> {
                 boolean current = Boolean.TRUE.equals(row.get(SiteModel.ENABLED));
-                refuseConflictingEnable(row, !current);
+                // No pre-check: the write-pipeline enable invariant (installEnableInvariant)
+                // runs inside model.save below and throws the enable_route_conflict Violations,
+                // which the row-action handler surfaces as a refusal toast.
                 row.set(SiteModel.ENABLED, !current);
                 ActivityLog.withAction(current ? "disabled" : "enabled", null,
                     () -> this.model().save(row));

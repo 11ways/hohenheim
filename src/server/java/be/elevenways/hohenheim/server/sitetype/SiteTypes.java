@@ -40,6 +40,9 @@ public class SiteTypes {
         NodeSiteType.initSharedInfrastructure();
         // Before any site row can be written: no plaintext api key reaches the datasource.
         SiteApiKeys.install();
+        // ...and no disabled site can go live on a hostname an enabled site already
+        // owns, on ANY write path (form, toggle, delegated save, revision restore).
+        be.elevenways.hohenheim.server.cms.SiteResource.installEnableInvariant();
     }
 
     public static SiteTypeHandler getHandler(String typeIdentifier) {
