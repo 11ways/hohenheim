@@ -16,13 +16,9 @@
     <header class="cms-resource-list-header">
         <h1>{{ siteName }}</h1>
         {% if canRequestCert %}
-        <a href={% "/admin/certificates-request?site=" + siteId %} id="request-cert-link">
-            <pl-button variant={% "outline" %}>{{ t("request_certificate", scope: "site_domains") }}</pl-button>
-        </a>
+        <pl-button variant="outline" href={% "/admin/certificates-request?site=" + siteId %} id="request-cert-link">{{ t("request_certificate", scope: "site_domains") }}</pl-button>
         {% /if %}
-        {% if canEditDomains %}<a href={% basePath + "/domains/new?site_id=" + siteId %} id="add-domain-link">
-            <pl-button variant={% "primary" %}>{{ t("add_domain", scope: "site_domains") }}</pl-button>
-        </a>{% /if %}
+        {% if canEditDomains %}<pl-button variant="primary" href={% basePath + "/domains/new?site_id=" + siteId %} id="add-domain-link">{{ t("add_domain", scope: "site_domains") }}</pl-button>{% /if %}
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}

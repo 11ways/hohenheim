@@ -33,9 +33,12 @@ import java.util.Map;
  */
 public final class SiteProcessesPage implements RecordScopedPage<Row> {
 
+    /** The route slug, shared with the terminal's scoped-CSP claim. */
+    public static final String SLUG = "processes";
+
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_processes"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("processes").withFilter("scope", "site"); }
-    @Override public @NonNull String slug() { return "processes"; }
+    @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("microchip"); }
 
     @Override

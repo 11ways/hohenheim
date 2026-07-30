@@ -47,7 +47,7 @@
                 </form>
                 {% /if %}
                 {% if canRollback %}
-                <form method="POST" action={% "/sites/" + siteId + "/rollback" %} data-confirm={% t("rollback_confirm", scope: "site_deployments") %}>
+                <form method="POST" action={% "/sites/" + siteId + "/rollback" %} use:CmsConfirm.destructive={% t("rollback_confirm", scope: "site_deployments") %}>
                     {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
                     <pl-button variant={% "destructive" %} type={% "submit" %}>{{ t("rollback", scope: "site_deployments") }}</pl-button>
                 </form>

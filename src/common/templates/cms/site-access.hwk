@@ -44,7 +44,7 @@
                 <pl-table-cell>{{ grant.get("createdAt") }}</pl-table-cell>
                 <pl-table-cell>
                     <form method="POST" action={% "/admin/sites/" + siteId + "/access/remove" %}
-                          data-confirm={% t("remove_confirm", scope: "site_access") %} style="display:inline">
+                          use:CmsConfirm.destructive={% t("remove_confirm", scope: "site_access") %} style="display:inline">
                         {% csrf() %}
                         <input type="hidden" name="subject_type" value={% grant.get("subjectType") %}>
                         <input type="hidden" name="subject_id" value={% grant.get("subjectId") %}>

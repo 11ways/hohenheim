@@ -117,9 +117,18 @@ class AdminPagesTest extends HohenheimTestBase {
         page.click(neverBan + " [data-array-add]");
         waitForReactiveIdle();
         page.locator(neverBan + " .zf-array-row:nth-child(3) input").fill("remove.example");
-        page.click(neverBan + " .zf-array-row:nth-child(3) [data-array-remove]");
+        // The row controls are use:List.moveUp/moveDown/remove now, so the boundary
+        // disabled guard and the default aria-label are the DIRECTIVE's -- assert them
+        // here rather than only swapping the marker selector.
+        assertThat(page.locator(neverBan + " .zf-array-row:nth-child(1) [data-list-move-up][disabled]")
+            .count()).as("the first row cannot move up").isEqualTo(1);
+        assertThat(page.locator(neverBan + " .zf-array-row:nth-child(3) [data-list-move-down][disabled]")
+            .count()).as("the last row cannot move down").isEqualTo(1);
+        assertThat(page.locator(neverBan + " .zf-array-row:nth-child(3) [data-list-remove]")
+            .getAttribute("aria-label")).as("the remove control is still labelled").isEqualTo("Remove");
+        page.click(neverBan + " .zf-array-row:nth-child(3) [data-list-remove]");
         waitForReactiveIdle();
-        page.click(neverBan + " .zf-array-row:nth-child(1) [data-array-move-down]");
+        page.click(neverBan + " .zf-array-row:nth-child(1) [data-list-move-down]");
         waitForReactiveIdle();
 
         page.click(".cms-settings-actions pl-button");
@@ -151,10 +160,17 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(entry).isNotNull();
         assertThat(entry.get(ActivityModel.DETAIL)).contains("security.domain_miss_threshold");
 
-        // Reset uses the same repeatable editor controls and elides the empty default.
-        page.click(".cms-setting:has([data-path='app.security.never_ban']) [data-cms-setting-reset]");
+        // Reset ARMS a clear that applies on save; it no longer empties the editor
+        // client-side (the settings page's inline script, which clicked every remove
+        // button, is gone). The write-back below is what proves the clear applied.
+        String resetControl =
+            ".cms-setting:has([data-path='app.security.never_ban']) [data-cms-setting-reset]";
+        page.click(resetControl + " pl-checkbox button");
         waitForReactiveIdle();
-        assertThat(page.locator(neverBan + " .zf-array-row").count()).isZero();
+        assertThat(page.locator(resetControl + " pl-checkbox button").getAttribute("aria-checked"))
+            .as("the reset control is armed").isEqualTo("true");
+        assertThat(page.locator(neverBan + " .zf-array-row").count())
+            .as("an armed reset leaves the editor untouched until save").isEqualTo(2);
         page.click(".cms-settings-actions pl-button");
         page.waitForCondition(() -> HohenheimSettings.VALUES
             .getValue(HohenheimSettings.Security.NEVER_BAN).isEmpty());
@@ -163,7 +179,11 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(security.containsKey("never_ban")).isFalse();
 
         // The save above PRG-reloads the page: the browse click below lands on a
-        // dead listener unless the reloaded page has finished hydrating first.
+        // dead listener unless the reloaded page has finished hydrating first. Settle
+        // on the RELOADED document before waiting for hydration -- the cleared never_ban
+        // editor only exists after the reload, whereas the still-hydrated pre-reload page
+        // satisfies waitForHydration() on its own, before the navigation even starts.
+        page.waitForCondition(() -> page.locator(neverBan + " .zf-array-row").count() == 0);
         waitForHydration();
 
         // The filesystem-path browser picks a server directory; the pick is

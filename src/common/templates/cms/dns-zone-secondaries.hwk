@@ -11,9 +11,7 @@
 <section class="cms-resource-list-page">
     <header class="cms-resource-list-header">
         <h1>{{ origin }}</h1>
-        <a href={% "/admin/dns-zone-peers/new?zone_id=" + zoneId %} id="attach-secondary-link">
-            <pl-button variant={% "primary" %}>{{ t("attach", scope: "dns_secondaries") }}</pl-button>
-        </a>
+        <pl-button variant="primary" href={% "/admin/dns-zone-peers/new?zone_id=" + zoneId %} id="attach-secondary-link">{{ t("attach", scope: "dns_secondaries") }}</pl-button>
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}

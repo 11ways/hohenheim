@@ -34,6 +34,15 @@ public final class HohenheimAccess {
     }
 
     /**
+     * The boot-time half of this policy: sites are the ONE model here that holds record
+     * grants, and zenit-auth refuses a grant on an undeclared model. Declaring it is
+     * also what keeps the grant-cleanup hooks off every other model's deletes.
+     */
+    public static void declareGrantableModels() {
+        RecordGrants.declareGrantable(SiteModel.MODEL_ID);
+    }
+
+    /**
      * @return true when the context holds the installation-wide admin permission
      */
     public static boolean isAdmin(@NonNull AccessContext ctx) {

@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.server.cms.SiteDomainResource;
 import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.hohenheim.server.cms.SiteTerminalCsp;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.process.ReservedEnv;
 import be.elevenways.hohenheim.server.process.SiteApiKeys;
@@ -36,5 +38,11 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // No disabled site can go live on a hostname an enabled site already
         // owns (form, toggle, delegated save, revision restore).
         SiteResource.installEnableInvariant();
+        // No domain row can take a route an enabled site already owns, and every row
+        // stamps the live-route claim its unique index arbitrates (form, clone, seeder,
+        // API writeback, direct model save).
+        SiteDomainResource.installRouteInvariant();
+        // The pl-terminal page gets the wasm concessions; no other admin page does.
+        SiteTerminalCsp.install();
     }
 }

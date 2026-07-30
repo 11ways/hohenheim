@@ -287,11 +287,29 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         assertThat((String) deploy.get(DeploymentModel.COMMIT_SHA)).isEqualTo(secondCommit);
         assertThat(gitHandler().getCurrentCommit()).isEqualTo(secondCommit);
 
-        // Rollback re-activates the previous slot (the first commit).
+        // Rollback re-activates the previous slot (the first commit). Driven through the
+        // REAL page: the form declares use:CmsConfirm.destructive, so the click must open
+        // the shell dialog, cancel must NOT roll back, and confirm must.
+        // AIDEV-NOTE: counterfactual (pre-conversion): with the dead data-confirm
+        // attribute the first click posted immediately -- the dialog assertion fails and
+        // the cancel branch finds a third deployment already running.
         assertThat(gitHandler().hasPreviousSlot()).isTrue();
 
-        response = postAction("/sites/" + siteId + "/rollback");
-        assertThat(response.statusCode()).isIn(302, 303);
+        navigateToApp("/admin/sites/" + siteId + "/page/deployments");
+        waitForHydration();
+        String rollbackButton = "form[action$='/rollback'] pl-button";
+        waitForSelector(rollbackButton);
+
+        click(rollbackButton);
+        assertIsVisible(".pl-dialog-modal[data-open]");
+        click("[data-cms-confirm-cancel]");
+        assertIsNotVisible(".pl-dialog-modal");
+        page.waitForTimeout(400);
+        assertThat(deployments()).as("cancel must not roll back").hasSize(2);
+
+        click(rollbackButton);
+        assertIsVisible(".pl-dialog-modal[data-open]");
+        click("[data-cms-confirm-ok]");
 
         await("rollback", () -> hasFinished(3));
         deploy = deployments().get(0);

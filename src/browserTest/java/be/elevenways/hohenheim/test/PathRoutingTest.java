@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.validation.Violations;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -17,6 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Host + path routing: several sites can share one hostname when their path
@@ -149,23 +151,37 @@ class PathRoutingTest {
     }
 
     @Test
-    void duplicateRouteClaimsAreRefusedFirstWins() throws Exception {
+    void aSecondLiveSiteCannotTakeAnAlreadyClaimedRoute() throws Exception {
         resetDatabase();
 
         int firstPort = startUpstream("first-upstream", null);
         int secondPort = startUpstream("second-upstream", null);
 
-        // Sites load in name order: "A Site" claims the route before "B Site".
+        // 1. "A Site" goes live on dup.test/api and claims that route.
         Row first = setupSite("hohenheim:proxy", "A Site", "a-site", proxySettings(firstPort));
         addDomain(first, "dup.test", "exact", "/api", false);
 
+        // 2. A second LIVE site claiming the identical (hostname, path, listener) tuple is
+        //    refused by the write pipeline. This used to be accepted and then resolved
+        //    first-wins at the dispatcher, which left the second operator with a site that
+        //    was enabled, reachable nowhere, and told nothing.
         Row second = setupSite("hohenheim:proxy", "B Site", "b-site", proxySettings(secondPort));
-        addDomain(second, "dup.test", "exact", "/api", false);
+        assertThatThrownBy(() -> addDomain(second, "dup.test", "exact", "/api", false))
+            .as("step 2: the duplicate route is refused, not silently shadowed")
+            .isInstanceOf(Violations.class)
+            .hasMessageContaining("route_taken_other_site");
 
+        // 3. The route is the whole tuple, not the hostname: a DIFFERENT path on the same
+        //    hostname is a different route and stays legal.
+        addDomain(second, "dup.test", "exact", "/other", false);
+
+        // 4. Both live routes resolve to their own site.
         proxy = startProxy();
-
         assertThat(rawRequest(httpPort(proxy), "dup.test", "/api/x"))
-            .contains("first-upstream");
+            .as("step 4: the incumbent still owns /api").contains("first-upstream");
+        assertThat(rawRequest(httpPort(proxy), "dup.test", "/other/x"))
+            .as("step 4: the accepted sibling route reaches the second site")
+            .contains("second-upstream");
     }
 
     @Test

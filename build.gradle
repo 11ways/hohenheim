@@ -39,7 +39,6 @@ sourceSets {
         java {
             srcDirs = ['src/client/java']
             compileClasspath += sourceSets.common.output
-            runtimeClasspath += sourceSets.common.output
         }
         resources { srcDirs = ['src/client/resources'] }
     }
@@ -48,7 +47,6 @@ sourceSets {
         java {
             srcDirs = ['src/server/java']
             compileClasspath += sourceSets.common.output
-            runtimeClasspath += sourceSets.common.output
         }
         resources { srcDirs = ['src/server/resources'] }
     }
@@ -57,7 +55,7 @@ sourceSets {
         java { srcDirs = ['src/browserTest/java'] }
         resources { srcDirs = ['src/browserTest/resources'] }
         compileClasspath += sourceSets.common.output + sourceSets.client.output + sourceSets.server.output
-        runtimeClasspath += sourceSets.common.output + sourceSets.client.output + sourceSets.server.output
+        runtimeClasspath += sourceSets.server.output
     }
 }
 
@@ -122,7 +120,7 @@ dependencies {
     commonCompileOnly ('be.elevenways:zenit-widget-common:0.1.0-SNAPSHOT') { changing = true }
 
     // Client (TeaVM-compiled browser code)
-    clientImplementation sourceSets.common.output
+    clientCompileOnly sourceSets.common.output
     clientImplementation teavm.libs.jsoApis
     clientImplementation ('be.elevenways:protoblast-client:0.1.0-SNAPSHOT') { changing = true }
     clientImplementation ('be.elevenways:hawkeye-client:0.1.0-SNAPSHOT') { changing = true }
@@ -132,22 +130,20 @@ dependencies {
     clientImplementation ('be.elevenways:zenit-microcopy-client:0.1.0-SNAPSHOT') { changing = true }
     clientImplementation ('be.elevenways:zenit-cms-client:0.1.0-SNAPSHOT') { changing = true }
     // The shell user menu (zn-auth-user-menu, contributed by AuthCmsBridge)
-    // must hydrate: the client bundle needs zenit-auth's compiled templates.
-    clientImplementation ('be.elevenways:zenit-auth-common:0.1.0-SNAPSHOT') { changing = true }
+    // must hydrate: the client bundle needs zenit-auth's compiled templates
+    // (carried by the self-sufficient client platform jar).
+    clientImplementation ('be.elevenways:zenit-auth-client:0.1.0-SNAPSHOT') { changing = true }
 
     // Server
-    serverImplementation sourceSets.common.output
+    serverCompileOnly sourceSets.common.output
     serverImplementation ('be.elevenways:protoblast-server:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:hawkeye-server:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:zenit-server:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:zenit-auth-server:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:plumage-server:0.1.0-SNAPSHOT') { changing = true }
-    serverImplementation ('be.elevenways:plumage-common:0.1.0-SNAPSHOT') { changing = true }
-    serverImplementation ('be.elevenways:zenit-forms-common:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:zenit-forms-server:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:zenit-microcopy-server:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:zenit-cms-server:0.1.0-SNAPSHOT') { changing = true }
-    serverImplementation ('be.elevenways:zenit-comms-common:0.1.0-SNAPSHOT') { changing = true }
     serverImplementation ('be.elevenways:zenit-comms-server:0.1.0-SNAPSHOT') { changing = true }
     // Spamservice: the canonical IP-reputation / security-event authority
     // (reputation pulls + client provisioning for managed sites).
@@ -182,8 +178,6 @@ dependencies {
     browserTestImplementation 'org.junit.jupiter:junit-jupiter'
     browserTestImplementation 'com.microsoft.playwright:playwright:1.48.0'
     browserTestImplementation 'org.assertj:assertj-core:3.25.3'
-    browserTestImplementation sourceSets.common.output
-    browserTestImplementation sourceSets.client.output
     browserTestImplementation sourceSets.server.output
     browserTestImplementation ('be.elevenways:protoblast-server:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:zenit-server:0.1.0-SNAPSHOT') { changing = true }
@@ -195,7 +189,6 @@ dependencies {
     browserTestImplementation ('be.elevenways:zenit-microcopy-server:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:spamservice-client:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:zenit-cms-server:0.1.0-SNAPSHOT') { changing = true }
-    browserTestImplementation ('be.elevenways:zenit-comms-common:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:zenit-comms-server:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation 'org.xerial:sqlite-jdbc:3.45.1.0'
     browserTestImplementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
@@ -223,7 +216,6 @@ task serverJar(type: ShadowJar) {
     // the per-source exclude can reach into them.
     def autoLoadInit = 'be/elevenways/protoblast/generated/BlastAutoLoadInit.class'
     from(sourceSets.server.output)
-    from(sourceSets.common.output) { exclude autoLoadInit }
     from({
         // AIDEV-NOTE: zenit-common compiles against protoblast-client, but a JVM fat jar must
         // contain only protoblast-server's platform bytecode or browser natives can win.
@@ -314,7 +306,6 @@ task browserJar(type: ShadowJar) {
     // bundled via zipTree(...) so the per-source 'exclude' can reach into them.
     def autoLoadInit = 'be/elevenways/protoblast/generated/BlastAutoLoadInit.class'
     from(sourceSets.client.output)
-    from(sourceSets.common.output) { exclude autoLoadInit }
     from({
         project.configurations.clientRuntimeClasspath.findAll { it.isFile() }.collect { zipTree(it) }
     }) { exclude autoLoadInit }

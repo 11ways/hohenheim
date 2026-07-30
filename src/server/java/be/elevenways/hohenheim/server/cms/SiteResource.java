@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.process.SiteApiKeys;
+import be.elevenways.hohenheim.server.proxy.RouteClaims;
+import be.elevenways.hohenheim.server.proxy.RouteClaims.ClaimConflict;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.sitetype.types.DevNamespaceSiteType;
@@ -173,39 +175,88 @@ public class SiteResource extends RowResource {
             return;
         }
         enableInvariantInstalled = true;
+        // The ADVISORY scan: produces the specific, localized refusal an operator can act
+        // on. It reads the site and domain tables and only then writes, so it cannot win a
+        // race -- that is what the claim stamp below is for.
+        //
+        // AIDEV-NOTE: beforeVALIDATE, not beforeWrite. Both tiers run inside the same
+        // Schema.beforeWrite pass on EVERY save path (there is no way to reach the
+        // datasource past one but not the other), so the bypass argument above is
+        // unchanged; the split exists so the diagnosis runs before the row is judged and
+        // the authoritative claim runs last, immediately before the datasource write.
+        SiteModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row stored = storedSiteOf(context.getRow());
+            if (stored != null && willBeLive(context.getRow(), stored) && !RouteClaims.isLive(stored)) {
+                refuseConflictingEnable(stored, true);
+            }
+        });
+        // The AUTHORITATIVE claim: rewrites this site's live_route_key column, whose UNIQUE
+        // index is the only thing that can refuse a route to the loser of a simultaneous
+        // enable. Runs on every site write, not just a transition, so a route edited while
+        // the site is live re-claims under its new key.
         SiteModel.SCHEMA.addBeforeWriteHook(context -> {
             Row row = context.getRow();
-            // enabled absent from the write means the flag is not changing; a create
-            // has no id and no domains yet. Only an UPDATE writing enabled=true can
-            // put a site into the shared route table, so only that is validated.
-            if (row == null || !row.has(SiteModel.ENABLED.getName())
-                    || !Boolean.TRUE.equals(row.get(SiteModel.ENABLED))) {
-                return;
-            }
-            if (!row.has(SiteModel.ID.getName()) || row.get(SiteModel.ID) == null) {
-                return;
-            }
-            Row stored = Models.get(SiteModel.class).findById(row.get(SiteModel.ID));
+            Row stored = storedSiteOf(row);
             if (stored == null) {
                 return;
             }
-            refuseConflictingEnable(stored, true);
+            try {
+                RouteClaims.restamp(stored.get(SiteModel.ID), willBeLive(row, stored));
+            } catch (ClaimConflict conflict) {
+                throw refusalFor(conflict);
+            }
         });
+    }
+
+    /**
+     * The stored site a write targets, or null for a create -- a site with no id has no
+     * domain rows yet and therefore claims nothing.
+     */
+    private static @Nullable Row storedSiteOf(@Nullable Row row) {
+        if (row == null || !row.has(SiteModel.ID.getName()) || row.get(SiteModel.ID) == null) {
+            return null;
+        }
+        return Models.get(SiteModel.class).findById(row.get(SiteModel.ID));
+    }
+
+    /** Whether the site will route traffic AFTER this write, reading through partial rows. */
+    private static boolean willBeLive(@NonNull Row row, @NonNull Row stored) {
+        Object enabled = row.has(SiteModel.ENABLED.getName())
+            ? row.get(SiteModel.ENABLED) : stored.get(SiteModel.ENABLED);
+        Object deletedAt = row.has(SiteModel.DELETED_AT.getName())
+            ? row.get(SiteModel.DELETED_AT) : stored.get(SiteModel.DELETED_AT);
+        return Boolean.TRUE.equals(enabled) && deletedAt == null;
+    }
+
+    /**
+     * Translate the unique-index refusal into the SAME violation the advisory scan
+     * produces, so a tenant who lost the race is told what happened instead of seeing a
+     * driver error -- the whole point of the constraint is that the loser is TOLD.
+     */
+    private static @NonNull Violations refusalFor(@NonNull ClaimConflict conflict) {
+        String holder = RouteClaims.holderNameOf(conflict.getKey());
+        return Violations.ofField("enabled", true,
+            CmsSupport.violationText("enable_route_conflict")
+                .withArg("hostname", RouteClaims.hostnameOf(conflict.getKey()))
+                .withArg("site", holder != null ? holder : "?"));
     }
 
     /**
      * THE enable invariant, invoked only from the write-pipeline hook above.
      *
      * AIDEV-NOTE: enabling puts a site's domain rows into the global route table, and
-     * disabled sites are EXEMPT from the cross-site route-identity check -- so a site
-     * staged on someone else's hostname seizes it the moment it goes live. Skips a
-     * site that is ALREADY enabled so an already-live re-save never self-conflicts;
-     * only the disabled->enabled transition is validated.
+     * sites that do not route are EXEMPT from the cross-site route-identity check -- so a
+     * site staged on someone else's hostname seizes it the moment it goes live. Skips a
+     * site that ALREADY routes so an already-live re-save never self-conflicts; only the
+     * routeless->live transition is validated. Routeless is RouteClaims.isLive, not a
+     * bare enabled check: a soft-deleted site keeps enabled=true, so restoring one is a
+     * transition into the route table exactly like an enable, and an enabled-only guard
+     * would wave it through unchecked.
      *
-     * @throws Violations when going live would collide with an enabled site's route
+     * @throws Violations when going live would collide with a live site's route
      */
     protected static void refuseConflictingEnable(@NonNull Row existing, boolean willBeEnabled) {
-        if (!willBeEnabled || Boolean.TRUE.equals(existing.get(SiteModel.ENABLED))) {
+        if (!willBeEnabled || RouteClaims.isLive(existing)) {
             return;
         }
         SiteDomainResource.refuseEnableRouteConflicts(existing.get(SiteModel.ID));

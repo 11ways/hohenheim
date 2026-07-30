@@ -216,13 +216,18 @@ public final class DynamicDnsService {
         // The column holds the DIGEST, so hash the presented plaintext and look up
         // by that. An existing client keeps working because it still presents the
         // same plaintext, which hashes to the stored digest.
+        // AIDEV-NOTE: dyndns_token carries an index (M046_DyndnsTokenIndex) because this
+        // runs on every router poll; it used to be a full scan of dns_records.
         String digest = digest(presented);
         Row record = Models.get(DnsRecordModel.class).find()
             .where(DnsRecordModel.DYNDNS_TOKEN.eq(digest)).first();
         if (record == null || !Boolean.TRUE.equals(record.get(DnsRecordModel.DYNAMIC))) {
             return null;
         }
-        // Re-check under constant time; the indexed lookup above is the fast path.
+        // The lookup above compares DIGESTS, which the caller already knows (it is a
+        // pure function of what they presented), so its timing leaks nothing about the
+        // secret. The decisive comparison is still made constant-time here so no future
+        // change to the lookup can turn it into an oracle.
         if (!SecureTokens.constantTimeEquals(digest, record.get(DnsRecordModel.DYNDNS_TOKEN))) {
             return null;
         }
