@@ -413,7 +413,8 @@ class ManagePanelTest extends HohenheimTestBase {
         String buckets = Zenit.DRY.stringify(
             new RecordSourceBucketQuery(null, "created_at", 7, null));
 
-        // Every installation-wide source is admin-gated: all four operations 403.
+        // Every installation-wide source is admin-gated. Unauthorized and unknown
+        // refuse IDENTICALLY with 404 (RecordSourceGate: no existence oracle).
         List<String> adminOnly = List.of(
             "hohenheim.certificate", "hohenheim.access_list", "hohenheim.database",
             "hohenheim.site_auth_provider", "hohenheim.system_user",
@@ -421,13 +422,13 @@ class ManagePanelTest extends HohenheimTestBase {
             "hohenheim.ban", "zenit.activity");
         for (String token : adminOnly) {
             assertThat(dryPost("/zn/records/" + token + "/query", query, outsiderSession, csrf).statusCode())
-                .as("query on %s", token).isEqualTo(403);
+                .as("query on %s", token).isEqualTo(404);
             assertThat(get("/zn/records/" + token + "/item/1", outsiderSession).statusCode())
-                .as("item on %s", token).isEqualTo(403);
+                .as("item on %s", token).isEqualTo(404);
             assertThat(get("/zn/records/" + token + "/vocabulary", outsiderSession).statusCode())
-                .as("vocabulary on %s", token).isEqualTo(403);
+                .as("vocabulary on %s", token).isEqualTo(404);
             assertThat(dryPost("/zn/records/" + token + "/buckets", buckets, outsiderSession, csrf).statusCode())
-                .as("buckets on %s", token).isEqualTo(403);
+                .as("buckets on %s", token).isEqualTo(404);
         }
 
         // The site source is grant-scoped instead of 403: an ungranted login

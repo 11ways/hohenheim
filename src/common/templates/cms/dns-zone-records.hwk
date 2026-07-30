@@ -12,9 +12,7 @@
 <section class="cms-resource-list-page">
     <header class="cms-resource-list-header">
         <h1>{{ origin }}</h1>
-        <a href={% "/admin/dns-records/new?zone_id=" + zoneId %} id="add-record-link">
-            <pl-button variant={% "primary" %}>{{ t("add_record", scope: "dns_zone") }}</pl-button>
-        </a>
+        <pl-button variant="primary" href={% "/admin/dns-records/new?zone_id=" + zoneId %} id="add-record-link">{{ t("add_record", scope: "dns_zone") }}</pl-button>
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}

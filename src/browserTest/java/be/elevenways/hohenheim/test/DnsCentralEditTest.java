@@ -292,6 +292,47 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat(fallback.body()).doesNotContain("add-remote-record-link");
     }
 
+    /**
+     * The remote-record delete form confirms through the shell dialog (its
+     * {@code use:CmsConfirm.destructive} directive) before forwarding to the owner.
+     *
+     * AIDEV-NOTE: counterfactual (pre-conversion): the form carried a DEAD data-confirm
+     * attribute, so the first click forwarded the delete immediately -- the dialog
+     * assertion fails and the cancel branch already finds the delete call on the stub.
+     */
+    @Test
+    @Order(3)
+    void remoteRecordDeleteConfirmsThroughTheShellDialog() throws Exception {
+        stub = new PeerStub();
+        int peerId = createPeer("confirm-peer", stub.baseUrl());
+        int zoneId = createZone("confirm.example", DnsZoneModel.ROLE_SECONDARY, peerId);
+
+        stub.body = "{\"zone\":\"confirm.example\",\"serial\":3,\"records\":["
+            + "{\"id\":7,\"name\":\"www\",\"type\":\"A\",\"ttl\":300,\"value\":\"198.51.100.7\",\"enabled\":true}]}";
+
+        navigateToApp("/admin/dns-zones/" + zoneId + "/page/records");
+        waitForHydration();
+
+        String deleteButton = "form:has(input[name='action'][value='delete']) pl-button";
+        waitForSelector(deleteButton);
+        stub.calls.clear();
+
+        // Cancel does NOT forward a delete to the owner.
+        click(deleteButton);
+        assertIsVisible(".pl-dialog-modal[data-open]");
+        click("[data-cms-confirm-cancel]");
+        assertIsNotVisible(".pl-dialog-modal");
+        page.waitForTimeout(400);
+        assertThat(stub.calls).as("cancel must not forward the delete").isEmpty();
+
+        // Confirm forwards the delete to the owning peer.
+        click(deleteButton);
+        assertIsVisible(".pl-dialog-modal[data-open]");
+        click("[data-cms-confirm-ok]");
+        page.waitForCondition(() -> stub.calls.stream()
+            .anyMatch(call -> "/api/dns/zones/confirm.example/records/7/delete".equals(call.path())));
+    }
+
     // ------------------------------------------------------------------
     // Fixtures + plumbing
     // ------------------------------------------------------------------

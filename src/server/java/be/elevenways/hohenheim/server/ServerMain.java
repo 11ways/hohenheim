@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
@@ -157,6 +158,7 @@ public class ServerMain {
         // not a session; the handler refuses anything the token does not unlock.
         AuthRegistry.registerPublicPrefix("/nic/update");
         AuthRegistry.baseline("/", AuthRequirement.requiresLogin());
+        HohenheimAccess.declareGrantableModels();
         KnownPermissions.register("hohenheim",
             KnownPermission.of(
                 HohenheimPanel.ACCESS.value(),

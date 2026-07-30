@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteHandlers;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.CmsSettings;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.security.ContentSecurityPolicies;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
@@ -215,15 +216,24 @@ class ProclogProxyIngressTest extends HohenheimTestBase {
             assertThat(withoutHydrationData(body)).as("neither payload becomes live markup")
                 .doesNotContain("<script>alert(1)")
                 .doesNotContain("<img src=x onerror=");
-            assertThat(viewer.headers().firstValue("Content-Security-Policy").orElse(null))
-                .as("the viewer carries the strict admin CSP")
-                .isEqualTo(CmsSettings.VALUES.getValue(CmsSettings.CSP));
+            // The proclog viewer is not a page of its own: ?log= is a view of the PROCESSES
+            // subpage, which is the one route that boots ghostty, so it is served the
+            // terminal CSP variant rather than the shared admin default. That variant
+            // widens exactly two directives (wasm compilation, data: fetches) and neither
+            // touches what this gate rests on -- script-src still forbids inline script, so
+            // a payload that did become markup still could not run.
+            String viewerCsp = viewer.headers().firstValue("Content-Security-Policy").orElse(null);
+            assertThat(viewerCsp)
+                .as("the viewer carries the terminal CSP variant of its own route")
+                .isEqualTo(ContentSecurityPolicies.STRICT_ADMIN_TERMINAL);
+            assertThat(viewerCsp)
+                .as("the variant permits wasm and nothing else on script-src")
+                .contains("script-src 'self' 'wasm-unsafe-eval';");
 
-            // Stop the proxy (and its live child) before the browser step. The live-process
-            // ghostty terminal is incidental to the stored-log XSS gate, and its wasm loads
-            // from a data: URI that the strict admin connect-src 'self' blocks (a separate CSP
-            // concern, reported). With no live handler the viewer shows only the stored log,
-            // exactly as ProclogRenderingTest does.
+            // Stop the proxy (and its live child) before the browser step: the live-process
+            // ghostty terminal is incidental to the stored-log XSS gate. With no live
+            // handler the viewer shows only the stored log, exactly as ProclogRenderingTest
+            // does.
             proxy.stop();
             proxyStopped = true;
             ServerMain.adoptProxyServer(previousProxy);

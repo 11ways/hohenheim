@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.proxy.ListenerAddressMatcher;
+import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.sitetype.types.TlsPassthroughSiteType;
@@ -27,7 +28,6 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -135,58 +135,81 @@ public class SiteDomainResource extends RowResource {
         return Map.copyOf(values);
     }
 
-    @Override
-    public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
-                                      @NonNull AccessContext accessContext) {
-        Map<String, Object> values = canonicalizePath(coerced);
-        validate(values, null);
-        return super.persistRow(values, accessContext);
-    }
+    private static volatile boolean routeInvariantInstalled;
 
-    @Override
-    public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
-                          @NonNull AccessContext accessContext) {
-        Map<String, Object> values = canonicalizePath(coerced);
-        validate(values, existing);
-        super.updateRow(existing, values, accessContext);
+    /**
+     * Install THE domain route invariant on the SiteDomainModel write pipeline: path
+     * canonicalization, the hostname/route refusal and the live-route claim stamp all run
+     * for every writer, not just for a CMS form submit.
+     *
+     * AIDEV-NOTE: this MUST live in the write pipeline, never in the resource layer --
+     * the same reasoning as SiteResource.installEnableInvariant, which this mirrors.
+     * These checks used to sit in persistRow/updateRow, where the ONLY thing keeping a
+     * bypass hypothetical was that SiteDomainModel happens not to be revisionable today:
+     * making it revisionable, or adding any second writer (a seeder, an import, an API
+     * writeback, a site-scoped bulk edit, the clone action's direct model.save), would
+     * silently reopen hostname takeover. A resource-layer invariant IS the bypass.
+     * Do NOT move any of this back into persistRow / updateRow as a per-path check.
+     *
+     * The refusal lives on the beforeVALIDATE tier and the claim stamp on the beforeWRITE
+     * tier of the SAME Schema.beforeWrite pass. That is deliberate: the scan is the
+     * advisory diagnosis and must run before the row is judged, the claim is the
+     * authoritative write-time backstop and must be the last thing to happen before the
+     * row hits the datasource.
+     */
+    public static synchronized void installRouteInvariant() {
+        if (routeInvariantInstalled) {
+            return;
+        }
+        routeInvariantInstalled = true;
+        SiteDomainModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null) {
+                canonicalizePath(row);
+                refuseRouteConflicts(row);
+            }
+        });
+        SiteDomainModel.SCHEMA.addBeforeWriteHook(context -> {
+            Row row = context.getRow();
+            if (row == null) {
+                return;
+            }
+            Object siteIdValue = SiteDomainModel.effective(row, SiteDomainModel.SITE_ID);
+            Row site = siteIdValue instanceof Integer siteId
+                ? Models.get(SiteModel.class).findById(siteId) : null;
+            row.set(SiteDomainModel.LIVE_ROUTE_KEY,
+                RouteClaims.isLive(site) ? RouteClaims.keyOfPendingWrite(row) : null);
+        });
     }
 
     /**
      * Store the path exactly as the dispatcher will route it, so a stored row cannot
      * spell a route differently than it resolves ("app" -> "/app", "/app/" -> "/app",
-     * "/" -> null catch-all). Absent key = untouched, for partial updates.
+     * "/" -> null catch-all). An absent key is untouched, for partial updates.
      */
-    private static @NonNull Map<String, Object> canonicalizePath(@NonNull Map<String, Object> coerced) {
-        if (!coerced.containsKey("path")) {
-            return coerced;
+    private static void canonicalizePath(@NonNull Row row) {
+        if (!row.has(SiteDomainModel.PATH.getName())) {
+            return;
         }
-        Object raw = coerced.get("path");
+        Object raw = row.get(SiteDomainModel.PATH);
         String canonical = SiteDispatcher.normalizeRoutePath(raw != null ? String.valueOf(raw) : null);
-        if (Objects.equals(raw, canonical)) {
-            return coerced;
+        if (!Objects.equals(raw, canonical)) {
+            row.set(SiteDomainModel.PATH, canonical);
         }
-        Map<String, Object> values = new LinkedHashMap<>(coerced);
-        values.put("path", canonical);
-        return values;
     }
 
-    /** Hostname required, and unique per site per canonical path. */
-    private void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
-        Object hostnameValue = coerced.get("hostname");
+    /** Hostname required, a site required, and the route unclaimed. */
+    private static void refuseRouteConflicts(@NonNull Row row) {
+        Object hostnameValue = SiteDomainModel.effective(row, SiteDomainModel.HOSTNAME);
         String hostname = hostnameValue != null ? String.valueOf(hostnameValue).trim() : "";
         if (hostname.isEmpty()) {
             throw Violations.ofField("hostname", hostname, CmsSupport.violationText("hostname_required"));
         }
-        Object siteIdValue = coerced.containsKey("site_id") ? coerced.get("site_id")
-            : existing != null ? existing.get(SiteDomainModel.SITE_ID) : null;
+        Object siteIdValue = SiteDomainModel.effective(row, SiteDomainModel.SITE_ID);
         if (!(siteIdValue instanceof Integer siteId)) {
             throw Violations.ofField("site_id", siteIdValue, CmsSupport.violationText("site_required"));
         }
         Row site = Models.get(SiteModel.class).findById(siteId);
-        if (site != null && TlsPassthroughSiteType.ID.toString()
-                .equals(site.get(SiteModel.SITE_TYPE))) {
-            validateTlsPassthroughDomain(coerced);
-        }
         // Uniqueness compares CANONICAL route components: the hostname as the model hook
         // stores it (SiteDomainModel.canonicalHostname -- ONE definition), the path as
         // the dispatcher routes it (normalizeRoutePath), and listener restrictions as
@@ -201,36 +224,33 @@ public class SiteDomainResource extends RowResource {
         // site name), so a same-route row on ANOTHER site is exactly as broken as one on
         // this site. Rows of DISABLED other sites (clones, staged drafts) are exempt --
         // they hold no routes; the conflict is refused again on the site-enable edit.
-        String matchType = stringValue(coerced.containsKey("match_type") ? coerced.get("match_type")
-            : existing != null ? existing.get(SiteDomainModel.MATCH_TYPE) : null);
+        String matchType = stringValue(SiteDomainModel.effective(row, SiteDomainModel.MATCH_TYPE));
         String canonicalHostname = SiteDomainModel.canonicalHostname(hostname, matchType);
-        String path = normalizedPath(coerced.containsKey("path") ? coerced.get("path")
-            : existing != null ? existing.get(SiteDomainModel.PATH) : null);
+        String path = normalizedPath(SiteDomainModel.effective(row, SiteDomainModel.PATH));
         List<String> listenOn = ListenerAddressMatcher.parse(
-            stringValue(coerced.containsKey("listen_on") ? coerced.get("listen_on")
-                : existing != null ? existing.get(SiteDomainModel.LISTEN_ON) : null));
+            stringValue(SiteDomainModel.effective(row, SiteDomainModel.LISTEN_ON)));
+        Object ownId = row.has(SiteDomainModel.ID.getName()) ? row.get(SiteDomainModel.ID) : null;
 
         Map<Integer, Row> sitesById = new HashMap<>();
         for (Row candidateSite : Models.get(SiteModel.class).find().all()) {
             sitesById.put(candidateSite.get(SiteModel.ID), candidateSite);
         }
-        // A row on a DISABLED site holds no routes, in either direction: staging a
-        // duplicate on a draft/clone site is legal, and only the site-enable edit
-        // re-judges it against the live table. Same-site duplicates are always a
-        // config mistake, enabled or not.
-        boolean ownSiteEnabled = site != null && Boolean.TRUE.equals(site.get(SiteModel.ENABLED));
+        // A row on a site that does not ROUTE holds no routes, in either direction:
+        // staging a duplicate on a draft/clone site is legal, and only the site-enable
+        // edit re-judges it against the live table. A soft-deleted site is exactly as
+        // routeless as a disabled one -- RouteClaims.isLive is the ONE definition, so a
+        // deleted site can never keep a hostname hostage. Same-site duplicates are
+        // always a config mistake, live or not.
+        boolean ownSiteLive = RouteClaims.isLive(site);
 
-        for (Row candidate : this.model().find().all()) {
-            if (existing != null
-                && candidate.get(SiteDomainModel.ID).equals(existing.get(SiteDomainModel.ID))) {
+        for (Row candidate : Models.get(SiteDomainModel.class).find().all()) {
+            if (ownId != null && ownId.equals(candidate.get(SiteDomainModel.ID))) {
                 continue;
             }
             Integer candidateSiteId = candidate.get(SiteDomainModel.SITE_ID);
             boolean sameSite = Objects.equals(candidateSiteId, siteId);
             Row candidateSite = sitesById.get(candidateSiteId);
-            boolean candidateEnabled = candidateSite != null
-                && Boolean.TRUE.equals(candidateSite.get(SiteModel.ENABLED));
-            if (!sameSite && (!candidateEnabled || !ownSiteEnabled)) {
+            if (!sameSite && (!RouteClaims.isLive(candidateSite) || !ownSiteLive)) {
                 continue;
             }
             String candidateHostname = SiteDomainModel.canonicalHostname(
@@ -281,8 +301,12 @@ public class SiteDomainResource extends RowResource {
                 if (Objects.equals(candidateSiteId, siteId)) {
                     continue;
                 }
+                // RouteClaims.isLive, not a bare enabled check: a soft-deleted site keeps
+                // enabled=true (deleteRow only stamps deleted_at), so an enabled-only
+                // test let a DELETED site hold its hostname hostage forever, refusing
+                // every later claimant in the name of a site that appears in no UI.
                 Row candidateSite = sitesById.get(candidateSiteId);
-                if (candidateSite == null || !Boolean.TRUE.equals(candidateSite.get(SiteModel.ENABLED))) {
+                if (!RouteClaims.isLive(candidateSite)) {
                     continue;
                 }
                 if (!Objects.equals(ownHostname, SiteDomainModel.canonicalHostname(
@@ -320,32 +344,4 @@ public class SiteDomainResource extends RowResource {
         return SiteDispatcher.normalizeRoutePath(value != null ? String.valueOf(value) : null);
     }
 
-    private static void validateTlsPassthroughDomain(Map<String, Object> values) {
-        String path = values.get("path") != null ? String.valueOf(values.get("path")).trim() : "";
-        if (!path.isEmpty() && !"/".equals(path)) {
-            throw Violations.ofField("path", path,
-                CmsSupport.violationText("tls_passthrough_no_path"));
-        }
-        if (Boolean.TRUE.equals(values.get("strip_path"))) {
-            throw Violations.ofField("strip_path", true,
-                CmsSupport.violationText("tls_passthrough_no_http_options"));
-        }
-        if (values.get("certificate_id") != null) {
-            throw Violations.ofField("certificate_id", values.get("certificate_id"),
-                CmsSupport.violationText("tls_passthrough_backend_certificate"));
-        }
-        if (Boolean.TRUE.equals(values.get("hsts_enabled"))
-                || Boolean.TRUE.equals(values.get("hsts_subdomains"))) {
-            throw Violations.ofField("hsts_enabled", values.get("hsts_enabled"),
-                CmsSupport.violationText("tls_passthrough_no_http_options"));
-        }
-        if (hasValues(values.get("custom_headers")) || hasValues(values.get("response_headers"))) {
-            throw Violations.ofField("custom_headers", values.get("custom_headers"),
-                CmsSupport.violationText("tls_passthrough_no_http_options"));
-        }
-    }
-
-    private static boolean hasValues(Object value) {
-        return value instanceof Map<?, ?> map && !map.isEmpty();
-    }
 }

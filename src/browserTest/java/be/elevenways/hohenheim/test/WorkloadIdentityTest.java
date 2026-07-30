@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.WorkloadIdentity;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
@@ -48,6 +49,9 @@ class WorkloadIdentityTest {
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
         ZenitAuth.init(HohenheimDatabase.datasource());
+        // This class boots a reduced path (no installAuthBaselines), so it declares the
+        // grantable model itself; zenit-auth refuses a grant on an undeclared model.
+        HohenheimAccess.declareGrantableModels();
 
         saveUser("wl-user-a", 44301);
         saveUser("wl-user-b", 44302);

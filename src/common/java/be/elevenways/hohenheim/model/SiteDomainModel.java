@@ -99,6 +99,22 @@ public class SiteDomainModel extends Model {
         .label(HohenheimFormCopy.label("exclude_from_letsencrypt"))
         .help(HohenheimFormCopy.help("exclude_from_letsencrypt"))
         .build());
+    /**
+     * The canonical route tuple this row claims while its site is LIVE, or null when it
+     * claims nothing (disabled site, soft-deleted site, or a row that lost a heal pass).
+     *
+     * AIDEV-NOTE: derived, never operator-editable, and backed by a UNIQUE index
+     * (M045_SiteDomainRouteClaims) -- it is the ONLY thing standing between two tenants
+     * that enable staged sites on one hostname in the same instant. The app-level scan in
+     * SiteDomainResource is a read-then-act check and always loses that race. NULL means
+     * "no claim", so staged duplicates on disabled sites stay legal and a soft-deleted
+     * site owns nothing. Backend note: this rides NULLs-are-distinct unique-index
+     * semantics (SQLite -- hohenheim's only backend -- plus PostgreSQL/MySQL/Firebird);
+     * MongoDB would need a partial index for the same shape.
+     */
+    public static final StringField LIVE_ROUTE_KEY = SCHEMA.addField(
+        StringField.builder().name("live_route_key").filterable(false).build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
@@ -146,7 +162,12 @@ public class SiteDomainModel extends Model {
         }
     }
 
-    private static Object effective(Row row, Field<?, ?> field) {
+    /**
+     * The value a partial write will END UP with: the staged value when the write carries
+     * the field, else the stored one. Every invariant over a domain row must read through
+     * this, because a CMS update stages only the changed columns.
+     */
+    public static Object effective(Row row, Field<?, ?> field) {
         if (row.has(field.getName())) return row.get(field.getName());
         if (!row.has(ID.getName())) return null;
         Row stored = Models.get(SiteDomainModel.class).findById(row.get(ID));

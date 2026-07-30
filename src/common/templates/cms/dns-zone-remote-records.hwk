@@ -139,7 +139,7 @@
                 </pl-table-cell>
                 {% if editable %}
                 <pl-table-cell>
-                    <form method="POST" action={% "/admin/dns-zones/" + zoneId + "/remote-records" %} data-confirm={% t("delete_confirm", scope: "dns_remote") %}>
+                    <form method="POST" action={% "/admin/dns-zones/" + zoneId + "/remote-records" %} use:CmsConfirm.destructive={% t("delete_confirm", scope: "dns_remote") %}>
                         {% csrf() %}
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="record_id" value={% record.id %}>

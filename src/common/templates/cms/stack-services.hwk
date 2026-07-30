@@ -13,9 +13,7 @@
 <section class="cms-resource-list-page">
     <header class="cms-resource-list-header">
         <h1>{{ stackName }}</h1>
-        <a href={% addServiceUrl %} id="add-service-link">
-            <pl-button variant={% "primary" %}>{{ t("add_service", scope: "stack_services") }}</pl-button>
-        </a>
+        <pl-button variant="primary" href={% addServiceUrl %} id="add-service-link">{{ t("add_service", scope: "stack_services") }}</pl-button>
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
@@ -47,9 +45,7 @@
                     {% each service.get("files") as fileIndex, file %}
                     <a href={% file.get("editUrl") %}><code>{{ file.get("path") }}</code></a>
                     {% /each %}
-                    <a href={% service.get("addFileUrl") %} class="hh-stack-add-file">
-                        <pl-button variant={% "ghost" %} size={% "sm" %}>{{ t("add_file", scope: "stack_services") }}</pl-button>
-                    </a>
+                    <pl-button variant="ghost" size="sm" href={% service.get("addFileUrl") %} class="hh-stack-add-file">{{ t("add_file", scope: "stack_services") }}</pl-button>
                 </pl-table-cell>
             </pl-table-row>
             {% /each %}
