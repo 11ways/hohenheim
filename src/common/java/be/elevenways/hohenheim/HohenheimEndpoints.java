@@ -309,15 +309,32 @@ public class HohenheimEndpoints {
             .addDelimiter().addParameter(PID).build())
         .requiresLogin()
         .revalidateEvery(TERMINAL_REVALIDATION_INTERVAL_MS)
-        .handler(session -> null) // Placeholder: set in HohenheimHandlers.init()
+        .handler(session -> null) // Placeholder: set in HohenheimHandlers.init(), at the MODULES stage
         .build();
 
     // --- Dev-tunnel registration (remote dev servers; token-authenticated in-band) ---
+
+    /**
+     * How often a registered tunnel's site/token/namespace authorization is
+     * re-resolved (revoked = 1008).
+     *
+     * AIDEV-NOTE: the endpoint is deliberately DECLARED even though the handshake
+     * is anonymous. This connection authenticates IN BAND (the register frame's
+     * token, DevTunnelServerHandler.handleRegister), so
+     * WebSocketRevalidator.intervalFor's identity test -- requiresAuthorization or a
+     * non-anonymous handshake principal -- is false here and would start NO
+     * revalidator at all, leaving a rotated token, a disabled site or a deleted site
+     * with a live tunnel forever. Declaring an interval is what reaches the handler's
+     * revalidate() hook, which is where the in-band credential is re-checked.
+     */
+    public static final long DEV_TUNNEL_REVALIDATION_INTERVAL_MS = TERMINAL_REVALIDATION_INTERVAL_MS;
+
     public static final WebSocketEndpoint DEV_TUNNEL = WebSocketEndpoint.builder()
         .identifier(Identifier.of("hohenheim", "dev_tunnel"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("ws").addDelimiter().addStatic("dev-tunnel").build())
-        .handler(session -> null) // Placeholder: set in HohenheimHandlers.init()
+        .revalidateEvery(DEV_TUNNEL_REVALIDATION_INTERVAL_MS)
+        .handler(session -> null) // Placeholder: set in HohenheimHandlers.init(), at the MODULES stage
         .build();
 
     public static void init() {

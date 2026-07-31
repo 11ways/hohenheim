@@ -32,7 +32,8 @@ import java.util.regex.Pattern;
  * tunnel streams, and answers heartbeats.
  *
  * The WebSocket handshake itself is unauthenticated; a connection that has
- * not registered within the auth window is dropped. All frame handling
+ * not registered within the auth window is dropped, and a registered one has
+ * its credential re-resolved on every {@link #revalidate()} tick. All frame handling
  * arrives on the connection's serial receive lane (zenit's WS dispatch), so
  * control handling needs no extra ordering locks.
  */
@@ -60,6 +61,8 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
     private final java.util.List<ScheduledJob> timers = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     private volatile @Nullable DevLease lease;
+    /** sha256 of the token this connection registered with; never the token itself. */
+    private volatile @Nullable String tokenDigest;
     private volatile @Nullable DevTunnelBridge bridge;
     private volatile long lastSeenAt = System.currentTimeMillis();
     private volatile boolean closed;
@@ -153,6 +156,45 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
         teardown("connection error: " + error.getMessage(), false);
     }
 
+    /**
+     * Re-resolve the in-band credential of a registered tunnel; false closes it with
+     * 1008.
+     *
+     * AIDEV-NOTE: this hook is the ONLY periodic authorization this connection has.
+     * The handshake is anonymous, so nothing the framework resolves at upgrade time
+     * describes the peer -- the register frame's token does, and it was checked
+     * exactly once. Re-running the SAME resolution registration used (enabled +
+     * not-deleted dev-namespace site, matching token, same wildcard base) is what
+     * makes a rotated token, a disabled or deleted site, a site retyped away from
+     * dev-namespace and a withdrawn wildcard domain all close the live tunnel.
+     * Runs off the callback lane (WebSocketRevalidator's runner), so it only reads
+     * volatile state and the database.
+     */
+    @Override
+    public boolean revalidate() {
+        DevLease current = this.lease;
+        if (current == null) {
+            // Not registered yet: the auth timeout owns that window, and a
+            // pre-registration connection holds no authorization to lose.
+            return !this.closed;
+        }
+
+        String digest = this.tokenDigest;
+        Row site = digest == null ? null : findNamespaceSite(digest);
+        if (site == null) {
+            return false;
+        }
+
+        Integer siteId = site.get(SiteModel.ID);
+        if (siteId == null || siteId != current.getSiteId()) {
+            return false;
+        }
+
+        String wildcardBase = firstWildcardBase(current.getSiteId());
+        return wildcardBase != null
+            && current.getOrigin().equals("https://" + current.getName() + wildcardBase);
+    }
+
     // ------------------------------------------------------------------
     // Registration
     // ------------------------------------------------------------------
@@ -184,7 +226,8 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
             return;
         }
 
-        Row site = findNamespaceSite(token);
+        String digest = SecureTokens.sha256Hex(token);
+        Row site = findNamespaceSite(digest);
         if (site == null) {
             Blast.log("Dev tunnel: registration for '" + name + "' refused (unknown token)");
             refuse("invalid token");
@@ -222,6 +265,9 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
                 return;
             }
             this.bridge = createdBridge;
+            // Before the lease: revalidate() reads the digest only when a lease
+            // exists, so publishing it first keeps the pair consistent.
+            this.tokenDigest = digest;
             // Lease is visible BEFORE the claim races anyone: a racing claim for
             // the same name replaces us immediately, and replacedBy() must see
             // the lease to log it (the bridge is closed via the bridge field).
@@ -248,8 +294,16 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
         teardown("registration refused: " + reason, true);
     }
 
-    /** Constant-time token match over the enabled dev-namespace sites. */
-    private static @Nullable Row findNamespaceSite(String token) {
+    /**
+     * Constant-time match of a token DIGEST over the enabled dev-namespace sites.
+     *
+     * AIDEV-NOTE: digests, not the token, because revalidation re-runs this
+     * resolution for the lifetime of the connection and a live tunnel must not
+     * retain its registration secret in memory to do so. findEnabled() already
+     * excludes disabled and soft-deleted sites, so this ONE resolution answers
+     * registration and revalidation identically.
+     */
+    private static @Nullable Row findNamespaceSite(String tokenDigest) {
         String typeId = DevNamespaceSiteType.ID.toString();
         Row match = null;
         for (Row site : Models.get(SiteModel.class).findEnabled()) {
@@ -260,9 +314,11 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
             Map<String, Object> settings = (Map<String, Object>) site.get(SiteModel.SETTINGS);
             String siteToken = settings != null
                 ? (String) settings.get(DevNamespaceSiteType.REGISTRATION_TOKEN_KEY) : null;
+            String siteDigest = siteToken != null ? SecureTokens.sha256Hex(siteToken) : null;
             // No early break: every candidate is compared so timing does not leak which
             // site (if any) matched.
-            if (siteToken != null && SecureTokens.constantTimeEquals(siteToken, token) && match == null) {
+            if (siteDigest != null && SecureTokens.constantTimeEquals(siteDigest, tokenDigest)
+                    && match == null) {
                 match = site;
             }
         }

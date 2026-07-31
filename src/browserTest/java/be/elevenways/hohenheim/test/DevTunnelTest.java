@@ -5,13 +5,11 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.devtunnel.DevTunnelServerHandler;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.sitetype.types.DevNamespaceSiteType;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.EndpointRoute;
@@ -20,6 +18,7 @@ import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.devtunnel.DevTunnelClient;
+import be.elevenways.zenit.server.http.WebSocketRevalidator;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
 
 import com.sun.net.httpserver.HttpServer;
@@ -86,12 +85,13 @@ class DevTunnelTest {
             SiteTypes.boot();
             HohenheimEndpoints.init();
             TestDatabases.freshDatabase();
+            // The discovered HohenheimHostWiring module installs the client script
+            // location, every endpoint handler (including this endpoint's real
+            // DevTunnelServerHandler factory) and both panels at the MODULES stage.
+            // This test used to re-install the DEV_TUNNEL factory by hand because
+            // production wired it after binding; nothing compensates any more.
             HohenheimTestRuntime.ensureBooted();
-            Zenit.getHawkeye().setClientScriptLocation("/cms.js");
         }
-
-        // The targeted wiring HohenheimHandlers.init() would do for this endpoint.
-        HohenheimEndpoints.DEV_TUNNEL.setHandlerFactory(DevTunnelServerHandler::new);
 
         createDevNamespace();
 
@@ -307,6 +307,69 @@ class DevTunnelTest {
             byte[] received = java.util.Arrays.copyOfRange(response, headerEnd, response.length);
             assertThat(received).isEqualTo(body);
         }
+    }
+
+    /**
+     * The in-band credential is re-resolved for the life of the connection: a
+     * rotated registration token closes a tunnel that already registered with the
+     * old one.
+     */
+    @Test
+    void aRotatedRegistrationTokenClosesTheLiveTunnel() throws Exception {
+        // 1. The endpoint DECLARES a cadence, which is the only reason an
+        //    anonymous handshake gets a revalidator at all: this connection
+        //    authenticates in band, so the framework's identity test (a gated
+        //    endpoint or a non-anonymous handshake principal) answers "no".
+        assertThat(WebSocketRevalidator.intervalFor(HohenheimEndpoints.DEV_TUNNEL, null))
+            .as("step 1: an in-band-authenticated socket must still be revalidated")
+            .isEqualTo(HohenheimEndpoints.DEV_TUNNEL_REVALIDATION_INTERVAL_MS);
+
+        // 2. A tunnel registered with the current token serves traffic.
+        HttpServer target = startTarget("still authorized".getBytes(StandardCharsets.UTF_8), null);
+        DevTunnelClient client = register("rotating", TOKEN, target.getAddress().getPort());
+        awaitRegistered(client);
+        assertThat(proxyGet("rotating." + BASE, "/")[0])
+            .as("step 2: the freshly registered tunnel serves its target")
+            .contains("200");
+
+        try {
+            // 3. The operator rotates the namespace's registration token. Nothing
+            //    touches the open socket: the credential it authenticated with is
+            //    simply no longer valid.
+            setNamespaceToken("zdev_rotated_registration_token");
+
+            // 4. The next revalidation tick resolves that and closes the tunnel, so
+            //    the proxy falls back to the offline page. Without revalidation the
+            //    lease survives until the client or the transport ends it.
+            assertThat(awaitOffline("rotating." + BASE))
+                .as("step 4: a rotated token must close the live tunnel")
+                .isTrue();
+        } finally {
+            setNamespaceToken(TOKEN);
+        }
+    }
+
+    /** Replace the dev namespace's registration token. */
+    private static void setNamespaceToken(String token) {
+        var siteModel = Models.get(SiteModel.class);
+        Row site = siteModel.find()
+            .where(SiteModel.SITE_TYPE.eq(DevNamespaceSiteType.ID.toString()))
+            .first();
+        site.set(SiteModel.SETTINGS, Map.of(DevNamespaceSiteType.REGISTRATION_TOKEN_KEY, token));
+        siteModel.save(site);
+    }
+
+    /** Poll the proxy until the name no longer resolves to a live tunnel. */
+    private static boolean awaitOffline(String host) throws Exception {
+        long deadline = System.currentTimeMillis()
+            + (HohenheimEndpoints.DEV_TUNNEL_REVALIDATION_INTERVAL_MS * 4);
+        while (System.currentTimeMillis() < deadline) {
+            if (proxyGet(host, "/")[0].contains("503")) {
+                return true;
+            }
+            Thread.sleep(500);
+        }
+        return false;
     }
 
     @Test
