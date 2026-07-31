@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.auth.server.GrantableModel;
 import be.elevenways.zenit.auth.server.RecordGrantCapabilityChecker;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
@@ -53,7 +54,15 @@ public final class HohenheimAccess {
      * the delegation path can never see different policies.
      */
     public static void declareGrantableModels() {
-        RecordGrants.declareGrantable(SiteModel.MODEL_ID);
+        // AIDEV-NOTE: liveWhen is NOT optional here. Sites soft-delete by hand -- the
+        // resource stamps deleted_at through save() without SoftDeleteBehaviour attached --
+        // so a trashed site's row is still physically present. Without this predicate the
+        // framework's presence-only default counted it as alive: its grants survived the
+        // orphan sweep and came straight back the moment the site was restored, handing an
+        // operator authority the delete had already withdrawn. The SAME predicate also
+        // stops a new grant being planted on a trashed site.
+        RecordGrants.declareGrantable(GrantableModel.of(SiteModel.MODEL_ID)
+            .liveWhen(row -> row.get(SiteModel.DELETED_AT) == null));
         KnownCapabilities.register(SiteModel.MODEL_ID,
             KnownCapability.of(MANAGE)
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))

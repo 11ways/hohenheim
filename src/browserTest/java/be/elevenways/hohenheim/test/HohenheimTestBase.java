@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimHandlers;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
@@ -76,6 +77,9 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         HohenheimEndpoints.init();
         // Force-load the zenit-cms panel routes (all /{panel}/... endpoints).
         Object cmsRoutes = ResourcePageEndpoints.LIST;
+        // Before the migrations, exactly as ServerMain does it: the declarations carry the
+        // per-model liveness definition zenit-auth's orphan-purge migration consults.
+        HohenheimAccess.declareGrantableModels();
         // Claims the database path too, AFTER HohenheimSettingsFiles.load() so a loaded
         // settings file can never point the suite at a developer's real database.
         try {
