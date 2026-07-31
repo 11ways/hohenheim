@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -35,34 +34,55 @@ public final class ManagePanel extends Panel {
     public ManagePanel() {
         super(Identifier.of("hohenheim", "manage"), "manage",
             Microcopy.of("title").withFilter("scope", "manage"), ACCESS);
-        installEffectiveAccessPolicy();
+        installEligibilityPolicy();
         // Eager, not lazy-in-buildPeers: the source must exist the moment the
         // server accepts requests, not after the first panel render.
         registerSiteSource();
     }
 
-    /** Derives panel eligibility from effective record grants while preserving explicit global grants. */
-    private static synchronized void installEffectiveAccessPolicy() {
+    /** Derives panel eligibility from walk-confirmed record grants while preserving explicit global grants. */
+    private static synchronized void installEligibilityPolicy() {
         PermissionChecker current = Zenit.getPermissionChecker();
-        if (current instanceof EffectiveManagePermissionChecker) {
+        if (current instanceof ManageEligibilityChecker) {
             return;
         }
-        Zenit.setPermissionChecker(new EffectiveManagePermissionChecker(current));
+        Zenit.setPermissionChecker(new ManageEligibilityChecker(current));
     }
 
-    private record EffectiveManagePermissionChecker(PermissionChecker delegate) implements PermissionChecker {
+    /**
+     * Widens ONLY the boolean face of the panel's ACCESS permission: an explicit
+     * resolver decision (either way) wins, and an abstain falls back to "holds a
+     * walk-confirmed manage grant on at least one site". zenit-cms checks a
+     * panel's access as a plain permission, so this layer is what makes a
+     * grant-holding tenant eligible for /manage without a second global grant.
+     *
+     * AIDEV-NOTE: decide() MUST pass through to the delegate untouched. The
+     * predecessor (EffectiveManagePermissionChecker) overrode only
+     * hasPermission, so it inherited the interface default decide() -- which
+     * maps false to abstain -- and thereby made an operator's explicit global
+     * DENY invisible to RecordCapabilities row 2 (GATE_DENIED) in every
+     * hohenheim install. Pinned by CapabilityWalkTest step 3.
+     */
+    private record ManageEligibilityChecker(PermissionChecker delegate) implements PermissionChecker {
         @Override
         public boolean hasPermission(Conduit conduit, Permission permission) {
             if (!ACCESS.equals(permission) || conduit == null) {
                 return this.delegate.hasPermission(conduit, permission);
             }
-            var principal = RecordSourceGate.principalOf(conduit);
-            Boolean decision = ZenitAuth.permissionResolver().decide(principal, permission.value());
+            Boolean decision = this.delegate.decide(conduit, permission);
             if (decision != null) {
                 return decision;
             }
-            return this.delegate.hasPermission(conduit, permission)
-                || !HohenheimAccess.managedSiteIds(principal).isEmpty();
+            // Abstain: eligibility follows the record grants. Each candidate is
+            // confirmed through the precedence walk (no recursion: the walk
+            // consults this checker only for OTHER permissions -- the admin
+            // bypass -- and for decide(), which passes through above).
+            return !HohenheimAccess.managedSiteIds(RecordSourceGate.accessContextOf(conduit)).isEmpty();
+        }
+
+        @Override
+        public @Nullable Boolean decide(Conduit conduit, @NonNull Permission permission) {
+            return this.delegate.decide(conduit, permission);
         }
     }
 
@@ -115,7 +135,7 @@ public final class ManagePanel extends Panel {
         if (ctx.isAnonymous()) {
             return impossible();
         }
-        Set<Integer> ids = HohenheimAccess.managedSiteIds(ctx.principal());
+        Set<Integer> ids = HohenheimAccess.managedSiteIds(ctx);
         if (ids.isEmpty()) {
             return impossible();
         }

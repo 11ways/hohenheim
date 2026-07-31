@@ -23,6 +23,7 @@ import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.security.KnownPermission;
 import be.elevenways.zenit.common.security.KnownPermissions;
 import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
+import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.AuthRegistry;
 import be.elevenways.zenit.auth.server.AuthRequirement;
 import be.elevenways.zenit.auth.server.ZenitAuth;
@@ -76,6 +77,9 @@ public class ServerMain {
         // Install zenit-auth (session store, CSRF, middleware, /login + /setup + /account + /admin).
         // Password login is native; Proteus SSO is added below when configured.
         ZenitAuth.init(HohenheimDatabase.datasource());
+        // The users/roles resources live in HohenheimPanel's security group;
+        // zenit-auth's own default panel would be a second UI over the same records.
+        AuthSettings.VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         installAuthBaselines();
         registerProteusIfConfigured();
 

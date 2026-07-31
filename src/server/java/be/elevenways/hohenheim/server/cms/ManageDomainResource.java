@@ -32,7 +32,7 @@ public final class ManageDomainResource extends SiteDomainResource {
             if (ctx.isAnonymous()) {
                 return AccessDecision.allow(QueryPredicate.of(SiteDomainModel.ID.eq(-1)));
             }
-            Set<Integer> ids = HohenheimAccess.managedSiteIds(ctx.principal());
+            Set<Integer> ids = HohenheimAccess.managedSiteIds(ctx);
             Criteria scope = ids.isEmpty()
                 ? SiteDomainModel.ID.eq(-1)
                 : SiteDomainModel.SITE_ID.in(ids);

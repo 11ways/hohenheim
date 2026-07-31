@@ -2977,6 +2977,10 @@
     "text": "Toegang tot het gedelegeerde sitebeheerpaneel",
     "scope": "permission"
   },
+  "manage": {
+    "text": "Beheren",
+    "scope": "capability"
+  },
   "access": {
     "text": "Toegang",
     "scope": "site"
