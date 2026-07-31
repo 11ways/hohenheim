@@ -33,6 +33,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
     @AfterEach
     void cleanUp() {
         SiteEnableWriteBarrier.clear();
+        SiteDomainWriteBarrier.clear();
+        SiteWriteFault.disarm();
         Model siteModel = Models.get(SiteModel.class);
         Model domainModel = Models.get(SiteDomainModel.class);
         for (Row site : this.createdSites) {
@@ -64,13 +66,32 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
     }
 
     private static Row domain(Row site, String hostname) {
+        return domain(site, hostname, SiteDomainModel.MATCH_EXACT, null);
+    }
+
+    private static Row domain(Row site, String hostname, String matchType, String listenOn) {
         Model domainModel = Models.get(SiteDomainModel.class);
         Row row = domainModel.createEmptyRow();
         row.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
         row.set(SiteDomainModel.HOSTNAME, hostname);
-        row.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        row.set(SiteDomainModel.MATCH_TYPE, matchType);
+        if (listenOn != null) {
+            row.set(SiteDomainModel.LISTEN_ON, listenOn);
+        }
         domainModel.save(row);
         return row;
+    }
+
+    /** Stored claim rows on the hostname: routing considers at most ONE legal, ever. */
+    private static long storedClaimsOn(String hostname) {
+        long claims = 0;
+        for (Row row : Models.get(SiteDomainModel.class).find()
+                .where(SiteDomainModel.HOSTNAME.eq(hostname)).all()) {
+            if (row.get(SiteDomainModel.LIVE_ROUTE_KEY) != null) {
+                claims++;
+            }
+        }
+        return claims;
     }
 
     /**
@@ -270,5 +291,199 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         assertThat((String) domainModel.findById(allowed.get(SiteDomainModel.ID))
                 .get(SiteDomainModel.LIVE_ROUTE_KEY))
             .as("step 4: an accepted route on a live site claims its key").isNotNull();
+    }
+
+    /**
+     * The listener-OVERLAP race the unique index alone can never refuse: an all-interfaces
+     * row and a single-address row spell DIFFERENT claim keys, so if the conflict scan and
+     * the row write are not one serialized transaction, two simultaneous writers both pass
+     * their scan and the storage ends up holding two claims routing considers one route.
+     */
+    @Test
+    void anAllInterfacesRowAndASingleAddressRowCannotBothClaimOneHostname() throws Exception {
+        String contested = "overlap.example.com";
+        Model domainModel = Models.get(SiteDomainModel.class);
+
+        // 1. Two LIVE sites, no domains yet. One will claim the hostname on every
+        //    interface, the other on a single pinned address -- overlapping listener
+        //    sets, therefore ONE route, but two DIFFERENT unique keys.
+        Row siteAny = site("Overlap Any", "overlap-any", true);
+        Row sitePinned = site("Overlap Pinned", "overlap-pinned", true);
+
+        // 2. Writer A (all interfaces) starts and is parked AFTER its conflict scan
+        //    passed and BEFORE its row reaches the datasource.
+        Throwable[] failureOfA = new Throwable[1];
+        Thread writeA = new Thread(() -> {
+            Row row = domainModel.createEmptyRow();
+            row.set(SiteDomainModel.SITE_ID, siteAny.get(SiteModel.ID));
+            row.set(SiteDomainModel.HOSTNAME, contested);
+            row.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+            domainModel.save(row);
+        }, "overlap-write-any");
+        writeA.setUncaughtExceptionHandler((thread, error) -> failureOfA[0] = error);
+
+        SiteEnableWriteBarrier.Coordinator coordinator = new SiteEnableWriteBarrier.Coordinator();
+        coordinator.holdWriteOf(writeA);
+        SiteDomainWriteBarrier.install(coordinator);
+        writeA.start();
+        assertThat(coordinator.awaitParked())
+            .as("step 2: writer A must reach the barrier past its conflict scan").isTrue();
+
+        // 3. Writer B (pinned address) races in while A is parked. Its scan cannot see
+        //    A's unwritten row, so only write-transaction serialization can save the
+        //    invariant: B must queue behind A's held write lock.
+        Throwable[] failureOfB = new Throwable[1];
+        Thread writeB = new Thread(() -> {
+            Row row = domainModel.createEmptyRow();
+            row.set(SiteDomainModel.SITE_ID, sitePinned.get(SiteModel.ID));
+            row.set(SiteDomainModel.HOSTNAME, contested);
+            row.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+            row.set(SiteDomainModel.LISTEN_ON, "127.0.0.1");
+            domainModel.save(row);
+        }, "overlap-write-pinned");
+        writeB.setUncaughtExceptionHandler((thread, error) -> failureOfB[0] = error);
+        writeB.start();
+        Thread.sleep(150);
+
+        // 4. Release A and let both writers finish (promptly: a queued writer times out
+        //    on SQLite's busy_timeout if the winner parks too long).
+        coordinator.releaseHeldWriter();
+        writeA.join(15_000);
+        writeB.join(15_000);
+        assertThat(writeA.isAlive()).as("step 4: writer A must complete").isFalse();
+        assertThat(writeB.isAlive()).as("step 4: writer B must complete").isFalse();
+
+        // 5. THE invariant: the storage never holds two claims routing considers one
+        //    route, no matter how the two writes interleaved.
+        assertThat(storedClaimsOn(contested))
+            .as("step 5: exactly one stored claim on the contested route -- an "
+                + "all-interfaces and a single-address claim must never coexist")
+            .isEqualTo(1);
+
+        // 6. A entered first and holds the write lock across scan+write, so A wins and
+        //    B is refused with the readable cross-site route conflict.
+        assertThat(failureOfA[0]).as("step 6: the first writer's claim must succeed").isNull();
+        assertThat(failureOfB[0])
+            .as("step 6: the loser is TOLD, never silently accepted")
+            .isInstanceOf(Violations.class);
+        assertThat(hasViolation((Violations) failureOfB[0], "hostname", "route_taken_other_site"))
+            .as("step 6: the refusal names the route conflict on 'hostname'").isTrue();
+    }
+
+    /**
+     * Single-writer route-identity journey: wildcard/exact shadowing, the restore
+     * transition, and a failed enable that must leave zero claims behind.
+     */
+    @Test
+    void wildcardShadowingRestoreAndFailedWritesKeepRouteStorageExact() {
+        String hostname = "identity.example.com";
+        Model siteModel = Models.get(SiteModel.class);
+        Model domainModel = Models.get(SiteDomainModel.class);
+
+        // 1. A live incumbent owns the exact hostname.
+        Row incumbent = site("Identity Incumbent", "identity-incumbent", true);
+        Row incumbentDomain = domain(incumbent, hostname);
+        assertThat(storedClaimsOn(hostname)).as("step 1: the incumbent claims the route").isEqualTo(1);
+
+        // 2. Wildcard/exact shadowing: a WILDCARD row spelling the same literal hostname
+        //    on another live site shadows the exact row in the tiered lookup -- one
+        //    contested route, refused, match type deliberately not part of the identity.
+        Row shadower = site("Identity Shadower", "identity-shadower", true);
+        assertThatThrownBy(() -> domain(shadower, hostname, SiteDomainModel.MATCH_WILDCARD, null))
+            .as("step 2: a wildcard row shadowing a live exact row is refused")
+            .isInstanceOfSatisfying(Violations.class, violations ->
+                assertThat(hasViolation(violations, "hostname", "route_taken_other_site"))
+                    .as("step 2: the refusal names the shadowed route").isTrue());
+
+        // 3. The incumbent is soft-deleted; its claim is released and a successor takes
+        //    the hostname live.
+        new SiteResource().deleteRow(siteModel.findById(incumbent.get(SiteModel.ID)),
+            AccessContext.anonymous());
+        assertThat(storedClaimsOn(hostname)).as("step 3: the deleted site's claim is gone").isEqualTo(0);
+        Row successor = site("Identity Successor", "identity-successor", true);
+        domain(successor, hostname);
+        assertThat(storedClaimsOn(hostname)).as("step 3: the successor claims the route").isEqualTo(1);
+
+        // 4. RESTORE is a transition into the route table: un-deleting the incumbent
+        //    while the successor holds the route must be refused, and the refusal must
+        //    write NOTHING -- the incumbent stays trashed and claimless.
+        Row trashed = siteModel.findById(incumbent.get(SiteModel.ID));
+        trashed.set(SiteModel.DELETED_AT, (Instant) null);
+        assertThatThrownBy(() -> siteModel.save(trashed))
+            .as("step 4: restoring into a taken route is refused")
+            .isInstanceOfSatisfying(Violations.class, violations ->
+                assertThat(hasViolation(violations, "enabled", "enable_route_conflict"))
+                    .as("step 4: the refusal is the enable route conflict").isTrue());
+        assertThat((Instant) siteModel.findById(incumbent.get(SiteModel.ID)).get(SiteModel.DELETED_AT))
+            .as("step 4: the refused restore left the site trashed").isNotNull();
+        assertThat(storedClaimsOn(hostname))
+            .as("step 4: the successor is still the single claimant").isEqualTo(1);
+
+        // 5. Once the successor is deleted, the SAME restore succeeds and re-claims.
+        new SiteResource().deleteRow(siteModel.findById(successor.get(SiteModel.ID)),
+            AccessContext.anonymous());
+        Row restorable = siteModel.findById(incumbent.get(SiteModel.ID));
+        restorable.set(SiteModel.DELETED_AT, (Instant) null);
+        siteModel.save(restorable);
+        assertThat((String) domainModel.findById(incumbentDomain.get(SiteDomainModel.ID))
+                .get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 5: the restored incumbent holds the claim again").isNotNull();
+        assertThat(storedClaimsOn(hostname)).as("step 5: exactly one claimant").isEqualTo(1);
+
+        // 6. FAILED WRITES: a site write that dies AFTER the claim stamp must roll the
+        //    claims back with the rest of the transaction -- a failed enable leaves a
+        //    disabled site owning nothing.
+        String faultHost = "fault.example.com";
+        Row faulty = site("Identity Faulty", "identity-faulty", false);
+        Row faultyDomain = domain(faulty, faultHost);
+        Row enabling = siteModel.findById(faulty.get(SiteModel.ID));
+        enabling.set(SiteModel.ENABLED, true);
+        SiteWriteFault.arm();
+        assertThatThrownBy(() -> siteModel.save(enabling))
+            .as("step 6: the injected fault aborts the enable")
+            .isInstanceOf(IllegalStateException.class);
+        assertThat((Boolean) siteModel.findById(faulty.get(SiteModel.ID)).get(SiteModel.ENABLED))
+            .as("step 6: the failed enable left the site disabled").isFalse();
+        assertThat(storedClaimsOn(faultHost))
+            .as("step 6: the failed write rolled its claim stamps back").isEqualTo(0);
+
+        // 7. The rollback left a retryable state: the same enable succeeds once the
+        //    fault is gone, and the claim lands.
+        Row retry = siteModel.findById(faulty.get(SiteModel.ID));
+        retry.set(SiteModel.ENABLED, true);
+        siteModel.save(retry);
+        assertThat((String) domainModel.findById(faultyDomain.get(SiteDomainModel.ID))
+                .get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 7: the retried enable claims the route").isNotNull();
+    }
+
+    /**
+     * Injects one failure into the SiteModel write pipeline AFTER the route-claim
+     * restamp hook (registration order: the enable invariant is installed at boot, this
+     * hook at test load), so a test can prove claim stamps roll back with their write.
+     */
+    static final class SiteWriteFault {
+
+        private static volatile boolean armed;
+
+        static {
+            SiteModel.SCHEMA.addBeforeWriteHook(context -> {
+                if (armed) {
+                    armed = false;
+                    throw new IllegalStateException("Injected site write fault");
+                }
+            });
+        }
+
+        private SiteWriteFault() {
+        }
+
+        static void arm() {
+            armed = true;
+        }
+
+        static void disarm() {
+            armed = false;
+        }
     }
 }

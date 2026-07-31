@@ -175,9 +175,11 @@ public class SiteResource extends RowResource {
             return;
         }
         enableInvariantInstalled = true;
-        // The ADVISORY scan: produces the specific, localized refusal an operator can act
-        // on. It reads the site and domain tables and only then writes, so it cannot win a
-        // race -- that is what the claim stamp below is for.
+        // The scan: produces the specific, localized refusal an operator can act on. It
+        // runs inside the one write transaction SiteModel.save declares, so on the
+        // serialized SQLite engine it cannot go stale and is the authoritative refusal
+        // for overlapping listener sets (see RouteClaims); the claim stamp below feeds
+        // the unique index that backstops identical keys.
         //
         // AIDEV-NOTE: beforeVALIDATE, not beforeWrite. Both tiers run inside the same
         // Schema.beforeWrite pass on EVERY save path (there is no way to reach the

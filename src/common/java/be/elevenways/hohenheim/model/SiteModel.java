@@ -15,6 +15,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 
 import java.util.List;
 import be.elevenways.zenit.common.validation.Violations;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 public class SiteModel extends Model {
 
@@ -157,6 +158,23 @@ public class SiteModel extends Model {
     private static Violations violation(String field, Object value, String key) {
         return Violations.ofField(field, value,
             Microcopy.of(key).withFilter("scope", "violations"));
+    }
+
+    /**
+     * Every site save is ONE write transaction by DECLARATION: the enable scan
+     * (beforeValidate), the route-claim restamp (beforeWrite) and the row write commit
+     * or fail together.
+     *
+     * AIDEV-NOTE: Model.save already wraps revisionable schemas in a transaction, but
+     * the route invariant (see RouteClaims) must not ride that coincidence -- removing
+     * REVISIONABLE would silently reopen the scan-then-claim window. The nested
+     * transaction joins the outer one, so this costs nothing today.
+     */
+    @Override
+    public Row save(@NonNull Row row) {
+        Row[] result = new Row[1];
+        this.requireDatasource().withTransaction(tx -> result[0] = super.save(row));
+        return result[0];
     }
 
     public List<Row> findEnabled() {

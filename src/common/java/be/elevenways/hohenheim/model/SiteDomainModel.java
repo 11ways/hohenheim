@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.model.Models;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.zenit.common.validation.Violations;
 
@@ -104,13 +105,16 @@ public class SiteDomainModel extends Model {
      * claims nothing (disabled site, soft-deleted site, or a row that lost a heal pass).
      *
      * AIDEV-NOTE: derived, never operator-editable, and backed by a UNIQUE index
-     * (M045_SiteDomainRouteClaims) -- it is the ONLY thing standing between two tenants
-     * that enable staged sites on one hostname in the same instant. The app-level scan in
-     * SiteDomainResource is a read-then-act check and always loses that race. NULL means
-     * "no claim", so staged duplicates on disabled sites stay legal and a soft-deleted
-     * site owns nothing. Backend note: this rides NULLs-are-distinct unique-index
-     * semantics (SQLite -- hohenheim's only backend -- plus PostgreSQL/MySQL/Firebird);
-     * MongoDB would need a partial index for the same shape.
+     * (M045_SiteDomainRouteClaims). Concurrency is handled by the serialized write
+     * transaction that this model's save() declares (see RouteClaims): the conflict scan
+     * in SiteDomainResource runs inside the same transaction as the claim write, so it
+     * cannot go stale, and it is what refuses OVERLAPPING listener sets whose keys
+     * differ; the index refuses identical keys even for writers that dodge the
+     * transaction. NULL means "no claim", so staged duplicates on disabled sites stay
+     * legal and a soft-deleted site owns nothing. Backend note: this rides
+     * NULLs-are-distinct unique-index semantics (SQLite -- hohenheim's only backend --
+     * plus PostgreSQL/MySQL/Firebird); MongoDB would need a partial index for the same
+     * shape.
      */
     public static final StringField LIVE_ROUTE_KEY = SCHEMA.addField(
         StringField.builder().name("live_route_key").filterable(false).build());
@@ -181,6 +185,23 @@ public class SiteDomainModel extends Model {
     private static Violations violation(String field, Object value, String key) {
         return Violations.ofField(field, value,
             Microcopy.of(key).withFilter("scope", "violations"));
+    }
+
+    /**
+     * Every domain save is ONE write transaction: the route-conflict scan
+     * (beforeValidate), the live-route claim stamp (beforeWrite) and the row write
+     * commit or fail together.
+     *
+     * AIDEV-NOTE: this transaction IS the route invariant for overlapping listener
+     * sets -- see RouteClaims. Without it the scan is a read-then-write with a window,
+     * and Model.save only wraps a transaction for revisionable schemas, which this
+     * model is not. Do not remove.
+     */
+    @Override
+    public Row save(@NonNull Row row) {
+        Row[] result = new Row[1];
+        this.requireDatasource().withTransaction(tx -> result[0] = super.save(row));
+        return result[0];
     }
 
     public List<Row> findBySiteId(int siteId) {
