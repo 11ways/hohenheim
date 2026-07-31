@@ -2,7 +2,11 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.CmsSettings;
+import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
+import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.common.security.ContentSecurityPolicies;
 import be.elevenways.zenit.server.http.Middleware;
 import be.elevenways.zenit.server.http.ScopedCspMiddleware;
@@ -58,12 +62,44 @@ public final class SiteTerminalCsp {
             : configured;
     }
 
-    /** The record-subpage route of the processes tab, under any registered panel. */
+    /**
+     * True only for the record-subpage route that actually dispatches to THIS
+     * page: {@code {panel}/{resource}/{id}/page/processes} where the panel is
+     * registered, the resource is one of its peers, and the subpage that slug
+     * resolves to really is {@link SiteProcessesPage}.
+     *
+     * AIDEV-NOTE: this used to be a SUFFIX test ("ends with /page/processes")
+     * plus "the first segment is a registered panel", which handed the widened
+     * policy to any depth of path under a panel slug -- 404s included, and any
+     * future resource that grows a "processes" tab of its own. The claim now
+     * walks the same registrations the request does (PanelRegistry ->
+     * Panel.peerBySlug -> RecordSubpageRegistry.resolve(resource.subpages())),
+     * so a path that cannot render the terminal cannot be claimed by it. It stays
+     * STRUCTURAL: no record is loaded, so a claim check never queries.
+     */
     private static boolean claims(String path) {
-        if (!path.endsWith("/page/" + SiteProcessesPage.SLUG)) {
+        String[] segments = path.split("/", -1);
+        if (segments.length != 5
+                || !"page".equals(segments[3])
+                || !SiteProcessesPage.SLUG.equals(segments[4])) {
             return false;
         }
-        String slug = ScopedCspMiddleware.firstSegment(path);
-        return !slug.isEmpty() && PanelRegistry.getBySlug(slug) != null;
+
+        Panel panel = segments[0].isEmpty() ? null : PanelRegistry.getBySlug(segments[0]);
+        if (panel == null || segments[1].isEmpty() || segments[2].isEmpty()) {
+            return false;
+        }
+        if (!(panel.peerBySlug(segments[1]) instanceof Resource<?> resource)) {
+            return false;
+        }
+
+        // resolve() applies the shadowing rule the dispatcher applies, so the page
+        // claimed here is the page that would render.
+        for (RecordScopedPage<?> subpage : RecordSubpageRegistry.INSTANCE.resolve(resource.subpages())) {
+            if (SiteProcessesPage.SLUG.equals(subpage.slug())) {
+                return subpage instanceof SiteProcessesPage;
+            }
+        }
+        return false;
     }
 }
