@@ -34,6 +34,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Per-site access control: a non-admin principal is refused everywhere until it
@@ -179,5 +180,56 @@ class SiteAccessControlTest extends HohenheimTestBase {
         socket.request(10);
 
         assertThat(closeCode.get(15, TimeUnit.SECONDS)).isEqualTo(1008);
+    }
+
+    /** A trashed site is not a grant target, and restoring it does not hand authority back. */
+    @Test
+    @Order(2)
+    void aTrashedSiteHoldsNoAuthorityAndRestoringItGrantsNoneBack() {
+        // AIDEV-NOTE: Sites soft-delete by HAND (SiteResource stamps deleted_at without
+        // SoftDeleteBehaviour), so the row stays physically present. The framework's
+        // presence-only liveness therefore counted a trashed site as a live grant target:
+        // its grants survived the orphan sweep and came back on restore. The declaration's
+        // liveWhen predicate is what makes deleted_at mean dead to zenit-auth as well.
+        var siteModel = Models.get(SiteModel.class);
+        UserPrincipal principal = new UserPrincipal(limitedUserId, "Limited User");
+
+        // 1. The limited user manages site A (granted by the journey above).
+        assertThat(HohenheimAccess.canManageSite(principal, siteAId)).isTrue();
+
+        // 2. Trash site A the way the admin resource does it.
+        Row siteA = siteModel.find().where(SiteModel.ID.eq(siteAId)).first();
+        siteA.set(SiteModel.DELETED_AT, Instant.now());
+        siteModel.save(siteA);
+
+        assertThat(siteModel.find().where(SiteModel.ID.eq(siteAId)).count())
+            .describedAs("the trashed row must still be physically present")
+            .isEqualTo(1);
+        assertThat(HohenheimAccess.canManageSite(principal, siteAId))
+            .describedAs("a trashed site must hold no authority")
+            .isFalse();
+
+        // 3. A grant cannot be planted on a trashed site either -- the SAME liveness
+        //    definition guards the write path.
+        assertThatThrownBy(() -> RecordGrants.grant("user", limitedUserId, SiteModel.MODEL_ID,
+                siteAId, HohenheimAccess.MANAGE, true))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        // 4. RESTORE: clearing deleted_at must not resurrect the withdrawn authority.
+        Row restored = siteModel.find().where(SiteModel.ID.eq(siteAId)).first();
+        restored.set(SiteModel.DELETED_AT, null);
+        siteModel.save(restored);
+
+        assertThat(HohenheimAccess.canManageSite(principal, siteAId))
+            .describedAs("restoring a site must not revive the grants its delete withdrew")
+            .isFalse();
+        assertThat(HohenheimAccess.managedSiteIds(principal)).isEmpty();
+
+        // 5. And the site is grantable again now that it is live, so the refusal was
+        //    about liveness and not about the site being permanently poisoned.
+        assertThat(RecordGrants.grant("user", limitedUserId, SiteModel.MODEL_ID, siteAId,
+            HohenheimAccess.MANAGE, true).get(
+                be.elevenways.zenit.auth.model.RecordGrantModel.VALUE)).isTrue();
+        assertThat(HohenheimAccess.canManageSite(principal, siteAId)).isTrue();
     }
 }

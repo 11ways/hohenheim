@@ -52,6 +52,7 @@ public class ServerMain {
         // server (both listeners) that only a kill -9 timeout stopped.
         if (args != null && java.util.Arrays.asList(args).contains("--run-migrations")) {
             HohenheimSettingsFiles.load();
+            HohenheimAccess.declareGrantableModels();
             HohenheimDatabase.init();
             // Upgrade transition: an install that already has sites keeps the lenient
             // workload-identity behaviour until the operator enables it deliberately.
@@ -72,6 +73,12 @@ public class ServerMain {
         HohenheimEndpoints.init();
         // Force-load the zenit-cms panel routes (all /{panel}/... endpoints).
         Object cmsRoutes = ResourcePageEndpoints.LIST;
+        // AIDEV-NOTE: BEFORE the migrations, not with the rest of the auth wiring. The
+        // grant declarations carry the per-model LIVENESS definition, and zenit-auth's
+        // one-time orphan purge (M009) is a migration: a declaration that lands afterwards
+        // leaves that purge judging a hand-stamped soft delete as a live record. Pure
+        // registry writes, so nothing here needs the database.
+        HohenheimAccess.declareGrantableModels();
         HohenheimDatabase.init();   // also registers the SQLite datasource as the framework default
 
         // Install zenit-auth (session store, CSRF, middleware, /login + /setup + /account + /admin).
@@ -162,7 +169,7 @@ public class ServerMain {
         // not a session; the handler refuses anything the token does not unlock.
         AuthRegistry.registerPublicPrefix("/nic/update");
         AuthRegistry.baseline("/", AuthRequirement.requiresLogin());
-        HohenheimAccess.declareGrantableModels();
+        // declareGrantableModels() already ran, before the migrations -- see main().
         KnownPermissions.register("hohenheim",
             KnownPermission.of(
                 HohenheimPanel.ACCESS.value(),
