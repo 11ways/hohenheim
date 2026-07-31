@@ -152,10 +152,11 @@ public class SiteDomainResource extends RowResource {
      * Do NOT move any of this back into persistRow / updateRow as a per-path check.
      *
      * The refusal lives on the beforeVALIDATE tier and the claim stamp on the beforeWRITE
-     * tier of the SAME Schema.beforeWrite pass. That is deliberate: the scan is the
-     * advisory diagnosis and must run before the row is judged, the claim is the
-     * authoritative write-time backstop and must be the last thing to happen before the
-     * row hits the datasource.
+     * tier of the SAME Schema.beforeWrite pass, and BOTH run inside the one write
+     * transaction SiteDomainModel.save declares. That is deliberate: the serialized scan
+     * is the authoritative refusal (it alone can judge listener-set OVERLAP, which no
+     * unique key can spell -- see RouteClaims), and the claim stamp feeds the unique
+     * index that refuses identical keys as the storage-level backstop.
      */
     public static synchronized void installRouteInvariant() {
         if (routeInvariantInstalled) {

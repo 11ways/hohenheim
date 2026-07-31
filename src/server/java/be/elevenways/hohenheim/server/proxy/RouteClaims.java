@@ -23,19 +23,20 @@ import java.util.Set;
  * {@link SiteDomainModel#LIVE_ROUTE_KEY} while its site actually routes traffic, and the
  * stamp/release pass that keeps that column honest.
  *
- * AIDEV-NOTE: the column carries a UNIQUE index (M045_SiteDomainRouteClaims), so this is
- * the only route-ownership check that survives concurrency. Every app-level scan in the
- * CMS reads first and writes second, which means two tenants enabling staged sites on one
- * hostname in the same instant both pass their scan; the index refuses the loser. The
- * scans stay because they produce the specific, localized refusal an operator can act on;
- * they are the diagnosis, this is the guarantee.
- *
- * Residual gap, deliberately accepted: the key holds the listener restriction LITERALLY,
- * while route identity treats listener SETS as conflicting when they OVERLAP (an empty
- * restriction listens everywhere). An all-interfaces row and a single-address row on the
- * same hostname therefore hold DIFFERENT keys and both fit in the index, even though the
- * dispatcher considers them one route. Set overlap is not expressible as a unique index;
- * the app-level scan still refuses that pair whenever the two writes are not simultaneous.
+ * AIDEV-NOTE: route ownership is a transactionally SERIALIZED claim registry. Every
+ * claim-writing path runs its conflict scan and its claim write inside ONE write
+ * transaction (SiteModel.save and SiteDomainModel.save declare the wrap; restamp runs
+ * inside the site save's transaction), and hohenheim's engine -- SQLite only, enforced by
+ * HohenheimDatabase.requireSqlite, BEGIN IMMEDIATE single-writer since the datasource
+ * rework -- serializes write transactions, so a scan can never go stale between read and
+ * write. That serialization is what refuses OVERLAPPING listener sets (an empty
+ * restriction listens everywhere): overlap-but-not-equal claims spell DIFFERENT keys, so
+ * no unique index can refuse them, only the serialized scan can. The UNIQUE index on this
+ * column (M045_SiteDomainRouteClaims) stays as the equality backstop: identical keys are
+ * refused by storage itself even if a future writer bypasses the transaction discipline.
+ * Route-claim transactions must stay well under SQLite's 5s busy_timeout or queued rivals
+ * fail with SQLITE_BUSY. The scans also produce the specific, localized refusal an
+ * operator can act on: they are diagnosis AND, under serialization, the overlap guarantee.
  *
  * @author Jelle De Loecker
  */
