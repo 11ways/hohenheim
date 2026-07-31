@@ -22,8 +22,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * CMS panel served at /admin. Constructed explicitly in ServerMain (not
- * {@code @ZenitAutoLoad}) because its resources reach server services.
+ * CMS panel served at /admin. Constructed by the discovered
+ * {@code HohenheimHostWiring} module at the MODULES boot stage (not
+ * {@code @ZenitAutoLoad}) because its resources reach server services, and
+ * because the registration must be complete before STARTHTTP binds.
  */
 public final class HohenheimPanel extends Panel {
 

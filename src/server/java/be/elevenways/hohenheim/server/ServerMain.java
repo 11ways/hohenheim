@@ -3,13 +3,11 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
-import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
-import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
@@ -31,7 +29,6 @@ import be.elevenways.zenit.auth.server.identity.AutoProvisioningSink;
 import be.elevenways.zenit.auth.server.identity.IdentityProviderRegistry;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusIdentityProvider;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.server.task.TaskService;
@@ -97,12 +94,12 @@ public class ServerMain {
         WorkloadIdentity.installSettingsGate();
 
         // main() does the HTTP-server side of startup; init() is idempotent.
+        // Everything an incoming request needs -- client script location, endpoint
+        // handlers, panels, the security engine -- is installed by the discovered
+        // HohenheimHostWiring module at the MODULES stage, which completes before
+        // this call binds the listener. Nothing request-facing may be added below.
         ServerZenitRuntime.main(args);
-        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
 
-        // Register handlers + the admin panel after the runtime is ready
-        // (the panel's resources resolve model singletons from the MODELS stage).
-        HohenheimHandlers.init();
         // A restart mid-deploy leaves stacks claiming "deploying", which would
         // disable their monitoring forever. Swept on a virtual thread: the sweep
         // does live Docker inspects (60s timeout each), and a wedged daemon --
@@ -111,15 +108,9 @@ public class ServerMain {
         // is safe: both serialize on the per-stack worker.
         JobRunner.startVirtualThread(() -> StackRuntime.get().resetInterruptedDeploys());
         installShutdownHook();
-        // The manager owns its own platform-thread lifecycle lane. Queue it before
-        // panel construction, but never hold HTTP/proxy/DNS startup on readiness.
+        // The manager owns its own platform-thread lifecycle lane; never hold
+        // HTTP/proxy/DNS startup on its readiness.
         SpamserviceManager.get().boot();
-        new HohenheimPanel();
-        new ManagePanel();
-
-        // Native security engine: local event sink, nftables setup + resync,
-        // ban-cache warmup. Before the proxy starts so its hot path sees bans.
-        HohenheimSecurity.boot();
 
         proxyServer = new ProxyServer();
         proxyServer.start();

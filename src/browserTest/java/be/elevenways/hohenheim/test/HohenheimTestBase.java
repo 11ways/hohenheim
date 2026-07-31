@@ -4,14 +4,10 @@ import be.elevenways.hawkeye.testSupport.HawkeyeBrowserTestBase;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.HohenheimHandlers;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
-import be.elevenways.hohenheim.server.cms.HohenheimPanel;
-import be.elevenways.hohenheim.server.cms.ManagePanel;
-import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.AuthSettings;
@@ -88,24 +84,23 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
             throw new RuntimeException("Failed to create the test database", e);
         }
 
-        // Run the real boot path (MODELS discovery registers the model singletons); HTTP auto-start
-        // is disabled inside ensureBooted() since this base binds its own server below.
-        HohenheimTestRuntime.ensureBooted();
-        Zenit.getHawkeye().setClientScriptLocation("/cms.js");
-
-        // Install auth exactly as production does, then seed a logged-in admin for the tests.
+        // Install auth exactly as production does, BEFORE the boot stages run:
+        // ManagePanel wraps the permission checker zenit-auth installs, so the
+        // harness must not invert that order.
         ZenitAuth.init(HohenheimDatabase.datasource());
         // Production disables the module's default auth panel (ServerMain does the
-        // same): the users/roles resources are wired into HohenheimPanel below.
+        // same): the users/roles resources are wired into HohenheimPanel instead.
         AuthSettings.VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         ServerMain.installAuthBaselines();
-        HohenheimHandlers.init();
-        new HohenheimPanel();
-        new ManagePanel();
 
-        // Native security engine, exactly as ServerMain boots it (sink, event
-        // vocabulary, own-IP guard, ban cache).
-        HohenheimSecurity.boot();
+        // AIDEV-NOTE: ONE order, shared with production. Everything a request needs
+        // -- client script location, endpoint handlers (incl. the WebSocket handler
+        // factories), both panels, the security engine -- is installed by the
+        // discovered HohenheimHostWiring module at the MODULES stage inside this
+        // call. The harness used to hand-install those AFTER booting while
+        // ServerMain installed them after BINDING, so the suite was a second,
+        // safer truth and could never see production's pre-wiring window.
+        HohenheimTestRuntime.ensureBooted();
 
         sessionToken = seedAuthenticatedAdmin();
 
