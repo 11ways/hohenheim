@@ -119,8 +119,11 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
             .as("step 1: two staged sites on one hostname claim nothing").isEqualTo(0);
 
         // 2. Tenant A starts enabling. The barrier parks it AFTER its conflict scan has
-        //    passed (B is still disabled) and BEFORE it claims anything, which is the
-        //    exact window the pre-fix code lost: a read that is already stale.
+        //    passed (B is still disabled) and BEFORE it claims anything. Since the SQLite
+        //    datasource rework, a site write runs on a DEDICATED connection whose
+        //    transaction holds the database's single write lock from BEGIN, so A parks
+        //    holding that lock: the scan it just ran can no longer go stale, because no
+        //    other writer can commit until A finishes.
         Throwable[] failureOfA = new Throwable[1];
         Thread enableA = new Thread(() -> {
             Row replay = siteModel.findById(siteA.get(SiteModel.ID));
@@ -136,33 +139,48 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         assertThat(coordinator.awaitParked())
             .as("step 2: tenant A must reach the barrier past its conflict scan").isTrue();
 
-        // 3. Tenant B enables while A is parked. B's own scan also passes -- A is still
-        //    disabled in the database -- so B goes live. This is the second half of the
-        //    race: both tenants have now passed a scan that says the hostname is free.
-        Row liveB = siteModel.findById(siteB.get(SiteModel.ID));
-        liveB.set(SiteModel.ENABLED, true);
-        siteModel.save(liveB);
-        assertThat((Boolean) siteModel.findById(siteB.get(SiteModel.ID)).get(SiteModel.ENABLED))
-            .as("step 3: tenant B wins the race and is live").isTrue();
+        // 3. Tenant B enables at the same instant. Its write must QUEUE behind A's held
+        //    write lock -- it can neither interleave with A's half-done claim (the pre-fix
+        //    shared-connection corruption) nor complete while A is parked.
+        Throwable[] failureOfB = new Throwable[1];
+        Thread enableB = new Thread(() -> {
+            Row liveB = siteModel.findById(siteB.get(SiteModel.ID));
+            liveB.set(SiteModel.ENABLED, true);
+            siteModel.save(liveB);
+        }, "race-enable-b");
+        enableB.setUncaughtExceptionHandler((thread, error) -> failureOfB[0] = error);
+        enableB.start();
+        Thread.sleep(150);
+        assertThat(enableB.isAlive())
+            .as("step 3: tenant B must queue behind A's write transaction, not slip inside it")
+            .isTrue();
 
-        // 4. Release A. Its scan said the hostname was free, but the unique live-route
-        //    claim has already been taken, so its write is REFUSED -- and refused with the
-        //    real route-conflict violation, not a driver error the tenant cannot read.
+        // 4. Release A: it entered first, so it wins -- its scan and its claim were one
+        //    atomic serialized transaction.
         coordinator.releaseHeldWriter();
         enableA.join(15_000);
         assertThat(enableA.isAlive()).as("step 4: tenant A's write must complete").isFalse();
-        assertThat(failureOfA[0])
-            .as("step 4: the loser of the race is TOLD, never silently dropped")
-            .isInstanceOf(Violations.class);
-        assertThat(hasViolation((Violations) failureOfA[0], "enabled", "enable_route_conflict"))
-            .as("step 4: the refusal is the route conflict, anchored on 'enabled'").isTrue();
+        assertThat(failureOfA[0]).as("step 4: the winner's enable must succeed").isNull();
 
-        // 5. The invariant that actually matters: the hostname has exactly ONE live owner,
+        // 5. B's queued write now runs its conflict scan against A's COMMITTED claim and
+        //    is REFUSED -- with the real route-conflict violation, not a driver error the
+        //    tenant cannot read.
+        enableB.join(15_000);
+        assertThat(enableB.isAlive()).as("step 5: tenant B's write must complete").isFalse();
+        assertThat(failureOfB[0])
+            .as("step 5: the loser of the race is TOLD, never silently dropped")
+            .isInstanceOf(Violations.class);
+        assertThat(hasViolation((Violations) failureOfB[0], "enabled", "enable_route_conflict"))
+            .as("step 5: the refusal is the route conflict, anchored on 'enabled'").isTrue();
+
+        // 6. The invariant that actually matters: the hostname has exactly ONE live owner,
         //    and it is the tenant that won.
         assertThat(liveOwnersOf(contested))
-            .as("step 5: exactly one live owner of the contested hostname").isEqualTo(1);
+            .as("step 6: exactly one live owner of the contested hostname").isEqualTo(1);
         assertThat((Boolean) siteModel.findById(siteA.get(SiteModel.ID)).get(SiteModel.ENABLED))
-            .as("step 5: the losing tenant stayed disabled").isFalse();
+            .as("step 6: the winning tenant is live").isTrue();
+        assertThat((Boolean) siteModel.findById(siteB.get(SiteModel.ID)).get(SiteModel.ENABLED))
+            .as("step 6: the losing tenant stayed disabled").isFalse();
     }
 
     @Test
