@@ -113,6 +113,14 @@ public class SiteModel extends Model {
         SCHEMA.addBehaviour(RevisionableBehaviour.create(50));
 
     static {
+        // AIDEV-NOTE: Sites are trashed by hand (SiteResource stamps deleted_at through
+        // save(), there is no SoftDeleteBehaviour here), so nothing declares deleted_at
+        // as lifecycle state for us. Without this the CMS revision-restore endpoint
+        // would replay a snapshot taken while the site was live -- deleted_at = null
+        // included -- and silently bring a deleted site, its routes and its
+        // certificates back.
+        SCHEMA.addLifecycleField(DELETED_AT);
+
         SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
             if (row == null || !SITE_TYPE_TLS_PASSTHROUGH.equals(effective(row, SITE_TYPE))) return;
