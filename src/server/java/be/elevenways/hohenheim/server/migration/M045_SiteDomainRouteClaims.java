@@ -52,7 +52,7 @@ public class M045_SiteDomainRouteClaims extends Migration {
     public void up(MigrationBuilder schema) {
         schema.alterTable("site_domains", table -> table.addColumn(LIVE_ROUTE_KEY_COLUMN,
             ColumnType.STRING, column -> column.maxLength(1024).nullable(true).ifNotExists()));
-        schema.data("Claim the live route of every enabled, non-deleted site's domains",
+        schema.data("Claim the live route of every enabled, non-deleted site's domains", "1",
             RouteClaims::backfill);
         schema.alterTable("site_domains", table ->
             table.unique(LIVE_ROUTE_KEY_INDEX, List.of(LIVE_ROUTE_KEY_COLUMN)));
