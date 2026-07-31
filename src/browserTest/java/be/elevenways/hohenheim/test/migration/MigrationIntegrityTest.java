@@ -52,7 +52,7 @@ class MigrationIntegrityTest {
      * @return the ALTER-only subset of the runner's own discovery, so a new migration is
      *         covered automatically instead of rotting out of a hand-maintained list
      */
-    // AIDEV-NOTE: Scoped to be.elevenways.hohenheim.migration on purpose: zenit's own
+    // AIDEV-NOTE: Scoped to be.elevenways.hohenheim on purpose: zenit's own
     // M002_AddSystemTaskBootClaim and M002_AddActivityRecordTitle are also ADD-COLUMN-only
     // but lack .ifNotExists(), so their replay posture is upstream's contract, not this
     // repo's. up() only RECORDS operations into a fresh builder (the MigrationChecksum
@@ -61,7 +61,7 @@ class MigrationIntegrityTest {
         List<Supplier<Migration>> result = new ArrayList<>();
         for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations("default")) {
             Migration migration = supplier.get();
-            if (!migration.getClass().getName().startsWith("be.elevenways.hohenheim.migration.")) {
+            if (!migration.getClass().getName().startsWith("be.elevenways.hohenheim.")) {
                 continue;
             }
             MigrationBuilder recorded = new MigrationBuilder();
@@ -241,7 +241,11 @@ class MigrationIntegrityTest {
         List<Migration> migrations = new ArrayList<>();
         for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations("default")) {
             Migration migration = supplier.get();
-            if (migration.getClass().getName().startsWith("be.elevenways.hohenheim.migration.")) {
+            // AIDEV-NOTE: the prefix is the REPO, not one package. Filtering on
+            // be.elevenways.hohenheim.migration silently excluded every migration in
+            // be.elevenways.hohenheim.server.migration -- M045 shipped uncovered, and the
+            // golden file jumped straight from M044 to M046 without anything noticing.
+            if (migration.getClass().getName().startsWith("be.elevenways.hohenheim.")) {
                 migrations.add(migration);
             }
         }
