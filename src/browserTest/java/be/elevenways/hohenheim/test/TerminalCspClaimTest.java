@@ -61,6 +61,31 @@ class TerminalCspClaimTest extends HohenheimTestBase {
         assertThat(csp(client, "/not-a-panel/sites/1/page/processes"))
             .as("step 4: the variant must not claim a path outside a registered panel")
             .isNotEqualTo(ContentSecurityPolicies.STRICT_ADMIN_TERMINAL);
+
+        // 5. Inside a registered panel, an UNREGISTERED resource is a 404 -- and a
+        //    404 must not be handed the wasm concessions just because its URL ends
+        //    in /page/processes.
+        assertThat(csp(client, "/admin/not-a-resource/1/page/processes"))
+            .as("step 5: a 404 under a registered panel must not get the terminal variant")
+            .isNotEqualTo(ContentSecurityPolicies.STRICT_ADMIN_TERMINAL);
+
+        // 6. A REGISTERED resource that has no processes subpage is refused too:
+        //    the claim resolves the subpage, it does not read the URL's shape.
+        assertThat(csp(client, "/admin/certificates/1/page/processes"))
+            .as("step 6: a resource without a processes subpage must not get the terminal variant")
+            .isEqualTo(ContentSecurityPolicies.STRICT_ADMIN);
+
+        // 7. Depth is not a loophole either: only the exact record-subpage route
+        //    dispatches to the terminal.
+        assertThat(csp(client, "/admin/sites/1/anything/at/all/page/processes"))
+            .as("step 7: a deeper path ending in /page/processes must not get the terminal variant")
+            .isNotEqualTo(ContentSecurityPolicies.STRICT_ADMIN_TERMINAL);
+
+        // 8. The delegated /manage panel DOES carry the terminal, so the narrowing
+        //    must not have become "the admin panel only".
+        assertThat(csp(client, "/manage/sites/1/page/processes"))
+            .as("step 8: the manage panel's processes subpage must keep the terminal variant")
+            .isEqualTo(ContentSecurityPolicies.STRICT_ADMIN_TERMINAL);
     }
 
     private String csp(HttpClient client, String path) throws Exception {
