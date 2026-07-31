@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.zenit.auth.AuthSettings;
+import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.setting.ServerSettings;
@@ -19,6 +21,15 @@ public final class HohenheimTestRuntime {
 
     public static void ensureBooted() {
         ensureDatasource();
+        // AIDEV-NOTE: auth is installed BEFORE the boot stages, exactly where
+        // ServerMain installs it, because the MODULES stage now builds both CMS
+        // panels and their resources are zenit-auth's. init() is idempotent, so a
+        // test that already installed auth itself is unaffected. Auth BASELINES
+        // stay the caller's choice: they are policy, not wiring.
+        ZenitAuth.init(Datasources.getDefault());
+        // The users/roles resources live in HohenheimPanel; zenit-auth's own
+        // default panel would be a second registration for the same slug.
+        AuthSettings.VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         ServerSettings.VALUES.setValue(ServerSettings.Network.AUTO_START_HTTP, false);
         // The suite mirrors an upgraded (legacy) install: sites spawn without a
         // dedicated system user. WorkloadIdentityTest flips this on explicitly.
