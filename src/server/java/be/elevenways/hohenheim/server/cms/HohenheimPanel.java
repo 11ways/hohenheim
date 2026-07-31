@@ -4,6 +4,8 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.auth.server.cms.AuthRolesResource;
+import be.elevenways.zenit.auth.server.cms.AuthUsersResource;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
@@ -66,6 +68,10 @@ public final class HohenheimPanel extends Panel {
         peers.add(new DnsZonePeerResource());
         peers.add(new NotificationChannelResource());
         peers.add(new BanResource());
+        // zenit-auth's generated admin resources, wired into THIS panel (the
+        // module's own default panel is disabled via auth.cms.auto_panel).
+        peers.add(new AuthUsersResource(SECURITY_GROUP, 2));
+        peers.add(new AuthRolesResource(SECURITY_GROUP, 3));
         peers.add(new SpamserviceOverviewPage());
         peers.add(new SpamserviceInstallationResource());
         peers.add(new SpamserviceSamplesResource());

@@ -2981,6 +2981,10 @@
     "text": "Access the delegated site-management panel",
     "scope": "permission"
   },
+  "manage": {
+    "text": "Manage",
+    "scope": "capability"
+  },
   "access": {
     "text": "Access",
     "scope": "site"

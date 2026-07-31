@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
@@ -90,6 +91,9 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
 
         // Install auth exactly as production does, then seed a logged-in admin for the tests.
         ZenitAuth.init(HohenheimDatabase.datasource());
+        // Production disables the module's default auth panel (ServerMain does the
+        // same): the users/roles resources are wired into HohenheimPanel below.
+        AuthSettings.VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         ServerMain.installAuthBaselines();
         HohenheimHandlers.init();
         new HohenheimPanel();
