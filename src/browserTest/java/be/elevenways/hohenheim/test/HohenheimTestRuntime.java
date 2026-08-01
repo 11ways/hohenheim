@@ -31,8 +31,8 @@ public final class HohenheimTestRuntime {
         // default panel would be a second registration for the same slug.
         AuthSettings.VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         ServerSettings.VALUES.setValue(ServerSettings.Network.AUTO_START_HTTP, false);
-        // The suite mirrors an upgraded (legacy) install: sites spawn without a
-        // dedicated system user. WorkloadIdentityTest flips this on explicitly.
+        // The suite opts OUT explicitly: its sites have no system user of their own
+        // and would otherwise all fault. WorkloadIdentityTest flips it back on.
         HohenheimSettings.VALUES.setValue(
             HohenheimSettings.Process.REQUIRE_DEDICATED_USER, false);
         ServerZenitRuntime.init().join();
