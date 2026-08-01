@@ -1,0 +1,22 @@
+
+── Dependencies (protoblast → emberglyph → hawkeye → janeway → zenit → plumage → zenit-microcopy → zenit-widget → zenit-forms → zenit-media → zenit-pages) [forced] ──
+  ok  protoblast
+  ok  emberglyph
+  ok  hawkeye
+  ...  protoblast-gradle-plugin: hawkeye-compile republished since the plugin fat jar was packaged -- repackaging the fat jar
+  ok  protoblast-gradle-plugin
+  ok  janeway
+  ok  zenit
+  ok  plumage
+  ok  zenit-microcopy
+  ok  zenit-widget
+  ok  zenit-forms
+  ok  zenit-media
+  ok  zenit-pages
+
+── Building zenit-cms ──
+  ...  Clearing generated template sources
+  ...  Removing stale TeaVM JS: cms.js
+  ok  zenit-cms
+
+  ok  Build completed in 155s

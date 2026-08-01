@@ -1,0 +1,20 @@
+TotpTurkishLocaleTest > aLowercaseSecretContainingLetterIStillDecodesAndVerifies() FAILED
+    java.lang.IllegalArgumentException at TotpTurkishLocaleTest.java:39
+
+1 test completed, 1 failed
+
+[Incubating] Problems report is available at: file:///home/skerit/projects/javaweb/zenit-auth/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':test'.
+> There were failing tests. See the report at: file:///home/skerit/projects/javaweb/zenit-auth/build/reports/tests/test/index.html
+
+--
+    TotpTurkishLocaleTest.aLowercaseSecretContainingLetterIStillDecodesAndVerifies()
+      Invalid Base32 character: İ
+      java.lang.IllegalArgumentException: Invalid Base32 character: İ
+      at be.elevenways.zenit.auth.server.Totp.base32Decode(Totp.java:147)
+      at be.elevenways.zenit.auth.server.Totp.codeAt(Totp.java:39)
+      at be.elevenways.zenit.auth.server.TotpTurkishLocaleTest.aLowercaseSecretContainingLetterIStillDecodesAndVerifies(TotpTurkishLocaleTest.java:39)

@@ -1,0 +1,8 @@
+> Task :checkLocaleFolds FAILED
+
+[Incubating] Problems report is available at: file:///home/skerit/projects/javaweb/zenit-microcopy/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+--
+Execution failed for task ':checkLocaleFolds' (registered by plugin 'be.elevenways.protoblast').
+> Locale-sensitive case fold(s) found. No-arg toLowerCase()/toUpperCase() follows the JVM default locale (the Turkish-I bug). Use toLowerCase(Locale.ROOT)/toUpperCase(Locale.ROOT) in server-only code, and BlastString.lower/upper in common/browser/client code (java.util.Locale is banned there: it anchors the Locale clinit into every TeaVM bundle). A deliberately locale-sensitive site takes a "locale-fold: deliberate" comment on the same line.

@@ -1,0 +1,7 @@
+  ...  Searching 20260801-110421.log for: step [12]
+539:    org.opentest4j.AssertionFailedError: step 1: ONCLICK= must fail compilation under a Turkish default locale ==> Expected java.lang.Exception to be thrown, but nothing was thrown.
+547:    org.opentest4j.AssertionFailedError: step 2: uppercase-I spelling must hit the retirement registered lowercase ==> expected: not <null>
+582:      step 1: ONCLICK= must fail compilation under a Turkish default locale ==> Expected java.lang.Exception to be thrown, but nothing was thrown.
+583:      org.opentest4j.AssertionFailedError: step 1: ONCLICK= must fail compilation under a Turkish default locale ==> Expected java.lang.Exception to be thrown, but nothing was thrown.
+592:      step 2: uppercase-I spelling must hit the retirement registered lowercase ==> expected: not <null>
+593:      org.opentest4j.AssertionFailedError: step 2: uppercase-I spelling must hit the retirement registered lowercase ==> expected: not <null>

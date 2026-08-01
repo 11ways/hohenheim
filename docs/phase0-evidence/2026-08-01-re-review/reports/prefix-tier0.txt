@@ -1,0 +1,9 @@
+32:    org.opentest4j.AssertionFailedError: step 1: slug of an uppercase-I input must match the TeaVM/ASCII fold ==> expected: <saved-view-title> but was: <saved-v-ew-t-tle>
+41:    org.opentest4j.AssertionFailedError: step 3: hostname fold must be locale-independent ==> expected: <mail.example.com> but was: <maıl.example.com>
+50:    org.opentest4j.AssertionFailedError: step 2: camelCase first word must lowercase I to ASCII i ==> expected: <firstItem> but was: <fırstItem>
+85:      step 1: slug of an uppercase-I input must match the TeaVM/ASCII fold ==> expected: <saved-view-title> but was: <saved-v-ew-t-tle>
+86:      org.opentest4j.AssertionFailedError: step 1: slug of an uppercase-I input must match the TeaVM/ASCII fold ==> expected: <saved-view-title> but was: <saved-v-ew-t-tle>
+95:      step 3: hostname fold must be locale-independent ==> expected: <mail.example.com> but was: <maıl.example.com>
+96:      org.opentest4j.AssertionFailedError: step 3: hostname fold must be locale-independent ==> expected: <mail.example.com> but was: <maıl.example.com>
+105:      step 2: camelCase first word must lowercase I to ASCII i ==> expected: <firstItem> but was: <fırstItem>
+106:      org.opentest4j.AssertionFailedError: step 2: camelCase first word must lowercase I to ASCII i ==> expected: <firstItem> but was: <fırstItem>
