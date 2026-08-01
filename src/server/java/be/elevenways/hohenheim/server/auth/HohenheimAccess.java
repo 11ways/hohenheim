@@ -4,11 +4,13 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.server.GrantableModel;
 import be.elevenways.zenit.auth.server.RecordGrantCapabilityChecker;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.KnownCapability;
@@ -17,6 +19,7 @@ import be.elevenways.zenit.common.security.RecordCapabilityRules;
 import be.elevenways.zenit.common.security.WebSocketAuthenticator;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -72,6 +75,52 @@ public final class HohenheimAccess {
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
+    }
+
+    /**
+     * Whether two sites answer to the SAME owner, which is what separates a deliberate
+     * configuration from a cross-tenant seizure.
+     *
+     * AIDEV-NOTE: ownership is the site's set of {@link #MANAGE} grant SUBJECTS, not its
+     * site id. Two sites an operator alone controls hold no manage grants at all, so they
+     * compare equal and an admin may deliberately point a wildcard at one site and carve
+     * one host out to another (a shipped, dispatch-tested capability -- exact beats
+     * wildcard, and two upstreams need two sites). The moment either side is TENANT code,
+     * the subject sets differ and the same shape becomes a takeover. Equality, not
+     * overlap: {A} versus {A, B} would let B seize what A was serving. Mirrors
+     * WorkloadIdentity.isTenantManaged, which is the same tenancy predicate one seam over.
+     *
+     * @return true when both sites carry the same manage-grant subjects (both empty
+     *         included), failing CLOSED to "different owners" when grants cannot be read
+     */
+    public static boolean sameOwner(int firstSiteId, int secondSiteId) {
+        if (firstSiteId == secondSiteId) {
+            return true;
+        }
+        Set<String> first = manageSubjectsOf(firstSiteId);
+        Set<String> second = manageSubjectsOf(secondSiteId);
+        return first != null && second != null && first.equals(second);
+    }
+
+    /** @return the subjects holding manage on the site, or null when grants are unreadable */
+    private static @Nullable Set<String> manageSubjectsOf(int siteId) {
+        Set<String> subjects = new HashSet<>();
+        try {
+            for (Row grant : RecordGrants.listForRecord(SiteModel.MODEL_ID, siteId)) {
+                if (MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))
+                        && Boolean.TRUE.equals(grant.get(RecordGrantModel.VALUE))) {
+                    subjects.add(grant.get(RecordGrantModel.SUBJECT_TYPE)
+                        + ":" + grant.get(RecordGrantModel.SUBJECT_ID));
+                }
+            }
+        } catch (IllegalStateException notInstalled) {
+            // ZenitAuth.init never ran (tools, minimal tests): no tenants can exist, so
+            // every site is operator-owned and the sets are legitimately equal.
+            return subjects;
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
+        return subjects;
     }
 
     /**
