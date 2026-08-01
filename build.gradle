@@ -78,11 +78,6 @@ configurations {
         }
     }
 
-    teavmLibs {
-        canBeConsumed = false
-        canBeResolved = true
-    }
-
     spamserviceDistribution {
         canBeConsumed = false
         canBeResolved = true
@@ -194,169 +189,34 @@ dependencies {
     browserTestImplementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
     browserTestImplementation 'org.shredzone.acme4j:acme4j-client:3.4.0'
     browserTestImplementation 'dnsjava:dnsjava:3.6.5'
-
-    // TeaVM libraries
-    teavmLibs 'org.teavm:teavm-classlib:0.15.0'
-    teavmLibs 'org.teavm:teavm-jso-apis:0.15.0'
-    teavmLibs 'org.teavm:teavm-jso-impl:0.15.0'
-    teavmLibs 'org.teavm:teavm-platform:0.15.0'
-    teavmLibs 'org.teavm:teavm-metaprogramming-impl:0.15.0'
 }
 
 // --- JAR Tasks ---
+// The whole assembly doctrine (merged services/resources/microcopy/tsv/
+// teavm.properties, the TeaVmPatchLane strip, DuplicatesStrategy.FAIL, the
+// zero-duplicate and patched-byte checks, inert-metadata exclusion) comes from
+// the protoblast plugin's blastServerJar/blastTeavmJar lanes; only hohenheim's
+// own content and assertions live here.
+def serverJar = blastServerJar(
+        mainClass: 'be.elevenways.hohenheim.server.ServerMain',
+        // dnsjava's Java 18 InetAddressResolverProvider exists only in META-INF/versions/18.
+        multiRelease: true,
+        implementationTitle: project.name,
+        microcopyKeys: ['add_domain': 'hohenheim', 'back_to_list': 'zenit-cms'],
+        microcopyScopes: ['dyndns_token': 'hohenheim', 'back_to_list': 'zenit-cms'],
+)
 
-// The dependency jars bundled into the deployable: everything on the server
-// runtime classpath except protoblast-client (zenit-common compiles against it,
-// but a JVM fat jar must contain only protoblast-server's platform bytecode).
-def serverFatJarDeps = {
-    configurations.serverRuntimeClasspath.findAll {
-        it.isFile() && !it.name.startsWith('protoblast-client-')
-    }
-}
-
-// Every jar on the client (TeaVM) runtime classpath rides the browser fat jar.
-def clientFatJarDeps = {
-    configurations.clientRuntimeClasspath.findAll { it.isFile() }
-}
-
-// Resources with more than one legitimate copy across the classpath get ONE
-// deliberately merged copy in the fat jar; every raw copy spec excludes them.
-def mergedResourcePatterns = [
-        'META-INF/services/**',
-        'META-INF/microcopy/**',
-        'META-INF/hawkeye/*.tsv',
-]
-
-// The browser jar additionally line-merges META-INF/teavm.properties:
-// protoblast-client AND hawkeye-client each declare their own
-// mapPackageHierarchy lines there, and a jar can only serve ONE copy per path.
-def browserMergedResourcePatterns = mergedResourcePatterns + ['META-INF/teavm.properties']
-
-// Packaging metadata that legitimately repeats across dependency jars but is
-// meaningless inside a fat jar. Everything NOT listed here or merged above
-// collides loudly (DuplicatesStrategy.FAIL below) instead of silently winning.
-def inertMetadataPatterns = [
-        'module-info.class',
-        'META-INF/versions/*/module-info.class',
-        'META-INF/MANIFEST.MF',
-        'META-INF/INDEX.LIST',
-        'META-INF/*LICENSE*',
-        'META-INF/*NOTICE*',
-        'META-INF/DEPENDENCIES',
-        'META-INF/maven/**',
-        'META-INF/proguard/**',
-        'META-INF/native-image/**',
-        'META-INF/versions/*/OSGI-INF/**',
-        'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA',
-        // Gradle incremental-compile state leaked into some published jars
-        // (hawkeye-server/zenit-server pack compile-task OUTPUTS, which include
-        // build/tmp/compileServerJava/previous-compilation-data.bin at jar root).
-        'previous-compilation-data.bin',
-]
-
-task mergeServerServiceFiles(type: be.elevenways.protoblast.gradle.MergeServiceFilesTask) {
-    serviceClasspath.from(sourceSets.server.output, files(serverFatJarDeps))
-    outputDirectory = layout.buildDirectory.dir('merged-server-service-files')
-}
-
-task mergeServerResources(type: be.elevenways.protoblast.gradle.MergeResourceFilesTask) {
-    resourceClasspath.from(sourceSets.server.output, files(serverFatJarDeps))
-    lineMergedPatterns = ['META-INF/microcopy/keys.txt', 'META-INF/hawkeye/*.tsv']
-    jsonMapMergedPatterns = ['META-INF/microcopy/*.json']
-    outputDirectory = layout.buildDirectory.dir('merged-server-resources')
-}
-
-task serverJar(type: ShadowJar) {
-    archiveClassifier = 'server'
-    // AIDEV-NOTE: every entry path exists exactly ONCE in this jar. Mergeable
-    // resources (services, microcopy catalogs/manifest, hawkeye tsv indexes) are
-    // excluded from the raw specs and re-added as the merge tasks' deliberate
-    // union -- Shadow's mergeServiceFiles() cannot do this (it ignores zipTree
-    // copy specs) and the previous INCLUDE strategy kept 34 duplicate paths (32
-    // byte-divergent, incl. 8 org/teavm JSO classes) resolved purely by entry
-    // order. DuplicatesStrategy.FAIL makes any unhandled collision a build
-    // error instead of an ordering accident.
-    // AIDEV-NOTE: only the SERVER source set's BlastAutoLoadInit (the complete
-    // server-side union) may survive; a dependency's partial loader would
-    // silently shadow it and no models/settings register at boot. Deps are
-    // bundled via zipTree so the per-source exclude can reach into them.
-    def autoLoadInit = 'be/elevenways/protoblast/generated/BlastAutoLoadInit.class'
-    from(sourceSets.server.output) {
-        exclude mergedResourcePatterns + inertMetadataPatterns
-    }
-    from({
-        // Protoblast's patched org/teavm classes (the sanctioned patch-shadow
-        // lane) must win EXPLICITLY: strip the upstream copy of every patched
-        // path from non-carrier jars instead of relying on copy order.
-        def deps = serverFatJarDeps()
-        def patched = be.elevenways.protoblast.gradle.TeaVmPatchLane.patchedEntries(deps)
-        deps.collect { dep ->
-            def tree = zipTree(dep)
-            if (!be.elevenways.protoblast.gradle.TeaVmPatchLane.isPatchCarrier(dep) && !patched.isEmpty()) {
-                tree = tree.matching { patched.each { p -> exclude p } }
-            }
-            tree
-        }
-    }) {
-        exclude autoLoadInit
-        exclude mergedResourcePatterns + inertMetadataPatterns
-    }
+serverJar.configure {
     from({ project.configurations.spamserviceDistribution.singleFile }) {
         into 'managed-services'
         rename { 'spamservice-server.jar' }
     }
-    from(tasks.named('mergeServerServiceFiles'))
-    from(tasks.named('mergeServerResources'))
-    duplicatesStrategy = DuplicatesStrategy.FAIL
 
-    manifest {
-        attributes(
-            'Main-Class': 'be.elevenways.hohenheim.server.ServerMain',
-            'Implementation-Title': project.name,
-            'Implementation-Version': project.version,
-            // dnsjava's Java 18 InetAddressResolverProvider exists only in META-INF/versions/18.
-            'Multi-Release': 'true'
-        )
-    }
-
+    // App-specific integrity checks (deliberately NOT generalized into the lane).
     doLast {
         def jarFile = archiveFile.get().asFile
         def jar = new java.util.jar.JarFile(jarFile)
         try {
-            // Whole-jar integrity: zero duplicate entry paths (the pre-fix jar
-            // carried 34 duplicate paths, 32 with divergent bytes, resolved by
-            // entry order alone).
-            def entryNames = []
-            jar.entries().each { entry ->
-                if (!entry.isDirectory()) {
-                    entryNames << entry.name
-                }
-            }
-            def duplicates = entryNames.countBy { it }.findAll { name, count -> count > 1 }
-            if (!duplicates.isEmpty()) {
-                throw new GradleException("${jarFile.name} contains duplicate entry paths: ${duplicates}")
-            }
-            // The merged microcopy catalog must carry entries from MORE than one
-            // module: a hohenheim-only key AND a zenit-cms-only one (a first-wins
-            // duplicate strategy silently drops every dependency catalog).
-            def enJson = new String(jar.getInputStream(jar.getJarEntry('META-INF/microcopy/en.json')).readAllBytes(), 'UTF-8')
-            ['dyndns_token': 'hohenheim', 'back_to_list': 'zenit-cms'].each { key, module ->
-                if (!enJson.contains("\"${key}\"")) {
-                    throw new GradleException(
-                        "Merged META-INF/microcopy/en.json lost the ${module} module's catalog (no '${key}')")
-                }
-            }
-            def keysTxt = new String(jar.getInputStream(jar.getJarEntry('META-INF/microcopy/keys.txt')).readAllBytes(), 'UTF-8').readLines()
-            ['add_domain': 'hohenheim', 'back_to_list': 'zenit-cms'].each { key, module ->
-                if (!keysTxt.contains(key)) {
-                    throw new GradleException(
-                        "Merged META-INF/microcopy/keys.txt lost the ${module} module's keys (no '${key}')")
-                }
-            }
-            def multiRelease = jar.manifest?.mainAttributes?.getValue('Multi-Release')
-            if (!'true'.equalsIgnoreCase(multiRelease)) {
-                throw new GradleException("${jarFile.name} is missing Multi-Release: true")
-            }
             def resolver = 'META-INF/versions/18/org/xbill/DNS/spi/DnsjavaInetAddressResolverProvider.class'
             if (jar.getEntry(resolver) == null) {
                 throw new GradleException("${jarFile.name} is missing dnsjava's Java 18 resolver provider")
@@ -399,121 +259,13 @@ task serverJar(type: ShadowJar) {
 }
 
 // --- TeaVM ---
-task mergeBrowserServiceFiles(type: be.elevenways.protoblast.gradle.MergeServiceFilesTask) {
-    serviceClasspath.from(sourceSets.client.output, configurations.clientRuntimeClasspath)
-    outputDirectory = layout.buildDirectory.dir('merged-browser-service-files')
-}
-
-task mergeBrowserResources(type: be.elevenways.protoblast.gradle.MergeResourceFilesTask) {
-    resourceClasspath.from(sourceSets.client.output, configurations.clientRuntimeClasspath)
-    lineMergedPatterns = ['META-INF/microcopy/keys.txt', 'META-INF/hawkeye/*.tsv', 'META-INF/teavm.properties']
-    jsonMapMergedPatterns = ['META-INF/microcopy/*.json']
-    outputDirectory = layout.buildDirectory.dir('merged-browser-resources')
-}
-
-task browserJar(type: ShadowJar) {
-    description = 'Fat JAR for TeaVM compilation'
-    archiveClassifier = 'browser'
-    // AIDEV-NOTE: every source set AND every dependency jar ships its own
-    // be.elevenways.protoblast.generated.BlastAutoLoadInit at the SAME FQN, but each is the
-    // @*AutoLoad union of ITS OWN classpath (partial/empty bodies). TeaVM can resolve only ONE
-    // class per FQN; if an incomplete one wins, @*AutoLoad <clinit> registrations (settings,
-    // custom-element registrations, DRY revivers) silently drop and hydration breaks. The COMPLETE
-    // client-side union lives in the leaf 'client' source set (it holds the TeaVM mainClass
-    // ClientMain and its compile classpath covers common + all client deps), so keep ONLY its
-    // loader and exclude it from every other source set and from every dependency jar. Deps are
-    // bundled via zipTree(...) so the per-source 'exclude' can reach into them.
-    // AIDEV-NOTE: every entry path exists exactly ONCE in this jar. The
-    // META-INF/services/...Template files come from mergeBrowserServiceFiles
-    // (Shadow's mergeServiceFiles() ignores zipTree copy specs -- without the
-    // merged union the dependency-jar template entries vanish and client-side
-    // rendering throws "Unknown custom element"); microcopy manifests, hawkeye
-    // tsv indexes and teavm.properties come merged from mergeBrowserResources.
-    // Protoblast's PATCHED org/teavm JSO classes must win over upstream
-    // teavm-jso-apis EXPLICITLY (the pre-fix INCLUDE jar carried both copies
-    // and TeaVM's pick was decided by entry order); the upstream copy of every
-    // patched path is stripped, and DuplicatesStrategy.FAIL turns any other
-    // collision into a build error.
-    def autoLoadInit = 'be/elevenways/protoblast/generated/BlastAutoLoadInit.class'
-    from(sourceSets.client.output) {
-        exclude browserMergedResourcePatterns + inertMetadataPatterns
-    }
-    from({
-        def deps = clientFatJarDeps()
-        def patched = be.elevenways.protoblast.gradle.TeaVmPatchLane.patchedEntries(deps)
-        deps.collect { dep ->
-            def tree = zipTree(dep)
-            if (!be.elevenways.protoblast.gradle.TeaVmPatchLane.isPatchCarrier(dep) && !patched.isEmpty()) {
-                tree = tree.matching { patched.each { p -> exclude p } }
-            }
-            tree
-        }
-    }) {
-        exclude autoLoadInit
-        exclude browserMergedResourcePatterns + inertMetadataPatterns
-    }
-    from(tasks.named('mergeBrowserServiceFiles'))
-    from(tasks.named('mergeBrowserResources'))
-    duplicatesStrategy = DuplicatesStrategy.FAIL
-
-    doLast {
-        def jarFile = archiveFile.get().asFile
-        def jar = new java.util.jar.JarFile(jarFile)
-        try {
-            // Zero duplicate entry paths (the pre-fix jar carried 15 duplicate
-            // paths, all byte-divergent, resolved by entry order alone).
-            def entryNames = []
-            jar.entries().each { entry ->
-                if (!entry.isDirectory()) {
-                    entryNames << entry.name
-                }
-            }
-            def duplicates = entryNames.countBy { it }.findAll { name, count -> count > 1 }
-            if (!duplicates.isEmpty()) {
-                throw new GradleException("${jarFile.name} contains duplicate entry paths: ${duplicates}")
-            }
-            // The surviving copy of every patched org/teavm path must be the
-            // patch CARRIER's bytes: TeaVM compiling against the unpatched JSO
-            // classes is exactly the silent failure this jar existed to avoid.
-            def deps = clientFatJarDeps()
-            def carriers = deps.findAll { be.elevenways.protoblast.gradle.TeaVmPatchLane.isPatchCarrier(it) }
-            if (carriers.size() != 1) {
-                throw new GradleException("Expected exactly one TeaVM patch carrier on the client classpath, found: ${carriers}")
-            }
-            def patched = be.elevenways.protoblast.gradle.TeaVmPatchLane.patchedEntries(carriers)
-            new java.util.zip.ZipFile(carriers[0]).withCloseable { carrierZip ->
-                patched.each { path ->
-                    def jarEntry = jar.getJarEntry(path)
-                    if (jarEntry == null) {
-                        throw new GradleException("${jarFile.name} is missing patched class ${path}")
-                    }
-                    def jarBytes = jar.getInputStream(jarEntry).readAllBytes()
-                    def carrierBytes = carrierZip.getInputStream(carrierZip.getEntry(path)).readAllBytes()
-                    if (!java.util.Arrays.equals(jarBytes, carrierBytes)) {
-                        throw new GradleException("${jarFile.name} carries an UNPATCHED copy of ${path} (upstream bytes won over the patch carrier)")
-                    }
-                }
-            }
-            // The merged microcopy key manifest must carry keys from MORE than
-            // one module (thoth's failure mode: first-wins dropped every
-            // dependency module's copy).
-            def keysTxt = new String(jar.getInputStream(jar.getJarEntry('META-INF/microcopy/keys.txt')).readAllBytes(), 'UTF-8').readLines()
-            ['add_domain': 'hohenheim', 'back_to_list': 'zenit-cms'].each { key, module ->
-                if (!keysTxt.contains(key)) {
-                    throw new GradleException(
-                        "Merged META-INF/microcopy/keys.txt lost the ${module} module's keys (no '${key}')")
-                }
-            }
-        } finally {
-            jar.close()
-        }
-    }
-}
-
-tasks.withType(GenerateJavaScriptTask).configureEach {
-    dependsOn browserJar
-    classpath.setFrom(files(browserJar.archiveFile) + configurations.teavmLibs)
-}
+// The lane also owns the teavmInput configuration (jar + TeaVM runtime libs)
+// and the GenerateJavaScriptTask wiring.
+blastTeavmJar(
+        taskName: 'browserJar',
+        description: 'Fat JAR for TeaVM compilation',
+        microcopyKeys: ['add_domain': 'hohenheim', 'back_to_list': 'zenit-cms'],
+)
 
 teavm {
     js {
@@ -535,7 +287,7 @@ teavm {
 // public/hohenheim.css from src/common/scss/app.scss + extracted .hwk tag
 // styles; the browserTest dependency is wired automatically).
 afterEvaluate {
-    serverJar.dependsOn 'copyClientJs', 'compileHawkeyeScss'
+    serverJar.configure { dependsOn 'copyClientJs', 'compileHawkeyeScss' }
 }
 
 // --- Browser Test Task ---
