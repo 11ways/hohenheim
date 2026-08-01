@@ -76,6 +76,21 @@ public final class ProxySessionSupport {
         return cookie != null ? cookie.getValue() : null;
     }
 
+    /**
+     * AIDEV-TODO: the Secure decision here reads the RAW request scheme, which is correct
+     * only while hohenheim terminates TLS itself and silently drops Secure the moment it
+     * sits behind a terminator. THE authority is Conduit.isEffectivelyHttps (direct TLS,
+     * network.assume_https, and a forwarded proto gated by network.trusted_proxies), and
+     * its conduit-less form already exists for exactly this shape of caller --
+     * HttpConduit.isEffectivelyHttps(boolean, peerIp, xForwardedProto, forwarded) in
+     * zenit's be.elevenways.zenit.server.http. It is PACKAGE-PRIVATE, so no code outside
+     * that package can reach it, and constructing an HttpConduit here is not an option:
+     * its constructor runs parseRequest (admission rate limiting, endpoint resolution) and
+     * can write a response. Re-deriving the answer from TrustedProxies + ASSUME_HTTPS in
+     * hohenheim would be a SECOND scheme-guessing implementation of a security decision,
+     * which is the thing to avoid. Fix belongs in zenit: publish that static overload.
+     * Until then this stays as-is rather than pretending to be trusted-proxy aware.
+     */
     private static Cookie baseCookie(HttpServerExchange exchange, String name, String value) {
         Cookie cookie = new CookieImpl(name, value);
         cookie.setPath("/");
