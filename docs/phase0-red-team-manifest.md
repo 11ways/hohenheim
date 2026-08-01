@@ -370,6 +370,17 @@ The ledger `/home/skerit/projects/javaweb/REMEDIATION-2026-07-31.md` (Waves A-G,
 **65 commits across 19 repositories**, none pushed. Its per-issue reports carry
 the observed pre-fix failure text and the verification command for each fix.
 
+**Where the evidence lives (added 2026-08-01).** The per-issue reports were
+originally written into an ephemeral agent scratchpad. They are now checked in
+under `phase0-evidence/` beside this file (relative to `docs/`): `reports/`
+(21 per-issue reports), `recon/` (7 wave recon reports plus the B6/B8
+assessment), `OWNER-DECISIONS.md`, `ORCHESTRATION.md`, and a copy of the
+ledger itself as `phase0-evidence/REMEDIATION-2026-07-31.md` -- the javaweb
+workspace root is NOT a git repository, so the original ledger path is not
+durable. This evidence chain spans 19 repos but is committed here, whole,
+because this manifest is its sole consumer and each report file crosses
+repo boundaries; splitting it per repo would sever the chain.
+
 This section is an APPEND. Nothing above was rewritten. The counterfactuals above
 remain the record for the code they were observed against; several of them were
 observed against code that no longer exists.
@@ -393,7 +404,7 @@ evidence tiers are used below, and they are not interchangeable:
 
 ## Wave G: the ten retained fixes, re-verified INTACT
 
-Report: `reports/wave-g-audit.md`. All ten (G1-G10, including all twelve G10
+Report: `phase0-evidence/reports/wave-g-audit.md`. All ten (G1-G10, including all twelve G10
 sub-items) verified at the current HEADs, with file:line evidence per item, and
 the audit states the assertions were checked to be REAL rather than merely
 present. This is the closest thing to a re-verification of the original gates
@@ -429,21 +440,21 @@ Rests on **(c)** for the proclog ingress claim itself and **(b)** for the policy
   and no longer covers foreign routes under its path. Fresh counterfactual:
   `[step 2: a declared locale route variant must be claimed] Expecting value to
   be true but was false` and, the other half, `Expecting value to be false but
-  was true` (`reports/e4-e5-e6-e8.md`).
+  was true` (`phase0-evidence/reports/e4-e5-e6-e8.md`).
 - The hohenheim TERMINAL VARIANT predicate was rewritten. hohenheim `b772041`
   (E7) resolves the registered panel/peer/subpage instead of matching a URL
   suffix. Fresh counterfactual: a 404 under a registered panel was served
-  `STRICT_ADMIN_TERMINAL` (`reports/e3-e7-e10.md`).
+  `STRICT_ADMIN_TERMINAL` (`phase0-evidence/reports/e3-e7-e10.md`).
 - The compile-time rules the row's "no inline `onload=`" assertion leans on were
   widened: hawkeye `01c63dec` (F2) makes `attr:onclick` the same
   `inline-event-attribute` ERROR as the plain spelling, and `4d05e77f` (F4) makes
   retired attributes case-insensitive, both with fresh counterfactuals
-  (`reports/f1-f4-f11.md`). A workspace sweep found ZERO `attr:on*` occurrences.
+  (`phase0-evidence/reports/f1-f4-f11.md`). A workspace sweep found ZERO `attr:on*` occurrences.
 - **Not re-verified at this hash:** `ProclogProxyIngressTest`,
   `ProclogRenderingTest`, and `hohenheimPanelsCarryTheAdminCspAndBootstrapExactlyOnce`
   were not individually re-run with the fix reverted. They passed inside the
   hohenheim full browser suite at `dc68e5b` (578 passed, 124 of 124 classes,
-  `reports/e3-e7-e10.md`) -- which is a green run, not a counterfactual, and
+  `phase0-evidence/reports/e3-e7-e10.md`) -- which is a green run, not a counterfactual, and
   predates `b772041` and `f38c8d9`.
 
 ### Process IPC (boundary 2) -- code changed underneath, counterfactuals NOT re-observed
@@ -482,16 +493,16 @@ defect in the same tier that the 0.A gate did not reach.
   configured locale disabled the whole AuthRegistry tier -- login-only baselines,
   permission baselines, the setup gate and public prefixes. Observed pre-fix:
   `step 2: a locale prefix must not walk past the login-only baseline ==>
-  expected: <302> but was: <200>` (`reports/e1-e2.md`). `/nl/admin/...` served
+  expected: <302> but was: <200>` (`phase0-evidence/reports/e1-e2.md`). `/nl/admin/...` served
   admin pages to an anonymous visitor while `/admin/...` refused them.
 - zenit-auth also gained a grant-administration boundary it did not have
   (`auth.grants.manage`, non-delegable) and a last-administrator invariant, both
-  with fresh counterfactuals (`reports/b1-b2-b3-b9.md`). MIGRATION IMPACT:
+  with fresh counterfactuals (`phase0-evidence/reports/b1-b2-b3-b9.md`). MIGRATION IMPACT:
   installs whose admins hold enumerated `auth.*` permissions rather than the
   wildcard lose grant editing until granted `auth.grants.manage`.
 - `AuthFlowIntegrationTest` re-ran green post-change (26 passed alongside
   `WebSocketAuthIntegrationTest` and `LocaleAuthorizationHttpTest`,
-  `reports/e1-e2.md`). **Not re-verified at this hash:**
+  `phase0-evidence/reports/e1-e2.md`). **Not re-verified at this hash:**
   `OidcEndpointDeclarationTest` (zenit-oidc) and `A2uiEndpointDeclarationTest`
   (zenit-a2ui) -- both repos were untouched and neither test appears in any
   remediation report.
@@ -506,7 +517,7 @@ Rests on **(a)**, and the row now understates the guarantee.
   like a secret column, because validation read the passed object's flags while
   `Field.getValue(Row)` reads by name. Observed pre-fix: `step 1: a forged
   same-name projection must not build ==> Expected java.lang.IllegalArgumentException
-  to be thrown, but nothing was thrown.` (`reports/d1-d5-d6.md`).
+  to be thrown, but nothing was thrown.` (`phase0-evidence/reports/d1-d5-d6.md`).
 - Same commit (D5): secret primary keys are now ILLEGAL at `Models.registerInstance`;
   `timestamp(field)` is canonicalized and redaction-gated; and a REAL reachable
   leak was found -- the title fallback stringified a `SchemaField` raw, handing
@@ -530,7 +541,7 @@ plumage moved `83b64dd` -> `37bde67`, including `4a47471`, which rewrote
 `BrowserTerminalBridge` (terminal dispose on unmount, loud ghostty failure) and
 rewrote the `terminal-test.hwk` fixture, which was found to be DEAD -- a tag
 declaration nothing instantiated, so any test pointed at it would trivially pass
-(`reports/e9-f6.md`). No remediation report re-runs `PublishedEndpointSafetyTest`.
+(`phase0-evidence/reports/e9-f6.md`). No remediation report re-runs `PublishedEndpointSafetyTest`.
 The row's own stated blind spot (a spawner using `Runtime.exec`, JNI or another
 library would evade the detector) is unchanged.
 
@@ -667,7 +678,14 @@ Rests on **(a)**.
   `ResourcePageEndpointsTest.restoreRefusedByTheModelWritePipelineReportsTheSpecificViolation`
   caught it (`expected: <enable_route_conflict> but was: <restored>`) -- which
   also means hohenheim's route invariant would have been skipped.
-- `RevisionRestoreTakeoverTest` re-ran green under D3/D4 (`reports/d3-d4.md`).
+- `RevisionRestoreTakeoverTest` re-ran green under D3/D4 (`phase0-evidence/reports/d3-d4.md`).
+- **Honesty caveat on the (a):** the C14 counterfactual (`a19e1dd`, observed on
+  the post-C13 serialized SQLite engine -- `9dd6de4` adapted the enable-race
+  test to it first) predates D4's `SiteModel` lifecycle change (`1a56057`) and
+  the E10 harness rewrite (`dc68e5b`). After E10 these classes passed only
+  inside the full browser suite; the overlapping-listener counterfactual was
+  not re-observed under the rewritten harness. The claim-registry code itself
+  is unchanged since `a19e1dd`.
 
 ## Corrections to the "Open, and deliberately not closed by 0.A" list
 
@@ -682,7 +700,7 @@ Rests on **(a)**.
   (`StringMapField` loses key order on JSON-column read-back) is UNCHANGED and
   still stands.
 - **Item 1 (historical plaintext) is unchanged and still open.** It is
-  ledger D7. The affected surfaces were enumerated (`OWNER-DECISIONS.md`):
+  ledger D7. The affected surfaces were enumerated (`phase0-evidence/OWNER-DECISIONS.md`):
   `zenit_revisions` carries it only for hohenheim `SiteModel`, the only
   production model with `RevisionableBehaviour`; `zenit_activity` can carry it
   for every model with secret/encrypted fields, and the full list is recorded.
@@ -713,8 +731,11 @@ Rests on **(a)**.
   and D7 describe the same rows in the same words. STILL OPEN.
 - **Open decision 13 = live-install migration checksum stamping and the flip to
   `migration_integrity=fail`.** This has NO counterpart in the remediation's
-  owner-decision file; the ledger never raised it. It is unchanged and still
-  open. So **0.B's gate is unchanged**, and the header's statement still holds.
+  owner-decision file; the ledger never raised it. (Ledger C8 -- repairing
+  shipped-migration checksums after the helper renames -- is adjacent but
+  distinct: it fixed checksums in code, not the live-install stamping and
+  flip, which stay blocked on Jelle.) It is unchanged and still open. So
+  **0.B's gate is unchanged**, and the header's statement still holds.
 - **Ledger D9 (at-rest encryption scope) is NOT one of the two 0.B gates.** It
   maps to the manifest's open item 5 (0.6c), which the header does not name as a
   0.B blocker. Recorded here so the two numbering schemes are not conflated.
@@ -722,7 +743,7 @@ Rests on **(a)**.
 ### New open owner decisions this remediation raised
 
 These are additions to the list above, not corrections to it. Full facts in
-`OWNER-DECISIONS.md`.
+`phase0-evidence/OWNER-DECISIONS.md`.
 
 - **E11** -- does the `NON_INTERACTIVE_ONLY` CSRF exemption keep the Origin
   check? `CsrfMiddleware.check` still returns before `isCrossOrigin`. The
@@ -750,7 +771,7 @@ These are additions to the list above, not corrections to it. Full facts in
 
 The third bullet (zenit-dev reported green targeted runs as FAILED) is joined by
 four more build-integrity defects, all with fresh counterfactuals
-(`reports/a1-a10.md`, `a2-a5-a9.md`, `a3-a4-a7-a8.md`, `a6-a11.md`). They matter
+(`phase0-evidence/reports/a1-a10.md`, `a2-a5-a9.md`, `a3-a4-a7-a8.md`, `a6-a11.md`). They matter
 here because every "verified" line in this manifest was produced by that
 toolchain:
 
@@ -802,8 +823,10 @@ zenit `8b6a60b`, zenit-cms `5408bcd`, zenit-widget `7ffe1de`, hohenheim
 `f38c8d9` -- but no per-issue report file was written for them. Their commit
 messages are the only prose record. Read the diffs, not the subjects.
 
-Nothing is pushed. Eight commits from this remediation have their subject and
+Nothing is pushed. Twelve commits from this remediation have their subject and
 body collapsed onto one overlong line (a heredoc newline-loss issue): hawkeye
-`c7903b19`, `6c443d84`, `d7a71b35`, `4d05e77f`, `01c63dec`, `9cf4cd41`, and
-zenit `2c7d8fb`, `efb7c6e`. All unpushed, so an interactive rebase to split them
-is still safe.
+`c7903b19`, `6c443d84`, `d7a71b35`, `4d05e77f`, `01c63dec`, `9cf4cd41`, zenit
+`2c7d8fb`, `efb7c6e`, `8b6a60b`, zenit-cms `5408bcd`, zenit-widget `7ffe1de`,
+and hohenheim `f38c8d9` -- the original count of eight missed the four F13/F14
+commits, which landed after it was written. All unpushed, so an interactive
+rebase to split them is still safe.
