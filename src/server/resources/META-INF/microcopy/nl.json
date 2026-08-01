@@ -3979,6 +3979,14 @@
     "text": "Deze route is al geclaimd door site {$site}",
     "scope": "violations"
   },
+  "route_overlaps_other_site": {
+    "text": "Deze hostnaam overlapt met {$hostname}, gerouteerd door site {$site}",
+    "scope": "violations"
+  },
+  "enable_route_overlap": {
+    "text": "Kan deze site niet inschakelen: {$hostname} overlapt met {$pattern}, gerouteerd door site {$site}",
+    "scope": "violations"
+  },
   "enable_route_conflict": {
     "text": "Kan deze site niet inschakelen: {$hostname} wordt al gerouteerd door site {$site}",
     "scope": "violations"

@@ -499,15 +499,10 @@ public class SiteDispatcher implements HttpHandler {
                 RouteEntry entry = new RouteEntry(requestHandler, siteName, domain, accessList,
                     settings, authGate, authProviderName);
 
-                String kind;
-                if (SiteDomainModel.MATCH_REGEX.equals(matchType)) {
-                    kind = SiteDomainModel.MATCH_REGEX;
-                } else if (SiteDomainModel.MATCH_WILDCARD.equals(matchType)
-                        || WildcardHostname.isWildcard(hostname)) {
-                    kind = SiteDomainModel.MATCH_WILDCARD;
-                } else {
-                    kind = SiteDomainModel.MATCH_EXACT;
-                }
+                // HostnamePatterns.effectiveKind is THE tier decision, shared with the
+                // write-time overlap scan: a hostname carrying glob characters routes as a
+                // wildcard whatever match_type says, and the scan must judge the same tier.
+                String kind = HostnamePatterns.effectiveKind(hostname, matchType);
 
                 // AIDEV-NOTE: route identity is RouteClaims.keyOf, THE single spelling
                 // shared with the write-time claim registry -- do not re-derive it here.

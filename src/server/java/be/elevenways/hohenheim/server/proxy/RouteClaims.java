@@ -29,9 +29,12 @@ import java.util.Set;
  * inside the site save's transaction), and hohenheim's engine -- SQLite only, enforced by
  * HohenheimDatabase.requireSqlite, BEGIN IMMEDIATE single-writer since the datasource
  * rework -- serializes write transactions, so a scan can never go stale between read and
- * write. That serialization is what refuses OVERLAPPING listener sets (an empty
- * restriction listens everywhere): overlap-but-not-equal claims spell DIFFERENT keys, so
- * no unique index can refuse them, only the serialized scan can. The UNIQUE index on this
+ * write. That serialization is what refuses OVERLAPPING claims, in BOTH dimensions a key
+ * cannot spell: listener sets (an empty restriction listens everywhere) and hostname sets
+ * (an exact host falling under another row's wildcard -- see HostnamePatterns). Overlap-
+ * but-not-equal claims spell DIFFERENT keys, so no unique index can refuse them, only the
+ * serialized scan can; that is the WHOLE guarantee, and it is why the scan may never move
+ * out of the write transaction. The UNIQUE index on this
  * column (M045_SiteDomainRouteClaims) stays as the equality backstop: identical keys are
  * refused by storage itself even if a future writer bypasses the transaction discipline.
  * Route-claim transactions must stay well under SQLite's 5s busy_timeout or queued rivals
@@ -85,6 +88,11 @@ public final class RouteClaims {
      * {@link ListenerAddressMatcher#parse}. Match type is deliberately absent: an exact
      * and a wildcard row spelling the same literal hostname shadow each other in the
      * tiered lookup, so they are one contested route, not two.
+     *
+     * AIDEV-NOTE: this key spells the LITERAL hostname, so it can only ever arbitrate
+     * IDENTICAL routes. Rows whose hostname sets merely INTERSECT (foo.example.com under
+     * *.example.com) spell different keys on purpose -- they are refused by the serialized
+     * conflict scan in SiteDomainResource, never by this key or its unique index.
      */
     public static @NonNull String keyOf(@Nullable Object hostname, @Nullable Object matchType,
                                         @Nullable Object path, @Nullable Object listenOn) {

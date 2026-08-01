@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.hohenheim.server.proxy.WildcardHostname;
 import org.junit.jupiter.api.Test;
 
@@ -64,5 +66,64 @@ class WildcardMatchTest {
         assertThat(WildcardHostname.isWildcard("*.example.com")).isTrue();
         assertThat(WildcardHostname.isWildcard("eu?.example.com")).isTrue();
         assertThat(WildcardHostname.isWildcard("plain.example.com")).isFalse();
+    }
+
+    /**
+     * The route-conflict question is set INTERSECTION, which string equality and one-way
+     * matching both get wrong; the pathological pair {@code a*} / {@code *b} is the case a
+     * witness-hostname shortcut would miss.
+     */
+    @Test
+    void hostnameSetsIntersectWheneverSomeHostMatchesBoth() {
+        // Exact under a wildcard, in both argument orders.
+        assertThat(intersect("foo.example.com", "*.example.com")).isTrue();
+        assertThat(intersect("*.example.com", "foo.example.com")).isTrue();
+        assertThat(intersect("deep.sub.example.com", "*.example.com")).isTrue();
+
+        // A leading "*." never covers the apex, so neither does the overlap rule.
+        assertThat(intersect("example.com", "*.example.com")).isFalse();
+
+        // Disjoint spaces stay disjoint.
+        assertThat(intersect("foo.example.org", "*.example.com")).isFalse();
+        assertThat(intersect("*.example.com", "*.example.org")).isFalse();
+        assertThat(intersect("a.example.com", "b.example.com")).isFalse();
+
+        // Wildcard against wildcard, including a nested space.
+        assertThat(intersect("*.example.com", "*.sub.example.com")).isTrue();
+        assertThat(intersect("eu*.example.com", "*.example.com")).isTrue();
+        assertThat(intersect("a*.example.com", "*b.example.com")).isTrue();
+        assertThat(intersect("a*.example.com", "b*.example.com")).isFalse();
+
+        // Single-character globs.
+        assertThat(intersect("node-?.example.com", "node-1.example.com")).isTrue();
+        assertThat(intersect("node-?.example.com", "node-12.example.com")).isFalse();
+
+        // Case folds, exactly like matching does.
+        assertThat(intersect("FOO.Example.com", "*.example.COM")).isTrue();
+    }
+
+    private static boolean intersect(String first, String second) {
+        return HostnamePatterns.intersect(first, SiteDomainModel.MATCH_WILDCARD,
+            second, SiteDomainModel.MATCH_WILDCARD);
+    }
+
+    /** A regex row is compared by literal equality only; the class documents why. */
+    @Test
+    void regexRowsAreComparedLiterally() {
+        assertThat(HostnamePatterns.intersect("^app\\.example\\.com$", SiteDomainModel.MATCH_REGEX,
+            "app.example.com", SiteDomainModel.MATCH_EXACT)).isFalse();
+        assertThat(HostnamePatterns.intersect("^app\\.example\\.com$", SiteDomainModel.MATCH_REGEX,
+            "^app\\.example\\.com$", SiteDomainModel.MATCH_REGEX)).isTrue();
+    }
+
+    /** The tier a row routes in ignores match_type when the hostname carries globs. */
+    @Test
+    void effectiveKindFollowsTheHostnameNotOnlyTheColumn() {
+        assertThat(HostnamePatterns.effectiveKind("*.example.com", SiteDomainModel.MATCH_EXACT))
+            .isEqualTo(SiteDomainModel.MATCH_WILDCARD);
+        assertThat(HostnamePatterns.effectiveKind("plain.example.com", SiteDomainModel.MATCH_WILDCARD))
+            .isEqualTo(SiteDomainModel.MATCH_WILDCARD);
+        assertThat(HostnamePatterns.effectiveKind("plain.example.com", SiteDomainModel.MATCH_EXACT))
+            .isEqualTo(SiteDomainModel.MATCH_EXACT);
     }
 }
