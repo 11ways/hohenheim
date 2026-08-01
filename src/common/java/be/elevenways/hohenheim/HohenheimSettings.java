@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.security.IpAddressSyntax;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Supplier;
 
 /**
  * All Hohenheim configuration settings, organized by group.
@@ -510,43 +509,22 @@ public class HohenheimSettings {
             .describe("Workload identity for managed child processes")
             .icon("terminal");
 
-        // AIDEV-NOTE: The gate is a server-installed seam because the offender scan
-        // needs the sites table plus RecordGrants (server-only); the coercer itself
-        // must stay common code. It is null during the boot-time settings load (the
-        // gate installs after the database is up), so an already-true file value
-        // always loads -- enforcement then faults the offending sites individually
-        // at handler creation instead of bricking boot.
-        public static volatile Supplier<String> DEDICATED_USER_GATE;
-
+        // AIDEV-NOTE: enforcement is UNCONDITIONAL by default and there is no
+        // "enable it later" gate: a control that refuses to turn the secure state ON
+        // while sites are misconfigured only ever keeps an install insecure. A site
+        // without its own claimed uid faults individually at handler creation
+        // (WorkloadIdentity.forSite -> FaultedSiteHandler), which is the refusal an
+        // operator can act on. Turning this OFF stays an explicit operator decision,
+        // and never loosens tenant-managed sites (WorkloadIdentity.isTenantManaged).
         public static final SettingDefinition<Boolean> REQUIRE_DEDICATED_USER = GROUP
             .buildSetting("require_dedicated_user", Boolean.class)
             .defaultValue(true)
             .description("Refuse to start a managed site process without its own exclusively-claimed "
                 + "system user. With a shared or absent user, same-uid workloads can read each "
-                + "other's process environments (IPC tokens, database credentials). Upgraded "
-                + "installs that already had sites start with this off; sites another tenant "
-                + "manages are ALWAYS required to have a dedicated user, regardless of this setting")
-            .coercer(Process::coerceRequireDedicatedUser)
+                + "other's process environments (IPC tokens, database credentials). Sites another "
+                + "tenant manages are ALWAYS required to have a dedicated user, regardless of "
+                + "this setting")
             .build();
-
-        private static SettingDefinition.CoercionResult<Boolean> coerceRequireDedicatedUser(Object raw) {
-            Boolean value = raw instanceof Boolean bool ? bool
-                : raw instanceof String text && !text.isBlank() ? Boolean.parseBoolean(text.trim())
-                : null;
-            if (value == null) {
-                return SettingDefinition.CoercionResult.rejected();
-            }
-            if (Boolean.TRUE.equals(value)) {
-                Supplier<String> gate = DEDICATED_USER_GATE;
-                String offenders = gate != null ? gate.get() : null;
-                if (offenders != null) {
-                    throw new IllegalArgumentException(
-                        "process.require_dedicated_user cannot be enabled while sites would fault: "
-                            + offenders);
-                }
-            }
-            return SettingDefinition.CoercionResult.accepted(value);
-        }
     }
 
     // --- Proteus SSO (optional; password login is always available) ---

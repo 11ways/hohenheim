@@ -11,7 +11,6 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
-import be.elevenways.zenit.server.setting.DrySettingsWriter;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -49,8 +48,8 @@ public final class WorkloadIdentity {
      * Resolve and CLAIM a site's run-as identity, or refuse.
      *
      * @param userKey the site's {@code user} setting (registry key or legacy id), or null
-     * @return the claimed identity, or null when no user is configured and the lenient
-     *         legacy mode tolerates inheriting the daemon user
+     * @return the claimed identity, or null when no user is configured and the operator
+     *         deliberately turned {@code process.require_dedicated_user} off
      * @throws IllegalArgumentException when the identity is missing while required, does
      *         not resolve, is root, is the daemon's own user, or is claimed by another site
      */
@@ -97,8 +96,7 @@ public final class WorkloadIdentity {
 
     /**
      * Read-only identity audit of every enabled, non-deleted, managed-process site.
-     * Never claims or mutates anything; used by the dashboard attention list and the
-     * settings gate that refuses enabling {@code require_dedicated_user}.
+     * Never claims or mutates anything; feeds the dashboard attention list.
      */
     public static @NonNull List<Finding> auditAll() {
         List<Finding> findings = new ArrayList<>();
@@ -150,55 +148,6 @@ public final class WorkloadIdentity {
         return null;
     }
 
-    /** Installs the settings-gate seam: enabling require_dedicated_user refuses while sites would fault. */
-    public static void installSettingsGate() {
-        HohenheimSettings.Process.DEDICATED_USER_GATE = () -> {
-            List<Finding> findings = auditAll();
-            if (findings.isEmpty()) {
-                return null;
-            }
-            StringBuilder offenders = new StringBuilder();
-            for (Finding finding : findings) {
-                if (offenders.length() > 0) {
-                    offenders.append("; ");
-                }
-                offenders.append("site ").append(finding.siteId());
-                if (finding.siteName() != null) {
-                    offenders.append(" (").append(finding.siteName()).append(")");
-                }
-                offenders.append(": ").append(finding.problem());
-            }
-            return offenders.toString();
-        };
-    }
-
-    /**
-     * Legacy transition, run once per install at boot/migrate time: an upgraded install
-     * that already has sites keeps the lenient behaviour (the setting is persisted FALSE),
-     * a fresh install keeps the strict default TRUE. Written to the settings file so it
-     * only ever happens while the key is absent.
-     */
-    public static void applyLegacyDefault(@NonNull Path settingsFile) {
-        if (HohenheimSettings.VALUES.hasValue(HohenheimSettings.Process.REQUIRE_DEDICATED_USER)) {
-            return;
-        }
-        boolean hasSites = Models.get(SiteModel.class).find().first() != null;
-        if (!hasSites) {
-            return;
-        }
-        try {
-            new DrySettingsWriter(settingsFile)
-                .set(HohenheimSettings.Process.REQUIRE_DEDICATED_USER, false)
-                .persist();
-        } catch (RuntimeException e) {
-            Blast.log("PROCESS: could not persist the legacy require_dedicated_user=false default:",
-                e.getMessage());
-        }
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Process.REQUIRE_DEDICATED_USER, false);
-        Blast.log("PROCESS: existing install detected; process.require_dedicated_user recorded as",
-            "false. Enable it after every site has its own system user.");
-    }
-
     /** @return true when this site must have a dedicated identity (setting, or tenant-managed) */
     public static boolean enforcementRequired(int siteId) {
         if (Boolean.TRUE.equals(HohenheimSettings.VALUES
@@ -210,7 +159,7 @@ public final class WorkloadIdentity {
 
     /**
      * A site any non-admin subject holds the "manage" capability on is tenant code:
-     * its refusal is UNCONDITIONAL, whatever the transition setting says.
+     * its refusal is UNCONDITIONAL, whatever {@code require_dedicated_user} says.
      */
     static boolean isTenantManaged(int siteId) {
         try {
