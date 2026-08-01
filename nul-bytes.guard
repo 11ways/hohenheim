@@ -1,0 +1,2 @@
+# runtime state (live git repos, volumes): machine-produced, broken symlinks abort the walk
+data/**

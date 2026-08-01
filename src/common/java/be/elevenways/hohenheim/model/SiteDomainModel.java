@@ -1,13 +1,13 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import java.util.List;
-import java.util.Locale;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -38,7 +38,7 @@ public class SiteDomainModel extends Model {
             return null;
         }
         String trimmed = hostname.trim();
-        return MATCH_REGEX.equals(matchType) ? trimmed : trimmed.toLowerCase(Locale.ROOT);
+        return MATCH_REGEX.equals(matchType) ? trimmed : BlastString.lower(trimmed);
     }
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
