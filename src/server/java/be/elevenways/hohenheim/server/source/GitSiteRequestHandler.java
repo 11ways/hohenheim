@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.WorkloadIdentity;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
@@ -54,9 +55,16 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
         boolean shallow = Boolean.TRUE.equals(sourceSettings.get("shallow_clone"));
         boolean submodules = Boolean.TRUE.equals(sourceSettings.get("submodules"));
 
-        // Drop git ops + build to the site's system user when configured, so a
-        // compromised repo can't run as the (sudo-capable) Hohenheim user.
-        this.runAs = SystemUsers.resolve(typeSettings.get("system_user_id"));
+        // Drop git ops + build to the site's system user, so a compromised repo can't
+        // run as the (sudo-capable) Hohenheim user.
+        //
+        // AIDEV-NOTE: this goes through WorkloadIdentity.forSite, NOT SystemUsers.resolve:
+        // a bare resolve hands back a uid without CLAIMING it, so a git site could clone
+        // and build under a uid another site's processes already run as -- readable /proc
+        // environments, exactly the boundary WorkloadIdentity exists to hold. It also
+        // reads the "user" key: "system_user_id" was migrated away by M025, so this used
+        // to resolve null on every site and every clone/build silently ran as the daemon.
+        this.runAs = WorkloadIdentity.forSite(siteId, typeSettings.get("user"));
         if (runAs == null && SystemUsers.daemonRunsAsRoot()) {
             Blast.log("GIT: site", siteId, "has no system user configured;",
                 "clone and build commands run as the root daemon user.",

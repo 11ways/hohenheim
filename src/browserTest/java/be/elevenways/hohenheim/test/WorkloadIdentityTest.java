@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.source.GitProvisioner;
 import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -293,5 +294,63 @@ class WorkloadIdentityTest {
         assertThat(WorkloadIdentity.auditAll())
             .as("4. and the site that would fault is still REPORTED, on the attention list")
             .isNotEmpty();
+    }
+
+    /**
+     * The git provisioning seam holds the same identity boundary as managed processes: it
+     * CLAIMS the uid instead of resolving one, so a git site's clone/build cannot run under
+     * a uid another site's workloads already own.
+     */
+    @Test
+    void aGitSiteClaimsItsUidInsteadOfQuietlyBorrowingIt() throws Exception {
+        int idA = siteA.get(SiteModel.ID);
+        int idB = siteB.get(SiteModel.ID);
+        saveUser("wl-git-incumbent", 44311);
+        saveUser("wl-git-own", 44312);
+        HohenheimSettings.VALUES.setValue(
+            HohenheimSettings.Process.REQUIRE_DEDICATED_USER, true);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH,
+            Files.createTempDirectory("wl-git-data").toString());
+
+        // 1. Site A owns a uid, recorded on its system_users row.
+        assertThat(WorkloadIdentity.forSite(idA, "hohenheim:wl-git-incumbent"))
+            .as("1. site A claims its uid").isNotNull();
+        assertThat(claimOf("wl-git-incumbent")).as("1. the claim is recorded").isEqualTo(idA);
+
+        // 2. A git site on ANOTHER site pointed at that same uid is refused BEFORE it
+        //    clones or builds anything. A bare SystemUsers.resolve handed the uid over
+        //    silently, which is the /proc-readable sharing the claim exists to stop.
+        Map<String, Object> typeSettings = new HashMap<>();
+        typeSettings.put("root_path", ".");
+        typeSettings.put("user", "hohenheim:wl-git-incumbent");
+        Map<String, Object> sourceSettings = new HashMap<>();
+        sourceSettings.put("repository_url", "");
+        sourceSettings.put("branch", "main");
+        assertThatThrownBy(() -> GitProvisioner.createHandler(siteB,
+                SiteTypes.getHandler("hohenheim:static"), typeSettings, sourceSettings, idB))
+            .as("2. a git site cannot borrow another site's uid")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("wl-git-incumbent")
+            .hasMessageContaining("already claimed by site " + idA);
+        assertThat(claimOf("wl-git-incumbent"))
+            .as("2. and the incumbent's claim is untouched").isEqualTo(idA);
+
+        // 3. With its OWN uid the handler is built AND the claim lands. This is the half a
+        //    resolve-only seam could never do, so it is what proves the routing changed.
+        typeSettings.put("user", "hohenheim:wl-git-own");
+        SiteRequestHandler handler = GitProvisioner.createHandler(siteB,
+            SiteTypes.getHandler("hohenheim:static"), typeSettings, sourceSettings, idB);
+        try {
+            assertThat(claimOf("wl-git-own"))
+                .as("3. the git site RECORDED its claim, it did not merely resolve a uid")
+                .isEqualTo(idB);
+        } finally {
+            // Teardown blocks on the cancelled deploy's child process (up to the queue's
+            // own 30s join), which this test has no stake in: hand it to a daemon thread.
+            Thread teardown = new Thread(handler::destroy, "wl-git-teardown");
+            teardown.setDaemon(true);
+            teardown.start();
+            teardown.join(2_000);
+        }
     }
 }
