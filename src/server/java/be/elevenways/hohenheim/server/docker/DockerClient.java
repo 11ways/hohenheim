@@ -14,6 +14,7 @@ import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
 import java.util.concurrent.TimeUnit;
@@ -746,7 +747,7 @@ public class DockerClient {
 
         boolean chunked = false;
         for (int i = 1; i < headLines.length; i++) {
-            String line = headLines[i].toLowerCase();
+            String line = headLines[i].toLowerCase(Locale.ROOT);
             if (line.startsWith("transfer-encoding:") && line.contains("chunked")) {
                 chunked = true;
             }

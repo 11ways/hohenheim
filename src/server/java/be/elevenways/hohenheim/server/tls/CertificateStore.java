@@ -110,9 +110,16 @@ public class CertificateStore {
         return resolveFromMap(hostname, snapshot.preferredHostnameToAlias);
     }
 
-    private static String resolveFromMap(String hostname, Map<String, String> map) {
+    // AIDEV-NOTE: the three hostname folds in this class (here, buildPreferredAliases,
+    // addCertToKeyStore) are Locale.ROOT because they are the two halves of one identity:
+    // the map is keyed from DB/SAN hostnames, the lookup key comes off the ClientHello SNI.
+    // Only one side is ever mixed case, so a locale-dependent fold is not merely a
+    // consistency risk -- under tr a mixed-case stored hostname becomes a key no SNI name
+    // can reach, and the handshake gets the wrong certificate or none.
+    /** Package-private so the hostname-folding journey can drive it without a snapshot. */
+    static String resolveFromMap(String hostname, Map<String, String> map) {
         if (hostname == null) return null;
-        hostname = hostname.toLowerCase();
+        hostname = hostname.toLowerCase(Locale.ROOT);
 
         String alias = map.get(hostname);
         if (alias != null) return alias;
@@ -184,7 +191,7 @@ public class CertificateStore {
                 continue;
             }
 
-            result.put(hostname.toLowerCase(), alias);
+            result.put(hostname.toLowerCase(Locale.ROOT), alias);
         }
 
         return result;
@@ -210,7 +217,7 @@ public class CertificateStore {
 
         Set<String> hostnames = extractHostnames(chain[0]);
         for (String hostname : hostnames) {
-            hostnameToAlias.put(hostname.toLowerCase(), alias);
+            hostnameToAlias.put(hostname.toLowerCase(Locale.ROOT), alias);
         }
 
         return alias;

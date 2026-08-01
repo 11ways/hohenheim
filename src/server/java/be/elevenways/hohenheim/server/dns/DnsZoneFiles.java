@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Standard zone-file text for a hosted zone. Import REPLACES all
@@ -236,12 +237,12 @@ public final class DnsZoneFiles {
         if (owner.equals(origin)) {
             return DnsNames.APEX;
         }
-        String relative = owner.relativize(origin).toString().toLowerCase();
+        String relative = owner.relativize(origin).toString().toLowerCase(Locale.ROOT);
         return DnsNames.normalizeOwner(relative);
     }
 
     private static @NonNull String stripDot(@NonNull Name name) {
-        String value = name.toString().toLowerCase();
+        String value = name.toString().toLowerCase(Locale.ROOT);
         while (value.endsWith(".")) {
             value = value.substring(0, value.length() - 1);
         }

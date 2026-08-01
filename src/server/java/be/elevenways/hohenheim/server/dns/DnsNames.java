@@ -2,12 +2,17 @@ package be.elevenways.hohenheim.server.dns;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import java.util.Locale;
 
 /**
  * Owner-name normalization for hosted zones.
  * Origins are canonical lowercase without trailing dot; record owners are
  * relative ("@" = apex, leftmost "*" = wildcard, "_" labels allowed).
  */
+// AIDEV-NOTE: every fold here is Locale.ROOT because RFC 4343 mandates ASCII-ONLY case
+// folding for DNS names. A no-arg toLowerCase() under -Duser.language=tr maps 'I' to
+// dotless 'ı', which fails the [a-z0-9-] label regex outright (a valid origin is rejected)
+// and silently mangles relative() (API.wiki.example.com resolves to owner "apı").
 public final class DnsNames {
 
     public static final String APEX = "@";
@@ -19,7 +24,7 @@ public final class DnsNames {
         if (input == null) {
             return null;
         }
-        String origin = input.trim().toLowerCase();
+        String origin = input.trim().toLowerCase(Locale.ROOT);
         while (origin.endsWith(".")) {
             origin = origin.substring(0, origin.length() - 1);
         }
@@ -39,7 +44,7 @@ public final class DnsNames {
         if (input == null) {
             return null;
         }
-        String owner = input.trim().toLowerCase();
+        String owner = input.trim().toLowerCase(Locale.ROOT);
         while (owner.endsWith(".")) {
             owner = owner.substring(0, owner.length() - 1);
         }
@@ -72,7 +77,7 @@ public final class DnsNames {
 
     /** @return the relative owner for a fully qualified name, or null when outside the zone */
     public static @Nullable String relative(@NonNull String origin, @NonNull String fqdn) {
-        String name = fqdn.toLowerCase();
+        String name = fqdn.toLowerCase(Locale.ROOT);
         while (name.endsWith(".")) {
             name = name.substring(0, name.length() - 1);
         }

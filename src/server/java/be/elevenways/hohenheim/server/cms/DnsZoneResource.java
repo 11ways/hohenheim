@@ -31,6 +31,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -197,7 +198,7 @@ public final class DnsZoneResource extends RowResource {
         }
 
         Object nsValue = coerced.get("soa_primary_ns");
-        String primaryNs = nsValue != null ? String.valueOf(nsValue).trim().toLowerCase() : "";
+        String primaryNs = nsValue != null ? String.valueOf(nsValue).trim().toLowerCase(Locale.ROOT) : "";
         while (primaryNs.endsWith(".")) {
             primaryNs = primaryNs.substring(0, primaryNs.length() - 1);
         }

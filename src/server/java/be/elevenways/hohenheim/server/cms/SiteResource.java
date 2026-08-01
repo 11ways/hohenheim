@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import be.elevenways.hohenheim.server.sitetype.types.TlsPassthroughSiteType;
@@ -497,7 +498,7 @@ public class SiteResource extends RowResource {
     }
 
     private static @NonNull String slugify(@NonNull String name) {
-        return name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+        return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
     }
 
     private static @NonNull String trimmed(@Nullable Object value) {

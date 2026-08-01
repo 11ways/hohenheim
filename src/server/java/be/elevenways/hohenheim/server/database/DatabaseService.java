@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
@@ -139,7 +140,7 @@ public class DatabaseService extends DatasourceScoped {
                 row = model.createEmptyRow();
                 row.set(DatabaseModel.NAME, name);
             }
-            row.set(DatabaseModel.ENGINE, engine.name().toLowerCase());
+            row.set(DatabaseModel.ENGINE, engine.name().toLowerCase(Locale.ROOT));
             row.set(DatabaseModel.IMAGE, image);
             row.set(DatabaseModel.DB_USER, user);
             row.set(DatabaseModel.DB_PASSWORD, password);
@@ -196,7 +197,7 @@ public class DatabaseService extends DatasourceScoped {
         String image = row.get(DatabaseModel.IMAGE);
         return new Detail(
             row.get(DatabaseModel.NAME),
-            engine.name().toLowerCase(),
+            engine.name().toLowerCase(Locale.ROOT),
             image != null ? image : "",
             row.get(DatabaseModel.DB_NAME),
             row.get(DatabaseModel.DB_USER),
@@ -217,7 +218,7 @@ public class DatabaseService extends DatasourceScoped {
             String image = row.get(DatabaseModel.IMAGE);
             result.add(new Summary(
                 row.get(DatabaseModel.NAME),
-                engine.name().toLowerCase(),
+                engine.name().toLowerCase(Locale.ROOT),
                 image != null ? image : "",
                 row.get(DatabaseModel.DB_NAME),
                 row.get(DatabaseModel.DB_USER),
@@ -319,6 +320,6 @@ public class DatabaseService extends DatasourceScoped {
 
     private static ManagedDatabase.Engine engineOf(Row row) {
         String engine = row.get(DatabaseModel.ENGINE);
-        return ManagedDatabase.Engine.valueOf(engine.toUpperCase());
+        return ManagedDatabase.Engine.valueOf(engine.toUpperCase(Locale.ROOT));
     }
 }
