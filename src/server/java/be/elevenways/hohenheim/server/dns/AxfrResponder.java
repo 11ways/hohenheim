@@ -18,6 +18,7 @@ import org.xbill.DNS.TSIGRecord;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Primary-side AXFR: streams a zone to a TSIG-authenticated secondary. The key
@@ -63,7 +64,7 @@ public final class AxfrResponder {
             return null;
         }
         Name qname = question.getName();
-        DnsZoneSnapshot zone = this.store.getZone(qname.toString(true).toLowerCase());
+        DnsZoneSnapshot zone = this.store.getZone(qname.toString(true).toLowerCase(Locale.ROOT));
         if (zone == null || !qname.equals(zone.getOrigin())) {
             return null; // not an apex we host: REFUSED
         }

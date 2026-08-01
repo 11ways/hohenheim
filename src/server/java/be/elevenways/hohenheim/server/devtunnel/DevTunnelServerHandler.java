@@ -20,6 +20,7 @@ import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.nio.channels.SocketChannel;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -330,7 +331,7 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
         for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(siteId)) {
             String hostname = domain.get(SiteDomainModel.HOSTNAME);
             if (hostname != null && hostname.startsWith("*.") && hostname.length() > 2) {
-                return hostname.substring(1).toLowerCase();
+                return hostname.substring(1).toLowerCase(Locale.ROOT);
             }
         }
         return null;

@@ -12,6 +12,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -93,7 +94,7 @@ public final class DatabaseEnvInjection {
         ManagedDatabase.Engine engine;
         try {
             engine = ManagedDatabase.Engine.valueOf(
-                String.valueOf(database.get(DatabaseModel.ENGINE)).toUpperCase());
+                String.valueOf(database.get(DatabaseModel.ENGINE)).toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             unresolved(siteId, databaseId, name, "unknown_engine");
             return;
@@ -118,7 +119,7 @@ public final class DatabaseEnvInjection {
         if (prefix == null || prefix.isBlank()) {
             return SiteDatabaseModel.DEFAULT_PREFIX;
         }
-        return prefix.trim().toUpperCase();
+        return prefix.trim().toUpperCase(Locale.ROOT);
     }
 
     /**

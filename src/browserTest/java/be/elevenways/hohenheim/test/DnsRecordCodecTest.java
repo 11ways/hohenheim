@@ -9,6 +9,8 @@ import org.xbill.DNS.Name;
 import org.xbill.DNS.Record;
 import org.xbill.DNS.TXTRecord;
 
+import java.util.Locale;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -42,6 +44,47 @@ class DnsRecordCodecTest {
         assertThat(DnsNames.relative("example.com", "www.example.com")).isEqualTo("www");
         assertThat(DnsNames.relative("example.com", "example.com")).isEqualTo("@");
         assertThat(DnsNames.relative("example.com", "www.other.com")).isNull();
+    }
+
+    /**
+     * RFC 4343: DNS name comparison is ASCII case-insensitive, never locale-sensitive.
+     * The whole journey runs with the JVM default locale forced to Turkish, where the
+     * no-argument toLowerCase() maps 'I' to dotless 'ı'.
+     */
+    @Test
+    void nameFoldingIsAsciiOnlyInEveryLocale() {
+        Locale previous = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+
+        try {
+            // 1. A zone origin spelled in capitals is a valid origin.
+            assertThat(DnsNames.normalizeOrigin("WIKI.EXAMPLE.COM"))
+                .as("uppercase origin canonicalizes")
+                .isEqualTo("wiki.example.com");
+
+            // 2. So is an owner label.
+            assertThat(DnsNames.normalizeOwner("API")).as("uppercase owner canonicalizes").isEqualTo("api");
+            assertThat(DnsNames.normalizeOwner("*.API")).as("wildcard owner canonicalizes").isEqualTo("*.api");
+
+            // 3. A qname arriving in any case still resolves to its owner inside the zone.
+            assertThat(DnsNames.relative("wiki.example.com", "API.wiki.example.com"))
+                .as("uppercase qname maps to its relative owner")
+                .isEqualTo("api");
+            assertThat(DnsNames.relative("wiki.example.com", "API.WIKI.EXAMPLE.COM"))
+                .as("fully uppercase qname maps to its relative owner")
+                .isEqualTo("api");
+
+            // 4. Which is what zone containment -- AXFR authorization, NOTIFY matching --
+            //    rides on.
+            assertThat(DnsNames.zoneContains("wiki.example.com", "API.WIKI.EXAMPLE.COM"))
+                .as("uppercase qname is inside the zone")
+                .isTrue();
+            assertThat(DnsNames.zoneContains("wiki.example.com", "api.other.com"))
+                .as("a name outside the zone stays outside")
+                .isFalse();
+        } finally {
+            Locale.setDefault(previous);
+        }
     }
 
     @Test

@@ -41,6 +41,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -125,10 +126,10 @@ public final class DatabaseResource extends RowResource {
         if (!name.matches("[a-z0-9][a-z0-9-]*")) {
             throw Violations.ofField("name", name, CmsSupport.violationText("name_format"));
         }
-        String engineToken = trimmed(coerced.get("engine")).toLowerCase();
+        String engineToken = trimmed(coerced.get("engine")).toLowerCase(Locale.ROOT);
         ManagedDatabase.Engine engine;
         try {
-            engine = ManagedDatabase.Engine.valueOf(engineToken.toUpperCase());
+            engine = ManagedDatabase.Engine.valueOf(engineToken.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             throw Violations.ofField("engine", engineToken,
                 CmsSupport.violationText("unknown_engine").withArg("engine", engineToken));

@@ -21,6 +21,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.Locale;
 
 /**
  * Federation peers: other Hohenheim instances (or plain nameservers) this
@@ -88,7 +89,7 @@ public final class DnsPeerResource extends RowResource {
         }
         Object algorithmValue = coerced.get("tsig_algorithm");
         if (algorithmValue != null && !String.valueOf(algorithmValue).isBlank()
-                && !ALGORITHMS.contains(String.valueOf(algorithmValue).trim().toLowerCase())) {
+                && !ALGORITHMS.contains(String.valueOf(algorithmValue).trim().toLowerCase(Locale.ROOT))) {
             throw Violations.ofField("tsig_algorithm", algorithmValue,
                 CmsSupport.violationText("dns_tsig_algorithm"));
         }

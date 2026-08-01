@@ -10,6 +10,7 @@ import org.xbill.DNS.Type;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntSupplier;
@@ -50,7 +51,7 @@ public final class DnsRateLimiter {
         if (rcode == Rcode.NXDOMAIN) {
             for (Record record : response.getSection(Section.AUTHORITY)) {
                 if (record.getType() == Type.SOA) {
-                    return "nx|" + record.getName().toString(true).toLowerCase();
+                    return "nx|" + record.getName().toString(true).toLowerCase(Locale.ROOT);
                 }
             }
             return "nx|-";
@@ -64,13 +65,13 @@ public final class DnsRateLimiter {
         if (!response.getHeader().getFlag(Flags.AA)) {
             for (Record record : response.getSection(Section.AUTHORITY)) {
                 if (record.getType() == Type.NS) {
-                    return "ref|" + record.getName().toString(true).toLowerCase();
+                    return "ref|" + record.getName().toString(true).toLowerCase(Locale.ROOT);
                 }
             }
         }
         Record question = query.getQuestion();
         return question != null
-            ? question.getName().toString(true).toLowerCase() + "|" + question.getType()
+            ? question.getName().toString(true).toLowerCase(Locale.ROOT) + "|" + question.getType()
             : "-";
     }
 

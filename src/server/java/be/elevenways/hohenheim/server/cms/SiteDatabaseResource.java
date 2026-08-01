@@ -27,6 +27,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
+import java.util.Locale;
 
 /**
  * Site-database attachments: the join records that drive connection-variable
@@ -157,7 +158,7 @@ public final class SiteDatabaseResource extends RowResource {
             String linkPrefix = DatabaseEnvInjection.normalizedPrefix(link.get(SiteDatabaseModel.ENV_PREFIX));
             if (linkPrefix.equalsIgnoreCase(prefix)) {
                 throw Violations.ofField("env_prefix", prefix,
-                    CmsSupport.violationText("prefix_taken").withArg("prefix", prefix.toUpperCase()));
+                    CmsSupport.violationText("prefix_taken").withArg("prefix", prefix.toUpperCase(Locale.ROOT)));
             }
         }
     }

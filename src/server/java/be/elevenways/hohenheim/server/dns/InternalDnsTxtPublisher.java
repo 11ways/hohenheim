@@ -14,6 +14,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.xbill.DNS.Name;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * First-party ACME DNS-01 publisher: writes the TXT value into a hosted zone
@@ -177,7 +178,7 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
     }
 
     private static @NonNull String stripDot(@Nullable String name) {
-        String value = name != null ? name.trim().toLowerCase() : "";
+        String value = name != null ? name.trim().toLowerCase(Locale.ROOT) : "";
         while (value.endsWith(".")) {
             value = value.substring(0, value.length() - 1);
         }

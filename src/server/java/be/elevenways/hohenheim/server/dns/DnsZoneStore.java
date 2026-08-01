@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntConsumer;
@@ -286,7 +287,7 @@ public final class DnsZoneStore {
         if (value == null || value.isBlank()) {
             return new Name("ns1", origin);
         }
-        String name = value.trim().toLowerCase();
+        String name = value.trim().toLowerCase(Locale.ROOT);
         while (name.endsWith(".")) {
             name = name.substring(0, name.length() - 1);
         }
@@ -295,7 +296,7 @@ public final class DnsZoneStore {
 
     /** Turns an email contact into SOA RNAME form (dots in the local part escaped). */
     private static @NonNull Name contactName(@Nullable String value, @NonNull String origin) throws TextParseException {
-        String contact = value != null ? value.trim().toLowerCase() : "";
+        String contact = value != null ? value.trim().toLowerCase(Locale.ROOT) : "";
         if (contact.isEmpty()) {
             contact = "hostmaster@" + origin;
         }

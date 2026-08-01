@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -129,7 +130,7 @@ public final class SecondaryZoneService {
         if (question == null) {
             return false;
         }
-        String originString = question.getName().toString(true).toLowerCase();
+        String originString = question.getName().toString(true).toLowerCase(Locale.ROOT);
         boolean scheduled = false;
         for (Row zone : Models.get(DnsZoneModel.class).findSecondaries()) {
             if (!originString.equals(zone.get(DnsZoneModel.ORIGIN))) {

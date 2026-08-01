@@ -22,6 +22,7 @@ import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -135,7 +136,7 @@ public final class DnsRecordCodec {
     }
 
     private static @NonNull Name targetName(@NonNull String value) throws DnsValueException {
-        String target = value.toLowerCase();
+        String target = value.toLowerCase(Locale.ROOT);
         while (target.endsWith(".")) {
             target = target.substring(0, target.length() - 1);
         }
@@ -167,7 +168,7 @@ public final class DnsRecordCodec {
         if (flags < 0 || flags > 255) {
             throw new DnsValueException("value", "dns_caa_format");
         }
-        String tag = parts[1].toLowerCase();
+        String tag = parts[1].toLowerCase(Locale.ROOT);
         if (!CAA_TAGS.contains(tag)) {
             throw new DnsValueException("value", "dns_caa_tag");
         }

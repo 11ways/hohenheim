@@ -130,7 +130,11 @@ public class AcmeService {
         if (entry == null) return null;
 
         // Validate that the requesting hostname is one we're issuing a cert for
-        if (hostname != null && !entry.validHostnames.contains(hostname.toLowerCase())) {
+        // AIDEV-NOTE: Locale.ROOT, not the default locale: the authorized set is folded from
+        // the ordered hostnames while this side folds the Host header off the wire. Under tr
+        // a mixed-case hostname on either side stops matching, the challenge 404s and
+        // issuance retries forever. Same reason for isValidHostname and the order hostname set.
+        if (hostname != null && !entry.validHostnames.contains(hostname.toLowerCase(Locale.ROOT))) {
             return null;
         }
 
@@ -397,7 +401,7 @@ public class AcmeService {
     /** RFC-1123 hostname check for HTTP-01, which cannot validate wildcards. */
     public static boolean isValidHostname(String hostname) {
         if (hostname == null) return false;
-        String h = hostname.trim().toLowerCase();
+        String h = hostname.trim().toLowerCase(Locale.ROOT);
         if (h.isEmpty() || h.length() > 253 || !h.contains(".")) return false;
         for (String label : h.split("\\.", -1)) {
             if (!HOSTNAME_LABEL.matcher(label).matches()) return false;
@@ -697,7 +701,7 @@ public class AcmeService {
         Order order = createOrder(account, hostnames);
 
         Set<String> hostnameSet = new HashSet<>();
-        for (String h : hostnames) hostnameSet.add(h.toLowerCase());
+        for (String h : hostnames) hostnameSet.add(h.toLowerCase(Locale.ROOT));
 
         for (Authorization auth : order.getAuthorizations()) {
             if (auth.getStatus() == Status.VALID) continue;
@@ -829,11 +833,11 @@ public class AcmeService {
      */
     public static String normalizeAccountEmail(@Nullable String email) {
         if (email == null) return "";
-        String normalized = email.trim().toLowerCase();
+        String normalized = email.trim().toLowerCase(Locale.ROOT);
         if (normalized.isEmpty()) return "";
 
         String global = HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL);
-        if (global != null && normalized.equals(global.trim().toLowerCase())) return "";
+        if (global != null && normalized.equals(global.trim().toLowerCase(Locale.ROOT))) return "";
 
         return normalized;
     }
@@ -886,7 +890,7 @@ public class AcmeService {
             .all();
         for (Row row : accountRows) {
             String rowEmail = row.get(CertificateModel.LETSENCRYPT_EMAIL);
-            String rowKey = rowEmail == null ? "" : rowEmail.trim().toLowerCase();
+            String rowKey = rowEmail == null ? "" : rowEmail.trim().toLowerCase(Locale.ROOT);
             if (!rowKey.equals(normalizedEmail)) continue;
 
             String keyPem = row.get(CertificateModel.PRIVATE_KEY_PEM);
