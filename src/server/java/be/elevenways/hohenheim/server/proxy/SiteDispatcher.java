@@ -69,7 +69,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -104,14 +103,14 @@ public class SiteDispatcher implements HttpHandler {
     private static final HttpString X_PROXIED_BY = new HttpString("X-Proxied-By");
     private static final HttpString X_FORWARDED_FOR = new HttpString("X-Forwarded-For");
     private static final HttpString X_FORWARDED_HOST = new HttpString("X-Forwarded-Host");
-    private static final HttpString X_FORWARDED_PROTO = new HttpString("X-Forwarded-Proto");
+    private static final HttpString X_FORWARDED_PROTO = ProxyScheme.X_FORWARDED_PROTO;
     private static final HttpString X_REAL_IP = new HttpString("X-Real-IP");
     private static final HttpString STRICT_TRANSPORT_SECURITY = new HttpString("Strict-Transport-Security");
 
-    // Trusted-remote-proxy authentication. Deliberately a dispatcher-level constant, distinct
-    // from the managed-process control key on ManagedProcessSiteHandler: that one authorizes
-    // process-control actions, this one authorizes client-IP propagation.
-    private static final HttpString X_HOHENHEIM_KEY = new HttpString("X-Hohenheim-Key");
+    // Trusted-remote-proxy authentication, owned by ProxyScheme. Deliberately distinct from
+    // the managed-process control key on ManagedProcessSiteHandler: that one authorizes
+    // process-control actions, this one authorizes client-IP and proto propagation.
+    private static final HttpString X_HOHENHEIM_KEY = ProxyScheme.X_HOHENHEIM_KEY;
 
     private final String instanceId = UUID.randomUUID().toString().substring(0, 8);
 
@@ -193,13 +192,6 @@ public class SiteDispatcher implements HttpHandler {
     // SecurityEvents sink so this instance's own events count too) and access logging.
     private final ThreatScorer threatScorer = HohenheimSecurity.scorer();
     private final AccessLog accessLog = new AccessLog();
-
-    // Trusted remote-proxy keys, re-parsed from settings at most every 10s (read per request).
-    // AIDEV-NOTE: initial readAt must be 0, not Long.MIN_VALUE -- "now - MIN_VALUE" overflows
-    // negative and the staleness check would never fire.
-    private static final long TRUSTED_KEYS_TTL_MS = 10_000;
-    private volatile long trustedKeysReadAt = 0;
-    private volatile Set<String> trustedProxyKeys = Set.of();
 
     private static final String ACME_CHALLENGE_PREFIX = "/.well-known/acme-challenge/";
 
@@ -597,6 +589,10 @@ public class SiteDispatcher implements HttpHandler {
     @Override
     public void handleRequest(HttpServerExchange exchange) throws Exception {
 
+        // Pin the client-facing scheme while the trust-boundary headers are still pristine:
+        // this pipeline strips X-Hohenheim-Key and rewrites X-Forwarded-Proto further down.
+        ProxyScheme.resolve(exchange);
+
         // --- ACME HTTP-01 challenge: BEFORE ban enforcement, so certificate
         //     renewal survives a mistaken ban (serving a pending challenge
         //     response is harmless). ---
@@ -718,7 +714,7 @@ public class SiteDispatcher implements HttpHandler {
         }
 
         // --- Force SSL redirect ---
-        if (httpsAvailable && entry.forceSsl && "http".equals(exchange.getRequestScheme())) {
+        if (httpsAvailable && entry.forceSsl && !ProxyScheme.isEffectivelyHttps(exchange)) {
             redirectToHttps(exchange, hostname);
             return;
         }
@@ -798,9 +794,6 @@ public class SiteDispatcher implements HttpHandler {
         String trustedForwardedFor = trustedRemoteProxy
             ? requestHeaders.getFirst(X_FORWARDED_FOR)
             : null;
-        String trustedForwardedProto = trustedRemoteProxy
-            ? requestHeaders.getFirst(X_FORWARDED_PROTO)
-            : null;
         String trustedForwardedHost = trustedRemoteProxy
             ? requestHeaders.getFirst(X_FORWARDED_HOST)
             : null;
@@ -825,9 +818,7 @@ public class SiteDispatcher implements HttpHandler {
         // through this listener today. Moving the strip later would make a privileged
         // endpoint publicly reachable -- a deliberate decision, never a side effect.
         requestHeaders.remove(X_HOHENHEIM_KEY);
-        requestHeaders.put(X_FORWARDED_PROTO,
-            trustedForwardedProto != null && !trustedForwardedProto.isBlank()
-                ? trustedForwardedProto : exchange.getRequestScheme());
+        requestHeaders.put(X_FORWARDED_PROTO, ProxyScheme.effectiveScheme(exchange));
         requestHeaders.put(X_FORWARDED_HOST,
             trustedForwardedHost != null && !trustedForwardedHost.isBlank()
                 ? trustedForwardedHost : hostname);
@@ -840,7 +831,7 @@ public class SiteDispatcher implements HttpHandler {
         }
 
         // RFC 6797 §7.2: HSTS header MUST NOT be emitted over non-secure transport.
-        if (entry.hstsEnabled && "https".equals(exchange.getRequestScheme())) {
+        if (entry.hstsEnabled && ProxyScheme.isEffectivelyHttps(exchange)) {
             String hstsValue = "max-age=31536000";
             if (entry.hstsSubdomains) hstsValue += "; includeSubDomains";
             exchange.getResponseHeaders().put(STRICT_TRANSPORT_SECURITY, hstsValue);
@@ -1374,7 +1365,7 @@ public class SiteDispatcher implements HttpHandler {
             return null;
         }
 
-        StringBuilder rewritten = new StringBuilder(exchange.getRequestScheme())
+        StringBuilder rewritten = new StringBuilder(ProxyScheme.effectiveScheme(exchange))
             .append("://").append(authority);
         if (parsed.getRawPath() != null) {
             rewritten.append(parsed.getRawPath());
@@ -1397,7 +1388,7 @@ public class SiteDispatcher implements HttpHandler {
 
     private boolean shouldForceHttpsGlobally(HttpServerExchange exchange) {
         return httpsAvailable
-            && "http".equals(exchange.getRequestScheme())
+            && !ProxyScheme.isEffectivelyHttps(exchange)
             && Boolean.TRUE.equals(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
     }
 
@@ -1503,29 +1494,7 @@ public class SiteDispatcher implements HttpHandler {
     }
 
     private boolean isTrustedRemoteProxy(HttpServerExchange exchange) {
-        String key = exchange.getRequestHeaders().getFirst(X_HOHENHEIM_KEY);
-        return key != null && trustedProxyKeys().contains(key);
-    }
-
-    private Set<String> trustedProxyKeys() {
-        long now = System.currentTimeMillis();
-        if (now - trustedKeysReadAt >= TRUSTED_KEYS_TTL_MS) {
-            trustedKeysReadAt = now;
-            List<String> configured = HohenheimSettings.VALUES.getValue(
-                HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS);
-            if (configured == null || configured.isEmpty()) {
-                trustedProxyKeys = Set.of();
-            } else {
-                Set<String> keys = new HashSet<>();
-                for (String part : configured) {
-                    if (!part.isBlank()) {
-                        keys.add(part.trim());
-                    }
-                }
-                trustedProxyKeys = Set.copyOf(keys);
-            }
-        }
-        return trustedProxyKeys;
+        return ProxyScheme.isTrustedRemoteProxy(exchange);
     }
 
     /**
