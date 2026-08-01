@@ -4,6 +4,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.hohenheim.server.proxy.ListenerAddressMatcher;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
@@ -226,13 +227,15 @@ public class SiteDomainResource extends RowResource {
         // An exact host falling under another row's wildcard is one contested host even
         // though the two spell different claim keys, and the dispatcher consults the exact
         // tier BEFORE the wildcard tier, so the exact row silently seizes traffic the
-        // wildcard row was serving. Scoping: serving *.example.com broadly and overriding
-        // foo.example.com is a legitimate, desirable configuration WITHIN one site (the
-        // exact row simply wins at dispatch), so a merely-overlapping row on the SAME site
-        // is allowed; across sites the same shape is a tenant takeover and is refused.
-        // IDENTICAL hostnames stay refused in both directions -- same-site duplicates are
-        // a config mistake and spell the same claim key anyway. Do not "simplify" this
-        // back to Objects.equals; that is the defect this rule exists to close.
+        // wildcard row was serving. Scoping: serving *.example.com broadly and carving
+        // foo.example.com out to a different upstream is a legitimate, desirable
+        // configuration -- and it NEEDS two sites, since an upstream is a site-level
+        // setting, so the ownership unit here cannot be the site id. It is the site's
+        // MANAGE-grant subjects (HohenheimAccess.sameOwner): operator-owned sites all
+        // compare equal, and the moment a tenant is involved the same shape becomes a
+        // takeover and is refused. IDENTICAL hostnames stay refused in every direction --
+        // same-site duplicates are a config mistake and spell the same claim key anyway.
+        // Do not "simplify" this back to Objects.equals; that is the defect it closes.
         //
         // The check is GLOBAL, not per-site: the dispatcher's route table spans every
         // enabled site and silently drops the loser of a duplicate claim (first-wins by
@@ -277,9 +280,11 @@ public class SiteDomainResource extends RowResource {
             }
             boolean identical = Objects.equals(canonicalHostname, candidateHostname);
             if (!identical) {
-                if (sameSite || !HostnamePatterns.intersect(canonicalHostname, matchType,
+                if (sameSite || candidateSiteId == null
+                    || !HostnamePatterns.intersect(canonicalHostname, matchType,
                         candidate.get(SiteDomainModel.HOSTNAME),
-                        candidate.get(SiteDomainModel.MATCH_TYPE))) {
+                        candidate.get(SiteDomainModel.MATCH_TYPE))
+                    || HohenheimAccess.sameOwner(siteId, candidateSiteId)) {
                     continue;
                 }
                 String siteName = candidateSite != null
@@ -344,13 +349,16 @@ public class SiteDomainResource extends RowResource {
                         ListenerAddressMatcher.parse(candidate.get(SiteDomainModel.LISTEN_ON)))) {
                     continue;
                 }
-                // Every candidate here is on ANOTHER site, so any hostname-set overlap is a
-                // takeover -- the same owner-scoped rule refuseRouteConflicts documents.
+                // Every candidate here is on ANOTHER site, so a hostname-set overlap is a
+                // takeover unless both sites answer to the same owner -- the same
+                // owner-scoped rule refuseRouteConflicts documents.
                 boolean identical = Objects.equals(ownHostname, candidateHostname);
-                if (!identical && !HostnamePatterns.intersect(
+                if (!identical && (!HostnamePatterns.intersect(
                         own.get(SiteDomainModel.HOSTNAME), own.get(SiteDomainModel.MATCH_TYPE),
                         candidate.get(SiteDomainModel.HOSTNAME),
-                        candidate.get(SiteDomainModel.MATCH_TYPE))) {
+                        candidate.get(SiteDomainModel.MATCH_TYPE))
+                    || candidateSiteId == null
+                    || HohenheimAccess.sameOwner(siteId, candidateSiteId))) {
                     continue;
                 }
                 throw Violations.ofField("enabled", true,

@@ -2,7 +2,11 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -458,36 +462,54 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
             .as("step 7: the retried enable claims the route").isNotNull();
     }
 
+    /** A tenant subject holding manage on the site, so the two sites have different owners. */
+    private static int tenantOf(Row site, String email) {
+        Row user = AuthModels.users().createEmptyRow();
+        user.set(UserModel.EMAIL, email);
+        user.set(UserModel.DISPLAY_NAME, email);
+        user.set(UserModel.ENABLED, true);
+        user.set(UserModel.CREATED_AT, Instant.now());
+        user.set(UserModel.UPDATED_AT, Instant.now());
+        AuthModels.users().save(user);
+        int userId = user.get(UserModel.ID);
+        RecordGrants.grant("user", userId, SiteModel.MODEL_ID, site.get(SiteModel.ID),
+            HohenheimAccess.MANAGE, true);
+        return userId;
+    }
+
     /**
      * The wildcard/exact takeover: hostname SETS that intersect are one contested host even
      * though they spell different claim keys, and the exact tier is consulted first. Proves
-     * the refusal in both directions, that the refused write commits NOTHING, and that the
-     * legitimate same-owner override stays allowed.
+     * the refusal in both directions, that the refused write commits NOTHING, and that both
+     * legitimate overrides -- same site, and same OWNER across sites -- stay allowed.
      */
     @Test
-    void anExactRowUnderAnotherSitesWildcardIsRefusedButTheSameSitesOverrideIsNot() {
+    void anExactRowUnderAnotherTenantsWildcardIsRefusedButAnOwnersOwnCarveOutIsNot() {
         Model siteModel = Models.get(SiteModel.class);
         Model domainModel = Models.get(SiteDomainModel.class);
 
-        // 1. Tenant A serves a whole subdomain space through one wildcard row.
+        // 1. Tenant A serves a whole subdomain space through one wildcard row. It is a
+        //    TENANT site: a subject other than the operator holds manage on it.
         Row tenantA = site("Overlap Tenant A", "overlap-tenant-a", true);
+        tenantOf(tenantA, "overlap-tenant-a@test");
         domain(tenantA, "*.tenant-a.example.com", SiteDomainModel.MATCH_WILDCARD, null);
         assertThat(domainModel.find().where(SiteDomainModel.SITE_ID.eq(tenantA.get(SiteModel.ID)))
                 .count())
             .as("step 1: tenant A holds its wildcard row").isEqualTo(1);
 
-        // 2. Tenant B claims ONE host inside that space, as an EXACT row on its own site.
-        //    The literal strings differ, so the claim keys differ and no unique index can
-        //    refuse it -- and the dispatcher consults the exact tier BEFORE the wildcard
-        //    tier, so committing this would hand tenant B traffic tenant A was serving.
+        // 2. A DIFFERENT tenant claims one host inside that space, as an EXACT row on its
+        //    own site. The literal strings differ, so the claim keys differ and no unique
+        //    index can refuse it -- and the dispatcher consults the exact tier BEFORE the
+        //    wildcard tier, so committing this would hand tenant B traffic A was serving.
         Row tenantB = site("Overlap Tenant B", "overlap-tenant-b", true);
+        tenantOf(tenantB, "overlap-tenant-b@test");
         Row seizure = domainModel.createEmptyRow();
         seizure.set(SiteDomainModel.SITE_ID, tenantB.get(SiteModel.ID));
         seizure.set(SiteDomainModel.HOSTNAME, "foo.tenant-a.example.com");
         seizure.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
         Throwable seizureRefusal = catchThrowable(() -> domainModel.save(seizure));
         assertThat(seizureRefusal)
-            .as("step 2: an exact host under another site's wildcard is a takeover")
+            .as("step 2: an exact host under another tenant's wildcard is a takeover")
             .isInstanceOfSatisfying(Violations.class, violations ->
                 assertThat(hasViolation(violations, "hostname", "route_overlaps_other_site"))
                     .as("step 2: the refusal names the overlap, not a generic error").isTrue());
@@ -506,7 +528,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         umbrella.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_WILDCARD);
         Throwable umbrellaRefusal = catchThrowable(() -> domainModel.save(umbrella));
         assertThat(umbrellaRefusal)
-            .as("step 3: a wildcard swallowing another site's exact host is refused too")
+            .as("step 3: a wildcard swallowing another tenant's exact host is refused too")
             .isInstanceOfSatisfying(Violations.class, violations ->
                 assertThat(hasViolation(violations, "hostname", "route_overlaps_other_site"))
                     .as("step 3: the refusal names the overlap").isTrue());
@@ -514,8 +536,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
                 .count())
             .as("step 3: tenant A still holds only its own wildcard row").isEqualTo(1);
 
-        // 4. The legitimate pattern must survive: overriding ONE host inside your OWN
-        //    wildcard is a normal configuration, and the exact row wins at dispatch.
+        // 4. Overriding one host inside your OWN wildcard, on your own site, stays allowed.
         Row override = domain(tenantA, "foo.tenant-a.example.com");
         assertThat((String) domainModel.findById(override.get(SiteDomainModel.ID))
                 .get(SiteDomainModel.LIVE_ROUTE_KEY))
@@ -529,22 +550,36 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
                 .get(SiteDomainModel.LIVE_ROUTE_KEY))
             .as("step 5: a disjoint hostname set is not a conflict").isNotNull();
 
-        // 6. The ENABLE seam is the same boundary: a staged site may sit on an overlapping
-        //    host while disabled, but going live must be refused and must leave it disabled.
+        // 6. THE other half of the rule: two OPERATOR-owned sites (no manage grants at
+        //    all) are the same owner, so a wildcard on one and a carve-out host on the
+        //    other is a deliberate configuration and must NOT be refused. A carve-out
+        //    needs two sites -- the upstream is a site-level setting.
+        Row operatorWildcard = site("Overlap Operator Wildcard", "overlap-op-wild", true);
+        domain(operatorWildcard, "*.operator.example.com", SiteDomainModel.MATCH_WILDCARD, null);
+        Row operatorExact = site("Overlap Operator Exact", "overlap-op-exact", true);
+        Row carveOut = domain(operatorExact, "app.operator.example.com");
+        assertThat((String) domainModel.findById(carveOut.get(SiteDomainModel.ID))
+                .get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 6: an operator's own cross-site carve-out is allowed and claims")
+            .isNotNull();
+
+        // 7. The ENABLE seam holds the same boundary: a third tenant may sit on an
+        //    overlapping host while disabled, but going live is refused and it stays off.
         Row stager = site("Overlap Stager", "overlap-stager", false);
+        tenantOf(stager, "overlap-stager@test");
         domain(stager, "deep.sub.tenant-a.example.com");
         Row goingLive = siteModel.findById(stager.get(SiteModel.ID));
         goingLive.set(SiteModel.ENABLED, true);
         Throwable enableRefusal = catchThrowable(() -> siteModel.save(goingLive));
         assertThat(enableRefusal)
-            .as("step 6: enabling into another site's wildcard space is refused")
+            .as("step 7: enabling into another tenant's wildcard space is refused")
             .isInstanceOfSatisfying(Violations.class, violations ->
                 assertThat(hasViolation(violations, "enabled", "enable_route_overlap"))
-                    .as("step 6: the refusal is the enable-time overlap").isTrue());
+                    .as("step 7: the refusal is the enable-time overlap").isTrue());
         assertThat((Boolean) siteModel.findById(stager.get(SiteModel.ID)).get(SiteModel.ENABLED))
-            .as("step 6: the refused enable left the site disabled").isFalse();
+            .as("step 7: the refused enable left the site disabled").isFalse();
         assertThat(storedClaimsOn("deep.sub.tenant-a.example.com"))
-            .as("step 6: and claimed nothing").isEqualTo(0);
+            .as("step 7: and claimed nothing").isEqualTo(0);
     }
 
     /**
