@@ -51,9 +51,6 @@ public class ServerMain {
             HohenheimSettingsFiles.load();
             HohenheimAccess.declareGrantableModels();
             HohenheimDatabase.init();
-            // Upgrade transition: an install that already has sites keeps the lenient
-            // workload-identity behaviour until the operator enables it deliberately.
-            WorkloadIdentity.applyLegacyDefault(HohenheimSettingsFiles.settingsFile());
             return;
         }
 
@@ -86,12 +83,6 @@ public class ServerMain {
         AuthSettings.VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         installAuthBaselines();
         registerProteusIfConfigured();
-
-        // Workload identity: the legacy transition runs before any site handler exists,
-        // and the settings gate (which needs the database plus RecordGrants) refuses
-        // enabling require_dedicated_user while a site would fault.
-        WorkloadIdentity.applyLegacyDefault(HohenheimSettingsFiles.settingsFile());
-        WorkloadIdentity.installSettingsGate();
 
         // main() does the HTTP-server side of startup; init() is idempotent.
         // Everything an incoming request needs -- client script location, endpoint

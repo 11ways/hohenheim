@@ -33,9 +33,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Workload identity as an ENFORCED boundary: a uid is claimed by exactly one site,
  * a site without its own user is refused when enforcement applies (the setting, or
- * unconditionally for tenant-managed sites), and the settings gate refuses enabling
- * enforcement while a site would fault. Claims are recorded on system_users.site_id,
- * never inferred from configuration.
+ * unconditionally for tenant-managed sites), and enforcement is the DEFAULT state.
+ * Claims are recorded on system_users.site_id, never inferred from configuration.
  */
 class WorkloadIdentityTest {
 
@@ -63,7 +62,6 @@ class WorkloadIdentityTest {
     void lenientAgain() {
         HohenheimSettings.VALUES.setValue(
             HohenheimSettings.Process.REQUIRE_DEDICATED_USER, false);
-        HohenheimSettings.Process.DEDICATED_USER_GATE = null;
     }
 
     private static void saveUser(String name, int uid) {
@@ -253,23 +251,47 @@ class WorkloadIdentityTest {
         RecordGrants.revoke("user", tenant.get(UserModel.ID), SiteModel.MODEL_ID, idB, "manage");
     }
 
+    /**
+     * Enforcement is the DEFAULT state, with nothing left that can quietly record it off
+     * and nothing left that refuses to turn it back on.
+     */
     @Test
-    void theSettingsGateRefusesEnablingWhileASiteWouldFault() {
-        // 1. Site B is enabled with NO user configured (its stored settings are empty),
-        //    so the audit reports it and the gate must refuse the flip.
-        WorkloadIdentity.installSettingsGate();
-        assertThatThrownBy(() ->
-                HohenheimSettings.Process.REQUIRE_DEDICATED_USER.coerce(Boolean.TRUE))
-            .as("1. enabling enforcement is refused while a site would fault")
+    void enforcementIsOnByDefaultAndNothingRefusesTurningItBackOn() {
+        int idA = siteA.get(SiteModel.ID);
+
+        // 1. Clear every stored value: this is what a fresh install reads. The declared
+        //    default is enforcement, and no boot path may persist anything weaker.
+        HohenheimSettings.VALUES.setValue(
+            HohenheimSettings.Process.REQUIRE_DEDICATED_USER, null);
+        assertThat(HohenheimSettings.VALUES.hasValue(
+                HohenheimSettings.Process.REQUIRE_DEDICATED_USER))
+            .as("1. nothing persisted a value for require_dedicated_user").isFalse();
+        assertThat(HohenheimSettings.VALUES.getValue(
+                HohenheimSettings.Process.REQUIRE_DEDICATED_USER))
+            .as("1. and it reads as enforced").isTrue();
+
+        // 2. The default really ENFORCES: a site with no dedicated user is refused
+        //    without anyone having set the flag. This is the gap that mattered -- the
+        //    setting used to read as enforced while being recorded off underneath.
+        assertThatThrownBy(() -> WorkloadIdentity.forSite(idA, null))
+            .as("2. a userless site is refused on the default alone")
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("require_dedicated_user")
-            .hasMessageContaining("wl-site-a")
             .hasMessageContaining("no dedicated system user configured");
 
-        // 2. Turning it OFF is never gated (the escape hatch stays open).
-        assertThat(HohenheimSettings.Process.REQUIRE_DEDICATED_USER.coerce(Boolean.FALSE)
-                .accepted())
-            .as("2. disabling enforcement always coerces")
-            .isTrue();
+        // 3. Turning enforcement OFF stays an explicit operator decision, and then the
+        //    same site is tolerated -- so step 2 was policy, not a broken resolve.
+        HohenheimSettings.VALUES.setValue(
+            HohenheimSettings.Process.REQUIRE_DEDICATED_USER, false);
+        assertThat(WorkloadIdentity.forSite(idA, null))
+            .as("3. the explicit opt-out tolerates inheriting the daemon user").isNull();
+
+        // 4. Turning it back ON is ACCEPTED even while site A would fault. The gate that
+        //    used to refuse this flip could only ever keep an install insecure; the
+        //    refusal belongs on the individual site handler, not on the setting.
+        assertThat(HohenheimSettings.Process.REQUIRE_DEDICATED_USER.coerce(Boolean.TRUE).accepted())
+            .as("4. re-enabling enforcement is never refused").isTrue();
+        assertThat(WorkloadIdentity.auditAll())
+            .as("4. and the site that would fault is still REPORTED, on the attention list")
+            .isNotEmpty();
     }
 }
