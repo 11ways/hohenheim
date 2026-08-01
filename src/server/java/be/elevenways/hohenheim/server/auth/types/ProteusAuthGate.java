@@ -10,6 +10,7 @@ import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusPermissions;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.session.SessionStore;
+import be.elevenways.hohenheim.server.proxy.ProxyScheme;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -188,8 +189,13 @@ public class ProteusAuthGate implements SiteAuthGate {
         return values != null && values.contains("verify");
     }
 
+    /**
+     * The public URL Proteus sends the browser back to. AIDEV-NOTE: the scheme comes from
+     * {@link ProxyScheme}, not the raw request scheme -- behind a TLS terminator the raw
+     * scheme would hand the identity provider an http:// return URL.
+     */
     private static String baseUrl(HttpServerExchange exchange) {
-        String scheme = exchange.getRequestScheme();
+        String scheme = ProxyScheme.effectiveScheme(exchange);
         String host = exchange.getRequestHeaders().getFirst(Headers.HOST);
         if (host == null) {
             host = exchange.getHostAndPort();

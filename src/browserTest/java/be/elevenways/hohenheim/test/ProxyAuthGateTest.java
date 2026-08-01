@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.server.setting.ServerSettings;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -31,8 +32,9 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Integration test for the per-site Basic auth gate: challenge, reject, admit, and the
- * session-cookie fast path (which also confirms Set-Cookie survives the proxied response).
+ * Integration test for the per-site Basic auth gate: challenge, reject, admit, the
+ * session-cookie fast path (which also confirms Set-Cookie survives the proxied response),
+ * and the trust gating of the session cookie's Secure flag.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
@@ -132,6 +134,54 @@ class ProxyAuthGateTest {
         assertThat(statusLine(viaCookie)).contains("200");
         assertThat(viaCookie).contains("upstream-ok");
 
+        // 5..7 assert on the RENDERED Set-Cookie text, not an internal flag: the whole bug
+        // class is a cookie that claims to be Secure and is not (or the reverse). This
+        // listener faces the open internet, so the ONLY peer allowed to state the client's
+        // proto is one holding a configured X-Hohenheim-Key.
+        boolean hadAssume = ServerSettings.VALUES.hasValue(ServerSettings.Network.ASSUME_HTTPS);
+        Boolean previousAssume = ServerSettings.VALUES.getValue(ServerSettings.Network.ASSUME_HTTPS);
+        List<String> previousKeys = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS);
+        ServerSettings.VALUES.setValue(ServerSettings.Network.ASSUME_HTTPS, false);
+        HohenheimSettings.VALUES.setValue(
+            HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of("front-key"));
+
+        try {
+            // 5. An UNAUTHENTICATED peer claiming https must NOT get a Secure cookie:
+            // believing it would let the session id travel back over cleartext.
+            String spoofed = headerValue(
+                request("gated.test", basic("alice", "s3cret"), null,
+                    "X-Forwarded-Proto: https", "X-Hohenheim-Key: wrong-key"),
+                "Set-Cookie");
+            assertThat(spoofed).as("step 5: the cookie is still issued").isNotNull();
+            assertThat(spoofed)
+                .as("step 5: an unauthenticated peer's X-Forwarded-Proto must not mark the cookie Secure")
+                .doesNotContainIgnoringCase("Secure");
+
+            // 6. The same header from a key-authenticated remote hohenheim must.
+            String trusted = headerValue(
+                request("gated.test", basic("alice", "s3cret"), null,
+                    "X-Forwarded-Proto: https", "X-Hohenheim-Key: front-key"),
+                "Set-Cookie");
+            assertThat(trusted)
+                .as("step 6: a trusted remote proxy's X-Forwarded-Proto must mark the cookie Secure")
+                .containsIgnoringCase("Secure");
+
+            // 7. network.assume_https is the operator declaring TLS terminates in front of
+            // hohenheim; no header is involved, so nothing can spoof it.
+            ServerSettings.VALUES.setValue(ServerSettings.Network.ASSUME_HTTPS, true);
+            String assumed = headerValue(
+                request("gated.test", basic("alice", "s3cret"), null), "Set-Cookie");
+            assertThat(assumed)
+                .as("step 7: assume_https marks the cookie Secure with no header at all")
+                .containsIgnoringCase("Secure");
+        } finally {
+            ServerSettings.VALUES.setValue(ServerSettings.Network.ASSUME_HTTPS,
+                hadAssume ? previousAssume : null);
+            HohenheimSettings.VALUES.setValue(
+                HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, previousKeys);
+        }
+
         proxy.stop();
         proxy = null;
         upstream.stop(0);
@@ -142,7 +192,8 @@ class ProxyAuthGateTest {
             .encodeToString((user + ":" + pass).getBytes(StandardCharsets.UTF_8));
     }
 
-    private String request(String host, String authHeader, String cookie) throws Exception {
+    private String request(String host, String authHeader, String cookie,
+                           String... extraHeaders) throws Exception {
         try (Socket socket = new Socket("127.0.0.1", httpPort)) {
             socket.setSoTimeout(4000);
             StringBuilder req = new StringBuilder("GET / HTTP/1.1\r\nHost: ").append(host).append("\r\n");
@@ -151,6 +202,9 @@ class ProxyAuthGateTest {
             }
             if (cookie != null) {
                 req.append("Cookie: ").append(cookie).append("\r\n");
+            }
+            for (String header : extraHeaders) {
+                req.append(header).append("\r\n");
             }
             req.append("Connection: close\r\n\r\n");
             socket.getOutputStream().write(req.toString().getBytes(StandardCharsets.UTF_8));
