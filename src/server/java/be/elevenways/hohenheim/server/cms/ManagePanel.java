@@ -117,7 +117,11 @@ public final class ManagePanel extends Panel {
             return;
         }
         sourceRegistered = true;
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(SiteModel.class)
+        // override, not register: the manage panel deliberately serves a WIDER audience
+        // than the sites panel's own access permission -- any principal with a grant,
+        // scoped to the sites that grant covers. The registry refuses a silent widening
+        // of the derived default, and this is the verb that declares one.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteModel.class)
             .search(SiteModel.NAME, SiteModel.SLUG)
             .baseCriteria(() -> SiteModel.DELETED_AT.isNull())
             .accessCriteria(ManagePanel::siteScope)
