@@ -3983,6 +3983,14 @@
     "text": "This route is already claimed by site {$site}",
     "scope": "violations"
   },
+  "route_overlaps_other_site": {
+    "text": "This hostname overlaps {$hostname}, routed by site {$site}",
+    "scope": "violations"
+  },
+  "enable_route_overlap": {
+    "text": "Cannot enable this site: {$hostname} overlaps {$pattern}, routed by site {$site}",
+    "scope": "violations"
+  },
   "enable_route_conflict": {
     "text": "Cannot enable this site: {$hostname} is already routed by site {$site}",
     "scope": "violations"

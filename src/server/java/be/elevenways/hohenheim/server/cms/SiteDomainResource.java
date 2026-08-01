@@ -4,6 +4,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.hohenheim.server.proxy.ListenerAddressMatcher;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
@@ -220,6 +221,19 @@ public class SiteDomainResource extends RowResource {
         // and a wildcard row with the same literal hostname shadow each other in the
         // tiered lookup, which is a config mistake worth refusing, not two routes.
         //
+        // AIDEV-NOTE: hostname conflict is a question about hostname SETS INTERSECTING
+        // (HostnamePatterns), and the rule is OWNER-SCOPED -- never plain string equality.
+        // An exact host falling under another row's wildcard is one contested host even
+        // though the two spell different claim keys, and the dispatcher consults the exact
+        // tier BEFORE the wildcard tier, so the exact row silently seizes traffic the
+        // wildcard row was serving. Scoping: serving *.example.com broadly and overriding
+        // foo.example.com is a legitimate, desirable configuration WITHIN one site (the
+        // exact row simply wins at dispatch), so a merely-overlapping row on the SAME site
+        // is allowed; across sites the same shape is a tenant takeover and is refused.
+        // IDENTICAL hostnames stay refused in both directions -- same-site duplicates are
+        // a config mistake and spell the same claim key anyway. Do not "simplify" this
+        // back to Objects.equals; that is the defect this rule exists to close.
+        //
         // The check is GLOBAL, not per-site: the dispatcher's route table spans every
         // enabled site and silently drops the loser of a duplicate claim (first-wins by
         // site name), so a same-route row on ANOTHER site is exactly as broken as one on
@@ -256,11 +270,24 @@ public class SiteDomainResource extends RowResource {
             }
             String candidateHostname = SiteDomainModel.canonicalHostname(
                 candidate.get(SiteDomainModel.HOSTNAME), candidate.get(SiteDomainModel.MATCH_TYPE));
-            if (!Objects.equals(canonicalHostname, candidateHostname)
-                || !Objects.equals(path, normalizedPath(candidate.get(SiteDomainModel.PATH)))
+            if (!Objects.equals(path, normalizedPath(candidate.get(SiteDomainModel.PATH)))
                 || !listenersOverlap(listenOn,
                     ListenerAddressMatcher.parse(candidate.get(SiteDomainModel.LISTEN_ON)))) {
                 continue;
+            }
+            boolean identical = Objects.equals(canonicalHostname, candidateHostname);
+            if (!identical) {
+                if (sameSite || !HostnamePatterns.intersect(canonicalHostname, matchType,
+                        candidate.get(SiteDomainModel.HOSTNAME),
+                        candidate.get(SiteDomainModel.MATCH_TYPE))) {
+                    continue;
+                }
+                String siteName = candidateSite != null
+                    ? String.valueOf(candidateSite.get(SiteModel.NAME)) : "#" + candidateSiteId;
+                throw Violations.ofField("hostname", hostname,
+                    CmsSupport.violationText("route_overlaps_other_site")
+                        .withArg("hostname", String.valueOf(candidateHostname))
+                        .withArg("site", siteName));
             }
             if (!sameSite) {
                 String siteName = candidateSite != null
@@ -310,16 +337,27 @@ public class SiteDomainResource extends RowResource {
                 if (!RouteClaims.isLive(candidateSite)) {
                     continue;
                 }
-                if (!Objects.equals(ownHostname, SiteDomainModel.canonicalHostname(
-                        candidate.get(SiteDomainModel.HOSTNAME), candidate.get(SiteDomainModel.MATCH_TYPE)))
-                    || !Objects.equals(ownPath, normalizedPath(candidate.get(SiteDomainModel.PATH)))
+                String candidateHostname = SiteDomainModel.canonicalHostname(
+                    candidate.get(SiteDomainModel.HOSTNAME), candidate.get(SiteDomainModel.MATCH_TYPE));
+                if (!Objects.equals(ownPath, normalizedPath(candidate.get(SiteDomainModel.PATH)))
                     || !listenersOverlap(ownListen,
                         ListenerAddressMatcher.parse(candidate.get(SiteDomainModel.LISTEN_ON)))) {
                     continue;
                 }
+                // Every candidate here is on ANOTHER site, so any hostname-set overlap is a
+                // takeover -- the same owner-scoped rule refuseRouteConflicts documents.
+                boolean identical = Objects.equals(ownHostname, candidateHostname);
+                if (!identical && !HostnamePatterns.intersect(
+                        own.get(SiteDomainModel.HOSTNAME), own.get(SiteDomainModel.MATCH_TYPE),
+                        candidate.get(SiteDomainModel.HOSTNAME),
+                        candidate.get(SiteDomainModel.MATCH_TYPE))) {
+                    continue;
+                }
                 throw Violations.ofField("enabled", true,
-                    CmsSupport.violationText("enable_route_conflict")
+                    CmsSupport.violationText(
+                            identical ? "enable_route_conflict" : "enable_route_overlap")
                         .withArg("hostname", String.valueOf(own.get(SiteDomainModel.HOSTNAME)))
+                        .withArg("pattern", String.valueOf(candidateHostname))
                         .withArg("site", String.valueOf(candidateSite.get(SiteModel.NAME))));
             }
         }
