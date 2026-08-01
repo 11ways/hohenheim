@@ -376,8 +376,8 @@ public class SiteDispatcher implements HttpHandler {
         Set<SiteRequestHandler> ownedHandlers = Collections.newSetFromMap(new IdentityHashMap<>());
         Set<SiteAuthGate> ownedGates = Collections.newSetFromMap(new IdentityHashMap<>());
 
-        // (match kind + hostname + path + listeners) -> owning site; duplicates are refused
-        // loudly with deterministic first-wins (sites load in name order).
+        // RouteClaims.keyOf -> owning site; duplicates are refused loudly with
+        // deterministic first-wins (sites load in name order).
         Map<String, String> claimedRoutes = new HashMap<>();
 
         List<Row> sites = siteModel.findEnabled();
@@ -509,13 +509,18 @@ public class SiteDispatcher implements HttpHandler {
                     kind = SiteDomainModel.MATCH_EXACT;
                 }
 
-                // Canonical hostname, NOT a blanket lowercase: regex sources are
+                // AIDEV-NOTE: route identity is RouteClaims.keyOf, THE single spelling
+                // shared with the write-time claim registry -- do not re-derive it here.
+                // Match type is deliberately NOT part of the key: the tier only decides
+                // who WINS a contested route, not whether two rows contest it, so an
+                // exact and a wildcard row spelling the same literal hostname are ONE
+                // route (a kind-prefixed key once let an unclaimed exact row silently
+                // take such a host from the wildcard row that held the claim). keyOf
+                // uses canonicalHostname, NOT a blanket lowercase: regex sources are
                 // case-sensitive patterns, so "^App\." and "^app\." are two distinct
                 // routes -- lowercasing the claim key dropped one of them here while
                 // both matched at request time.
-                String claimKey = kind + "|"
-                    + SiteDomainModel.canonicalHostname(hostname, matchType) + "|"
-                    + (entry.path != null ? entry.path : "") + "|" + entry.listenOnAddresses;
+                String claimKey = RouteClaims.keyOf(domain);
                 String owner = claimedRoutes.putIfAbsent(claimKey, siteName);
                 if (owner != null && !owner.equals(siteName)) {
                     Blast.log("SiteDispatcher: DUPLICATE route", hostname,
