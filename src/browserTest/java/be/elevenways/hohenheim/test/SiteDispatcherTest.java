@@ -1,7 +1,11 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -9,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -25,6 +30,7 @@ class SiteDispatcherTest {
     private static boolean initialized = false;
     private ProxyServer proxy;
     private HttpServer upstream;
+    private final List<HttpServer> markerUpstreams = new ArrayList<>();
 
     @BeforeAll
     static void initRuntime() throws Exception {
@@ -43,6 +49,10 @@ class SiteDispatcherTest {
             upstream.stop(0);
             upstream = null;
         }
+        for (HttpServer marker : markerUpstreams) {
+            marker.stop(0);
+        }
+        markerUpstreams.clear();
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of());
     }
 
@@ -181,6 +191,101 @@ class SiteDispatcherTest {
             "Sec-WebSocket-Version: 13");
 
         assertThat(response).contains("503").doesNotContain("403");
+    }
+
+    /** Serve a fixed marker body so an assertion can name WHICH site answered. */
+    private int startMarkerUpstream(String marker) throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", ex -> {
+            byte[] body = marker.getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+        });
+        server.start();
+        markerUpstreams.add(server);
+        return server.getAddress().getPort();
+    }
+
+    /**
+     * Route identity across match types: an exact and a wildcard row spelling the SAME
+     * literal hostname are one contested route (the runtime backstop must agree with
+     * RouteClaims.keyOf), while an exact host inside a COVERING wildcard stays the legal
+     * nginx-style carve-out.
+     */
+    @Test
+    void exactAndWildcardSpellingsOfOneHostnameAreOneContestedRoute() throws Exception {
+        resetDatabase();
+
+        int wildcardUpstream = startMarkerUpstream("owned-by-wildcard-site");
+        int exactUpstream = startMarkerUpstream("owned-by-exact-site");
+        int carveExactUpstream = startMarkerUpstream("owned-by-carve-exact");
+        int carveWildcardUpstream = startMarkerUpstream("owned-by-carve-wildcard");
+
+        // 1. A live site claims "shadow.test" as a metachar-free WILDCARD literal. Sites
+        //    load in NAME order, so the "aaa" prefix makes this the first claimant the
+        //    dispatcher sees.
+        Row wildcardSite = setupSite("hohenheim:proxy", "aaa-shadow-wildcard",
+            "aaa-shadow-wildcard",
+            Map.of("forward_host", "127.0.0.1", "forward_port", wildcardUpstream));
+        addDomain(wildcardSite, "shadow.test", "wildcard", null, false);
+        assertThat((String) Models.get(SiteDomainModel.class).find()
+                .where(SiteDomainModel.SITE_ID.eq(wildcardSite.get(SiteModel.ID))).first()
+                .get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 1: the wildcard-literal row holds the live route claim").isNotNull();
+
+        // 2. A second live site holds an EXACT row on the same literal hostname, planted
+        //    in the legacy shape the M045 backfill leaves behind: live but UNCLAIMED (the
+        //    set-based update bypasses the write-time claim guard exactly like pre-claim
+        //    data predates it). This is the shape the dispatcher backstop exists for.
+        Row exactSite = setupSite("hohenheim:proxy", "bbb-shadow-exact", "bbb-shadow-exact",
+            Map.of("forward_host", "127.0.0.1", "forward_port", exactUpstream));
+        addDomain(exactSite, "shadow-staging.test", "exact", null, false);
+        Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.SITE_ID.eq(exactSite.get(SiteModel.ID)))
+            .assign(SiteDomainModel.HOSTNAME, "shadow.test")
+            .assign(SiteDomainModel.LIVE_ROUTE_KEY, null)
+            .updateAll();
+        Row planted = Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.SITE_ID.eq(exactSite.get(SiteModel.ID))).first();
+        assertThat((String) planted.get(SiteDomainModel.HOSTNAME))
+            .as("step 2: the legacy exact row spells the contested hostname")
+            .isEqualTo("shadow.test");
+        assertThat((String) planted.get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 2: the legacy row is live but unclaimed, the backfill loser shape")
+            .isNull();
+
+        // 3. A genuine carve-out pair on ANOTHER domain family: an exact host plus a
+        //    COVERING wildcard. Different canonical hostnames, so two legal routes.
+        Row carveExactSite = setupSite("hohenheim:proxy", "ccc-carve-exact", "ccc-carve-exact",
+            Map.of("forward_host", "127.0.0.1", "forward_port", carveExactUpstream));
+        addDomain(carveExactSite, "app.carve.test", "exact", null, false);
+        Row carveWildcardSite = setupSite("hohenheim:proxy", "ddd-carve-wildcard",
+            "ddd-carve-wildcard",
+            Map.of("forward_host", "127.0.0.1", "forward_port", carveWildcardUpstream));
+        addDomain(carveWildcardSite, "*.carve.test", "wildcard", null, false);
+
+        proxy = startProxy();
+
+        // 4. THE contested route: both spellings resolve to the same requests, so they
+        //    are ONE route and only the FIRST claimant may serve it. Before the fix the
+        //    kind-prefixed runtime key saw two distinct routes, silently added both, and
+        //    the exact tier handed the host to the site that lost the claim.
+        assertThat(rawRequest(httpPort(proxy), "shadow.test", "/"))
+            .as("step 4: the contested literal hostname is served by the first claimant, "
+                + "not silently taken over by the unclaimed exact row")
+            .contains("owned-by-wildcard-site");
+
+        // 5. The carve-out exact host still beats its covering wildcard: different
+        //    canonical hostnames never contest each other.
+        assertThat(rawRequest(httpPort(proxy), "app.carve.test", "/"))
+            .as("step 5: the exact carve-out wins its own hostname inside the wildcard")
+            .contains("owned-by-carve-exact");
+
+        // 6. Every other host under the wildcard still routes to the wildcard site.
+        assertThat(rawRequest(httpPort(proxy), "other.carve.test", "/"))
+            .as("step 6: the covering wildcard serves the rest of its family")
+            .contains("owned-by-carve-wildcard");
     }
 
     @Test
