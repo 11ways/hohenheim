@@ -3928,5 +3928,9 @@
   "enable_route_conflict": {
     "text": "Cannot enable this site: {$hostname} is already routed by site {$site}",
     "scope": "violations"
+  },
+  "docker_unreachable": {
+    "text": "Docker daemon unreachable",
+    "scope": "attention_title"
   }
 }

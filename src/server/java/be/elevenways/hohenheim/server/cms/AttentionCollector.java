@@ -7,8 +7,11 @@ import be.elevenways.hohenheim.model.DeploymentModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.WorkloadIdentity;
+import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -45,18 +48,49 @@ public final class AttentionCollector {
 
     private AttentionCollector() {}
 
+    /**
+     * Every collector is gated on the role that runs the thing it watches: a
+     * DNS appliance must not claim to be watching stacks or certificates it
+     * does not run. Task history stays ungated -- only role-enabled tasks
+     * declare schedules, so its content is already role-shaped.
+     */
     public static @NonNull List<AttentionItem> collect() {
         List<AttentionItem> items = new ArrayList<>();
-        errorCertificates(items);
-        unhealthySites(items);
-        failedDatabases(items);
-        unavailableAttachedDatabases(items);
-        failedDeployments(items);
+        if (HohenheimRoles.enabled(Role.PROXY)) {
+            errorCertificates(items);
+            unhealthySites(items);
+            failedDeployments(items);
+        }
+        if (HohenheimRoles.enabled(Role.DATABASES)) {
+            failedDatabases(items);
+            unavailableAttachedDatabases(items);
+        }
+        if (HohenheimRoles.enabled(Role.STACKS)) {
+            dockerUnreachable(items);
+        }
         failedTasks(items);
-        dnsIssues(items);
-        spamserviceIssue(items);
-        identityIssues(items);
+        if (HohenheimRoles.enabled(Role.DNS)) {
+            dnsIssues(items);
+        }
+        if (HohenheimRoles.enabled(Role.FIREWALL)) {
+            spamserviceIssue(items);
+        }
+        if (HohenheimRoles.enabled(Role.PROCESSES)) {
+            identityIssues(items);
+        }
         return items;
+    }
+
+    /** A stacks node whose boot probe found no Docker daemon: a red item, not silence. */
+    private static void dockerUnreachable(List<AttentionItem> items) {
+        DockerHealth health = DockerHealth.instance();
+        if (health.status() != DockerHealth.Status.UNREACHABLE) {
+            return;
+        }
+        items.add(item("error", "cubes",
+            copy("docker_unreachable", "attention_title"),
+            literal(health.problem()),
+            "/admin/settings"));
     }
 
     /**
