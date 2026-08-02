@@ -12,8 +12,11 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
+import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
+import be.elevenways.protoblast.common.Blast;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -60,15 +63,24 @@ public class ServerMain {
             return;
         }
 
-        // Site types and auth-provider types self-register through compile-time
-        // discovery (BlastAutoLoadInit); only the shared process infrastructure
-        // needs an explicit boot before the proxy loads its routes.
-        SiteTypes.boot();
-
         // Load Hohenheim's own settings (settings/hohenheim.dry + HOHENHEIM__*
         // env). The context roots at the hohenheim group, so file keys keep the
-        // flat proxy/ssl/... shape.
+        // flat proxy/ssl/... shape. Also captures the HohenheimRoles snapshot,
+        // which every role gate below reads. BEFORE SiteTypes.boot(): the
+        // process-monitor thread is a roles.processes side effect and nothing
+        // between the old order and this one read a setting.
         HohenheimSettingsFiles.load();
+
+        // Site types and auth-provider types self-register through compile-time
+        // discovery (BlastAutoLoadInit); only the shared process infrastructure
+        // needs an explicit boot before the proxy loads its routes -- and only
+        // on a node that actually runs managed processes.
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.PROCESSES)) {
+            SiteTypes.boot();
+        } else {
+            roleSkip(HohenheimRoles.Role.PROCESSES,
+                "process monitor and port/socket allocators not started");
+        }
 
         HohenheimEndpoints.init();
         // Force-load the zenit-cms panel routes (all /{panel}/... endpoints).
@@ -97,21 +109,41 @@ public class ServerMain {
         // this call binds the listener. Nothing request-facing may be added below.
         ServerZenitRuntime.main(args);
 
-        // A restart mid-deploy leaves stacks claiming "deploying", which would
-        // disable their monitoring forever. Swept on a virtual thread: the sweep
-        // does live Docker inspects (60s timeout each), and a wedged daemon --
-        // a common reason for the restart -- must never hold the proxy, DNS and
-        // security engine off the wire for it. A monitor tick racing the sweep
-        // is safe: both serialize on the per-stack worker.
-        JobRunner.startVirtualThread(() -> StackRuntime.get().resetInterruptedDeploys());
-        installShutdownHook();
-        // The manager owns its own platform-thread lifecycle lane; never hold
-        // HTTP/proxy/DNS startup on its readiness.
-        SpamserviceManager.get().boot();
+        // Stacks: prove the Docker daemon is reachable, loudly, before anything
+        // trusts it (a missing socket used to degrade completely silently); a
+        // node without the stacks role never constructs a DockerClient here.
+        DockerHealth.probeAtBoot();
 
-        proxyServer = new ProxyServer();
-        proxyServer.start();
-        ProxyReloadHooks.install();
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.STACKS)) {
+            // A restart mid-deploy leaves stacks claiming "deploying", which would
+            // disable their monitoring forever. Swept on a virtual thread: the sweep
+            // does live Docker inspects (60s timeout each), and a wedged daemon --
+            // a common reason for the restart -- must never hold the proxy, DNS and
+            // security engine off the wire for it. A monitor tick racing the sweep
+            // is safe: both serialize on the per-stack worker.
+            JobRunner.startVirtualThread(() -> StackRuntime.get().resetInterruptedDeploys());
+        } else {
+            roleSkip(HohenheimRoles.Role.STACKS,
+                "stack runtime not started, interrupted-deploy sweep skipped");
+        }
+        installShutdownHook();
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.FIREWALL)) {
+            // The manager owns its own platform-thread lifecycle lane; never hold
+            // HTTP/proxy/DNS startup on its readiness.
+            SpamserviceManager.get().boot();
+        } else {
+            roleSkip(HohenheimRoles.Role.FIREWALL, "spamservice manager not booted");
+        }
+
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.PROXY)) {
+            proxyServer = new ProxyServer();
+            proxyServer.start();
+            ProxyReloadHooks.install();
+        } else {
+            // ABSENT, not FAILED: getProxyServer() stays null, so status surfaces
+            // show "not part of this install" instead of a false-red bind failure.
+            roleSkip(HohenheimRoles.Role.PROXY, "proxy listeners not started");
+        }
 
         // The secret-normalization hooks (site api keys, dyndns tokens, reserved
         // env, enable invariant) install via the discovered HohenheimWriteHooks
@@ -119,22 +151,33 @@ public class ServerMain {
         // BEFORE the HTTP server binds; the one-time sweeps of pre-existing
         // plaintext ride SiteApiKeySeeder/DyndnsTokenSeeder at the SEED stage.
 
-        // The zone store loads regardless of the listeners so zones stay
-        // editable (and the internal ACME publisher functional in tests)
-        // while the DNS server itself is disabled.
-        DnsZoneStore.INSTANCE.reload();
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.DNS)) {
+            // The zone store loads regardless of the listeners so zones stay
+            // editable (and the internal ACME publisher functional in tests)
+            // while the DNS server itself is disabled.
+            DnsZoneStore.INSTANCE.reload();
 
-        // Federation: NOTIFY secondaries when a primary zone's serial bumps
-        // (admin edits and the ACME publisher both funnel through bumpSerialAndReload),
-        // and replicate secondary zones from their primary peers.
-        DnsZoneStore.INSTANCE.setOnZoneChanged(DnsNotifier.INSTANCE::notifyZonePeers);
-        secondaryZoneService = new SecondaryZoneService(DnsZoneStore.INSTANCE);
+            // Federation: NOTIFY secondaries when a primary zone's serial bumps
+            // (admin edits and the ACME publisher both funnel through bumpSerialAndReload),
+            // and replicate secondary zones from their primary peers.
+            DnsZoneStore.INSTANCE.setOnZoneChanged(DnsNotifier.INSTANCE::notifyZonePeers);
+            secondaryZoneService = new SecondaryZoneService(DnsZoneStore.INSTANCE);
 
-        dnsServer = new DnsServer();
-        dnsServer.setSecondaryService(secondaryZoneService);
-        dnsServer.startIfEnabled();
-        secondaryZoneService.start();
+            dnsServer = new DnsServer();
+            dnsServer.setSecondaryService(secondaryZoneService);
+            dnsServer.startIfEnabled();
+            secondaryZoneService.start();
+        } else {
+            roleSkip(HohenheimRoles.Role.DNS,
+                "zone store, federation and DNS listeners not started");
+        }
+    }
 
+    /** A skipped role must never be silent: name the role and what did not start. */
+    private static void roleSkip(HohenheimRoles.@NonNull Role role, @NonNull String skipped) {
+        Blast.slog("hohenheim.role_disabled", java.util.Map.of(
+            "role", role.token(),
+            "skipped", skipped));
     }
 
     /** Registers cleanup before the first managed child can start. */

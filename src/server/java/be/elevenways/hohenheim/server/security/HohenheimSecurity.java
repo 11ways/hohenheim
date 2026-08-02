@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -40,6 +41,11 @@ public final class HohenheimSecurity {
      * Idempotent boot: install the local event sink, describe the event-type
      * vocabulary, make sure the own-IP ban guard has addresses, and bring
      * nftables plus the ban cache in line with the database.
+     *
+     * AIDEV-NOTE: only the ENFORCEMENT half (BanService: ban cache, nftables,
+     * auto-bans) is behind roles.firewall. The event sink, the vocabulary and
+     * the local-address discovery are observability every install wants -- a
+     * DNS appliance still reports its security events to spamservice.
      */
     public static synchronized void boot() {
         if (!booted) {
@@ -50,10 +56,19 @@ public final class HohenheimSecurity {
             describeEventTypes();
         }
         ensureLocalAddresses();
-        BanService.INSTANCE.boot();
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.FIREWALL)) {
+            BanService.INSTANCE.boot();
+        } else {
+            Blast.slog("hohenheim.role_disabled", java.util.Map.of(
+                "role", HohenheimRoles.Role.FIREWALL.token(),
+                "skipped", "ban enforcement (cache warmup, nftables, auto-bans)"));
+        }
     }
 
     private static void onThresholdCrossed(String ip, String type, int score) {
+        if (!HohenheimRoles.enabled(HohenheimRoles.Role.FIREWALL)) {
+            return;   // scoring stays observability; the BAN is enforcement
+        }
         BanService.INSTANCE.autoBan(ip, type, "score " + score + " over threshold");
     }
 
