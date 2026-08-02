@@ -3903,8 +3903,12 @@
     "text": "Another service in this stack already publishes that host port",
     "scope": "violations"
   },
-  "host_port_taken_other_stack": {
-    "text": "This host port is already published by service {$service} of another stack on this server",
+  "port_held": {
+    "text": "This host port is already claimed by {$holder}",
+    "scope": "violations"
+  },
+  "port_held_race": {
+    "text": "This host port was claimed by {$holder} while this form was open",
     "scope": "violations"
   },
   "depends_unknown_service": {

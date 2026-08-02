@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
@@ -413,7 +414,7 @@ public class StackRuntime {
     /** Whether any stack on this server is currently deploying (or rolling back). */
     private boolean deployInFlightOn(@NonNull String serverName) {
         return scoped(() -> !Models.get(StackModel.class).find()
-            .where(StackModel.SERVER_NAME.eq(serverName))
+            .where(StackModel.SERVER_ID.eq(ServerModel.canonicalServerId(serverName)))
             .where(StackModel.STATUS.eq(StackModel.STATUS_DEPLOYING))
             .all().isEmpty());
     }
@@ -422,10 +423,11 @@ public class StackRuntime {
     private @NonNull Map<String, Set<String>> declaredImagesByServer() {
         Map<String, Set<String>> byServer = new LinkedHashMap<>();
         for (Row stack : Models.get(StackModel.class).find().all()) {
-            String serverName = stack.get(StackModel.SERVER_NAME);
-            if (serverName == null || serverName.isBlank()) {
-                continue;
-            }
+            // AIDEV-NOTE: the pre-FK version keyed on the raw server_name STRING and
+            // SKIPPED blank/null ones, so a "local by omission" stack's image references
+            // never entered the keep set beside an explicit "local" stack's -- the
+            // two-spellings bug class. The canonical FK folds them into one host.
+            String serverName = ServerModel.nameOf(stack.get(StackModel.SERVER_ID));
             Set<String> references = byServer.computeIfAbsent(serverName, key -> new LinkedHashSet<>());
             for (Row service : Models.get(StackServiceModel.class)
                     .findByStackId(stack.get(StackModel.ID))) {

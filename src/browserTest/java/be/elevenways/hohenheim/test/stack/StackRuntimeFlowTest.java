@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.stack;
 
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -93,7 +94,7 @@ class StackRuntimeFlowTest {
             Row stack = stacks.createEmptyRow();
             stack.set(StackModel.NAME, stackName);
             stack.set(StackModel.ENABLED, true);
-            stack.set(StackModel.SERVER_NAME, "local");
+            stack.set(StackModel.SERVER_ID, ServerModel.localServerId());
             stack.set(StackModel.REGISTRY_PASSWORD, "very-private-registry-secret");
             stacks.save(stack);
             id[0] = stack.get(StackModel.ID);

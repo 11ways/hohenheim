@@ -5,7 +5,8 @@ import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.docker.DockerReclaim;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
@@ -24,11 +25,10 @@ import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldLabels;
-import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
-import be.elevenways.zenit.common.edit.OptionSource;
-import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -53,14 +53,10 @@ public class StackResource extends RowResource {
     /** Stack names become network/container/volume name segments. */
     static final Pattern NAME_PATTERN = Pattern.compile("[a-z0-9][a-z0-9-]{0,62}");
 
-    private final ServerService serverService = new ServerService();
-
     private final FormSpec formSpec = FormSpec.builder()
         .add(StackModel.NAME)
         .add(StackModel.ENABLED)
-        .add(Select.of(StackModel.SERVER_NAME)
-            .options(OptionSource.dynamic(ctx -> serverOptions()))
-            .build())
+        .add(RelationPick.of(StackModel.SERVER_ID, ServerModel.MODEL_ID).build())
         .add(StackModel.SUBNET)
         .add(StackModel.ADOPT_RESOURCES)
         .add(StackModel.REGISTRY_SERVER)
@@ -71,7 +67,8 @@ public class StackResource extends RowResource {
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(StackModel.NAME).filterable().build())
-        .column(ColumnSpec.fromField(StackModel.SERVER_NAME).filterable().build())
+        .column(ColumnSpec.fromField(StackModel.SERVER_ID)
+            .relation(RelationPick.of(StackModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())
         .column(ColumnSpec.fromField(StackModel.STATUS).filterable().build())
         .column(ColumnSpec.fromField(StackModel.ENABLED).filterable().build())
         .filter(FilterSpec.forField(StackModel.NAME, FilterSpec.Kind.TEXT)
@@ -92,13 +89,12 @@ public class StackResource extends RowResource {
     @Override public int navOrder() { return 25; }
     @Override public @NonNull Icon icon() { return Icon.of("layer-group"); }
 
-    private @NonNull List<FieldOption<String>> serverOptions() {
-        this.serverService.ensureLocal();
-        List<FieldOption<String>> options = new ArrayList<>();
-        for (String name : this.serverService.names()) {
-            options.add(FieldOption.of(name, name));
-        }
-        return options;
+    /** The server pick defaults to the local daemon (ensuring its row exists for the picker). */
+    @Override
+    public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
+        Map<String, Object> values = CmsSupport.mutable(formSpec().defaultValues());
+        values.put("server_id", ServerModel.localServerId());
+        return Map.copyOf(values);
     }
 
     @Override
@@ -114,7 +110,13 @@ public class StackResource extends RowResource {
                           @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, existing);
-        super.updateRow(existing, values, accessContext);
+        try {
+            super.updateRow(existing, values, accessContext);
+        } catch (PortLedger.PortConflict conflict) {
+            // Moving the stack to another host re-keys every service's port claims;
+            // a contested port on the new host refuses the move, transactionally.
+            throw StackServiceResource.asViolation(conflict);
+        }
     }
 
     /** Names become Docker resource names: enforce the safe shape and uniqueness.

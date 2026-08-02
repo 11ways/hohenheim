@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -162,7 +163,7 @@ public class DatabaseService extends DatasourceScoped {
             row.set(DatabaseModel.MEMORY_LIMIT_MB, limits.memoryMb());
             row.set(DatabaseModel.CPU_LIMIT, limits.cpus());
             row.set(DatabaseModel.STATUS, status);
-            row.set(DatabaseModel.SERVER_NAME, serverName);
+            row.set(DatabaseModel.SERVER_ID, ServerModel.canonicalServerId(serverName));
             model.save(row);
             return row.get(DatabaseModel.ID);
         });
@@ -260,9 +261,17 @@ public class DatabaseService extends DatasourceScoped {
         return status != null ? status : STATUS_ACTIVE;   // records predating the status column
     }
 
-    private static String serverOf(Row row) {
-        String server = row.get(DatabaseModel.SERVER_NAME);
-        return server != null ? server : ServerService.LOCAL;   // records predating the server column
+    /**
+     * THE canonical host key is the FK; the transport layer still speaks names.
+     *
+     * AIDEV-NOTE: NOT static, and scoped through {@link #query}: the pre-FK version read a
+     * name straight off the row and needed no datasource, while resolving the FK is a real
+     * servers lookup -- outside this service's scope it hits the DEFAULT datasource and
+     * throws "No server with id N" on every isolated-datasource caller (destroy, backup,
+     * restore). Every serverOf call site is already outside a scope, so the scope goes here.
+     */
+    private String serverOf(Row row) {
+        return query(() -> ServerModel.nameOf(row.get(DatabaseModel.SERVER_ID)));
     }
 
     /**

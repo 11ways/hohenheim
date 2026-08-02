@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
@@ -88,11 +89,10 @@ public record StackSpec(
             services.add(serviceOf(serviceRow, fileModel));
         }
 
-        String server = stack.get(StackModel.SERVER_NAME);
         return new StackSpec(
             stackId,
             stack.get(StackModel.NAME),
-            server != null && !server.isBlank() ? server : "local",
+            ServerModel.nameOf(stack.get(StackModel.SERVER_ID)),
             blankToNull(stack.get(StackModel.SUBNET)),
             Boolean.TRUE.equals(stack.get(StackModel.ADOPT_RESOURCES)),
             blankToNull(stack.get(StackModel.REGISTRY_SERVER)),

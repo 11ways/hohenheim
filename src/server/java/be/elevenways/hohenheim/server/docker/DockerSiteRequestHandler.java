@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
@@ -141,13 +142,15 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
 
     // -----------------------------------------------------------------------
 
-    // Resolve the daemon for this site's target server. Local is a direct client (no inventory
-    // lookup, so it works without the DB); a named remote host resolves through the inventory.
+    // Resolve the daemon for this site's target server. An absent/blank setting is a direct
+    // local client (no inventory lookup, so it works without the DB); any stored value goes
+    // through THE canonical host-key derivation (ServerModel) -- never a local re-spelling.
     private static DockerClient dockerFor(Map<String, Object> settings) {
         Object server = settings.get("server");
-        String name = (server == null || server.toString().isBlank())
-            ? ServerService.LOCAL : server.toString().trim();
-        return ServerService.LOCAL.equals(name) ? new DockerClient() : new ServerService().clientFor(name);
+        if (server == null || server.toString().isBlank()) {
+            return new DockerClient();
+        }
+        return new ServerService().clientFor(ServerModel.nameOf(ServerModel.canonicalServerId(server)));
     }
 
     private void removeExisting() {

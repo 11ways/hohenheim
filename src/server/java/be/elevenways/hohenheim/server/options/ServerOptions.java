@@ -32,7 +32,10 @@ public final class ServerOptions {
         for (Row row : Models.get(ServerModel.class).find().all()) {
             String name = row.get(ServerModel.NAME);
             if (name != null && !name.isBlank()) {
-                entries.put(Identifier.of("hohenheim", name), new ServerEntry(name, row.get(ServerModel.MODE)));
+                // Keyed by the server's ID (the canonical host key), never its name:
+                // stored settings keep pointing at the same host through a rename.
+                entries.put(Identifier.of("hohenheim", String.valueOf(row.get(ServerModel.ID))),
+                    new ServerEntry(name, row.get(ServerModel.MODE)));
             }
         }
         REGISTRY.clear();
@@ -40,10 +43,13 @@ public final class ServerOptions {
         populated = true;
     }
 
+    /** Display name for a stored server key, tolerant of a key whose server vanished. */
     public static String nameFromKey(@Nullable Object storedKey) {
-        if (!(storedKey instanceof String key) || key.isBlank()) return ServerService.LOCAL;
-        Identifier id = Identifier.tryParse(key);
-        return id != null ? id.getPath() : key;
+        try {
+            return ServerModel.nameOf(ServerModel.canonicalServerId(storedKey));
+        } catch (IllegalArgumentException unknown) {
+            return String.valueOf(storedKey);
+        }
     }
 
     private record ServerEntry(String name, String mode) implements TypeDefinition {

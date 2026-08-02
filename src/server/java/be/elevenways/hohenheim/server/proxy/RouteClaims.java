@@ -41,6 +41,11 @@ import java.util.Set;
  * fail with SQLITE_BUSY. The scans also produce the specific, localized refusal an
  * operator can act on: they are diagnosis AND, under serialization, the overlap guarantee.
  *
+ * AIDEV-NOTE: the port ledger (PortLedger/port_allocations) deliberately did NOT reuse
+ * this claim-key-column shape: a managed-process port is owned by a process INSTANCE,
+ * not a record, so there is no row to hang the column on -- the second spelling of an
+ * exclusive claim in this repo is a decided fork, not drift.
+ *
  * @author Jelle De Loecker
  */
 public final class RouteClaims {

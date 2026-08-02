@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -50,7 +51,8 @@ public class StackModel extends Model {
         .label(HohenheimFormCopy.label("enabled"))
         .build());
 
-    public static final StringField SERVER_NAME = SCHEMA.addField(StringField.builder().name("server_name")
+    /** The host this stack deploys to: a {@code servers.id} FK, never a name string. */
+    public static final IntegerField SERVER_ID = SCHEMA.addField(IntegerField.builder().name("server_id")
         .label(HohenheimFormCopy.label("server"))
         .help(HohenheimFormCopy.help("server"))
         .build());
@@ -97,6 +99,38 @@ public class StackModel extends Model {
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
+
+    static {
+        // A stack always has a concrete host: defaulting the FK at create time keeps
+        // the port ledger's claim keys total (a null host would split the claim set).
+        SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null && row.get(ID) == null && row.get(SERVER_ID) == null) {
+                row.set(SERVER_ID, ServerModel.localServerId());
+            }
+        });
+        // A stack save can MOVE the stack to another host; every service's port claims
+        // key on that host, so they are re-synced (and possibly refused) with the save.
+        SCHEMA.addAfterSaveHook(context -> {
+            Row row = context.getRow();
+            Integer stackId = row != null ? row.get(ID) : null;
+            if (stackId != null) {
+                PortLedger.syncStack(stackId);
+            }
+        });
+    }
+
+    /**
+     * Every stack save is ONE write transaction: the row write and the port-claim
+     * re-sync of its services (afterSave hook) commit or fail together -- the
+     * SiteDomainModel/RouteClaims shape.
+     */
+    @Override
+    public Row save(Row row) {
+        Row[] result = new Row[1];
+        this.requireDatasource().withTransaction(tx -> result[0] = super.save(row));
+        return result[0];
+    }
 
     /** The stack with this unique name, or null if none. */
     public Row findByName(String name) {

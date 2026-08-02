@@ -78,13 +78,24 @@ public class DatabaseModel extends Model {
         .value(STATUS_ACTIVE, v -> v.displayName("Active").icon("circle-check").color("success"))
         .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-xmark").color("destructive"))
         .build());
-    public static final StringField SERVER_NAME = SCHEMA.addField(StringField.builder().name("server_name")
+    /** The host this database's container runs on: a {@code servers.id} FK, never a name. */
+    public static final IntegerField SERVER_ID = SCHEMA.addField(IntegerField.builder().name("server_id")
         .label(HohenheimFormCopy.label("server"))
         .help(HohenheimFormCopy.help("server"))
         .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
+    static {
+        // A managed database always has a concrete host; default the FK at create time
+        // so no consumer ever re-invents a "blank means local" spelling.
+        SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null && row.get(ID) == null && row.get(SERVER_ID) == null) {
+                row.set(SERVER_ID, ServerModel.localServerId());
+            }
+        });
+    }
 
     /** The database with this unique name, or null if none. */
     public Row findByName(String name) {

@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.sitetype.SiteTypeInfo;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -133,12 +133,12 @@ public final class SiteDatabaseResource extends RowResource {
             throw Violations.ofField("database_id", databaseId,
                 CmsSupport.violationText("database_missing"));
         }
-        String server = database.get(DatabaseModel.SERVER_NAME);
-        if (server != null && !server.isBlank() && !ServerService.LOCAL.equals(server)) {
+        Integer serverId = database.get(DatabaseModel.SERVER_ID);
+        if (serverId != null && serverId != ServerModel.localServerId()) {
             throw Violations.ofField("database_id", databaseId,
                 CmsSupport.violationText("database_remote")
                     .withArg("name", database.get(DatabaseModel.NAME))
-                    .withArg("server", server));
+                    .withArg("server", ServerModel.nameOf(serverId)));
         }
 
         String prefix = prefixOf(coerced, existing);

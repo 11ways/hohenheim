@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -185,6 +186,38 @@ public class StackServiceModel extends Model {
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
+
+    static {
+        // Declared host ports are exclusive whole-host resources: every save diff-syncs
+        // this service's claims in the port ledger (inside the save's transaction, see
+        // save() below), and every delete path releases them.
+        SCHEMA.addAfterSaveHook(context -> {
+            Row row = context.getRow();
+            Integer serviceId = row != null ? row.get(ID) : null;
+            if (serviceId != null) {
+                PortLedger.syncStackService(serviceId);
+            }
+        });
+        // AIDEV-NOTE: remove hooks fire ONCE for the whole delete with a CRITERIA-only
+        // context (getRow() is null) -- for delete(id), criteria deletes and deleteAll
+        // alike. The doomed ids must therefore be read in the BEFORE hook and released
+        // in the AFTER hook; an afterRemove-only hook reading getRow() releases nothing.
+        SCHEMA.addBeforeRemoveHook(PortLedger::captureDoomedServices);
+        SCHEMA.addAfterRemoveHook(PortLedger::releaseDoomedServices);
+    }
+
+    /**
+     * Every service save is ONE write transaction: the row write and the port-claim
+     * sync (afterSave hook) commit or fail together, so a refused claim also rolls the
+     * service row back -- the SiteDomainModel/RouteClaims shape. SQLite's serialized
+     * write transactions make the resource's friendly pre-write ledger read race-free.
+     */
+    @Override
+    public Row save(Row row) {
+        Row[] result = new Row[1];
+        this.requireDatasource().withTransaction(tx -> result[0] = super.save(row));
+        return result[0];
+    }
 
     /** All services of a stack, declaration order by id. */
     public List<Row> findByStackId(int stackId) {

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -45,12 +46,12 @@ class DatabaseModelTest {
             row.set(DatabaseModel.DB_PASSWORD, "secret123");
             row.set(DatabaseModel.DB_NAME, "appdb");
             row.set(DatabaseModel.EPHEMERAL, false);
-            row.set(DatabaseModel.SERVER_NAME, "edge-1");
+            row.set(DatabaseModel.SERVER_ID, edgeServerId());
             model.save(row);
 
             Row reloaded = model.findByName("blog");
             assertThat(reloaded).isNotNull();
-            assertThat((String) reloaded.get(DatabaseModel.SERVER_NAME)).isEqualTo("edge-1");
+            assertThat((Integer) reloaded.get(DatabaseModel.SERVER_ID)).isEqualTo(edgeServerId());
             assertThat((String) reloaded.get(DatabaseModel.ENGINE)).isEqualTo("postgres");
             assertThat((String) reloaded.get(DatabaseModel.IMAGE)).isEqualTo("postgres:17-alpine");
             assertThat((String) reloaded.get(DatabaseModel.DB_USER)).isEqualTo("appuser");
@@ -80,5 +81,25 @@ class DatabaseModelTest {
 
             assertThat((String) model.findByName("preview").get(DatabaseModel.IMAGE)).isEqualTo("mysql:8.0");
         });
+    }
+
+    /** The named test server's row id, created as an SSH host on first use. */
+    private static int edgeServerIdNamed(String name) {
+        if ("local".equals(name)) {
+            return ServerModel.localServerId();
+        }
+        ServerModel servers = Models.get(ServerModel.class);
+        Row row = servers.findByName(name);
+        if (row == null) {
+            row = servers.createEmptyRow();
+            row.set(ServerModel.NAME, name);
+            row.set(ServerModel.MODE, ServerModel.MODE_SSH);
+            servers.save(row);
+        }
+        return row.get(ServerModel.ID);
+    }
+
+    private static int edgeServerId() {
+        return edgeServerIdNamed("edge-1");
     }
 }

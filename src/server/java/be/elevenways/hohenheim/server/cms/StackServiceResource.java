@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -101,7 +103,11 @@ public class StackServiceResource extends RowResource {
                                       @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, null);
-        return super.persistRow(values, accessContext);
+        try {
+            return super.persistRow(values, accessContext);
+        } catch (PortLedger.PortConflict conflict) {
+            throw asViolation(conflict);
+        }
     }
 
     @Override
@@ -109,7 +115,27 @@ public class StackServiceResource extends RowResource {
                           @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, existing);
-        super.updateRow(existing, values, accessContext);
+        try {
+            super.updateRow(existing, values, accessContext);
+        } catch (PortLedger.PortConflict conflict) {
+            throw asViolation(conflict);
+        }
+    }
+
+    /**
+     * The ledger's unique-index backstop caught a claim the friendly pre-write read did
+     * not see; the save transaction already rolled the row back, so the outcome is the
+     * same refusal, just form-level instead of per-port.
+     *
+     * AIDEV-NOTE: its own microcopy key on purpose. The two refusals are otherwise
+     * indistinguishable in the rendered form -- which made a test that "proved" the
+     * friendly read still pass with that read deleted. Distinct copy is both the honest
+     * operator message (this one means someone else claimed it just now) and the only
+     * way a test can tell which arbiter answered.
+     */
+    static @NonNull Violations asViolation(PortLedger.@NonNull PortConflict conflict) {
+        return Violations.ofForm(CmsSupport.violationText("port_held_race")
+            .withArg("holder", conflict.getHolder()));
     }
 
     /**
@@ -168,7 +194,7 @@ public class StackServiceResource extends RowResource {
         }
 
         validateMounts(coerced, existingId);
-        validatePorts(coerced, stackId, siblings, existingId);
+        validatePorts(coerced, stackId, existingId);
         validateDependsOn(coerced, name, siblings, existingId);
         validateHealth(coerced);
 
@@ -257,14 +283,22 @@ public class StackServiceResource extends RowResource {
     }
 
     /**
-     * Published host ports are a whole-HOST resource: collisions are refused within the
-     * stack AND against every other stack on the same server (a second stack binding
-     * :8099 would only fail at deploy time otherwise).
+     * Published host ports are a whole-HOST resource, arbitrated by the PORT LEDGER:
+     * the claim keys are checked against {@code port_allocations}, which sees EVERY
+     * recording authority (other stacks, and -- as they migrate in -- docker sites,
+     * managed databases and managed processes), not just sibling stack rows.
+     *
+     * AIDEV-NOTE: this read is the FRIENDLY refusal (field-pathed, names the holder).
+     * Exclusivity itself is the ledger's unique claim-key index, enforced inside the
+     * service save's write transaction (StackServiceModel afterSave -> PortLedger);
+     * SQLite's serialized write transactions keep this read honest against rivals.
      */
     private static void validatePorts(@NonNull Map<String, Object> coerced, int stackId,
-                                      @NonNull List<Row> siblings, @Nullable Integer existingId) {
+                                      @Nullable Integer existingId) {
         Set<String> claimed = new HashSet<>();
-        List<Row> sameServerForeignServices = servicesOnSameServer(stackId);
+        Row stack = Models.get(StackModel.class).findById(stackId);
+        Integer stackServer = stack != null ? stack.get(StackModel.SERVER_ID) : null;
+        int serverId = stackServer != null ? stackServer : ServerModel.localServerId();
         int index = -1;
         for (Row port : recordsOf(coerced, "ports")) {
             index++;
@@ -289,70 +323,19 @@ public class StackServiceResource extends RowResource {
             if (host == null) {
                 continue;
             }
-            String claim = portClaim(port.get("host_ip"), host, port.get("protocol"));
-            if (!claimed.add(claim)) {
+            if (!claimed.add(PortLedger.portClaim(port.get("host_ip"), host, port.get("protocol")))) {
                 throw Violations.ofField("ports." + index + ".host_port", host,
                     CmsSupport.violationText("host_port_taken"));
             }
-            for (Row sibling : siblings) {
-                if (sibling.get(StackServiceModel.ID).equals(existingId)) {
-                    continue;
-                }
-                refuseClaimedPort(sibling, claim, host, index, "host_port_taken");
-            }
-            for (Row foreign : sameServerForeignServices) {
-                refuseClaimedPort(foreign, claim, host, index, "host_port_taken_other_stack");
-            }
-        }
-    }
-
-    /** One canonical claim per (bind address, port, protocol): trims both sides, treats
-     *  a blank bind address and 0.0.0.0 as the same whole-host bind, defaults tcp. */
-    private static @NonNull String portClaim(@Nullable Object hostIp, int host, @Nullable Object protocol) {
-        String address = trimmed(hostIp);
-        if (address.equals("0.0.0.0")) {
-            address = "";
-        }
-        String proto = trimmed(protocol).toLowerCase(java.util.Locale.ROOT);
-        if (proto.isEmpty()) {
-            proto = "tcp";
-        }
-        return address + "|" + host + "|" + proto;
-    }
-
-    private static void refuseClaimedPort(@NonNull Row service, @NonNull String claim, int host,
-                                          int index, @NonNull String copyKey) {
-        for (Row other : service.getRecords(StackServiceModel.PORTS)) {
-            Integer otherHost = other.get(StackServiceModel.PORT_HOST);
-            if (otherHost == null || otherHost != host) {
-                continue;
-            }
-            if (portClaim(other.get(StackServiceModel.PORT_HOST_IP), otherHost,
-                    other.get(StackServiceModel.PORT_PROTOCOL)).equals(claim)) {
+            Row holder = PortLedger.holderOf(
+                PortLedger.claimKeyOf(serverId, port.get("host_ip"), host, port.get("protocol")));
+            if (holder != null
+                && !PortLedger.isOwnedBy(holder, StackServiceModel.MODEL_ID, existingId)) {
                 throw Violations.ofField("ports." + index + ".host_port", host,
-                    CmsSupport.violationText(copyKey)
-                        .withArg("service", String.valueOf(service.get(StackServiceModel.NAME))));
+                    CmsSupport.violationText("port_held")
+                        .withArg("holder", PortLedger.describeHolder(holder)));
             }
         }
-    }
-
-    /** Every service of OTHER stacks bound to the same server as {@code stackId}'s stack. */
-    private static @NonNull List<Row> servicesOnSameServer(int stackId) {
-        Row stack = Models.get(StackModel.class).findById(stackId);
-        if (stack == null) {
-            return List.of();
-        }
-        String server = trimmed(stack.get(StackModel.SERVER_NAME));
-        List<Row> foreign = new ArrayList<>();
-        for (Row otherStack : Models.get(StackModel.class).find().all()) {
-            if (otherStack.get(StackModel.ID).equals(stackId)
-                || !server.equals(trimmed(otherStack.get(StackModel.SERVER_NAME)))) {
-                continue;
-            }
-            foreign.addAll(Models.get(StackServiceModel.class).find()
-                .where(StackServiceModel.STACK_ID.eq(otherStack.get(StackModel.ID))).all());
-        }
-        return foreign;
     }
 
     /** A dependency naming no sibling service can never be satisfied at deploy time. */
