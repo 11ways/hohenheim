@@ -6,6 +6,9 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.ApiKeyService;
+import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -17,7 +20,12 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -142,6 +150,79 @@ class GeneratedDnsRecordsTest extends HohenheimTestBase {
         assertThat((String) activity.get(ActivityModel.ORIGIN))
             .describedAs("a system write on a tenant's behalf attributes to the system")
             .isEqualTo(GeneratedDnsRecords.ORIGIN_ACME);
+    }
+
+    /**
+     * A generated row is un-editable and un-deletable through every caller path, while the
+     * system that authored it still removes its own row.
+     */
+    @Test
+    @Order(3)
+    void aGeneratedRowIsImmutableToCallersButNotToItsAuthor() throws Exception {
+        var model = Models.get(DnsRecordModel.class);
+        DnsTxtRecord challenge = new DnsTxtRecord("_acme-challenge." + ORIGIN, "immutable-value");
+        GeneratedDnsRecords.as(new GeneratedDnsRecords.Attribution(
+            GeneratedDnsRecords.SOURCE_ACME, "hohenheim:site_domain", 9),
+            () -> new InternalDnsTxtPublisher().publish(challenge));
+
+        Row generated = model.find()
+            .where(DnsRecordModel.ZONE_ID.eq(zoneId))
+            .where(DnsRecordModel.VALUE.eq("immutable-value")).first();
+        int generatedId = generated.get(DnsRecordModel.ID);
+
+        // 1. A direct edit is refused at the write funnel, whatever the caller changes.
+        generated.set(DnsRecordModel.VALUE, "hijacked");
+        assertThatThrownBy(() -> model.save(generated))
+            .describedAs("an in-flight challenge row must not be editable")
+            .isInstanceOf(Violations.class);
+
+        // 2. A direct delete is refused at the remove funnel, criteria delete included.
+        assertThatThrownBy(() -> model.find().where(DnsRecordModel.ID.eq(generatedId)).delete())
+            .describedAs("an in-flight challenge row must not be deletable")
+            .isInstanceOf(Violations.class);
+        assertThat(model.findById(generatedId))
+            .describedAs("the refused delete left the row in place")
+            .isNotNull();
+
+        // 3. The peer/automation API is the path that could kill an order mid-flight: it
+        //    resolves a record by ZONE MEMBERSHIP alone, so an API key holding the admin
+        //    permission reached every generated row in every hosted zone.
+        String apiKey = ApiKeyService.create(
+            AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
+                .get(UserModel.ID),
+            "generated-dns-test", List.of("hohenheim.*"), null).plaintext();
+
+        HttpResponse<String> edited = apiPost(apiKey,
+            "/api/dns/zones/" + ORIGIN + "/records/" + generatedId, "value=192.0.2.9");
+        assertThat(edited.statusCode())
+            .describedAs("the API refuses the edit as a violation, not a 500")
+            .isEqualTo(422);
+
+        HttpResponse<String> deleted = apiPost(apiKey,
+            "/api/dns/zones/" + ORIGIN + "/records/" + generatedId + "/delete", "");
+        assertThat(deleted.statusCode()).isEqualTo(422);
+        assertThat((String) model.findById(generatedId).get(DnsRecordModel.VALUE))
+            .describedAs("neither API call moved the row")
+            .isEqualTo("immutable-value");
+
+        // 4. The author still cleans up after itself -- the guard is about CALLERS.
+        GeneratedDnsRecords.as(new GeneratedDnsRecords.Attribution(
+            GeneratedDnsRecords.SOURCE_ACME, "hohenheim:site_domain", 9),
+            () -> new InternalDnsTxtPublisher().cleanup(challenge));
+        assertThat(model.findById(generatedId))
+            .describedAs("the system removes the row it published")
+            .isNull();
+    }
+
+    private HttpResponse<String> apiPost(String apiKey, String path, String body) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER).build();
+        return client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + path))
+            .header("Authorization", "Bearer " + apiKey)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private static Row txtRow(String name, String value) {

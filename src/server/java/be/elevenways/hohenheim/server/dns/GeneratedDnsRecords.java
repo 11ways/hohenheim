@@ -3,13 +3,17 @@ package be.elevenways.hohenheim.server.dns;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -158,12 +162,58 @@ public final class GeneratedDnsRecords {
                 }
                 return;
             }
-            if (changesAttribution(row)) {
+            Row stored = storedRowOf(row);
+            if (stored != null && stored.get(DnsRecordModel.GENERATED_BY) != null) {
+                throw readOnly(stored);
+            }
+            if (changesAttribution(row, stored)) {
                 throw Violations.ofField(DnsRecordModel.GENERATED_BY.getName(),
                     row.get(DnsRecordModel.GENERATED_BY),
                     CmsSupport.violationText("dns_generated_attribution"));
             }
         });
+        DnsRecordModel.SCHEMA.addBeforeRemoveHook(context -> {
+            if (inSystemScope()) {
+                return;
+            }
+            for (Row doomed : doomedRows(context)) {
+                if (doomed.get(DnsRecordModel.GENERATED_BY) != null) {
+                    throw readOnly(doomed);
+                }
+            }
+        });
+    }
+
+    /**
+     * The rows a criteria delete is about to remove.
+     *
+     * AIDEV-NOTE: a remove context carries CRITERIA, not rows, so the guard re-runs the same
+     * query -- the ActivityLog.captureDoomed idiom. Enforcing on the resource's delete method
+     * instead would leave every criteria delete (the zone-file import, the peer API, the
+     * publisher's own cleanup) outside the guard, which is the whole point of the funnel.
+     */
+    private static @NonNull List<Row> doomedRows(@NonNull RemoveFromDatasource context) {
+        Model model = context.getModel();
+        QueryContext queryContext = context.getQueryContext();
+        if (model == null || queryContext == null) {
+            return List.of();
+        }
+        return model.executeFindQuery(new QueryContext(
+            queryContext.getCriteria(), List.of(), null, null, List.of(), null,
+            queryContext.getRelatedFilters(), queryContext.getLocaleChain(),
+            queryContext.isAcrossLocales(), true, true, queryContext.getHints()));
+    }
+
+    private static @NonNull Violations readOnly(@NonNull Row stored) {
+        return Violations.ofField(DnsRecordModel.GENERATED_BY.getName(),
+            stored.get(DnsRecordModel.GENERATED_BY),
+            CmsSupport.violationText("dns_generated_readonly")
+                .withArg("source", String.valueOf(stored.get(DnsRecordModel.GENERATED_BY))));
+    }
+
+    private static @Nullable Row storedRowOf(@NonNull Row row) {
+        return row.has(DnsRecordModel.ID.getName())
+            ? Models.get(DnsRecordModel.class).findById(row.get(DnsRecordModel.ID)) : null;
     }
 
     /**
@@ -174,9 +224,7 @@ public final class GeneratedDnsRecords {
      * with their stored values, so a presence check refused every ordinary save of an
      * ordinary record. What a caller may not do is CHANGE them -- set one, or clear one.
      */
-    private static boolean changesAttribution(@NonNull Row row) {
-        Row stored = row.has(DnsRecordModel.ID.getName())
-            ? Models.get(DnsRecordModel.class).findById(row.get(DnsRecordModel.ID)) : null;
+    private static boolean changesAttribution(@NonNull Row row, @Nullable Row stored) {
         return differs(row, stored, DnsRecordModel.GENERATED_BY.getName())
             || differs(row, stored, DnsRecordModel.GENERATED_FOR_MODEL.getName())
             || differs(row, stored, DnsRecordModel.GENERATED_FOR_ID.getName())
