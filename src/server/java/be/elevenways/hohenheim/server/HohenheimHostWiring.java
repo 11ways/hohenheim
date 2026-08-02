@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
+import be.elevenways.zenit.cms.server.page.CmsPanels;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.ZenitModule;
 
@@ -42,6 +43,15 @@ public final class HohenheimHostWiring implements ZenitModule {
         // what makes the generic /{panel}/... CMS routes resolve to anything.
         new HohenheimPanel();
         new ManagePanel();
+        // The /manage wiring a request depends on, installed HERE, never as a
+        // Panel-constructor side effect: the eligibility checker (grant-holding
+        // tenants pass the panel's ACCESS permission) and the scoped SiteModel
+        // record source must both exist before STARTHTTP binds.
+        ManagePanel.installEligibilityPolicy();
+        ManagePanel.registerSiteSource();
+        // GET /: operators land on /admin (landingWeight 50), manage-only
+        // tenants on /manage (default 100), nobody-with-a-panel gets a refusal.
+        CmsPanels.installLandingRedirect();
 
         // Native security engine: local event sink, event vocabulary, own-IP
         // guard, nftables setup + resync, ban-cache warmup. Before the first

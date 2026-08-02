@@ -1067,10 +1067,6 @@
       "scope": "dns_secondaries"
     },
     {
-      "text": "No delegated access",
-      "scope": "site_access"
-    },
-    {
       "text": "No services yet",
       "scope": "stack_services"
     },
@@ -1091,10 +1087,6 @@
     {
       "text": "Webhook, poll or manual deploys of this site will show up here.",
       "scope": "site_deployments"
-    },
-    {
-      "text": "Nobody besides administrators can manage this site yet.",
-      "scope": "site_access"
     },
     {
       "text": "Add a service to describe what this stack runs.",
@@ -1441,16 +1433,10 @@
     "text": "Used by",
     "scope": "database_tab"
   },
-  "user": [
-    {
-      "text": "User",
-      "scope": "database_tab"
-    },
-    {
-      "text": "User",
-      "scope": "site_access"
-    }
-  ],
+  "user": {
+    "text": "User",
+    "scope": "database_tab"
+  },
   "variables": {
     "text": "Injected variables",
     "scope": "site_databases"
@@ -2984,58 +2970,6 @@
   "manage": {
     "text": "Manage",
     "scope": "capability"
-  },
-  "access": {
-    "text": "Access",
-    "scope": "site"
-  },
-  "subject": {
-    "text": "Who",
-    "scope": "site_access"
-  },
-  "capability": {
-    "text": "Capability",
-    "scope": "site_access"
-  },
-  "allowed": {
-    "text": "Allowed",
-    "scope": "site_access"
-  },
-  "added": {
-    "text": "Added",
-    "scope": "site_access"
-  },
-  "yes": {
-    "text": "Yes",
-    "scope": "site_access"
-  },
-  "no": {
-    "text": "No",
-    "scope": "site_access"
-  },
-  "remove": {
-    "text": "Remove",
-    "scope": "site_access"
-  },
-  "remove_confirm": {
-    "text": "Revoke this access grant? The user loses the manage panel when this was their last site.",
-    "scope": "site_access"
-  },
-  "add_title": {
-    "text": "Grant access",
-    "scope": "site_access"
-  },
-  "add_description": {
-    "text": "The user can view, edit and operate this site (and its domains) through the /manage panel.",
-    "scope": "site_access"
-  },
-  "add": {
-    "text": "Grant access",
-    "scope": "site_access"
-  },
-  "user_missing": {
-    "text": "Pick an enabled user",
-    "scope": "violations"
   },
   "security": {
     "text": "Security",

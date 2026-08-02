@@ -182,29 +182,6 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("isolate").build())
         .build();
 
-    // --- Site access grants (forms on the admin site Access tab) ---
-    public static final Endpoint<Object> SITES_ACCESS_ADD = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_access_add"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("admin").addDelimiter().addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("access").addDelimiter().addStatic("add").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
-        .build();
-
-    public static final Endpoint<Object> SITES_ACCESS_REMOVE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_access_remove"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("admin").addDelimiter().addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("access").addDelimiter().addStatic("remove").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
-        .build();
-
-    // --- Root: the admin panel IS the app, so / lands on it ---
-    public static final Endpoint<Object> ROOT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "root"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET).build())
-        .build();
-
     // --- Automation API (znit_ bearer keys via zenit-auth) ---
     public static final Endpoint<Object> API_SITES = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "api_sites"))

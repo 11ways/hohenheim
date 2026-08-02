@@ -47,6 +47,12 @@ public final class HohenheimPanel extends Panel {
         super(Identifier.of("hohenheim", "admin"), "admin", Microcopy.of("title").withFilter("scope", "admin"), ACCESS);
     }
 
+    /** Below ManagePanel's default 100: an operator holding both panels lands on /admin. */
+    @Override
+    public int landingWeight() {
+        return 50;
+    }
+
     @Override
     public List<PanelPeer> buildPeers() {
         List<PanelPeer> peers = new ArrayList<>();

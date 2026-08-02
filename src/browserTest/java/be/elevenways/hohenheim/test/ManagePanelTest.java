@@ -155,16 +155,25 @@ class ManagePanelTest extends HohenheimTestBase {
     void grantingThroughTheAccessTabUnlocksExactlyTheGrantedSite() throws Exception {
         assertThat(operatorGet("/manage").statusCode()).isEqualTo(403);
         assertThat(operatorGet("/manage/sites").statusCode()).isEqualTo(403);
+        // A manage-less login has NO accessible panel: the landing refuses
+        // (403), it never redirects -- a redirect could only loop.
+        assertThat(operatorGet("/").statusCode()).isEqualTo(403);
 
+        // The GENERIC record-access matrix (zenit-auth's contributed subpage)
+        // is the grant surface -- the hand-written SiteAccessPage is deleted.
         HttpResponse<String> add = adminPost(
-            "/admin/sites/" + siteAId + "/access/add", "user_id=" + operatorId);
+            "/admin/sites/" + siteAId + "/page/access",
+            "access.0.type=user&access.0.id=" + operatorId
+                + "&access.0.caps.0.key=manage&access.0.caps.0.value=allow");
         assertThat(add.statusCode()).isIn(302, 303);
 
-        // The Access tab lists the new grant row.
+        // The Access tab IS the generic page: only it renders the
+        // pl-capability-matrix, with the new grant as a subject row.
         HttpResponse<String> pageView = adminGet("/admin/sites/" + siteAId + "/page/access");
         assertThat(pageView.statusCode()).isEqualTo(200);
-        assertThat(pageView.body()).contains("operator@hohenheim.local");
-        assertThat(pageView.body()).contains("data-subject-id");
+        assertThat(pageView.body()).contains("<pl-capability-matrix");
+        assertThat(pageView.body()).contains("data-subject=\"user:" + operatorId + "\"");
+        assertThat(pageView.body()).contains("Site Operator");
 
         // Panel eligibility is derived from the effective record grant; no
         // second global grant is created or synchronized.
@@ -175,6 +184,15 @@ class ManagePanelTest extends HohenheimTestBase {
 
         assertThat(operatorGet("/manage").statusCode()).isIn(200, 302, 303);
 
+        // Post-login landing: the manage-only principal lands on /manage,
+        // the operator (admin) keeps landing on /admin (lower landingWeight).
+        HttpResponse<String> operatorLanding = operatorGet("/");
+        assertThat(operatorLanding.statusCode()).isIn(302, 303);
+        assertThat(operatorLanding.headers().firstValue("Location")).hasValue("/manage");
+        HttpResponse<String> adminLanding = adminGet("/");
+        assertThat(adminLanding.statusCode()).isIn(302, 303);
+        assertThat(adminLanding.headers().firstValue("Location")).hasValue("/admin");
+
         HttpResponse<String> list = operatorGet("/manage/sites");
         assertThat(list.statusCode()).isEqualTo(200);
         assertThat(list.body()).contains("Manage Site A");
@@ -183,6 +201,13 @@ class ManagePanelTest extends HohenheimTestBase {
         // Safe row actions only.
         assertThat(list.body()).contains("toggle_site");
         assertThat(list.body()).doesNotContain("clone_site");
+
+        // The delegated surface offers the SAME generic access tab (a manage
+        // holder may delegate its delegable capability from /manage).
+        HttpResponse<String> manageAccess = operatorGet(
+            "/manage/sites/" + siteAId + "/page/access");
+        assertThat(manageAccess.statusCode()).isEqualTo(200);
+        assertThat(manageAccess.body()).contains("<pl-capability-matrix");
 
         // Site B's manage detail URL reads as missing, not forbidden.
         assertThat(operatorGet("/manage/sites/" + siteBId).statusCode()).isEqualTo(404);
@@ -320,19 +345,31 @@ class ManagePanelTest extends HohenheimTestBase {
     @Order(3)
     void recordAndGlobalGrantsDrivePanelEligibility() throws Exception {
         GrantService.createDirectGrant("user", operatorId, "hohenheim.manage.access", true);
-        HttpResponse<String> remove = adminPost("/admin/sites/" + siteAId + "/access/remove",
-            "subject_type=user&subject_id=" + operatorId + "&capability=" + HohenheimAccess.MANAGE);
+        HttpResponse<String> remove = adminPost("/admin/sites/" + siteAId + "/page/access",
+            "access.__removed=" + java.net.URLEncoder.encode("user:" + operatorId,
+                java.nio.charset.StandardCharsets.UTF_8));
         assertThat(remove.statusCode()).isIn(302, 303);
 
-        // The grants table is empty again (the empty state renders).
+        // The matrix has no subject row for the operator anymore.
         HttpResponse<String> pageView = adminGet("/admin/sites/" + siteAId + "/page/access");
         assertThat(pageView.statusCode()).isEqualTo(200);
-        assertThat(pageView.body()).doesNotContain("data-subject-id");
+        assertThat(pageView.body()).doesNotContain("data-subject=\"user:" + operatorId + "\"");
 
         // The independently administered panel grant remains untouched.
         assertThat(GrantService.listDirectGrants("user", operatorId))
             .anyMatch(grant -> "hohenheim.manage.access".equals(grant.get(GrantModel.PERMISSION)));
         assertThat(operatorGet("/manage").statusCode()).isIn(200, 302, 303);
+
+        // NAV-ONLY hiding: the panel grant without any site keeps /manage
+        // reachable, but the zero-in-scope Sites/Domains entries leave the nav
+        // and the panel index...
+        HttpResponse<String> emptyPanel = operatorGet("/manage");
+        assertThat(emptyPanel.statusCode()).isEqualTo(200);
+        assertThat(emptyPanel.body()).doesNotContain("href=\"/manage/sites\"");
+        assertThat(emptyPanel.body()).doesNotContain("href=\"/manage/domains\"");
+        // ...while the direct URL still answers with the scoped (empty) list:
+        // hiding must never become enforcement.
+        assertThat(operatorGet("/manage/sites").statusCode()).isEqualTo(200);
 
         for (Row grant : GrantService.listDirectGrants("user", operatorId)) {
             if ("hohenheim.manage.access".equals(grant.get(GrantModel.PERMISSION))) {
@@ -445,6 +482,53 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(siteVocabulary.body()).doesNotContain("created_at");
         assertThat(dryPost("/zn/records/hohenheim.site/buckets", buckets, outsiderSession, csrf).statusCode())
             .isEqualTo(400);
+    }
+
+    /**
+     * The managedSiteIds query budget: one /manage render asks for the managed
+     * set several times (panel eligibility, list scope, both nav probes), and
+     * the conduit memo must collapse that to ONE grant-store enumeration --
+     * pinned as a per-request cap on record-grant finds so a regression (a new
+     * caller, a lost memo) becomes a visible number, not a silent slowdown.
+     */
+    @Test
+    @Order(6)
+    void managedSiteIdsStaysWithinItsPerRequestQueryBudget() throws Exception {
+        Row tenant = AuthModels.users().createEmptyRow();
+        tenant.set(UserModel.EMAIL, "budget@hohenheim.local");
+        tenant.set(UserModel.DISPLAY_NAME, "Budget Tenant");
+        tenant.set(UserModel.ENABLED, true);
+        tenant.set(UserModel.CREATED_AT, Instant.now());
+        tenant.set(UserModel.UPDATED_AT, Instant.now());
+        AuthModels.users().save(tenant);
+        Integer tenantId = tenant.get(UserModel.ID);
+
+        Session session = Zenit.getSessionStore().create();
+        session.set(AuthKeys.USER_ID, tenantId.longValue());
+        session.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
+        Zenit.getSessionStore().save(session);
+
+        RecordGrants.grant("user", tenantId, SiteModel.MODEL_ID, siteAId,
+            HohenheimAccess.MANAGE, true);
+        try {
+            java.util.concurrent.atomic.AtomicInteger finds = new java.util.concurrent.atomic.AtomicInteger();
+            be.elevenways.zenit.auth.model.RecordGrantModel.SCHEMA
+                .addBeforeFindHook(ignored -> finds.incrementAndGet());
+
+            finds.set(0);
+            assertThat(get("/manage/sites", session.id()).statusCode()).isEqualTo(200);
+            int perRequest = finds.get();
+
+            // Memoized: the enumeration (1 candidate fetch + 1 walk
+            // confirmation) runs ONCE per request. Without the memo every
+            // caller pays it again and this cap breaks loudly.
+            assertThat(perRequest)
+                .as("record-grant finds during one /manage/sites request")
+                .isBetween(1, 3);
+        } finally {
+            RecordGrants.revoke("user", tenantId, SiteModel.MODEL_ID, siteAId,
+                HohenheimAccess.MANAGE);
+        }
     }
 
     private HttpResponse<String> dryPost(String path, String body, String session, String csrf) throws Exception {

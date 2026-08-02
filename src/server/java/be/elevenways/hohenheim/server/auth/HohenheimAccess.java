@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.server.GrantableModel;
 import be.elevenways.zenit.auth.server.RecordGrantCapabilityChecker;
@@ -156,14 +157,43 @@ public final class HohenheimAccess {
             .hasCapability(principal, SiteModel.MODEL_ID, siteId, MANAGE);
     }
 
+    /** Request-scoped memo of the confirmed managed-site set (one principal per conduit). */
+    private static final IdentifierKey<Set<Integer>> MANAGED_SITE_IDS =
+        IdentifierKey.of("hohenheim", "managed_site_ids");
+
     /**
      * Every site id the context holds {@link #MANAGE} on, for feeding scope
      * criteria (the walk decides per record and offers no enumeration, so
      * candidates come from the grant store and each one is CONFIRMED through
      * the walk -- which re-applies admin bypass and gate denial).
+     *
+     * Memoized per REQUEST on the conduit (the PermissionResolver WALK_CACHE
+     * idiom): panel eligibility, scope criteria and the nav probes all ask per
+     * render, and grants written mid-request stay next-request-effective.
+     * Conduit-less contexts run the enumeration fresh.
      */
     @NonNull
     public static Set<Integer> managedSiteIds(@NonNull AccessContext ctx) {
+        Conduit conduit = ctx.conduit();
+        if (conduit == null) {
+            return enumerateManagedSiteIds(ctx);
+        }
+
+        Set<Integer> cached = conduit.getAttribute(MANAGED_SITE_IDS);
+        if (cached != null) {
+            return cached;
+        }
+
+        Set<Integer> ids = enumerateManagedSiteIds(ctx);
+        try {
+            conduit.setAttribute(MANAGED_SITE_IDS, ids);
+        } catch (UnsupportedOperationException attributeless) {
+            // A conduit without attribute storage just pays the walk each call.
+        }
+        return ids;
+    }
+
+    private static @NonNull Set<Integer> enumerateManagedSiteIds(@NonNull AccessContext ctx) {
         return confirmedSiteIds(ctx.principal(),
             id -> ctx.hasCapability(SiteModel.MODEL_ID, id, MANAGE));
     }

@@ -23,7 +23,6 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.CertificateRequestForm;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -41,9 +40,6 @@ import be.elevenways.domino.common.DominoFile;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
-import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -97,7 +93,6 @@ public final class HohenheimHandlers {
         initDatabases();
         initProcessControl();
         initDeployControl();
-        initSiteAccess();
         initTerminal();
         initDevTunnel();
         initApi();
@@ -154,7 +149,8 @@ public final class HohenheimHandlers {
     }
 
     private static void initHealth() {
-        HohenheimEndpoints.ROOT.setHandler(conduit -> redirectUntyped("/admin"));
+        // GET / is owned by zenit-cms's landing redirect (CmsPanels, installed by
+        // HohenheimHostWiring): operators land on /admin, manage-only tenants on /manage.
         HohenheimEndpoints.HEALTH.setHandler(conduit ->
             jsonUntyped(Map.of("status", "ok")));
     }
@@ -849,86 +845,6 @@ public final class HohenheimHandlers {
     private static String deploymentsPageUrl(Conduit conduit, Integer siteId) {
         return ReturnTarget.or(ReturnTarget.read(conduit),
             "/admin/sites/" + siteId + "/page/deployments");
-    }
-
-    // -----------------------------------------------------------------------
-    // Site access grants: /manage eligibility is derived from effective record
-    // grants, so no independently administered global permissions are mutated.
-    // -----------------------------------------------------------------------
-
-    private static void initSiteAccess() {
-        HohenheimEndpoints.SITES_ACCESS_ADD.setHandler(conduit -> {
-            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
-            Row site = existingSite(siteId);
-            if (site == null) {
-                conduit.notFound();
-                return null;
-            }
-            String backUrl = accessPageUrl(siteId);
-            Map<String, String> form = formMap(conduit);
-            Integer userId = parseIntOrNull(form.get("user_id"));
-            Row user = userId != null ? AuthModels.users().findById(userId) : null;
-            if (user == null || !Boolean.TRUE.equals(user.get(UserModel.ENABLED))) {
-                return redirectUntyped(backUrl + "?error=" + URLEncoder.encode(
-                    CmsSupport.violationText("user_missing")
-                        .resolve(conduit.getLocales(), conduit.getMessageResolver()),
-                    StandardCharsets.UTF_8));
-            }
-            RecordGrants.grant("user", userId, SiteModel.MODEL_ID, siteId,
-                HohenheimAccess.MANAGE, true);
-            ActivityLog.record(Models.get(SiteModel.class), siteId, "access_granted",
-                String.valueOf(user.get(UserModel.EMAIL)));
-            return redirectUntyped(backUrl);
-        });
-
-        HohenheimEndpoints.SITES_ACCESS_REMOVE.setHandler(conduit -> {
-            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
-            Row site = existingSite(siteId);
-            if (site == null) {
-                conduit.notFound();
-                return null;
-            }
-            String backUrl = accessPageUrl(siteId);
-            Map<String, String> form = formMap(conduit);
-            String subjectType = form.getOrDefault("subject_type", "user");
-            Integer subjectId = parseIntOrNull(form.get("subject_id"));
-            String capability = form.getOrDefault("capability", HohenheimAccess.MANAGE);
-            if (subjectId == null) {
-                return redirectUntyped(backUrl);
-            }
-            boolean removed = RecordGrants.revoke(subjectType, subjectId,
-                SiteModel.MODEL_ID, siteId, capability);
-            if (removed && "user".equals(subjectType)) {
-                ActivityLog.record(Models.get(SiteModel.class), siteId, "access_revoked",
-                    "user #" + subjectId);
-            }
-            return redirectUntyped(backUrl);
-        });
-    }
-
-    private static String accessPageUrl(Integer siteId) {
-        return "/admin/sites/" + siteId + "/page/access";
-    }
-
-    private static Row existingSite(Integer siteId) {
-        if (siteId == null) {
-            return null;
-        }
-        return Models.get(SiteModel.class).find()
-            .where(SiteModel.ID.eq(siteId))
-            .where(SiteModel.DELETED_AT.isNull())
-            .first();
-    }
-
-    private static Integer parseIntOrNull(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(raw.trim());
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 
     private static void initDevTunnel() {
