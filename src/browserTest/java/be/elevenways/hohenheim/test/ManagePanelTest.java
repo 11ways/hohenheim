@@ -311,33 +311,43 @@ class ManagePanelTest extends HohenheimTestBase {
 
         HttpResponse<String> subpage = operatorGet("/manage/sites/" + siteAId + "/page/domains");
         assertThat(subpage.statusCode()).isEqualTo(200);
-        assertThat(subpage.body()).contains("managed.example.com").doesNotContain("add-domain-link");
+        // Binding a hostname to a managed site is delegated; REQUESTING a certificate for it
+        // stays installation administration (an issued certificate is authority over a name).
+        assertThat(subpage.body()).contains("managed.example.com").contains("add-domain-link")
+            .doesNotContain("certificates-request");
 
-        // The delegated record form must render INERT: updatable()==false makes
-        // the renderer null the submitUrl (so no form posts back to the domain
-        // record and the save pl-button is dropped) and skip the
-        // optimistic-concurrency token (cms__snapshot) that only writable forms
-        // carry. A bare type="submit" check would trip over the shell's logout
-        // button.
+        // The delegated record form is WRITABLE now, but offers only the delegated columns.
+        // That omission is UX: the freeze itself lives in the SiteDomainModel write pipeline
+        // and is proven against a direct model save in TenantDomainDnsScopeTest.
         HttpResponse<String> domainForm = operatorGet("/manage/domains/" + domainAId);
         assertThat(domainForm.statusCode()).isEqualTo(200);
         assertThat(domainForm.body())
-            .doesNotContain("action=\"/manage/domains/")
-            .doesNotContain("<pl-button type=\"submit\"")
-            .doesNotContain("cms__snapshot");
+            .contains("cms__snapshot")
+            .doesNotContain("name=\"listen_on\"")
+            .doesNotContain("name=\"match_type\"")
+            .doesNotContain("name=\"path\"")
+            .doesNotContain("name=\"certificate_id\"");
         assertThat(operatorPost("/manage/domains/new",
-            "site_id=" + siteAId + "&hostname=hijack.example.com&match_type=exact").statusCode())
-            .isEqualTo(404);
+            "site_id=" + siteAId + "&hostname=delegated.example.com").statusCode())
+            .isIn(302, 303);
+        // A forged non-exact match type never lands: the form drops it and the pipeline
+        // refuses an effective value other than exact.
         assertThat(operatorPost("/manage/domains/" + domainAId,
-            "site_id=" + siteAId + "&hostname=hijacked.example.com&match_type=regex").statusCode())
-            .isEqualTo(404);
-        assertThat(operatorPost("/manage/domains/" + domainAId + "/delete", "").statusCode())
-            .isEqualTo(404);
+            "site_id=" + siteAId + "&hostname=managed.example.com&match_type=regex").statusCode())
+            .isIn(200, 302, 303, 422);
 
         Row domain = Models.get(SiteDomainModel.class).findById(domainAId);
         assertThat(domain.get(SiteDomainModel.HOSTNAME)).isEqualTo("managed.example.com");
+        assertThat(domain.get(SiteDomainModel.MATCH_TYPE)).isEqualTo(SiteDomainModel.MATCH_EXACT);
+
+        Row boundDomain = Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.HOSTNAME.eq("delegated.example.com")).first();
+        assertThat(boundDomain).isNotNull();
+        assertThat(boundDomain.get(SiteDomainModel.SITE_ID)).isEqualTo(siteAId);
+        assertThat(operatorPost("/manage/domains/" + boundDomain.get(SiteDomainModel.ID) + "/delete", "")
+            .statusCode()).isIn(302, 303);
         assertThat(Models.get(SiteDomainModel.class).find()
-            .where(SiteDomainModel.HOSTNAME.eq("hijack.example.com")).first()).isNull();
+            .where(SiteDomainModel.HOSTNAME.eq("delegated.example.com")).first()).isNull();
     }
 
     /** Revocation, group/negative record grants and an explicit global deny all drive eligibility. */
