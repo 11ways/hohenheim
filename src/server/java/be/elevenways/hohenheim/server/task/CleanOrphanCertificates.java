@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -35,7 +36,9 @@ public class CleanOrphanCertificates extends ScheduledTask {
 
     @Override
     public @NonNull List<ScheduleDeclaration> schedules() {
-        return List.of(ScheduleDeclaration.fallback("45 4 * * *"));
+        return HohenheimRoles.schedulesWhen(
+            List.of(ScheduleDeclaration.fallback("45 4 * * *")),
+            HohenheimRoles.Role.PROXY);
     }
 
     @Override

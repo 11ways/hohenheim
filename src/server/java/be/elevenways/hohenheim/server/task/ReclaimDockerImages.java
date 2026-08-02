@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.docker.DockerReclaim;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -33,7 +34,9 @@ public class ReclaimDockerImages extends ScheduledTask {
     public @NonNull List<ScheduleDeclaration> schedules() {
         // Nightly: the sweep costs a couple of daemon round-trips, and an image that
         // became reclaimable during the day is not urgent.
-        return List.of(ScheduleDeclaration.fallback("23 4 * * *"));
+        return HohenheimRoles.schedulesWhen(
+            List.of(ScheduleDeclaration.fallback("23 4 * * *")),
+            HohenheimRoles.Role.STACKS);
     }
 
     @Override

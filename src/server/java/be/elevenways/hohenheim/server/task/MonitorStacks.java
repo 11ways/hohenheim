@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.hohenheim.server.stack.StackRuntime;
+import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -24,7 +25,9 @@ public class MonitorStacks extends ScheduledTask {
 
     @Override
     public @NonNull List<ScheduleDeclaration> schedules() {
-        return List.of(ScheduleDeclaration.fallback("*/5 * * * *"));
+        return HohenheimRoles.schedulesWhen(
+            List.of(ScheduleDeclaration.fallback("*/5 * * * *")),
+            HohenheimRoles.Role.STACKS);
     }
 
     @Override
