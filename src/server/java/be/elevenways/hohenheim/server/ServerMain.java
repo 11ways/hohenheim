@@ -47,10 +47,16 @@ public class ServerMain {
         // datasource + migrations, then exit WITHOUT booting any server.
         // Without this early path the migration step used to boot a full
         // server (both listeners) that only a kill -9 timeout stopped.
+        // AIDEV-NOTE: it must run through ServerZenitRuntime, not HohenheimDatabase.init():
+        // the framework prints the sentinels zenit-dev's migration preflight reads. A
+        // hand-rolled branch printed neither, so every successful run was reported as
+        // "exited without proving completion" and the server never started.
         if (args != null && java.util.Arrays.asList(args).contains("--run-migrations")) {
             HohenheimSettingsFiles.load();
             HohenheimAccess.declareGrantableModels();
-            HohenheimDatabase.init();
+            ServerZenitRuntime.runMigrationsIfRequested(args,
+                HohenheimDatabase::openDatasource,
+                HohenheimDatabase::acknowledgeRetiredVersions);
             return;
         }
 
