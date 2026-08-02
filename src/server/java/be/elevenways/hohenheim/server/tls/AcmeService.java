@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.tls;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
@@ -79,11 +81,14 @@ public class AcmeService {
         }
     }
 
+    /** identifier = the ACME identifier domain, which drops a SAN's leading wildcard label. */
     private record DnsAuthorization(Authorization authorization, Dns01Challenge challenge,
-                                    DnsTxtRecord record) {}
+                                    DnsTxtRecord record, String identifier) {}
 
+    /** declaring maps every requested SAN to the domain row that authorized it. */
     private record DnsOrderContext(Order order, KeyPair domainKeyPair, List<String> hostnames,
-                                   List<DnsAuthorization> authorizations) {}
+                                   List<DnsAuthorization> authorizations,
+                                   Map<String, Integer> declaring) {}
 
     private record PendingManualDnsOrder(int certificateId, DnsOrderContext order, Instant createdAt,
                                          String orderKey, OrderFlight flight) {}
@@ -167,7 +172,7 @@ public class AcmeService {
         // entry points reach the CA (this one, the manual DNS lane, the renewal sweep), and
         // a handler-layer check is the exact bypass shape SiteDomainResource's route
         // invariant documents. Do NOT move it up into HohenheimHandlers.
-        CertificateAuthority.authorize(requester, hostnames);
+        Map<String, Integer> declaring = CertificateAuthority.authorize(requester, hostnames);
 
         // Claim the order key BEFORE creating a row: a concurrent identical
         // request shares the leader's certificate row instead of minting a
@@ -213,7 +218,8 @@ public class AcmeService {
                 throw new IllegalArgumentException("Invalid hostnames: " + String.join(", ", invalid));
             }
 
-            OrderResult result = performAcmeOrderUncoalesced(hostnames, email, challengeType, dnsPublisher);
+            OrderResult result = performAcmeOrderUncoalesced(hostnames, email, challengeType,
+                dnsPublisher, declaring);
             flight.result().complete(result);
 
             certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
@@ -293,7 +299,7 @@ public class AcmeService {
                                                          CertificateAuthority.Requester requester)
             throws Exception {
         // Same enforcement point as requestCertificate: before the row, before the CA.
-        CertificateAuthority.authorize(requester, hostnames);
+        Map<String, Integer> declaring = CertificateAuthority.authorize(requester, hostnames);
 
         List<String> invalid = invalidHostnames(hostnames, true);
         if (!invalid.isEmpty()) {
@@ -322,7 +328,7 @@ public class AcmeService {
             }
             certModel.save(certRow);
 
-            DnsOrderContext order = prepareDnsOrder(hostnames, email);
+            DnsOrderContext order = prepareDnsOrder(hostnames, email, declaring);
             String token = SecureTokens.randomToken();
             int certificateId = certRow.get(CertificateModel.ID);
             PendingManualDnsOrder pending = new PendingManualDnsOrder(
@@ -564,7 +570,7 @@ public class AcmeService {
 
         try {
             Integer requestedBy = certRow.get(CertificateModel.REQUESTED_BY_USER_ID);
-            CertificateAuthority.authorize(requestedBy != null
+            Map<String, Integer> declaring = CertificateAuthority.authorize(requestedBy != null
                 ? CertificateAuthority.Requester.ofSubject(requestedBy)
                 : CertificateAuthority.Requester.SYSTEM, hostnames);
 
@@ -575,7 +581,7 @@ public class AcmeService {
             OrderResult result = performAcmeOrder(hostnames,
                 certRow.get(CertificateModel.LETSENCRYPT_EMAIL), challengeType,
                 certRow.get(CertificateModel.DNS_PUBLISHER),
-                certRow.get(CertificateModel.ID));
+                certRow.get(CertificateModel.ID), declaring);
 
             certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
             certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem);
@@ -650,7 +656,8 @@ public class AcmeService {
 
     private OrderResult performAcmeOrder(List<String> hostnames, @Nullable String email,
                                          String challengeType, @Nullable String dnsPublisher,
-                                         int certificateId) throws Exception {
+                                         int certificateId,
+                                         Map<String, Integer> declaring) throws Exception {
         boolean dns = CertificateModel.CHALLENGE_DNS.equals(challengeType);
         List<String> invalid = invalidHostnames(hostnames, dns);
         if (!invalid.isEmpty()) {
@@ -679,7 +686,8 @@ public class AcmeService {
         }
 
         try {
-            OrderResult result = performAcmeOrderUncoalesced(hostnames, email, challengeType, dnsPublisher);
+            OrderResult result = performAcmeOrderUncoalesced(hostnames, email, challengeType,
+                dnsPublisher, declaring);
             leader.result().complete(result);
             return result;
         } catch (Throwable failure) {
@@ -702,19 +710,24 @@ public class AcmeService {
 
     private OrderResult performAcmeOrderUncoalesced(List<String> hostnames, @Nullable String email,
                                                      String challengeType,
-                                                     @Nullable String dnsPublisher) throws Exception {
+                                                     @Nullable String dnsPublisher,
+                                                     Map<String, Integer> declaring) throws Exception {
 
         if (CertificateModel.CHALLENGE_DNS.equals(challengeType)) {
             DnsTxtPublisher publisher = DnsTxtPublishers.INSTANCE.get(dnsPublisher);
             if (publisher == null) {
                 throw new IllegalStateException("DNS-01 publisher is unavailable: " + dnsPublisher);
             }
-            DnsOrderContext context = prepareDnsOrder(hostnames, email);
-            List<DnsTxtRecord> published = new ArrayList<>();
+            DnsOrderContext context = prepareDnsOrder(hostnames, email, declaring);
+            List<DnsAuthorization> published = new ArrayList<>();
             try {
                 for (DnsAuthorization authorization : context.authorizations()) {
-                    publisher.publish(authorization.record());
-                    published.add(authorization.record());
+                    // The challenge row is a GENERATED row: it is attributed to the domain
+                    // row that authorized this SAN, and written under the "acme" origin
+                    // rather than whoever happens to be logged in.
+                    GeneratedDnsRecords.as(attributionFor(context, authorization),
+                        () -> publisher.publish(authorization.record()));
+                    published.add(authorization);
                 }
                 int propagation = HohenheimSettings.VALUES.getValue(
                     HohenheimSettings.Ssl.DNS_PROPAGATION_SECONDS);
@@ -725,12 +738,14 @@ public class AcmeService {
                 return finalizeOrder(context);
             } finally {
                 Collections.reverse(published);
-                for (DnsTxtRecord record : published) {
+                for (DnsAuthorization authorization : published) {
                     try {
-                        publisher.cleanup(record);
+                        // Removing its own row is the same system scope as writing it.
+                        GeneratedDnsRecords.as(attributionFor(context, authorization),
+                            () -> publisher.cleanup(authorization.record()));
                     } catch (Exception cleanupFailure) {
-                        Blast.log("ACME: DNS TXT cleanup failed for", record.name(), "-",
-                            cleanupFailure.getMessage());
+                        Blast.log("ACME: DNS TXT cleanup failed for", authorization.record().name(),
+                            "-", cleanupFailure.getMessage());
                     }
                 }
             }
@@ -748,7 +763,8 @@ public class AcmeService {
             completeHttpChallenge(auth, hostnameSet);
         }
 
-        return finalizeOrder(new DnsOrderContext(order, domainKeyPair, hostnames, List.of()));
+        return finalizeOrder(new DnsOrderContext(order, domainKeyPair, hostnames, List.of(),
+            declaring));
     }
 
     private static Order createOrder(Account account, List<String> hostnames) throws Exception {
@@ -759,7 +775,8 @@ public class AcmeService {
         return orderBuilder.create();
     }
 
-    private DnsOrderContext prepareDnsOrder(List<String> hostnames, @Nullable String email) throws Exception {
+    private DnsOrderContext prepareDnsOrder(List<String> hostnames, @Nullable String email,
+                                            Map<String, Integer> declaring) throws Exception {
         Account account = ensureAccount(normalizeAccountEmail(email));
         KeyPair domainKeyPair = KeyPairUtils.createKeyPair(2048);
         Order order = createOrder(account, hostnames);
@@ -772,10 +789,30 @@ public class AcmeService {
                 .orElseThrow(() -> new RuntimeException(
                     "No DNS-01 challenge available for " + auth.getIdentifier().getDomain()));
             authorizations.add(new DnsAuthorization(auth, challenge,
-                new DnsTxtRecord(Dns01Challenge.toRRName(auth.getIdentifier()), challenge.getDigest())));
+                new DnsTxtRecord(Dns01Challenge.toRRName(auth.getIdentifier()), challenge.getDigest()),
+                auth.getIdentifier().getDomain()));
         }
         return new DnsOrderContext(order, domainKeyPair, List.copyOf(hostnames),
-            List.copyOf(authorizations));
+            List.copyOf(authorizations), Map.copyOf(declaring));
+    }
+
+    /**
+     * The declaring domain row for one authorization.
+     *
+     * AIDEV-NOTE: the ACME identifier of a wildcard SAN drops the leading label, so
+     * "*.example.com" is authorized under identifier "example.com" -- both spellings must be
+     * looked up or a wildcard challenge lands unattributed.
+     */
+    private static GeneratedDnsRecords.Attribution attributionFor(DnsOrderContext context,
+                                                                  DnsAuthorization authorization) {
+        String identifier = authorization.identifier() != null
+            ? authorization.identifier().toLowerCase(Locale.ROOT) : "";
+        Integer domainId = context.declaring().get(identifier);
+        if (domainId == null) {
+            domainId = context.declaring().get("*." + identifier);
+        }
+        return new GeneratedDnsRecords.Attribution(GeneratedDnsRecords.SOURCE_ACME,
+            SiteDomainModel.MODEL_ID.toString(), domainId);
     }
 
     private void completeDnsAuthorizations(List<DnsAuthorization> authorizations) throws Exception {
