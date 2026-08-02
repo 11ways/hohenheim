@@ -177,6 +177,62 @@ public class HohenheimSettings {
         }
     }
 
+    // --- Install roles ---
+    // AIDEV-NOTE: restartRequired is ADVISORY metadata (a UI banner, nothing
+    // enforces it at runtime). What makes these flags behave consistently is
+    // that the server reads them ONCE at boot into the HohenheimRoles snapshot
+    // (captured by HohenheimSettingsFiles.load) and every gate reads the
+    // snapshot, never the live setting. A live edit therefore changes nothing
+    // until the restart the banner asks for.
+    public abstract class Roles {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("roles")
+            .label("Install roles")
+            .describe("Which subsystems this installation runs; disabled roles do not start, "
+                + "declare no scheduled tasks and remove their admin surfaces")
+            .icon("server");
+
+        public static final SettingDefinition<Boolean> PROXY = GROUP.buildSetting("proxy", Boolean.class)
+            .defaultValue(true)
+            .description("Run the reverse proxy: public listeners, sites, domains, certificates "
+                + "and access lists")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<Boolean> DNS = GROUP.buildSetting("dns", Boolean.class)
+            .defaultValue(true)
+            .description("Run the DNS subsystem: zone store, federation and the authoritative "
+                + "server (the listener itself still requires dns.enabled)")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<Boolean> FIREWALL = GROUP.buildSetting("firewall", Boolean.class)
+            .defaultValue(true)
+            .description("Run ban enforcement and spamservice reputation; nftables stays behind "
+                + "security.nftables_enabled")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<Boolean> STACKS = GROUP.buildSetting("stacks", Boolean.class)
+            .defaultValue(true)
+            .description("Run managed Docker stacks; requires a reachable Docker daemon, which "
+                + "is probed loudly at boot")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<Boolean> PROCESSES = GROUP.buildSetting("processes", Boolean.class)
+            .defaultValue(true)
+            .description("Run managed child processes (Node.js and friends): the process monitor, "
+                + "port and socket allocators")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<Boolean> DATABASES = GROUP.buildSetting("databases", Boolean.class)
+            .defaultValue(true)
+            .description("Run managed databases: provisioning, backups and the site database links")
+            .restartRequired()
+            .build();
+    }
+
     // --- SSL/TLS ---
     public abstract class Ssl {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("ssl")

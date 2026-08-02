@@ -38,6 +38,9 @@ public final class HohenheimSettingsFiles {
         HohenheimSettings.VALUES.loadFrom(
             new DryFileSource(settingsFile()),
             new EnvSettingsSource("HOHENHEIM"));
+        // The settings just became real: this is THE role-snapshot moment.
+        // Every roles.* gate reads the snapshot, never the live setting.
+        HohenheimRoles.capture();
     }
 
     /**

@@ -21,7 +21,7 @@ class SettingsGroupCoverageTest {
      * losing those keys.
      */
     private static final Set<String> DECLARED_GROUPS = Set.of(
-        "proxy", "ssl", "dns", "logging", "node", "storage", "stacks",
+        "proxy", "roles", "ssl", "dns", "logging", "node", "storage", "stacks",
         "database", "security", "process", "auth_proteus", "proxy_auth");
 
     @Test
