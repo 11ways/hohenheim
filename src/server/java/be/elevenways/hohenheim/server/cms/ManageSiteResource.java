@@ -7,6 +7,7 @@ import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -20,6 +21,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -96,8 +98,22 @@ public final class ManageSiteResource extends SiteResource {
         return List.of(this.toggleAction());
     }
 
+    /** NAV-ONLY (zero granted sites hide the empty list); the route itself stays scoped by accessFunction. */
+    @Override
+    public boolean hasInScopeRecords(@NonNull AccessContext access) {
+        return ManagePanel.hasManageScope(access);
+    }
+
     @Override
     public @NonNull List<RecordScopedPage<Row>> subpages() {
-        return List.of(new SiteDomainsPage(), new SiteDeploymentsPage(), new SiteProcessesPage());
+        // The operator subpages plus the CONTRIBUTED ones (the generic "access"
+        // matrix): a manage holder must be able to delegate from /manage, and
+        // each contributed page still gates itself per record via visibleFor.
+        // Deliberately NOT frameworkSubpages(): the admin activity/revision
+        // history pages stay off the delegated surface.
+        List<RecordScopedPage<Row>> pages = new ArrayList<>(
+            List.of(new SiteDomainsPage(), new SiteDeploymentsPage(), new SiteProcessesPage()));
+        pages.addAll(RecordSubpageRegistry.INSTANCE.contributionsFor(this.model().getModelId()));
+        return pages;
     }
 }

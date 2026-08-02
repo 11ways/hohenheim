@@ -1067,10 +1067,6 @@
       "scope": "dns_secondaries"
     },
     {
-      "text": "Geen gedelegeerde toegang",
-      "scope": "site_access"
-    },
-    {
       "text": "Nog geen services",
       "scope": "stack_services"
     },
@@ -1091,10 +1087,6 @@
     {
       "text": "Deployments via webhook, polling of handmatige start verschijnen hier.",
       "scope": "site_deployments"
-    },
-    {
-      "text": "Niemand behalve beheerders kan deze site al beheren.",
-      "scope": "site_access"
     },
     {
       "text": "Voeg een service toe om te beschrijven wat deze stack draait.",
@@ -1437,16 +1429,10 @@
     "text": "Gebruikt door",
     "scope": "database_tab"
   },
-  "user": [
-    {
-      "text": "Gebruiker",
-      "scope": "database_tab"
-    },
-    {
-      "text": "Gebruiker",
-      "scope": "site_access"
-    }
-  ],
+  "user": {
+    "text": "Gebruiker",
+    "scope": "database_tab"
+  },
   "variables": {
     "text": "Geïnjecteerde variabelen",
     "scope": "site_databases"
@@ -2980,58 +2966,6 @@
   "manage": {
     "text": "Beheren",
     "scope": "capability"
-  },
-  "access": {
-    "text": "Toegang",
-    "scope": "site"
-  },
-  "subject": {
-    "text": "Wie",
-    "scope": "site_access"
-  },
-  "capability": {
-    "text": "Bevoegdheid",
-    "scope": "site_access"
-  },
-  "allowed": {
-    "text": "Toegestaan",
-    "scope": "site_access"
-  },
-  "added": {
-    "text": "Toegevoegd",
-    "scope": "site_access"
-  },
-  "yes": {
-    "text": "Ja",
-    "scope": "site_access"
-  },
-  "no": {
-    "text": "Nee",
-    "scope": "site_access"
-  },
-  "remove": {
-    "text": "Verwijderen",
-    "scope": "site_access"
-  },
-  "remove_confirm": {
-    "text": "Deze toegang intrekken? De gebruiker verliest het beheerpaneel als dit de laatste site was.",
-    "scope": "site_access"
-  },
-  "add_title": {
-    "text": "Toegang verlenen",
-    "scope": "site_access"
-  },
-  "add_description": {
-    "text": "De gebruiker kan deze site (en haar domeinen) bekijken, bewerken en bedienen via het /manage-paneel.",
-    "scope": "site_access"
-  },
-  "add": {
-    "text": "Toegang verlenen",
-    "scope": "site_access"
-  },
-  "user_missing": {
-    "text": "Kies een actieve gebruiker",
-    "scope": "violations"
   },
   "security": {
     "text": "Beveiliging",

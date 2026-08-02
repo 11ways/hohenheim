@@ -10,6 +10,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Permission;
@@ -34,14 +35,16 @@ public final class ManagePanel extends Panel {
     public ManagePanel() {
         super(Identifier.of("hohenheim", "manage"), "manage",
             Microcopy.of("title").withFilter("scope", "manage"), ACCESS);
-        installEligibilityPolicy();
-        // Eager, not lazy-in-buildPeers: the source must exist the moment the
-        // server accepts requests, not after the first panel render.
-        registerSiteSource();
     }
 
-    /** Derives panel eligibility from walk-confirmed record grants while preserving explicit global grants. */
-    private static synchronized void installEligibilityPolicy() {
+    /**
+     * Derives panel eligibility from walk-confirmed record grants while preserving
+     * explicit global grants. Installed by {@code HohenheimHostWiring} at the
+     * MODULES stage (never a Panel-constructor side effect): the checker and the
+     * site source must exist the moment the server accepts requests, and boot-seam
+     * installation makes that ordering structural.
+     */
+    public static synchronized void installEligibilityPolicy() {
         PermissionChecker current = Zenit.getPermissionChecker();
         if (current instanceof ManageEligibilityChecker) {
             return;
@@ -148,6 +151,15 @@ public final class ManagePanel extends Panel {
 
     /** Matches nothing; NEVER ID.in(empty), which some backends reject or widen. */
     static @NonNull Criteria impossible() {
-        return SiteModel.ID.eq(-1);
+        return Models.get(SiteModel.class).matchNone();
+    }
+
+    /**
+     * NAV-ONLY scope probe shared by the /manage peers: admins always have
+     * scope; everyone else needs at least one walk-confirmed managed site.
+     * Cheap per render thanks to the conduit-scoped managedSiteIds memo.
+     */
+    static boolean hasManageScope(@NonNull AccessContext ctx) {
+        return HohenheimAccess.isAdmin(ctx) || !HohenheimAccess.managedSiteIds(ctx).isEmpty();
     }
 }

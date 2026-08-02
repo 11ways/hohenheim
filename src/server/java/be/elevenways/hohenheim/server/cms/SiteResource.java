@@ -490,9 +490,11 @@ public class SiteResource extends RowResource {
 
     @Override
     public @NonNull List<RecordScopedPage<Row>> subpages() {
+        // The "access" tab is the GENERIC record-access page, contributed by
+        // zenit-auth through RecordSubpageRegistry (part of frameworkSubpages).
         List<RecordScopedPage<Row>> pages = new ArrayList<>(
             List.of(new SiteDomainsPage(), new SiteDatabasesPage(), new SiteProcessesPage(),
-                new SiteDeploymentsPage(), new SiteDevSessionsPage(), new SiteAccessPage()));
+                new SiteDeploymentsPage(), new SiteDevSessionsPage()));
         pages.addAll(this.frameworkSubpages());
         return pages;
     }
