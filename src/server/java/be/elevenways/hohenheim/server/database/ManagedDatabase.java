@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 
 import java.io.IOException;
@@ -181,13 +183,26 @@ public class ManagedDatabase {
     public Connection provision(String name, Engine engine, String image,
                                 String user, String password, String database,
                                 boolean ephemeral) throws IOException {
-        return provision(name, engine, image, user, password, database, ephemeral, ResourceLimits.none());
+        return provision(name, engine, image, user, password, database, ephemeral,
+            ResourceLimits.none(), null);
     }
 
     /** Provision with optional container resource caps. */
     public Connection provision(String name, Engine engine, String image,
                                 String user, String password, String database,
                                 boolean ephemeral, ResourceLimits limits) throws IOException {
+        return provision(name, engine, image, user, password, database, ephemeral, limits, null);
+    }
+
+    /**
+     * Provision with the owning {@link DatabaseModel} record id: the container and its
+     * data volume then carry the {@link OwnerLabels} pair so the reconciler can
+     * attribute them. Null (record-less callers: tests, previews) labels nothing.
+     */
+    public Connection provision(String name, Engine engine, String image,
+                                String user, String password, String database,
+                                boolean ephemeral, ResourceLimits limits,
+                                @Nullable Integer recordId) throws IOException {
         String containerName = "hohenheim-db-" + name;
         String volumeName = containerName + "-data";
         String imageRef = (image == null || image.isBlank()) ? engine.defaultImage : image;
@@ -201,9 +216,11 @@ public class ManagedDatabase {
             // nothing to replace
         }
 
+        Map<String, String> owner = recordId != null
+            ? OwnerLabels.of(DatabaseModel.MODEL_ID, recordId) : null;
         String id = docker.createContainer(containerName,
             buildSpec(engine, imageRef, volumeName, engine.env(user, password, database),
-                engine.containerCommand(password), ephemeral, limits));
+                engine.containerCommand(password), ephemeral, limits, owner));
         docker.startContainer(id);
 
         waitForReady(id, engine, user, password, database, 60_000);
@@ -456,21 +473,32 @@ public class ManagedDatabase {
 
     private static Map<String, Object> buildSpec(Engine engine, String imageRef, String volumeName,
                                                  Map<String, String> env, @Nullable List<String> command,
-                                                 boolean ephemeral, ResourceLimits limits) {
+                                                 boolean ephemeral, ResourceLimits limits,
+                                                 @Nullable Map<String, String> ownerLabels) {
         String portKey = engine.port + "/tcp";
         List<String> envList = new ArrayList<>();
         env.forEach((key, value) -> envList.add(key + "=" + value));
 
         // Ephemeral data lives in a RAM-backed tmpfs mount: no host disk I/O at all (no btrfs
         // fsync storms from initdb), freed when the container is removed. Persistent data lives
-        // in a named volume that survives re-provisioning.
-        Map<String, Object> dataMount = ephemeral
-            ? Map.of("Type", "tmpfs", "Target", engine.dataPath,
-                     "TmpfsOptions", Map.of("SizeBytes", EPHEMERAL_DATA_SIZE_BYTES))
-            : Map.of("Type", "volume", "Source", volumeName, "Target", engine.dataPath);
+        // in a named volume that survives re-provisioning; VolumeOptions.Labels stamp the owner
+        // onto it at BIRTH, because Docker never relabels an existing volume.
+        Map<String, Object> dataMount;
+        if (ephemeral) {
+            dataMount = Map.of("Type", "tmpfs", "Target", engine.dataPath,
+                "TmpfsOptions", Map.of("SizeBytes", EPHEMERAL_DATA_SIZE_BYTES));
+        } else if (ownerLabels != null) {
+            dataMount = Map.of("Type", "volume", "Source", volumeName, "Target", engine.dataPath,
+                "VolumeOptions", Map.of("Labels", ownerLabels));
+        } else {
+            dataMount = Map.of("Type", "volume", "Source", volumeName, "Target", engine.dataPath);
+        }
 
         Map<String, Object> spec = new LinkedHashMap<>();
         spec.put("Image", imageRef);
+        if (ownerLabels != null) {
+            spec.put("Labels", ownerLabels);
+        }
         if (!envList.isEmpty()) {
             spec.put("Env", envList);
         }

@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -536,11 +538,19 @@ public class StackDeployer {
         return new DockerClient.RegistryAuth(spec.registryUser(), spec.registryPassword(), spec.registryServer());
     }
 
+    // AIDEV-NOTE: The stack-NAME-keyed labels above answer "which stack may touch
+    // this" (isOwned, prune, destroy, removeOwnedVolumes all key on LABEL_STACK
+    // alone); the record-id owner labels answer "which record created this" for the
+    // cross-tier reconciler. Both stay: adding the owner pair must never widen what
+    // the deployer is willing to remove.
     private Map<String, String> ownershipLabels(StackSpec spec, @Nullable String serviceName) {
         Map<String, String> labels = new LinkedHashMap<>();
         labels.put(LABEL_STACK, spec.name());
         if (serviceName != null) {
             labels.put(LABEL_SERVICE, serviceName);
+        }
+        if (spec.stackId() > 0) {
+            labels.putAll(OwnerLabels.of(StackModel.MODEL_ID, spec.stackId()));
         }
         return labels;
     }

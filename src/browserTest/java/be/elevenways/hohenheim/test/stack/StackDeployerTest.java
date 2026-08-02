@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.stack;
 
+import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.stack.StackDeployer;
 import be.elevenways.hohenheim.server.stack.StackSpec;
 import org.junit.jupiter.api.AfterEach;
@@ -141,6 +143,76 @@ class StackDeployerTest {
         assertThat(resolve.exitCode())
             .withFailMessage("service alias did not resolve: %s%s", resolve.stdout(), resolve.stderr())
             .isEqualTo(0);
+    }
+
+    /**
+     * A spec carrying its record id stamps the reconciler's owner labels onto
+     * container, volume AND network, WITHOUT changing what the deployer is willing
+     * to touch: ownership matching stays keyed on the stack-name label alone, so a
+     * same-named foreign resource is still refused.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void ownerLabelsRideAlongsideStackLabelsWithoutWideningOwnership() throws IOException {
+        requireDocker();
+        String stackName = uniqueStackName();
+        int stackRecordId = 31337;
+
+        StackSpec.ServiceSpec app = sleeper("app", List.of(),
+            List.of(new StackSpec.MountSpec("volume", "data", "/data", null)),
+            List.of(), null);
+        StackSpec spec = new StackSpec(stackRecordId, stackName, "local", null, false,
+            null, null, null, StackSpec.topologicallySorted(List.of(app)));
+        deployedSpecs.add(spec);
+
+        // 1. Deploy: every created resource carries stack labels AND the owner pair.
+        deployer(null).deploy(spec);
+
+        Map<String, Object> container = docker.inspectContainer(StackDeployer.containerName(spec, "app"));
+        Map<String, Object> containerLabels =
+            (Map<String, Object>) ((Map<String, Object>) container.get("Config")).get("Labels");
+        assertThat(containerLabels)
+            .as("container keeps the stack-name labels")
+            .containsEntry(StackDeployer.LABEL_STACK, stackName)
+            .containsEntry(StackDeployer.LABEL_SERVICE, "app");
+        OwnerLabels.Owner containerOwner = OwnerLabels.parse(containerLabels);
+        assertThat(containerOwner).as("container carries the owner pair").isNotNull();
+        assertThat(containerOwner.model()).isEqualTo(StackModel.MODEL_ID);
+        assertThat(containerOwner.id()).isEqualTo(String.valueOf(stackRecordId));
+
+        Map<String, Object> volume = docker.inspectVolume("hohenheim-stack-" + stackName + "-data");
+        OwnerLabels.Owner volumeOwner = OwnerLabels.parse((Map<?, ?>) volume.get("Labels"));
+        assertThat(volumeOwner).as("volume carries the owner pair from birth").isNotNull();
+        assertThat(volumeOwner.id()).isEqualTo(String.valueOf(stackRecordId));
+
+        Map<String, Object> network = docker.inspectNetwork(StackDeployer.networkName(spec));
+        OwnerLabels.Owner networkOwner = OwnerLabels.parse((Map<?, ?>) network.get("Labels"));
+        assertThat(networkOwner).as("network carries the owner pair").isNotNull();
+        assertThat(networkOwner.model()).isEqualTo(StackModel.MODEL_ID);
+
+        // 2. Destroy with volumes removes exactly this stack's resources, keyed on
+        //    the stack-name label as before.
+        deployer(null).destroy(spec, true);
+        String containerName = StackDeployer.containerName(spec, "app");
+        assertThatThrownBy(() -> docker.inspectContainer(containerName))
+            .as("container removed by destroy").isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> docker.inspectVolume("hohenheim-stack-" + stackName + "-data"))
+            .as("owned volume removed by destroy").isInstanceOf(IOException.class);
+
+        // 3. Ownership matching did NOT widen: a same-named container carrying ONLY
+        //    the owner pair (no stack-name label) is still refused, because isOwned
+        //    keys on the stack-name label alone. (The refused deploy re-creates the
+        //    stack network/volume first; @AfterEach's destroy sweeps those.)
+        strayContainers.add(containerName);
+        Map<String, Object> impostorSpec = new java.util.LinkedHashMap<>();
+        impostorSpec.put("Image", TEST_IMAGE);
+        impostorSpec.put("Cmd", List.of("sleep", "600"));
+        impostorSpec.put("Labels", OwnerLabels.of(StackModel.MODEL_ID, stackRecordId));
+        docker.createContainer(containerName, impostorSpec);
+        assertThatThrownBy(() -> deployer(null).deploy(spec))
+            .as("owner labels alone never make a resource replaceable")
+            .isInstanceOf(IOException.class)
+            .hasMessageContaining("not owned by this stack");
     }
 
     @Test
