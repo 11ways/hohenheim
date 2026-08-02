@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
@@ -20,6 +22,21 @@ public final class HohenheimTestRuntime {
     }
 
     public static void ensureBooted() {
+        // Standalone tests that never load the hohenheim settings file still hit
+        // role gates (task declarations at the TASKS stage, panel filtering, the
+        // security engine). The funnel DECLARES the full-node role set for them,
+        // matching what these suites always exercised; a role-restricted test
+        // declares its own set (and captures) BEFORE calling ensureBooted.
+        if (!HohenheimRoles.isCaptured()) {
+            HohenheimSettingsFiles.forceDefinitions();
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.PROXY, true);
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.DNS, true);
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.FIREWALL, true);
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.STACKS, true);
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.PROCESSES, true);
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.DATABASES, true);
+            HohenheimRoles.capture();
+        }
         ensureDatasource();
         // AIDEV-NOTE: auth is installed BEFORE the boot stages, exactly where
         // ServerMain installs it, because the MODULES stage now builds both CMS

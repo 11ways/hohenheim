@@ -65,6 +65,17 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
             throw new RuntimeException("Failed to create temp database file", e);
         }
 
+        // The shared harness DECLARES its role set instead of inheriting it by
+        // omission: every role on, the full-node shape this suite has always
+        // exercised. load() below snapshots these into HohenheimRoles.
+        HohenheimSettingsFiles.forceDefinitions();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.PROXY, true);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.DNS, true);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.FIREWALL, true);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.STACKS, true);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.PROCESSES, true);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.DATABASES, true);
+
         // Load the (empty) test settings file into the context so the panel's
         // framework SettingsPage can locate its editable DryFileSource.
         HohenheimSettingsFiles.load();
@@ -117,8 +128,9 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         return port;
     }
 
-    /** Create an enabled admin user and an active session for it; returns the session id (cookie value). */
-    private static String seedAuthenticatedAdmin() {
+    /** Create an enabled admin user and an active session for it; returns the session id (cookie value).
+     *  Package-visible: isolated boot tests (RoleRestrictedBootTest) reuse it instead of copying. */
+    static String seedAuthenticatedAdmin() {
         Row user = AuthModels.users().createEmptyRow();
         user.set(UserModel.EMAIL, "test@hohenheim.local");
         user.set(UserModel.DISPLAY_NAME, "Test Admin");

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.server.task.CleanOldActivity;
@@ -38,6 +39,14 @@ class HohenheimTaskBootstrapTest {
 
     @BeforeAll
     static void boot() throws Exception {
+        // Role-gated declarations read the boot snapshot; this suite declares the
+        // full-node set (all roles on) through a private settings file.
+        File settingsDry = File.createTempFile("hohenheim-task-bootstrap", ".dry");
+        settingsDry.delete();
+        settingsDry.deleteOnExit();
+        System.setProperty("hohenheim.settings", settingsDry.getAbsolutePath());
+        HohenheimSettingsFiles.load();
+
         SiteTypes.boot();
         HohenheimEndpoints.init();
         // auto-discovery creates system_task + the M0xx tables
