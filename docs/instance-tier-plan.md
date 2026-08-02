@@ -1334,15 +1334,80 @@ cross-tier link (Phase 5 game-domain mapping, Phase 7 project domains), which is
 why it sits beside Phase 2 rather than inside a phase that may be interleaved
 past. It is small if Phase 1 is done right: it is a consumer, not a mechanism.
 
-- Decide per model, and record it: `DnsZoneModel`, `DnsRecordModel`,
-  `SiteDomainModel` and the certificate records either get a capability
-  vocabulary in `KnownCapabilities` (with owner-implied and delegable flags),
-  or they are recorded as a permanent ADMIN-ONLY non-goal in the combined
-  product boundary section. Silence is not an option; either answer is.
+- DECIDED 2026-08-02, per model. This is the answer the gate demanded; it is
+  binding and belongs in the combined product boundary section.
+
+  - **`DnsZoneModel` -- PERMANENT ADMIN-ONLY NON-GOAL.** A zone row is the
+    DNSSEC/TSIG trust root (`DNSSEC_PRIVATE_KEY`, `DNSSEC_ALGORITHM`,
+    `DNSSEC_KEY_TAG`, plus `ROLE`/`PRIMARY_PEER_ID` binding it to a
+    TSIG-holding peer). There is no per-field split that leaves a tenant a safe
+    subset: every remaining field is SOA policy whose blast radius is the whole
+    zone going dark. Creating a zone also ASSERTS a delegation from the parent
+    that hohenheim cannot verify, so only an operator can make it. A tenant
+    never sees a zone row -- only names inside one.
+  - **`DnsPeerModel` / `DnsZonePeerModel` -- SAME RULING, same reason**
+    (`TSIG_SECRET`, `API_KEY`). Named explicitly so they are not left silent.
+  - **`DnsRecordModel` -- NARROW VOCABULARY.** `view` (ordinary, delegable,
+    owner-implied), `edit` (elevated, delegable, owner-implied) restricted by a
+    TYPE ALLOW-LIST of A/AAAA/CNAME/TXT/SRV, and `dyndns` (elevated, NOT
+    delegable, not owner-implied). NS/CAA/MX/DS/DNSKEY authoring, `MANAGED_BY`
+    mutation and `ZONE_ID` reassignment are not capabilities at all: each is a
+    zone-compromise primitive (NS delegates a subtree away, CAA disables or
+    redirects issuance for the whole name, moving a row between zones is a
+    takeover). `dyndns` is non-delegable because the minted token is a bearer
+    credential that SURVIVES grant revocation -- re-delegation would launder a
+    permanent capability out of a revocable one. Enforce the allow-list in the
+    write pipeline, never in the resource.
+  - **`SiteDomainModel` -- NO INDEPENDENT GRANT SURFACE.** Authority over a
+    domain is already fully determined by `manage` on its parent site
+    (`SITE_ID` -> `HohenheimAccess.canManageSite`). A second grant surface on
+    the child row means two authorities that can disagree, and it would spawn a
+    second auto-registered `RecordAccessPage`. Tenants may never set
+    `LISTEN_ON` (a disjoint listener walks straight past the overlap check),
+    `MATCH_TYPE` other than `exact` (a tenant wildcard or regex claims an
+    unbounded hostname set), or `CERTIFICATE_ID` (pinning a certificate row
+    they do not own).
+  - **`CertificateModel` -- VOCABULARY, ORDINARY ONLY.** `view` (ordinary,
+    delegable, owner-implied: status, expiry, hostnames, renewal error --
+    never PEMs) and `request` (elevated, delegable, NOT owner-implied).
+    **Key export is NEVER delegable and never owner-implied**: hohenheim
+    terminates TLS itself, so a tenant has no need for the private key, and
+    exporting it makes revocation meaningless. Certificate UPLOAD stays
+    admin-only -- an uploaded cert is unverified authority over a name. The
+    `PROVIDER_ACME_ACCOUNT` row must be excluded by the ACCESS criteria, not
+    only by the existing `baseCriteria` filter.
+
+  Registering a vocabulary is NOT free: `AuthRecordAccessBridge` auto-attaches
+  a subjects-x-capabilities matrix page to every model that declares one and is
+  grantable. Never declare one before that resource's scoping is complete.
 - Domain claim authority: who may bind a hostname, and what stops tenant B from
   claiming a name tenant A already serves or once served. This is the same
   invariant as 0.9 route ownership, one tier up. Reuse the model-level
   invariant 0.9 establishes; do not hand-roll a second check.
+
+  STATUS 2026-08-02: the ALREADY-SERVES half is DONE and is already
+  owner-scoped -- `SiteDomainResource.refuseRouteConflicts` compares hostname
+  SETS via `HostnamePatterns.intersect` and exempts only same-owner pairs,
+  where owner is the site's set of truthy `manage` grant subjects. Site-vs-site
+  is just the degenerate operator case (empty subject sets compare equal).
+
+  The ONCE-SERVED half is NOT done and nothing tracks it. There is no release
+  ledger anywhere; `LIVE_ROUTE_KEY` simply goes NULL, and an existing test
+  (`RouteOwnershipInvariantTest.aDeletedSitesHostnameBecomesClaimableAgain`)
+  asserts the OPPOSITE invariant on purpose -- correct for an operator-owned
+  install, wrong for multi-tenant. The attack is ordinary subdomain takeover:
+  tenant A serves `shop.example.com` and points a CNAME at it from a zone we do
+  not host, deletes the site, tenant B claims the name, and A's still-live
+  CNAME delivers A's users to B. Refusing the claim is the only lever we have,
+  because the dangling pointer is outside our control.
+
+  DECIDED: add a released-claim ledger (hostname set + former owner subject set
+  + released_at) written by the same restamp pass that nulls `LIVE_ROUTE_KEY`.
+  `refuseRouteConflicts` consults it and refuses a claim by a DIFFERENT owner
+  inside a quarantine window, with a recorded admin override. Same owner
+  reclaiming is always allowed, and operator-to-operator is unaffected because
+  both sides carry empty subject sets -- so the existing test keeps passing and
+  is AMENDED rather than deleted.
 - Generated records (ACME challenge records, Velocity forced-hosts, SRV/A rows
   materialized from a mapping) carry owner + source metadata and reconcile or
   delete ONLY their own output. A generated row is never adopted by whoever
