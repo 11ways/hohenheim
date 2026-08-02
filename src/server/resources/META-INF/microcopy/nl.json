@@ -1631,10 +1631,16 @@
     "text": "Overschrijft het globale Let's Encrypt-accountadres voor dit certificaat.",
     "scope": "certificate_request"
   },
-  "request": {
-    "text": "Certificaat aanvragen",
-    "scope": "certificate_request"
-  },
+  "request": [
+    {
+      "text": "Certificaat aanvragen",
+      "scope": "certificate_request"
+    },
+    {
+      "text": "Aanvragen",
+      "scope": "capability"
+    }
+  ],
   "any": {
     "text": "Eén van beide (IP of Basic Auth)",
     "scope": "access_satisfy"
@@ -2555,6 +2561,14 @@
     "text": "Alleen een beheerder kan wijzigen wie een record beheert",
     "scope": "violations"
   },
+  "tenant_record_not_authorized": {
+    "text": "Je beheert geen hostnaam die deze naam dekt",
+    "scope": "violations"
+  },
+  "tenant_record_no_zone": {
+    "text": "Geen enkele gehoste zone bevat die naam",
+    "scope": "violations"
+  },
   "dns_record_duplicate": {
     "text": "Dat exacte record bestaat al in deze zone",
     "scope": "violations"
@@ -3013,6 +3027,18 @@
   },
   "manage": {
     "text": "Beheren",
+    "scope": "capability"
+  },
+  "view": {
+    "text": "Bekijken",
+    "scope": "capability"
+  },
+  "edit": {
+    "text": "Bewerken",
+    "scope": "capability"
+  },
+  "dyndns": {
+    "text": "Dynamische DNS-token",
     "scope": "capability"
   },
   "security": {

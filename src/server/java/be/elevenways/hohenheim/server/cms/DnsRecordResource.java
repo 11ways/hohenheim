@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -36,7 +37,7 @@ import java.util.Map;
  * zone's Records tab. A row that persists is a row the codec can serve,
  * so validation converts through {@link DnsRecordCodec}.
  */
-public final class DnsRecordResource extends RowResource {
+public class DnsRecordResource extends RowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(RelationPick.of(DnsRecordModel.ZONE_ID, DnsZoneModel.MODEL_ID).build())
@@ -138,6 +139,12 @@ public final class DnsRecordResource extends RowResource {
             .label(Microcopy.of("dyndns_token").withFilter("scope", "dns_record"))
             .icon(Icon.of("rotate"))
             .description(Microcopy.of("dyndns_token_hint").withFilter("scope", "dns_record"))
+            // The token is a bearer credential that survives grant revocation, so minting it
+            // is its OWN capability -- and visibleFor is re-checked on invoke, not just on
+            // render (ResourcePageEndpoints). An operator passes through the walk's admin
+            // bypass, so one predicate answers for both panels.
+            .visibleFor((row, ctx) -> ctx.hasCapability(DnsRecordModel.MODEL_ID,
+                row.get(DnsRecordModel.ID), HohenheimAccess.DYNDNS))
             .handler((row, ctx) -> mintDynamicToken(row))
             .build());
         return actions;

@@ -1,10 +1,13 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.server.GrantableModel;
 import be.elevenways.zenit.auth.server.RecordGrantCapabilityChecker;
@@ -24,7 +27,9 @@ import be.elevenways.zenit.server.data.RecordSourceGate;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -47,6 +52,18 @@ public final class HohenheimAccess {
 
     /** The single v1 capability on a site record. */
     public static final String MANAGE = "manage";
+
+    /** Read a record's own state: DNS record fields, certificate status (never key material). */
+    public static final String VIEW = "view";
+
+    /** Author a DNS record inside the delegated type allow-list. */
+    public static final String EDIT = "edit";
+
+    /** Mint and hold a DNS record's dyndns update token. */
+    public static final String DYNDNS = "dyndns";
+
+    /** Order or renew a certificate for names the holder already answers for. */
+    public static final String REQUEST = "request";
 
     private HohenheimAccess() {
     }
@@ -79,6 +96,67 @@ public final class HohenheimAccess {
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
+
+        // AIDEV-NOTE: DnsZoneModel, DnsPeerModel and DnsZonePeerModel declare NO vocabulary
+        // and are NOT grantable, PERMANENTLY and by decision (docs/instance-tier-plan.md,
+        // "Phase 2 parallel gate", DECIDED 2026-08-02). A zone row is the DNSSEC/TSIG trust
+        // root (dnssec_private_key, tsig_secret, api_key) and every remaining field is SOA
+        // policy whose blast radius is the whole zone going dark, so there is no per-field
+        // split leaving a tenant a safe subset; creating a zone also ASSERTS a delegation
+        // from the parent that hohenheim cannot verify. A tenant never sees a zone row, only
+        // names inside one. Do not "helpfully" add one here: the tenant-facing DNS surface is
+        // ManageDnsRecordResource, scoped by hostname authority and per-record grants.
+        // AIDEV-NOTE: asOwnerImplied() on these two is DECLARED but INERT today -- the walk's
+        // owner row only runs when the model's rules name an ownerField, and dns_records has
+        // no owning-principal column. It is written down anyway because the decision is that
+        // ownership WOULD imply them; the day a column lands, ownedBy() is the only edit.
+        // CertificateModel's owner row is live (requested_by_user_id).
+        RecordGrants.declareGrantable(GrantableModel.of(DnsRecordModel.MODEL_ID));
+        KnownCapabilities.register(DnsRecordModel.MODEL_ID,
+            KnownCapability.of(VIEW)
+                .label(Microcopy.of("view").withFilter("scope", "capability"))
+                .asDelegable()
+                .asOwnerImplied(),
+            KnownCapability.of(EDIT)
+                .label(Microcopy.of("edit").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable()
+                .asOwnerImplied(),
+            // NOT delegable: the minted token is a bearer credential that SURVIVES grant
+            // revocation, so re-delegation would launder a permanent capability out of a
+            // revocable one. NS/CAA/MX/DS/DNSKEY authoring, managed_by mutation and zone_id
+            // reassignment are deliberately not capabilities AT ALL -- each is a
+            // zone-compromise primitive, refused in the write pipeline (TenantWrites) for
+            // every writer rather than offered as something an operator could grant.
+            KnownCapability.of(DYNDNS)
+                .label(Microcopy.of("dyndns").withFilter("scope", "capability"))
+                .elevated());
+        RecordGrantCapabilityChecker.declareRules(DnsRecordModel.MODEL_ID,
+            RecordCapabilityRules.create()
+                .gate(ManagePanel.ACCESS)
+                .admin(HohenheimPanel.ACCESS));
+
+        RecordGrants.declareGrantable(GrantableModel.of(CertificateModel.MODEL_ID));
+        KnownCapabilities.register(CertificateModel.MODEL_ID,
+            KnownCapability.of(VIEW)
+                .label(Microcopy.of("view").withFilter("scope", "capability"))
+                .asDelegable()
+                .asOwnerImplied(),
+            // Not owner-implied: having ordered one certificate is not authority to order the
+            // next. Key EXPORT and certificate UPLOAD are not capabilities at all -- hohenheim
+            // terminates TLS itself so a tenant never needs the key, and an uploaded
+            // certificate is unverified authority over a name.
+            KnownCapability.of(REQUEST)
+                .label(Microcopy.of("request").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable());
+        RecordGrantCapabilityChecker.declareRules(CertificateModel.MODEL_ID,
+            RecordCapabilityRules.create()
+                .gate(ManagePanel.ACCESS)
+                .admin(HohenheimPanel.ACCESS)
+                // The requester IS the owner: the column already exists because renewal
+                // re-decides authority against it every sweep.
+                .ownedBy(CertificateModel.REQUESTED_BY_USER_ID.getName()));
     }
 
     /**
@@ -177,55 +255,94 @@ public final class HohenheimAccess {
     public static @Nullable Criteria managedSiteScope(@NonNull AccessContext ctx,
                                                       @NonNull Model model,
                                                       @NonNull Function<Set<Integer>, Criteria> forManagedIds) {
+        return grantScope(ctx, model, SiteModel.MODEL_ID, MANAGE, forManagedIds);
+    }
+
+    /**
+     * The generalized shape of {@link #managedSiteScope}: admins are unconstrained, an
+     * anonymous or grant-less principal matches NOTHING, and everyone else gets the criteria
+     * {@code forGrantedIds} spells over the walk-confirmed record ids.
+     *
+     * @param model the model being SCOPED (its {@code matchNone()}), which is not necessarily
+     *        the model the capability is held on -- domains scope by their parent site
+     */
+    public static @Nullable Criteria grantScope(@NonNull AccessContext ctx,
+                                                @NonNull Model model,
+                                                @NonNull Identifier capabilityModel,
+                                                @NonNull String capability,
+                                                @NonNull Function<Set<Integer>, Criteria> forGrantedIds) {
         if (isAdmin(ctx)) {
             return null;
         }
         if (ctx.isAnonymous()) {
             return model.matchNone();
         }
-        Set<Integer> ids = managedSiteIds(ctx);
-        return ids.isEmpty() ? model.matchNone() : forManagedIds.apply(ids);
+        Set<Integer> ids = grantedRecordIds(ctx, capabilityModel, capability);
+        return ids.isEmpty() ? model.matchNone() : forGrantedIds.apply(ids);
     }
 
-    /** Request-scoped memo of the confirmed managed-site set (one principal per conduit). */
-    private static final IdentifierKey<Set<Integer>> MANAGED_SITE_IDS =
-        IdentifierKey.of("hohenheim", "managed_site_ids");
+    /** Request-scoped memo of the confirmed id sets, keyed by model + capability. */
+    private static final IdentifierKey<Map<String, Set<Integer>>> GRANTED_RECORD_IDS =
+        IdentifierKey.of("hohenheim", "granted_record_ids");
 
     /**
-     * Every site id the context holds {@link #MANAGE} on, for feeding scope
-     * criteria (the walk decides per record and offers no enumeration, so
-     * candidates come from the grant store and each one is CONFIRMED through
-     * the walk -- which re-applies admin bypass and gate denial).
-     *
-     * Memoized per REQUEST on the conduit (the PermissionResolver WALK_CACHE
-     * idiom): panel eligibility, scope criteria and the nav probes all ask per
-     * render, and grants written mid-request stay next-request-effective.
-     * Conduit-less contexts run the enumeration fresh.
+     * Every site id the context holds {@link #MANAGE} on.
      */
     @NonNull
     public static Set<Integer> managedSiteIds(@NonNull AccessContext ctx) {
+        return grantedRecordIds(ctx, SiteModel.MODEL_ID, MANAGE);
+    }
+
+    /**
+     * Every record id of {@code model} the context holds {@code capability} on, for feeding
+     * scope criteria (the walk decides per record and offers no enumeration, so candidates
+     * come from the grant store and each one is CONFIRMED through the walk -- which
+     * re-applies admin bypass and gate denial).
+     *
+     * Memoized per REQUEST on the conduit (the PermissionResolver WALK_CACHE idiom): panel
+     * eligibility, scope criteria and the nav probes all ask per render, and grants written
+     * mid-request stay next-request-effective. Conduit-less contexts run the enumeration
+     * fresh.
+     *
+     * AIDEV-NOTE: the memo is a MAP keyed by model+capability, not one attribute per set. One
+     * attribute per set is how the second consumer (dns records) quietly ends up outside the
+     * budget the first consumer's test pinned.
+     */
+    @NonNull
+    public static Set<Integer> grantedRecordIds(@NonNull AccessContext ctx,
+                                                @NonNull Identifier model,
+                                                @NonNull String capability) {
+        String key = model + "#" + capability;
         Conduit conduit = ctx.conduit();
         if (conduit == null) {
-            return enumerateManagedSiteIds(ctx);
+            return enumerateGrantedIds(ctx, model, capability);
         }
 
-        Set<Integer> cached = conduit.getAttribute(MANAGED_SITE_IDS);
+        Map<String, Set<Integer>> cache = conduit.getAttribute(GRANTED_RECORD_IDS);
+        if (cache == null) {
+            cache = new HashMap<>();
+            try {
+                conduit.setAttribute(GRANTED_RECORD_IDS, cache);
+            } catch (UnsupportedOperationException attributeless) {
+                // A conduit without attribute storage just pays the walk each call.
+            }
+        }
+
+        Set<Integer> cached = cache.get(key);
         if (cached != null) {
             return cached;
         }
 
-        Set<Integer> ids = enumerateManagedSiteIds(ctx);
-        try {
-            conduit.setAttribute(MANAGED_SITE_IDS, ids);
-        } catch (UnsupportedOperationException attributeless) {
-            // A conduit without attribute storage just pays the walk each call.
-        }
+        Set<Integer> ids = enumerateGrantedIds(ctx, model, capability);
+        cache.put(key, ids);
         return ids;
     }
 
-    private static @NonNull Set<Integer> enumerateManagedSiteIds(@NonNull AccessContext ctx) {
-        return confirmedSiteIds(ctx.principal(),
-            id -> ctx.hasCapability(SiteModel.MODEL_ID, id, MANAGE));
+    private static @NonNull Set<Integer> enumerateGrantedIds(@NonNull AccessContext ctx,
+                                                             @NonNull Identifier model,
+                                                             @NonNull String capability) {
+        return confirmedRecordIds(ctx.principal(), model, capability,
+            id -> ctx.hasCapability(model, id, capability));
     }
 
     /**
@@ -235,7 +352,7 @@ public final class HohenheimAccess {
     @NonNull
     public static Set<Integer> managedSiteIds(@NonNull Principal principal) {
         WebSocketAuthenticator authenticator = Zenit.getWebSocketAuthenticator();
-        return confirmedSiteIds(principal,
+        return confirmedRecordIds(principal, SiteModel.MODEL_ID, MANAGE,
             id -> authenticator.hasCapability(principal, SiteModel.MODEL_ID, id, MANAGE));
     }
 
@@ -243,20 +360,22 @@ public final class HohenheimAccess {
      * @return the grant-derived candidate ids the walk confirms (unparseable ids skipped)
      */
     @NonNull
-    private static Set<Integer> confirmedSiteIds(@NonNull Principal principal,
-                                                 @NonNull Predicate<String> confirmedByWalk) {
+    private static Set<Integer> confirmedRecordIds(@NonNull Principal principal,
+                                                   @NonNull Identifier model,
+                                                   @NonNull String capability,
+                                                   @NonNull Predicate<String> confirmedByWalk) {
         if (principal.isAnonymous()) {
             return Set.of();
         }
         Set<Integer> ids = new HashSet<>();
-        for (String raw : RecordGrants.recordIds(principal, SiteModel.MODEL_ID, MANAGE)) {
+        for (String raw : RecordGrants.recordIds(principal, model, capability)) {
             if (!confirmedByWalk.test(raw)) {
                 continue;
             }
             try {
                 ids.add(Integer.parseInt(raw));
             } catch (NumberFormatException ignored) {
-                // Grants store record ids as strings; non-numeric ones cannot be sites.
+                // Grants store record ids as strings; these models all key on an integer.
             }
         }
         return ids;

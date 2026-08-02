@@ -61,6 +61,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
     private static Integer foreignDomainId;
     private static Integer foreignCertificateId;
     private static Integer zoneId;
+    private static Integer foreignRecordId;
     private static Integer tenantId;
     private static String tenantSession;
     private static String tenantCsrf;
@@ -100,8 +101,9 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         foreignCertificateId = cert.get(CertificateModel.ID);
 
         // The ACME ACCOUNT row: bookkeeping that holds the installation's account key and
-        // must be invisible through the certificate source's ACCESS criteria, not merely
-        // through its display filter.
+        // must be invisible through the certificate source's BASE criteria -- which
+        // RecordSource ANDs into query, resolve, exists and buckets alike, so it is a real
+        // exclusion on every path and not merely a display filter.
         Row account = certModel.createEmptyRow();
         account.set(CertificateModel.NICE_NAME, "ACME account bookkeeping");
         account.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_ACME_ACCOUNT);
@@ -119,6 +121,20 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         zoneModel.save(zone);
         zoneId = zone.get(DnsZoneModel.ID);
         DnsZoneStore.INSTANCE.reload();
+
+        // Another tenant's DNS record, authored as the system so nothing under test made it.
+        // It lives in the SAME zone as the tenant's own names: the zone is not the unit of
+        // authority, so a scope that leaked would leak this row.
+        var recordModel = Models.get(DnsRecordModel.class);
+        Row foreignRecord = recordModel.createEmptyRow();
+        foreignRecord.set(DnsRecordModel.ZONE_ID, zoneId);
+        foreignRecord.set(DnsRecordModel.NAME, "foreign");
+        foreignRecord.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_A);
+        foreignRecord.set(DnsRecordModel.VALUE, "10.0.0.66");
+        foreignRecord.set(DnsRecordModel.TTL, 300);
+        foreignRecord.set(DnsRecordModel.ENABLED, true);
+        recordModel.save(foreignRecord);
+        foreignRecordId = foreignRecord.get(DnsRecordModel.ID);
 
         Row tenant = AuthModels.users().createEmptyRow();
         tenant.set(UserModel.EMAIL, "tenant-scope@hohenheim.local");
@@ -436,22 +452,41 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
     }
 
     /**
-     * The DNS type allow-list: a tenant-originated write may only author A/AAAA/CNAME/TXT/SRV,
-     * may not re-home a row between zones and may not relabel who manages it. The same writes
-     * as an operator are unaffected.
+     * The two halves of a tenant DNS write: the NAME must be one the tenant already answers
+     * for ({@code HostnameAuthority}, the same predicate a certificate order asks) and the
+     * TYPE must be inside the delegated allow-list. Re-homing between zones and relabelling
+     * who manages a row stay refused; the same writes as an operator are unaffected.
      */
     @Test
     @Order(5)
-    void tenantDnsWritesStayInsideTheTypeAllowList() {
+    void tenantDnsWritesNeedNameAuthorityAndStayInsideTheTypeAllowList() {
         Model model = Models.get(DnsRecordModel.class);
 
-        // 1. An allow-listed type saves.
+        // 1. An allow-listed type under a hostname the tenant SERVES saves.
         assertThatCode(() -> TenantConduits.as(tenantPrincipal,
-            () -> model.save(record(model, "www", DnsRecordModel.TYPE_A, "10.0.0.1"))))
-            .as("A is inside the allow-list").doesNotThrowAnyException();
+            () -> model.save(record(model, "owned", DnsRecordModel.TYPE_A, "10.0.0.1"))))
+            .as("A under a managed hostname is inside both halves").doesNotThrowAnyException();
 
-        // 2. The zone-compromise primitives are refused: NS delegates a subtree away, CAA
-        //    redirects issuance for the whole name, MX re-points mail.
+        // 2. The SAME type under a name the tenant does not serve is refused -- the zone is
+        //    not the unit of authority, the hostname is.
+        assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal,
+            () -> model.save(record(model, "foreign", DnsRecordModel.TYPE_A, "10.0.0.166"))))
+            .as("another tenant's hostname is not a name this tenant may author")
+            .isInstanceOf(Violations.class);
+        assertThat(model.find().where(DnsRecordModel.ZONE_ID.eq(zoneId))
+            .where(DnsRecordModel.NAME.eq("foreign"))
+            .where(DnsRecordModel.VALUE.eq("10.0.0.166")).first())
+            .as("and the refused write left no row").isNull();
+
+        // 3. So is a name nothing on this installation serves at all (fails closed on
+        //    absence, exactly like a certificate order for an unserved name).
+        assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal,
+            () -> model.save(record(model, "unserved", DnsRecordModel.TYPE_A, "10.0.0.67"))))
+            .as("an unserved name has no owner, so nobody but an operator may claim it")
+            .isInstanceOf(Violations.class);
+
+        // 4. The zone-compromise primitives are refused even on the tenant's OWN name: NS
+        //    delegates a subtree away, CAA redirects issuance, MX re-points mail.
         for (String type : List.of(DnsRecordModel.TYPE_NS, DnsRecordModel.TYPE_CAA,
                 DnsRecordModel.TYPE_MX)) {
             String value = switch (type) {
@@ -459,8 +494,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
                 default -> "attacker.example.com.";
             };
             assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal, () -> {
-                Row row = record(model, "hostile-" + type.toLowerCase(java.util.Locale.ROOT),
-                    type, value);
+                Row row = record(model, "owned", type, value);
                 row.set(DnsRecordModel.PRIORITY, 10);
                 model.save(row);
             })).as("%s is not a delegable record type", type).isInstanceOf(Violations.class);
@@ -469,13 +503,13 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
                 .as("a refused %s write leaves no row behind", type).isNull();
         }
 
-        // 3. An operator authors the same NS row without trouble -- the allow-list is about
+        // 5. An operator authors the same NS row without trouble -- the allow-list is about
         //    delegation, not about the record type being invalid.
         Row operatorNs = record(model, "sub", DnsRecordModel.TYPE_NS, "ns1.example.com.");
         assertThatCode(() -> TenantConduits.as(adminPrincipal, () -> model.save(operatorNs)))
             .as("an operator may author NS").doesNotThrowAnyException();
 
-        // 4. A tenant cannot launder that row in by RETYPING it, in either direction.
+        // 6. A tenant cannot launder that row in by RETYPING it, in either direction.
         assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal, () -> {
             Row row = model.findById(operatorNs.get(DnsRecordModel.ID));
             row.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_A);
@@ -484,7 +518,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         })).as("editing a row whose STORED type is outside the allow-list is refused")
             .isInstanceOf(Violations.class);
 
-        // 5. Nor delete it, while its own A row deletes fine.
+        // 7. Nor delete it, while its own A row deletes fine.
         assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal,
             () -> model.delete(model.findById(operatorNs.get(DnsRecordModel.ID)))))
             .as("deleting an NS row is the same zone-compromise primitive as writing one")
@@ -492,16 +526,16 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         assertThat(model.findById(operatorNs.get(DnsRecordModel.ID)))
             .as("the operator NS row survived").isNotNull();
 
-        // 6. Re-homing a row between zones is a takeover primitive.
+        // 8. Re-homing a row between zones is a takeover primitive.
         Row own = model.find().where(DnsRecordModel.ZONE_ID.eq(zoneId))
-            .where(DnsRecordModel.NAME.eq("www")).first();
+            .where(DnsRecordModel.NAME.eq("owned")).first();
         assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal, () -> {
             Row row = model.findById(own.get(DnsRecordModel.ID));
             row.set(DnsRecordModel.ZONE_ID, zoneId + 1000);
             model.save(row);
         })).as("zone_id is frozen for a tenant").isInstanceOf(Violations.class);
 
-        // 7. So is relabelling who manages it: managed_by decides the zone-file import's
+        // 9. So is relabelling who manages it: managed_by decides the zone-file import's
         //    replace scope.
         assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal, () -> {
             Row row = model.findById(own.get(DnsRecordModel.ID));
@@ -509,7 +543,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             model.save(row);
         })).as("managed_by is frozen for a tenant").isInstanceOf(Violations.class);
 
-        // 8. An ordinary value edit on its own A row still saves.
+        // 10. An ordinary value edit on its own A row still saves.
         assertThatCode(() -> TenantConduits.as(tenantPrincipal, () -> {
             Row row = model.findById(own.get(DnsRecordModel.ID));
             row.set(DnsRecordModel.VALUE, "10.0.0.2");
@@ -570,33 +604,96 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         assertThat((String) model.findById(mistake.get(DnsRecordModel.ID)).get(DnsRecordModel.VALUE))
             .as("and nothing was written").isEqualTo("mx.example.com.");
 
+        // 3. The anonymous lane is BOUNDED, not exempt: it may move VALUE on a stored DYNAMIC
+        //    row and nothing else. Without the bound, "no principal" would be a write pass.
+        Integer dynamicId = dynamic.get(DnsRecordModel.ID);
+        assertThatThrownBy(() -> TenantConduits.as(null, () -> {
+            Row row = model.findById(dynamicId);
+            row.set(DnsRecordModel.NAME, "hijacked");
+            model.save(row);
+        })).as("an anonymous caller may not relabel the row its token unlocks")
+            .isInstanceOf(Violations.class);
+        assertThat((String) model.findById(dynamicId).get(DnsRecordModel.NAME))
+            .as("and the owner name is untouched").isEqualTo("router");
+
+        Row notDynamic = record(model, "static-a", DnsRecordModel.TYPE_A, "10.1.1.1");
+        model.save(notDynamic);
+        assertThatThrownBy(() -> TenantConduits.as(null, () -> {
+            Row row = model.findById(notDynamic.get(DnsRecordModel.ID));
+            row.set(DnsRecordModel.VALUE, "10.1.1.2");
+            model.save(row);
+        })).as("nor touch a row that was never dynamic").isInstanceOf(Violations.class);
+        assertThat((String) model.findById(notDynamic.get(DnsRecordModel.ID))
+            .get(DnsRecordModel.VALUE)).isEqualTo("10.1.1.1");
+
+        // 4. Minting a token is its OWN capability: a tenant holding only edit is refused,
+        //    and the stored digest is proof it wrote nothing.
+        assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimAccess.EDIT);
+        assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimAccess.VIEW);
+        String storedDigest = model.findById(dynamicId).get(DnsRecordModel.DYNDNS_TOKEN);
+        assertThat(tenantPost("/manage/dns-records/" + dynamicId + "/action/dyndns_token", "")
+            .statusCode()).as("edit is not dyndns").isIn(403, 404);
+        assertThat((String) model.findById(dynamicId).get(DnsRecordModel.DYNDNS_TOKEN))
+            .as("the refused action minted nothing").isEqualTo(storedDigest);
+
+        assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimAccess.DYNDNS);
+        assertThat(tenantPost("/manage/dns-records/" + dynamicId + "/action/dyndns_token", "")
+            .statusCode()).as("the dyndns holder may re-mint").isIn(200, 302, 303);
+        assertThat((String) model.findById(dynamicId).get(DnsRecordModel.DYNDNS_TOKEN))
+            .as("and the stored digest actually rotated").isNotEqualTo(storedDigest);
+
+        for (String capability : List.of(HohenheimAccess.EDIT, HohenheimAccess.VIEW,
+                HohenheimAccess.DYNDNS)) {
+            RecordGrants.revoke("user", tenantId, DnsRecordModel.MODEL_ID, dynamicId, capability);
+        }
         TenantConduits.as(adminPrincipal, () -> {
-            model.delete(model.findById(dynamic.get(DnsRecordModel.ID)));
+            model.delete(model.findById(dynamicId));
             model.delete(model.findById(mistake.get(DnsRecordModel.ID)));
+            model.delete(model.findById(notDynamic.get(DnsRecordModel.ID)));
         });
     }
 
     /**
-     * The zone / record / certificate tier stays ADMIN-ONLY through every surface a delegated
-     * tenant can address: sources, the nav-hidden record resource, the peer API, the zone-file
-     * import and the certificate pages.
+     * The ZONE tier stays admin-only through every surface a delegated tenant can address --
+     * a tenant reaches names, never the zone row that holds the DNSSEC/TSIG material -- and
+     * the record/certificate tiers answer only for what the tenant is scoped to.
      */
     @Test
     @Order(7)
-    void everyZoneRecordAndCertificateSurfaceStaysClosedToATenant() throws Exception {
+    void everyZoneSurfaceStaysClosedAndTheScopedTiersLeakNothing() throws Exception {
         String matchAll = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
 
-        // 1. Sources: unauthorized and unknown refuse IDENTICALLY with 404.
-        for (String token : List.of("hohenheim.dns_zone", "hohenheim.certificate",
-                "hohenheim.dns_record")) {
-            assertThat(tenantDry("/zn/records/" + token + "/query", matchAll).statusCode())
-                .as("query on %s", token).isEqualTo(404);
-            assertThat(tenantGet("/zn/records/" + token + "/item/" + zoneId).statusCode())
-                .as("item on %s", token).isEqualTo(404);
-        }
+        // 1. The zone source: unauthorized and unknown refuse IDENTICALLY with 404. Zones are
+        //    a PERMANENT admin-only non-goal, so there is no scoped view of one.
+        assertThat(tenantDry("/zn/records/hohenheim.dns_zone/query", matchAll).statusCode())
+            .as("query on hohenheim.dns_zone").isEqualTo(404);
+        assertThat(tenantGet("/zn/records/hohenheim.dns_zone/item/" + zoneId).statusCode())
+            .as("item on hohenheim.dns_zone").isEqualTo(404);
 
-        // 2. The ACME ACCOUNT row is excluded by the ACCESS criteria, so even the operator's
-        //    own reads through the source cannot resolve it.
+        // 2. The record and certificate sources ARE open to a grant holder -- and empty of
+        //    everything the tenant does not answer for. Reachability is not disclosure.
+        HttpResponse<String> records =
+            tenantDry("/zn/records/hohenheim.dns_record/query", matchAll);
+        assertThat(records.statusCode()).as("the record source is open to a grant holder")
+            .isEqualTo(200);
+        // By ID, not by scanning the body for a string the projection may never carry: a
+        // substring assertion over a DataItem list is exactly the check that cannot fail.
+        assertThat(tenantGet("/zn/records/hohenheim.dns_record/item/" + foreignRecordId)
+            .statusCode())
+            .as("another tenant's record does not resolve through the source").isEqualTo(404);
+
+        HttpResponse<String> certs = tenantDry("/zn/records/hohenheim.certificate/query", matchAll);
+        assertThat(certs.statusCode()).isEqualTo(200);
+        assertThat(certs.body())
+            .as("a certificate the tenant neither requested nor was granted stays invisible")
+            .doesNotContain("Foreign tenant certificate")
+            .doesNotContain("ACME account bookkeeping");
+        assertThat(tenantGet("/zn/records/hohenheim.certificate/item/" + foreignCertificateId)
+            .statusCode()).as("and resolves as missing by id too").isEqualTo(404);
+
+        // 3. The ACME ACCOUNT row is excluded by the source's BASE criteria (which
+        //    RecordSource ANDs into query, resolve, exists and buckets alike), so even the
+        //    operator's own reads through the source cannot resolve it.
         Row account = Models.get(CertificateModel.class).find()
             .where(CertificateModel.PROVIDER.eq(CertificateModel.PROVIDER_ACME_ACCOUNT)).first();
         HttpResponse<String> adminAccount = get(
@@ -611,7 +708,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             .contains("Foreign tenant certificate")
             .doesNotContain("ACME account bookkeeping");
 
-        // 3. Nav invisibility is not a gate: the record resource's slug still ROUTES, and it
+        // 4. Nav invisibility is not a gate: the ADMIN resources' slugs still ROUTE, and it
         //    is the panel permission that refuses.
         assertThat(tenantGet("/admin/dns-records").statusCode()).isEqualTo(403);
         assertThat(tenantGet("/admin/dns-zones/" + zoneId + "/page/records").statusCode())
@@ -620,19 +717,30 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         assertThat(tenantGet("/admin/certificates-request?site=" + foreignSiteId).statusCode())
             .isEqualTo(403);
 
-        // 4. ...and the delegated panel simply has no such peers.
-        for (String slug : List.of("dns-records", "dns-zones", "dns-peers", "certificates")) {
+        // 5. The delegated panel has a records and a certificates peer -- and NO zone or peer
+        //    surface, in either direction, permanently.
+        for (String slug : List.of("dns-zones", "dns-peers")) {
             assertThat(tenantGet("/manage/" + slug).statusCode())
                 .as("/manage/%s is not a delegated surface", slug).isEqualTo(404);
         }
+        HttpResponse<String> manageRecords = tenantGet("/manage/dns-records");
+        assertThat(manageRecords.statusCode()).isEqualTo(200);
+        assertThat(manageRecords.body())
+            .as("the delegated record list carries no foreign name")
+            .doesNotContain("foreign.tenantscope.test").doesNotContain("ns1.example.com");
+        HttpResponse<String> manageCerts = tenantGet("/manage/certificates");
+        assertThat(manageCerts.statusCode()).isEqualTo(200);
+        assertThat(manageCerts.body())
+            .as("the delegated certificate list carries no foreign certificate")
+            .doesNotContain("Foreign tenant certificate");
 
-        // 5. The peer/automation API refuses a session principal outright, tenant or not.
+        // 6. The peer/automation API refuses a session principal outright, tenant or not.
         assertThat(tenantGet("/api/dns/zones/" + ZONE_ORIGIN + "/records").statusCode())
             .as("the DNS API is admin-permissioned AND api-key-only").isIn(403, 404);
         assertThat(tenantPost("/api/dns/zones/" + ZONE_ORIGIN + "/records",
             "name=x&type=NS&value=ns.attacker.example.com.").statusCode()).isIn(403, 404);
 
-        // 6. The zone-file import replaces every non-generated row in a zone in one POST.
+        // 7. The zone-file import replaces every non-generated row in a zone in one POST.
         assertThat(tenantPost("/admin/dns-zones/" + zoneId + "/page/zone-file",
             "text=" + URLEncoder.encode("@ IN NS ns.attacker.example.com.",
                 StandardCharsets.UTF_8)).statusCode())
@@ -644,9 +752,13 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
     }
 
     /**
-     * The added managedSiteIds callers must stay inside the memo: scoping the domain list
-     * asks for the managed set through the panel gate, the resource AccessFunction, the
-     * record source and the nav probe, and that must remain ONE grant-store enumeration.
+     * The grant-store enumerations must stay inside the per-request memo. Rendering
+     * /manage/domains asks for the managed-site set through the panel gate, the resource
+     * AccessFunction, the record source and the nav probe -- and, since the DNS and
+     * certificate peers joined the panel, for their own (model, capability) sets through
+     * their nav probes. The budget is one enumeration per DISTINCT set plus the walk
+     * confirmations, never one per asker: the memo is a MAP keyed by model+capability, so a
+     * fourth peer must not multiply this number by the number of times it is asked.
      */
     @Test
     @Order(8)
@@ -658,8 +770,164 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         finds.set(0);
         assertThat(tenantGet("/manage/domains").statusCode()).isEqualTo(200);
         assertThat(finds.get())
-            .as("record-grant finds during one scoped /manage/domains render")
-            .isBetween(1, 3);
+            .as("record-grant finds during one scoped /manage/domains render "
+                + "(3 distinct capability sets + walk confirmations)")
+            .isBetween(1, 6);
+    }
+
+    /**
+     * The delegated DNS surface end to end, through the HTTP resource rather than the model:
+     * a tenant authors a name it serves by typing the ABSOLUTE name (it never learns a zone
+     * row exists), edits and deletes it, and is missing on another tenant's row through both
+     * the resource route and the record source.
+     */
+    @Test
+    @Order(9)
+    void aTenantAuthorsEditsAndDeletesRecordsUnderTheHostnamesItServes() throws Exception {
+        Model model = Models.get(DnsRecordModel.class);
+
+        // 1. Create by absolute name: no zone picker anywhere in the transport.
+        assertThat(tenantPost("/manage/dns-records/new",
+            "name=owned.tenantscope.test&type=A&value=10.0.0.5&ttl=300&enabled=true")
+            .statusCode()).as("a tenant may author a name it serves").isIn(302, 303);
+        Row created = model.find().where(DnsRecordModel.ZONE_ID.eq(zoneId))
+            .where(DnsRecordModel.NAME.eq("owned")).first();
+        assertThat(created).as("the row persisted, split into (zone, relative owner)").isNotNull();
+        assertThat((String) created.get(DnsRecordModel.VALUE)).isEqualTo("10.0.0.5");
+
+        // 2. A name it does NOT serve writes nothing, whatever the status page says.
+        tenantPost("/manage/dns-records/new",
+            "name=foreign.tenantscope.test&type=A&value=10.0.0.99&ttl=300&enabled=true");
+        assertThat(model.find().where(DnsRecordModel.ZONE_ID.eq(zoneId))
+            .where(DnsRecordModel.NAME.eq("foreign"))
+            .where(DnsRecordModel.VALUE.eq("10.0.0.99")).first())
+            .as("the hostname is the unit of authority, not the zone").isNull();
+
+        // 3. Another tenant's row is MISSING through the resource and through the source.
+        assertThat(tenantGet("/manage/dns-records/" + foreignRecordId).statusCode())
+            .as("a foreign record is 404, never 403 -- no existence oracle").isEqualTo(404);
+        assertThat(tenantGet("/zn/records/hohenheim.dns_record/item/" + foreignRecordId)
+            .statusCode()).as("and missing through the source too").isEqualTo(404);
+        assertThat(tenantPost("/manage/dns-records/" + foreignRecordId + "/delete", "")
+            .statusCode()).isEqualTo(404);
+        assertThat(model.findById(foreignRecordId)).as("and it is still there").isNotNull();
+
+        // 4. Its own row edits and deletes.
+        assertThat(tenantPost("/manage/dns-records/" + created.get(DnsRecordModel.ID),
+            "name=owned.tenantscope.test&type=A&value=10.0.0.6&ttl=300&enabled=true")
+            .statusCode()).isIn(302, 303);
+        assertThat((String) model.findById(created.get(DnsRecordModel.ID))
+            .get(DnsRecordModel.VALUE)).isEqualTo("10.0.0.6");
+        assertThat(tenantPost("/manage/dns-records/" + created.get(DnsRecordModel.ID) + "/delete",
+            "").statusCode()).isIn(302, 303);
+        assertThat(model.findById(created.get(DnsRecordModel.ID)))
+            .as("a tenant may remove its own row").isNull();
+
+        // 5. An explicit view grant is the SECOND lane, and it is view-only: the row becomes
+        //    reachable, and a write is still refused because view is not edit.
+        assertGranted(DnsRecordModel.MODEL_ID, foreignRecordId, HohenheimAccess.VIEW);
+        assertThat(tenantGet("/zn/records/hohenheim.dns_record/item/" + foreignRecordId)
+            .statusCode()).as("a view grant reaches exactly one foreign row").isEqualTo(200);
+        assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal, () -> {
+            Row row = model.findById(foreignRecordId);
+            row.set(DnsRecordModel.VALUE, "10.0.0.77");
+            model.save(row);
+        })).as("view is not edit").isInstanceOf(Violations.class);
+        assertThat((String) model.findById(foreignRecordId).get(DnsRecordModel.VALUE))
+            .as("and the refused write left the value alone").isEqualTo("10.0.0.66");
+
+        // 6. An edit grant authorizes the row -- but NOT a rename onto a third name, which is
+        //    the claim half and answers to hostname authority alone.
+        assertGranted(DnsRecordModel.MODEL_ID, foreignRecordId, HohenheimAccess.EDIT);
+        assertThatCode(() -> TenantConduits.as(tenantPrincipal, () -> {
+            Row row = model.findById(foreignRecordId);
+            row.set(DnsRecordModel.VALUE, "10.0.0.78");
+            model.save(row);
+        })).as("an edit grant is authority over the row").doesNotThrowAnyException();
+        assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal, () -> {
+            Row row = model.findById(foreignRecordId);
+            row.set(DnsRecordModel.NAME, "takeover");
+            model.save(row);
+        })).as("a grant on a row is never authority over a name it never covered")
+            .isInstanceOf(Violations.class);
+        assertThat((String) model.findById(foreignRecordId).get(DnsRecordModel.NAME))
+            .isEqualTo("foreign");
+
+        // 7. Revoking both puts the row back out of reach on every surface.
+        RecordGrants.revoke("user", tenantId, DnsRecordModel.MODEL_ID, foreignRecordId,
+            HohenheimAccess.VIEW);
+        RecordGrants.revoke("user", tenantId, DnsRecordModel.MODEL_ID, foreignRecordId,
+            HohenheimAccess.EDIT);
+        assertThat(tenantGet("/zn/records/hohenheim.dns_record/item/" + foreignRecordId)
+            .statusCode()).as("a revoked grant is a closed door again").isEqualTo(404);
+        assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal, () -> {
+            Row row = model.findById(foreignRecordId);
+            row.set(DnsRecordModel.VALUE, "10.0.0.79");
+            model.save(row);
+        })).as("and the write lane closed with it").isInstanceOf(Violations.class);
+    }
+
+    /**
+     * Certificate {@code view}: a tenant sees the certificates it REQUESTED and nothing else,
+     * and the delegated surface never carries key material or a way to obtain it.
+     */
+    @Test
+    @Order(10)
+    void aTenantSeesOnlyItsOwnCertificatesAndNeverAPrivateKey() throws Exception {
+        var certModel = Models.get(CertificateModel.class);
+
+        Row mine = certModel.createEmptyRow();
+        mine.set(CertificateModel.NICE_NAME, "Tenant requested certificate");
+        mine.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
+        mine.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
+        mine.set(CertificateModel.DOMAIN_NAMES_TEXT, "owned.tenantscope.test");
+        mine.set(CertificateModel.REQUESTED_BY_USER_ID, tenantId);
+        mine.set(CertificateModel.CERTIFICATE_PEM, "-----BEGIN CERTIFICATE-----ownedcert");
+        mine.set(CertificateModel.PRIVATE_KEY_PEM, "-----BEGIN PRIVATE KEY-----ownedsecret");
+        certModel.save(mine);
+        Integer mineId = mine.get(CertificateModel.ID);
+
+        // 1. The requester is the owner: its own certificate is listed, the other tenant's is
+        //    not, and neither list nor detail carries the key.
+        HttpResponse<String> list = tenantGet("/manage/certificates");
+        assertThat(list.statusCode()).isEqualTo(200);
+        assertThat(list.body())
+            .contains("Tenant requested certificate")
+            .doesNotContain("Foreign tenant certificate")
+            .doesNotContain("ownedsecret");
+
+        HttpResponse<String> detail = tenantGet("/manage/certificates/" + mineId);
+        assertThat(detail.statusCode()).isEqualTo(200);
+        assertThat(detail.body())
+            .as("status is delegable; the PEMs are not, on any surface")
+            .contains("owned.tenantscope.test")
+            .doesNotContain("ownedsecret")
+            .doesNotContain("BEGIN PRIVATE KEY");
+
+        // 2. Another tenant's certificate is missing through the delegated resource.
+        assertThat(tenantGet("/manage/certificates/" + foreignCertificateId).statusCode())
+            .as("a foreign certificate is 404, never 403").isEqualTo(404);
+
+        // 3. The download endpoint is the private-key export. The delegated surface neither
+        //    OFFERS it (no row action, so no link) nor would it help if forged: key export is
+        //    never delegable and never owner-implied, so even the OWNER is refused.
+        assertThat(detail.body())
+            .as("the delegated detail page offers no export affordance")
+            .doesNotContain("/certificates/" + mineId + "/download");
+        assertThat(tenantGet("/certificates/" + mineId + "/download").statusCode())
+            .as("a tenant never obtains a private key, not even its own certificate's")
+            .isIn(403, 404);
+
+        certModel.delete(certModel.findById(mineId));
+    }
+
+    /** Grant and PROVE it landed: grant() over a live deny is a documented silent no-op. */
+    private static void assertGranted(be.elevenways.protoblast.common.registry.Identifier model,
+                                      Object recordId, String capability) {
+        Row written = RecordGrants.grant("user", tenantId, model, recordId, capability, true);
+        assertThat((Boolean) written.get(
+            be.elevenways.zenit.auth.model.RecordGrantModel.VALUE))
+            .as("the %s grant actually landed", capability).isTrue();
     }
 
     private static Row record(Model model, String name, String type, String value) {

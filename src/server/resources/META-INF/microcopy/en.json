@@ -1635,10 +1635,16 @@
     "text": "Overrides the global Let's Encrypt account email for this certificate.",
     "scope": "certificate_request"
   },
-  "request": {
-    "text": "Request certificate",
-    "scope": "certificate_request"
-  },
+  "request": [
+    {
+      "text": "Request certificate",
+      "scope": "certificate_request"
+    },
+    {
+      "text": "Request",
+      "scope": "capability"
+    }
+  ],
   "any": {
     "text": "Any (IP or Basic Auth)",
     "scope": "access_satisfy"
@@ -2559,6 +2565,14 @@
     "text": "Only an administrator can change who manages a record",
     "scope": "violations"
   },
+  "tenant_record_not_authorized": {
+    "text": "You do not manage a hostname that covers this name",
+    "scope": "violations"
+  },
+  "tenant_record_no_zone": {
+    "text": "No hosted zone contains that name",
+    "scope": "violations"
+  },
   "dns_record_duplicate": {
     "text": "That exact record already exists in this zone",
     "scope": "violations"
@@ -3017,6 +3031,18 @@
   },
   "manage": {
     "text": "Manage",
+    "scope": "capability"
+  },
+  "view": {
+    "text": "View",
+    "scope": "capability"
+  },
+  "edit": {
+    "text": "Edit",
+    "scope": "capability"
+  },
+  "dyndns": {
+    "text": "Dynamic DNS token",
     "scope": "capability"
   },
   "security": {

@@ -1,17 +1,28 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.HostnameAuthority;
+import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
+import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Permission;
@@ -20,7 +31,10 @@ import be.elevenways.zenit.server.data.RecordSourceGate;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Delegated operator panel at /manage: only the sites (and their domains) the
@@ -91,7 +105,8 @@ public final class ManagePanel extends Panel {
 
     @Override
     public @NonNull List<PanelPeer> buildPeers() {
-        return List.of(new ManageSiteResource(), new ManageDomainResource());
+        return List.of(new ManageSiteResource(), new ManageDomainResource(),
+            new ManageDnsRecordResource(), new ManageCertificateResource());
     }
 
     /**
@@ -145,6 +160,148 @@ public final class ManagePanel extends Panel {
             .search(SiteDomainModel.HOSTNAME)
             .accessCriteria(ManagePanel::domainScope)
             .build());
+
+        // DNS records: the SAME shadowing hazard (the admin DnsRecordResource and the
+        // delegated ManageDnsRecordResource both derive a default), plus the reason the
+        // capability vocabulary exists at all -- a tenant reaches individual names inside a
+        // zone it can never see.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(DnsRecordModel.class)
+            .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
+            .accessCriteria(ManagePanel::dnsRecordScope)
+            .build());
+
+        // Certificates: this REPLACES the common ADMIN_ACCESS-gated registration (which the
+        // browser registry keeps, legitimately -- the scope below reads zenit-auth record
+        // grants that common code cannot see). The base criteria is the SAME method the
+        // common registration uses, never a second copy of the ACME-account exclusion.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(CertificateModel.class)
+            .search(CertificateModel.NICE_NAME)
+            .baseCriteria(HohenheimSources::notTheAcmeAccountRow)
+            .accessCriteria(ManagePanel::certificateScope)
+            .build());
+    }
+
+    /**
+     * The DNS records a principal may read: the ones under a hostname it answers for, plus
+     * the ones explicitly granted {@code view}.
+     *
+     * AIDEV-NOTE: the derived half enumerates EXACT managed hostnames only. A managed
+     * WILDCARD domain confers write authority over the names it covers (HostnamePatterns
+     * .covers, via HostnameAuthority) but contributes no owner label here, so such a row is
+     * authored-but-unlisted until an explicit view grant. Deliberate: the read scope is a
+     * criteria over stored owner labels, and widening it to "any label a wildcard could
+     * cover" would need a scan of dns_records to build a query over dns_records.
+     *
+     * @return null for admins, else a criteria that never widens past the two sets
+     */
+    static @Nullable Criteria dnsRecordScope(@NonNull AccessContext ctx) {
+        Model model = Models.get(DnsRecordModel.class);
+        if (HohenheimAccess.isAdmin(ctx)) {
+            return null;
+        }
+        if (ctx.isAnonymous()) {
+            return model.matchNone();
+        }
+
+        List<Criteria> reachable = new ArrayList<>(zoneScopedNameCriteria(ctx));
+        Set<Integer> granted = HohenheimAccess.grantedRecordIds(ctx, DnsRecordModel.MODEL_ID,
+            HohenheimAccess.VIEW);
+        if (!granted.isEmpty()) {
+            reachable.add(DnsRecordModel.ID.in(granted));
+        }
+
+        if (reachable.isEmpty()) {
+            return model.matchNone();
+        }
+        return reachable.size() == 1 ? reachable.get(0)
+            : new CompositeCriteria(CompositeOperator.OR, reachable.toArray(new Criteria[0]));
+    }
+
+    /** One {@code zone_id = z AND name IN (...)} clause per zone holding a managed hostname. */
+    private static @NonNull List<Criteria> zoneScopedNameCriteria(@NonNull AccessContext ctx) {
+        Set<Integer> managed = HohenheimAccess.managedSiteIds(ctx);
+        if (managed.isEmpty()) {
+            return List.of();
+        }
+
+        HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
+        Set<String> hostnames = new LinkedHashSet<>();
+        for (Row domain : Models.get(SiteDomainModel.class).find()
+                .where(SiteDomainModel.SITE_ID.in(managed)).all()) {
+            String hostname = domain.get(SiteDomainModel.HOSTNAME);
+            if (hostname == null || hostname.isBlank()
+                    || !SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))) {
+                continue;
+            }
+            // The SAME predicate the write side uses: a name a second, unmanaged site also
+            // covers is a name two owners answer for, and neither of them alone owns it.
+            if (HostnameAuthority.canManage(snapshot, ctx, hostname)) {
+                hostnames.add(BlastString.lower(hostname.trim()));
+            }
+        }
+        if (hostnames.isEmpty()) {
+            return List.of();
+        }
+
+        List<Criteria> perZone = new ArrayList<>();
+        for (Row zone : Models.get(DnsZoneModel.class).find().all()) {
+            String origin = zone.get(DnsZoneModel.ORIGIN);
+            Integer zoneId = zone.get(DnsZoneModel.ID);
+            if (origin == null || zoneId == null) {
+                continue;
+            }
+            Set<String> owners = new LinkedHashSet<>();
+            for (String hostname : hostnames) {
+                String owner = DnsNames.relative(origin, hostname);
+                if (owner != null) {
+                    owners.add(owner);
+                }
+            }
+            if (!owners.isEmpty()) {
+                perZone.add(new CompositeCriteria(CompositeOperator.AND,
+                    DnsRecordModel.ZONE_ID.eq(zoneId), DnsRecordModel.NAME.in(owners)));
+            }
+        }
+        return perZone;
+    }
+
+    /**
+     * The certificates a principal may read: the ones it REQUESTED (the walk's owner row,
+     * enumerated) plus the ones explicitly granted {@code view}.
+     *
+     * AIDEV-NOTE: deliberately NOT "every certificate covering a managed domain", which the
+     * superseded AIDEV-TODO in HohenheimSources proposed. Coverage is authority to REQUEST a
+     * certificate and CertificateAuthority already owns that question; making it a READ scope
+     * too would put a second authority beside the capability walk this vocabulary declares,
+     * and the two would disagree the moment a name moves between sites.
+     *
+     * @return null for admins, else a criteria matching only the walk-reachable rows
+     */
+    static @Nullable Criteria certificateScope(@NonNull AccessContext ctx) {
+        Model model = Models.get(CertificateModel.class);
+        if (HohenheimAccess.isAdmin(ctx)) {
+            return null;
+        }
+        if (ctx.isAnonymous()) {
+            return model.matchNone();
+        }
+
+        List<Criteria> reachable = new ArrayList<>();
+        Long principalId = ctx.principalId();
+        if (principalId != null) {
+            reachable.add(CertificateModel.REQUESTED_BY_USER_ID.eq(principalId.intValue()));
+        }
+        Set<Integer> granted = HohenheimAccess.grantedRecordIds(ctx, CertificateModel.MODEL_ID,
+            HohenheimAccess.VIEW);
+        if (!granted.isEmpty()) {
+            reachable.add(CertificateModel.ID.in(granted));
+        }
+
+        if (reachable.isEmpty()) {
+            return model.matchNone();
+        }
+        return reachable.size() == 1 ? reachable.get(0)
+            : new CompositeCriteria(CompositeOperator.OR, reachable.toArray(new Criteria[0]));
     }
 
     /**

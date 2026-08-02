@@ -462,8 +462,11 @@ class ManagePanelTest extends HohenheimTestBase {
 
         // Every installation-wide source is admin-gated. Unauthorized and unknown
         // refuse IDENTICALLY with 404 (RecordSourceGate: no existence oracle).
+        // hohenheim.certificate and hohenheim.dns_record deliberately LEFT OUT: they carry a
+        // capability vocabulary now, so they are grant-scoped like the site source rather
+        // than admin-gated. They are asserted below, as EMPTY rather than as 404.
         List<String> adminOnly = List.of(
-            "hohenheim.certificate", "hohenheim.access_list", "hohenheim.database",
+            "hohenheim.access_list", "hohenheim.database",
             "hohenheim.site_auth_provider", "hohenheim.system_user",
             "hohenheim.spamservice_system_users", "hohenheim.dns_zone",
             "hohenheim.ban", "zenit.activity");
@@ -492,14 +495,30 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(siteVocabulary.body()).doesNotContain("created_at");
         assertThat(dryPost("/zn/records/hohenheim.site/buckets", buckets, outsiderSession, csrf).statusCode())
             .isEqualTo(400);
+
+        // The two capability-scoped sources answer the same way: reachable, and empty. A
+        // login with no grant and no requested certificate holds nothing, so "open to a
+        // grant holder" must not mean "open".
+        for (String token : List.of("hohenheim.certificate", "hohenheim.dns_record")) {
+            HttpResponse<String> scoped =
+                dryPost("/zn/records/" + token + "/query", query, outsiderSession, csrf);
+            assertThat(scoped.statusCode()).as("query on %s", token).isEqualTo(200);
+            assertThat(scoped.body())
+                .as("%s returns no rows to a principal with no grants", token)
+                .contains("\"total\":l0");
+            assertThat(get("/zn/records/" + token + "/item/1", outsiderSession).statusCode())
+                .as("item on %s", token).isEqualTo(404);
+        }
     }
 
     /**
-     * The managedSiteIds query budget: one /manage render asks for the managed
-     * set several times (panel eligibility, list scope, both nav probes), and
-     * the conduit memo must collapse that to ONE grant-store enumeration --
-     * pinned as a per-request cap on record-grant finds so a regression (a new
-     * caller, a lost memo) becomes a visible number, not a silent slowdown.
+     * The grant-enumeration query budget: one /manage render asks for the
+     * managed-site set several times (panel eligibility, list scope, every nav
+     * probe) and, since the DNS and certificate peers joined the panel, for
+     * their own (model, capability) sets too. The conduit memo must collapse
+     * that to ONE grant-store enumeration PER DISTINCT SET -- pinned as a
+     * per-request cap on record-grant finds so a regression (a new caller, a
+     * lost memo) becomes a visible number, not a silent slowdown.
      */
     @Test
     @Order(6)
@@ -529,12 +548,13 @@ class ManagePanelTest extends HohenheimTestBase {
             assertThat(get("/manage/sites", session.id()).statusCode()).isEqualTo(200);
             int perRequest = finds.get();
 
-            // Memoized: the enumeration (1 candidate fetch + 1 walk
-            // confirmation) runs ONCE per request. Without the memo every
+            // Memoized: each distinct set's enumeration (1 candidate fetch + 1
+            // walk confirmation) runs ONCE per request. Without the memo every
             // caller pays it again and this cap breaks loudly.
             assertThat(perRequest)
-                .as("record-grant finds during one /manage/sites request")
-                .isBetween(1, 3);
+                .as("record-grant finds during one /manage/sites request "
+                    + "(3 distinct capability sets + walk confirmations)")
+                .isBetween(1, 6);
         } finally {
             RecordGrants.revoke("user", tenantId, SiteModel.MODEL_ID, siteAId,
                 HohenheimAccess.MANAGE);

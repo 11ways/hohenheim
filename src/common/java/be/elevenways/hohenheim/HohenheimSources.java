@@ -73,13 +73,13 @@ public final class HohenheimSources implements ZenitModule {
         // does not. (Registration-wise the two are not interchangeable either: only
         // permission/accessCriteria/openTo* count as the access DECLARATION the registry
         // refuses a source without, and this source declares permission.)
-        // AIDEV-TODO: the tenant NARROWING (certificates covering a managed site's domains)
-        // is per-principal and so genuinely needs accessCriteria -- but it cannot be spelled
-        // here: it needs HohenheimAccess.managedSiteIds, which reads zenit-auth record grants
-        // and is therefore server-only, while this class also feeds the BROWSER registry. It
-        // lands beside ManagePanel.registerSiteSource as a server-side override when the
-        // CertificateModel `view` capability ships; until then the ADMIN_ACCESS gate below
-        // means a tenant is 404 on every certificate.
+        // AIDEV-NOTE: the tenant NARROWING is per-principal and so genuinely needs
+        // accessCriteria -- and it cannot be spelled here, because it reads zenit-auth record
+        // grants (server-only) while this class also feeds the BROWSER registry. It LANDED as
+        // a server-side override in ManagePanel.registerSiteSource, beside the site and
+        // domain ones, when the CertificateModel `view` capability shipped. This registration
+        // is what the BROWSER registry keeps -- deliberately the narrower, admin-gated view;
+        // registry membership is a server-authoritative question.
         RecordSourceRegistry.INSTANCE.register(RecordSource.of(CertificateModel.class)
             .search(CertificateModel.NICE_NAME)
             .baseCriteria(HohenheimSources::notTheAcmeAccountRow)
@@ -147,8 +147,11 @@ public final class HohenheimSources implements ZenitModule {
         ActivityLog.setPolicy(DeploymentModel.MODEL_ID, ActivityPolicy.NONE);
     }
 
-    /** Everything except the internal ACME account row (whose provider marks it). */
-    private static CompositeCriteria notTheAcmeAccountRow() {
+    /**
+     * Everything except the internal ACME account row (whose provider marks it); public so
+     * the server-side scoped override reuses this exclusion instead of restating it.
+     */
+    public static CompositeCriteria notTheAcmeAccountRow() {
         return new CompositeCriteria(CompositeOperator.OR,
             CertificateModel.PROVIDER.isNull(),
             CertificateModel.PROVIDER.ne(CertificateModel.PROVIDER_ACME_ACCOUNT));

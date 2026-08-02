@@ -46,7 +46,7 @@ import java.util.Map;
  * request page linked from the header). The internal ACME account row is
  * scoped out of every list/load.
  */
-public final class CertificateResource extends RowResource {
+public class CertificateResource extends RowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(CertificateModel.NICE_NAME)
