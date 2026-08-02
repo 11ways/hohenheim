@@ -1823,6 +1823,123 @@ Driver and infrastructure:
   transaction and no unique constraint, so two concurrent submits both pass.
   That validator reports "no conflict" while three quarters of the load is
   invisible to it: a check that cannot catch the conflicts it exists for.
+
+  RECON 2026-08-02 (second pass) found FIVE more authorities/facts that change
+  the design, all verified in source or on the live daemon:
+
+  - **`RouteClaims` is the reference implementation of an exclusive claim in
+    this repo and MUST be read before building this.** Derived claim-key column
+    + UNIQUE index + NULL-means-no-claim + `DuplicateKeyException` caught and
+    rethrown as a NAMED conflict that can say who holds it + heal-don't-brick
+    backfill. `M044_SystemUserClaims` is the same shape again. Not reading them
+    first is how this ships a third spelling of a solved problem.
+  - **`Model.insertIfAbsent` is PRIMARY-KEY-ONLY** (verified: it throws when the
+    row carries no explicit PK, and refuses rows with pending localized or
+    schema-record writes). `Model.getPrimaryKeyField()` returns ONE field, so a
+    unique constraint on `(server, ip, port, protocol)` is NOT reachable by
+    `insertIfAbsent` unless that tuple IS the primary key.
+    `DuplicateKeyException.isPrimaryKeyConflict` exists specifically to refuse
+    attributing a non-PK unique violation to a lost `insertIfAbsent` race.
+    `find().increment().updateAll()` has NO role here -- a port claim is an
+    exclusivity assertion, not a counter.
+  - **`assertUnique` on live data is an availability bug** (`M043`'s own
+    AIDEV-NOTE): a pre-existing duplicate becomes a control plane that will not
+    boot. Heal-then-constrain via `schema.data(...)`, as `M045` does.
+  - **A managed-process port is owned by a PROCESS INSTANCE, not by a site.**
+    `allocate` happens inside `startProcessOnce` and `release` on every exit
+    path, so a site with capacity N holds N ports and a crash-loop churns them.
+    Also: `use_ports` DEFAULTS TO FALSE (the default path is a unix socket), so
+    `PortAllocator` is on the minority path.
+  - **Two more port consumers no ledger will ever contain:** `IpcChannel` opens
+    `new ServerSocket(0, ...)` per managed-process spawn (kernel-ephemeral,
+    loopback, outside `PortAllocator` entirely); and the machine's testcontainers
+    publish into the kernel ephemeral range 32768-60999 on `0.0.0.0`.
+    `PortAllocator`'s window (4748+) does not overlap TODAY, but `FIRST_PORT` is
+    operator-configurable and an existing test sets it to 24748. The OS probe is
+    the ONLY thing that can see non-hohenheim consumers, and only at the instant
+    it runs.
+  - **The org already has an owner-label convention:** the live testcontainers
+    carry `be.elevenways.zenit.testdatasources` + `.backend`, i.e. scope +
+    discriminator -- the same shape `StackDeployer` uses. The reconciler must
+    classify those as `foreign-known`, or every dev machine's attention list
+    opens with six false alarms and operators learn to ignore it.
+
+  DECIDED 2026-08-02 -- the four forks, resolved. Binding.
+
+  1. **LEDGER TABLE, not a claim-key column**, despite the house precedent. The
+     tiebreaker is the managed-process case: a process-instance port has no
+     record to hang a column on. A table also carries the `releasing` state,
+     cross-authority capacity queries, and ports whose owner is not a record.
+     Put a one-line AIDEV-NOTE in `RouteClaims` recording WHY it did not move,
+     so the second spelling is visibly deliberate rather than drift.
+  2. **RECORD-AFTER is the default; explicit pre-allocation is a DECLARED mode.**
+     One ledger, one claim primitive, two acquisition strategies behind an
+     explicit discriminator -- never two code paths. Record-after wins by
+     default because pre-allocation does not remove the TOCTOU, it adds a second
+     one seconds wide (an image pull can sit inside it) and, for a REMOTE host,
+     is an unevidenced guess: `isPortFree` binds a local socket, so probing a
+     remote host answers a question about the controller. Pre-allocation is
+     required where the number must be known in advance (UDP, game servers --
+     note `publishedPort` hardcodes `/tcp`, so record-after cannot serve UDP at
+     all). **The label must land at container-CREATE time, before the port
+     exists** -- that is what makes record-after honest, because it lets the
+     reconciler find a container whose claim row was never written.
+  3. **RESERVED-UNTIL-OBSERVED, not optimistic release.** Three states: `held`,
+     `releasing`, absent. Every swallowed-IOException teardown path lands in
+     `releasing`; only the reconciler, having OBSERVED the port free, deletes
+     the row. Optimistic release re-creates the exact bug the ledger exists to
+     prevent ("we said it was free and it was not") one layer up. A `releasing`
+     row that never clears IS the alarm and belongs on the attention list.
+     Soft delete must NOT release (a soft-deleted site is restorable, and
+     `RouteClaims.isLive` is the precedent for keying on live-ness). Host
+     removal moves claims to `releasing`, never deletes them -- a `servers` row
+     vanishing does not free ports on the physical machine.
+  4. **ONE canonical host-key derivation, AND the FK, in this wave.** The
+     concrete live bug is that the local daemon is spelled both `""` and
+     `"local"` in three separate normalisations, which would give the ledger two
+     disjoint claim sets for one machine while every unique constraint held.
+     A canonical token alone fixes that, but "FK later" has a track record here:
+     `ServerModel.ID` has been a foreign key to NOTHING since M017. Nothing is
+     deployed, so backwards compatibility is not a reason to defer -- do the
+     derivation as one function AND migrate `StackModel.SERVER_NAME`,
+     `DatabaseModel.SERVER_NAME` and the Docker-site `settings["server"]` key
+     onto the FK. Eliminate the spellings; do not add a fourth.
+
+  SEQUENCING -- each commit leaves the tree green and shippable:
+  C1 owner labels at every create site, read by nothing (zero risk, starts the
+  attribution clock); **C1 restricted to VOLUMES is the smallest first commit
+  and the highest value** -- a volume is the only irreversible resource, is
+  owned by naming convention alone today, and is the one thing a later
+  reconciler cannot retroactively fix. C2 reconciler, REPORT-ONLY, wired to
+  `AttentionCollector` + a scheduled task (it will immediately surface the
+  `hohenheim-site-{id}-vol-*` orphans nothing has ever named). C3 ledger table +
+  canonical host key + FK, with stacks as first consumer, reusing
+  `StackServiceResource.portClaim`'s canonical string VERBATIM. C4 record-after
+  for the two Docker cases. C5 `PortAllocator` behind the ledger + boot sweep.
+  C6 the `releasing` state and destroy paths that stop lying. C7 `InstanceModel`
+  as the FOURTH consumer.
+
+  RISK: C5's boot sweep is the one most likely to break a dev environment
+  SILENTLY. Managed-process children are spawned via `ProcessBuilder` with no
+  evidence they die with the controller; if any survive, the sweep frees a port
+  still bound, the next allocate hands it out, the child dies EADDRINUSE -- and
+  `startProcessOnce` RETRIES on address-in-use, so the symptom is a slower
+  startup and a retry log, not a failure. Keep the OS probe AFTER the ledger
+  check for exactly this reason.
+
+  RECONCILER AUTHORITY: it may delete `releasing` rows whose port it OBSERVED
+  free, and it may report. It may NOT remove any container, volume or network
+  (autonomous orphan-volume removal is a data-loss primitive; `DockerReclaim`
+  already refuses volumes for this reason) and it may NOT apply labels --
+  adoption is an explicit, `ActivityLog`-recorded operator action, per the
+  `StackDeployer.adoptResources` precedent. It must run as a SCHEDULED task and
+  PERSIST its findings; `AttentionCollector` reads the stored result, because
+  that collector's own docblock refuses per-render host probing as an O(hosts)
+  network operation.
+
+  COVERAGE HOLE, state it rather than discover it later: every Docker test
+  `assumeTrue`s on a daemon socket, so on a machine without one they SKIP and
+  the run is green with zero coverage of the entire record-after design.
 - **Console vs exec are DISTINCT handlers.** Console is a WS terminal over the
   driver's ATTACH to the instance's primary process (stdin to a game server),
   grant-checked `console`, over the hardened WS admission/revalidation from
