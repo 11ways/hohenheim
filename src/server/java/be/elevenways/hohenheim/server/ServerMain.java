@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -33,8 +34,11 @@ import be.elevenways.zenit.auth.server.identity.IdentityProviderRegistry;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusIdentityProvider;
 import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.server.setting.ServerSettings;
 import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.server.task.TaskService;
+
+import java.util.List;
 
 /**
  * Server entry point for Hohenheim.
@@ -54,6 +58,42 @@ public class ServerMain {
         // the framework prints the sentinels zenit-dev's migration preflight reads. A
         // hand-rolled branch printed neither, so every successful run was reported as
         // "exited without proving completion" and the server never started.
+        // Backup/restore-only invocations for control-plane recovery archives (database +
+        // keyring as one verified unit), exiting WITHOUT booting. Restore is OFFLINE BY
+        // DESIGN -- it replaces the SQLite file, so it must never run while a server has it
+        // open; the archive is fully checksum-verified before either half is touched. Both
+        // load the zenit settings chain too, so a database.encryption.key_file override in
+        // settings/local.dry is honored exactly like a real boot.
+        if (args != null) {
+            List<String> argList = java.util.Arrays.asList(args);
+
+            if (argList.contains("--backup-control-plane")) {
+                HohenheimSettingsFiles.load();
+                ServerSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
+                var datasource = HohenheimDatabase.openDatasource();
+                try {
+                    ControlPlaneBackups.backupNow();
+                } catch (java.io.IOException error) {
+                    throw new java.io.UncheckedIOException("Control-plane backup failed", error);
+                } finally {
+                    datasource.close();
+                }
+                return;
+            }
+
+            int restoreFlag = argList.indexOf("--restore-control-plane");
+            if (restoreFlag >= 0) {
+                if (restoreFlag + 1 >= args.length) {
+                    throw new IllegalArgumentException(
+                        "--restore-control-plane needs the archive path as its next argument");
+                }
+                HohenheimSettingsFiles.load();
+                ServerSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
+                ControlPlaneBackups.restore(java.nio.file.Path.of(args[restoreFlag + 1]));
+                return;
+            }
+        }
+
         if (args != null && java.util.Arrays.asList(args).contains("--run-migrations")) {
             HohenheimSettingsFiles.load();
             HohenheimAccess.declareGrantableModels();

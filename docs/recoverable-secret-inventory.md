@@ -156,9 +156,28 @@ above are encrypted, that stops being true.
    cheaper than atomic backup.
 3. The field flips above, each with a raw-column test proving ciphertext at rest
    (`StackRuntimeFlowTest:165-172` is the template).
-4. Backup: one archive carrying DB + keyring with a recorded checksum of each.
-   Ordering is easy because the keyring is prepend-only -- snapshot the keyring
-   FIRST; a keyring newer than the DB is always safe, older never is.
+4. Backup: LANDED 2026-08-02. `RecoveryArchive` (zenit, `server/orm/backup`) is
+   the mechanism: one zip carrying a `VACUUM INTO` snapshot of the database plus
+   the keyring file, with a DRY manifest recording a SHA-256 + size of each half
+   and the key-id list; `create` re-reads and re-hashes the written file before
+   reporting success, `verify`/`restore` refuse tampered, truncated or
+   half-missing archives whole (`RecoveryArchiveException` problem tokens).
+   NOTE the ordering the original sketch here had BACKWARDS: because the keyring
+   is prepend-only, the DATABASE is snapshotted FIRST and the keyring file read
+   SECOND -- that guarantees the archived keyring is at least as new as the
+   archived DB (newer is always safe, older never is). Restore writes keyring
+   first, database second, MERGES an existing target keyring (never discards
+   keys), and is offline-by-design. Hohenheim wiring: `ControlPlaneBackups` +
+   the role-free daily `BackupControlPlane` task (archives under
+   `database.backup_path`/control-plane, `database.backup_retention` applies)
+   and the `--restore-control-plane <archive>` boot argument. HONEST LIMIT: the
+   default destination is a LOCAL directory -- this protects against a lost or
+   corrupt working copy, not against losing the host, and the archive holds the
+   master keys in the clear. Off-host transfer remains a deployment concern.
+   Also landed: `KeyringGuard` now ADVANCES the marker to the active key on
+   every passing boot, so restoring a keyring from before the last rotation
+   refuses instead of passing on the original key alone, and the refusal
+   message points at the recovery archive.
 
 ## What the plan's 0.6c text got wrong, and the one hazard that survives
 

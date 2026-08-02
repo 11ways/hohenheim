@@ -89,8 +89,12 @@ public class BackupDatabases extends ScheduledTask {
         Blast.log("TASK: BackupDatabases backed up", backedUp, "databases");
     }
 
-    // Keep the newest `retention` dumps (timestamp filenames sort chronologically), delete older.
-    private static void pruneOldBackups(Path dir, int retention) throws IOException {
+    /**
+     * Keep the newest {@code retention} files in a backup directory (timestamp filenames sort
+     * chronologically), delete older ones; retention 0 or less keeps everything. Shared with
+     * the control-plane backup task.
+     */
+    public static void pruneOldBackups(Path dir, int retention) throws IOException {
         if (retention <= 0) {
             return;
         }
