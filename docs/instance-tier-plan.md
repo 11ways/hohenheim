@@ -845,6 +845,51 @@ enable runs the same conflict invariant as updateRow.
   hook that all resource invariants share. Gate the exact `/manage/.../revision/
   {n}/restore` attack and assert the proxy route table still has one owner.
 
+### STATUS: Phase 0 re-verified against code (2026-08-02)
+
+Source-level verification of every item the 2026-07-29 audit reopened, done
+against current HEADs rather than against the prose below. CLOSED: 0.1 (the
+ingress test now drives a real `ProxyServer` listener over a raw socket, not
+env-var planting), 0.2 (uid exclusivity, reserved-env stamping and wrapper
+buffering all landed), 0.4, 0.6a, 0.6b, 0.8 (atomic `insertIfAbsent`, deny as
+sole unconditional writer), 0.9 for its named attack.
+
+STILL OPEN, with owners in this document:
+- **0.6c encryption at rest: UNSTARTED.** Exactly three `.encrypted()` fields
+  exist (`StackModel:80`, `StackDeploymentModel:40`, `StackFileModel:35`) and
+  all three were born encrypted. `SiteModel.SECURITY_REPORT_TOKEN:103` is still
+  `.secret()`-only. The keyring and `database.encryption.key_file` are
+  pre-existing framework code, not new work. Owned by the Phase 2 parallel gate.
+- **0.5 published shell: NOT EVIDENCE.** The only manifest row with no observed
+  counterfactual; never re-run; its detector recognizes `java/lang/Process` and
+  `com/pty4j` only, so `Runtime.exec` and JNI evade it.
+- **0.7 gate incomplete.** The mechanism landed (admission before
+  authentication, `onError` routed to shared teardown) but the audit's actual
+  ask -- open a real terminal, log out / revoke / disable / delete, observe 1008
+  -- has no test anywhere.
+
+NEW FINDING, same boundary as 0.9, fixed 2026-08-02 (`fef9bde`, `683ebfe`):
+route-claim conflict detection compared hostnames by string equality while
+`RouteClaims.keyOf` kept the literal hostname, so `*.example.com` (tenant A) and
+`foo.example.com` (tenant B) hashed to different keys, both committed, and the
+exact-before-wildcard dispatch let B seize A's traffic. Claims now compare
+hostname-set INTERSECTION, with ownership scoped to the site's set of truthy
+`manage` grant subjects (compared by equality, not overlap, so `{A}` vs `{A,B}`
+cannot let B seize). Operator-only sites hold no manage grants and so may still
+carve out across sites, which is required: upstream is a site-level setting, so
+a cross-site carve-out genuinely needs two sites.
+
+SECURITY THEATER recorded, not yet fixed: `GrantWritePrimitiveGuardTest`
+enforces the PRESENCE OF A COMMENT (`// grant-write-guarded:`) within 6 lines of
+each `GrantService.createDirectGrant` call site; nothing verifies an
+`AdministratorGuard` is on the stack. Writing the comment passes the test, and
+that test is what closed a re-review finding about a genuinely unguarded
+last-administrator path.
+
+The manifest is stale against its own "Now" column -- every repo has moved past
+the hashes it pins (zenit by 31 commits at the time of checking). Treat its
+per-row hashes as historical.
+
 ### STATUS: Phase 0 REOPENED after independent completion audit (2026-07-29)
 
 The earlier statement that all nine items landed and a 21-project integration
@@ -1912,6 +1957,35 @@ Each names its home and its first consumer.
   fork them.
 
 ## Open decisions (need Jelle, flagged not assumed)
+
+RESOLVED 2026-08-02 -- do not re-raise these three:
+
+- **1 and 13 are MOOT.** Jelle: no Zenit-based project is deployed anywhere, and
+  backwards compatibility is never a concern in this workspace. Both decisions
+  existed only because they were believed to touch an irreversible live
+  database. There is none. Historical plaintext secrets: nothing to remediate.
+  Migration checksums: fix any source-side drift by EDITING the migration in
+  place and flip `database.migration_integrity` to `fail`; the snapshot /
+  capture-at-warn / scratch-JVM procedure is not needed. This deletes the whole
+  of Phase 0.B as a gated production operation.
+- **14 is STRUCK.** It asked whether to ship a weaker product and fix it later,
+  which contradicts the standing instruction to build it properly and never
+  work around a gap. It was invented by an earlier session, not by Jelle.
+
+The remainder are derivable from "build it properly" and are NOT blocking:
+2 defaults ON (fail closed). 3 yes, interactive-only. 4 decided at the Phase 1
+UI stage. 5/7/8/9 resolve to the fuller shape (hierarchical tenancy because
+Coolify parity needs projects and environments; both host postures expressible
+with the safe one as the default; `record_schedules` a new table). 6/10/11/12
+are evidence-gathering at their own phases -- write the Proxmox inventory rather
+than asking about it.
+
+A consequence worth stating once: "no installs exist" is a licence to DELETE.
+The 2026-08-02 wave removed `WorkloadIdentity.applyLegacyDefault`, which
+persisted `process.require_dedicated_user = false` on any install that already
+had sites -- so the setting read as enforced in source while being off on every
+upgraded box. Prefer deleting such accommodations over carrying them.
+
 
 1. Historical plaintext secret remediation: choose scrub-in-place with explicit
    restore semantics vs dropping pre-fix revisions. "Leave and document" is no
