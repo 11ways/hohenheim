@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -53,48 +55,63 @@ public final class HohenheimPanel extends Panel {
         return 50;
     }
 
+    /**
+     * AIDEV-NOTE: role filtering happens HERE, never in nav visibility: dispatch
+     * resolves through the memoized peersBySlug, so a peer this method omits has
+     * no ROUTE either -- /admin/stacks 404s on a stacks-less node instead of
+     * being merely hidden. peers() memoizes for the panel's lifetime, matching
+     * the boot-captured HohenheimRoles snapshot these gates read.
+     */
     @Override
     public List<PanelPeer> buildPeers() {
         List<PanelPeer> peers = new ArrayList<>();
         // The dashboard comes first: the panel landing soft-redirects to the
         // first accessible DashboardPanelPeer.
         peers.add(new AdminDashboard());
-        peers.add(new SiteResource());
-        peers.add(new SiteDomainResource());
-        peers.add(new SiteDatabaseResource());
-        peers.add(new CertificateResource());
-        peers.add(new AccessListResource());
-        peers.add(new AuthProviderResource());
-        peers.add(new DatabaseResource());
-        peers.add(new StackResource());
-        peers.add(new StackServiceResource());
-        peers.add(new StackFileResource());
-        peers.add(new ServerResource());
-        peers.add(new DnsZoneResource());
-        peers.add(new DnsRecordResource());
-        peers.add(new DnsPeerResource());
-        peers.add(new DnsZonePeerResource());
+        addIf(peers, new SiteResource(), Role.PROXY);
+        addIf(peers, new SiteDomainResource(), Role.PROXY);
+        addIf(peers, new SiteDatabaseResource(), Role.DATABASES);
+        addIf(peers, new CertificateResource(), Role.PROXY);
+        addIf(peers, new AccessListResource(), Role.PROXY);
+        addIf(peers, new AuthProviderResource(), Role.PROXY);
+        addIf(peers, new DatabaseResource(), Role.DATABASES);
+        addIf(peers, new StackResource(), Role.STACKS);
+        addIf(peers, new StackServiceResource(), Role.STACKS);
+        addIf(peers, new StackFileResource(), Role.STACKS);
+        // The Docker host inventory serves stacks AND managed databases.
+        addIf(peers, new ServerResource(), Role.STACKS, Role.DATABASES);
+        addIf(peers, new DnsZoneResource(), Role.DNS);
+        addIf(peers, new DnsRecordResource(), Role.DNS);
+        addIf(peers, new DnsPeerResource(), Role.DNS);
+        addIf(peers, new DnsZonePeerResource(), Role.DNS);
         peers.add(new NotificationChannelResource());
-        peers.add(new BanResource());
+        addIf(peers, new BanResource(), Role.FIREWALL);
         // zenit-auth's generated admin resources, wired into THIS panel (the
         // module's own default panel is disabled via auth.cms.auto_panel).
         peers.add(new AuthUsersResource(SECURITY_GROUP, 2));
         peers.add(new AuthRolesResource(SECURITY_GROUP, 3));
-        peers.add(new SpamserviceOverviewPage());
-        peers.add(new SpamserviceInstallationResource());
-        peers.add(new SpamserviceSamplesResource());
-        peers.add(new SpamserviceClientsResource());
-        peers.add(new SpamserviceClientKeysResource());
-        peers.add(new SpamserviceSecurityEventsResource());
-        peers.add(new SpamserviceWordsResource());
-        peers.add(new SpamserviceReputationPage());
+        addIf(peers, new SpamserviceOverviewPage(), Role.FIREWALL);
+        addIf(peers, new SpamserviceInstallationResource(), Role.FIREWALL);
+        addIf(peers, new SpamserviceSamplesResource(), Role.FIREWALL);
+        addIf(peers, new SpamserviceClientsResource(), Role.FIREWALL);
+        addIf(peers, new SpamserviceClientKeysResource(), Role.FIREWALL);
+        addIf(peers, new SpamserviceSecurityEventsResource(), Role.FIREWALL);
+        addIf(peers, new SpamserviceWordsResource(), Role.FIREWALL);
+        addIf(peers, new SpamserviceReputationPage(), Role.FIREWALL);
         peers.add(new ActivityResource());
         SettingsPage settings = settingsPage();
         if (settings != null) {
             peers.add(settings);
         }
-        peers.add(new CertificateRequestPage());
+        addIf(peers, new CertificateRequestPage(), Role.PROXY);
         return peers;
+    }
+
+    /** Adds the peer only when at least one of its owning roles is enabled. */
+    private static void addIf(List<PanelPeer> peers, PanelPeer peer, Role... roles) {
+        if (HohenheimRoles.anyEnabled(roles)) {
+            peers.add(peer);
+        }
     }
 
     /**

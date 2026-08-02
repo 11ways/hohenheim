@@ -3924,5 +3924,9 @@
   "enable_route_conflict": {
     "text": "Kan deze site niet inschakelen: {$hostname} wordt al gerouteerd door site {$site}",
     "scope": "violations"
+  },
+  "docker_unreachable": {
+    "text": "Docker-daemon onbereikbaar",
+    "scope": "attention_title"
   }
 }

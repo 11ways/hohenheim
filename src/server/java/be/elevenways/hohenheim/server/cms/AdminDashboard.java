@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.AttentionWidget;
 import be.elevenways.hohenheim.OnboardingWidget;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.protoblast.common.i18n.Locale;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -42,8 +44,12 @@ public final class AdminDashboard extends DashboardPanelPeer {
     @Override public @NonNull Icon icon() { return Icon.LAYOUT_DASH; }
     @Override public int navOrder() { return 1; }
 
+    /** Role-gated bands: a tile must not link to a resource this install has no route for. */
     @Override
     public @NonNull WidgetTree widgets(@NonNull AccessContext accessContext) {
+        boolean proxy = HohenheimRoles.enabled(Role.PROXY);
+        boolean firewall = HohenheimRoles.enabled(Role.FIREWALL);
+
         WidgetTree stats = new WidgetTree(List.of(
             stat("site", "hohenheim.site", "sites", "globe"),
             stat("certificate", "hohenheim.certificate", "certificates", "lock"),
@@ -60,20 +66,24 @@ public final class AdminDashboard extends DashboardPanelPeer {
                 "link", "/admin/bans"))));
 
         List<WidgetInstance> widgets = new ArrayList<>();
-        if (Models.get(SiteModel.class).findActive().isEmpty()) {
+        if (proxy && Models.get(SiteModel.class).findActive().isEmpty()) {
             widgets.add(section(new WidgetInstance(OnboardingWidget.ID, Map.of())));
         }
         widgets.add(section(new WidgetInstance(AttentionWidget.ID, Map.of())
             .withData(AttentionCollector.collect())));
-        widgets.add(section(new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 3), stats)));
-        widgets.add(section(new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 2), securityStats)));
-        widgets.add(section(new WidgetInstance(ChartWidget.ID, Map.of(
-            "title", localized("bans_created_30d", "dashboard"),
-            "source", "hohenheim.ban",
-            "date_field", "created_at",
-            "days", 30,
-            "type", "area",
-            "label", localized("plural", "ban")))));
+        if (proxy) {
+            widgets.add(section(new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 3), stats)));
+        }
+        if (firewall) {
+            widgets.add(section(new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 2), securityStats)));
+            widgets.add(section(new WidgetInstance(ChartWidget.ID, Map.of(
+                "title", localized("bans_created_30d", "dashboard"),
+                "source", "hohenheim.ban",
+                "date_field", "created_at",
+                "days", 30,
+                "type", "area",
+                "label", localized("plural", "ban")))));
+        }
         widgets.add(section(new WidgetInstance(RecordsWidget.ID, Map.of(
                 "title", localized("recent_activity", "dashboard"),
                 "source", "zenit.activity",
