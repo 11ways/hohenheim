@@ -188,6 +188,15 @@ public final class DynamicDnsService {
         }
 
         String type = record.get(DnsRecordModel.TYPE);
+        // dyndns2 writes an ADDRESS, so only an address record can be dynamic. Without this
+        // an operator who flagged, say, an MX row dynamic would have had its VALUE rewritten
+        // to an IP by an anonymous caller; the write pipeline refuses that now (a dyndns
+        // update is a tenant-originated write and MX is outside the tenant type allow-list),
+        // and refusing it HERE turns the 500 that refusal would be into the protocol's own
+        // dnserr answer.
+        if (!DnsRecordModel.TYPE_A.equals(type) && !DnsRecordModel.TYPE_AAAA.equals(type)) {
+            return new UpdateResult(Status.DNSERR, null);
+        }
         String newIp = resolveIp(type, myip, callerIp);
         if (newIp == null) {
             // A caller behind a v4-only path can't set an AAAA (and vice versa); not an error the
