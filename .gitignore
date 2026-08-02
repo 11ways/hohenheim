@@ -10,8 +10,8 @@ public/hohenheim.css
 public/plumage.css
 public/cms.css
 
-# Database
-*.db
+# Database (plus SQLite -wal/-shm sidecars and hand-made backups)
+*.db*
 
 # Per-developer settings overrides (proxy port, TLS toggles, ...)
 # Checked-in template: settings/local.dry.example
