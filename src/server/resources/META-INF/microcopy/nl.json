@@ -2523,6 +2523,38 @@
     "text": "Dit record is gegenereerd door {$source} en kan hier niet bewerkt of verwijderd worden",
     "scope": "violations"
   },
+  "tenant_site_not_managed": {
+    "text": "Je kan alleen domeinen toevoegen aan sites die je beheert",
+    "scope": "violations"
+  },
+  "tenant_match_type_exact": {
+    "text": "Gedelegeerde domeinen moeten exact een hostnaam matchen",
+    "scope": "violations"
+  },
+  "tenant_listen_on_frozen": {
+    "text": "Alleen een beheerder kan beperken op welk adres een domein luistert",
+    "scope": "violations"
+  },
+  "tenant_path_frozen": {
+    "text": "Alleen een beheerder kan een domein aan een padprefix binden",
+    "scope": "violations"
+  },
+  "tenant_field_frozen": {
+    "text": "Alleen een beheerder kan deze instelling wijzigen",
+    "scope": "violations"
+  },
+  "tenant_record_type": {
+    "text": "Je kan alleen A-, AAAA-, CNAME-, TXT- en SRV-records beheren",
+    "scope": "violations"
+  },
+  "tenant_zone_frozen": {
+    "text": "Een record kan niet naar een andere zone verplaatst worden",
+    "scope": "violations"
+  },
+  "tenant_managed_by_frozen": {
+    "text": "Alleen een beheerder kan wijzigen wie een record beheert",
+    "scope": "violations"
+  },
   "dns_record_duplicate": {
     "text": "Dat exacte record bestaat al in deze zone",
     "scope": "violations"
