@@ -60,12 +60,29 @@ public final class HohenheimSources implements ZenitModule {
         // its per-principal scope reads zenit-auth record grants, which common
         // code cannot see, and /manage tenants must reach it too.
 
-        // The internal ACME account row is bookkeeping, never a pickable certificate.
+        // The internal ACME account row is bookkeeping holding the installation's ACME
+        // account KEY, never a pickable certificate.
+        //
+        // AIDEV-NOTE: baseCriteria is the RIGHT knob here and is NOT merely cosmetic --
+        // RecordSource ANDs it into every query, resolve, exists and bucket path, exactly
+        // where accessCriteria lands. Restating the same exclusion as an accessCriteria was
+        // tried and REVERTED: it changed no observable behaviour on any path, so it could
+        // not be given a counterfactual, and an unfalsifiable second declaration is the
+        // security theater this codebase keeps finding rather than the defence in depth it
+        // looks like. accessCriteria is for decisions that differ PER PRINCIPAL; this one
+        // does not. (Registration-wise the two are not interchangeable either: only
+        // permission/accessCriteria/openTo* count as the access DECLARATION the registry
+        // refuses a source without, and this source declares permission.)
+        // AIDEV-TODO: the tenant NARROWING (certificates covering a managed site's domains)
+        // is per-principal and so genuinely needs accessCriteria -- but it cannot be spelled
+        // here: it needs HohenheimAccess.managedSiteIds, which reads zenit-auth record grants
+        // and is therefore server-only, while this class also feeds the BROWSER registry. It
+        // lands beside ManagePanel.registerSiteSource as a server-side override when the
+        // CertificateModel `view` capability ships; until then the ADMIN_ACCESS gate below
+        // means a tenant is 404 on every certificate.
         RecordSourceRegistry.INSTANCE.register(RecordSource.of(CertificateModel.class)
             .search(CertificateModel.NICE_NAME)
-            .baseCriteria(() -> new CompositeCriteria(CompositeOperator.OR,
-                CertificateModel.PROVIDER.isNull(),
-                CertificateModel.PROVIDER.ne(CertificateModel.PROVIDER_ACME_ACCOUNT)))
+            .baseCriteria(HohenheimSources::notTheAcmeAccountRow)
             .permission(ADMIN_ACCESS)
             .build());
 
@@ -128,5 +145,12 @@ public final class HohenheimSources implements ZenitModule {
         // their own history UI. Tracking them would flood zenit_activity.
         ActivityLog.setPolicy(ProclogModel.MODEL_ID, ActivityPolicy.NONE);
         ActivityLog.setPolicy(DeploymentModel.MODEL_ID, ActivityPolicy.NONE);
+    }
+
+    /** Everything except the internal ACME account row (whose provider marks it). */
+    private static CompositeCriteria notTheAcmeAccountRow() {
+        return new CompositeCriteria(CompositeOperator.OR,
+            CertificateModel.PROVIDER.isNull(),
+            CertificateModel.PROVIDER.ne(CertificateModel.PROVIDER_ACME_ACCOUNT));
     }
 }

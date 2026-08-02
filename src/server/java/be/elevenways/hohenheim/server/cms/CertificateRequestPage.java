@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
@@ -66,13 +67,23 @@ public final class CertificateRequestPage extends PanelPage {
                     .resolve(conduit.getLocales(), conduit.getMessageResolver()));
             }
         }
-        List<String> domains = prefillFromSite(conduit, vars);
+        List<String> domains = prefillFromSite(conduit, accessContext, vars);
         vars.put("domainForm", CertificateRequestForm.state(accessContext, domains));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/certificate-request"), vars);
     }
 
-    /** A ?site= link (the site's Domains tab) prefills the LE-eligible exact hostnames. */
+    /**
+     * A ?site= link (the site's Domains tab) prefills the LE-eligible exact hostnames.
+     *
+     * AIDEV-NOTE: the ?site= id is SCOPED, not merely parsed. This page is a HohenheimPanel
+     * peer today, so only an operator reaches it and the check answers true every time --
+     * that is exactly why it is written down: without it the read is an unauthenticated-by-
+     * construction hostname enumerator over every site in the install, and the only thing
+     * standing in front of it is which panel the page happens to be registered in. A page
+     * moved or contributed to /manage later must not silently become that enumerator.
+     */
     private static @NonNull List<String> prefillFromSite(@NonNull Conduit conduit,
+                                                         @NonNull AccessContext accessContext,
                                                          @NonNull Map<String, Object> vars) {
         vars.put("niceName", "");
         String siteParam = conduit.getQueryParam("site");
@@ -83,6 +94,10 @@ public final class CertificateRequestPage extends PanelPage {
         try {
             siteId = Integer.parseInt(siteParam);
         } catch (NumberFormatException invalid) {
+            return List.of();
+        }
+        if (!HohenheimAccess.isAdmin(accessContext)
+                && !HohenheimAccess.canManageSite(accessContext, siteId)) {
             return List.of();
         }
         Row site = Models.get(SiteModel.class).find().where(SiteModel.ID.eq(siteId)).first();
