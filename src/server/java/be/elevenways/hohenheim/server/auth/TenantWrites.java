@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
+import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -46,8 +48,8 @@ import java.util.Set;
  * adding a Schema.addBeforeFindHook scope to DnsRecordModel would 404 every router polling
  * in production while looking like a security improvement. That request DOES pass here on
  * the WRITE side (an anonymous conduit reads as tenant-originated) and is allowed because it
- * only moves VALUE on an A/AAAA record, which the type allow-list permits. Do not "fix" the
- * read side.
+ * is bounded to VALUE on a stored DYNAMIC row inside the type allow-list. Do not "fix" the
+ * read side; the tenant READ scope lives on the RecordSource (ManagePanel.dnsRecordScope).
  *
  * @author Jelle De Loecker
  */
@@ -85,6 +87,12 @@ public final class TenantWrites {
     public static final Set<String> RECORD_TYPES = Set.of(
         DnsRecordModel.TYPE_A, DnsRecordModel.TYPE_AAAA, DnsRecordModel.TYPE_CNAME,
         DnsRecordModel.TYPE_TXT, DnsRecordModel.TYPE_SRV);
+
+    /** The DnsRecordModel counterpart of {@link #DOMAIN_DERIVED}: pipeline-written columns. */
+    private static final Set<String> RECORD_DERIVED = Set.of(
+        DnsRecordModel.ID.getName(),
+        DnsRecordModel.CREATED_AT.getName(),
+        DnsRecordModel.UPDATED_AT.getName());
 
     private static volatile boolean installed;
 
@@ -136,8 +144,20 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
+            AccessContext ctx = acting();
+            HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
             for (Row doomed : doomedRecords(context)) {
                 refuseForeignRecordType(doomed.get(DnsRecordModel.TYPE));
+                // Removing a row is authority over the row, so it asks the SAME question a
+                // write does -- minus the claim half, since a delete claims no new name. An
+                // anonymous caller holds none of it: /nic/update updates, it never deletes.
+                boolean authorized = ctx != null && !ctx.isAnonymous()
+                    && (ctx.hasCapability(DnsRecordModel.MODEL_ID, doomed.get(DnsRecordModel.ID),
+                            HohenheimAccess.EDIT)
+                        || HostnameAuthority.canManage(snapshot, ctx, fqdnOf(doomed, doomed)));
+                if (!authorized) {
+                    throw refusal(DnsRecordModel.NAME.getName(), doomed.get(DnsRecordModel.NAME));
+                }
             }
         });
     }
@@ -225,6 +245,7 @@ public final class TenantWrites {
         Row stored = row.has(DnsRecordModel.ID.getName())
             ? model.findById(row.get(DnsRecordModel.ID)) : null;
 
+        requireRecordAuthority(row, stored);
         refuseForeignRecordType(effective(row, stored, DnsRecordModel.TYPE));
         // A record being EDITED must have been allow-listed before the edit too, otherwise
         // "change the type of the NS row to A" launders it in.
@@ -251,6 +272,100 @@ public final class TenantWrites {
                 row.get(DnsRecordModel.MANAGED_BY),
                 CmsSupport.violationText("tenant_managed_by_frozen"));
         }
+    }
+
+    /**
+     * WHOSE name this is. The type allow-list says what a tenant may author; this says where.
+     *
+     * Two lanes, and they are a UNION of authorities rather than two policies that can
+     * disagree: HOSTNAME authority (the row's FQDN is covered by a domain of a site the
+     * caller manages -- the same {@link HostnameAuthority} predicate a certificate order
+     * asks) and an explicit per-record GRANT ({@code edit}, or {@code dyndns} narrowed to the
+     * dynamic columns). Renaming or creating additionally needs hostname authority over the
+     * name being CLAIMED, or a grant would launder into a takeover of a name it never covered.
+     *
+     * @throws Violations naming the field that carries the claim
+     */
+    private static void requireRecordAuthority(@NonNull Row row, @Nullable Row stored) {
+        AccessContext ctx = acting();
+        if (ctx == null) {
+            return;
+        }
+
+        // AIDEV-NOTE: the ANONYMOUS lane is /nic/update and nothing else. It is already
+        // authorized -- by a bearer token resolved against the row's digest before any write
+        // -- so it is not asked for a capability it structurally cannot hold. It is bounded
+        // instead: a stored DYNAMIC row, and VALUE the only column that may move. Without
+        // that bound the exemption would be the bypass shape it looks like.
+        if (ctx.isAnonymous()) {
+            if (stored == null || !Boolean.TRUE.equals(stored.get(DnsRecordModel.DYNAMIC))) {
+                throw refusal(DnsRecordModel.NAME.getName(), effective(row, stored, DnsRecordModel.NAME));
+            }
+            refuseChangesOutside(row, stored, Set.of(DnsRecordModel.VALUE.getName()));
+            return;
+        }
+
+        Object recordId = stored != null ? stored.get(DnsRecordModel.ID) : null;
+        boolean holdsEdit = recordId != null
+            && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.EDIT);
+        boolean holdsDyndns = recordId != null
+            && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.DYNDNS);
+
+        HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
+        boolean ownsStoredName = stored != null
+            && HostnameAuthority.canManage(snapshot, ctx, fqdnOf(stored, stored));
+
+        // A CREATE has no row to hold authority over, so it answers to the claim half alone.
+        if (stored != null && !holdsEdit && !ownsStoredName) {
+            if (holdsDyndns) {
+                // dyndns alone is authority over the token, never over the record: only the
+                // two dynamic columns may move (the mint row action writes exactly those).
+                refuseChangesOutside(row, stored, Set.of(DnsRecordModel.DYNAMIC.getName(),
+                    DnsRecordModel.DYNDNS_TOKEN.getName()));
+                return;
+            }
+            throw refusal(DnsRecordModel.NAME.getName(), effective(row, stored, DnsRecordModel.NAME));
+        }
+
+        String claimed = fqdnOf(row, stored);
+        boolean claimsNewName = stored == null
+            || !claimed.equals(fqdnOf(stored, stored));
+        if (claimsNewName && !HostnameAuthority.canManage(snapshot, ctx, claimed)) {
+            throw refusal(DnsRecordModel.NAME.getName(), claimed);
+        }
+    }
+
+    /** @return the fully qualified name the write ends up with, or "" when its zone is gone */
+    private static @NonNull String fqdnOf(@NonNull Row row, @Nullable Row stored) {
+        Object zoneId = effective(row, stored, DnsRecordModel.ZONE_ID);
+        Object name = effective(row, stored, DnsRecordModel.NAME);
+        if (zoneId == null || name == null) {
+            return "";
+        }
+        Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
+        String origin = zone != null ? zone.get(DnsZoneModel.ORIGIN) : null;
+        return origin != null ? DnsNames.absolute(origin, String.valueOf(name)) : "";
+    }
+
+    /** Every column outside {@code writable} must keep its stored value (its default on a create). */
+    private static void refuseChangesOutside(@NonNull Row row, @Nullable Row stored,
+                                             @NonNull Set<String> writable) {
+        Model model = Models.get(DnsRecordModel.class);
+        for (Field<?, ?> field : model.getSchema().getFields().values()) {
+            String name = field.getName();
+            if (writable.contains(name) || RECORD_DERIVED.contains(name) || !row.has(name)) {
+                continue;
+            }
+            Object baseline = stored != null ? stored.get(name) : field.getDefaultValue();
+            if (!Objects.equals(row.get(name), baseline)) {
+                throw refusal(name, row.get(name));
+            }
+        }
+    }
+
+    private static @NonNull Violations refusal(@NonNull String field, @Nullable Object value) {
+        return Violations.ofField(field, value,
+            CmsSupport.violationText("tenant_record_not_authorized"));
     }
 
     private static void refuseForeignRecordType(@Nullable Object type) {

@@ -3,20 +3,17 @@ package be.elevenways.hohenheim.server.tls;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
-import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -177,31 +174,17 @@ public final class CertificateAuthority {
      */
     public static @NonNull Map<String, Integer> authorize(@NonNull Requester requester,
                                                           @NonNull List<String> hostnames) {
-        List<Row> domains = Models.get(SiteDomainModel.class).find().all();
-        Map<Integer, Row> sitesById = new HashMap<>();
-        for (Row site : Models.get(SiteModel.class).find().all()) {
-            sitesById.put(site.get(SiteModel.ID), site);
-        }
+        // AIDEV-NOTE: the covering-rows walk lives in HostnameAuthority.Snapshot -- a tenant
+        // DNS write asks the SAME question and two copies of it would be two answers. Only
+        // the certificate-specific halves (LE exclusion, TLS passthrough) stay here.
+        HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
 
         boolean admin = requester.isAdmin();
         Map<String, Integer> declaring = new LinkedHashMap<>();
 
         for (String raw : hostnames) {
             String hostname = BlastString.lower(raw != null ? raw.trim() : "");
-            List<Row> covering = new ArrayList<>();
-            for (Row domain : domains) {
-                Integer siteId = domain.get(SiteDomainModel.SITE_ID);
-                Row site = siteId != null ? sitesById.get(siteId) : null;
-                // A soft-deleted site owns nothing: its grants do not survive its delete
-                // (HohenheimAccess.declareGrantableModels), so neither may its hostnames.
-                if (site == null || site.get(SiteModel.DELETED_AT) != null) {
-                    continue;
-                }
-                if (HostnamePatterns.covers(domain.get(SiteDomainModel.HOSTNAME),
-                        domain.get(SiteDomainModel.MATCH_TYPE), hostname)) {
-                    covering.add(domain);
-                }
-            }
+            List<Row> covering = snapshot.covering(hostname);
 
             if (covering.isEmpty()) {
                 throw new Refused(Refusal.NOT_SERVED, hostname);
@@ -220,7 +203,7 @@ public final class CertificateAuthority {
             // site is checked beside the flag rather than through it: the model hook forces
             // the flag on WRITE, so only rows written since then carry it.
             for (Row domain : covering) {
-                Row site = sitesById.get(domain.get(SiteDomainModel.SITE_ID));
+                Row site = snapshot.siteOf(domain);
                 if (Boolean.TRUE.equals(domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT))
                         || site != null && SiteModel.SITE_TYPE_TLS_PASSTHROUGH
                             .equals(site.get(SiteModel.SITE_TYPE))) {

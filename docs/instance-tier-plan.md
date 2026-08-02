@@ -1373,13 +1373,46 @@ past. It is small if Phase 1 is done right: it is a consumer, not a mechanism.
     **Key export is NEVER delegable and never owner-implied**: hohenheim
     terminates TLS itself, so a tenant has no need for the private key, and
     exporting it makes revocation meaningless. Certificate UPLOAD stays
-    admin-only -- an uploaded cert is unverified authority over a name. The
-    `PROVIDER_ACME_ACCOUNT` row must be excluded by the ACCESS criteria, not
-    only by the existing `baseCriteria` filter.
+    admin-only -- an uploaded cert is unverified authority over a name.
+    ~~The `PROVIDER_ACME_ACCOUNT` row must be excluded by the ACCESS criteria,
+    not only by the existing `baseCriteria` filter.~~ **SUPERSEDED 2026-08-02.**
+    `baseCriteria` is ANDed into every RecordSource path -- query, resolve,
+    exists, buckets -- exactly where `accessCriteria` lands, so the exclusion is
+    already total. Restating it as `accessCriteria` was implemented, proved to
+    change no observable behaviour on any path, could be given no counterfactual,
+    and was reverted; an unfalsifiable second declaration is security theater,
+    not defence in depth. `accessCriteria` is for decisions that differ PER
+    PRINCIPAL. The framework contract is recorded as an AIDEV-NOTE on the
+    certificate source in `HohenheimSources`.
 
   Registering a vocabulary is NOT free: `AuthRecordAccessBridge` auto-attaches
   a subjects-x-capabilities matrix page to every model that declares one and is
   grantable. Never declare one before that resource's scoping is complete.
+
+  STATUS 2026-08-02 -- LANDED. `HohenheimAccess.declareGrantableModels` declares
+  both vocabularies (and an AIDEV-NOTE recording the zone/peer non-goal at the
+  one place a future reader would add one). Both blockers landed with them:
+  `ManageDnsRecordResource` and `ManageCertificateResource` are /manage peers
+  with explicit scoped RecordSource overrides beside the site and domain ones
+  (`ManagePanel.dnsRecordScope` / `certificateScope`), so the auto-attached
+  matrix page has a tenant-reachable host.
+
+  Two implementation decisions this section did not fix, recorded here:
+
+  - **DNS authority is the HOSTNAME, not the zone and not only the grant.** A
+    tenant may author a record whose FQDN is covered by a live domain row of a
+    site it manages -- the same `HostnameAuthority` walk a certificate order
+    asks, extracted out of `CertificateAuthority` so the two can never answer
+    differently. An explicit `edit` grant is the second lane (authority over a
+    row that is not under one of its hostnames); `dyndns` alone is narrowed to
+    the two dynamic columns. Renaming or creating always needs hostname
+    authority over the name being CLAIMED, so a grant cannot launder into a
+    takeover. Without this a tenant could author any name in any zone, which is
+    what the pre-2026-08-02 code and its test actually allowed.
+  - **Certificate `view` scope is requester-or-grant, NOT domain coverage.**
+    Coverage is authority to REQUEST and `CertificateAuthority` owns it; making
+    it a read scope too would put a second authority beside the capability walk
+    the vocabulary declares.
 - Domain claim authority: who may bind a hostname, and what stops tenant B from
   claiming a name tenant A already serves or once served. This is the same
   invariant as 0.9 route ownership, one tier up. Reuse the model-level
