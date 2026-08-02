@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.WorkloadIdentity;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
+import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -67,6 +68,11 @@ public final class AttentionCollector {
         }
         if (HohenheimRoles.enabled(Role.STACKS)) {
             dockerUnreachable(items);
+        }
+        if (HohenheimRoles.anyEnabled(Role.PROXY, Role.DATABASES, Role.STACKS)) {
+            // Stored reconciler findings only -- the sweep itself is a scheduled
+            // task, never a per-render daemon probe.
+            items.addAll(DockerReconciler.attentionItems());
         }
         failedTasks(items);
         if (HohenheimRoles.enabled(Role.DNS)) {

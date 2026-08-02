@@ -4006,5 +4006,25 @@
   "docker_unreachable": {
     "text": "Docker daemon unreachable",
     "scope": "attention_title"
-  }
+  },
+  "docker_orphans": [
+    {
+      "text": "Unowned Docker resources on {$server}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "{$count} Docker resource(s) have no live owning record: {$names}",
+      "scope": "attention_detail"
+    }
+  ],
+  "docker_colliding": [
+    {
+      "text": "Colliding Docker names on {$server}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "{$count} unmanaged resource(s) hold hohenheim-style names: {$names}",
+      "scope": "attention_detail"
+    }
+  ]
 }
