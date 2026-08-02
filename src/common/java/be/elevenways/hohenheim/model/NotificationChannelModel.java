@@ -33,7 +33,7 @@ public class NotificationChannelModel extends Model {
         .value(FORMAT_GENERIC, v -> v.displayName("Generic JSON").icon("code").color("gray"))
         .build());
     // The webhook URL is a bearer capability (Slack/Discord embed the token in the path).
-    public static final StringField URL = SCHEMA.addField(StringField.builder().name("url").secret().build());
+    public static final StringField URL = SCHEMA.addField(StringField.builder().name("url").secret().encrypted().build());
     // Subscribed event tokens; empty/null = receive every event.
     public static final ListField<String> EVENTS = SCHEMA.addField(
         ListField.<String>builder(StringField.builder().name("event").build()).name("events").build());

@@ -25,7 +25,7 @@ public class DnsPeerModel extends Model {
         .label(HohenheimFormCopy.label("peer_name")).help(HohenheimFormCopy.help("peer_name")).build());
     public static final StringField BASE_URL = SCHEMA.addField(StringField.builder().name("base_url")
         .label(HohenheimFormCopy.label("peer_base_url")).help(HohenheimFormCopy.help("peer_base_url")).build());
-    public static final StringField API_KEY = SCHEMA.addField(StringField.builder().name("api_key").secret()
+    public static final StringField API_KEY = SCHEMA.addField(StringField.builder().name("api_key").secret().encrypted()
         .label(HohenheimFormCopy.label("peer_api_key")).help(HohenheimFormCopy.help("peer_api_key")).build());
     public static final StringField TRANSFER_HOST = SCHEMA.addField(StringField.builder().name("transfer_host")
         .label(HohenheimFormCopy.label("peer_transfer_host")).help(HohenheimFormCopy.help("peer_transfer_host")).build());
@@ -36,7 +36,7 @@ public class DnsPeerModel extends Model {
         .label(HohenheimFormCopy.label("peer_tsig_key_name")).help(HohenheimFormCopy.help("peer_tsig_key_name")).build());
     public static final StringField TSIG_ALGORITHM = SCHEMA.addField(StringField.builder().name("tsig_algorithm")
         .label(HohenheimFormCopy.label("peer_tsig_algorithm")).help(HohenheimFormCopy.help("peer_tsig_algorithm")).build());
-    public static final StringField TSIG_SECRET = SCHEMA.addField(StringField.builder().name("tsig_secret").secret()
+    public static final StringField TSIG_SECRET = SCHEMA.addField(StringField.builder().name("tsig_secret").secret().encrypted()
         .label(HohenheimFormCopy.label("peer_tsig_secret")).help(HohenheimFormCopy.help("peer_tsig_secret")).build());
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true)
         .label(HohenheimFormCopy.label("peer_enabled")).help(HohenheimFormCopy.help("peer_enabled")).build());

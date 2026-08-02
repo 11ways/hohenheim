@@ -51,6 +51,7 @@ public class DatabaseModel extends Model {
         .build());
     public static final StringField DB_PASSWORD = SCHEMA.addField(StringField.builder().name("db_password")
         .secret()
+        .encrypted()
         .label(HohenheimFormCopy.label("db_password"))
         .help(HohenheimFormCopy.help("db_password"))
         .build());

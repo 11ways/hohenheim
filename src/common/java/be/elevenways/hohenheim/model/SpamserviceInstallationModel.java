@@ -38,7 +38,7 @@ public class SpamserviceInstallationModel extends Model {
         IntegerField.builder().name("max_heap_mb").defaultValue(512)
             .validator(Range.of(MIN_HEAP_SIZE_MB, MAX_HEAP_SIZE_MB)).build());
     public static final StringField CONTROLLER_KEY = SCHEMA.addField(
-        StringField.builder().name("controller_key").secret().filterable(false).build());
+        StringField.builder().name("controller_key").secret().encrypted().filterable(false).build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(

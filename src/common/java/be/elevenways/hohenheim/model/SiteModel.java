@@ -101,7 +101,7 @@ public class SiteModel extends Model {
     // the sites table can impersonate this site's reporting client --
     // acceptable, since that table already holds site env secrets.
     public static final StringField SECURITY_REPORT_TOKEN = SCHEMA.addField(
-        StringField.builder().name("security_report_token").secret().build());
+        StringField.builder().name("security_report_token").secret().encrypted().build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
