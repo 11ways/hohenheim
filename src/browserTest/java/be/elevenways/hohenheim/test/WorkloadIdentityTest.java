@@ -46,12 +46,15 @@ class WorkloadIdentityTest {
     static void boot() throws Exception {
         SiteTypes.boot();
         HohenheimEndpoints.init();
+        // This class boots a reduced path (no installAuthBaselines), so it declares the
+        // grantable model itself; zenit-auth refuses a grant on an undeclared model.
+        // BEFORE the boot stages, exactly as ServerMain does: zenit-auth's record-access
+        // page registry is a MODULES-stage snapshot, and a declaration landing after the
+        // drain is refused loudly by RecordAccessCoverage.
+        HohenheimAccess.declareGrantableModels();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
         ZenitAuth.init(HohenheimDatabase.datasource());
-        // This class boots a reduced path (no installAuthBaselines), so it declares the
-        // grantable model itself; zenit-auth refuses a grant on an undeclared model.
-        HohenheimAccess.declareGrantableModels();
 
         saveUser("wl-user-a", 44301);
         saveUser("wl-user-b", 44302);

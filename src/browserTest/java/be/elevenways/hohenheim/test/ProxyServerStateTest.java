@@ -29,6 +29,9 @@ class ProxyServerStateTest {
         SiteTypes.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
+        // Declare the full-node role set: this class boots the runtime without the
+        // HohenheimTestRuntime funnel, and the TASKS stage reads the role snapshot.
+        be.elevenways.hohenheim.server.HohenheimRoles.capture();
         ServerZenitRuntime.init();
         Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
