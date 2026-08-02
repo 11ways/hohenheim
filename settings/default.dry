@@ -6,9 +6,6 @@
     "content": {
         "locales": "en"
     },
-    "database": {
-        "migration_integrity": "warn"
-    },
     "brand": {
         "name": "Hohenheim",
         "seed_color": "#b45309"

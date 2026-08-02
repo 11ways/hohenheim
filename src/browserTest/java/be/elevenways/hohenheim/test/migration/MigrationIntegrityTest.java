@@ -13,13 +13,16 @@ import be.elevenways.zenit.common.orm.migration.MigrationRunnerResult;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationChecksum;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import be.elevenways.zenit.server.setting.DryFileSource;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -109,8 +112,8 @@ class MigrationIntegrityTest {
         assertThat(second.isSuccess()).as("second migrate must not fail").isTrue();
         assertThat(second.getAppliedCount()).as("second migrate applies nothing").isZero();
 
-        // 5. A fresh install has zero integrity findings, so the strictest mode boots green.
-        //    This is the evidence for eventually shipping database.migration_integrity=fail.
+        // 5. A fresh install has zero integrity findings, so the SHIPPED posture boots green.
+        //    Pinned explicitly so the guarantee survives an ambient settings change.
         withIntegrityMode("fail", () -> {
             MigrationRunnerResult strict = new MigrationRunner(datasource)
                 .acknowledgeMissingMigrationVersions(
@@ -118,6 +121,27 @@ class MigrationIntegrityTest {
                 .migrate();
             assertThat(strict.isSuccess()).as("strict migrate on a clean install").isTrue();
         });
+    }
+
+    @Test
+    void shippedSettingsDoNotDowngradeMigrationIntegrity() {
+        // 1. The framework ships the strict posture.
+        assertThat(ServerSettings.Database.MIGRATION_INTEGRITY.getDefaultValue())
+            .as("the framework's shipped database.migration_integrity")
+            .isEqualTo("fail");
+
+        // 2. Hohenheim must not opt out of it. A "warn" pin here was written when warn WAS
+        //    the framework default; left in place it is a deliberate downgrade that turns
+        //    every checksum and out-of-order finding into a log line nobody reads.
+        Path defaults = Path.of("settings", "default.dry");
+        assertThat(defaults).as("the shipped defaults file").exists();
+        Object database = new DryFileSource(defaults).snapshot().get("database");
+        if (database instanceof Map<?, ?> group) {
+            assertThat(group.get("migration_integrity"))
+                .as("settings/default.dry must not pin database.migration_integrity below the"
+                    + " framework default; the enforcement everything else gained is the point")
+                .isNull();
+        }
     }
 
     @Test
@@ -143,17 +167,27 @@ class MigrationIntegrityTest {
                 supplier.get().getVersion());
         }
 
-        // 4. The normal boot path replays exactly those versions. Without .ifNotExists() the first
-        //    one dies on "duplicate column name" and the whole batch stops.
-        MigrationRunnerResult replay = new MigrationRunner(datasource).migrate();
-        assertThat(replay.isSuccess())
-            .as("replaying migrations onto an existing schema: %s", failureDetail(replay))
-            .isTrue();
-        assertThat(replay.getAppliedCount())
-            .as("every deleted version was replayed")
-            .isEqualTo(alterOnly.size());
+        // 4. Under the SHIPPED posture that history is out of order (old versions pending
+        //    behind applied newer ones), so the boot is REFUSED. Replaying a hand-repaired
+        //    history is an operator decision, never something the framework does silently.
+        assertThatThrownBy(() -> new MigrationRunner(datasource).migrate())
+            .as("a divergent history must not replay itself under the shipped fail posture")
+            .hasMessageContaining("out of order");
 
-        // 5. The replay was a pure no-op: the data those tables already held is untouched.
+        // 5. Once the operator declares that downgrade, the replay runs -- and replays exactly
+        //    those versions. Without .ifNotExists() the first one dies on "duplicate column
+        //    name" and the whole batch stops.
+        withIntegrityMode("warn", () -> {
+            MigrationRunnerResult replay = new MigrationRunner(datasource).migrate();
+            assertThat(replay.isSuccess())
+                .as("replaying migrations onto an existing schema: %s", failureDetail(replay))
+                .isTrue();
+            assertThat(replay.getAppliedCount())
+                .as("every deleted version was replayed")
+                .isEqualTo(alterOnly.size());
+        });
+
+        // 6. The replay was a pure no-op: the data those tables already held is untouched.
         assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM spamservice_installations"))
             .as("a replay never rewrites data").isEqualTo(1L);
     }
@@ -217,8 +251,8 @@ class MigrationIntegrityTest {
         }
 
         withIntegrityMode("fail", () -> {
-            // 2. Unacknowledged, those rows are fatal in strict mode -- this is what would have
-            //    happened the moment the shipped default moved to "fail".
+            // 2. Unacknowledged, those rows are fatal under the shipped posture: the boot
+            //    refuses rather than logging a finding nobody reads.
             assertThatThrownBy(() -> new MigrationRunner(datasource).migrate())
                 .as("an unacknowledged retired version is a strict-mode finding")
                 .hasMessageContaining("2026_03_31_000001");
