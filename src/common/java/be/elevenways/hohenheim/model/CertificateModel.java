@@ -56,7 +56,7 @@ public class CertificateModel extends Model {
         .label(HohenheimFormCopy.label("cert_certificate_pem"))
         .help(HohenheimFormCopy.help("cert_certificate_pem")).build());
     public static final TextField PRIVATE_KEY_PEM = SCHEMA.addField(TextField.builder("private_key_pem")
-        .secret().inputHint(InputType.MULTILINE)
+        .secret().encrypted().inputHint(InputType.MULTILINE)
         .label(HohenheimFormCopy.label("cert_private_key_pem"))
         .help(HohenheimFormCopy.help("cert_private_key_pem")).build());
     public static final DateTimeField EXPIRES_ON = SCHEMA.addField(DateTimeField.builder().name("expires_on").build());

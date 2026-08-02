@@ -107,7 +107,12 @@ public class StackServiceModel extends Model {
             .help(HohenheimFormCopy.help("service_command"))
             .build());
 
+    // Secret AND encrypted: env maps routinely carry credentials, and unlike
+    // SiteModel.environment_variables (inside a JSON SchemaField) this is a
+    // main-table column, so the encrypted-envelope path is available.
     public static final StringMapField ENVIRONMENT = SCHEMA.addField(StringMapField.builder("environment")
+        .secret()
+        .encrypted()
         .label(HohenheimFormCopy.label("environment_variables"))
         .help(HohenheimFormCopy.help("service_environment"))
         .build());

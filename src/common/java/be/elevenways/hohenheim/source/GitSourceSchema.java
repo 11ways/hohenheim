@@ -11,8 +11,12 @@ public class GitSourceSchema {
 
     public static final Schema SCHEMA = new Schema();
 
+    // secret(): a private-repo clone URL routinely embeds https://user:TOKEN@host.
+    // Inside a JSON SchemaField it CANNOT be .encrypted() (Schema.refuseEncryptedJsonSubFields);
+    // the eventual fix is a separate credential field so the URL itself stays plain.
     public static final StringField REPOSITORY_URL = SCHEMA.addField(
-        StringField.builder().name("repository_url").label(HohenheimFormCopy.label("repository_url"))
+        StringField.builder().name("repository_url").secret()
+            .label(HohenheimFormCopy.label("repository_url"))
             .help(HohenheimFormCopy.help("repository_url")).build());
 
     public static final StringField BRANCH = SCHEMA.addField(

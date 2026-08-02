@@ -70,7 +70,7 @@ public class DnsZoneModel extends Model {
         IntegerField.builder().name("dnssec_algorithm").defaultValue(13).build());
     /** Base64 PKCS#8 private key; secret so it never leaves the server in exports or forms. */
     public static final StringField DNSSEC_PRIVATE_KEY = SCHEMA.addField(
-        StringField.builder().name("dnssec_private_key").secret().build());
+        StringField.builder().name("dnssec_private_key").secret().encrypted().build());
     /** Base64 X.509 SubjectPublicKeyInfo of the signing key. */
     public static final StringField DNSSEC_PUBLIC_KEY = SCHEMA.addField(
         StringField.builder().name("dnssec_public_key").build());
