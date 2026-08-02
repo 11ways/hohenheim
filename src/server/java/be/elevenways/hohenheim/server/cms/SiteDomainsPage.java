@@ -61,8 +61,11 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         vars.put("domains", domains);
         vars.put("basePath", basePath);
         boolean administerDomains = HohenheimAccess.isAdmin(accessContext);
-        // Hostname ownership and LE requests are installation administration.
-        vars.put("canEditDomains", administerDomains);
+        // Binding a hostname to a site the principal MANAGES is delegated (the write pipeline
+        // decides what such a write may carry); requesting a certificate stays installation
+        // administration, because an issued certificate is authority over a name.
+        vars.put("canEditDomains", administerDomains
+            || HohenheimAccess.canManageSite(accessContext, siteId));
         vars.put("canRequestCert", administerDomains && !tlsPassthrough);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-domains"), vars);
