@@ -24,9 +24,33 @@ check ENGAGING (empty unchecked list, marker row recorded).
 Also landed: the `SiteDispatcher` plaintext-compare fallback is DELETED (a
 non-argon2 stored `basic_auth_pass` is refused loudly, pinned by
 `BasicAuthPasswordVerificationTest`), and `GitSourceSchema.REPOSITORY_URL` is
-now `.secret()`. `TotpModel.SECRET` was deliberately NOT touched: the v2 AAD
-binds table|column, not row, so a cross-user seed swap still decrypts -- it
-needs row-level integrity of its own first.
+now `.secret()`.
+
+`TotpModel.SECRET` is now ROW-BOUND encrypted (2026-08-02): the zenit envelope
+grew a per-field opt-in, `Field.Builder.encryptedBoundTo(rowKeyField)`, that
+authenticates the owning row's identity (the app-assigned primary key) into the
+GCM additional data on top of table|column. `TotpModel.SECRET.encryptedBoundTo(
+USER_ID)` uses it; `auth_totp.secret` widened STRING(64)->TEXT (M004 edited in
+place, nothing deployed). What each layer buys, stated honestly:
+encryption fixes READ-ONLY exposure (a backup leak, a read replica, a
+SELECT-only injection -- a strictly larger and more common attacker class, and
+that alone justifies encrypting the seed); ROW-BINDING converts a silent
+write-tampering seed graft (pasting user A's ciphertext onto user B's row -- an
+authentication BYPASS, because B could then log in with A's authenticator) into
+a loud, fail-closed refusal on read; NEITHER prevents a write-capable attacker
+who ALSO holds the keyring from re-encrypting a seed under the correct AAD, and
+no design can (they own both halves). The refusal is enforced by DECLARATION,
+not by the stored bytes: a row-bound field refuses the AAD-less v1 envelope and
+a column-only v2 envelope alike, so the binding cannot be downgraded away.
+`confirmed_at` is deliberately OUT OF SCOPE: a write attacker who nulls it only
+downgrades the account to password-only (the login skips the second factor), and
+that same attacker achieves the identical effect more cheaply with `DELETE FROM
+auth_totp`. It is not an impersonation bypass -- the password is still required
+-- so it does not warrant its own integrity field. The end-to-end refusal, the
+victim's-own-row still decrypting, the downgrade/column-only refusals and the
+admin recovery path are pinned by `EncryptedFieldTest` (zenit, 8 backends) and
+`AuthFlowIntegrationTest.totpSeedGraftAcrossUsersIsRefusedAtLoginAndAdminReset...`
+(zenit-auth).
 
 The organising question is NOT "is this sensitive" but **"must this value be
 RECOVERABLE"**. A credential the code only ever COMPARES belongs hashed;
@@ -57,7 +81,7 @@ pre-wave posture notes for the record.
 | 7 | `SiteModel.SECURITY_REPORT_TOKEN` | `SiteModel.java:103` | spamservice reporting credential; injected raw into the child env |
 | 8 | `SpamserviceInstallationModel.CONTROLLER_KEY` | `SpamserviceInstallationModel.java:40` | local spamservice control API |
 | 9 | `StackServiceModel.ENVIRONMENT` | `StackServiceModel.java:110` | **PLAIN today, not even secret.** A `StringMapField` on the MAIN TABLE, so unlike `SiteModel.environment_variables` it is not inside a JSON SchemaField and encryption IS available |
-| 10 | `TotpModel.SECRET` (zenit-auth) | `TotpModel.java:25` | **PLAIN today, not even secret.** The worst posture found. BLOCKED ON AAD -- see below |
+| 10 | `TotpModel.SECRET` (zenit-auth) | `TotpModel.java:36` | ROW-BOUND ENCRYPTED as of 2026-08-02 (`encryptedBoundTo(USER_ID)`). Was the worst posture found (PLAIN, not even secret); a plain `.encrypted()` would have been a half-fix (still cross-row graftable). See the intro for the full framing |
 
 ## Correct as-is -- do not "improve" these
 
@@ -124,10 +148,16 @@ dominant defect shape.
    cleanly, writes new rows under a new key, and only fails later per-row on the
    first read of an old envelope. New and unrecoverable rows interleave. There is
    no boot-time check anywhere.
-3. **No AAD.** `FieldEncryption.java:22-28` documents the absence. A valid
-   envelope grafts cleanly between rows and columns: site A's TLS key onto site
-   B's certificate row, one zone's DNSSEC key onto another, user A's TOTP seed
-   onto user B (an authentication bypass). The comment itself names TOTP.
+3. **AAD.** LANDED. The v2 envelope binds table|column, refusing cross-COLUMN
+   grafts (site A's TLS key onto site B's certificate row, one zone's DNSSEC key
+   onto another). Cross-ROW grafts within one column stay possible for a plain
+   `.encrypted()` field BY DESIGN (the auto-increment pk is not in hand at encrypt
+   time), which is why the TOTP seed -- where the cross-row swap IS the attack --
+   uses the per-field `encryptedBoundTo(pkField)` row binding (LANDED 2026-08-02,
+   see intro). None of hohenheim's ten fields can adopt row binding: every one
+   sits on an auto-increment `id` pk, which is DB-assigned and therefore refused
+   as a binding key. That is correct -- their attack model is the read-only leak,
+   not a targeted intra-column swap.
 4. **Permissive existing file modes are never inspected.** Creation restricts to
    0600, but `loadOrCreate` reads a pre-existing file with no mode check.
 5. **No fsync**, neither the file nor the parent directory. For a file whose loss
