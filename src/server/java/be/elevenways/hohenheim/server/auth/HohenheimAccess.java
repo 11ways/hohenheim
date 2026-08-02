@@ -12,6 +12,8 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.KnownCapability;
@@ -24,6 +26,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -155,6 +158,33 @@ public final class HohenheimAccess {
     public static boolean canManageSite(@NonNull Principal principal, int siteId) {
         return Zenit.getWebSocketAuthenticator()
             .hasCapability(principal, SiteModel.MODEL_ID, siteId, MANAGE);
+    }
+
+    /**
+     * THE managed-site scoping shape, shared by every source and resource whose rows hang
+     * off a site: admins are unconstrained, a principal with no managed sites matches
+     * NOTHING, and everyone else gets the criteria {@code forManagedIds} spells over the
+     * confirmed id set.
+     *
+     * AIDEV-NOTE: one definition on purpose. Three hand-rolled copies (site, domain,
+     * certificate) is how one of them ends up missing the anonymous branch or answering
+     * {@code ID.in(empty)}, which some backends widen instead of refusing.
+     *
+     * @param model          the model being scoped, for its {@code matchNone()}
+     * @param forManagedIds  builds the criteria from the confirmed managed-site ids
+     * @return null for admins (no extra constraint), else a criteria
+     */
+    public static @Nullable Criteria managedSiteScope(@NonNull AccessContext ctx,
+                                                      @NonNull Model model,
+                                                      @NonNull Function<Set<Integer>, Criteria> forManagedIds) {
+        if (isAdmin(ctx)) {
+            return null;
+        }
+        if (ctx.isAnonymous()) {
+            return model.matchNone();
+        }
+        Set<Integer> ids = managedSiteIds(ctx);
+        return ids.isEmpty() ? model.matchNone() : forManagedIds.apply(ids);
     }
 
     /** Request-scoped memo of the confirmed managed-site set (one principal per conduit). */

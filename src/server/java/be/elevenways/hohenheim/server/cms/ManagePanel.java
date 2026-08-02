@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -20,7 +21,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
-import java.util.Set;
 
 /**
  * Delegated operator panel at /manage: only the sites (and their domains) the
@@ -129,6 +129,22 @@ public final class ManagePanel extends Panel {
             .baseCriteria(() -> SiteModel.DELETED_AT.isNull())
             .accessCriteria(ManagePanel::siteScope)
             .build());
+
+        // The domain source, for the SAME reason and by the same verb -- plus one that is
+        // specific to this model: site_domain is exposed by TWO RowResources (the admin
+        // SiteDomainResource and the delegated ManageDomainResource), so zenit-cms derives
+        // a default source from BOTH panels and which one wins is decided by panel walk
+        // ORDER. That is a shadowing hazard exactly like the deleted "hohenheim.manage_site"
+        // one: it decides whether the token is admin-gated-unscoped or manage-gated-scoped
+        // at boot. This explicit registration makes the answer boot-order-independent.
+        // AIDEV-NOTE: scoped by the domain's PARENT SITE, never by a grant on the domain
+        // row -- SiteDomainModel deliberately has NO grant surface of its own (see
+        // docs/instance-tier-plan.md, Phase 2 parallel gate): a second authority over a
+        // child row is a second authority that can disagree with the first.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteDomainModel.class)
+            .search(SiteDomainModel.HOSTNAME)
+            .accessCriteria(ManagePanel::domainScope)
+            .build());
     }
 
     /**
@@ -136,17 +152,15 @@ public final class ManagePanel extends Panel {
      *         for principals without grants, else {@code ID IN (managed ids)}
      */
     static @Nullable Criteria siteScope(@NonNull AccessContext ctx) {
-        if (HohenheimAccess.isAdmin(ctx)) {
-            return null;
-        }
-        if (ctx.isAnonymous()) {
-            return impossible();
-        }
-        Set<Integer> ids = HohenheimAccess.managedSiteIds(ctx);
-        if (ids.isEmpty()) {
-            return impossible();
-        }
-        return SiteModel.ID.in(ids);
+        return HohenheimAccess.managedSiteScope(ctx, Models.get(SiteModel.class), SiteModel.ID::in);
+    }
+
+    /**
+     * @return null for admins, else the domains of the principal's managed sites
+     */
+    static @Nullable Criteria domainScope(@NonNull AccessContext ctx) {
+        return HohenheimAccess.managedSiteScope(ctx, Models.get(SiteDomainModel.class),
+            SiteDomainModel.SITE_ID::in);
     }
 
     /** Matches nothing; NEVER ID.in(empty), which some backends reject or widen. */
