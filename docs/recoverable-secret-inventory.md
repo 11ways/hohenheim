@@ -4,6 +4,30 @@ Checked in 2026-08-02, the artifact the Phase 2 parallel gate demands. Every
 field below was read at its declaration AND at its use site; the posture column
 is what the code does today, not what a docblock claims.
 
+## Status 2026-08-02: the encryption wave LANDED
+
+Fields 1-9 below are now `.secret().encrypted()` (field 9 gained BOTH flags).
+`M047_EncryptRecoverableSecrets` ships the idempotent heal in the same release:
+a `builder.data(...)` step that reads the columns RAW (the typed accessors
+throw on plaintext once `.encrypted()` is declared) and folds every
+non-`zenc$` value into an envelope. Raw reads abandon `data()`'s
+eight-backend portability -- acceptable only because hohenheim is SQLite-only,
+stated in an AIDEV-NOTE at the call site. M047's version is `2026_08_02_100047`
+so it sorts AFTER zenit's `2026_08_02_100000`, keeping the out-of-order
+integrity finding quiet on an install that applied zenit's migration first.
+`EncryptedSecretsAtRestTest` pins ciphertext at rest (raw-column asserts per
+field), the model round-trip, the heal (plaintext planted pre-M047, healed by
+the full migrate, re-run leaves envelopes byte-identical), and that zenit's
+keyring marker table is created by a hohenheim migrate with the KeyringGuard
+check ENGAGING (empty unchecked list, marker row recorded).
+
+Also landed: the `SiteDispatcher` plaintext-compare fallback is DELETED (a
+non-argon2 stored `basic_auth_pass` is refused loudly, pinned by
+`BasicAuthPasswordVerificationTest`), and `GitSourceSchema.REPOSITORY_URL` is
+now `.secret()`. `TotpModel.SECRET` was deliberately NOT touched: the v2 AAD
+binds table|column, not row, so a cross-user seed swap still decrypts -- it
+needs row-level integrity of its own first.
+
 The organising question is NOT "is this sensitive" but **"must this value be
 RECOVERABLE"**. A credential the code only ever COMPARES belongs hashed;
 encrypting it is the weaker design because it keeps a reversible copy for no
@@ -16,8 +40,11 @@ SECRET (redacted in derived surfaces, PLAINTEXT in the column) | PLAIN | EXTERNA
 ## Must be encrypted -- recoverable, main-table, no query breakage
 
 Each was traced for queryability: every use is `row.get(...)` on an already
-loaded row. None appears in a value criterion, ordering, grouping or aggregate,
-so `.encrypted()` breaks nothing. All are SECRET today, i.e. plaintext at rest.
+loaded row (the two writes via `assignIfNull(...).updateAll()` and the one
+`isNotNull()` criterion stay legal under encryption). None appears in a value
+criterion, ordering, grouping or aggregate, so `.encrypted()` breaks nothing.
+Rows 1-9 are ENCRYPTED as of 2026-08-02; the table below keeps the original
+pre-wave posture notes for the record.
 
 | # | Field | Declared | Protects |
 | --- | --- | --- | --- |
@@ -52,14 +79,19 @@ is the only lever until each gets a real column or a table-stored sub-schema.
 - `GitSourceSchema.WEBHOOK_SECRET` (`GitSourceSchema.java:42`) -- HMAC needs the raw value, so it cannot be hashed either.
 - `ProteusAuthProviderType` `access_key` (`ProteusAuthProviderType.java:42`).
 - `GitSourceSchema.BUILD_ENVIRONMENT_VARIABLES`, dev `registration_token`.
-- **`GitSourceSchema.REPOSITORY_URL` (`GitSourceSchema.java:14`) is PLAIN and was missed by every prior category list.** A private-repo clone URL routinely embeds `https://user:TOKEN@host/...`. Minimum fix is `.secret()`; the correct fix is a separate credential field.
+- **`GitSourceSchema.REPOSITORY_URL` was PLAIN and was missed by every prior category list.** A private-repo clone URL routinely embeds `https://user:TOKEN@host/...`. The minimum fix -- `.secret()` -- LANDED 2026-08-02; the correct eventual fix remains a separate credential field so the URL itself can stay visible and editable.
 
 ## Fix by TIGHTENING hashing, not by encrypting
 
 `AccessListModel.BASIC_AUTH_PASS` (`AccessListModel.java:27`) hashes with argon2
-when the value starts with `$argon2`, and otherwise falls back to a constant-time
-PLAINTEXT compare (`SiteDispatcher.java:1130-1135`). That legacy branch exists
-only for pre-hash values. Nothing is deployed, so there are none: DELETE it.
+when the value starts with `$argon2`, and otherwise USED TO fall back to a
+constant-time PLAINTEXT compare in `SiteDispatcher`. That legacy branch existed
+only for pre-hash values; nothing was deployed, so it was DELETED (2026-08-02):
+`SiteDispatcher.verifyBasicAuthPassword` now refuses any non-argon2 stored value
+with a loud log line. NOTE the sibling `BasicAuthProviderType.verify` still
+constant-time-compares plaintext -- that one is DELIBERATE (provider credentials
+are operator-visible/editable by design, pinned by `SecretFieldsTest`), with an
+argon2 branch for legacy hashed rows.
 
 ## Not columns at all -- state this honestly
 
