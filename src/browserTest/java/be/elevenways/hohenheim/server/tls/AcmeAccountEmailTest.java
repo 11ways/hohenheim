@@ -4,6 +4,8 @@ import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -85,10 +87,13 @@ class AcmeAccountEmailTest {
     void requestCertificateStoresTheEmailOnTheCertRow() {
         AcmeService service = new AcmeService(new CertificateStore());
 
-        // Invalid hostname: fails during validation, before any CA contact -- but the
-        // row (and its account email) must already be persisted.
+        // The name is SERVED (so CertificateAuthority lets the order start) but is not a
+        // legal hostname, so it fails during validation before any CA contact -- and the
+        // row, with its account email, must already be persisted by then.
+        serveHostname("not a hostname");
         int certId = service.requestCertificate(
-            List.of("not a hostname"), "Email Test", "certs@tenant.example");
+            List.of("not a hostname"), "Email Test", "certs@tenant.example",
+            CertificateAuthority.Requester.SYSTEM);
         assertThat(certId).isEqualTo(-1);
 
         var certModel = Models.get(CertificateModel.class);
@@ -101,5 +106,24 @@ class AcmeAccountEmailTest {
             .isEqualTo("certs@tenant.example");
         assertThat((String) cert.get(CertificateModel.STATUS))
             .isEqualTo(CertificateModel.STATUS_ERROR);
+    }
+
+    /** A site plus one exact domain row, which is what makes a hostname requestable at all. */
+    private static void serveHostname(String hostname) {
+        var siteModel = Models.get(SiteModel.class);
+        Row site = siteModel.createEmptyRow();
+        site.set(SiteModel.NAME, "Acme Email Site " + hostname);
+        site.set(SiteModel.SLUG, "acme-email-site");
+        site.set(SiteModel.SITE_TYPE, "hohenheim:dead");
+        site.set(SiteModel.STATUS, "active");
+        site.set(SiteModel.ENABLED, true);
+        siteModel.save(site);
+
+        var domainModel = Models.get(SiteDomainModel.class);
+        Row domain = domainModel.createEmptyRow();
+        domain.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
+        domain.set(SiteDomainModel.HOSTNAME, hostname);
+        domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domainModel.save(domain);
     }
 }

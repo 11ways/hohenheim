@@ -1699,6 +1699,14 @@
     "text": "Invalid hostnames: {$hostnames}",
     "scope": "certificate_request_error"
   },
+  "hostname_not_served": {
+    "text": "This installation does not serve {$hostnames}; add it as a domain first",
+    "scope": "certificate_request_error"
+  },
+  "hostname_not_managed": {
+    "text": "You do not manage the site serving {$hostnames}",
+    "scope": "certificate_request_error"
+  },
   "excluded_hostnames": {
     "text": "Excluded from Let's Encrypt by their domain settings: {$hostnames}",
     "scope": "certificate_request_error"

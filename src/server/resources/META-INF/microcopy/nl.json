@@ -1695,6 +1695,14 @@
     "text": "Ongeldige hostnamen: {$hostnames}",
     "scope": "certificate_request_error"
   },
+  "hostname_not_served": {
+    "text": "Deze installatie bedient {$hostnames} niet; voeg het eerst toe als domein",
+    "scope": "certificate_request_error"
+  },
+  "hostname_not_managed": {
+    "text": "Je beheert de site die {$hostnames} bedient niet",
+    "scope": "certificate_request_error"
+  },
   "excluded_hostnames": {
     "text": "Uitgesloten van Let's Encrypt via hun domeininstellingen: {$hostnames}",
     "scope": "certificate_request_error"

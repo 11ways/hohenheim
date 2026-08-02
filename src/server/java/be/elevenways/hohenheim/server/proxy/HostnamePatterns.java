@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -67,6 +68,48 @@ public final class HostnamePatterns {
             return false;
         }
         return globsIntersect(canonicalA, canonicalB);
+    }
+
+    /**
+     * Whether a configured row's hostname set CONTAINS every host the requested certificate
+     * name can present.
+     *
+     * AIDEV-NOTE: coverage is one-directional and strictly stronger than {@link #intersect}.
+     * An exact row {@code a.example.com} INTERSECTS the request {@code *.example.com}
+     * without covering it, and issuing on that intersection hands whoever serves one host a
+     * certificate valid for every sibling under the parent -- a cross-tenant certificate.
+     * A wildcard request is therefore only covered by a row that is ITSELF a leading-"*."
+     * wildcard whose base is the request's base or a suffix of it. Anything this layer
+     * cannot decide (a regex row, an in-label glob such as {@code a*.example.com}) fails
+     * CLOSED, because "probably a superset" is not an authority.
+     *
+     * @param requestedName an ACME SAN: an exact hostname or one leading {@code *.} label
+     */
+    public static boolean covers(@Nullable String rowHostname, @Nullable String rowMatchType,
+                                 @Nullable String requestedName) {
+        String pattern = SiteDomainModel.canonicalHostname(rowHostname, rowMatchType);
+        if (pattern == null || pattern.isEmpty() || requestedName == null) {
+            return false;
+        }
+        String requested = BlastString.lower(requestedName.trim());
+        if (requested.isEmpty()) {
+            return false;
+        }
+        if (SiteDomainModel.MATCH_REGEX.equals(effectiveKind(pattern, rowMatchType))) {
+            return false;
+        }
+        if (!requested.startsWith("*.")) {
+            return WildcardHostname.matches(requested, pattern);
+        }
+        if (!pattern.startsWith("*.")) {
+            return false;
+        }
+        String patternBase = pattern.substring(2);
+        if (patternBase.isEmpty() || WildcardHostname.isWildcard(patternBase)) {
+            return false;
+        }
+        String requestedBase = requested.substring(2);
+        return requestedBase.equals(patternBase) || requestedBase.endsWith("." + patternBase);
     }
 
     /**
