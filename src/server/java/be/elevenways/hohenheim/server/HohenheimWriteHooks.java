@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.server.cms.SiteDomainResource;
 import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.hohenheim.server.cms.SiteTerminalCsp;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
+import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.process.ReservedEnv;
 import be.elevenways.hohenheim.server.process.SiteApiKeys;
 import be.elevenways.zenit.common.ZenitModule;
@@ -42,6 +43,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // stamps the live-route claim its unique index arbitrates (form, clone, seeder,
         // API writeback, direct model save).
         SiteDomainResource.installRouteInvariant();
+        // A DNS record a system authored carries derived attribution, and no caller can
+        // hand-write that attribution onto a row of its own.
+        GeneratedDnsRecords.install();
         // The pl-terminal page gets the wasm concessions; no other admin page does.
         SiteTerminalCsp.install();
     }

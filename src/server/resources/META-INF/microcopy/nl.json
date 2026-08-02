@@ -2515,6 +2515,14 @@
     "text": "TTL-waarden moeten tussen 0 en 604800 seconden liggen (een week)",
     "scope": "violations"
   },
+  "dns_generated_attribution": {
+    "text": "Attributie van gegenereerde records wordt door het systeem gezet, nooit ingestuurd",
+    "scope": "violations"
+  },
+  "dns_generated_readonly": {
+    "text": "Dit record is gegenereerd door {$source} en kan hier niet bewerkt of verwijderd worden",
+    "scope": "violations"
+  },
   "dns_record_duplicate": {
     "text": "Dat exacte record bestaat al in deze zone",
     "scope": "violations"

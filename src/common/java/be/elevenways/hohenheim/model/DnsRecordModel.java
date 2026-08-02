@@ -64,6 +64,30 @@ public class DnsRecordModel extends Model {
     public static final StringField MANAGED_BY = SCHEMA.addField(StringField.builder().name("managed_by")
         .label(HohenheimFormCopy.label("managed_by")).build());
 
+    /**
+     * Which system authored this row, or null when an operator did.
+     *
+     * AIDEV-NOTE: this is the ENFORCEMENT column, distinct from {@link #MANAGED_BY} on
+     * purpose. managed_by carries zone-file-import semantics (DnsZoneFiles replaces only
+     * rows where it is NULL) and is a bare opaque string nothing ever refused, so a
+     * hand-written {@code managed_by = "acme"} was indistinguishable from a real one. These
+     * four columns are DERIVED in the write pipeline by GeneratedDnsRecords and refused
+     * outright when a caller supplies them.
+     */
+    public static final StringField GENERATED_BY = SCHEMA.addField(
+        StringField.builder().name("generated_by").filterable(false).build());
+
+    /** Model id of the record that authorized this row; the reclaim doctrine's anchor. */
+    public static final StringField GENERATED_FOR_MODEL = SCHEMA.addField(
+        StringField.builder().name("generated_for_model").filterable(false).build());
+
+    /** Primary key of the declaring record inside {@link #GENERATED_FOR_MODEL}. */
+    public static final IntegerField GENERATED_FOR_ID = SCHEMA.addField(
+        IntegerField.builder().name("generated_for_id").build());
+
+    public static final DateTimeField GENERATED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("generated_at").build());
+
     // --- Dynamic DNS (dyndns2 update protocol; only A/AAAA records) ---
     public static final BooleanField DYNAMIC = SCHEMA.addField(BooleanField.builder("dynamic").defaultValue(false)
         .label(HohenheimFormCopy.label("record_dynamic")).help(HohenheimFormCopy.help("record_dynamic")).build());
