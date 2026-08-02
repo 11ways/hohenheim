@@ -145,16 +145,29 @@ public class AcmeService {
      * Request a new Let's Encrypt certificate for the given hostnames.
      * Blocks until the certificate is issued or an error occurs.
      *
+     * @param requester the identity the order acts as; its authority over EVERY requested
+     *                  name is decided here, before any row or CA order exists
      * @return the certificate database row ID, or -1 on failure
+     * @throws CertificateAuthority.Refused when the requester may not obtain these names
      */
-    public int requestCertificate(List<String> hostnames, String niceName, @Nullable String email) {
+    public int requestCertificate(List<String> hostnames, String niceName, @Nullable String email,
+                                  CertificateAuthority.Requester requester) {
         return requestCertificate(hostnames, niceName, email,
-            CertificateModel.CHALLENGE_HTTP, null);
+            CertificateModel.CHALLENGE_HTTP, null, requester);
     }
 
     public int requestCertificate(List<String> hostnames, String niceName, @Nullable String email,
-                                  String challengeType, @Nullable String dnsPublisher) {
+                                  String challengeType, @Nullable String dnsPublisher,
+                                  CertificateAuthority.Requester requester) {
         var certModel = Models.get(CertificateModel.class);
+
+        // AIDEV-NOTE: authorization runs FIRST, before the order-key claim and before the
+        // certificate row exists, so a refused request leaves no trace of an order that was
+        // never placed. It lives here rather than in the HTTP handler on purpose: several
+        // entry points reach the CA (this one, the manual DNS lane, the renewal sweep), and
+        // a handler-layer check is the exact bypass shape SiteDomainResource's route
+        // invariant documents. Do NOT move it up into HohenheimHandlers.
+        CertificateAuthority.authorize(requester, hostnames);
 
         // Claim the order key BEFORE creating a row: a concurrent identical
         // request shares the leader's certificate row instead of minting a
@@ -185,6 +198,7 @@ public class AcmeService {
         certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
         certRow.set(CertificateModel.CHALLENGE_TYPE, challengeType);
         certRow.set(CertificateModel.DNS_PUBLISHER, dnsPublisher);
+        certRow.set(CertificateModel.REQUESTED_BY_USER_ID, requester.subjectId());
         if (email != null && !email.isBlank()) {
             certRow.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
         }
@@ -269,9 +283,18 @@ public class AcmeService {
         return new RuntimeException("Order rejected by CA: " + details);
     }
 
-    /** Begin a DNS-01 order and return the TXT values the operator must publish. */
+    /**
+     * Begin a DNS-01 order and return the TXT values the operator must publish.
+     *
+     * @throws CertificateAuthority.Refused when the requester may not obtain these names
+     */
     public ManualDnsRequest prepareManualDnsCertificate(List<String> hostnames, String niceName,
-                                                         @Nullable String email) throws Exception {
+                                                         @Nullable String email,
+                                                         CertificateAuthority.Requester requester)
+            throws Exception {
+        // Same enforcement point as requestCertificate: before the row, before the CA.
+        CertificateAuthority.authorize(requester, hostnames);
+
         List<String> invalid = invalidHostnames(hostnames, true);
         if (!invalid.isEmpty()) {
             throw new IllegalArgumentException("Invalid hostnames: " + String.join(", ", invalid));
@@ -293,6 +316,7 @@ public class AcmeService {
             certRow.set(CertificateModel.CHALLENGE_TYPE, CertificateModel.CHALLENGE_DNS);
             certRow.set(CertificateModel.DNS_PUBLISHER, CertificateModel.DNS_PUBLISHER_MANUAL);
             certRow.set(CertificateModel.AUTO_RENEW, false);
+            certRow.set(CertificateModel.REQUESTED_BY_USER_ID, requester.subjectId());
             if (email != null && !email.isBlank()) {
                 certRow.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
             }
@@ -520,7 +544,18 @@ public class AcmeService {
         return due;
     }
 
-    private void renewCertificate(Row certRow, CertificateModel certModel) {
+    /**
+     * Re-order a stored certificate, re-deciding its authority first.
+     *
+     * AIDEV-NOTE: a failed re-authorization REFUSES AND SURFACES; it deliberately does not
+     * clear auto_renew. Refusal is what closes the hole (no new certificate is issued), and
+     * the existing failure bookkeeping already escalates the retry backoff to ~32h, alerts
+     * once and shows the reason on the certificates page. Disabling auto-renew adds nothing
+     * to the security outcome and subtracts recoverability: an authority change that is
+     * later undone (a re-granted site, a restored domain row) would silently expire the
+     * certificate weeks later with no failure left to notice.
+     */
+    void renewCertificate(Row certRow, CertificateModel certModel) {
         String domainsText = certRow.get(CertificateModel.DOMAIN_NAMES_TEXT);
         String niceName = certRow.get(CertificateModel.NICE_NAME);
         if (domainsText == null || domainsText.isEmpty()) return;
@@ -528,6 +563,11 @@ public class AcmeService {
         List<String> hostnames = Arrays.asList(domainsText.split(","));
 
         try {
+            Integer requestedBy = certRow.get(CertificateModel.REQUESTED_BY_USER_ID);
+            CertificateAuthority.authorize(requestedBy != null
+                ? CertificateAuthority.Requester.ofSubject(requestedBy)
+                : CertificateAuthority.Requester.SYSTEM, hostnames);
+
             String challengeType = certRow.get(CertificateModel.CHALLENGE_TYPE);
             if (challengeType == null || challengeType.isBlank()) {
                 challengeType = CertificateModel.CHALLENGE_HTTP;

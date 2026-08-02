@@ -20,7 +20,6 @@ import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
-import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.CertificateRequestForm;
@@ -35,6 +34,7 @@ import be.elevenways.hohenheim.server.process.ProcessTerminalHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteHandlers;
 import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.hohenheim.server.tls.CertificateAuthority;
 import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
 import be.elevenways.domino.common.DominoFile;
 import be.elevenways.protoblast.common.Blast;
@@ -50,6 +50,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.JsonResult;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.HttpConduit;
@@ -211,12 +212,6 @@ public final class HohenheimHandlers {
                     .withArg("hostnames", String.join(", ", invalid)));
             }
 
-            List<String> excluded = excludedFromLetsencrypt(hostnames);
-            if (!excluded.isEmpty()) {
-                return requestError(conduit, certificateError("excluded_hostnames")
-                    .withArg("hostnames", String.join(", ", excluded)));
-            }
-
             // Input validation first: only a request that could actually be
             // ordered gets refused on operational grounds.
             var proxy = ServerMain.getProxyServer();
@@ -224,12 +219,16 @@ public final class HohenheimHandlers {
                 return requestError(conduit, certificateError("proxy_unavailable"));
             }
 
+            var requester = CertificateAuthority.Requester.of(AccessContext.of(conduit));
+
             if (dns && CertificateModel.DNS_PUBLISHER_MANUAL.equals(dnsMode)) {
                 try {
                     var manual = proxy.getAcmeService().prepareManualDnsCertificate(
-                        hostnames, niceName, email.isEmpty() ? null : email);
+                        hostnames, niceName, email.isEmpty() ? null : email, requester);
                     return redirectUntyped("/admin/certificates-request?manual="
                         + URLEncoder.encode(manual.token(), StandardCharsets.UTF_8));
+                } catch (CertificateAuthority.Refused refused) {
+                    return requestError(conduit, refusalMessage(refused));
                 } catch (Exception e) {
                     return requestError(conduit, certificateError("dns_start_failed")
                         .withArg("reason", e.getMessage()));
@@ -260,8 +259,13 @@ public final class HohenheimHandlers {
             if (dns && CommandDnsTxtPublisher.ID.equals(dnsMode) && !CommandDnsTxtPublisher.isConfigured()) {
                 return requestError(conduit, certificateError("hook_not_configured"));
             }
-            int certId = proxy.getAcmeService().requestCertificate(hostnames, niceName,
-                email.isEmpty() ? null : email, challengeType, publisher);
+            int certId;
+            try {
+                certId = proxy.getAcmeService().requestCertificate(hostnames, niceName,
+                    email.isEmpty() ? null : email, challengeType, publisher, requester);
+            } catch (CertificateAuthority.Refused refused) {
+                return requestError(conduit, refusalMessage(refused));
+            }
 
             if (certId < 0) {
                 Row failed = certModel.find()
@@ -660,25 +664,22 @@ public final class HohenheimHandlers {
             + URLEncoder.encode(resolved, StandardCharsets.UTF_8));
     }
 
-    /** The subset of hostnames whose domain record opted out of Let's Encrypt. */
-    private static List<String> excludedFromLetsencrypt(List<String> hostnames) {
-        var domainModel = Models.get(SiteDomainModel.class);
-        List<String> excluded = new ArrayList<>();
-        for (String hostname : hostnames) {
-            List<Row> domains = domainModel.find()
-                .where(SiteDomainModel.HOSTNAME.eq(hostname))
-                .all();
-            for (Row domain : domains) {
-                Row site = Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID));
-                if (Boolean.TRUE.equals(domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT))
-                        || site != null && SiteModel.SITE_TYPE_TLS_PASSTHROUGH
-                            .equals(site.get(SiteModel.SITE_TYPE))) {
-                    excluded.add(hostname);
-                    break;
-                }
-            }
-        }
-        return excluded;
+    /**
+     * The user-facing rendering of an authority refusal.
+     *
+     * AIDEV-NOTE: this MAPS a decision, it does not make one -- the decision lives in
+     * CertificateAuthority, inside the service, so every entry point (this form, the manual
+     * DNS lane, the renewal sweep) answers to the same rule. The old hostname-eligibility
+     * check that lived here compared hostnames with HOSTNAME.eq, so a name covered only by
+     * a wildcard row was never seen at all.
+     */
+    private static Microcopy refusalMessage(CertificateAuthority.Refused refused) {
+        String key = switch (refused.refusal()) {
+            case NOT_SERVED -> "hostname_not_served";
+            case NOT_MANAGED -> "hostname_not_managed";
+            case EXCLUDED -> "excluded_hostnames";
+        };
+        return certificateError(key).withArg("hostnames", refused.hostname());
     }
 
     // -----------------------------------------------------------------------

@@ -100,6 +100,19 @@ public class CertificateModel extends Model {
             .label(HohenheimFormCopy.label("cert_dns_publisher"))
             .help(HohenheimFormCopy.help("cert_dns_publisher")).build());
 
+    /**
+     * The user whose authority this certificate was issued under, or null for operator and
+     * unattended orders.
+     *
+     * AIDEV-NOTE: renewal re-runs CertificateAuthority against THIS subject rather than
+     * trusting the fact that issuance once succeeded. Without it a certificate ordered by a
+     * tenant kept renewing forever after the manage grant that authorized it was revoked.
+     * Never a permission SNAPSHOT -- a stored decision goes stale silently; a stored subject
+     * is re-decided every sweep.
+     */
+    public static final IntegerField REQUESTED_BY_USER_ID = SCHEMA.addField(
+        IntegerField.builder().name("requested_by_user_id").build());
+
     /** Dedup stamp for the expiring-soon alert; a renewal moves expires_on forward, re-arming it. */
     public static final DateTimeField EXPIRY_NOTIFIED_AT = SCHEMA.addField(DateTimeField.builder().name("expiry_notified_at").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
