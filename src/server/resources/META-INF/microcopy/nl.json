@@ -3899,8 +3899,12 @@
     "text": "Een andere service in deze stack publiceert die hostpoort al",
     "scope": "violations"
   },
-  "host_port_taken_other_stack": {
-    "text": "Deze hostpoort wordt al gepubliceerd door service {$service} van een andere stack op deze server",
+  "port_held": {
+    "text": "Deze hostpoort is al geclaimd door {$holder}",
+    "scope": "violations"
+  },
+  "port_held_race": {
+    "text": "Deze hostpoort werd geclaimd door {$holder} terwijl dit formulier openstond",
     "scope": "violations"
   },
   "depends_unknown_service": {

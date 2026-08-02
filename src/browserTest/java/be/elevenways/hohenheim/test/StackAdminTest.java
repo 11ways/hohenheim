@@ -1,8 +1,12 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -56,7 +60,8 @@ class StackAdminTest extends HohenheimTestBase {
         assertThat(page.locator("form").count()).isGreaterThan(0);
 
         var response = postForm("/admin/stacks/new",
-            "name=admin-test-stack&enabled=false&enabled=true&server_name=local&subnet=172.31.9.0/24");
+            "name=admin-test-stack&enabled=false&enabled=true&server_id="
+            + ServerModel.localServerId() + "&subnet=172.31.9.0/24");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row stack = Models.get(StackModel.class).find()
@@ -69,7 +74,8 @@ class StackAdminTest extends HohenheimTestBase {
     @Order(2)
     void malformedSubnetIsRefused() throws Exception {
         postForm("/admin/stacks/new",
-            "name=bad-subnet-stack&enabled=false&enabled=true&server_name=local&subnet=not-a-cidr");
+            "name=bad-subnet-stack&enabled=false&enabled=true&server_id="
+            + ServerModel.localServerId() + "&subnet=not-a-cidr");
 
         assertThat(Models.get(StackModel.class).find()
             .where(StackModel.NAME.eq("bad-subnet-stack")).count())
@@ -149,6 +155,10 @@ class StackAdminTest extends HohenheimTestBase {
             .where(StackFileModel.STACK_SERVICE_ID.eq(serviceId)).count()).isEqualTo(1);
     }
 
+    // AIDEV-NOTE: since C3 the sibling-row scan this test originally pinned is GONE --
+    // what refuses the duplicate now is the PORT LEDGER's exclusivity (the "web" service's
+    // saved claim in port_allocations). The test is kept as the stack-vs-stack face of that
+    // exclusivity; the cross-AUTHORITY faces are the two tests directly below.
     @Test
     @Order(7)
     void duplicateHostPortAcrossServicesIsRefused() throws Exception {
@@ -161,6 +171,76 @@ class StackAdminTest extends HohenheimTestBase {
             .where(StackServiceModel.NAME.eq("other")).count())
             .as("two services cannot publish the same host port")
             .isEqualTo(0);
+    }
+
+    /**
+     * THE decisive cross-authority case: the pre-C3 validator scanned sibling STACK rows
+     * only, so a collision with a managed database's port was structurally invisible to
+     * it. The ledger claim below is the shape C4's record-after path will write; the
+     * assertion is the named conflict AND the resulting state, never a bare status code.
+     */
+    @Test
+    @Order(12)
+    void stackPortCollidingWithAManagedDatabaseClaimIsRefused() throws Exception {
+        DatabaseModel databases = Models.get(DatabaseModel.class);
+        Row db = databases.createEmptyRow();
+        db.set(DatabaseModel.NAME, "ledgerdb");
+        db.set(DatabaseModel.ENGINE, "postgres");
+        db.set(DatabaseModel.DB_USER, "appuser");
+        db.set(DatabaseModel.DB_PASSWORD, "pw");
+        db.set(DatabaseModel.DB_NAME, "appdb");
+        db.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+        databases.save(db);
+        PortLedger.claim(ServerModel.localServerId(), "", 8210, "tcp",
+            DatabaseModel.MODEL_ID, db.get(DatabaseModel.ID), null);
+
+        var response = postForm("/admin/stack-services/new",
+            "stack_id=" + stackId + "&name=dbclash&enabled=false&enabled=true"
+            + "&image=alpine%3Alatest&command=&restart_policy=no"
+            + "&ports.0.container_port=80&ports.0.host_port=8210&ports.0.protocol=tcp");
+
+        assertThat(Models.get(StackServiceModel.class).find()
+            .where(StackServiceModel.NAME.eq("dbclash")).count())
+            .as("a stack service cannot seize a port the ledger records for a managed database")
+            .isEqualTo(0);
+        assertThat(response.body())
+            .as("the refusal names the holding database, not a bare status")
+            .contains("ledgerdb");
+        // AIDEV-NOTE: which ARBITER answered, pinned. Refusing at all only proves the
+        // ledger's unique index (that survives deleting the pre-write read -- observed
+        // counterfactual), so the friendly field-pathed read is pinned by its own copy;
+        // the backstop's copy is port_held_race.
+        assertThat(response.body())
+            .as("the friendly pre-write ledger read answered, not the unique-index backstop")
+            .contains("already claimed by");
+    }
+
+    /** The same cross-authority refusal against a DOCKER SITE's recorded publication. */
+    @Test
+    @Order(13)
+    void stackPortCollidingWithADockerSiteClaimIsRefused() throws Exception {
+        SiteModel sites = Models.get(SiteModel.class);
+        Row site = sites.createEmptyRow();
+        site.set(SiteModel.NAME, "ledgersite");
+        site.set(SiteModel.SLUG, "ledgersite");
+        site.set(SiteModel.SITE_TYPE, "docker");
+        site.set(SiteModel.ENABLED, false);
+        sites.save(site);
+        PortLedger.claim(ServerModel.localServerId(), "0.0.0.0", 8211, null,
+            SiteModel.MODEL_ID, site.get(SiteModel.ID), null);
+
+        var response = postForm("/admin/stack-services/new",
+            "stack_id=" + stackId + "&name=siteclash&enabled=false&enabled=true"
+            + "&image=alpine%3Alatest&command=&restart_policy=no"
+            + "&ports.0.container_port=80&ports.0.host_port=8211&ports.0.protocol=tcp");
+
+        assertThat(Models.get(StackServiceModel.class).find()
+            .where(StackServiceModel.NAME.eq("siteclash")).count())
+            .as("a stack service cannot seize a port the ledger records for a docker site")
+            .isEqualTo(0);
+        assertThat(response.body())
+            .as("the refusal names the holding site (0.0.0.0 + null protocol folded canonically)")
+            .contains("ledgersite");
     }
 
     @Test

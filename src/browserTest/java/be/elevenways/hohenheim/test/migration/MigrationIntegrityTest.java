@@ -1,8 +1,11 @@
 package be.elevenways.hohenheim.test.migration;
 
+import be.elevenways.hohenheim.migration.M017_CreateServers;
 import be.elevenways.hohenheim.migration.M042_CreateStacks;
 import be.elevenways.hohenheim.migration.M043_StackUniqueKeys;
+import be.elevenways.hohenheim.migration.M051_PortLedgerAndHostFks;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.zenit.common.orm.datasource.ColumnType;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 import be.elevenways.zenit.common.orm.migration.MigrationDirection;
@@ -311,6 +314,113 @@ class MigrationIntegrityTest {
                 + "HohenheimDatabase.RETIRED_MIGRATION_VERSIONS in the same commit. "
                 + "Computed content:\n%s", computed)
             .isEqualTo(golden);
+    }
+
+    /**
+     * M051's two heals against a legacy-spelled database: every host spelling folds onto
+     * ONE servers.id, unknown names get a visible placeholder row instead of a silent
+     * redirect to local, and the declared stack ports land in the ledger with the lowest
+     * service id winning a contested tuple.
+     */
+    @Test
+    void hostSpellingsAndDeclaredPortsAreHealedOntoTheLedger() throws Exception {
+        SqliteDatasource datasource = emptyDatabase("hostheal");
+
+        // 1. The pre-M051 state: servers + stack tables, plus the two legacy-spelled
+        //    tables M051 alters (fixture DDL: migration mechanics, the documented
+        //    exemption from auto-discovery).
+        new MigrationRunner(datasource, List.of(M017_CreateServers::new, M042_CreateStacks::new,
+            MigrationIntegrityTest::legacyHostTables)).migrate().requireSuccess();
+
+        // 2. Plant every legacy spelling of "this machine" plus one unknown remote:
+        //    blank, "local" and a registry-key spelling must become ONE host.
+        datasource.rawUpdate("INSERT INTO stacks (id, name, server_name) VALUES (1, 'a', '')");
+        datasource.rawUpdate("INSERT INTO stacks (id, name, server_name) VALUES (2, 'b', 'local')");
+        datasource.rawUpdate(
+            "INSERT INTO stacks (id, name, server_name) VALUES (3, 'c', 'hohenheim:edge-9')");
+        datasource.rawUpdate("INSERT INTO stack_services (id, stack_id, name) VALUES (1, 1, 'w1')");
+        datasource.rawUpdate("INSERT INTO stack_services (id, stack_id, name) VALUES (2, 2, 'w2')");
+        datasource.rawUpdate("INSERT INTO stack_services (id, stack_id, name) VALUES (3, 3, 'w3')");
+        // Service 1 and 2 contest ONE local tuple ('' vs 0.0.0.0 are the same bind);
+        // service 3 declares the same port on the OTHER host -- a different tuple.
+        datasource.rawUpdate("INSERT INTO stack_services_ports (stack_service_id, order_key,"
+            + " container_port, host_port, protocol, host_ip) VALUES (1, 1024, 80, 8400, 'tcp', '')");
+        datasource.rawUpdate("INSERT INTO stack_services_ports (stack_service_id, order_key,"
+            + " container_port, host_port, protocol, host_ip) VALUES (2, 1024, 80, 8400, 'tcp', '0.0.0.0')");
+        datasource.rawUpdate("INSERT INTO stack_services_ports (stack_service_id, order_key,"
+            + " container_port, host_port, protocol, host_ip) VALUES (3, 1024, 80, 8400, 'tcp', '')");
+        datasource.rawUpdate("INSERT INTO managed_databases (id, name) VALUES (1, 'plaindb')");
+        datasource.rawUpdate("INSERT INTO sites (id, site_type, settings)"
+            + " VALUES (1, 'docker', '{\"server\":\"hohenheim:edge-9\"}')");
+
+        // 3. M051 heals rather than aborting.
+        MigrationRunnerResult result = new MigrationRunner(datasource,
+            List.of(M017_CreateServers::new, M042_CreateStacks::new,
+                MigrationIntegrityTest::legacyHostTables, M051_PortLedgerAndHostFks::new)).migrate();
+        assertThat(result.isSuccess())
+            .as("M051 must survive legacy spellings: %s", failureDetail(result))
+            .isTrue();
+
+        // 4. ONE local host: blank and "local" resolved to the SAME server id, the
+        //    unknown remote got a visible placeholder row, and server_name is gone.
+        long localId = ((Number) datasource.rawQuery(
+            "SELECT id FROM servers WHERE name = 'local'").get(0).get("id")).longValue();
+        long edgeId = ((Number) datasource.rawQuery(
+            "SELECT id FROM servers WHERE name = 'edge-9' AND mode = 'ssh'").get(0).get("id")).longValue();
+        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM stacks WHERE server_id = " + localId))
+            .as("'' and 'local' fold onto ONE local host").isEqualTo(2L);
+        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM stacks WHERE server_id = " + edgeId))
+            .as("the unknown remote is a real (placeholder) row, not a silent local").isEqualTo(1L);
+        assertThat(columnsOf(datasource, "SELECT name FROM pragma_table_info('stacks')"))
+            .as("the legacy spelling column is gone").doesNotContain("server_name");
+        assertThat(scalar(datasource,
+            "SELECT COUNT(*) AS c FROM managed_databases WHERE server_id = " + localId))
+            .as("a NULL database server_name is the local host").isEqualTo(1L);
+        assertThat(String.valueOf(datasource.rawQuery(
+                "SELECT settings FROM sites WHERE id = 1").get(0).get("settings")))
+            .as("the docker site's settings key was rewritten to the id registry key")
+            .contains("hohenheim:" + edgeId);
+
+        // 5. The ledger holds exactly TWO claims for :8400 -- one per host -- and the
+        //    contested local tuple went to the LOWEST service id.
+        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM port_allocations WHERE port = 8400"))
+            .as("one claim per host for the contested port").isEqualTo(2L);
+        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM port_allocations"
+                + " WHERE server_id = " + localId + " AND owner_id = 1"))
+            .as("the lowest service id kept the local claim").isEqualTo(1L);
+        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM port_allocations"
+                + " WHERE server_id = " + edgeId + " AND owner_id = 3"))
+            .as("the other host's identical port is its own tuple").isEqualTo(1L);
+    }
+
+    /**
+     * Fixture DDL: the pre-M051 shape of the two tables M051 alters that M042 does not
+     * create. ANONYMOUS on purpose -- a named public nested Migration would be picked up
+     * by auto-discovery and applied to every real database.
+     */
+    private static Migration legacyHostTables() {
+        return new Migration("2026_08_02_999999", "Legacy host-spelling fixture tables") {
+            @Override
+            public void up(MigrationBuilder schema) {
+                schema.createTable("managed_databases", table -> {
+                    table.id();
+                    table.string("name", 128);
+                    table.addColumn("server_name", ColumnType.STRING,
+                        col -> col.maxLength(128).nullable(true));
+                });
+                schema.createTable("sites", table -> {
+                    table.id();
+                    table.string("site_type", 64);
+                    table.json("settings");
+                });
+            }
+
+            @Override
+            public void down(MigrationBuilder schema) {
+                schema.dropTable("sites");
+                schema.dropTable("managed_databases");
+            }
+        };
     }
 
     @Test

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -56,7 +57,8 @@ class DatabaseServiceTest {
             assertThat(all).hasSize(1);
             assertThat((String) all.get(0).get(DatabaseModel.ENGINE)).isEqualTo("postgres");
             assertThat((Boolean) all.get(0).get(DatabaseModel.EPHEMERAL)).isTrue();
-            assertThat((String) all.get(0).get(DatabaseModel.SERVER_NAME)).isEqualTo("local");   // default host
+            assertThat((Integer) all.get(0).get(DatabaseModel.SERVER_ID))
+                .isEqualTo(ServerModel.localServerId());   // default host
             assertThat((Integer) all.get(0).get(DatabaseModel.MEMORY_LIMIT_MB)).isEqualTo(256);
             assertThat((Double) all.get(0).get(DatabaseModel.CPU_LIMIT)).isEqualTo(1.0);
 

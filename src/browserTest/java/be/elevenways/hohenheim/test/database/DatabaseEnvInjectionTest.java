@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -64,7 +65,7 @@ class DatabaseEnvInjectionTest {
         row.set(DatabaseModel.DB_PASSWORD, "s3cret");
         row.set(DatabaseModel.DB_NAME, "appdb");
         row.set(DatabaseModel.STATUS, status);
-        row.set(DatabaseModel.SERVER_NAME, "local");
+        row.set(DatabaseModel.SERVER_ID, ServerModel.localServerId());
         databases.save(row);
         return row.get(DatabaseModel.ID);
     }

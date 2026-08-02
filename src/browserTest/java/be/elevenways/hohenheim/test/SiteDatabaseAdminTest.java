@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -65,6 +66,23 @@ class SiteDatabaseAdminTest extends HohenheimTestBase {
         return site.get(SiteModel.ID);
     }
 
+
+    /** The named test server's row id, created as an SSH host on first use. */
+    private static int serverId(String name) {
+        if ("local".equals(name)) {
+            return ServerModel.localServerId();
+        }
+        ServerModel servers = Models.get(ServerModel.class);
+        Row row = servers.findByName(name);
+        if (row == null) {
+            row = servers.createEmptyRow();
+            row.set(ServerModel.NAME, name);
+            row.set(ServerModel.MODE, ServerModel.MODE_SSH);
+            servers.save(row);
+        }
+        return row.get(ServerModel.ID);
+    }
+
     private static Integer database(String name, String server) {
         DatabaseModel databases = Models.get(DatabaseModel.class);
         Row row = databases.createEmptyRow();
@@ -74,7 +92,7 @@ class SiteDatabaseAdminTest extends HohenheimTestBase {
         row.set(DatabaseModel.DB_PASSWORD, "linkpass");
         row.set(DatabaseModel.DB_NAME, "appdb");
         row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
-        row.set(DatabaseModel.SERVER_NAME, server);
+        row.set(DatabaseModel.SERVER_ID, serverId(server));
         databases.save(row);
         return row.get(DatabaseModel.ID);
     }

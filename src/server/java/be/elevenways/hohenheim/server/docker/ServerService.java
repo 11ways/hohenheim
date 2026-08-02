@@ -41,17 +41,9 @@ public class ServerService extends DatasourceScoped {
         return Models.get(ServerModel.class);
     }
 
-    /** Ensure the implicit local host has a record (idempotent). */
+    /** Ensure the implicit local host has a record (idempotent; delegates to THE derivation). */
     public void ensureLocal() {
-        exec(() -> {
-            ServerModel model = model();
-            if (model.findByName(LOCAL) == null) {
-                Row row = model.createEmptyRow();
-                row.set(ServerModel.NAME, LOCAL);
-                row.set(ServerModel.MODE, MODE_LOCAL);
-                model.save(row);
-            }
-        });
+        exec(ServerModel::localServerId);
     }
 
     /** A server with its best-effort reachability and host resource snapshot, for the admin list.

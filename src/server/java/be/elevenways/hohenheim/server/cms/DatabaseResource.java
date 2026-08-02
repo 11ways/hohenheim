@@ -3,14 +3,15 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.http.Uri;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.RowAction;
@@ -24,10 +25,8 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
-import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
-import be.elevenways.zenit.common.edit.OptionSource;
-import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -52,7 +51,6 @@ import java.util.Map;
 public final class DatabaseResource extends RowResource {
 
     private final DatabaseService databaseService = new DatabaseService();
-    private final ServerService serverService = new ServerService();
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(DatabaseModel.NAME)
@@ -64,9 +62,7 @@ public final class DatabaseResource extends RowResource {
         .add(DatabaseModel.EPHEMERAL)
         .add(DatabaseModel.MEMORY_LIMIT_MB)
         .add(DatabaseModel.CPU_LIMIT)
-        .add(Select.of(DatabaseModel.SERVER_NAME)
-            .options(OptionSource.dynamic(ctx -> serverOptions()))
-            .build())
+        .add(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID).build())
         .add(DatabaseModel.STATUS)
         .build();
 
@@ -74,7 +70,8 @@ public final class DatabaseResource extends RowResource {
         .column(ColumnSpec.fromField(DatabaseModel.NAME).filterable().build())
         .column(ColumnSpec.fromField(DatabaseModel.ENGINE).filterable().build())
         .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).filterable().build())
-        .column(ColumnSpec.fromField(DatabaseModel.SERVER_NAME).filterable().build())
+        .column(ColumnSpec.fromField(DatabaseModel.SERVER_ID)
+            .relation(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())
         .column(ColumnSpec.fromField(DatabaseModel.EPHEMERAL).filterable().build())
         .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().build())
         .filter(FilterSpec.forField(DatabaseModel.NAME, FilterSpec.Kind.TEXT)
@@ -83,21 +80,18 @@ public final class DatabaseResource extends RowResource {
             .label(FieldLabels.labelFor(DatabaseModel.ENGINE)).build())
         .filter(FilterSpec.forField(DatabaseModel.DB_NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(DatabaseModel.DB_NAME)).build())
-        .filter(FilterSpec.forField(DatabaseModel.SERVER_NAME, FilterSpec.Kind.TEXT)
-            .label(FieldLabels.labelFor(DatabaseModel.SERVER_NAME)).build())
         .filter(FilterSpec.forField(DatabaseModel.EPHEMERAL, FilterSpec.Kind.BOOLEAN)
             .label(FieldLabels.labelFor(DatabaseModel.EPHEMERAL)).build())
         .filter(FilterSpec.forField(DatabaseModel.STATUS, FilterSpec.Kind.SELECT)
             .label(FieldLabels.labelFor(DatabaseModel.STATUS)).build())
         .build();
 
-    private @NonNull List<FieldOption<String>> serverOptions() {
-        this.serverService.ensureLocal();
-        List<FieldOption<String>> options = new ArrayList<>();
-        for (String name : this.serverService.names()) {
-            options.add(FieldOption.of(name, name));
-        }
-        return options;
+    /** The server pick defaults to the local daemon (ensuring its row exists for the picker). */
+    @Override
+    public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
+        Map<String, Object> values = CmsSupport.mutable(formSpec().defaultValues());
+        values.put("server_id", ServerModel.localServerId());
+        return Map.copyOf(values);
     }
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "database"); }
@@ -149,10 +143,9 @@ public final class DatabaseResource extends RowResource {
         }
         String image = trimmed(coerced.get("image"));
         boolean ephemeral = Boolean.TRUE.equals(coerced.get("ephemeral"));
-        String server = trimmed(coerced.get("server_name"));
-        if (server.isEmpty()) {
-            server = ServerService.LOCAL;
-        }
+        // The FK is canonical; the service API still speaks the (unique) server name.
+        String server = ServerModel.nameOf(
+            coerced.get("server_id") instanceof Integer serverId ? serverId : null);
 
         ResourceLimits limits = ResourceLimits.of(
             coerced.get("memory_limit_mb") instanceof Integer mb ? mb : null,
