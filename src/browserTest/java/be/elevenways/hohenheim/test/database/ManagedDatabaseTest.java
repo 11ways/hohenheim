@@ -1,7 +1,10 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.OwnerLabels;
+import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -38,9 +41,10 @@ class ManagedDatabaseTest {
         try {
             // ephemeral=true -> data dir is a RAM tmpfs mount, so Postgres initdb never
             // fsync-storms the btrfs root (which previously stalled it for minutes).
+            // recordId 4242 -> the container must be born carrying its owner claim.
             ManagedDatabase.Connection conn = databases.provision(
                 name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
-                "appuser", "secret123", "appdb", true);
+                "appuser", "secret123", "appdb", true, ResourceLimits.none(), 4242);
 
             assertThat(conn.host()).isEqualTo("127.0.0.1");
             assertThat(conn.port()).isGreaterThan(0);
@@ -49,6 +53,13 @@ class ManagedDatabaseTest {
             // provision() waits for readiness; the container is running and the port is open.
             Map<String, Object> info = docker.inspectContainer(containerName);
             assertThat(((Map<String, Object>) info.get("State")).get("Running")).isEqualTo(Boolean.TRUE);
+
+            // The record's owner labels landed at container-create time.
+            Map<String, Object> config = (Map<String, Object>) info.get("Config");
+            OwnerLabels.Owner owner = OwnerLabels.parse((Map<?, ?>) config.get("Labels"));
+            assertThat(owner).as("db container carries owner labels").isNotNull();
+            assertThat(owner.model()).isEqualTo(DatabaseModel.MODEL_ID);
+            assertThat(owner.id()).isEqualTo("4242");
             try (Socket socket = new Socket()) {
                 socket.connect(new InetSocketAddress(conn.host(), conn.port()), 2000);
             }

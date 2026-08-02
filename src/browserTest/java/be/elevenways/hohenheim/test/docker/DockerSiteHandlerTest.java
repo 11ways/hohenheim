@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerSiteRequestHandler;
+import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import org.junit.jupiter.api.Test;
 
@@ -34,12 +36,15 @@ class DockerSiteHandlerTest {
         assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
 
         // A long-lived command keeps the container running; the port need not be
-        // listened on for Docker to publish the host->container binding.
+        // listened on for Docker to publish the host->container binding. The volume
+        // exercises birth-labelling of the one unrecoverable resource kind.
+        String volumeName = "hohenheim-site-" + TEST_SITE_ID + "-vol-data";
         DockerSiteRequestHandler handler = new DockerSiteRequestHandler(TEST_SITE_ID, Map.of(
             "image", "alpine",
             "tag", "latest",
             "container_port", 8080,
-            "command", "sleep 3600"
+            "command", "sleep 3600",
+            "volumes", Map.of("data", "/data")
         ));
 
         try {
@@ -54,8 +59,29 @@ class DockerSiteHandlerTest {
             Map<String, Object> info = docker.inspectContainer(CONTAINER_NAME);
             Map<String, Object> state = (Map<String, Object>) info.get("State");
             assertThat(state.get("Running")).isEqualTo(Boolean.TRUE);
+
+            // The container was born carrying its owner claim...
+            Map<String, Object> config = (Map<String, Object>) info.get("Config");
+            OwnerLabels.Owner containerOwner =
+                OwnerLabels.parse((Map<?, ?>) config.get("Labels"));
+            assertThat(containerOwner).as("container carries owner labels").isNotNull();
+            assertThat(containerOwner.model()).isEqualTo(SiteModel.MODEL_ID);
+            assertThat(containerOwner.id()).isEqualTo(String.valueOf(TEST_SITE_ID));
+
+            // ...and so was the volume, the resource that never gets relabelled.
+            Map<String, Object> volume = docker.inspectVolume(volumeName);
+            OwnerLabels.Owner volumeOwner =
+                OwnerLabels.parse((Map<?, ?>) volume.get("Labels"));
+            assertThat(volumeOwner).as("volume carries owner labels from birth").isNotNull();
+            assertThat(volumeOwner.model()).isEqualTo(SiteModel.MODEL_ID);
+            assertThat(volumeOwner.id()).isEqualTo(String.valueOf(TEST_SITE_ID));
         } finally {
             handler.destroy();
+            try {
+                docker.removeVolume(volumeName, true);
+            } catch (IOException ignored) {
+                // best effort
+            }
         }
 
         assertThat(handler.getHealth()).isEqualTo(SiteHealth.DOWN);

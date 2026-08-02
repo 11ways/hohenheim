@@ -82,16 +82,27 @@ public class DatabaseService extends DatasourceScoped {
             ResourceLimits.none());
     }
 
-    /** Synchronous create with optional container resource caps. */
+    /**
+     * Synchronous create with optional container resource caps. The record is persisted
+     * as "provisioning" BEFORE the container exists (matching the async path), so the
+     * container and volume can be born carrying the record's owner labels; a failed
+     * provision leaves a "failed" record rather than nothing.
+     */
     public ManagedDatabase.Connection create(String name, ManagedDatabase.Engine engine, String image,
                                              String user, String password, String database,
                                              boolean ephemeral, String serverName,
                                              ResourceLimits limits) throws IOException {
-        ManagedDatabase.Connection connection = managedFor.apply(serverName)
-            .provision(name, engine, image, user, password, database, ephemeral, limits);
-        upsertRecord(name, engine, image, user, password, database, ephemeral, serverName,
-            limits, STATUS_ACTIVE);
-        return connection;
+        Integer recordId = upsertRecord(name, engine, image, user, password, database, ephemeral,
+            serverName, limits, STATUS_PROVISIONING);
+        try {
+            ManagedDatabase.Connection connection = managedFor.apply(serverName)
+                .provision(name, engine, image, user, password, database, ephemeral, limits, recordId);
+            setStatus(name, STATUS_ACTIVE);
+            return connection;
+        } catch (IOException e) {
+            setStatus(name, STATUS_FAILED);
+            throw e;
+        }
     }
 
     /** Provision asynchronously on the local host; see the server-aware overload. */
@@ -116,12 +127,13 @@ public class DatabaseService extends DatasourceScoped {
     public void createAsync(String name, ManagedDatabase.Engine engine, String image,
                             String user, String password, String database, boolean ephemeral,
                             String serverName, ResourceLimits limits) {
-        upsertRecord(name, engine, image, user, password, database, ephemeral, serverName,
-            limits, STATUS_PROVISIONING);
+        Integer recordId = upsertRecord(name, engine, image, user, password, database, ephemeral,
+            serverName, limits, STATUS_PROVISIONING);
         PROVISION_EXECUTOR.submit(() -> {
             try {
                 managedFor.apply(serverName)
-                    .provision(name, engine, image, user, password, database, ephemeral, limits);
+                    .provision(name, engine, image, user, password, database, ephemeral, limits,
+                        recordId);
                 setStatus(name, STATUS_ACTIVE);
             } catch (Exception e) {
                 setStatus(name, STATUS_FAILED);
@@ -130,10 +142,11 @@ public class DatabaseService extends DatasourceScoped {
         });
     }
 
-    private void upsertRecord(String name, ManagedDatabase.Engine engine, String image, String user,
-                              String password, String database, boolean ephemeral, String serverName,
-                              ResourceLimits limits, String status) {
-        exec(() -> {
+    /** @return the persisted record's id, so provisioning can label its resources */
+    private Integer upsertRecord(String name, ManagedDatabase.Engine engine, String image, String user,
+                                 String password, String database, boolean ephemeral, String serverName,
+                                 ResourceLimits limits, String status) {
+        return query(() -> {
             DatabaseModel model = model();
             Row row = model.findByName(name);
             if (row == null) {
@@ -151,6 +164,7 @@ public class DatabaseService extends DatasourceScoped {
             row.set(DatabaseModel.STATUS, status);
             row.set(DatabaseModel.SERVER_NAME, serverName);
             model.save(row);
+            return row.get(DatabaseModel.ID);
         });
     }
 

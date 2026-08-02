@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -160,8 +161,10 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
     private static Map<String, Object> buildSpec(int siteId, String imageRef, int port,
                                                  Map<String, Object> settings) {
         String portKey = port + "/tcp";
+        Map<String, String> owner = OwnerLabels.of(SiteModel.MODEL_ID, siteId);
         Map<String, Object> spec = new LinkedHashMap<>();
         spec.put("Image", imageRef);
+        spec.put("Labels", owner);
 
         String command = (String) settings.get("command");
         if (command != null && !command.isBlank()) {
@@ -180,6 +183,9 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
 
         // Persistent named volumes (logical name -> container path); the stable volume
         // name keys on the site id, so data survives redeploys and container swaps.
+        // VolumeOptions.Labels stamp the owner onto the volume the daemon creates for
+        // the mount -- the container is relabelled for free on every recreate, but a
+        // volume keeps whatever labels it was BORN with (Docker never relabels one).
         List<Map<String, Object>> mounts = new ArrayList<>();
         EnvVars.toMap(settings.get("volumes")).forEach((name, containerPath) -> {
             if (containerPath == null || containerPath.isBlank()) {
@@ -188,7 +194,8 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
             mounts.add(Map.of(
                 "Type", "volume",
                 "Source", "hohenheim-site-" + siteId + "-vol-" + name,
-                "Target", containerPath.trim()));
+                "Target", containerPath.trim(),
+                "VolumeOptions", Map.of("Labels", owner)));
         });
         if (!mounts.isEmpty()) {
             hostConfig.put("Mounts", mounts);
