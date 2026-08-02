@@ -60,9 +60,22 @@ public class DockerClient {
         this(transport, DEFAULT_TIMEOUT_MS);
     }
 
+    // AIDEV-NOTE: honest instrumentation for the roles contract, not bookkeeping.
+    // "roles.stacks/databases off" promises NO DockerClient is ever constructed,
+    // and a promise nothing can observe is security theater; the role tests
+    // assert this counter stays at zero on a docker-less boot.
+    private static final java.util.concurrent.atomic.AtomicLong CONSTRUCTED =
+        new java.util.concurrent.atomic.AtomicLong();
+
     public DockerClient(DockerTransport transport, long timeoutMillis) {
         this.transport = transport;
         this.timeoutMillis = timeoutMillis;
+        CONSTRUCTED.incrementAndGet();
+    }
+
+    /** @return how many DockerClient instances this JVM has ever constructed */
+    public static long constructionCount() {
+        return CONSTRUCTED.get();
     }
 
     /** Talk to a remote Docker daemon over SSH (key-based ssh + docker required on {@code sshTarget}). */

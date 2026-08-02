@@ -162,6 +162,13 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
     protected ManagedProcessSiteHandler(int siteId, String siteName, Map<String, Object> settings,
                                          PortAllocator portAllocator, ProcessMonitor monitor) {
+        if (monitor == null || portAllocator == null) {
+            // roles.processes is off (initSharedInfrastructure never ran): every
+            // managed-process site type's createHandler catches this and serves an
+            // explicit FaultedSiteHandler 503 instead of NPEing mid-request.
+            throw new IllegalArgumentException(
+                "managed process infrastructure is not running (roles.processes is disabled)");
+        }
         this.siteId = siteId;
         this.siteName = siteName;
         this.portAllocator = portAllocator;
