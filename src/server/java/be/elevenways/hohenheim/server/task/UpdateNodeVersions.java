@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.NodeVersionModel;
 import be.elevenways.hohenheim.server.options.NodeVersionOptions;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -46,7 +47,9 @@ public class UpdateNodeVersions extends ScheduledTask {
 
     @Override
     public @NonNull List<ScheduleDeclaration> schedules() {
-        return List.of(ScheduleDeclaration.bootAndCron("14 * * * *"));
+        return HohenheimRoles.schedulesWhen(
+            List.of(ScheduleDeclaration.bootAndCron("14 * * * *")),
+            HohenheimRoles.Role.PROCESSES);
     }
 
     @Override

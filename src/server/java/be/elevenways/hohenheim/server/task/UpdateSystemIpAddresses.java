@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -29,7 +30,9 @@ public class UpdateSystemIpAddresses extends ScheduledTask {
 
     @Override
     public @NonNull List<ScheduleDeclaration> schedules() {
-        return List.of(ScheduleDeclaration.bootAndCron("8 * * * *"));
+        return HohenheimRoles.schedulesWhen(
+            List.of(ScheduleDeclaration.bootAndCron("8 * * * *")),
+            HohenheimRoles.Role.PROXY, HohenheimRoles.Role.FIREWALL);
     }
 
     @Override

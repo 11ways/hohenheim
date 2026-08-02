@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.ProclogModel;
+import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -25,7 +26,9 @@ public class CleanOldProclogs extends ScheduledTask {
 
     @Override
     public @NonNull List<ScheduleDeclaration> schedules() {
-        return List.of(ScheduleDeclaration.fallback("30 4 * * *"));
+        return HohenheimRoles.schedulesWhen(
+            List.of(ScheduleDeclaration.fallback("30 4 * * *")),
+            HohenheimRoles.Role.PROCESSES);
     }
 
     @Override

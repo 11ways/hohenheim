@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -31,7 +32,9 @@ public class ResignDnssecZones extends ScheduledTask {
 
     @Override
     public @NonNull List<ScheduleDeclaration> schedules() {
-        return List.of(ScheduleDeclaration.fallback("0 3 * * *"));
+        return HohenheimRoles.schedulesWhen(
+            List.of(ScheduleDeclaration.fallback("0 3 * * *")),
+            HohenheimRoles.Role.DNS);
     }
 
     @Override
