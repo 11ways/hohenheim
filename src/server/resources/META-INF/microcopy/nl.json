@@ -4002,5 +4002,25 @@
   "docker_unreachable": {
     "text": "Docker-daemon onbereikbaar",
     "scope": "attention_title"
-  }
+  },
+  "docker_orphans": [
+    {
+      "text": "Docker-resources zonder eigenaar op {$server}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "{$count} Docker-resource(s) zonder levend eigenaarsrecord: {$names}",
+      "scope": "attention_detail"
+    }
+  ],
+  "docker_colliding": [
+    {
+      "text": "Botsende Docker-namen op {$server}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "{$count} onbeheerde resource(s) dragen namen in hohenheim-stijl: {$names}",
+      "scope": "attention_detail"
+    }
+  ]
 }
