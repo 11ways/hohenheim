@@ -1467,6 +1467,122 @@ path reaches the DNS tier at all, and the boundary section is amended to say so.
 These are Phase 3 entry criteria, not later polish. The hostile-workload threat
 model is false without them, even if Docker itself starts correctly.
 
+#### RECON 2026-08-02 -- ground truth for every prerequisite below
+
+Verified in source. Where this block contradicts the prose that follows, this
+block is what the code does; amend the prose, do not code against it.
+
+- **Node identity does not exist, at all.** No node id, no lease, no heartbeat,
+  no `nodes` table anywhere in zenit. `TaskClaimManager` is a static JVM-wide
+  `IdentityHashMap<Datasource, Set<String>>` of held lock strings plus an
+  ANONYMOUS `datasource.acquireAdvisoryLock`, and its `Claim` carries only a
+  lock id and a boolean -- no owner token, no epoch, no counter, so there is
+  NOTHING a runtime operation could record as a fence. `SystemTaskModel` has
+  `last_fired_at` and no owner/lease/generation column. When the backend has no
+  distributed lock it logs once and RETURNS A CLAIM ANYWAY.
+- **`acquireAdvisoryLock` returns a bare `true` while locking nothing** on
+  `SqliteDatasource`, `DuckDbDatasource`, `FirebirdDatasource` and
+  `CockroachDbDatasource`. Hohenheim runs on SQLite, so in the shipped
+  configuration EVERY advisory lock is a no-op. Two live callers reach the API
+  without the `supportsDistributedAdvisoryLocks()` guard and inherit the silent
+  no-op: `MigrationCapableDatasource.acquireMigrationLock` (concurrent
+  migrations unprotected, reported as locked) and `RevisionableBehaviour`, whose
+  `if (!acquired) throw revisionLockTimeout(...)` IS A CHECK THAT CANNOT FIRE on
+  half the matrix. Verified separately: CockroachDB declares
+  `supportsDistributedAdvisoryLocks() -> false`, so the claim manager correctly
+  never takes the distributed branch there. `PostgresDatasource` has its own
+  hazard -- `activeLocks` is per-datasource-INSTANCE, i.e. process-wide, so a
+  second independent caller asking for a held lock is told `true` while holding
+  nothing and the first release frees it for both. Build fencing on a ROW plus
+  compare-and-set, never on this API.
+- **Fencing IS buildable without a distributed lock service.** It needs only
+  atomic compare-and-set and a monotonic counter, and the ORM already has both
+  portably on all 8 backends (`Model.insertIfAbsent` -- documented never to
+  degrade to an UPDATE -- and `find().increment(F).updateAll()`). A
+  `controller_leases` row per (host, purpose) with owner token, `fence` bigint
+  and expiry, acquired by conditional UPDATE that increments the fence in the
+  same statement, is the minimum honest mechanism. It belongs in ZENIT CORE
+  beside `TaskClaimManager` (pure ORM mechanics, no product knowledge) with
+  `TaskClaimManager` as the wired consumer -- which also finally gives the four
+  no-op backends a working coordination primitive.
+- **A host record exists but is a stub.** `ServerModel` (table `servers`) has
+  only id/name/mode(`local`|`ssh`)/ssh_target/timestamps -- no posture, no
+  capabilities, no health, no credential, no cordon/drain, no fingerprint, no
+  version. So host enrollment is a stub to GROW, not greenfield. Enrollment is
+  today "paste an ssh target" with no probe and no trust ceremony; the transport
+  uses `StrictHostKeyChecking=accept-new` (silent TOFU, no pinning);
+  `ServerService.remove` deletes a host while stacks and databases still
+  reference it BY NAME STRING with no FK, orphaning them silently.
+- **`ServerService.infoFor` swallows every exception into `null`** and each
+  capacity field then degrades to `0`/`""`, so host-down, wrong-key,
+  docker-absent, host-key-changed and DNS failure are one indistinguishable
+  state WITH ZEROED CAPACITY. A placement allocator reading `cpus`/`memoryBytes`
+  would read `0` for an unreachable host and, depending on the comparison,
+  either always refuse or always accept. Replace with a typed outcome before
+  anything places workloads.
+- **Docker absence IS loud at boot -- but only for stacks.** `DockerHealth`
+  exists, is probed from `ServerMain`, has a four-state status and feeds the
+  admin attention list. Any note claiming absence is silent is STALE. However
+  the probe is gated on `roles.stacks`, while `DockerSiteRequestHandler` and
+  `ManagedDatabase` construct clients unconditionally and still degrade
+  silently. Phase 3 must not repeat the role gating.
+- **Nothing resembling `InstanceRuntime` exists**, and the streaming half cannot
+  be layered on: `DockerTransport` is a single-shot `byte[] roundTrip(...)`
+  contract that reads to EOF with `Connection: close`, so stats, follow-logs,
+  attach-with-stdin and TTY exec are UNREPRESENTABLE in it. That needs a second,
+  streaming transport contract, not a patch. `DockerClient` is adaptable for the
+  non-streaming half and `StackDeployer`'s label+adoption logic is the right
+  pattern to generalize -- but `DockerClient` must NOT itself be the driver
+  seam, because Incus (Phase 4) is HTTPS + client certs, a different shape. One
+  plan claim is stale: `exchange(...)` already returns a byte-accurate response;
+  only the JSON wrapper decodes to String.
+- **No quota mechanism exists anywhere**, in either tree. `ResourceLimits`
+  carries ONLY memory and cpus. Confirmed that `createPermission` is
+  deliberately not record-aware ("creation is checked while no record exists"),
+  and it is a plain boolean at form-render and submit, with persistence after --
+  so a quota enforced there is a check that cannot fail under exactly the
+  concurrency the gate names. The reservation must be transactional and adjacent
+  to the write (`Schema.addBeforeWriteHook`/`GlobalModelHooks` inside the save
+  pipeline). A generic reservation ledger is a more-than-one-consumer capability
+  and belongs in ZENIT CORE, with hohenheim as the first wired consumer in the
+  same phase; the limits and policy stay hohenheim.
+- **Container hardening is ZERO.** No `CapDrop`, `SecurityOpt`,
+  `no-new-privileges`, `Privileged`, `UsernsMode`, `ReadonlyRootfs` or
+  `PidsLimit` anywhere in any non-test file. Every container hohenheim runs
+  today is a default-privilege Docker container. The presence of a
+  `ResourceLimits` type reads as though isolation is configured; it is two
+  cgroup knobs. This is parallel work, needed by everything, and independently
+  testable -- do it early.
+- **Per-tenant networking is essentially absent.** `NftService` covers IP BANS
+  only (one input-hook chain, timeout sets) -- no forward chain, no per-tenant
+  chain, no egress rule, no metadata-range deny, nothing about container IPv6.
+  Two traps in it, both self-documented: it is DEFAULT-OFF
+  (`security.nftables_enabled`) and ALL nft failures are logged loudly but NEVER
+  thrown. A network policy materialized through that class returns normally on a
+  host where nothing was applied, and the container starts unisolated. The
+  Phase 3 network applier must be a separate class with a THROWING contract, or
+  `NftService`'s contract is fixed and every ban call site re-verified. Only
+  stacks get their own Docker network; sites and databases share the default
+  bridge.
+- **Already done, do not re-schedule:** `KnownCapabilities`/sensitivity classes
+  (zenit core, wired -- Phase 3 only needs to REGISTER the instance vocabulary,
+  which is an hour, not a workstream); `RecordGrants` + the grant-scoped
+  `/manage` resource precedent; control-plane recovery. **Caveat on that last
+  one:** `ControlPlaneBackups` exists and is verified, but its destination is a
+  LOCAL directory and it explicitly does not claim off-host transfer, while the
+  prerequisite below says "off-host target". Either meet it or amend it -- do
+  not let the existence of the class close the gate.
+- **Still accurate in the plan:** `RecordTabs` hardcodes Edit first, so the
+  Overview-home mechanism still needs building; `stack_health` is raised but
+  absent from the routable notification vocabulary, so it reaches only channels
+  with an empty subscription list (one-line fix, do it in passing).
+- **Destroy paths cannot fail today.** `ManagedDatabase.destroy` swallows stop,
+  remove AND volume removal, after which `DatabaseService.destroy` deletes the
+  record unconditionally -- so an unreachable daemon leaves the container
+  running and destroys the only copy of `db_password`. `DockerSiteRequestHandler`
+  has the same shape one tier over. Any Phase 3 destroy/drain built by copying
+  these inherits a delete that reports success while nothing was reclaimed.
+
 FOUR OPEN DECISIONS GATE THIS PHASE'S ENTRY and they are not independent of the
 work below -- each one changes a table shape or an enforcement point, so
 answering them after the code exists means rewriting it: decision 8 (shared-host
@@ -1507,10 +1623,25 @@ shape) is confirmable during the phase. Do not start Phase 3 with 7 or 8 open.
 - **One fenced controller owns each host mutation.** A process-local worker lane
   is not enough once role-separated/control-plane installs share a database.
   Host-controller leases carry monotonically increasing fencing tokens; every
-  runtime operation records operation id, desired generation and fence. A stale
-  controller cannot create/start/destroy after losing its lease. Operations are
-  idempotent and resumable after crash, with explicit retry/cancel/dead-letter
-  states and orphan quarantine when live truth is ambiguous.
+  runtime operation records operation id, desired generation and fence.
+  CORRECTED 2026-08-02: the original wording here said "a stale controller
+  cannot create/start/destroy after losing its lease". That is NOT ACHIEVABLE
+  and must not be written into the gate -- the Docker daemon obeys a stale
+  controller happily, and no token we mint changes that. The achievable and
+  therefore binding claim is: a stale controller cannot create/start/destroy
+  AND HAVE IT STICK. The database is the fence (every write recording a runtime
+  outcome is conditional on `lease.fence = :myFence`), and the daemon is
+  RECONCILED (the winning controller lists resources by ownership label and
+  quarantines or adopts what it did not record). A gate step that asserts a
+  rejected DB write and calls it proof no container started is the dominant
+  defect shape pre-installed into the acceptance criteria -- every runtime gate
+  step must assert HOST state (no container, port not bound, no nft rule)
+  alongside the API refusal, because in this codebase "the API refused" and
+  "nothing happened" are currently independent facts. Reconciliation is only
+  possible once containers carry ownership labels, which today only stacks do.
+  Operations are idempotent and resumable after crash, with explicit
+  retry/cancel/dead-letter states and orphan quarantine when live truth is
+  ambiguous.
 - **Quota is a transactional reservation system.** Count/cpu/memory/disk/port
   reservations are claimed atomically before create and adjusted atomically on
   resize, restore, clone and destroy. Concurrent creates cannot both spend the
@@ -1547,6 +1678,52 @@ restart policy, status, owner principal id, workload trust class, desired
 generation and current operation id/fence. Soft delete (with the grant-cleanup
 hook from Phase 1). Localized: labels/descriptions from microcopy; instance
 names are user data (not localized).
+
+CORRECTED 2026-08-02, and this supersedes the field list above: **`InstanceModel`
+gets NO `owner_principal_id` column.** Ownership in this product is ALREADY
+grant-derived and has been since Phase 1 -- `HohenheimAccess.sameOwner` compares
+the truthy `manage`-grant SUBJECT SETS of two records and treats set equality as
+same-owner, and the route-overlap invariant is built on exactly that. An owner
+column would be a SECOND authority answering the same question, and it drifts
+the first moment a grant is added or revoked without the column following. Quota
+per owner, anti-affinity per tenant and placement all key on the SAME
+grant-derived owner that `sameOwner` computes, or they will disagree with the
+access checks. This also means "decision 7 (tenancy shape)" is not an open
+question to be decided fresh -- it is ALREADY ANSWERED IN CODE, and the only
+legitimate moves are to ratify that derivation or to deliberately replace it
+everywhere at once. Never let a new column become a quiet second answer.
+
+RECON 2026-08-02: what a new `InstanceModel` COLLIDES with, verified in source.
+There are THREE container authorities today and only ONE of them asserts
+ownership in-band: `StackDeployer` labels its containers
+(`be.elevenways.hohenheim.stack`) and REFUSES to touch a same-named unlabelled
+resource, whereas `DockerSiteRequestHandler` (`hohenheim-site-{id}`) and
+`ManagedDatabase` (`hohenheim-db-{name}`) carry NO labels and FORCE-REMOVE a
+same-named container, swallowing the failure. So an instance named into
+collision with a site's container gets that site's container destroyed by
+whichever authority deploys second. "Which host" has three incompatible
+spellings (`StackModel.SERVER_NAME` string, `DatabaseModel.SERVER_NAME` string,
+Docker sites' `settings["server"]` map key) and `ServerModel.ID` is used as a
+foreign key by NOTHING -- so a fourth spelling via `server_id` leaves any
+placement or capacity allocator blind to three quarters of the load actually
+consuming the host. Volumes are owned by naming convention only, so deleting a
+site record already orphans `hohenheim-site-{id}-vol-*` with nothing pointing at
+it. `DockerReclaim`'s attribution-based image sweep is driven by STACK-declared
+image references and does not know instance images could exist.
+
+CONSEQUENCE FOR SEQUENCING -- the smallest honest first slice is NOT "an
+instance that starts". A happy-path container start is achievable today by
+copying `DockerSiteRequestHandler`, and doing that FIRST is precisely how this
+becomes a fourth parallel record type that runs containers alongside Site,
+Stack and Deployment. The slice is: ONE persistent `port_allocations` table plus
+ONE `be.elevenways.hohenheim.owner = {model}:{id}` label convention, retrofitted
+onto all four existing authorities, with a reconciler that lists by label and
+reports owned / orphaned / foreign -- and THEN `InstanceModel` as the FOURTH
+consumer of that shared machinery, running one container on the local host,
+fenced by the core lease. Every prerequisite that slice does not yet satisfy
+(multi-host posture, per-tenant networks, quota) is then ADDED TO SHARED
+MACHINERY rather than retrofitted across four divergent authorities. This is
+what makes the product one whole instead of a well-engineered federation.
 
 Design gaps the old Phase 2 left open, now resolved for a public product:
 
@@ -1628,6 +1805,24 @@ Driver and infrastructure:
   consumers migrate (managed processes, docker sites, stacks validation, and
   the database tier's published-port readback). UDP is a protocol value; games
   need allocation bookkeeping, not proxying.
+
+  RECON 2026-08-02, verified in source: `port_allocations` DOES NOT EXIST. It
+  occurs exactly once in this repository -- in the future-tense prose above.
+  Any handoff or status note claiming it "already absorbed" the other consumers
+  is FALSE; nothing has been absorbed. There are FOUR independent port
+  authorities today: (1) `PortAllocator` for managed processes -- an in-memory
+  `ConcurrentHashMap`, lost on restart, TCP-only, with a real TOCTOU against
+  the OS (the probe socket closes before the claim, so `putIfAbsent` guards
+  only same-JVM threads) and a singleton only by virtue of one static field
+  that `JavaSiteType`/`CommandSiteType` happen to borrow; (2) ephemeral Docker
+  publication for Docker sites, read back and never persisted; (3) ephemeral
+  Docker publication for managed databases, likewise; (4) operator-declared
+  `StackServiceModel.PORT_HOST` for stacks. `StackServiceResource.validatePorts`
+  compares a new claim only against OTHER STACKS -- it is blind to the other
+  three authorities, and it runs read-then-save on the CMS form path with no
+  transaction and no unique constraint, so two concurrent submits both pass.
+  That validator reports "no conflict" while three quarters of the load is
+  invisible to it: a check that cannot catch the conflicts it exists for.
 - **Console vs exec are DISTINCT handlers.** Console is a WS terminal over the
   driver's ATTACH to the instance's primary process (stdin to a game server),
   grant-checked `console`, over the hardened WS admission/revalidation from
