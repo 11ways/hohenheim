@@ -1127,12 +1127,7 @@ public class SiteDispatcher implements HttpHandler {
             if (colon < 0) return false;
             String user = decoded.substring(0, colon);
             String pass = decoded.substring(colon + 1);
-            boolean passwordMatches = entry.basicAuthPass != null
-                && (entry.basicAuthPass.startsWith("$argon2")
-                    ? PasswordHasher.verify(pass, entry.basicAuthPass)
-                    : MessageDigest.isEqual(
-                        entry.basicAuthPass.getBytes(StandardCharsets.UTF_8),
-                        pass.getBytes(StandardCharsets.UTF_8)));
+            boolean passwordMatches = verifyBasicAuthPassword(pass, entry.basicAuthPass, entry.siteName);
             return MessageDigest.isEqual(
                     entry.basicAuthUser.getBytes(StandardCharsets.UTF_8),
                     user.getBytes(StandardCharsets.UTF_8))
@@ -1140,6 +1135,26 @@ public class SiteDispatcher implements HttpHandler {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * @return true only when the stored value is an argon2 hash that verifies the presented
+     *         password; any other non-null stored value is refused LOUDLY, never compared
+     */
+    // AIDEV-NOTE: this used to fall back to a constant-time PLAINTEXT compare for stored
+    // values without the $argon2 prefix -- security theater that silently accepted an
+    // unhashed column. AccessListResource hashes on every save and nothing was ever deployed,
+    // so a non-argon2 stored value is operator/data corruption and must fail closed and loud.
+    static boolean verifyBasicAuthPassword(String presented, String stored, String siteName) {
+        if (stored == null) {
+            return false;
+        }
+        if (!stored.startsWith("$argon2")) {
+            Blast.log("SiteDispatcher: stored basic-auth password for site", siteName,
+                "is not an argon2 hash; refusing authentication. Re-save the access list to hash it.");
+            return false;
+        }
+        return PasswordHasher.verify(presented, stored);
     }
 
     private void sendAuthChallenge(HttpServerExchange exchange, RouteEntry entry) {
