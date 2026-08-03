@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
+import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.process.PortAllocator;
 import be.elevenways.hohenheim.server.process.ProcessInfrastructure;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
@@ -239,6 +240,9 @@ public class ServerMain {
             if (secondaryZoneService != null) secondaryZoneService.stop();
             SpamserviceManager.get().shutdown();
             ProcessInfrastructure.shutdown();
+            // Hand the host leases back so a successor controller does not have to
+            // wait out the TTL; a crash still recovers through expiry.
+            HostLeases.production().releaseAll();
         }, "hohenheim-shutdown"));
     }
 

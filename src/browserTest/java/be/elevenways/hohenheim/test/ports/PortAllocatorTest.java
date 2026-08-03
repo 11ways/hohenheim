@@ -95,8 +95,12 @@ class PortAllocatorTest {
             assertThat((String) claim.get(PortAllocationModel.OWNER_MODEL))
                 .as("step 1: a process-instance port has no owning RECORD").isNull();
             assertThat((String) claim.get(PortAllocationModel.NOTE))
-                .as("step 1: the note says what holds it and which controller wrote it")
-                .contains("managed process site=77").contains("controller=");
+                .as("step 1: the note says what holds it")
+                .contains("managed process site=77");
+            assertThat((Long) claim.get(PortAllocationModel.CONTROLLER_FENCE))
+                .as("step 1: the claim carries the writing controller's host-lease fence,"
+                    + " not a note-string token")
+                .isNotNull();
 
             // 2. A fresh allocator -- i.e. a restarted controller, empty cache -- refuses
             //    to hand the same port out, because the LEDGER told it, not memory.
@@ -171,7 +175,7 @@ class PortAllocatorTest {
                     .as("step 1: the free port's stale claim is gone").isNull();
 
                 // 2. THIS controller's own claim is never a sweep candidate, whenever the
-                //    sweep runs -- the note's controller token is what makes that provable.
+                //    sweep runs -- its controller_fence equals the held lease's fence.
                 assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(serverId, "", mine, "tcp")))
                     .as("step 2: the running controller's own allocation survives the sweep")
                     .isNotNull();

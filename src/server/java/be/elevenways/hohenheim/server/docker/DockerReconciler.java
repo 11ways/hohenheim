@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.stack.StackDeployer;
 import be.elevenways.hohenheim.server.util.PortProbe;
 import be.elevenways.protoblast.common.Blast;
@@ -39,10 +40,12 @@ import java.util.Set;
  *
  * AIDEV-NOTE: Authority limits are deliberate and load-bearing. Removal: an orphan
  * VOLUME is the one unrecoverable resource (DockerReclaim refuses volumes for the
- * same reason), so removal stays an explicit operator action. Labelling: stamping a
- * label on a NAME match would convert "looks like ours" into "is ours"; adoption
- * must be an explicit, ActivityLog-recorded operator action (the
- * StackDeployer.adoptResources precedent) and does not exist yet -- it is owed.
+ * same reason), so removal stays an explicit operator action -- which now EXISTS as
+ * OrphanActions.removeOrphan (containers/networks, re-verified live, ActivityLog-
+ * recorded, surfaced on ReconcileFindingResource). Labelling: stamping a label on a
+ * NAME match would convert "looks like ours" into "is ours"; label ADOPTION still
+ * does not exist because Docker cannot relabel a container or volume in place --
+ * adoption means recreate-under-labels, which only the owning tier can do.
  */
 public final class DockerReconciler {
 
@@ -340,8 +343,14 @@ public final class DockerReconciler {
         for (String serverName : servers.names()) {
             try {
                 results.put(serverName, sweepServer(serverName, servers.clientFor(serverName)));
+                // The sweep IS a successful daemon contact: the scheduled reconcile
+                // doubles as the host heartbeat, so last_seen_at stays honest without
+                // a second per-host probe loop.
+                HostProbe.recordSuccess(serverName);
             } catch (Exception e) {
                 Blast.log("DOCKER RECONCILE: could not sweep server", serverName, "-", e.getMessage());
+                HostProbe.recordFailure(serverName,
+                    HostProbe.classify(e));
             }
         }
         return results;

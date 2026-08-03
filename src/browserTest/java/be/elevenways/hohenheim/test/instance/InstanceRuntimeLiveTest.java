@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.InstanceNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -97,6 +98,7 @@ class InstanceRuntimeLiveTest {
             "no private netns: the instance tier refuses to deploy unprotected");
 
         Db.run(datasource, () -> {
+            HostFixtures.admitLocal();
             int localId = ServerModel.localServerId();
             Map<String, Object> settings = new LinkedHashMap<>();
             settings.put("image", "alpine");
@@ -202,6 +204,7 @@ class InstanceRuntimeLiveTest {
             "no private netns: the instance tier refuses to deploy unprotected");
 
         Db.run(datasource, () -> {
+            HostFixtures.admitLocal();
             int id = instanceRecord("collision-victim", new LinkedHashMap<>(
                 Map.of("image", "alpine", "command", "sleep 300")));
             String handle = "hohenheim-instance-" + id;

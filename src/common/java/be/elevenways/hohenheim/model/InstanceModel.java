@@ -100,6 +100,15 @@ public class InstanceModel extends Model {
     public static final StringField QUOTA_BUCKET = SCHEMA.addField(
         StringField.builder().name("quota_bucket").filterable(false).build());
 
+    /**
+     * The controller fence of the last recorded runtime outcome. Every runtime-outcome
+     * write is conditional on it ({@code claim_fence IS NULL OR claim_fence <= :myFence})
+     * and stamps it; a stale controller's write matches ZERO rows, and zero rows is a
+     * hard failure, never a shrug (InstanceService.stampGuarded).
+     */
+    public static final LongField CLAIM_FENCE = SCHEMA.addField(
+        LongField.builder("claim_fence").filterable(false).build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());

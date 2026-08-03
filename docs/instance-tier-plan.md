@@ -1804,6 +1804,32 @@ block is what the code does; amend the prose, do not code against it.
   has the same shape one tier over. Any Phase 3 destroy/drain built by copying
   these inherits a delete that reports success while nothing was reclaimed.
 
+**LANDED 2026-08-03 (re-verify, do not assume): node identity, controller
+fencing and host preflight.** Controller identity = the host-lease FENCE (zenit
+`Leases`, first production consumer): `HostLeases` holds one lease per host for
+the controller's lifetime, every instance runtime-outcome write is ONE guarded
+`updateAll` (`claim_fence IS NULL OR claim_fence <= :myFence`, zero rows = hard
+`instance_fenced_out` failure, loser aborts WITHOUT touching the ledger), and
+`PortAllocator`'s note-token identity is replaced by `controller_fence` on the
+claim rows (allocate requires the lease; the boot sweep runs only while holding
+it and judges only lower generations -- the live-peer-claim deletion is
+structurally gone). Host record grew posture/admission (default BLOCKED,
+admit gated on a passing preflight)/capabilities JSON/probed_at/preflight_ok/
+last_seen_at/typed last_error(+kind)/host_key_fingerprint (unpopulated, the
+pinning wave's home)/controller_version (M056); `ServerService.remove` and every
+other delete path refuse while stacks/databases/live instances reference the
+host (schema hook -- the FKs are unenforced on the shipped SQLite URL).
+`HostPreflight` reads KERNEL truth from a probe container (delegated pids
+controller, pids.max == configured, seccomp mode 2, no_new_privs) plus real nft
+add/list/delete and a real probe-network create; the report is STORED on the
+row. Proven by two-controller counterfactuals (`HostFencingTest`: stalled
+deploy cannot stick, with host-state assertions; rival boot sweep deletes
+nothing). NOT yet fenced: stack/site/database outcome writes, scheduled-task
+outcome writes, ACME/monitor/nft loops; destroy's deleted_at save rides the
+save path for the quota hook (fence proven by the guarded stamp immediately
+before). Explicit orphan authority: `OrphanActions.removeOrphan`
+(re-verified live, volumes refused, ActivityLog) on `ReconcileFindingResource`.
+
 FOUR OPEN DECISIONS GATE THIS PHASE'S ENTRY and they are not independent of the
 work below -- each one changes a table shape or an enforcement point, so
 answering them after the code exists means rewriting it: decision 8 (shared-host

@@ -1841,6 +1841,10 @@
     {
       "text": "Instantiequota's",
       "scope": "instance_quota"
+    },
+    {
+      "text": "Reconciliatiebevindingen",
+      "scope": "reconcile_finding"
     }
   ],
   "dashboard": {
@@ -4234,5 +4238,141 @@
       "text": "Limiet voor deze eigenaar; 0 weigert elke nieuwe instantie, leeg valt terug op de globale standaard",
       "scope": "help"
     }
-  ]
+  ],
+  "host_lease_unavailable": {
+    "text": "Een andere controller houdt de lease voor host #{$server}; deze controller mag hem niet wijzigen",
+    "scope": "violations"
+  },
+  "instance_fenced_out": {
+    "text": "Instantie {$name} wordt nu beheerd door een andere controller op host {$server}; deze bewerking is afgebroken zonder opruiming",
+    "scope": "violations"
+  },
+  "host_not_admitted": {
+    "text": "Host {$name} is niet toegelaten voor plaatsing; voer eerst preflight uit en laat hem toe",
+    "scope": "violations"
+  },
+  "host_posture_refuses": {
+    "text": "Host {$name} heeft een trusted-only houding en weigert tenant-instanties",
+    "scope": "violations"
+  },
+  "admit_needs_preflight": {
+    "text": "Host {$name} heeft geen geslaagde preflight; voer eerst preflight uit",
+    "scope": "violations"
+  },
+  "server_in_use": {
+    "text": "Server {$name} bezit nog {$stacks} stack(s), {$databases} database(s) en {$instances} instantie(s); verwijder of verplaats die eerst",
+    "scope": "violations"
+  },
+  "preflight": {
+    "text": "Preflight",
+    "scope": "server"
+  },
+  "admit": {
+    "text": "Toelaten",
+    "scope": "server"
+  },
+  "cordon": {
+    "text": "Afgrendelen",
+    "scope": "server"
+  },
+  "uncordon": {
+    "text": "Vrijgeven",
+    "scope": "server"
+  },
+  "preflight_passed": {
+    "text": "Preflight geslaagd op {$name}; de host kan toegelaten worden",
+    "scope": "server"
+  },
+  "preflight_failed": {
+    "text": "Preflight MISLUKT op {$name}; zie het opgeslagen rapport",
+    "scope": "server"
+  },
+  "host_admitted": {
+    "text": "Host {$name} is toegelaten voor plaatsing",
+    "scope": "server"
+  },
+  "host_cordoned": {
+    "text": "Host {$name} is afgegrendeld; geen nieuwe plaatsing",
+    "scope": "server"
+  },
+  "host_error_state": {
+    "text": "Probe mislukt ({$kind}) - {$admission}",
+    "scope": "server"
+  },
+  "host_never_probed": {
+    "text": "Nooit geprobed - {$admission}",
+    "scope": "server"
+  },
+  "host_stored_state": {
+    "text": "{$docker} - {$admission}",
+    "scope": "server"
+  },
+  "blocked": {
+    "text": "Geblokkeerd",
+    "scope": "host_admission"
+  },
+  "admitted": {
+    "text": "Toegelaten",
+    "scope": "host_admission"
+  },
+  "cordoned": {
+    "text": "Afgegrendeld",
+    "scope": "host_admission"
+  },
+  "trusted_only": {
+    "text": "Enkel vertrouwd",
+    "scope": "host_posture"
+  },
+  "dedicated": {
+    "text": "Toegewijd aan een tenant",
+    "scope": "host_posture"
+  },
+  "shared_container": {
+    "text": "Gedeelde containers (operator-risico)",
+    "scope": "host_posture"
+  },
+  "vm_isolated": {
+    "text": "VM-isolatie",
+    "scope": "host_posture"
+  },
+  "posture": {
+    "text": "Houding",
+    "scope": "field"
+  },
+  "admission": {
+    "text": "Toelating",
+    "scope": "field"
+  },
+  "remove_orphan": {
+    "text": "Wees verwijderen",
+    "scope": "reconcile_finding"
+  },
+  "remove_orphan_confirm": {
+    "text": "Deze verweesde resource stoppen en verwijderen bij de daemon? De data van een container gaat verloren; volumes zijn hier nooit verwijderbaar.",
+    "scope": "reconcile_finding"
+  },
+  "orphan_removed": {
+    "text": "Wees {$name} verwijderd bij de daemon",
+    "scope": "reconcile_finding"
+  },
+  "orphan_not_orphaned": {
+    "text": "{$name} is geen verweesde resource",
+    "scope": "violations"
+  },
+  "orphan_volume_refused": {
+    "text": "Volume {$name} is hier niet verwijderbaar: het is de enige onherstelbare resource",
+    "scope": "violations"
+  },
+  "orphan_reclassified": {
+    "text": "{$name} classificeert niet langer als wees; sweep eerst opnieuw",
+    "scope": "violations"
+  },
+  "orphan_kind_unknown": {
+    "text": "{$name} heeft een soort die deze bevoegdheid niet dekt",
+    "scope": "violations"
+  },
+  "orphan_remove_failed": {
+    "text": "Verwijdering geweigerd door de daemon: {$name}",
+    "scope": "violations"
+  }
 }

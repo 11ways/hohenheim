@@ -71,6 +71,16 @@ public class PortAllocationModel extends Model {
     public static final StringField STATUS = SCHEMA.addField(
         StringField.builder().name("status").build());
 
+    /**
+     * Which controller GENERATION wrote a record-less managed-process claim: the host
+     * lease's fence at allocation time (HostLeases). The boot sweep only judges rows
+     * from a LOWER generation than its own held fence, so a claim can never be freed by
+     * the very controller run that wrote it, and never while a rival holds the host.
+     * Null on owner-carrying claims (their record is the identity) and on legacy rows.
+     */
+    public static final LongField CONTROLLER_FENCE = SCHEMA.addField(
+        LongField.builder("controller_fence").filterable(false).build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(

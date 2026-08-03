@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.InstanceNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -89,6 +90,7 @@ class InstanceNetworkIsolationTest {
             int[] ids = new int[2];
             try {
                 Db.run(datasource, () -> {
+                    HostFixtures.admitLocal();
                     InstanceService service = new InstanceService();
                     ids[0] = record("net-tenant-a", CLIENT_IMAGE, "sleep 600");
                     ids[1] = record("net-tenant-b", SERVER_IMAGE, null);
@@ -185,6 +187,7 @@ class InstanceNetworkIsolationTest {
         int[] ids = new int[1];
         try {
             Db.run(datasource, () -> {
+                HostFixtures.admitLocal();
                 ids[0] = record("net-refused", CLIENT_IMAGE, "sleep 600");
                 String handle = "hohenheim-instance-" + ids[0];
 

@@ -4,22 +4,29 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.host.HostAdmission;
+import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.Computed;
 import be.elevenways.zenit.common.edit.EditView;
+import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -30,7 +37,8 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.LinkedHashMap;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -38,6 +46,9 @@ import java.util.regex.Pattern;
 /**
  * Multi-server Docker host inventory. The implicit {@code local} host always
  * exists and cannot be edited or removed; remote hosts are reached over SSH.
+ * The LIST reads stored host state (health columns + last preflight); the only
+ * live daemon contacts are the detail page's overview and the explicit
+ * preflight action, both of which persist their outcome.
  */
 public final class ServerResource extends RowResource {
 
@@ -56,6 +67,7 @@ public final class ServerResource extends RowResource {
     private final FormSpec formSpec = FormSpec.builder()
         .add(ServerModel.NAME)
         .add(ServerModel.SSH_TARGET)
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.POSTURE))
         .add(Computed.of(LIVE_OVERVIEW, values -> serverOverview(String.valueOf(values.get("name"))))
             .dependsOn("name")
             .build())
@@ -65,11 +77,15 @@ public final class ServerResource extends RowResource {
         .column(ColumnSpec.fromField(ServerModel.NAME).filterable().build())
         .column(ColumnSpec.fromField(ServerModel.MODE).filterable().build())
         .column(ColumnSpec.fromField(ServerModel.SSH_TARGET).filterable().build())
+        .column(ColumnSpec.fromField(ServerModel.ADMISSION).filterable().build())
+        .column(ColumnSpec.fromField(ServerModel.POSTURE).filterable().build())
         .column(ColumnSpec.virtual("host_status", Microcopy.of("host_status").withFilter("scope", "server")).build())
         .filter(FilterSpec.forField(ServerModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(ServerModel.NAME)).build())
         .filter(FilterSpec.forField(ServerModel.MODE, FilterSpec.Kind.SELECT)
             .label(FieldLabels.labelFor(ServerModel.MODE)).build())
+        .filter(FilterSpec.forField(ServerModel.ADMISSION, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(ServerModel.ADMISSION)).build())
         .filter(FilterSpec.forField(ServerModel.SSH_TARGET, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(ServerModel.SSH_TARGET)).build())
         .build();
@@ -103,6 +119,9 @@ public final class ServerResource extends RowResource {
         if (coerced.containsKey("ssh_target")) {
             row.set(ServerModel.SSH_TARGET, (String) coerced.get("ssh_target"));
         }
+        if (coerced.containsKey("posture") && coerced.get("posture") instanceof String posture) {
+            row.set(ServerModel.POSTURE, posture);
+        }
         if (coerced.get("mode") instanceof String mode) {
             row.set(ServerModel.MODE, mode);
         }
@@ -112,27 +131,34 @@ public final class ServerResource extends RowResource {
     public @NonNull List<Row> listRows(TableView.Applied<Row> applied,
                                        @NonNull AccessContext accessContext) {
         this.serverService.ensureLocal();
-        this.hostStatus = buildHostStatus();
         return super.listRows(applied, accessContext);
     }
 
-    // Reachability + host stats per server name, refreshed per list render.
-    private Map<String, String> hostStatus = Map.of();
-
-    private @NonNull Map<String, String> buildHostStatus() {
-        Map<String, String> status = new LinkedHashMap<>();
-        for (ServerService.Summary summary : this.serverService.summaries()) {
-            if (!summary.reachable()) {
-                status.put(summary.name(), hostCopy(Microcopy.of("host_unreachable")));
-                continue;
-            }
-            status.put(summary.name(), formatSummary(summary));
+    /** STORED state per host: health columns and the last preflight, never a live probe. */
+    private @NonNull String storedStatus(@NonNull Row row) {
+        String admission = String.valueOf((Object) row.get(ServerModel.ADMISSION));
+        String errorKind = row.get(ServerModel.LAST_ERROR_KIND);
+        Instant lastSeen = row.get(ServerModel.LAST_SEEN_AT);
+        if (errorKind != null && !errorKind.isBlank()) {
+            return hostCopy(Microcopy.of("host_error_state")
+                .withArg("kind", errorKind)
+                .withArg("admission", admission));
         }
-        return status;
+        if (lastSeen == null) {
+            return hostCopy(Microcopy.of("host_never_probed").withArg("admission", admission));
+        }
+        Object capabilities = row.get(ServerModel.CAPABILITIES);
+        String docker = capabilities instanceof Map<?, ?> map
+            && map.get("docker_version") instanceof String version && !version.isBlank()
+            ? "Docker " + version : "Docker";
+        return hostCopy(Microcopy.of("host_stored_state")
+            .withArg("docker", docker)
+            .withArg("admission", admission));
     }
 
+    /** The detail page's LIVE overview; the probe persists its typed outcome either way. */
     private @NonNull String serverOverview(@NonNull String name) {
-        ServerService.Summary summary = this.serverService.summary(name);
+        ServerService.Summary summary = this.serverService.probeAndStore(name);
         return summary == null || !summary.reachable()
             ? hostCopy(Microcopy.of("host_docker_unavailable"))
             : formatSummary(summary);
@@ -163,8 +189,8 @@ public final class ServerResource extends RowResource {
     }
 
     /**
-     * Host stats are computed once per list render without a requesting conduit, so
-     * they speak the server's default locale.
+     * Host stats are computed without a requesting conduit, so they speak the
+     * server's default locale.
      */
     private static @NonNull String hostCopy(@NonNull Microcopy microcopy) {
         return microcopy.withFilter("scope", "server")
@@ -175,9 +201,98 @@ public final class ServerResource extends RowResource {
     @Override
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
         if ("host_status".equals(column.name())) {
-            return this.hostStatus.get(row.get(ServerModel.NAME));
+            return storedStatus(row);
         }
         return super.cellValue(row, column);
+    }
+
+    // -- host lifecycle actions ----------------------------------------------
+
+    @Override
+    public @NonNull List<RowAction<Row>> rowActions() {
+        List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
+        actions.add(this.preflightAction());
+        actions.add(this.admitAction());
+        actions.add(this.cordonAction());
+        actions.add(this.uncordonAction());
+        return actions;
+    }
+
+    /** Run the full preflight and store its report; the toast states the verdict. */
+    private @NonNull RowAction<Row> preflightAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "preflight_server"))
+            .label(Microcopy.of("preflight").withFilter("scope", "server"))
+            .icon(Icon.of("stethoscope"))
+            .handler((row, ctx) -> {
+                String name = row.get(ServerModel.NAME);
+                HostPreflight.Report[] report = new HostPreflight.Report[1];
+                ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "preflight",
+                    () -> report[0] = HostPreflight.runAndStore(name));
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of(report[0].passed() ? "preflight_passed" : "preflight_failed")
+                        .withFilter("scope", "server")
+                        .withArg("name", name));
+            })
+            .build();
+    }
+
+    /** Admit for placement; refused unless the LAST preflight passed. */
+    private @NonNull RowAction<Row> admitAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "admit_server"))
+            .label(Microcopy.of("admit").withFilter("scope", "server"))
+            .icon(Icon.of("circle-check"))
+            .visibleFor((row, ctx) ->
+                !ServerModel.ADMISSION_ADMITTED.equals(row.get(ServerModel.ADMISSION)))
+            .handler((row, ctx) -> {
+                HostAdmission.requireAdmittable(row);
+                setAdmission(row, ServerModel.ADMISSION_ADMITTED, "admit");
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("host_admitted").withFilter("scope", "server")
+                        .withArg("name", row.get(ServerModel.NAME)));
+            })
+            .build();
+    }
+
+    /** Refuse NEW placement while existing workloads keep running. */
+    private @NonNull RowAction<Row> cordonAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "cordon_server"))
+            .label(Microcopy.of("cordon").withFilter("scope", "server"))
+            .icon(Icon.of("circle-pause"))
+            .style(ActionStyle.DESTRUCTIVE)
+            .visibleFor((row, ctx) ->
+                ServerModel.ADMISSION_ADMITTED.equals(row.get(ServerModel.ADMISSION)))
+            .handler((row, ctx) -> {
+                setAdmission(row, ServerModel.ADMISSION_CORDONED, "cordon");
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("host_cordoned").withFilter("scope", "server")
+                        .withArg("name", row.get(ServerModel.NAME)));
+            })
+            .build();
+    }
+
+    /** Lift a cordon; the stored preflight verdict must still be green. */
+    private @NonNull RowAction<Row> uncordonAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "uncordon_server"))
+            .label(Microcopy.of("uncordon").withFilter("scope", "server"))
+            .icon(Icon.of("circle-play"))
+            .visibleFor((row, ctx) ->
+                ServerModel.ADMISSION_CORDONED.equals(row.get(ServerModel.ADMISSION)))
+            .handler((row, ctx) -> {
+                HostAdmission.requireAdmittable(row);
+                setAdmission(row, ServerModel.ADMISSION_ADMITTED, "uncordon");
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("host_admitted").withFilter("scope", "server")
+                        .withArg("name", row.get(ServerModel.NAME)));
+            })
+            .build();
+    }
+
+    private static void setAdmission(@NonNull Row row, @NonNull String admission,
+                                     @NonNull String action) {
+        ActivityLog.withAction(ActivityLog.ACTION_UPDATE, action, () -> {
+            row.set(ServerModel.ADMISSION, admission);
+            Models.get(ServerModel.class).save(row);
+        });
     }
 
     @Override
