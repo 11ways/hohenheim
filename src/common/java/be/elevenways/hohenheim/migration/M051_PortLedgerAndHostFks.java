@@ -94,11 +94,15 @@ public class M051_PortLedgerAndHostFks extends Migration {
     public static int healHostKeys(Datasource datasource) {
         int[] created = {0};
         Db.run(datasource, () -> {
-            ServerModel servers = new ServerModel();
+            // AIDEV-NOTE: the ERA-FROZEN server shape, never the live ServerModel: the
+            // live schema has since grown columns (M056 posture/admission/...) whose
+            // create-time defaults would be written into a table that does not have
+            // them yet at M051 time -- the frozen-migration-meaning trap.
+            LegacyServer servers = new LegacyServer();
             Map<String, Integer> idByName = new HashMap<>();
             for (Row server : servers.find().all()) {
-                idByName.put(String.valueOf(server.get(ServerModel.NAME)),
-                    server.get(ServerModel.ID));
+                idByName.put(String.valueOf(server.get(LegacyServer.NAME)),
+                    server.get(LegacyServer.ID));
             }
 
             int stacks = relink(new LegacyStack(), servers, idByName, created);
@@ -113,27 +117,27 @@ public class M051_PortLedgerAndHostFks extends Migration {
     }
 
     /** Resolve one canonical spelling to a server id, creating a placeholder when unknown. */
-    private static int resolveOrCreate(String spelling, ServerModel servers,
+    private static int resolveOrCreate(String spelling, LegacyServer servers,
                                        Map<String, Integer> idByName, int[] created) {
         Integer known = idByName.get(spelling);
         if (known != null) {
             return known;
         }
         Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, spelling);
+        row.set(LegacyServer.NAME, spelling);
         // A previously deleted/never-registered remote: keep the claim visible (and the
         // host unreachable until an operator supplies its ssh target) instead of silently
         // redirecting the workload to the local daemon. The local row itself is created
         // in local mode -- ServerModel.canonicalSpelling already folded blanks onto it.
-        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL.equals(spelling)
+        row.set(LegacyServer.MODE, ServerModel.MODE_LOCAL.equals(spelling)
             ? ServerModel.MODE_LOCAL : ServerModel.MODE_SSH);
         servers.save(row);
         created[0]++;
-        idByName.put(spelling, row.get(ServerModel.ID));
-        return row.get(ServerModel.ID);
+        idByName.put(spelling, row.get(LegacyServer.ID));
+        return row.get(LegacyServer.ID);
     }
 
-    private static int relink(LegacyServerNamed legacy, ServerModel servers,
+    private static int relink(LegacyServerNamed legacy, LegacyServer servers,
                               Map<String, Integer> idByName, int[] created) {
         int relinked = 0;
         for (Row row : legacy.find().all()) {
@@ -146,7 +150,7 @@ public class M051_PortLedgerAndHostFks extends Migration {
     }
 
     @SuppressWarnings("unchecked")
-    private static int rewriteDockerSites(ServerModel servers, Map<String, Integer> idByName,
+    private static int rewriteDockerSites(LegacyServer servers, Map<String, Integer> idByName,
                                           int[] created) {
         LegacySite sites = new LegacySite();
         int rewritten = 0;
@@ -207,6 +211,22 @@ public class M051_PortLedgerAndHostFks extends Migration {
         @Override public Field<?, ?> getPrimaryKeyField() { return ID; }
         @Override public String getModelName() { return "M051Database"; }
         @Override public String getTableName() { return "managed_databases"; }
+        @Override public Schema getSchema() { return SCHEMA; }
+    }
+
+    /** The M051-era servers shape: id/name/mode only, no live-model defaults. */
+    private static final class LegacyServer extends Model {
+        static final Schema SCHEMA = new Schema();
+        static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
+        static final StringField NAME = SCHEMA.addField(
+            StringField.builder().name("name").build());
+        static final StringField MODE = SCHEMA.addField(
+            StringField.builder().name("mode").build());
+
+        @Override public Identifier getModelId() { return Identifier.of("hohenheim", "m051_server"); }
+        @Override public Field<?, ?> getPrimaryKeyField() { return ID; }
+        @Override public String getModelName() { return "M051Server"; }
+        @Override public String getTableName() { return "servers"; }
         @Override public Schema getSchema() { return SCHEMA; }
     }
 

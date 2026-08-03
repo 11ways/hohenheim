@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,6 +21,7 @@ import java.io.File;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -370,6 +372,14 @@ class PortLedgerTest {
                 .as("step 6 precondition: the edge host's claim is parked (service died)")
                 .isTrue();
             PortLedger.claim(edge.get(ServerModel.ID), "", 8312, "tcp", null, null, "edge held");
+            // 6a. While the moved stack still references the host, removal REFUSES --
+            //     the M056 ownership invariant (the FK is documentation, this is the
+            //     enforcement).
+            assertThat(catchThrowable(() ->
+                    Models.get(ServerModel.class).delete(edge.get(ServerModel.ID))))
+                .as("step 6a: host removal refuses while a stack references it")
+                .isInstanceOf(Violations.class);
+            Models.get(StackModel.class).delete(stackId);
             Models.get(ServerModel.class).delete(edge.get(ServerModel.ID));
             Row afterHostRemoval = Models.get(PortAllocationModel.class).find()
                 .where(PortAllocationModel.SERVER_ID.eq(edge.get(ServerModel.ID)))

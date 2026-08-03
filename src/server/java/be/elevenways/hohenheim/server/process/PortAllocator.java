@@ -4,13 +4,13 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.util.PortProbe;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.security.SecureRandom;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -42,6 +42,15 @@ import java.util.concurrent.ConcurrentHashMap;
  * port -- proven by counterfactual -- and removing both hands a docker site's published
  * port to a managed process. The read also keeps a host with many held ports from probing
  * and then failing an INSERT once per held port on every spawn.
+ *
+ * AIDEV-NOTE: controller identity is the HOST LEASE FENCE (HostLeases), stamped into
+ * {@code controller_fence} on every claim -- never again a per-JVM random token
+ * string-matched out of the note. Two consequences: allocation REQUIRES holding the
+ * host lease (a second controller on the same database cannot allocate at all), and
+ * the boot sweep can only run while holding it, so the old bug -- one controller's
+ * boot sweep deleting a live peer's claim inside its allocate-to-spawn window -- is
+ * structurally impossible: the peer's claims carry the CURRENT fence while the peer
+ * holds the lease, and no rival can hold the lease at the same time.
  */
 public class PortAllocator {
 
@@ -53,26 +62,31 @@ public class PortAllocator {
     /** The bind address a managed-process claim covers: the whole host, matching the probe. */
     private static final String BIND_ADDRESS = "";
 
-    private static final SecureRandom RANDOM = new SecureRandom();
+    private final HostLeases leases;
+
+    /** port -> the fence it was claimed under, so release can never delete a rival's row. */
+    private final ConcurrentHashMap<Integer, Long> reservedPorts = new ConcurrentHashMap<>();
+
+    public PortAllocator() {
+        this(HostLeases.production());
+    }
+
+    /** Test seam: a rival controller is a PortAllocator over a rival {@link HostLeases}. */
+    public PortAllocator(@NonNull HostLeases leases) {
+        this.leases = leases;
+    }
 
     /**
-     * Identifies THIS controller run in the ledger note. A row carrying another token was
-     * written by a previous JVM, which is exactly what the boot sweep is allowed to touch --
-     * so a sweep can never free a port this controller just allocated, whenever it runs.
-     */
-    private final String controllerToken = Long.toHexString(RANDOM.nextLong());
-
-    private final ConcurrentHashMap<Integer, Integer> reservedPorts = new ConcurrentHashMap<>();
-
-    /**
-     * Allocate a free port for the given site and hold it in the ledger.
+     * Allocate a free port for the given site and hold it in the ledger, under this
+     * controller's host-lease fence.
      *
-     * @throws RuntimeException if no port is available
+     * @throws RuntimeException if no port is available or the host lease is held by a rival
      */
     public int allocate(int siteId) {
         int firstPort = getFirstPort();
         int lastPort = firstPort + PORT_RANGE;
         int serverId = ServerModel.localServerId();
+        long fence = this.leases.requireFence(serverId);
         Set<Integer> claimed = claimedPorts(serverId, firstPort, lastPort);
 
         for (int port = firstPort; port < lastPort; port++) {
@@ -83,31 +97,55 @@ public class PortAllocator {
                 continue;
             }
             try {
-                PortLedger.claim(serverId, BIND_ADDRESS, port, "tcp", null, null, noteFor(siteId));
+                PortLedger.claimFenced(serverId, BIND_ADDRESS, port, "tcp", null, null,
+                    noteFor(siteId), fence);
             } catch (PortLedger.PortConflict conflict) {
                 continue;   // a rival writer took it between the read and the insert
             }
-            reservedPorts.put(port, siteId);
+            reservedPorts.put(port, fence);
             return port;
         }
 
         throw new RuntimeException("No free port in range " + firstPort + "-" + lastPort);
     }
 
-    /** Release a previously allocated port, in memory and in the ledger. */
+    /**
+     * Release a previously allocated port, in memory and in the ledger. Fence-guarded:
+     * the row is deleted only when it still carries the fence this allocator claimed it
+     * under, so a stale controller's process-exit path can never delete a claim the
+     * winning controller has since written for the same port.
+     */
     public void release(int port) {
-        reservedPorts.remove(port);
-        PortLedger.releaseKey(PortLedger.claimKeyOf(ServerModel.localServerId(),
-            BIND_ADDRESS, port, "tcp"));
+        Long fence = reservedPorts.remove(port);
+        String key = PortLedger.claimKeyOf(ServerModel.localServerId(),
+            BIND_ADDRESS, port, "tcp");
+        if (fence == null) {
+            // Not allocated by this instance in this JVM: nothing we can vouch for.
+            return;
+        }
+        Row held = PortLedger.holderOf(key);
+        if (held == null) {
+            return;
+        }
+        Long rowFence = held.get(PortAllocationModel.CONTROLLER_FENCE);
+        if (rowFence != null && rowFence.longValue() != fence.longValue()) {
+            Blast.log("PORTS: release of port", port, "skipped - the ledger row was written"
+                + " under fence", rowFence, "and this controller allocated under", fence);
+            return;
+        }
+        PortLedger.releaseKey(key);
     }
 
     /** What a boot sweep did: rows whose port was observed free, and rows still bound. */
     public record SweepResult(int released, int retained) {}
 
     /**
-     * Reconcile managed-process claims left behind by a PREVIOUS controller run: a port
-     * this machine no longer has bound is released, a port that is STILL BOUND keeps its
-     * claim and is reported.
+     * Reconcile managed-process claims left behind by a PREVIOUS controller generation:
+     * a port this machine no longer has bound is released, a port that is STILL BOUND
+     * keeps its claim and is reported. Runs only while HOLDING the host lease; when a
+     * rival controller holds it, the sweep deletes NOTHING and says so -- the old
+     * unconditional sweep is exactly what deleted a live peer's claim inside its
+     * allocate-to-spawn window.
      *
      * AIDEV-NOTE: the single most dangerous operation in this class, and the reason the
      * OS probe outranks the ledger here. Managed children are spawned with ProcessBuilder
@@ -117,11 +155,20 @@ public class PortAllocator {
      * allocate, whose child then dies with EADDRINUSE -- and startProcess RETRIES on
      * address-in-use, so the whole failure would show up as a slightly slower start and a
      * retry log. A still-bound port must therefore keep its row (it stays unallocatable)
-     * and say so loudly; it never disappears quietly. Rows written by THIS controller are
-     * never candidates, so the sweep is safe to run at any time and more than once.
+     * and say so loudly; it never disappears quietly. Rows written under THIS controller's
+     * current fence are never candidates, so the sweep is safe to run at any time and more
+     * than once.
      */
     public @NonNull SweepResult sweepPreviousControllerClaims() {
         int serverId = ServerModel.localServerId();
+        long fence;
+        try {
+            fence = this.leases.requireFence(serverId);
+        } catch (RuntimeException unavailable) {
+            Blast.log("PORTS: boot sweep SKIPPED - another controller holds the host lease"
+                + " for server", serverId, "; its claims are live and not ours to judge");
+            return new SweepResult(0, 0);
+        }
         int released = 0;
         int retained = 0;
         for (Row claim : Models.get(PortAllocationModel.class).find()
@@ -129,8 +176,12 @@ public class PortAllocator {
                 .and(PortAllocationModel.OWNER_MODEL.isNull())
                 .all()) {
             String note = claim.get(PortAllocationModel.NOTE);
-            if (note == null || !note.startsWith(NOTE_PREFIX) || note.endsWith(controllerToken)) {
-                continue;   // not ours to judge, or written by this very controller
+            if (note == null || !note.startsWith(NOTE_PREFIX)) {
+                continue;   // not a managed-process claim, not ours to judge
+            }
+            Long claimFence = claim.get(PortAllocationModel.CONTROLLER_FENCE);
+            if (claimFence != null && claimFence.longValue() >= fence) {
+                continue;   // written under THIS controller generation (or a newer one)
             }
             Integer port = claim.get(PortAllocationModel.PORT);
             if (port == null) {
@@ -153,9 +204,9 @@ public class PortAllocator {
         return new SweepResult(released, retained);
     }
 
-    /** The ledger note for one process-instance claim: what holds it, and which controller. */
+    /** The ledger note for one process-instance claim: what holds it. */
     private String noteFor(int siteId) {
-        return NOTE_PREFIX + " site=" + siteId + " controller=" + controllerToken;
+        return NOTE_PREFIX + " site=" + siteId;
     }
 
     /** Every port the ledger holds on this host inside the allocation window, in ONE query. */

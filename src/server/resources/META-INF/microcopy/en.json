@@ -1845,6 +1845,10 @@
     {
       "text": "Instance Quotas",
       "scope": "instance_quota"
+    },
+    {
+      "text": "Reconcile findings",
+      "scope": "reconcile_finding"
     }
   ],
   "dashboard": {
@@ -4238,5 +4242,141 @@
       "text": "Cap for this owner; 0 refuses every new instance, empty falls back to the global default",
       "scope": "help"
     }
-  ]
+  ],
+  "host_lease_unavailable": {
+    "text": "Another controller holds the lease for host #{$server}; this controller may not mutate it",
+    "scope": "violations"
+  },
+  "instance_fenced_out": {
+    "text": "Instance {$name} is now controlled by another controller on host {$server}; this operation was aborted without cleanup",
+    "scope": "violations"
+  },
+  "host_not_admitted": {
+    "text": "Host {$name} is not admitted for placement; run preflight and admit it first",
+    "scope": "violations"
+  },
+  "host_posture_refuses": {
+    "text": "Host {$name} declares a trusted-only posture and refuses tenant instances",
+    "scope": "violations"
+  },
+  "admit_needs_preflight": {
+    "text": "Host {$name} has no passing preflight; run preflight before admitting",
+    "scope": "violations"
+  },
+  "server_in_use": {
+    "text": "Server {$name} still owns {$stacks} stack(s), {$databases} database(s) and {$instances} instance(s); remove or move them first",
+    "scope": "violations"
+  },
+  "preflight": {
+    "text": "Preflight",
+    "scope": "server"
+  },
+  "admit": {
+    "text": "Admit",
+    "scope": "server"
+  },
+  "cordon": {
+    "text": "Cordon",
+    "scope": "server"
+  },
+  "uncordon": {
+    "text": "Uncordon",
+    "scope": "server"
+  },
+  "preflight_passed": {
+    "text": "Preflight passed on {$name}; the host can be admitted",
+    "scope": "server"
+  },
+  "preflight_failed": {
+    "text": "Preflight FAILED on {$name}; see the stored report",
+    "scope": "server"
+  },
+  "host_admitted": {
+    "text": "Host {$name} is admitted for placement",
+    "scope": "server"
+  },
+  "host_cordoned": {
+    "text": "Host {$name} is cordoned; no new placement",
+    "scope": "server"
+  },
+  "host_error_state": {
+    "text": "Probe failed ({$kind}) - {$admission}",
+    "scope": "server"
+  },
+  "host_never_probed": {
+    "text": "Never probed - {$admission}",
+    "scope": "server"
+  },
+  "host_stored_state": {
+    "text": "{$docker} - {$admission}",
+    "scope": "server"
+  },
+  "blocked": {
+    "text": "Blocked",
+    "scope": "host_admission"
+  },
+  "admitted": {
+    "text": "Admitted",
+    "scope": "host_admission"
+  },
+  "cordoned": {
+    "text": "Cordoned",
+    "scope": "host_admission"
+  },
+  "trusted_only": {
+    "text": "Trusted only",
+    "scope": "host_posture"
+  },
+  "dedicated": {
+    "text": "Dedicated to one tenant",
+    "scope": "host_posture"
+  },
+  "shared_container": {
+    "text": "Shared containers (operator risk)",
+    "scope": "host_posture"
+  },
+  "vm_isolated": {
+    "text": "VM isolated",
+    "scope": "host_posture"
+  },
+  "posture": {
+    "text": "Posture",
+    "scope": "field"
+  },
+  "admission": {
+    "text": "Admission",
+    "scope": "field"
+  },
+  "remove_orphan": {
+    "text": "Remove orphan",
+    "scope": "reconcile_finding"
+  },
+  "remove_orphan_confirm": {
+    "text": "Stop and remove this orphaned resource at the daemon? The stored data of a container is lost; volumes are never removable here.",
+    "scope": "reconcile_finding"
+  },
+  "orphan_removed": {
+    "text": "Orphan {$name} removed at the daemon",
+    "scope": "reconcile_finding"
+  },
+  "orphan_not_orphaned": {
+    "text": "{$name} is not an orphaned resource",
+    "scope": "violations"
+  },
+  "orphan_volume_refused": {
+    "text": "Volume {$name} is not removable here: it is the one unrecoverable resource",
+    "scope": "violations"
+  },
+  "orphan_reclassified": {
+    "text": "{$name} no longer classifies as an orphan; sweep again first",
+    "scope": "violations"
+  },
+  "orphan_kind_unknown": {
+    "text": "{$name} has a kind this authority does not cover",
+    "scope": "violations"
+  },
+  "orphan_remove_failed": {
+    "text": "Removal refused by the daemon: {$name}",
+    "scope": "violations"
+  }
 }

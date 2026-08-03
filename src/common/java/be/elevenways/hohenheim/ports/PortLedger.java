@@ -190,6 +190,18 @@ public final class PortLedger {
     public static void claim(int serverId, @Nullable Object hostIp, int port,
                              @Nullable Object protocol, @Nullable Identifier ownerModel,
                              @Nullable Integer ownerId, @Nullable String note) {
+        claimFenced(serverId, hostIp, port, protocol, ownerModel, ownerId, note, null);
+    }
+
+    /**
+     * {@link #claim} plus the writing controller's host-lease fence in
+     * {@code controller_fence} -- the identity the boot sweep and the fence-guarded
+     * release compare against for record-less managed-process claims.
+     */
+    public static void claimFenced(int serverId, @Nullable Object hostIp, int port,
+                                   @Nullable Object protocol, @Nullable Identifier ownerModel,
+                                   @Nullable Integer ownerId, @Nullable String note,
+                                   @Nullable Long controllerFence) {
         String key = claimKeyOf(serverId, hostIp, port, protocol);
         Row overlapping = conflictingHolder(serverId, hostIp, port, protocol);
         if (overlapping != null) {
@@ -209,6 +221,7 @@ public final class PortLedger {
         row.set(PortAllocationModel.OWNER_MODEL, ownerModel != null ? ownerModel.toString() : null);
         row.set(PortAllocationModel.OWNER_ID, ownerId);
         row.set(PortAllocationModel.NOTE, note);
+        row.set(PortAllocationModel.CONTROLLER_FENCE, controllerFence);
         row.set(PortAllocationModel.STATUS, PortAllocationModel.STATUS_HELD);
         try {
             ledger.save(row);

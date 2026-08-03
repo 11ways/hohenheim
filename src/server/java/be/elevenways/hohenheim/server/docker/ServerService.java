@@ -1,12 +1,15 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +18,14 @@ import java.util.Map;
  * The multi-server inventory: persists Docker hosts ({@link ServerModel}) and builds a
  * {@link DockerClient} for each. The implicit {@code local} host is ensured to exist; remote hosts
  * are reached over SSH.
+ *
+ * AIDEV-NOTE: the admin LIST reads STORED host state ({@link #storedStates}) -- it
+ * never probes a daemon, because the old per-render serial probe (8s ceiling PER
+ * host) hung the page on one down remote and its exception-to-null swallowing made
+ * host-down, bad-key, host-key-changed, docker-absent and DNS failure one
+ * indistinguishable state with ZEROED capacity -- worse than unknown, because an
+ * allocator reading cpus=0 treats an unreachable host as an empty one. Live probes
+ * are explicit ({@link #probeAndStore}) and always PERSIST their typed outcome.
  *
  * @author  Jelle De Loecker
  * @since   0.1.0
@@ -26,7 +37,7 @@ public class ServerService extends DatasourceScoped {
     public static final String MODE_LOCAL = ServerModel.MODE_LOCAL;
     public static final String MODE_SSH = ServerModel.MODE_SSH;
 
-    // Short deadline for the list's reachability probe so a down remote can't hang the page long.
+    // Short deadline for an explicit reachability probe so a down remote can't hang long.
     private static final long PING_TIMEOUT_MS = 8000;
 
     public ServerService() {
@@ -46,29 +57,69 @@ public class ServerService extends DatasourceScoped {
         exec(ServerModel::localServerId);
     }
 
-    /** A server with its best-effort reachability and host resource snapshot, for the admin list.
-     *  All resource fields are 0 when the host is unreachable. */
+    /** A server with its LIVE reachability and host resource snapshot (explicit probes only). */
     public record Summary(String name, String mode, String sshTarget, boolean reachable,
                           int cpus, long memoryBytes, int containersRunning, int containersTotal,
                           int images, String dockerVersion, String operatingSystem,
-                          String osType, String architecture) {}
+                          String osType, String architecture,
+                          @Nullable String errorKind, @Nullable String errorDetail) {}
 
-    /** All servers with reachability + host stats (from Docker {@code /info}), best-effort per record. */
-    public List<Summary> summaries() {
-        List<Summary> result = new ArrayList<>();
+    /** One host's STORED state: what the list and any allocator read, no daemon involved. */
+    public record HostState(String name, String mode, String sshTarget,
+                            String admission, String posture, boolean preflightOk,
+                            @Nullable Instant probedAt, @Nullable Instant lastSeenAt,
+                            @Nullable String lastErrorKind, @Nullable String lastError,
+                            @Nullable Map<String, Object> capabilities) {}
+
+    /** Every host's stored state, in one query, without touching any daemon. */
+    public List<HostState> storedStates() {
+        List<HostState> result = new ArrayList<>();
         for (Row row : query(() -> model().find().all())) {
-            result.add(summaryFor(row));
+            result.add(stateOf(row));
         }
         return result;
     }
 
-    /** Returns one named server's live Docker snapshot without probing every host. */
-    public @Nullable Summary summary(String name) {
+    private static HostState stateOf(Row row) {
+        String target = row.get(ServerModel.SSH_TARGET);
+        Object capabilities = row.get(ServerModel.CAPABILITIES);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> capabilityMap =
+            capabilities instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
+        return new HostState(
+            row.get(ServerModel.NAME),
+            row.get(ServerModel.MODE),
+            target != null ? target : "",
+            String.valueOf((Object) row.get(ServerModel.ADMISSION)),
+            String.valueOf((Object) row.get(ServerModel.POSTURE)),
+            Boolean.TRUE.equals(row.get(ServerModel.PREFLIGHT_OK)),
+            row.get(ServerModel.PROBED_AT),
+            row.get(ServerModel.LAST_SEEN_AT),
+            row.get(ServerModel.LAST_ERROR_KIND),
+            row.get(ServerModel.LAST_ERROR),
+            capabilityMap);
+    }
+
+    /**
+     * LIVE-probe one named server and PERSIST the typed outcome on its record
+     * (last_seen_at on success, last_error_kind/last_error on failure), so even an
+     * on-demand probe leaves durable evidence. Null when the server is unknown.
+     */
+    public @Nullable Summary probeAndStore(String name) {
         if (LOCAL.equals(name)) {
             ensureLocal();
         }
         Row row = query(() -> model().findByName(name));
-        return row != null ? summaryFor(row) : null;
+        if (row == null) {
+            return null;
+        }
+        HostProbe.Outcome outcome = probe(row);
+        if (outcome.reachable()) {
+            exec(() -> HostProbe.recordSuccess(name));
+        } else {
+            exec(() -> HostProbe.recordFailure(name, outcome));
+        }
+        return summaryOf(row, outcome);
     }
 
     /** Just the server names (no reachability probe), for form dropdowns. */
@@ -118,7 +169,11 @@ public class ServerService extends DatasourceScoped {
         });
     }
 
-    /** Remove a server; the implicit local host (the machine itself) cannot be removed. */
+    /**
+     * Remove a server; the implicit local host (the machine itself) cannot be removed.
+     * ServerModel's beforeRemove hook REFUSES the delete while live stacks, databases
+     * or instances still reference the host -- on every delete path, not just this one.
+     */
     public void remove(String name) {
         if (LOCAL.equals(name)) {
             return;
@@ -133,23 +188,24 @@ public class ServerService extends DatasourceScoped {
         return new UnixSocketDockerTransport(DockerClient.DEFAULT_SOCKET);
     }
 
-    // Host /info (also serves as the reachability probe), or null when unreachable.
-    private static Map<String, Object> infoFor(Row row) {
+    /** One live daemon probe with a TYPED outcome; never a silent null. */
+    private static HostProbe.Outcome probe(Row row) {
         try {
-            return new DockerClient(transportFor(row), PING_TIMEOUT_MS).info();
+            return HostProbe.Outcome.success(
+                new DockerClient(transportFor(row), PING_TIMEOUT_MS).info());
         } catch (Exception e) {
-            return null;
+            return HostProbe.classify(e);
         }
     }
 
-    private static Summary summaryFor(Row row) {
+    private static Summary summaryOf(Row row, HostProbe.Outcome outcome) {
         String target = row.get(ServerModel.SSH_TARGET);
-        Map<String, Object> info = infoFor(row);
+        Map<String, Object> info = outcome.info();
         return new Summary(
             row.get(ServerModel.NAME),
             row.get(ServerModel.MODE),
             target != null ? target : "",
-            info != null,
+            outcome.reachable(),
             asInt(info, "NCPU"),
             asLong(info, "MemTotal"),
             asInt(info, "ContainersRunning"),
@@ -158,7 +214,9 @@ public class ServerService extends DatasourceScoped {
             asString(info, "ServerVersion"),
             asString(info, "OperatingSystem"),
             asString(info, "OSType"),
-            asString(info, "Architecture"));
+            asString(info, "Architecture"),
+            outcome.kind() != null ? outcome.kind().token : null,
+            outcome.detail());
     }
 
     private static int asInt(Map<String, Object> info, String key) {

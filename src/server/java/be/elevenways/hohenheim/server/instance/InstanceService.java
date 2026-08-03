@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.host.HostAdmission;
+import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
@@ -10,6 +12,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -23,11 +26,38 @@ import java.util.Map;
  * Refusals are thrown as {@link Violations} with named reasons so the admin surface
  * shows the operator what actually happened -- never a bare 500, never a silent
  * success.
+ *
+ * AIDEV-NOTE: every operation runs under the HOST LEASE (HostLeases) and every write
+ * recording a runtime outcome is CONDITIONAL ON THE FENCE (stampGuarded): a stale
+ * controller's write matches zero rows, zero rows is a hard failure, and the loser
+ * ABORTS without touching the ledger -- parking claims on the fenced-out path would
+ * park the WINNER's fresh rows. The daemon still obeys a stale controller (nothing
+ * we mint changes that); what the fence guarantees is that a stale controller's
+ * operation cannot STICK -- the database refuses the outcome and the winner's next
+ * deploy reconciles the daemon through the owner labels (removeIfOwnedBy).
  */
 public final class InstanceService {
 
     /** Publications bind loopback (DockerInstanceRuntime.HOST_BIND_ADDRESS's ledger spelling). */
     private static final String BIND_ADDRESS = "127.0.0.1";
+
+    private final HostLeases leases;
+
+    /** Test seam: runs between the daemon operations and the fenced outcome write. */
+    private final Runnable beforeOutcomeWrite;
+
+    public InstanceService() {
+        this(HostLeases.production(), () -> {});
+    }
+
+    /**
+     * Test seam: a rival controller is an InstanceService over a rival {@link HostLeases};
+     * the pause hook is the injectable SIGSTOP between daemon work and the outcome write.
+     */
+    public InstanceService(@NonNull HostLeases leases, @NonNull Runnable beforeOutcomeWrite) {
+        this.leases = leases;
+        this.beforeOutcomeWrite = beforeOutcomeWrite;
+    }
 
     /**
      * Create (replacing only an own leftover container) and start the instance's
@@ -38,20 +68,27 @@ public final class InstanceService {
      */
     public @NonNull InstanceStatus deploy(int instanceId) {
         Resolved resolved = resolve(instanceId);
+        long fence = this.leases.requireFence(resolved.serverId());
+        HostAdmission.requireInstancePlacement(resolved.serverId());
         try {
             String handle = resolved.runtime().create(resolved.spec());
             resolved.runtime().start(handle);
             InstanceStatus status = resolved.runtime().status(handle);
+            this.beforeOutcomeWrite.run();
+            // The fence gate comes BEFORE any ledger write: a stale controller that
+            // reached the ledger first would delete the winner's fresh port claim.
+            stampGuarded(resolved, fence, InstanceModel.STATUS_RUNNING);
             if (status.publishedPort() != null) {
                 PortLedger.recordObserved(resolved.serverId(), BIND_ADDRESS,
                     status.publishedPort(), "tcp", InstanceModel.MODEL_ID, instanceId, null);
             }
-            stamp(resolved.row(), InstanceModel.STATUS_RUNNING);
             return status;
         } catch (IOException e) {
-            // Whatever the previous deploy held is now unverifiable: park, never delete.
+            // Fence first, ledger second: a fenced-out loser must not park the
+            // winner's claims. Whatever the previous deploy held is unverifiable
+            // for a still-fenced controller: park, never delete.
+            stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
-            stamp(resolved.row(), InstanceModel.STATUS_ERROR);
             throw refusal("instance_deploy_failed", resolved.row(), e);
         }
     }
@@ -65,11 +102,14 @@ public final class InstanceService {
      */
     public void stop(int instanceId) {
         Resolved resolved = resolve(instanceId);
+        long fence = this.leases.requireFence(resolved.serverId());
         try {
             resolved.runtime().stop(resolved.spec().handle(), 10);
+            this.beforeOutcomeWrite.run();
+            stampGuarded(resolved, fence, InstanceModel.STATUS_STOPPED);
             PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
-            stamp(resolved.row(), InstanceModel.STATUS_STOPPED);
         } catch (IOException e) {
+            stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
             throw refusal("instance_stop_failed", resolved.row(), e);
         }
@@ -81,21 +121,32 @@ public final class InstanceService {
      * (deleted_at; the grant liveWhen predicate keys on it). Named volumes survive --
      * the reconciler reports them as orphans until an operator decides.
      *
+     * AIDEV-NOTE: the deleted_at write itself rides save(), NOT the guarded updateAll,
+     * because the instance-quota release lives in a beforeWrite hook on the deleted_at
+     * transition and updateAll is hook-free by contract. The guarded stamp immediately
+     * before is the fence proof; the small window between it and the save is
+     * covered by the held lease, not by a row guard.
+     *
      * @throws Violations when the daemon cannot confirm removal: the record is KEPT
      *         (status {@code error}), the claims are parked, and the operator retries
      */
     public void destroy(int instanceId) {
         Resolved resolved = resolve(instanceId);
+        long fence = this.leases.requireFence(resolved.serverId());
         try {
             resolved.runtime().destroy(resolved.spec().handle());
         } catch (IOException e) {
+            stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
-            stamp(resolved.row(), InstanceModel.STATUS_ERROR);
             throw refusal("instance_destroy_failed", resolved.row(), e);
         }
+        this.beforeOutcomeWrite.run();
+        stampGuarded(resolved, fence, InstanceModel.STATUS_STOPPED);
         PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
-        Row row = resolved.row();
-        row.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
+        Row row = Models.get(InstanceModel.class).findById(instanceId);
+        if (row == null) {
+            return;
+        }
         row.set(InstanceModel.DELETED_AT, Instant.now());
         Models.get(InstanceModel.class).save(row);
         Blast.log("INSTANCE: destroyed", resolved.spec().handle(),
@@ -106,6 +157,35 @@ public final class InstanceService {
     public @NonNull InstanceStatus liveStatus(int instanceId) {
         Resolved resolved = resolve(instanceId);
         return resolved.runtime().status(resolved.spec().handle());
+    }
+
+    // -- the fence discipline -------------------------------------------------
+
+    /**
+     * THE fenced outcome write: one guarded statement that both records the status and
+     * stamps the fence -- {@code WHERE id = ? AND deleted_at IS NULL AND (claim_fence
+     * IS NULL OR claim_fence <= :myFence)}. Zero matched rows is a HARD FAILURE, never
+     * a shrug: it means a rival controller with a higher fence owns this record now,
+     * so this controller drops its hold and aborts. Cleanup is the winner's job.
+     *
+     * @throws Violations {@code instance_fenced_out}
+     */
+    private void stampGuarded(@NonNull Resolved resolved, long fence, @NonNull String status) {
+        int matched = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(resolved.row().get(InstanceModel.ID)))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .where(Criteria.or(
+                InstanceModel.CLAIM_FENCE.isNull(),
+                InstanceModel.CLAIM_FENCE.lte(fence)))
+            .assign(InstanceModel.STATUS, status)
+            .assign(InstanceModel.CLAIM_FENCE, fence)
+            .updateAll();
+        if (matched == 0) {
+            this.leases.fencedOut(resolved.serverId());
+            throw Violations.ofForm(violationText("instance_fenced_out")
+                .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME)))
+                .withArg("server", ServerModel.nameOf(resolved.serverId())));
+        }
     }
 
     // -- resolution -----------------------------------------------------------
@@ -149,11 +229,6 @@ public final class InstanceService {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> castSettings(Map<?, ?> map) {
         return (Map<String, Object>) map;
-    }
-
-    private static void stamp(Row row, String status) {
-        row.set(InstanceModel.STATUS, status);
-        Models.get(InstanceModel.class).save(row);
     }
 
     private static Violations refusal(String key, Row row, IOException cause) {
