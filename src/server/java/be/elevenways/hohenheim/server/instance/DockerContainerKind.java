@@ -36,19 +36,28 @@ public final class DockerContainerKind implements InstanceKindHandler {
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     /**
-     * The DECLARED isolation profile of this kind, and the reason it is the strict one:
-     * the instance tier is the tier whose workloads are hostile-tenant by definition, and
-     * a generic "run this image" kind has nothing on which to earn a capability.
+     * The DECLARED isolation profile of this kind: drop ALL, add back the five
+     * capabilities an ordinary published image needs to chown its data directory and
+     * drop to a service user.
      *
-     * AIDEV-NOTE: this is where the trust asymmetry lives as data. The operator-authored
-     * tiers (stacks, managed databases, Docker sites) declare SERVICE because their images
-     * are the chown-then-drop-privileges shape; this one does not, and an image that needs
-     * SERVICE fails LOUDLY in its own container log ("Operation not permitted") rather
-     * than quietly running with capabilities nobody asked for. A future kind whose image
-     * shape is known -- a game-server kind, an Incus kind -- declares its own profile
-     * here; never widen this one to make a particular image work.
+     * AIDEV-NOTE: a capability profile is an IMAGE-SHAPE declaration, not a trust
+     * declaration -- read it that way or the next reader will conclude we decided
+     * tenants are trusted. This kind runs generic tenant-supplied images and it declares
+     * the same profile as stacks, managed databases and Docker sites for exactly one
+     * reason: ordinary container images are all built the same way. Measured 2026-08-03:
+     * postgres:17-alpine as an instance under STRICT dies at entrypoint with
+     * "chmod: /var/lib/postgresql/data: Operation not permitted" / "error: failed
+     * switching to 'postgres': operation not permitted", which is the archetypal
+     * game-server image shape this tier exists to run. The trust-independent floor is
+     * unchanged and is where the tenant-vs-operator boundary actually lives: drop-ALL as
+     * the base, no-new-privileges, the pids cap, and the structural refusals in
+     * {@link ContainerHardening#ESCAPE_KEYS} (Privileged, host namespaces, host bind
+     * mounts, devices, sysctls, UsernsMode). The rest of that boundary -- per-tenant
+     * network policy -- is NOT BUILT; do not read this constant as a substitute for it.
+     * A future kind whose image shape is genuinely narrower declares its own profile
+     * here rather than widening or narrowing this one to make one image work.
      */
-    public static final ContainerHardening.Profile HARDENING = ContainerHardening.STRICT;
+    public static final ContainerHardening.Profile HARDENING = ContainerHardening.SERVICE;
 
     public static final StringField IMAGE = SETTINGS_SCHEMA.addField(
         StringField.builder().name("image").label(HohenheimFormCopy.label("image"))

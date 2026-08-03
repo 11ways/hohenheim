@@ -35,8 +35,11 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * in the JSON" proves nothing about a running container -- that is exactly the theater
  * this baseline exists to remove. CapBnd is the capability BOUNDING set of pid 1: an
  * unhardened Docker container has 0xa80425fb there, a STRICT one has 0x0, and a SERVICE
- * one has 0xcb (CHOWN|DAC_OVERRIDE|FOWNER|SETGID|SETUID). Those three numbers are the
- * whole test; if Docker's default set ever changes, only UNHARDENED_CAPS moves.
+ * one has 0xcb (CHOWN|DAC_OVERRIDE|FOWNER|SETGID|SETUID). Those numbers are the whole
+ * test; if Docker's default set ever changes, only UNHARDENED_CAPS moves. All four
+ * authorities declare SERVICE since 2026-08-03 (see {@link DockerContainerKind#HARDENING}
+ * for why that is an image-shape statement and not a trust statement), so 0xcb is what
+ * every running container here must show and 0xa80425fb is what none of them may.
  */
 class ContainerHardeningTest {
 
@@ -44,14 +47,20 @@ class ContainerHardeningTest {
     private static final String TEST_IMAGE = "alpine:latest";
     private static final String REDIS_IMAGE = "redis:7-alpine";
 
+    /** The chown-then-drop-privileges image shape the instance tier must run out of the box. */
+    private static final String POSTGRES_IMAGE = "postgres:17-alpine";
+
     /** CapBnd of a container created with no hardening at all -- what we must never see. */
     private static final long UNHARDENED_CAPS = 0xa80425fbL;
 
-    /** CapBnd of {@link ContainerHardening#STRICT}: nothing at all. */
-    private static final long STRICT_CAPS = 0L;
-
     /** CapBnd of {@link ContainerHardening#SERVICE}: CHOWN|DAC_OVERRIDE|FOWNER|SETGID|SETUID. */
     private static final long SERVICE_CAPS = 0xcbL;
+
+    /** CAP_NET_RAW (bit 13): in Docker's default set, in NO hohenheim profile. */
+    private static final long NET_RAW = 1L << 13;
+
+    /** Key {@link #kernelStatusOf} files the pids cgroup cap under. */
+    private static final String PIDS_MAX = "PidsMax";
 
     @BeforeAll
     static void bootRuntime() {
@@ -72,7 +81,9 @@ class ContainerHardeningTest {
         assumeTrue(imagePresent(docker, REDIS_IMAGE), REDIS_IMAGE + " not present locally");
         int pids = ContainerHardening.pidsLimit();
 
-        // 1. INSTANCE TIER -- the hostile-tenant tier, which declares STRICT.
+        // 1. INSTANCE TIER -- declares SERVICE like the other three, because generic
+        //    tenant images have the same chown-then-drop shape (see
+        //    instanceTierRunsAChownThenDropPrivilegesImage for the workload proof).
         int instanceId = 999_101;
         InstanceSpec spec = new DockerContainerKind().specFor(instanceId, Map.of(
             "image", "alpine", "tag", "latest", "command", "sleep 600"));
@@ -80,7 +91,7 @@ class ContainerHardeningTest {
         String handle = runtime.create(spec);
         try {
             runtime.start(handle);
-            assertKernelState(docker, handle, "step 1: instance tier", STRICT_CAPS, pids);
+            assertKernelState(docker, handle, "step 1: instance tier", SERVICE_CAPS, pids);
         } finally {
             runtime.destroy(handle);
         }
@@ -126,56 +137,142 @@ class ContainerHardeningTest {
     }
 
     /**
-     * The refusals: a spec that carries a privilege escape never reaches the daemon, and
-     * the refusal names the key. Each step also asserts that NOTHING was created -- a
-     * guard that throws after the container exists would be worse than none.
+     * THE workload this tier exists to run: a generic image whose root entrypoint chowns
+     * its data volume and then drops to an unprivileged user, started through the real
+     * instance kind. postgres:17-alpine is that shape and it is already on this machine;
+     * a game-server image is the same shape.
+     *
+     * AIDEV-NOTE: this is the test the SERVICE widening was made for, so it must fail for
+     * the RIGHT reason if the widening is reverted. Counterfactual run 2026-08-03 with
+     * DockerContainerKind.HARDENING = STRICT: the container exits immediately and its own
+     * log reads "chmod: /var/lib/postgresql/data: Operation not permitted" / "chmod:
+     * /var/run/postgresql: Operation not permitted" / "error: failed switching to
+     * 'postgres': operation not permitted". Asserting "the container is running" would
+     * NOT have caught that, which is why every assertion below is either kernel state of
+     * pid 1 or the container's own readiness line. The restart lap is not padding: the
+     * hardening AIDEV-NOTE records that a narrower capability set boots ONCE and dies on
+     * the second start, so a single-boot test would report success for a broken set.
      */
     @Test
-    void privilegeEscapesAreRefusedAndNoContainerIsCreated() throws IOException {
+    void instanceTierRunsAChownThenDropPrivilegesImage() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, POSTGRES_IMAGE), POSTGRES_IMAGE + " not present locally");
+
+        int instanceId = 999_104;
+        InstanceSpec spec = new DockerContainerKind().specFor(instanceId, Map.of(
+            "image", "postgres", "tag", "17-alpine",
+            "environment_variables", Map.of("POSTGRES_PASSWORD", "hardening-probe"),
+            "volumes", Map.of("data", "/var/lib/postgresql/data")));
+        String volume = "hohenheim-instance-" + instanceId + "-vol-data";
+        DockerInstanceRuntime runtime = new DockerInstanceRuntime(docker);
+        String handle = runtime.create(spec);
+        try {
+            // 1. It STARTS: the root entrypoint chowned a freshly created, root-owned
+            //    named volume and switched user, which is exactly what STRICT forbids.
+            runtime.start(handle);
+            waitForLog(docker, handle, "database system is ready to accept connections",
+                "step 1: the chown-then-drop entrypoint completed");
+
+            // 2. It really dropped privileges: pid 1 runs as the image's service user,
+            //    not as root. A container that failed to switch would have died in 1.
+            Map<String, String> kernel = kernelStatusOf(docker, handle);
+            assertThat(kernel.get("Uid").split("\\s+")[0])
+                .as("step 2: pid 1 dropped to the unprivileged postgres uid").isEqualTo("70");
+
+            // 3. And it is running on the DECLARED set, not Docker's default.
+            long capBnd = Long.parseLong(kernel.get("CapBnd"), 16);
+            assertThat(capBnd).as("step 3: the declared SERVICE capability set")
+                .isEqualTo(SERVICE_CAPS);
+            assertThat(capBnd).as("step 3: never the Docker default set")
+                .isNotEqualTo(UNHARDENED_CAPS);
+            assertThat(capBnd & NET_RAW).as("step 3: NET_RAW is gone (no spoofing on the"
+                + " shared bridge), which the Docker default grants").isEqualTo(0L);
+
+            // 4. The floor did not move with the capability set.
+            assertKernelState(docker, handle, "step 4: instance floor", SERVICE_CAPS,
+                ContainerHardening.pidsLimit());
+
+            // 5. RESTART: the narrower sets that pass step 1 die here.
+            docker.restartContainer(handle, 10);
+            waitForLog(docker, handle, "database system is ready to accept connections",
+                "step 5: it survives a restart onto the already-chowned volume");
+            assertThat(kernelStatusOf(docker, handle).get("Uid").split("\\s+")[0])
+                .as("step 5: still unprivileged after the restart").isEqualTo("70");
+        } finally {
+            runtime.destroy(handle);
+            try {
+                docker.removeVolume(volume, true);
+            } catch (IOException ignored) {
+                // best effort: the volume only exists on a run that got past create
+            }
+        }
+    }
+
+    /**
+     * The refusals are a property of the FUNNEL, not of a profile: the instance tier's
+     * widened profile buys a caller nothing structural. Same escapes, asserted with the
+     * exact profile the instance tier now declares.
+     */
+    @Test
+    void theInstanceProfileStillRefusesEveryStructuralEscape() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
 
-        // 1. Privileged: the whole reason this class exists.
-        assertRefused(docker, "hh-escape-privileged",
-            Map.of("Image", TEST_IMAGE, "HostConfig", Map.of("Privileged", true)),
-            "HostConfig.Privileged");
+        ContainerHardening.Profile profile = DockerContainerKind.HARDENING;
+        assertThat(profile.capabilities()).as("step 0: the instance tier declares SERVICE")
+            .containsExactly("CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID");
 
-        // 2. A hand-added capability: capabilities are declared by a profile, never appended.
-        assertRefused(docker, "hh-escape-capadd",
-            Map.of("Image", TEST_IMAGE, "HostConfig", Map.of("CapAdd", List.of("SYS_ADMIN"))),
-            "HostConfig.CapAdd");
+        // 1. Every key the policy owns is still refused under the widened profile.
+        assertRefused(docker, profile, "hh-inst-privileged",
+            Map.of("Privileged", true), "HostConfig.Privileged");
+        assertRefused(docker, profile, "hh-inst-capadd",
+            Map.of("CapAdd", List.of("SYS_ADMIN")), "HostConfig.CapAdd");
+        assertRefused(docker, profile, "hh-inst-capdrop",
+            Map.of("CapDrop", List.of()), "HostConfig.CapDrop");
+        assertRefused(docker, profile, "hh-inst-secopt",
+            Map.of("SecurityOpt", List.of("seccomp=unconfined")), "HostConfig.SecurityOpt");
+        assertRefused(docker, profile, "hh-inst-pids",
+            Map.of("PidsLimit", 0), "HostConfig.PidsLimit");
+        assertRefused(docker, profile, "hh-inst-userns",
+            Map.of("UsernsMode", "host"), "HostConfig.UsernsMode");
+        assertRefused(docker, profile, "hh-inst-devices",
+            Map.of("Devices", List.of()), "HostConfig.Devices");
+        assertRefused(docker, profile, "hh-inst-sysctls",
+            Map.of("Sysctls", Map.of("kernel.shmmax", "1")), "HostConfig.Sysctls");
+        assertRefused(docker, profile, "hh-inst-readonlypaths",
+            Map.of("ReadonlyPaths", List.of()), "HostConfig.ReadonlyPaths");
+        assertRefused(docker, profile, "hh-inst-maskedpaths",
+            Map.of("MaskedPaths", List.of()), "HostConfig.MaskedPaths");
+        assertRefused(docker, profile, "hh-inst-binds",
+            Map.of("Binds", List.of("/:/host")), "HostConfig.Binds");
 
-        // 3. Opting out of the policy itself (seccomp=unconfined lives here).
-        assertRefused(docker, "hh-escape-secopt",
-            Map.of("Image", TEST_IMAGE, "HostConfig",
-                Map.of("SecurityOpt", List.of("seccomp=unconfined"))),
-            "HostConfig.SecurityOpt");
+        // 2. Host namespaces, every one of them.
+        int index = 0;
+        for (String key : List.of("PidMode", "IpcMode", "UTSMode", "NetworkMode", "CgroupnsMode")) {
+            assertRefused(docker, profile, "hh-inst-ns" + index++,
+                Map.of(key, "host"), "shares a host namespace");
+        }
 
-        // 4. Opting a container OUT of daemon userns remapping.
-        assertRefused(docker, "hh-escape-userns",
-            Map.of("Image", TEST_IMAGE, "HostConfig", Map.of("UsernsMode", "host")),
-            "HostConfig.UsernsMode");
-
-        // 5. Sharing a host namespace is a container escape by definition.
-        assertRefused(docker, "hh-escape-pidmode",
-            Map.of("Image", TEST_IMAGE, "HostConfig", Map.of("PidMode", "host")),
-            "shares a host namespace");
-
-        // 6. A bind mount of a host path -- the Docker socket variant is root on the host.
-        assertRefused(docker, "hh-escape-bind",
-            Map.of("Image", TEST_IMAGE, "HostConfig", Map.of("Mounts", List.of(
-                Map.of("Type", "bind", "Source", "/var/run/docker.sock",
-                    "Target", "/var/run/docker.sock")))),
+        // 3. A host bind mount, the Docker-socket-is-root-on-the-host case.
+        assertRefused(docker, profile, "hh-inst-bindmount",
+            Map.of("Mounts", List.of(Map.of("Type", "bind",
+                "Source", "/var/run/docker.sock", "Target", "/sock"))),
             "not an isolation boundary");
 
-        // 7. A NON-host NetworkMode is untouched: stacks legitimately name their network.
+        // 4. The refusal is a property of the FUNNEL, not of the profile: the same spec
+        //    is refused under STRICT, so no profile is a way around it.
+        assertRefused(docker, ContainerHardening.STRICT, "hh-strict-privileged",
+            Map.of("Privileged", true), "HostConfig.Privileged");
+
+        // 5. A NON-host NetworkMode is untouched: stacks legitimately name their network.
         String allowed = "hh-escape-ok-" + System.nanoTime();
         String id = docker.createContainer(allowed, Map.of("Image", TEST_IMAGE,
             "Cmd", List.of("sleep", "30"), "HostConfig", Map.of("NetworkMode", "bridge")),
-            ContainerHardening.STRICT);
+            profile);
         try {
-            assertThat(id).as("step 7: a named network is not an escape").isNotBlank();
+            assertThat(id).as("step 5: a named network is not an escape").isNotBlank();
         } finally {
             docker.removeContainer(allowed, true);
         }
@@ -238,23 +335,8 @@ class ContainerHardeningTest {
      */
     private static void assertKernelState(DockerClient docker, String container, String step,
                                           long expectedCaps, int expectedPids) throws IOException {
-        DockerClient.ExecResult result = docker.exec(container, List.of("sh", "-c",
-            "grep -E '^(CapBnd|NoNewPrivs):' /proc/1/status; cat /sys/fs/cgroup/pids.max"));
-        assertThat(result.exitCode()).as(step + ": kernel probe ran").isEqualTo(0);
-        Map<String, String> kernel = new LinkedHashMap<>();
-        String pidsMax = "";
-        for (String line : result.output().split("\\R")) {
-            String trimmed = line.trim();
-            if (trimmed.isEmpty()) {
-                continue;
-            }
-            if (trimmed.contains(":")) {
-                String[] parts = trimmed.split("[:\\s]+", 2);
-                kernel.put(parts[0], parts.length > 1 ? parts[1].trim() : "");
-            } else {
-                pidsMax = trimmed;   // the cgroup file's single value line
-            }
-        }
+        Map<String, String> kernel = kernelStatusOf(docker, container);
+        String pidsMax = kernel.get(PIDS_MAX);
 
         long capBnd = Long.parseLong(kernel.get("CapBnd"), 16);
         assertThat(capBnd).as(step + ": capability bounding set of pid 1").isEqualTo(expectedCaps);
@@ -273,10 +355,65 @@ class ContainerHardeningTest {
             .isEqualTo(Boolean.FALSE);
     }
 
-    private static void assertRefused(DockerClient docker, String prefix,
-                                      Map<String, Object> spec, String expected) throws IOException {
+    /**
+     * Read pid 1's {@code /proc/1/status} plus the pids cgroup cap from INSIDE the
+     * container, keyed by status field name with the cgroup value under {@link #PIDS_MAX}.
+     */
+    private static Map<String, String> kernelStatusOf(DockerClient docker, String container)
+            throws IOException {
+        DockerClient.ExecResult result = docker.exec(container, List.of("sh", "-c",
+            "grep -E '^(Uid|CapBnd|NoNewPrivs):' /proc/1/status; cat /sys/fs/cgroup/pids.max"));
+        assertThat(result.exitCode()).as("the kernel probe ran inside " + container).isEqualTo(0);
+        Map<String, String> kernel = new LinkedHashMap<>();
+        for (String line : result.output().split("\\R")) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            if (trimmed.contains(":")) {
+                String[] parts = trimmed.split("[:\\s]+", 2);
+                kernel.put(parts[0], parts.length > 1 ? parts[1].trim() : "");
+            } else {
+                kernel.put(PIDS_MAX, trimmed);   // the cgroup file's single value line
+            }
+        }
+        return kernel;
+    }
+
+    /**
+     * Wait for a line in the container's own log, failing with the FULL log the moment the
+     * container exits -- that log is the whole point on a hardening regression.
+     */
+    private static void waitForLog(DockerClient docker, String container, String needle,
+                                   String step) throws IOException {
+        for (int attempt = 0; attempt < 120; attempt++) {
+            String logs = docker.containerLogs(container, true, true, 200);
+            if (logs.contains(needle)) {
+                return;
+            }
+            Object state = docker.inspectContainer(container).get("State");
+            if (state instanceof Map<?, ?> map && !Boolean.TRUE.equals(map.get("Running"))) {
+                throw new AssertionError(step + ": the container EXITED before logging \""
+                    + needle + "\". Its own log says:\n" + logs);
+            }
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        throw new AssertionError(step + ": never logged \"" + needle + "\" within 60s:\n"
+            + docker.containerLogs(container, true, true, 200));
+    }
+
+    private static void assertRefused(DockerClient docker, ContainerHardening.Profile profile,
+                                      String prefix, Map<String, Object> hostConfig,
+                                      String expected) throws IOException {
         String name = prefix + "-" + System.nanoTime();
-        assertThatThrownBy(() -> docker.createContainer(name, spec, ContainerHardening.STRICT))
+        Map<String, Object> spec = Map.of("Image", TEST_IMAGE, "Cmd", List.of("sleep", "30"),
+            "HostConfig", hostConfig);
+        assertThatThrownBy(() -> docker.createContainer(name, spec, profile))
             .as("the escape is refused, naming what was refused")
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("REFUSED")

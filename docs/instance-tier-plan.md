@@ -1688,6 +1688,24 @@ block is what the code does; amend the prose, do not code against it.
     read from INSIDE the running container, not the spec that was sent. STILL OPEN
     from this bullet: per-stack-SERVICE capability declaration (StackSpec.ServiceSpec
     has no field for it) and the host preflight that verifies userns/seccomp/AppArmor.
+  - **SUPERSEDED 2026-08-03 (same day, product decision): the instance tier declares
+    `SERVICE`, not `STRICT`.** Generic tenant images must work out of the box, and
+    `STRICT` rejects the chown-then-drop-privileges entrypoint that is the archetypal
+    game-server (and database, and web-server) image -- measured through the real
+    instance kind: postgres:17-alpine dies at entrypoint with `chmod:
+    /var/lib/postgresql/data: Operation not permitted` / `error: failed switching to
+    'postgres': operation not permitted`. What moved is ONLY the capability add-back
+    list, empty -> the same five three other tiers already run with. What did NOT
+    move: drop-ALL as the base, `no-new-privileges`, the pids cap and every structural
+    refusal, all re-asserted for the instance profile from kernel state inside a
+    running container (`ContainerHardeningTest.instanceTierRunsAChownThenDropPrivileges
+    Image` incl. a RESTART lap, `theInstanceProfileStillRefusesEveryStructuralEscape`).
+    A capability profile is an IMAGE-SHAPE declaration, not a trust declaration: the
+    tenant-vs-operator boundary is the structural refusals, the pids cap, and the
+    per-tenant network policy in the next bullet, which is still NOT BUILT. Consequence
+    to keep honest: NO production kind declares `STRICT` any more -- it survives as the
+    unconditional base of every profile and as what the tests pin, not as a policy
+    anything uses.
 - **Per-tenant networking is essentially absent.** `NftService` covers IP BANS
   only (one input-hook chain, timeout sets) -- no forward chain, no per-tenant
   chain, no egress rule, no metadata-range deny, nothing about container IPv6.
