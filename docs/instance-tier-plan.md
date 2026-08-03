@@ -1441,6 +1441,92 @@ past. It is small if Phase 1 is done right: it is a consumer, not a mechanism.
   reclaiming is always allowed, and operator-to-operator is unaffected because
   both sides carry empty subject sets -- so the existing test keeps passing and
   is AMENDED rather than deleted.
+
+  RECON 2026-08-03, verified in framework source. The design survives, but by a
+  single hook, and the natural implementation gets it wrong:
+
+  ORDERING (the load-bearing fact): the restamp is a beforeWrite hook
+  (`SiteResource.java:200,207`); grant revocation is `RecordGrantCleanup`'s
+  AFTER_SAVE, registered via `GlobalModelHooks.addAfterSaveHook`
+  (`RecordGrantCleanup.java:69`); `Schema` fires beforeWrite hooks at `:693` and
+  afterSave hooks at `:707`. So the manage-grant subject set is INTACT when
+  restamp runs. THE LEDGER MUST BE WRITTEN FROM THE beforeWrite HOOK. An
+  afterSave writer -- the more natural-looking place, since it records something
+  that already happened -- races grant cleanup by pure registration order,
+  captures an EMPTY subject set, and every released hostname then looks
+  operator-owned. Quarantine never fires, for exactly the tenant case it exists
+  for, with every test green. Assert the STORED subject set in the test, not
+  only the refusal, or the green proves nothing.
+
+  Also: re-saving a still-trashed row RE-FIRES cleanup and restore never
+  resurrects grants, so the owner set can only be captured on the FIRST delete
+  save. The ledger write is idempotent-on-first-write, never last-write-wins.
+
+  THREE RELEASE PATHS, not one. The restamp covers soft delete and disable.
+  UNCOVERED and both must be handled or the ledger is worse than none:
+   - domain-row DELETE: `SiteDomainResource` does not override `deleteRow`, so
+     it inherits `RowResource.deleteRow`'s plain `model.delete()` -- no hook at
+     all. This is the most natural way a tenant abandons one hostname while
+     keeping the site.
+   - hostname/path/listener CHANGE: `SiteDomainResource.java:175-185`
+     unconditionally reassigns `LIVE_ROUTE_KEY`, freeing the departing key with
+     nothing observing it. The hook has the stored row and could diff; it does
+     not.
+  MIRROR-IMAGE TRAP: three paths must NOT write ledger rows or the ledger
+  quarantines owners against themselves -- restamp's intra-site swap release
+  (`RouteClaims.java:161-168`), the same-site duplicate loser (`:153-160`), and
+  the migration backfill (`:228-244`).
+
+  PLACEMENT: the check goes in `refuseRouteConflicts` AND
+  `refuseEnableRouteConflicts` (both beforeValidate on `SiteDomainModel`).
+  Omitting the enable path is bypassable by a two-step the code already
+  documents as LEGAL: stage the hostname on a disabled site (exempt by design),
+  then enable. It must be an INDEXED lookup on the claim key -- both functions
+  already full-scan every site and every domain row per write, the enable one
+  quadratically; do not extend the scan. The refusal belongs in the identical-key
+  branch; wildcard-vs-exact OVERLAP against a released claim is a harder question
+  and is explicitly OUT of scope rather than half-handled.
+
+  SHAPE: a TABLE (a released claim may have no live row to hang a column on),
+  keyed by `RouteClaims.keyOf` -- the same authority, never a re-derivation --
+  with the subject set spelled exactly as `HohenheimAccess.java:194-195`. NO
+  unique index on the claim key: the same hostname can be released repeatedly,
+  and a unique index turns a legitimate re-release into a brick. Mirror
+  `RouteClaims`' key-derivation + NAMED conflict + heal-don't-brick discipline,
+  not its column. Note `RouteClaims.java:26-42`: the unique index is the
+  equality backstop, the serialized scan is the WHOLE guarantee -- a ledger
+  mirroring only the index half inherits a check that cannot catch what it
+  exists for.
+
+  MICROCOPY: the refusal must NOT name the former owner. Existing refusals name
+  the holding SITE because it is live and actionable; a released claim's former
+  owner is a deleted tenant, and naming them crosses a tenancy boundary the
+  current refusals never cross. Separate keys for the write path and the enable
+  path (precedent: `route_taken_other_site` vs `enable_route_conflict`).
+
+  OVERRIDE: the mechanism exists -- `RowAction.Invoke` +
+  `ConfirmationSpec.requireTypedConfirmation` with the HOSTNAME as the phrase,
+  wrapped in `ActivityLog.withAction`. Visibility is not authorization: the
+  handler re-checks admin. Window: a setting in the Security group, declared in
+  DAYS, `0` means disabled and says so. 30 days is the industry convention for
+  this attack and is a PROPOSAL for Jelle, not a finding.
+
+  RESIDUAL RISK, not closed: same-owner reclaim. A site's manage grant is
+  typically applied AFTER the record is created, so a tenant re-claiming via a
+  fresh site can present an empty set and be refused as a "different owner".
+  Admin-mediated today (`ManageSiteResource.creatable()` is false) but it fires
+  the moment tenant self-service creation exists -- which the instance tier
+  requires. Design the check so an empty claimant set never satisfies "different
+  owner" without also being checked against the actor's own subject identity.
+
+  ADJACENT LATENT BUG, fix in the same commit: a hard-deleted `sites` row leaves
+  orphaned `site_domains` rows holding a non-null `live_route_key`. The scan
+  skips them (the site lookup returns null, so they read as not-live) but the
+  UNIQUE index still enforces, so the next claimant gets a duplicate-key
+  conflict whose holder name resolves to null -- the operator is told the route
+  is taken by "?", and the hostname is permanently unclaimable with no nameable
+  holder. Only tests hard-delete sites today. Cascade the domain rows from a
+  beforeRemove hook on `SiteModel`.
 - Generated records (ACME challenge records, Velocity forced-hosts, SRV/A rows
   materialized from a mapping) carry owner + source metadata and reconcile or
   delete ONLY their own output. A generated row is never adopted by whoever
@@ -1693,6 +1779,35 @@ question to be decided fresh -- it is ALREADY ANSWERED IN CODE, and the only
 legitimate moves are to ratify that derivation or to deliberately replace it
 everywhere at once. Never let a new column become a quiet second answer.
 
+RECON 2026-08-03, verified in source, and it makes the decision above
+UNIMPLEMENTABLE AS WRITTEN until one refactor lands: `HohenheimAccess.sameOwner`
+is SITE-ONLY. Its signature is `sameOwner(int firstSiteId, int secondSiteId)`
+(`HohenheimAccess.java:178`) and its body passes `SiteModel.MODEL_ID` as a
+LITERAL (`:191`). `RecordGrants.listForRecord` already takes
+`(Identifier model, Object recordId)`, so the fix is small: generalize to
+`manageSubjectsOf(Identifier, Object)` + `sameOwner(Identifier, Object, Object)`
+with the two-int form delegating, so exactly ONE derivation survives. There are
+exactly two production call sites (`SiteDomainResource.java:287` and `:361`).
+C7's FIRST step is this refactor -- because the path of least resistance is a
+local `instanceSameOwner(int, int)`, and that is precisely the second authority
+the no-column decision exists to prevent.
+
+WORSE, and this is the likeliest place C7 becomes security theater: `manage` is
+registered as a capability for `SiteModel` ONLY (`HohenheimAccess.java:90-99`;
+`DnsRecordModel` at `:115` and `CertificateModel` at `:140` declare
+view/edit/dyndns/request and NO manage). Until `InstanceModel` registers a
+manage-equivalent capability AND is declared grantable, `sameOwner` on instances
+compares two empty sets and answers "same owner" for every pair -- a tenancy
+check that CANNOT FAIL. Register the capability in the same commit as the model.
+
+CONSEQUENCE the field list does not draw out: two operator-owned records always
+compare same-owner because BOTH carry the empty set (`HohenheimAccess.java:172-177`
+documents this deliberately). So a per-owner quota keyed on the grant-derived
+owner collapses every operator-owned instance into ONE bucket. That is arguably
+correct for an operator install, but the quota key must then BE the canonical
+subject set, and "the operator" is one quota subject. State it, or the first
+quota test will disagree with the first access test.
+
 RECON 2026-08-02: what a new `InstanceModel` COLLIDES with, verified in source.
 There are THREE container authorities today and only ONE of them asserts
 ownership in-band: `StackDeployer` labels its containers
@@ -1918,6 +2033,33 @@ Driver and infrastructure:
   for the two Docker cases. C5 `PortAllocator` behind the ledger + boot sweep.
   C6 the `releasing` state and destroy paths that stop lying. C7 `InstanceModel`
   as the FOURTH consumer.
+
+  C7 TRAP, verified 2026-08-03: `DockerReconciler.ModelRecords` is a hardcoded
+  if-chain, and an unknown model returns `false`, which classifies as ORPHANED
+  (`DockerReconciler.java:108-109`, `:266`, `:289`). The moment C7 creates a
+  container carrying `OwnerLabels.of(InstanceModel.MODEL_ID, id)`, EVERY LIVE
+  INSTANCE is reported as an orphan on the attention list. C7 must teach
+  `ModelRecords` the model (with the soft-delete predicate) in the SAME commit.
+  A false-positive alarm is how operators learn to ignore the list. Also check
+  `classify`'s name-scheme fallbacks: an instance container matches none of the
+  `hohenheim-site-` / `-db-` / `-stack-` prefixes.
+
+  C7 ORDER (smallest honest slice, dependency-ordered): generalize `sameOwner`
+  first (no instance code); then `InstanceModel` + migration with `kind` as a
+  `RegistryEnumField` over an instance-kind registry and `settings` via
+  `SchemaField.schemaFrom("kind")` -- ONE discriminator, not kind+runtime, since
+  `schemaFrom` takes exactly one sibling, and note `SiteModel.java:96-105` that
+  the dynamic form entry REWRITES the whole settings map on every admin save, so
+  anything that must survive an admin save is a COLUMN; then declare grantable +
+  register the manage capability; then the two `PortLedger` capture/release
+  remove hooks; then teach the reconciler; then `InstanceRuntime` (five methods:
+  create/start/stop/destroy/status, labels stamped at CREATE, typed outcomes
+  where absent != unreachable) plus a Docker driver that WRAPS `DockerClient`
+  rather than being it. NO fence or generation columns -- there is nothing to
+  fence against yet, and a column that reads like enforcement and enforces
+  nothing is the exact defect shape this plan exists to prevent. Streaming
+  (stats, follow-logs, attach, TTY exec) is a SECOND transport contract, not a
+  patch to `DockerTransport`'s single-shot `byte[] roundTrip`, and it is Phase 6.
 
   RISK: C5's boot sweep is the one most likely to break a dev environment
   SILENTLY. Managed-process children are spawned via `ProcessBuilder` with no
