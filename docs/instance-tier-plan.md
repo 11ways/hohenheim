@@ -1752,6 +1752,39 @@ block is what the code does; amend the prose, do not code against it.
   `NftService`'s contract is fixed and every ban call site re-verified. Only
   stacks get their own Docker network; sites and databases share the default
   bridge.
+  - **PARTIALLY LANDED 2026-08-03 for the INSTANCE tier only (re-verify, do not
+    assume, and read the scope line):** per-WORKLOAD (not yet per-tenant) private
+    networking. Shipped: `WorkloadNetworkPolicy` -- a SEPARATE class from
+    `NftService` in its own `inet hohenheim_net` table, every method THROWS on a
+    non-zero nft exit, the whole ruleset goes through one atomic `nft -f -`
+    transaction, and `apply` returns only after re-listing both chains and finding
+    every rule it just wrote (exit 0 is not evidence). Two base chains per workload
+    (forward + input, priority -10): established/related accept, own-subnet accept,
+    then deny to `169.254.0.0/16`, `10/8`, `172.16/12`, `192.168/16`, plus the
+    IPv6 twins (`fc00::/7`, `fe80::/10`) whenever the network has a v6 subnet; the
+    input chain denies the workload the host entirely, which is what covers the
+    reverse proxy on 80/443 and DNS on 53. `WorkloadNetwork.fromInspect` REFUSES to
+    build a policy for a v6-enabled network with no v6 subnet rather than shipping a
+    v4-only policy onto a v6-reachable container. One user-defined network per
+    instance (`hohenheim-instance-{id}-net`), owner-labelled at creation so the
+    reconciler buckets it OWNED, attached in the CREATE body (never a post-hoc
+    connect, which would leave the container on the default bridge for an interval),
+    with the policy applied and verified BEFORE the container is created; `start`
+    re-applies (a reboot keeps the network and drops the nft rules); `destroy`
+    removes the chains and the network. When enforcement is off the instance deploy
+    REFUSES -- no container, no network -- which is the whole distinction from
+    `NftService`. `ContainerHardening` now also refuses `NetworkMode`/`PidMode`/etc
+    of the form `container:<id>`, which was the string that opted a workload out of
+    all of this. **STILL OPEN and deliberately so:** stacks, Docker sites and managed
+    databases remain on the shared default bridge and can still reach each other, the
+    host and the metadata address -- they are operator-authored, and migrating them
+    is a separate slice; per-TENANT grouping (one network per packed manage-subject
+    set rather than per workload); egress is restrictive, not closed (no per-workload
+    allowlist); the `DatabaseEnvInjection` limitation for Docker sites is untouched
+    because that needs the site tier on user-defined networks; and the applier is
+    proven against real nftables in a private network namespace, NOT against a host
+    netns (no machine in the loop has passwordless `nft`), so the host preflight this
+    phase already demands must actually verify nft before a host accepts tenants.
 - **Already done, do not re-schedule:** `KnownCapabilities`/sensitivity classes
   (zenit core, wired -- Phase 3 only needs to REGISTER the instance vocabulary,
   which is an hour, not a workstream); `RecordGrants` + the grant-scoped

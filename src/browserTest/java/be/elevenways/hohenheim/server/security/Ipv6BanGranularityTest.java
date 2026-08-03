@@ -48,9 +48,9 @@ class Ipv6BanGranularityTest {
 
     private BanService newService(boolean nftEnabled) {
         nftCommands.clear();
-        NftService nft = new NftService(args -> {
+        NftService nft = new NftService((args, stdin) -> {
             nftCommands.add(String.join(" ", args));
-            return new NftService.Result(0, "");
+            return new NftRunner.Result(0, "", "");
         }, () -> nftEnabled);
         return new BanService(nft, System::currentTimeMillis);
     }

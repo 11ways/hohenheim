@@ -9,13 +9,17 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
+import be.elevenways.hohenheim.server.runtime.InstanceNetworks;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -43,6 +47,13 @@ class InstanceRuntimeLiveTest {
 
     private static SqliteDatasource datasource;
 
+    /**
+     * The instance tier REFUSES to deploy where its network policy cannot be enforced, so
+     * every test here needs a kernel that will take one. This is a private namespace, not
+     * the host's -- see {@link PrivateNetns}.
+     */
+    private static PrivateNetns netns;
+
     @BeforeAll
     static void setUp() throws Exception {
         File db = File.createTempFile("hohenheim-instance-live-test", ".db");
@@ -51,6 +62,19 @@ class InstanceRuntimeLiveTest {
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
         HohenheimTestRuntime.ensureBooted();
+        if (PrivateNetns.available()) {
+            netns = new PrivateNetns();
+            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
+        }
+    }
+
+    @AfterAll
+    static void tearDown() {
+        WorkloadNetworkPolicy.overrideForTest(null);
+        if (netns != null) {
+            netns.close();
+            netns = null;
+        }
     }
 
     private static int instanceRecord(String name, Map<String, Object> settings) {
@@ -69,6 +93,8 @@ class InstanceRuntimeLiveTest {
         DockerClient docker = new DockerClient();
         org.junit.jupiter.api.Assumptions.assumeTrue(imagePresent(docker, "alpine:latest"),
             "alpine:latest not present locally");
+        org.junit.jupiter.api.Assumptions.assumeTrue(netns != null,
+            "no private netns: the instance tier refuses to deploy unprotected");
 
         Db.run(datasource, () -> {
             int localId = ServerModel.localServerId();
@@ -172,6 +198,8 @@ class InstanceRuntimeLiveTest {
         DockerClient docker = new DockerClient();
         org.junit.jupiter.api.Assumptions.assumeTrue(imagePresent(docker, "alpine:latest"),
             "alpine:latest not present locally");
+        org.junit.jupiter.api.Assumptions.assumeTrue(netns != null,
+            "no private netns: the instance tier refuses to deploy unprotected");
 
         Db.run(datasource, () -> {
             int id = instanceRecord("collision-victim", new LinkedHashMap<>(
@@ -241,6 +269,11 @@ class InstanceRuntimeLiveTest {
             docker.removeContainer(container, true);
         } catch (IOException ignored) {
             // already gone
+        }
+        try {
+            docker.removeNetwork(InstanceNetworks.networkName(container));
+        } catch (IOException ignored) {
+            // a deploy that never reached the network has none to remove
         }
         if (volume != null) {
             try {

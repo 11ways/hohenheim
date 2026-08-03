@@ -46,7 +46,7 @@ class NeverBanHostnamesTest {
     }
 
     private BanService newService() {
-        NftService nft = new NftService(args -> new NftService.Result(0, ""), () -> false);
+        NftService nft = new NftService((args, stdin) -> new NftRunner.Result(0, "", ""), () -> false);
         return new BanService(nft, System::currentTimeMillis);
     }
 

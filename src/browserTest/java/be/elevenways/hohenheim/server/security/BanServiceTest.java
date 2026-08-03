@@ -59,9 +59,9 @@ class BanServiceTest {
     private BanService newService(boolean nftEnabled, java.util.function.LongSupplier clock) {
         nftCommands.clear();
         notifications.clear();
-        NftService nft = new NftService(args -> {
+        NftService nft = new NftService((args, stdin) -> {
             nftCommands.add(String.join(" ", args));
-            return new NftService.Result(0, "");
+            return new NftRunner.Result(0, "", "");
         }, () -> nftEnabled);
         return new BanService(nft, clock,
             (event, subject, message) -> notifications.add(event));
@@ -344,9 +344,9 @@ class BanServiceTest {
     void nftFailureRollsBackTheRowAndDoesNotConsumeABudgetSlot() {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 1);
         java.util.concurrent.atomic.AtomicBoolean fail = new java.util.concurrent.atomic.AtomicBoolean(true);
-        NftService nft = new NftService(args -> fail.get()
-            ? new NftService.Result(1, "injected failure")
-            : new NftService.Result(0, ""), () -> true);
+        NftService nft = new NftService((args, stdin) -> fail.get()
+            ? new NftRunner.Result(1, "", "injected failure")
+            : new NftRunner.Result(0, "", ""), () -> true);
         BanService service = new BanService(nft, System::currentTimeMillis,
             (event, subject, message) -> notifications.add(event));
 
@@ -495,14 +495,14 @@ class BanServiceTest {
     void slowKernelResyncNeverBlocksServerBoot() throws Exception {
         CountDownLatch runnerEntered = new CountDownLatch(1);
         CountDownLatch releaseRunner = new CountDownLatch(1);
-        NftService slowNft = new NftService(args -> {
+        NftService slowNft = new NftService((args, stdin) -> {
             runnerEntered.countDown();
             try {
                 releaseRunner.await(5, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            return new NftService.Result(0, "");
+            return new NftRunner.Result(0, "", "");
         }, () -> true);
         BanService service = new BanService(slowNft);
 
