@@ -1,0 +1,58 @@
+{#- Create an instance from a template: name + host + the template's typed
+    variables rendered as an ordinary zenit form (FormState entries). -#}
+{% declare title: String %}
+{% declare templateId: Integer %}
+{% declare templateName: String %}
+{% declare templateDescription: String = "" %}
+{% declare approved: Boolean = false %}
+{% declare hasInstall: Boolean = false %}
+{% declare instanceName: String = "" %}
+{% declare serverId: String = "" %}
+{% declare servers: List %}
+{% declare formError: String = "" %}
+{% declare variableForm: FormState %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-form-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ t("create_from", scope: "instance_from_template") }} {{ templateName }}</h1>
+    </header>
+
+    {% if templateDescription != "" %}<p>{{ templateDescription }}</p>{% /if %}
+    {% if !approved %}
+    <pl-alert variant="warning">{{ t("unapproved_note", scope: "instance_from_template") }}</pl-alert>
+    {% /if %}
+    {% if formError != "" %}<pl-alert variant="destructive">{{ formError }}</pl-alert>{% /if %}
+
+    <form method="POST" action="/admin/instances-from-template">
+        {% csrf() %}
+        <input type="hidden" name="template_id" value={% templateId %}>
+        <pl-card><pl-card-content><zf-form-scope><div class="zf-entries">
+            <pl-field>
+                <pl-label target="name">{{ t("instance_name", scope: "instance_from_template") }}</pl-label>
+                <pl-input inputId="name" type="text" name="name" value={% instanceName %}></pl-input>
+            </pl-field>
+            <pl-field>
+                <pl-label>{{ t("host", scope: "instance_from_template") }}</pl-label>
+                <pl-select name="server_id" value={% serverId %} submitEmpty={% true %}>
+                    {% each servers as index, server %}
+                    <pl-select-item value={% server.get("id") %}>{{ server.get("name") }}</pl-select-item>
+                    {% /each %}
+                </pl-select>
+            </pl-field>
+            {% each variableForm.entries as entry %}
+            {% render entry.templateId var:entry=entry %}
+            {% /each %}
+        </div></zf-form-scope></pl-card-content></pl-card>
+        {% if hasInstall %}
+        <pl-alert variant="default">{{ t("install_note", scope: "instance_from_template") }}</pl-alert>
+        {% /if %}
+        <div class="cms-form-actions">
+            <pl-button variant="primary" type="submit">{{ t("create", scope: "instance_from_template") }}</pl-button>
+            <a href="/admin/instance-templates">{{ t("cancel", scope: "instance_from_template") }}</a>
+        </div>
+    </form>
+</section>
+{% /block %}

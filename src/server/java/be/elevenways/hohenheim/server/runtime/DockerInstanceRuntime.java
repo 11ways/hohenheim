@@ -27,7 +27,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * tiers (stacks, Docker sites, managed databases) deliberately do NOT refuse and stay on
  * the shared default bridge -- a declared difference, not an accident.
  */
-public final class DockerInstanceRuntime implements InstanceRuntime, VolumeSnapshotSupport {
+public final class DockerInstanceRuntime
+        implements InstanceRuntime, VolumeSnapshotSupport, FileStagingSupport, InstallSupport {
 
     /** Published ports bind loopback only: the reverse proxy / operator reaches them, the world does not. */
     private static final String HOST_BIND_ADDRESS = "127.0.0.1";
@@ -197,6 +198,167 @@ public final class DockerInstanceRuntime implements InstanceRuntime, VolumeSnaps
             ? ref : spec.image();
         String id = inspect.get("Image") instanceof String imageId ? imageId : null;
         return new ImageIdentity(reference, id);
+    }
+
+    // -- FileStagingSupport ---------------------------------------------------
+
+    @Override
+    public void stageFiles(@NonNull String handle,
+                           @NonNull List<FileStagingSupport.StagedFile> files) throws IOException {
+        if (files.isEmpty()) {
+            return;
+        }
+        // The StackDeployer staging shape: a temp tree pushed through the archive API,
+        // so remote daemons work identically and no host bind mount ever exists.
+        java.nio.file.Path staging = java.nio.file.Files.createTempDirectory("hohenheim-instance-files");
+        try {
+            for (FileStagingSupport.StagedFile file : files) {
+                String relative = file.containerPath().startsWith("/")
+                    ? file.containerPath().substring(1) : file.containerPath();
+                if (relative.isBlank()) {
+                    throw new IOException("Refusing config file path '" + file.containerPath() + "'");
+                }
+                java.nio.file.Path target = staging.resolve(relative).normalize();
+                if (!target.startsWith(staging)) {
+                    throw new IOException("Refusing config file path '" + file.containerPath() + "'");
+                }
+                java.nio.file.Files.createDirectories(target.getParent());
+                java.nio.file.Files.writeString(target, file.content());
+                applyMode(target, file.mode());
+            }
+            this.docker.putArchiveFromDirectory(handle, "/", staging);
+        } finally {
+            deleteRecursively(staging);
+        }
+    }
+
+    private static void applyMode(java.nio.file.Path file, String mode) throws IOException {
+        try {
+            int octal = Integer.parseInt(mode, 8);
+            StringBuilder permissions = new StringBuilder(9);
+            String symbols = "rwxrwxrwx";
+            for (int bit = 8; bit >= 0; bit--) {
+                permissions.append((octal & (1 << bit)) != 0 ? symbols.charAt(8 - bit) : '-');
+            }
+            java.nio.file.Files.setPosixFilePermissions(file,
+                java.nio.file.attribute.PosixFilePermissions.fromString(permissions.toString()));
+        } catch (NumberFormatException error) {
+            throw new IOException("Bad file mode '" + mode + "' (expected octal like 0644)");
+        } catch (UnsupportedOperationException unsupported) {
+            // Non-POSIX staging filesystem: the tar carries default modes instead.
+        }
+    }
+
+    private static void deleteRecursively(java.nio.file.Path root) {
+        try (var walk = java.nio.file.Files.walk(root)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    java.nio.file.Files.deleteIfExists(path);
+                } catch (IOException ignored) {
+                    // best-effort temp cleanup
+                }
+            });
+        } catch (IOException ignored) {
+            // best-effort temp cleanup
+        }
+    }
+
+    // -- InstallSupport -------------------------------------------------------
+
+    /** How often the install waiter re-inspects the one-shot workload. */
+    private static final long INSTALL_POLL_MS = 500;
+
+    @Override
+    public @NonNull InstallOutcome runInstall(@NonNull InstanceSpec spec,
+                                              @NonNull String installImage,
+                                              @NonNull String script,
+                                              @NonNull Map<String, String> env,
+                                              long timeoutMs) throws IOException {
+        OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());
+        if (owner == null) {
+            throw new IOException("InstanceSpec '" + spec.handle() + "' carries no valid owner"
+                + " labels; an unattributable install container is forbidden by design");
+        }
+        // The install runs INSIDE the instance's private network: it may need egress
+        // (downloading server files is the archetypal install step) but must enjoy the
+        // same host/metadata/tenant deny policy as the workload itself.
+        String network = InstanceNetworks.ensure(this.docker, this.policy, spec.handle(),
+            spec.ownerLabels());
+        this.docker.ensureImage(installImage, null);
+
+        String handle = spec.handle() + "-install";
+        // Idempotent resume: a leftover install container WE own is replaced; a
+        // same-named foreign container stays a refusal inside removeIfOwnedBy.
+        OwnerLabels.removeIfOwnedBy(this.docker, handle, owner.model(), owner.id());
+
+        Map<String, Object> containerSpec = new LinkedHashMap<>();
+        containerSpec.put("Image", installImage);
+        containerSpec.put("Labels", spec.ownerLabels());
+        containerSpec.put("Cmd", List.of("/bin/sh", "-c", script));
+        containerSpec.put("NetworkingConfig",
+            Map.of("EndpointsConfig", Map.of(network, Map.of())));
+        List<String> envList = new ArrayList<>();
+        env.forEach((name, value) -> envList.add(name + "=" + value));
+        if (!envList.isEmpty()) {
+            containerSpec.put("Env", envList);
+        }
+        Map<String, Object> hostConfig = new LinkedHashMap<>();
+        hostConfig.put("NetworkMode", network);
+        List<Map<String, Object>> mounts = new ArrayList<>();
+        spec.volumes().forEach((volumeName, containerPath) -> {
+            if (containerPath == null || containerPath.isBlank()) {
+                return;
+            }
+            mounts.add(Map.of(
+                "Type", "volume",
+                "Source", volumeName,
+                "Target", containerPath,
+                "VolumeOptions", Map.of("Labels", spec.ownerLabels())));
+        });
+        if (!mounts.isEmpty()) {
+            hostConfig.put("Mounts", mounts);
+        }
+        containerSpec.put("HostConfig", hostConfig);
+
+        this.docker.createContainer(handle, containerSpec, spec.hardening());
+        try {
+            this.docker.startContainer(handle);
+            long deadline = System.currentTimeMillis() + timeoutMs;
+            while (true) {
+                Map<String, Object> inspect = this.docker.inspectContainer(handle);
+                Object state = inspect.get("State");
+                boolean running = state instanceof Map<?, ?> s
+                    && Boolean.TRUE.equals(s.get("Running"));
+                if (!running) {
+                    int exitCode = state instanceof Map<?, ?> s
+                        && s.get("ExitCode") instanceof Number code ? code.intValue() : -1;
+                    String tail = "";
+                    try {
+                        tail = this.docker.containerLogs(handle, true, true, 100);
+                    } catch (IOException unreadable) {
+                        tail = "(install output unreadable: " + unreadable.getMessage() + ")";
+                    }
+                    return new InstallOutcome(exitCode, tail);
+                }
+                if (System.currentTimeMillis() > deadline) {
+                    throw new IOException("Install step for '" + spec.handle()
+                        + "' exceeded its " + timeoutMs + "ms timeout and was removed");
+                }
+                try {
+                    Thread.sleep(INSTALL_POLL_MS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Install wait interrupted for '" + spec.handle() + "'");
+                }
+            }
+        } finally {
+            try {
+                this.docker.removeContainer(handle, true);
+            } catch (IOException ignored) {
+                // A leftover install container is re-removed by the next attempt's
+                // removeIfOwnedBy; never mask the run's real outcome with cleanup noise.
+            }
+        }
     }
 
     /** The materialized volume name behind a container path, resolved off the spec. */

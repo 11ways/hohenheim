@@ -54,6 +54,11 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
+    public static final ParameterDefinition<Integer> TEMPLATE_ID = ParameterDefinition.builder(Integer.class)
+        .name("templateId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
     // --- Rate limits: expensive or upstream-quota-bound operations. ---
     // The LE request burns Let's Encrypt quota; db dump/restore stream whole
     // databases; deploys spawn builds. Keyed per principal (per IP for
@@ -93,6 +98,29 @@ public class HohenheimEndpoints {
             .addStatic("admin").addDelimiter().addStatic("certificates-request").build())
         .requiresPermission(Permission.of("hohenheim.admin.access"))
         .rateLimit(LE_REQUEST_LIMIT)
+        .build();
+
+    // --- Instance templates: export download, import paste, create-from-template ---
+    public static final Endpoint<Object> INSTANCE_TEMPLATES_EXPORT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "instance_templates_export"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("admin").addDelimiter().addStatic("instance-templates").addDelimiter()
+            .addParameter(TEMPLATE_ID).addDelimiter().addStatic("export").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .build();
+
+    public static final Endpoint<Object> INSTANCE_TEMPLATES_IMPORT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "instance_templates_import"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("admin").addDelimiter().addStatic("instance-templates-import").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .build();
+
+    public static final Endpoint<Object> INSTANCES_FROM_TEMPLATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "instances_from_template"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("admin").addDelimiter().addStatic("instances-from-template").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
         .build();
 
     // --- DNS zone-file import (POST for the CMS zone-file tab) ---

@@ -1,0 +1,77 @@
+{#- Contents tab on an instance template: typed variables and config files, with
+    links into the (nav-hidden) variable and file resource forms. -#}
+{% declare title: String %}
+{% declare templateName: String %}
+{% declare variables: List %}
+{% declare files: List %}
+{% declare addVariableUrl: String = "" %}
+{% declare addFileUrl: String = "" %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ templateName }}</h1>
+        <div>
+            <pl-button variant="primary" href={% addVariableUrl %} id="add-variable-link">{{ t("add_variable", scope: "template_contents") }}</pl-button>
+            <pl-button variant="secondary" href={% addFileUrl %} id="add-file-link">{{ t("add_file", scope: "template_contents") }}</pl-button>
+        </div>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    <h2>{{ t("variables", scope: "template_contents") }}</h2>
+    {% if variables %}
+    <pl-table striped={% true %}>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("key", scope: "template_contents") }}</pl-table-head>
+            <pl-table-head>{{ t("label", scope: "template_contents") }}</pl-table-head>
+            <pl-table-head>{{ t("type", scope: "template_contents") }}</pl-table-head>
+            <pl-table-head>{{ t("required", scope: "template_contents") }}</pl-table-head>
+            <pl-table-head>{{ t("default", scope: "template_contents") }}</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each variables as index, variable %}
+            <pl-table-row>
+                <pl-table-cell><a href={% variable.get("editUrl") %}><code>{{ variable.get("key") }}</code></a></pl-table-cell>
+                <pl-table-cell>{{ variable.get("label") }}</pl-table-cell>
+                <pl-table-cell><pl-badge variant="secondary">{{ variable.get("type") }}</pl-badge></pl-table-cell>
+                <pl-table-cell>{% if variable.get("required") %}{{ t("yes", scope: "template_contents") }}{% /if %}</pl-table-cell>
+                <pl-table-cell><code>{{ variable.get("defaultValue") }}</code></pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="sliders">
+        <pl-empty-state-title>{{ t("no_variables", scope: "template_contents") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("no_variables_description", scope: "template_contents") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+
+    <h2>{{ t("files", scope: "template_contents") }}</h2>
+    {% if files %}
+    <pl-table striped={% true %}>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("path", scope: "template_contents") }}</pl-table-head>
+            <pl-table-head>{{ t("mode", scope: "template_contents") }}</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each files as index, file %}
+            <pl-table-row>
+                <pl-table-cell><a href={% file.get("editUrl") %}><code>{{ file.get("path") }}</code></a></pl-table-cell>
+                <pl-table-cell><code>{{ file.get("mode") }}</code></pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="file-code">
+        <pl-empty-state-title>{{ t("no_files", scope: "template_contents") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("no_files_description", scope: "template_contents") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+</section>
+{% /block %}

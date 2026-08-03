@@ -1,0 +1,84 @@
+{#- Provisioning tab on an instance: template, install state, variables (secret
+    VALUES never rendered) and config files. -#}
+{% declare title: String %}
+{% declare instanceName: String %}
+{% declare templateName: String = "" %}
+{% declare installState: String %}
+{% declare installStateLabel: Microcopy %}
+{% declare installError: String = "" %}
+{% declare variables: List %}
+{% declare files: List %}
+{% declare addFileUrl: String = "" %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ instanceName }}</h1>
+        <pl-button variant="secondary" href={% addFileUrl %} id="add-file-link">{{ t("add_file", scope: "template_contents") }}</pl-button>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    <pl-card>
+        <pl-card-content>
+            <p>
+                {{ t("template", scope: "instance_provisioning") }}:
+                {% if templateName != "" %}<strong>{{ templateName }}</strong>{% else %}{{ t("no_template", scope: "instance_provisioning") }}{% /if %}
+            </p>
+            <p>{{ t("install_state", scope: "instance_provisioning") }}: <pl-badge variant="secondary">{{ installStateLabel }}</pl-badge></p>
+            {% if installError != "" %}
+            <pl-alert variant="destructive"><pre>{{ installError }}</pre></pl-alert>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+
+    <h2>{{ t("variables", scope: "template_contents") }}</h2>
+    {% if variables %}
+    <pl-table striped={% true %}>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("key", scope: "template_contents") }}</pl-table-head>
+            <pl-table-head>{{ t("value", scope: "instance_provisioning") }}</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each variables as index, variable %}
+            <pl-table-row>
+                <pl-table-cell><code>{{ variable.get("key") }}</code></pl-table-cell>
+                <pl-table-cell>
+                    {% if variable.get("secret") %}
+                    <pl-badge variant="secondary">{{ t("secret_set", scope: "instance_provisioning") }}</pl-badge>
+                    {% else %}
+                    <code>{{ variable.get("value") }}</code>
+                    {% /if %}
+                </pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <p>{{ t("no_variables", scope: "template_contents") }}</p>
+    {% /if %}
+
+    <h2>{{ t("files", scope: "template_contents") }}</h2>
+    {% if files %}
+    <pl-table striped={% true %}>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("path", scope: "template_contents") }}</pl-table-head>
+            <pl-table-head>{{ t("mode", scope: "template_contents") }}</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each files as index, file %}
+            <pl-table-row>
+                <pl-table-cell><a href={% file.get("editUrl") %}><code>{{ file.get("path") }}</code></a></pl-table-cell>
+                <pl-table-cell><code>{{ file.get("mode") }}</code></pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <p>{{ t("no_files", scope: "template_contents") }}</p>
+    {% /if %}
+</section>
+{% /block %}

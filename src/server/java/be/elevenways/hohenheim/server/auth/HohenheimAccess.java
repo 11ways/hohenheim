@@ -74,6 +74,14 @@ public final class HohenheimAccess {
     /** Export instance backups and restore them to new instances. */
     public static final String BACKUPS = "backups";
 
+    /**
+     * Run an ARBITRARY, non-template image on an instance. Exec-equivalent by the
+     * threat model (an attacker-chosen image is attacker-chosen code), so admin/
+     * type-level: elevated and deliberately NOT delegable -- a manage holder must not
+     * be able to launder it to a third party or mint it into an API-key scope.
+     */
+    public static final String IMAGE_ANY = "image_any";
+
     private HohenheimAccess() {
     }
 
@@ -170,7 +178,14 @@ public final class HohenheimAccess {
             KnownCapability.of(BACKUPS)
                 .label(Microcopy.of("backups").withFilter("scope", "capability"))
                 .elevated()
-                .asDelegable());
+                .asDelegable(),
+            // Phase 5: the image gate exists (InstanceImagePolicy on the write funnel),
+            // so the capability registers WITH its enforcement per the no-unwired rule.
+            // The grant matrix this declaration attaches is the instances access page
+            // that manage/snapshots/backups already surface.
+            KnownCapability.of(IMAGE_ANY)
+                .label(Microcopy.of("image_any").withFilter("scope", "capability"))
+                .elevated());
         RecordGrantCapabilityChecker.declareRules(InstanceModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)

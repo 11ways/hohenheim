@@ -2,8 +2,10 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
+import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -13,6 +15,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -62,6 +65,7 @@ public final class InstanceResource extends RowResource {
         .column(ColumnSpec.fromField(InstanceModel.SERVER_ID)
             .relation(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())
         .column(ColumnSpec.fromField(InstanceModel.STATUS).filterable().build())
+        .column(ColumnSpec.fromField(InstanceModel.INSTALL_STATE).filterable().build())
         .column(ColumnSpec.fromField(InstanceModel.CREATED_AT).filterable().build())
         .filter(FilterSpec.forField(InstanceModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(InstanceModel.NAME)).build())
@@ -114,9 +118,89 @@ public final class InstanceResource extends RowResource {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
         actions.add(this.deployAction());
         actions.add(this.stopAction());
+        actions.add(this.installAction());
+        actions.add(this.reinstallAction());
         actions.add(this.snapshotAction());
         actions.add(this.backupAction());
         return actions;
+    }
+
+    @Override
+    public @NonNull List<RecordScopedPage<Row>> subpages() {
+        List<RecordScopedPage<Row>> pages = new ArrayList<>(List.of(new InstanceProvisioningPage()));
+        pages.addAll(this.frameworkSubpages());
+        return pages;
+    }
+
+    /** Run (or resume/retry) the template's install step. */
+    private @NonNull RowAction<Row> installAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "install_instance"))
+            .label(Microcopy.of("install").withFilter("scope", "instance"))
+            .icon(Icon.of("wand-magic-sparkles"))
+            .inlineInRow(false)
+            .visibleFor((row, ctx) -> row.get(InstanceModel.TEMPLATE_ID) != null
+                && !InstanceModel.INSTALL_NONE.equals(row.get(InstanceModel.INSTALL_STATE))
+                && !InstanceModel.INSTALL_INSTALLED.equals(row.get(InstanceModel.INSTALL_STATE)))
+            .handler((row, ctx) -> {
+                new InstanceInstalls().install(row.get(InstanceModel.ID));
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("installed_toast").withFilter("scope", "instance")
+                        .withArg("name", row.get(InstanceModel.NAME)));
+            })
+            .build();
+    }
+
+    /**
+     * Reinstall per the template's EXPLICIT data policy. A clear-policy template gets
+     * a destructive dialog that demands the instance's name typed back; preserve gets
+     * an ordinary confirmation. The dialog is the accident guard -- the POLICY itself
+     * is enforced in InstanceInstalls.
+     */
+    private @NonNull RowAction<Row> reinstallAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "reinstall_instance"))
+            .label(Microcopy.of("reinstall").withFilter("scope", "instance"))
+            .icon(Icon.of("rotate"))
+            .inlineInRow(false)
+            .visibleFor((row, ctx) -> row.get(InstanceModel.TEMPLATE_ID) != null
+                && (InstanceModel.INSTALL_INSTALLED.equals(row.get(InstanceModel.INSTALL_STATE))
+                    || InstanceModel.INSTALL_FAILED.equals(row.get(InstanceModel.INSTALL_STATE))))
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("reinstall").withFilter("scope", "instance"))
+                .body(Microcopy.of("reinstall_confirm").withFilter("scope", "instance"))
+                .confirmLabel(Microcopy.of("reinstall").withFilter("scope", "instance"))
+                .build())
+            .dynamicConfirmation(row -> {
+                boolean clears = templateClearsOnReinstall(row);
+                ConfirmationSpec.Builder spec = ConfirmationSpec.builder()
+                    .title(Microcopy.of("reinstall").withFilter("scope", "instance"))
+                    .body(Microcopy.of(clears ? "reinstall_clear_confirm" : "reinstall_confirm")
+                        .withFilter("scope", "instance")
+                        .withArg("name", row.get(InstanceModel.NAME)))
+                    .confirmLabel(Microcopy.of("reinstall").withFilter("scope", "instance"));
+                if (clears) {
+                    spec.style(ActionStyle.DESTRUCTIVE)
+                        .requireTypedConfirmation(
+                            String.valueOf((Object) row.get(InstanceModel.NAME)));
+                }
+                return spec.build();
+            })
+            .handler((row, ctx) -> {
+                new InstanceInstalls().reinstall(row.get(InstanceModel.ID));
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("reinstalled_toast").withFilter("scope", "instance")
+                        .withArg("name", row.get(InstanceModel.NAME)));
+            })
+            .build();
+    }
+
+    private static boolean templateClearsOnReinstall(@NonNull Row instance) {
+        Object templateId = instance.get(InstanceModel.TEMPLATE_ID);
+        if (!(templateId instanceof Integer id)) {
+            return false;
+        }
+        Row template = Models.get(InstanceTemplateModel.class).findById(id);
+        return template != null && InstanceTemplateModel.REINSTALL_CLEAR
+            .equals(template.get(InstanceTemplateModel.REINSTALL_POLICY));
     }
 
     /** Cold capture: a running instance is stopped for the copy and redeployed after. */

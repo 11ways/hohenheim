@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostLeases;
+import be.elevenways.hohenheim.server.runtime.FileStagingSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
@@ -17,6 +19,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -68,12 +72,15 @@ public final class InstanceService {
     public @NonNull InstanceStatus deploy(int instanceId) {
         Resolved resolved = resolve(instanceId);
         // Settle-then-refuse: a start under a live capture/restore corrupts the very
-        // data those operations exist to protect.
+        // data those operations exist to protect; a start before the template's install
+        // step completed runs the workload on half-written data.
         InstanceOperationGuard.requireOperable(resolved.row());
+        InstanceOperationGuard.requireInstalled(resolved.row());
         long fence = this.leases.requireFence(resolved.serverId());
         HostAdmission.requireInstancePlacement(resolved.serverId());
         try {
             String handle = resolved.runtime().create(resolved.spec());
+            stageConfigFiles(resolved, instanceId);
             resolved.runtime().start(handle);
             InstanceStatus status = resolved.runtime().status(handle);
             this.beforeOutcomeWrite.run();
@@ -186,13 +193,42 @@ public final class InstanceService {
         return this.leases;
     }
 
+    /**
+     * Render and place the instance's config files into the CREATED workload (before
+     * start), {@code {{KEY}}} placeholders resolved against its variables. A driver
+     * without file staging refuses when files exist -- never a silently missing config.
+     */
+    private static void stageConfigFiles(@NonNull Resolved resolved, int instanceId)
+            throws IOException {
+        List<Row> files = Models.get(InstanceFileModel.class).findByInstanceId(instanceId);
+        if (files.isEmpty()) {
+            return;
+        }
+        if (!(resolved.runtime() instanceof FileStagingSupport staging)) {
+            throw Violations.ofForm(violationText("files_unsupported")
+                .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
+        }
+        List<FileStagingSupport.StagedFile> staged = new ArrayList<>();
+        for (Row file : files) {
+            String content = file.get(InstanceFileModel.CONTENT);
+            String mode = file.get(InstanceFileModel.MODE);
+            staged.add(new FileStagingSupport.StagedFile(
+                file.get(InstanceFileModel.CONTAINER_PATH),
+                InstanceVariables.substitute(content == null ? "" : content, resolved.variables()),
+                mode == null || mode.isBlank() ? "0644" : mode));
+        }
+        staging.stageFiles(resolved.spec().handle(), staged);
+    }
+
     // -- resolution -----------------------------------------------------------
 
     record Resolved(@NonNull Row row, @NonNull InstanceRuntime runtime,
-                    @NonNull InstanceSpec spec, int serverId) {}
+                    @NonNull InstanceSpec spec, int serverId,
+                    @NonNull Map<String, String> variables) {}
 
     /**
-     * Load the record and resolve its kind handler, host and spec.
+     * Load the record and resolve its kind handler, host, variables and spec (variables
+     * merge into the env and substitute inside the command -- see InstanceVariables).
      *
      * @throws Violations for a missing/trashed record, an unknown kind or a blank image
      */
@@ -213,6 +249,9 @@ public final class InstanceService {
         }
         Map<String, Object> settings = row.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
             ? castSettings(map) : Map.of();
+        InstanceVariables instanceVariables = new InstanceVariables();
+        Map<String, String> variables = instanceVariables.valuesFor(instanceId);
+        settings = instanceVariables.applyToSettings(settings, variables);
         InstanceSpec spec = handler.specFor(instanceId, settings);
         if (spec.image().isEmpty()) {
             throw Violations.ofField("settings.image", "", violationText("instance_image_required"));
@@ -221,7 +260,7 @@ public final class InstanceService {
         // was already normalized onto servers.id by the model's beforeValidate hook.
         int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
         String serverName = ServerModel.nameOf(serverId);
-        return new Resolved(row, handler.runtimeFor(serverName), spec, serverId);
+        return new Resolved(row, handler.runtimeFor(serverName), spec, serverId, variables);
     }
 
     @SuppressWarnings("unchecked")

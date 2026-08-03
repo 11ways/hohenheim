@@ -77,6 +77,12 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new AuthProviderResource(), Role.PROXY);
         addIf(peers, new DatabaseResource(), Role.DATABASES);
         addIf(peers, new InstanceResource(), Role.INSTANCES);
+        addIf(peers, new InstanceTemplateResource(), Role.INSTANCES);
+        addIf(peers, new InstanceTemplateVariableResource(), Role.INSTANCES);
+        addIf(peers, new InstanceTemplateFileResource(), Role.INSTANCES);
+        addIf(peers, new InstanceFileResource(), Role.INSTANCES);
+        addIf(peers, new InstanceFromTemplatePage(), Role.INSTANCES);
+        addIf(peers, new InstanceTemplateImportPage(), Role.INSTANCES);
         addIf(peers, new InstanceQuotaResource(), Role.INSTANCES);
         addIf(peers, new InstanceSnapshotResource(), Role.INSTANCES);
         addIf(peers, new InstanceBackupResource(), Role.INSTANCES);

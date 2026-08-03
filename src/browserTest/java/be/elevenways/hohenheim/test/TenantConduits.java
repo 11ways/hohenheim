@@ -27,13 +27,13 @@ import java.util.Map;
  * default, which is what a synthetic carrier legitimately looks like (AccessContext.of
  * documents that shape).
  */
-final class TenantConduits {
+public final class TenantConduits {
 
     private TenantConduits() {
     }
 
     /** Run {@code body} inside a request scope whose principal is {@code principal}. */
-    static void as(@Nullable Principal principal, Runnable body) {
+    public static void as(@Nullable Principal principal, Runnable body) {
         RouteScope.run(stub(principal), body);
     }
 
