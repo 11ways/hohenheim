@@ -1829,6 +1829,10 @@
     {
       "text": "Stack files",
       "scope": "stack_file"
+    },
+    {
+      "text": "Released hostnames",
+      "scope": "released_claim"
     }
   ],
   "dashboard": {
@@ -3049,18 +3053,36 @@
     "text": "Security",
     "scope": "nav"
   },
-  "lift": {
-    "text": "Lift ban",
-    "scope": "ban"
-  },
-  "lift_hint": {
-    "text": "Unban this IP immediately, in the app and in the firewall.",
-    "scope": "ban"
-  },
-  "lift_confirm": {
-    "text": "Lift this ban? The IP can reach all proxied sites again right away.",
-    "scope": "ban"
-  },
+  "lift": [
+    {
+      "text": "Lift ban",
+      "scope": "ban"
+    },
+    {
+      "text": "Lift quarantine",
+      "scope": "released_claim"
+    }
+  ],
+  "lift_hint": [
+    {
+      "text": "Unban this IP immediately, in the app and in the firewall.",
+      "scope": "ban"
+    },
+    {
+      "text": "Allow any owner to claim this hostname again, immediately",
+      "scope": "released_claim"
+    }
+  ],
+  "lift_confirm": [
+    {
+      "text": "Lift this ban? The IP can reach all proxied sites again right away.",
+      "scope": "ban"
+    },
+    {
+      "text": "A DNS record pointing here may still be live for the former owner. Lifting lets a different owner take over the traffic it delivers. Type the hostname to confirm.",
+      "scope": "released_claim"
+    }
+  ],
   "lifted": {
     "text": "Ban lifted",
     "scope": "ban"
@@ -4072,5 +4094,33 @@
   "force_delete_done": {
     "text": "Record of '{$name}' deleted; its host resources were NOT verified removed",
     "scope": "database"
+  },
+  "released_at": {
+    "text": "Released",
+    "scope": "field"
+  },
+  "former_site": {
+    "text": "Former site",
+    "scope": "field"
+  },
+  "former_owner": {
+    "text": "Former owner",
+    "scope": "field"
+  },
+  "lifted_toast": {
+    "text": "Quarantine lifted",
+    "scope": "released_claim"
+  },
+  "lift_denied": {
+    "text": "Only administrators can lift a quarantine",
+    "scope": "released_claim"
+  },
+  "route_quarantined": {
+    "text": "{$hostname} was recently released by another owner and stays reserved for {$days} more day(s); an administrator can lift the quarantine",
+    "scope": "violations"
+  },
+  "enable_route_quarantined": {
+    "text": "Cannot enable this site: {$hostname} was recently released by another owner and stays reserved for {$days} more day(s); an administrator can lift the quarantine",
+    "scope": "violations"
   }
 }

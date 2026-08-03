@@ -184,8 +184,19 @@ public final class HohenheimAccess {
         return first != null && second != null && first.equals(second);
     }
 
-    /** @return the subjects holding manage on the site, or null when grants are unreadable */
-    private static @Nullable Set<String> manageSubjectsOf(int siteId) {
+    /**
+     * THE owner identity of a site: the subjects holding {@link #MANAGE} on it, spelled
+     * {@code subjectType:subjectId}. An EMPTY set means operator-owned (nobody was granted
+     * anything), which is why it is a legitimate value and never an error.
+     *
+     * AIDEV-NOTE: public because the released-claim ledger (ReleasedClaims) must STORE this
+     * exact set at release time and compare a later claimant against it. It is the same
+     * authority {@link #sameOwner} answers from -- a second spelling of "who owns this site"
+     * is how the quarantine and the overlap refusal would end up disagreeing.
+     *
+     * @return the manage-grant subjects, or null when grants are unreadable (callers fail closed)
+     */
+    public static @Nullable Set<String> manageSubjectsOf(int siteId) {
         Set<String> subjects = new HashSet<>();
         try {
             for (Row grant : RecordGrants.listForRecord(SiteModel.MODEL_ID, siteId)) {

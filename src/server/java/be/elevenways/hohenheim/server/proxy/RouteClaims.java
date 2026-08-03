@@ -143,6 +143,15 @@ public final class RouteClaims {
     public static void restamp(int siteId, boolean live) {
         Model domains = Models.get(SiteDomainModel.class);
         if (!live) {
+            // RELEASE PATH 1 of 3 (the other two are in SiteDomainResource): the site stops
+            // routing -- soft delete, disable, or a hard delete cascading through.
+            // AIDEV-NOTE: the ledger write rides THIS hook (beforeWrite) and may never move
+            // to afterSave: zenit-auth's RecordGrantCleanup revokes the deleted site's
+            // grants from an afterSave hook, so an afterSave writer would capture an EMPTY
+            // owner set and quarantine nothing. See ReleasedClaims. Rows already holding no
+            // claim record nothing, which is what makes a re-save of an already-trashed row
+            // (which re-fires grant cleanup) incapable of overwriting the real owner.
+            ReleasedClaims.recordReleaseOfSite(siteId);
             domains.find().where(SiteDomainModel.SITE_ID.eq(siteId))
                 .assign(SiteDomainModel.LIVE_ROUTE_KEY, null)
                 .updateAll();

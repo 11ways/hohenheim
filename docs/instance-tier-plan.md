@@ -1527,6 +1527,36 @@ past. It is small if Phase 1 is done right: it is a consumer, not a mechanism.
   is taken by "?", and the hostname is permanently unclaimable with no nameable
   holder. Only tests hard-delete sites today. Cascade the domain rows from a
   beforeRemove hook on `SiteModel`.
+
+  STATUS 2026-08-03 -- LANDED, with ONE correction to the RECON above. The
+  ledger is `released_route_claims` (M053) + `ReleasedClaims` (server/proxy);
+  all three release paths write it from beforeWrite/beforeRemove; both
+  `refuseRouteConflicts` and `refuseEnableRouteConflicts` consult it by INDEXED
+  claim key; the window is `security.release_quarantine_days` (30, 0 = off);
+  the override is `ReleasedClaimResource`'s hostname-typed `lift_quarantine`
+  action, admin-re-checked in the handler; the orphan cascade landed on
+  `SiteModel`.
+
+  CORRECTION to "races grant cleanup by pure registration order": it is not a
+  race and not registration order. `Schema.afterSave` fires the schema's own
+  hooks and THEN `GlobalModelHooks.fireAfterSave` (Schema.java:707-711;
+  GlobalModelHooks' own docblock states the tiering), and `RecordGrantCleanup`
+  installs on the GLOBAL tier -- so a SCHEMA-level afterSave writer would in
+  fact still see the grants. The losing writer is a GLOBAL-tier afterSave hook
+  registered after zenit-auth's, and that one loses deterministically. Proven
+  both ways: the schema-tier counterfactual passed (vacuous, said so), the
+  global-tier one failed on the stored subject set (`expected "user:3", was
+  ""`). The beforeWrite placement stays REQUIRED regardless, for a second
+  reason the recon did not name: by afterSave `live_route_key` is already NULL,
+  so an afterSave writer cannot tell which rows actually held a claim and must
+  re-derive keys -- which is also what makes it unable to stay idempotent.
+
+  Also decided while implementing: with the window disabled (0) nothing is
+  RECORDED either, so re-enabling never quarantines on stale history; a claimant
+  whose grants are unreadable fails CLOSED (an unmatchable owner marker, never an
+  empty set, because an empty set reads as operator-owned); and wildcard-vs-exact
+  OVERLAP against a released claim stays explicitly OUT of scope -- only the
+  identical claim key is quarantined.
 - Generated records (ACME challenge records, Velocity forced-hosts, SRV/A rows
   materialized from a mapping) carry owner + source metadata and reconcile or
   delete ONLY their own output. A generated row is never adopted by whoever

@@ -1825,6 +1825,10 @@
     {
       "text": "Stack-bestanden",
       "scope": "stack_file"
+    },
+    {
+      "text": "Vrijgegeven hostnamen",
+      "scope": "released_claim"
     }
   ],
   "dashboard": {
@@ -3045,18 +3049,36 @@
     "text": "Beveiliging",
     "scope": "nav"
   },
-  "lift": {
-    "text": "Verbanning opheffen",
-    "scope": "ban"
-  },
-  "lift_hint": {
-    "text": "Hef de verbanning onmiddellijk op, in de app en in de firewall.",
-    "scope": "ban"
-  },
-  "lift_confirm": {
-    "text": "Deze verbanning opheffen? Het IP-adres kan meteen alle sites weer bereiken.",
-    "scope": "ban"
-  },
+  "lift": [
+    {
+      "text": "Verbanning opheffen",
+      "scope": "ban"
+    },
+    {
+      "text": "Quarantaine opheffen",
+      "scope": "released_claim"
+    }
+  ],
+  "lift_hint": [
+    {
+      "text": "Hef de verbanning onmiddellijk op, in de app en in de firewall.",
+      "scope": "ban"
+    },
+    {
+      "text": "Laat elke eigenaar deze hostnaam meteen opnieuw claimen",
+      "scope": "released_claim"
+    }
+  ],
+  "lift_confirm": [
+    {
+      "text": "Deze verbanning opheffen? Het IP-adres kan meteen alle sites weer bereiken.",
+      "scope": "ban"
+    },
+    {
+      "text": "Een DNS-record dat hierheen wijst kan nog steeds actief zijn voor de vorige eigenaar. Opheffen laat een andere eigenaar dat verkeer overnemen. Typ de hostnaam om te bevestigen.",
+      "scope": "released_claim"
+    }
+  ],
   "lifted": {
     "text": "Verbanning opgeheven",
     "scope": "ban"
@@ -4068,5 +4090,33 @@
   "force_delete_done": {
     "text": "Record van '{$name}' verwijderd; de resources op de host zijn NIET geverifieerd verwijderd",
     "scope": "database"
+  },
+  "released_at": {
+    "text": "Vrijgegeven",
+    "scope": "field"
+  },
+  "former_site": {
+    "text": "Vorige site",
+    "scope": "field"
+  },
+  "former_owner": {
+    "text": "Vorige eigenaar",
+    "scope": "field"
+  },
+  "lifted_toast": {
+    "text": "Quarantaine opgeheven",
+    "scope": "released_claim"
+  },
+  "lift_denied": {
+    "text": "Alleen beheerders kunnen een quarantaine opheffen",
+    "scope": "released_claim"
+  },
+  "route_quarantined": {
+    "text": "{$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dag(en) gereserveerd; een beheerder kan de quarantaine opheffen",
+    "scope": "violations"
+  },
+  "enable_route_quarantined": {
+    "text": "Kan deze site niet inschakelen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dag(en) gereserveerd; een beheerder kan de quarantaine opheffen",
+    "scope": "violations"
   }
 }

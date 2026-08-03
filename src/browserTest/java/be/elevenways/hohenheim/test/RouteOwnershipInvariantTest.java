@@ -1,21 +1,34 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.ReleasedClaimResource;
 import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.hohenheim.server.proxy.RouteClaims;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.cms.common.action.ActionContext;
+import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,6 +66,10 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
             siteModel.delete(site);
         }
         this.createdSites.clear();
+        // Tearing a live site down IS a release, so cleanup itself ledgers quarantine rows.
+        // They would otherwise outlive this class and refuse another class's claim on the
+        // same hostname -- correct behaviour, wrong scope for a fixture.
+        Models.get(ReleasedRouteClaimModel.class).find().delete();
     }
 
     /** Persist an active static site; enabled per the flag. */
@@ -209,8 +226,15 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
             .as("step 6: the losing tenant stayed disabled").isFalse();
     }
 
+    /**
+     * The OPERATOR-scoped half of the release rule: two sites nobody was granted anything on
+     * are the same owner, so a deleted site's hostname stays freely re-claimable. Every
+     * assertion here predates the release quarantine and must keep passing verbatim -- that
+     * is the proof the quarantine did not change operator behaviour.
+     */
     @Test
-    void aDeletedSitesHostnameBecomesClaimableAgain() {
+    @DisplayName("an operator-owned deleted site's hostname becomes claimable again")
+    void anOperatorOwnedDeletedSitesHostnameBecomesClaimableAgain() {
         String hostname = "abandoned.example.com";
         Model siteModel = Models.get(SiteModel.class);
 
@@ -472,9 +496,328 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         user.set(UserModel.UPDATED_AT, Instant.now());
         AuthModels.users().save(user);
         int userId = user.get(UserModel.ID);
+        grantManage(site, userId);
+        return userId;
+    }
+
+    /** Give an EXISTING tenant subject manage on another site -- the same owner, twice. */
+    private static void grantManage(Row site, int userId) {
         RecordGrants.grant("user", userId, SiteModel.MODEL_ID, site.get(SiteModel.ID),
             HohenheimAccess.MANAGE, true);
-        return userId;
+    }
+
+    /** The active quarantine row for a hostname's exact-match, path-less, all-interfaces route. */
+    private static Row quarantineOn(String hostname) {
+        return Models.get(ReleasedRouteClaimModel.class).find()
+            .where(ReleasedRouteClaimModel.CLAIM_KEY.eq(
+                RouteClaims.keyOf(hostname, SiteDomainModel.MATCH_EXACT, null, null)))
+            .orderBy(ReleasedRouteClaimModel.ID, SortOrder.DESC)
+            .first();
+    }
+
+    /**
+     * The release-quarantine journey: a tenant's abandoned hostname stays reserved FOR THAT
+     * TENANT, because the CNAME it pointed here from a zone we do not host is still live and
+     * we cannot retract it. Walks the whole boundary -- what is stored, who is refused on the
+     * write path, who is refused on the enable path, who may still take it.
+     */
+    @Test
+    void aReleasedTenantHostnameIsQuarantinedAgainstEveryOtherOwner() {
+        String hostname = "released.tenant.example.com";
+        Model siteModel = Models.get(SiteModel.class);
+        Model domainModel = Models.get(SiteDomainModel.class);
+
+        // 1. Tenant A serves the hostname on a live site it holds manage on.
+        Row tenantSiteA = site("Quarantine Tenant A", "quarantine-tenant-a", true);
+        int tenantA = tenantOf(tenantSiteA, "quarantine-tenant-a@test");
+        domain(tenantSiteA, hostname);
+        assertThat(storedClaimsOn(hostname))
+            .as("step 1: tenant A holds the live route claim").isEqualTo(1);
+        assertThat(HohenheimAccess.manageSubjectsOf(tenantSiteA.get(SiteModel.ID)))
+            .as("step 1: and the site's owner is the tenant subject, not the operator")
+            .containsExactly("user:" + tenantA);
+
+        // 2. Tenant A deletes the site through the REAL CMS delete path. The claim is
+        //    released -- and the ledger must have captured WHO released it. The subject set
+        //    is only knowable before zenit-auth's afterSave grant cleanup runs, so asserting
+        //    the stored set (not merely a later refusal) is what proves the capture happened
+        //    on the beforeWrite tier.
+        new SiteResource().deleteRow(siteModel.findById(tenantSiteA.get(SiteModel.ID)),
+            AccessContext.anonymous());
+        assertThat(storedClaimsOn(hostname))
+            .as("step 2: the deleted tenant site holds no claim").isEqualTo(0);
+        Row quarantine = quarantineOn(hostname);
+        assertThat(quarantine).as("step 2: the release was recorded in the ledger").isNotNull();
+        assertThat((String) quarantine.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
+            .as("step 2: the ledger stored the FORMER OWNER, captured before grant cleanup")
+            .isEqualTo("user:" + tenantA);
+        assertThat((Instant) quarantine.get(ReleasedRouteClaimModel.RELEASED_AT))
+            .as("step 2: and when it was released -- the window is measured from here")
+            .isNotNull();
+
+        // 3. A DIFFERENT tenant claims the abandoned hostname on its own live site. This is
+        //    the takeover: tenant A's CNAME still points here, so accepting this would hand
+        //    A's visitors to B. Refused, and nothing persisted.
+        Row tenantSiteB = site("Quarantine Tenant B", "quarantine-tenant-b", true);
+        tenantOf(tenantSiteB, "quarantine-tenant-b@test");
+        Row seizure = domainModel.createEmptyRow();
+        seizure.set(SiteDomainModel.SITE_ID, tenantSiteB.get(SiteModel.ID));
+        seizure.set(SiteDomainModel.HOSTNAME, hostname);
+        seizure.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        assertThat(catchThrowable(() -> domainModel.save(seizure)))
+            .as("step 3: a different owner is refused inside the quarantine window")
+            .isInstanceOfSatisfying(Violations.class, violations ->
+                assertThat(hasViolation(violations, "hostname", "route_quarantined"))
+                    .as("step 3: with the quarantine refusal, not a generic conflict").isTrue());
+        assertThat(domainModel.find().where(SiteDomainModel.SITE_ID.eq(tenantSiteB.get(SiteModel.ID)))
+                .count())
+            .as("step 3: the refused takeover persisted NO row").isEqualTo(0);
+
+        // 4. The two-step the write path deliberately allows: staging the hostname on a
+        //    DISABLED site is legal (drafts and clones must be allowed to sit anywhere), so
+        //    the ENABLE seam is where that path is judged. Without a check there the whole
+        //    quarantine is bypassable by disabling first.
+        Row stager = site("Quarantine Stager", "quarantine-stager", false);
+        tenantOf(stager, "quarantine-stager@test");
+        domain(stager, hostname);
+        Row goingLive = siteModel.findById(stager.get(SiteModel.ID));
+        goingLive.set(SiteModel.ENABLED, true);
+        assertThat(catchThrowable(() -> siteModel.save(goingLive)))
+            .as("step 4: enabling a site staged on a quarantined hostname is refused too")
+            .isInstanceOfSatisfying(Violations.class, violations ->
+                assertThat(hasViolation(violations, "enabled", "enable_route_quarantined"))
+                    .as("step 4: with the enable-anchored quarantine refusal").isTrue());
+        assertThat((Boolean) siteModel.findById(stager.get(SiteModel.ID)).get(SiteModel.ENABLED))
+            .as("step 4: the refused enable left the site disabled").isFalse();
+        assertThat(storedClaimsOn(hostname))
+            .as("step 4: and claimed nothing").isEqualTo(0);
+
+        // 5. The owner that released it may always take it back: a fresh site carrying the
+        //    SAME manage subject is the same owner, and the quarantine exists to protect it,
+        //    never to lock it out.
+        Row reclaim = site("Quarantine Tenant A Again", "quarantine-tenant-a-again", true);
+        grantManage(reclaim, tenantA);
+        Row reclaimed = domain(reclaim, hostname);
+        assertThat((String) domainModel.findById(reclaimed.get(SiteDomainModel.ID))
+                .get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 5: the former owner re-claims its own hostname and holds the route")
+            .isNotNull();
+
+        // 6. THE other half: two OPERATOR sites carry EMPTY subject sets, so a release by one
+        //    and a claim by the other is the same owner. The ledger row must exist for this
+        //    step to mean anything -- otherwise it only proves the mechanism never fired.
+        String operatorHost = "released.operator.example.com";
+        Row operatorFirst = site("Quarantine Operator First", "quarantine-op-first", true);
+        domain(operatorFirst, operatorHost);
+        new SiteResource().deleteRow(siteModel.findById(operatorFirst.get(SiteModel.ID)),
+            AccessContext.anonymous());
+        Row operatorQuarantine = quarantineOn(operatorHost);
+        assertThat(operatorQuarantine)
+            .as("step 6: an operator release is ledgered too").isNotNull();
+        assertThat((String) operatorQuarantine.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
+            .as("step 6: with an EMPTY owner set -- that is what operator-owned means")
+            .isEmpty();
+        Row operatorSecond = site("Quarantine Operator Second", "quarantine-op-second", true);
+        Row operatorClaim = domain(operatorSecond, operatorHost);
+        assertThat((String) domainModel.findById(operatorClaim.get(SiteDomainModel.ID))
+                .get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 6: operator-to-operator re-claim stays allowed, ledger row and all")
+            .isNotNull();
+    }
+
+    /**
+     * The recorded ADMIN OVERRIDE: the quarantine has to be liftable, or an operator whose
+     * tenant really did hand a hostname over has no move at all. Proves the surface renders,
+     * that the handler re-checks admin itself (visibility is not authorization), and that
+     * lifting actually frees the hostname.
+     */
+    @Test
+    void onlyAnAdminCanLiftAQuarantineAndLiftingFreesTheHostname() throws Exception {
+        String hostname = "override.tenant.example.com";
+        Model siteModel = Models.get(SiteModel.class);
+        Model domainModel = Models.get(SiteDomainModel.class);
+
+        // 1. A tenant releases a hostname, which quarantines it.
+        Row tenantSite = site("Override Tenant", "override-tenant", true);
+        tenantOf(tenantSite, "override-tenant@test");
+        domain(tenantSite, hostname);
+        new SiteResource().deleteRow(siteModel.findById(tenantSite.get(SiteModel.ID)),
+            AccessContext.anonymous());
+        Row quarantine = quarantineOn(hostname);
+        assertThat(quarantine).as("step 1: the release is quarantined").isNotNull();
+
+        // 2. A different owner is refused while it stands.
+        Row successor = site("Override Successor", "override-successor", true);
+        tenantOf(successor, "override-successor@test");
+        Row refused = domainModel.createEmptyRow();
+        refused.set(SiteDomainModel.SITE_ID, successor.get(SiteModel.ID));
+        refused.set(SiteDomainModel.HOSTNAME, hostname);
+        refused.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        assertThat(catchThrowable(() -> domainModel.save(refused)))
+            .as("step 2: the quarantine refuses the successor").isInstanceOf(Violations.class);
+
+        // 3. The operator surface renders and names the hostname -- an override nobody can
+        //    reach is the same as no override at all.
+        HttpResponse<String> list = adminGet("/admin/released-claims");
+        assertThat(list.statusCode()).as("step 3: the quarantine list renders").isEqualTo(200);
+        assertThat(list.body()).as("step 3: and shows the quarantined hostname")
+            .contains(hostname);
+
+        // 4. Visibility is NOT authorization: invoking the action's handler directly with a
+        //    non-admin context must refuse and leave the row standing. (The button is hidden
+        //    for that context too, but a hidden button is not a guard.)
+        RowAction<Row> lift = null;
+        for (RowAction<Row> action : new ReleasedClaimResource().rowActions()) {
+            if (Identifier.of("hohenheim", "lift_quarantine").equals(action.id())) {
+                lift = action;
+            }
+        }
+        assertThat(lift).as("step 4: the resource offers the lift action").isNotNull();
+        assertThat(lift.isVisibleFor(quarantine, AccessContext.anonymous()))
+            .as("step 4: the button is hidden for a non-admin").isFalse();
+        ((RowAction.Invoke<Row>) lift).invoke(quarantine,
+            ActionContext.of(AccessContext.anonymous()));
+        assertThat(Models.get(ReleasedRouteClaimModel.class)
+                .findById(quarantine.get(ReleasedRouteClaimModel.ID)))
+            .as("step 4: a non-admin invoke lifted NOTHING").isNotNull();
+
+        // 5. The admin lifts it through the real invoke route, and the row is gone.
+        HttpResponse<String> lifted = adminPost("/admin/released-claims/"
+            + quarantine.get(ReleasedRouteClaimModel.ID) + "/action/lift_quarantine", "");
+        assertThat(lifted.statusCode()).as("step 5: the admin lift is accepted")
+            .isIn(200, 302, 303);
+        assertThat(quarantineOn(hostname)).as("step 5: the quarantine row is gone").isNull();
+
+        // 6. And the hostname is claimable again by the very owner that was refused in
+        //    step 2 -- so step 2 was the quarantine, not a broken write.
+        Row claimed = domain(successor, hostname);
+        assertThat((String) domainModel.findById(claimed.get(SiteDomainModel.ID))
+                .get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 6: the successor now holds the route").isNotNull();
+    }
+
+    private HttpResponse<String> adminGet(String path) throws Exception {
+        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
+            .send(HttpRequest.newBuilder().uri(URI.create(baseUrl() + path))
+                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+                .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> adminPost(String path, String body) throws Exception {
+        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
+            .send(HttpRequest.newBuilder().uri(URI.create(baseUrl() + path))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+                .header("X-Csrf-Token", csrfToken)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private String baseUrl() {
+        return "http://localhost:" + getServerPort();
+    }
+
+    /**
+     * The two release paths the site-write restamp does NOT cover: deleting a domain row
+     * (RowResource.deleteRow runs no write hook at all) and EDITING a live row's hostname
+     * (the departing key is freed with nothing observing it). A ledger written at only some
+     * release points would quarantine some hostnames and silently free others.
+     */
+    @Test
+    void abandoningOneHostnameWithoutDeletingTheSiteIsLedgeredToo() {
+        Model domainModel = Models.get(SiteDomainModel.class);
+
+        // 1. A tenant serves two hostnames on one live site.
+        String dropped = "dropped.tenant.example.com";
+        String renamed = "renamed.tenant.example.com";
+        Row tenantSite = site("Partial Release Tenant", "partial-release-tenant", true);
+        int tenant = tenantOf(tenantSite, "partial-release@test");
+        Row droppedRow = domain(tenantSite, dropped);
+        Row renamedRow = domain(tenantSite, renamed);
+        assertThat(storedClaimsOn(dropped) + storedClaimsOn(renamed))
+            .as("step 1: both hostnames are claimed").isEqualTo(2);
+
+        // 2. The tenant deletes ONE domain row -- the site keeps running. This is the most
+        //    ordinary way a hostname is abandoned, and it runs no write hook.
+        domainModel.delete(droppedRow);
+        Row droppedQuarantine = quarantineOn(dropped);
+        assertThat(droppedQuarantine)
+            .as("step 2: deleting the domain row ledgers the release").isNotNull();
+        assertThat((String) droppedQuarantine.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
+            .as("step 2: with the owner intact -- the site's grants were never touched")
+            .isEqualTo("user:" + tenant);
+
+        // 3. The tenant renames the other row. The departing key is released just as
+        //    completely as a delete: the old hostname stops routing here.
+        Row renaming = domainModel.findById(renamedRow.get(SiteDomainModel.ID));
+        renaming.set(SiteDomainModel.HOSTNAME, "kept.tenant.example.com");
+        domainModel.save(renaming);
+        Row renamedQuarantine = quarantineOn(renamed);
+        assertThat(renamedQuarantine)
+            .as("step 3: renaming a live row ledgers the hostname it left behind").isNotNull();
+        assertThat((String) renamedQuarantine.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
+            .as("step 3: owned by the same tenant").isEqualTo("user:" + tenant);
+        assertThat(storedClaimsOn("kept.tenant.example.com"))
+            .as("step 3: and the row claims its new route").isEqualTo(1);
+
+        // 4. Both abandoned hostnames are now refused to a different owner.
+        Row otherTenant = site("Partial Release Other", "partial-release-other", true);
+        tenantOf(otherTenant, "partial-release-other@test");
+        for (String abandoned : List.of(dropped, renamed)) {
+            Row seizure = domainModel.createEmptyRow();
+            seizure.set(SiteDomainModel.SITE_ID, otherTenant.get(SiteModel.ID));
+            seizure.set(SiteDomainModel.HOSTNAME, abandoned);
+            seizure.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+            assertThat(catchThrowable(() -> domainModel.save(seizure)))
+                .as("step 4: %s is quarantined against a different owner", abandoned)
+                .isInstanceOfSatisfying(Violations.class, violations ->
+                    assertThat(hasViolation(violations, "hostname", "route_quarantined"))
+                        .as("step 4: with the quarantine refusal").isTrue());
+        }
+
+        // 5. Positive control: an unrelated hostname on the same site still saves, so step 4
+        //    was the quarantine and not a broken write path.
+        Row free = domain(otherTenant, "partial-release-free.example.com");
+        assertThat((String) domainModel.findById(free.get(SiteDomainModel.ID))
+                .get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 5: an unquarantined hostname is claimed normally").isNotNull();
+    }
+
+    /**
+     * The orphan trap: a HARD site delete used to leave its domain rows behind holding a
+     * live_route_key. The conflict scan skipped them (their site resolves to null, so they
+     * read as not-live) but the UNIQUE index still enforced, so the next claimant got a
+     * duplicate-key refusal naming a holder of "?" -- the hostname was permanently
+     * unclaimable with nobody to point at.
+     */
+    @Test
+    void hardDeletingASiteTakesItsDomainRowsWithIt() {
+        String hostname = "orphan.example.com";
+        Model siteModel = Models.get(SiteModel.class);
+        Model domainModel = Models.get(SiteDomainModel.class);
+
+        // 1. A live site claims the hostname.
+        Row doomed = site("Orphan Doomed", "orphan-doomed", true);
+        Integer doomedId = doomed.get(SiteModel.ID);
+        domain(doomed, hostname);
+        assertThat(storedClaimsOn(hostname)).as("step 1: the site claims the route").isEqualTo(1);
+
+        // 2. HARD delete the site row (the shape only tests use today -- and the shape that
+        //    left the debris).
+        siteModel.delete(doomed);
+        this.createdSites.removeIf(site -> doomedId.equals(site.get(SiteModel.ID)));
+        assertThat(domainModel.find().where(SiteDomainModel.SITE_ID.eq(doomedId)).count())
+            .as("step 2: the delete cascaded to the site's domain rows").isEqualTo(0);
+        assertThat(storedClaimsOn(hostname))
+            .as("step 2: so no orphan row keeps holding the claim").isEqualTo(0);
+
+        // 3. The hostname is claimable again, by the unique index and by the scan alike --
+        //    before the fix this threw a duplicate-key conflict naming site "?".
+        Row successor = site("Orphan Successor", "orphan-successor", true);
+        Row claim = domain(successor, hostname);
+        assertThat((String) domainModel.findById(claim.get(SiteDomainModel.ID))
+                .get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 3: the successor claims the freed route").isNotNull();
     }
 
     /**
