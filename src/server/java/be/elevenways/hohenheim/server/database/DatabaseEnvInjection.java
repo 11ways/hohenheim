@@ -180,7 +180,7 @@ public final class DatabaseEnvInjection {
         DatabaseService service = new DatabaseService();
         return row -> {
             DatabaseService.Detail detail = service.detailOf(row);
-            return new ManagedDatabase.LiveStatus(detail.running(), detail.port());
+            return new ManagedDatabase.LiveStatus(detail.containerState(), detail.port());
         };
     }
 }

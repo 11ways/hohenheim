@@ -29,6 +29,13 @@ public class DatabaseModel extends Model {
     /** {@link #STATUS} value when provisioning failed. */
     public static final String STATUS_FAILED = "failed";
 
+    /**
+     * {@link #STATUS} value when a destroy could not verify its teardown: the record (and
+     * the only copy of {@code db_password}) is deliberately KEPT, the container may still
+     * run, and the operator retries or force-destroys explicitly.
+     */
+    public static final String STATUS_DESTROY_FAILED = "destroy_failed";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .label(HohenheimFormCopy.label("name"))
@@ -78,6 +85,8 @@ public class DatabaseModel extends Model {
         .value(STATUS_PROVISIONING, v -> v.displayName("Provisioning").icon("rotate").color("warning"))
         .value(STATUS_ACTIVE, v -> v.displayName("Active").icon("circle-check").color("success"))
         .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-xmark").color("destructive"))
+        .value(STATUS_DESTROY_FAILED,
+            v -> v.displayName("Destroy failed").icon("triangle-exclamation").color("destructive"))
         .build());
     /** The host this database's container runs on: a {@code servers.id} FK, never a name. */
     public static final IntegerField SERVER_ID = SCHEMA.addField(IntegerField.builder().name("server_id")

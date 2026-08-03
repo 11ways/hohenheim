@@ -92,9 +92,14 @@ class PortLedgerTest {
         });
     }
 
-    /** Claim, conflict (named), release, re-claim: the ledger's exclusivity contract. */
+    /**
+     * Claim, conflict (named), the three-state release contract: an UNVERIFIED release
+     * parks the claim in {@code releasing} where it still blocks rivals (a port that
+     * might be bound is not available), the owner may re-claim its own parked tuple,
+     * and only an OBSERVED release frees it for the next claimant.
+     */
     @Test
-    void claimConflictNamesTheHolderAndReleaseFreesTheTuple() {
+    void claimConflictNamesTheHolderAndOnlyObservedReleaseFreesTheTuple() {
         Db.run(datasource, () -> {
             int localId = ServerModel.localServerId();
             Row db = Models.get(DatabaseModel.class).createEmptyRow();
@@ -116,11 +121,31 @@ class PortLedgerTest {
                 .hasMessageContaining("claimdb");
             // 3. A different port is untouched by the conflict.
             PortLedger.claim(localId, "", 8303, "tcp", null, null, "another port");
-            // 4. Releasing the owner frees the tuple for the next claimant.
+            // 4. An UNVERIFIED release parks the claim: the row survives as releasing...
             PortLedger.releaseOwner(DatabaseModel.MODEL_ID, dbId);
+            Row parked = PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8302, "tcp"));
+            assertThat(parked).as("step 4: the parked claim row survives").isNotNull();
+            assertThat(PortLedger.isReleasing(parked))
+                .as("step 4: the parked claim is in the releasing state").isTrue();
+            // 5. ...and a releasing row still BLOCKS a rival claim.
+            assertThatThrownBy(() ->
+                    PortLedger.claim(localId, "", 8302, "tcp", null, null, "rival"))
+                .as("step 5: a releasing claim still blocks a new claimant")
+                .isInstanceOf(PortLedger.PortConflict.class)
+                .hasMessageContaining("claimdb");
+            // 6. The OWNER may re-claim its own parked tuple (a restored workload
+            //    landing on the same port is not its own rival).
+            PortLedger.claim(localId, "", 8302, "tcp", DatabaseModel.MODEL_ID, dbId, null);
+            Row reclaimed = PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8302, "tcp"));
+            assertThat(PortLedger.isReleasing(reclaimed))
+                .as("step 6: the owner's re-claim is held again, not releasing").isFalse();
+            // 7. Only the OBSERVED release deletes the row and frees the tuple.
+            PortLedger.releaseOwnerObserved(DatabaseModel.MODEL_ID, dbId);
+            assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8302, "tcp")))
+                .as("step 7: the observed release removed the row").isNull();
             PortLedger.claim(localId, "", 8302, "tcp", null, null, "reclaimed");
             assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8302, "tcp")))
-                .as("step 4: the released tuple was re-claimable").isNotNull();
+                .as("step 7: the freed tuple was re-claimable").isNotNull();
         });
     }
 
@@ -208,14 +233,26 @@ class PortLedgerTest {
                     PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8332, "tcp"))))
                 .as("step 3: the rival still holds its tuple").isEqualTo("an older claimant");
 
-            // 4. Deleting the owning record releases its claims -- through the model's
-            //    remove hooks, so EVERY delete path frees the port, not just destroy().
+            // 4. Deleting the owning record through the model's remove hooks PARKS its
+            //    claims in releasing (a record delete observes nothing about the port);
+            //    the row survives, still blocks rivals, and only an observer frees it.
             assertThat(PortLedger.recordObserved(localId, "127.0.0.1", 8333, "tcp",
                     DatabaseModel.MODEL_ID, dbId, null))
                 .as("step 4: the record holds a port again before it is deleted").isTrue();
             Models.get(DatabaseModel.class).delete(dbId);
+            List<Row> outliving = PortLedger.claimsOf(DatabaseModel.MODEL_ID, dbId);
+            assertThat(outliving)
+                .as("step 4: the claim outlives its record").hasSize(1);
+            assertThat(PortLedger.isReleasing(outliving.get(0)))
+                .as("step 4: the outliving claim is parked in releasing").isTrue();
+            assertThatThrownBy(() ->
+                    PortLedger.claim(localId, "127.0.0.1", 8333, "tcp", null, null, "rival"))
+                .as("step 4: the parked claim of a dead record still blocks a rival")
+                .isInstanceOf(PortLedger.PortConflict.class);
+            // 5. The observer's deletion closes the loop.
+            PortLedger.releaseObserved(outliving.get(0));
             assertThat(PortLedger.claimsOf(DatabaseModel.MODEL_ID, dbId))
-                .as("step 4: the record's death released its port").isEmpty();
+                .as("step 5: the observed release removed the parked claim").isEmpty();
         });
     }
 
@@ -267,17 +304,35 @@ class PortLedgerTest {
                 .as("step 2: the refused service row did not survive the rollback")
                 .isEqualTo(0);
 
-            // 3. Editing the ports diff-syncs: the old claim is released, the new held.
+            // 3. Editing the ports diff-syncs: the un-declared claim is PARKED (the
+            //    previous deploy may still bind it -- nothing observed it free), the
+            //    newly declared one is held.
             Row reloaded = Models.get(StackServiceModel.class).findById(serviceId);
             reloaded.setRecords(StackServiceModel.PORTS, List.of(port(80, 8311, "udp", "")));
             Models.get(StackServiceModel.class).save(reloaded);
-            assertThat(PortLedger.holderOf(firstKey))
-                .as("step 3: the abandoned tcp claim was released").isNull();
+            Row abandoned = PortLedger.holderOf(firstKey);
+            assertThat(abandoned)
+                .as("step 3: the abandoned tcp claim survives as releasing").isNotNull();
+            assertThat(PortLedger.isReleasing(abandoned))
+                .as("step 3: the abandoned tcp claim is parked, not held").isTrue();
             assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8311, "udp")))
                 .as("step 3: the udp claim is held (protocol is a first-class value)")
                 .isNotNull();
+            // ...and re-declaring the parked port flips it straight back to held.
+            reloaded = Models.get(StackServiceModel.class).findById(serviceId);
+            reloaded.setRecords(StackServiceModel.PORTS,
+                List.of(port(80, 8310, "tcp", ""), port(80, 8311, "udp", "")));
+            Models.get(StackServiceModel.class).save(reloaded);
+            assertThat(PortLedger.isReleasing(PortLedger.holderOf(firstKey)))
+                .as("step 3: a re-declared parked claim is held again").isFalse();
+            reloaded = Models.get(StackServiceModel.class).findById(serviceId);
+            reloaded.setRecords(StackServiceModel.PORTS, List.of(port(80, 8311, "udp", "")));
+            Models.get(StackServiceModel.class).save(reloaded);
+            PortLedger.releaseObserved(PortLedger.holderOf(firstKey));   // observed free
 
-            // 4. Moving the stack to another host re-keys the claims onto that host.
+            // 4. Moving the stack to another host claims on that host and parks the
+            //    old host's claim (the old deploy is torn down by the runtime, but the
+            //    ledger saw no observation).
             Row edge = Models.get(ServerModel.class).createEmptyRow();
             edge.set(ServerModel.NAME, "ledger-edge");
             edge.set(ServerModel.MODE, ServerModel.MODE_SSH);
@@ -285,19 +340,44 @@ class PortLedgerTest {
             Row movedStack = Models.get(StackModel.class).findById(stackId);
             movedStack.set(StackModel.SERVER_ID, edge.get(ServerModel.ID));
             Models.get(StackModel.class).save(movedStack);
-            assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8311, "udp")))
-                .as("step 4: the local host no longer holds the claim").isNull();
+            Row leftBehind = PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8311, "udp"));
+            assertThat(leftBehind)
+                .as("step 4: the local host's claim survives as releasing").isNotNull();
+            assertThat(PortLedger.isReleasing(leftBehind))
+                .as("step 4: the local host's claim is parked").isTrue();
             assertThat(PortLedger.holderOf(
                     PortLedger.claimKeyOf(edge.get(ServerModel.ID), "", 8311, "udp")))
                 .as("step 4: the new host holds it").isNotNull();
 
-            // 5. Deleting the service releases every claim it held.
+            // 5. Deleting the service parks every claim it held; nothing is deleted
+            //    without observation, and the rows still name their (dead) owner.
             Models.get(StackServiceModel.class).delete(serviceId);
-            assertThat(Models.get(PortAllocationModel.class).find()
+            List<Row> parked = Models.get(PortAllocationModel.class).find()
                 .where(PortAllocationModel.OWNER_MODEL.eq(StackServiceModel.MODEL_ID.toString()))
-                .and(PortAllocationModel.OWNER_ID.eq(serviceId)).count())
-                .as("step 5: deletion releases the service's claims")
-                .isEqualTo(0);
+                .and(PortAllocationModel.OWNER_ID.eq(serviceId)).all();
+            assertThat(parked)
+                .as("step 5: the deleted service's claims survive").isNotEmpty();
+            assertThat(parked).allSatisfy(claim ->
+                assertThat(PortLedger.isReleasing(claim))
+                    .as("step 5: every surviving claim is parked in releasing").isTrue());
+
+            // 6. Removing a HOST parks its claims too -- a servers row vanishing frees
+            //    nothing on the physical machine (and there is no FK delete action).
+            Row edgeClaim = PortLedger.holderOf(
+                PortLedger.claimKeyOf(edge.get(ServerModel.ID), "", 8311, "udp"));
+            assertThat(PortLedger.isReleasing(edgeClaim))
+                .as("step 6 precondition: the edge host's claim is parked (service died)")
+                .isTrue();
+            PortLedger.claim(edge.get(ServerModel.ID), "", 8312, "tcp", null, null, "edge held");
+            Models.get(ServerModel.class).delete(edge.get(ServerModel.ID));
+            Row afterHostRemoval = Models.get(PortAllocationModel.class).find()
+                .where(PortAllocationModel.SERVER_ID.eq(edge.get(ServerModel.ID)))
+                .and(PortAllocationModel.PORT.eq(8312))
+                .first();
+            assertThat(afterHostRemoval)
+                .as("step 6: the removed host's held claim survives").isNotNull();
+            assertThat(PortLedger.isReleasing(afterHostRemoval))
+                .as("step 6: the removed host's claim is parked in releasing").isTrue();
         });
     }
 

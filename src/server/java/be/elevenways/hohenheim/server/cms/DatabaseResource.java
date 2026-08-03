@@ -14,7 +14,11 @@ import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -37,7 +41,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -186,7 +189,11 @@ public final class DatabaseResource extends RowResource {
         try {
             this.databaseService.destroy(name, true);
         } catch (IOException e) {
-            throw new UncheckedIOException("Destroy of '" + name + "' failed", e);
+            // A NAMED refusal, not a 500: the record is kept (status destroy_failed), the
+            // port claim is parked, and the force-destroy action is the recorded way out.
+            throw Violations.ofForm(CmsSupport.violationText("database_destroy_failed")
+                .withArg("name", name)
+                .withArg("reason", e.getMessage()));
         }
         // Links to soft-deleted sites are debris once the database is gone.
         links.find().where(SiteDatabaseModel.DATABASE_ID.eq(id)).delete();
@@ -201,7 +208,53 @@ public final class DatabaseResource extends RowResource {
             .url(row -> new Uri(HohenheimEndpoints.DATABASES_BACKUP
                 .with(HohenheimEndpoints.DATABASE_NAME, row.get(DatabaseModel.NAME)).toUrl()))
             .build());
+        actions.add(this.forceDeleteAction());
         return actions;
+    }
+
+    /**
+     * The recorded escape hatch for a genuinely unreachable host: visible ONLY once a
+     * normal destroy already failed (status {@code destroy_failed}), typed-confirmed
+     * with the database's own name, and ActivityLog-recorded. The container and volume
+     * may survive on the host; the reconciler reports them as orphans, and the port
+     * claim stays parked in {@code releasing} via the model's remove hooks.
+     */
+    private @NonNull RowAction<Row> forceDeleteAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "force_delete_database"))
+            .label(Microcopy.of("force_delete").withFilter("scope", "database"))
+            .description(Microcopy.of("force_delete_hint").withFilter("scope", "database"))
+            .icon(Icon.of("triangle-exclamation"))
+            .style(ActionStyle.DESTRUCTIVE)
+            .inlineInRow(false)
+            .visibleFor((row, ctx) ->
+                DatabaseModel.STATUS_DESTROY_FAILED.equals(row.get(DatabaseModel.STATUS)))
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("force_delete").withFilter("scope", "database"))
+                .body(Microcopy.of("force_delete_confirm_generic").withFilter("scope", "database"))
+                .confirmLabel(Microcopy.of("force_delete_ok").withFilter("scope", "database"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .build())
+            .dynamicConfirmation(row -> ConfirmationSpec.builder()
+                .title(Microcopy.of("force_delete").withFilter("scope", "database"))
+                .body(Microcopy.of("force_delete_confirm").withFilter("scope", "database")
+                    .withArg("name", row.get(DatabaseModel.NAME)))
+                .confirmLabel(Microcopy.of("force_delete_ok").withFilter("scope", "database"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .requireTypedConfirmation(row.get(DatabaseModel.NAME))
+                .build())
+            .handler((row, ctx) -> {
+                String name = row.get(DatabaseModel.NAME);
+                Integer id = row.get(DatabaseModel.ID);
+                ActivityLog.withAction(ActivityLog.ACTION_DELETE, "force-destroy", () -> {
+                    this.databaseService.forceDestroyRecord(name);
+                    Models.get(SiteDatabaseModel.class).find()
+                        .where(SiteDatabaseModel.DATABASE_ID.eq(id)).delete();
+                });
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("force_delete_done").withFilter("scope", "database")
+                        .withArg("name", name));
+            })
+            .build();
     }
 
     @Override

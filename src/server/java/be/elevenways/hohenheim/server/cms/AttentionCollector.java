@@ -4,6 +4,8 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DeploymentModel;
+import be.elevenways.hohenheim.model.PortAllocationModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -16,6 +18,7 @@ import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
@@ -28,6 +31,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.xbill.DNS.Type;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -74,6 +79,9 @@ public final class AttentionCollector {
             // task, never a per-render daemon probe.
             items.addAll(DockerReconciler.attentionItems());
         }
+        if (HohenheimRoles.anyEnabled(Role.PROXY, Role.DATABASES, Role.STACKS, Role.PROCESSES)) {
+            stuckReleasingPorts(items, Instant.now().minus(RELEASING_STUCK_AFTER));
+        }
         failedTasks(items);
         if (HohenheimRoles.enabled(Role.DNS)) {
             dnsIssues(items);
@@ -85,6 +93,53 @@ public final class AttentionCollector {
             identityIssues(items);
         }
         return items;
+    }
+
+    /** How long a claim may sit in {@code releasing} before it is an alarm: two hourly
+     *  reconciler sweeps should have observed and freed it by then. */
+    private static final Duration RELEASING_STUCK_AFTER = Duration.ofHours(2);
+
+    /**
+     * Port claims stuck in {@code releasing} past the age threshold -- the ledger's
+     * never-cleared alarm. A row lands there when a teardown could not verify itself
+     * (or a host was removed); the reconciler deletes it once it OBSERVES the port
+     * free, so one that lingers means the port is genuinely still bound by something
+     * we no longer manage, or the host is unobservable. The flip time is updated_at:
+     * releasing rows are never re-saved (the park is idempotent). The threshold is a
+     * parameter only so a test can prove the projection without forging timestamps.
+     */
+    public static void stuckReleasingPorts(List<AttentionItem> items, Instant threshold) {
+        Map<String, List<String>> stuckByServer = new LinkedHashMap<>();
+        List<Row> releasing = Models.get(PortAllocationModel.class).find()
+            .where(PortAllocationModel.STATUS.eq(PortAllocationModel.STATUS_RELEASING))
+            .all();
+        for (Row claim : releasing) {
+            Instant parkedAt = claim.get(PortAllocationModel.UPDATED_AT);
+            if (parkedAt == null || parkedAt.isAfter(threshold)) {
+                continue;
+            }
+            stuckByServer.computeIfAbsent(serverNameOf(claim.get(PortAllocationModel.SERVER_ID)),
+                    k -> new ArrayList<>())
+                .add(claim.get(PortAllocationModel.PORT) + "/"
+                    + claim.get(PortAllocationModel.PROTOCOL));
+        }
+        stuckByServer.forEach((server, ports) -> items.add(item("warning", "ethernet",
+            copy("ports_releasing", "attention_title", "server", server),
+            copy("ports_releasing", "attention_detail",
+                "count", ports.size(),
+                "hours", RELEASING_STUCK_AFTER.toHours(),
+                "ports", String.join(", ", ports)),
+            null)));
+    }
+
+    // A releasing claim can outlive its servers row (host removal parks claims and
+    // deletes nothing), so a dangling id must still render, not throw.
+    private static String serverNameOf(@Nullable Integer serverId) {
+        try {
+            return ServerModel.nameOf(serverId);
+        } catch (IllegalArgumentException gone) {
+            return "removed host #" + serverId;
+        }
     }
 
     /** A stacks node whose boot probe found no Docker daemon: a red item, not silence. */
@@ -241,8 +296,12 @@ public final class AttentionCollector {
             } else {
                 var live = safeDetail(databases, database);
                 unavailable = live == null || !live.running();
-                detail = copy("database_not_running", "attention_detail",
-                    "name", database.get(DatabaseModel.NAME));
+                boolean unreachable = live == null
+                    || live.containerState() == ManagedDatabase.ContainerState.UNREACHABLE;
+                // "Gone/stopped" and "the daemon could not be asked" are different
+                // operator problems; conflating them was the C6 status defect.
+                detail = copy(unreachable ? "database_unreachable" : "database_not_running",
+                    "attention_detail", "name", database.get(DatabaseModel.NAME));
             }
             if (unavailable) {
                 items.add(item("warning", "database",

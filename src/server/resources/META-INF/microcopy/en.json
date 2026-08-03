@@ -4030,5 +4030,47 @@
       "text": "{$count} unmanaged resource(s) hold hohenheim-style names: {$names}",
       "scope": "attention_detail"
     }
-  ]
+  ],
+  "ports_releasing": [
+    {
+      "text": "Ports awaiting release verification on {$server}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "{$count} port claim(s) have been releasing for over {$hours} hours: {$ports}. Something outside our management may still hold them.",
+      "scope": "attention_detail"
+    }
+  ],
+  "database_unreachable": {
+    "text": "Attached database {$name} is on a host that cannot be reached",
+    "scope": "attention_detail"
+  },
+  "database_destroy_failed": {
+    "text": "Destroy of '{$name}' could not verify its teardown: {$reason}. The record and its credentials are kept; retry, or use Force delete for an unreachable host.",
+    "scope": "violations"
+  },
+  "force_delete": {
+    "text": "Force delete",
+    "scope": "database"
+  },
+  "force_delete_hint": {
+    "text": "Delete the record without verifying teardown (unreachable host). Container and volume may survive; the reconciler will report them.",
+    "scope": "database"
+  },
+  "force_delete_confirm_generic": {
+    "text": "Delete this database record WITHOUT verifying its container was removed? Whatever still runs on the host survives, and the credentials are lost.",
+    "scope": "database"
+  },
+  "force_delete_confirm": {
+    "text": "Delete the record of '{$name}' WITHOUT verifying its container was removed? Whatever still runs on the host survives, and the credentials are lost. Type the database name to confirm.",
+    "scope": "database"
+  },
+  "force_delete_ok": {
+    "text": "Force delete",
+    "scope": "database"
+  },
+  "force_delete_done": {
+    "text": "Record of '{$name}' deleted; its host resources were NOT verified removed",
+    "scope": "database"
+  }
 }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -38,6 +39,13 @@ public class ServerModel extends Model {
     static {
         // The name is the human title (relation pickers, refusal messages), not "Server #id".
         SCHEMA.setDisplayFields(NAME);
+        // Removing a host we can no longer observe must never delete its port claims (a
+        // servers row vanishing frees nothing on the physical machine): they are parked
+        // in "releasing" instead. Via the before/after pairing because a remove context
+        // carries CRITERIA, not a row -- see PortLedger.captureDoomedOwners. There is no
+        // FK delete action on port_allocations.server_id, so this hook IS the enforcement.
+        SCHEMA.addBeforeRemoveHook(PortLedger::captureDoomedOwners);
+        SCHEMA.addAfterRemoveHook(PortLedger::markDoomedServersReleasing);
     }
 
     /** The server with this unique name, or null if none. */
