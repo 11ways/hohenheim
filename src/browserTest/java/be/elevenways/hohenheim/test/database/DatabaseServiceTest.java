@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -245,11 +246,11 @@ class DatabaseServiceTest {
             assertThat(new ManagedDatabase(unreachable)
                     .status(name, ManagedDatabase.Engine.POSTGRES).state())
                 .as("step 4: an unaskable daemon is UNREACHABLE, not 'gone'")
-                .isEqualTo(ManagedDatabase.ContainerState.UNREACHABLE);
+                .isEqualTo(ContainerState.UNREACHABLE);
             assertThat(new ManagedDatabase(docker)
                     .status(name, ManagedDatabase.Engine.POSTGRES).state())
                 .as("step 4: the reachable daemon reports the container RUNNING")
-                .isEqualTo(ManagedDatabase.ContainerState.RUNNING);
+                .isEqualTo(ContainerState.RUNNING);
 
             // 5. The VERIFIED destroy then succeeds completely: record gone, container
             //    gone on the host, ledger empty, and the name reads ABSENT (not
@@ -275,7 +276,7 @@ class DatabaseServiceTest {
             assertThat(new ManagedDatabase(docker)
                     .status(name, ManagedDatabase.Engine.POSTGRES).state())
                 .as("step 5: a genuinely gone database reads ABSENT")
-                .isEqualTo(ManagedDatabase.ContainerState.ABSENT);
+                .isEqualTo(ContainerState.ABSENT);
         } finally {
             try {
                 service.destroy(name, true);

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.runtime.ContainerState;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -226,14 +227,6 @@ public class ManagedDatabase {
 
         return new Connection(engine, "127.0.0.1", hostPort, user, password, database);
     }
-
-    /**
-     * What the daemon says about a database's container. ABSENT ("this database is gone")
-     * and UNREACHABLE ("I could not ask the daemon") are DISTINCT identities on purpose:
-     * conflating them is how an operator restarts a healthy host chasing a deleted
-     * container, or trusts a "not running" that was really a network failure.
-     */
-    public enum ContainerState { RUNNING, STOPPED, ABSENT, UNREACHABLE }
 
     /** Live container state for a managed database, plus the published host port when running. */
     public record LiveStatus(ContainerState state, Integer port) {

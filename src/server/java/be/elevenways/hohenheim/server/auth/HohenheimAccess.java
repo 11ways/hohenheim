@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
@@ -136,6 +137,25 @@ public final class HohenheimAccess {
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
 
+        // Instances: the SAME single-capability shape as sites, and registering it in the
+        // SAME commit as the model is load-bearing -- without a declared vocabulary,
+        // sameOwner on instances compares two EMPTY subject sets and answers "same owner"
+        // for every pair: a tenancy check that cannot fail. Only "manage" for now; wider
+        // verbs (view/power/console/config/destroy/exec) land WITH the surfaces that
+        // enforce them (declaring one auto-attaches the grant-matrix subpage, so an
+        // unenforced capability would be operator-editable theater).
+        RecordGrants.declareGrantable(GrantableModel.of(InstanceModel.MODEL_ID)
+            .liveWhen(row -> row.get(InstanceModel.DELETED_AT) == null));
+        KnownCapabilities.register(InstanceModel.MODEL_ID,
+            KnownCapability.of(MANAGE)
+                .label(Microcopy.of("manage").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable());
+        RecordGrantCapabilityChecker.declareRules(InstanceModel.MODEL_ID,
+            RecordCapabilityRules.create()
+                .gate(ManagePanel.ACCESS)
+                .admin(HohenheimPanel.ACCESS));
+
         RecordGrants.declareGrantable(GrantableModel.of(CertificateModel.MODEL_ID));
         KnownCapabilities.register(CertificateModel.MODEL_ID,
             KnownCapability.of(VIEW)
@@ -160,46 +180,57 @@ public final class HohenheimAccess {
     }
 
     /**
-     * Whether two sites answer to the SAME owner, which is what separates a deliberate
-     * configuration from a cross-tenant seizure.
+     * Whether two records of one model answer to the SAME owner, which is what separates
+     * a deliberate configuration from a cross-tenant seizure.
      *
-     * AIDEV-NOTE: ownership is the site's set of {@link #MANAGE} grant SUBJECTS, not its
-     * site id. Two sites an operator alone controls hold no manage grants at all, so they
-     * compare equal and an admin may deliberately point a wildcard at one site and carve
-     * one host out to another (a shipped, dispatch-tested capability -- exact beats
-     * wildcard, and two upstreams need two sites). The moment either side is TENANT code,
-     * the subject sets differ and the same shape becomes a takeover. Equality, not
-     * overlap: {A} versus {A, B} would let B seize what A was serving. Mirrors
-     * WorkloadIdentity.isTenantManaged, which is the same tenancy predicate one seam over.
+     * AIDEV-NOTE: ownership is the record's set of {@link #MANAGE} grant SUBJECTS, never
+     * an owner column -- InstanceModel deliberately has NO owner_principal_id, and this
+     * method is THE one derivation every tier (routes, released claims, instances) answers
+     * from; a second spelling is how two authorities drift. Two records an operator alone
+     * controls hold no manage grants at all, so they compare equal and an admin may
+     * deliberately point a wildcard at one site and carve one host out to another (a
+     * shipped, dispatch-tested capability -- exact beats wildcard, and two upstreams need
+     * two sites). The moment either side is TENANT-held, the subject sets differ and the
+     * same shape becomes a takeover. Equality, not overlap: {A} versus {A, B} would let B
+     * seize what A was serving. Mirrors WorkloadIdentity.isTenantManaged, which is the
+     * same tenancy predicate one seam over.
      *
-     * @return true when both sites carry the same manage-grant subjects (both empty
+     * @return true when both records carry the same manage-grant subjects (both empty
      *         included), failing CLOSED to "different owners" when grants cannot be read
      */
-    public static boolean sameOwner(int firstSiteId, int secondSiteId) {
-        if (firstSiteId == secondSiteId) {
+    public static boolean sameOwner(@NonNull Identifier model, @NonNull Object firstId,
+                                    @NonNull Object secondId) {
+        // Grants key records by their stringified id, so identity folds the same way.
+        if (String.valueOf(firstId).equals(String.valueOf(secondId))) {
             return true;
         }
-        Set<String> first = manageSubjectsOf(firstSiteId);
-        Set<String> second = manageSubjectsOf(secondSiteId);
+        Set<String> first = manageSubjectsOf(model, firstId);
+        Set<String> second = manageSubjectsOf(model, secondId);
         return first != null && second != null && first.equals(second);
     }
 
+    /** Site convenience over {@link #sameOwner(Identifier, Object, Object)}. */
+    public static boolean sameOwner(int firstSiteId, int secondSiteId) {
+        return sameOwner(SiteModel.MODEL_ID, firstSiteId, secondSiteId);
+    }
+
     /**
-     * THE owner identity of a site: the subjects holding {@link #MANAGE} on it, spelled
+     * THE owner identity of a record: the subjects holding {@link #MANAGE} on it, spelled
      * {@code subjectType:subjectId}. An EMPTY set means operator-owned (nobody was granted
      * anything), which is why it is a legitimate value and never an error.
      *
      * AIDEV-NOTE: public because the released-claim ledger (ReleasedClaims) must STORE this
      * exact set at release time and compare a later claimant against it. It is the same
-     * authority {@link #sameOwner} answers from -- a second spelling of "who owns this site"
-     * is how the quarantine and the overlap refusal would end up disagreeing.
+     * authority {@link #sameOwner} answers from -- a second spelling of "who owns this
+     * record" is how the quarantine and the overlap refusal would end up disagreeing.
      *
      * @return the manage-grant subjects, or null when grants are unreadable (callers fail closed)
      */
-    public static @Nullable Set<String> manageSubjectsOf(int siteId) {
+    public static @Nullable Set<String> manageSubjectsOf(@NonNull Identifier model,
+                                                         @NonNull Object recordId) {
         Set<String> subjects = new HashSet<>();
         try {
-            for (Row grant : RecordGrants.listForRecord(SiteModel.MODEL_ID, siteId)) {
+            for (Row grant : RecordGrants.listForRecord(model, recordId)) {
                 if (MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))
                         && Boolean.TRUE.equals(grant.get(RecordGrantModel.VALUE))) {
                     subjects.add(grant.get(RecordGrantModel.SUBJECT_TYPE)
@@ -208,12 +239,17 @@ public final class HohenheimAccess {
             }
         } catch (IllegalStateException notInstalled) {
             // ZenitAuth.init never ran (tools, minimal tests): no tenants can exist, so
-            // every site is operator-owned and the sets are legitimately equal.
+            // every record is operator-owned and the sets are legitimately equal.
             return subjects;
         } catch (RuntimeException unreadable) {
             return null;
         }
         return subjects;
+    }
+
+    /** Site convenience over {@link #manageSubjectsOf(Identifier, Object)}. */
+    public static @Nullable Set<String> manageSubjectsOf(int siteId) {
+        return manageSubjectsOf(SiteModel.MODEL_ID, siteId);
     }
 
     /**

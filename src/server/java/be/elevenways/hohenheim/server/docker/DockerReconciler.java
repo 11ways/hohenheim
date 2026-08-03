@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -148,6 +149,13 @@ public final class DockerReconciler {
      * Attribution by our own naming conventions, for resources created before the
      * owner labels existed. Sites key on the record id in the name; databases and
      * stacks key on their unique name column.
+     *
+     * AIDEV-NOTE: there is deliberately NO {@code hohenheim-instance-} scheme here.
+     * The instance tier was born AFTER the owner labels, so every genuine instance
+     * resource (container AND its volumes) carries them from birth -- a label-less
+     * {@code hohenheim-instance-*} name is by definition not attributably ours and
+     * correctly falls through to FOREIGN_COLLIDING below. Adding a name fallback
+     * would convert "looks like ours" into "is ours" for a tier that never needs it.
      */
     private static @Nullable Finding classifyByNamingScheme(String kind, String name, Records records) {
         // hohenheim-site-{id} containers, hohenheim-site-{id}-vol-{mount} volumes.
@@ -288,6 +296,12 @@ public final class DockerReconciler {
             if (StackModel.MODEL_ID.equals(model)) {
                 return Models.get(StackModel.class).find()
                     .where(StackModel.ID.eq(key)).first() != null;
+            }
+            if (InstanceModel.MODEL_ID.equals(model)) {
+                return Models.get(InstanceModel.class).find()
+                    .where(InstanceModel.ID.eq(key))
+                    .where(InstanceModel.DELETED_AT.isNull())
+                    .first() != null;
             }
             return false;   // a model we cannot resolve is an alarm, not an assumption
         }

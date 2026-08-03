@@ -35,6 +35,7 @@ public final class HohenheimTestRuntime {
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.STACKS, true);
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.PROCESSES, true);
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.DATABASES, true);
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.INSTANCES, true);
             HohenheimRoles.capture();
         }
         ensureDatasource();

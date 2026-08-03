@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -211,15 +212,15 @@ public class DatabaseService extends DatasourceScoped {
     /** A persisted database plus its live container status, for the admin list.
      *  {@code status} is the provisioning lifecycle (provisioning/active/failed/destroy_failed);
      *  {@code containerState} is the daemon's answer (running/stopped/absent/unreachable --
-     *  absent and unreachable are DISTINCT identities, see ManagedDatabase.ContainerState). */
+     *  absent and unreachable are DISTINCT identities, see ContainerState). */
     public record Summary(String name, String engine, String image, String database, String user,
                           boolean ephemeral, String server, String status, boolean running,
-                          ManagedDatabase.ContainerState containerState, Integer port) {}
+                          ContainerState containerState, Integer port) {}
 
     /** Full detail for one database, including the password (admin detail page only). */
     public record Detail(String name, String engine, String image, String database, String user,
                          String password, boolean ephemeral, String server, String status,
-                         boolean running, ManagedDatabase.ContainerState containerState,
+                         boolean running, ContainerState containerState,
                          Integer port) {}
 
     /** Full detail for one database by name with live status, or null if there is no such record. */
@@ -281,7 +282,7 @@ public class DatabaseService extends DatasourceScoped {
         try {
             return managedFor.apply(serverOf(row)).status(row.get(DatabaseModel.NAME), engine);
         } catch (Exception e) {
-            return new ManagedDatabase.LiveStatus(ManagedDatabase.ContainerState.UNREACHABLE, null);
+            return new ManagedDatabase.LiveStatus(ContainerState.UNREACHABLE, null);
         }
     }
 

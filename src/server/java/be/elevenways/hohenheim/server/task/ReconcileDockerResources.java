@@ -34,7 +34,8 @@ public class ReconcileDockerResources extends ScheduledTask {
         // calls per daemon. Gated on every role that runs containers it attributes.
         return HohenheimRoles.schedulesWhen(
             List.of(ScheduleDeclaration.fallback("41 * * * *")),
-            HohenheimRoles.Role.STACKS, HohenheimRoles.Role.DATABASES, HohenheimRoles.Role.PROXY);
+            HohenheimRoles.Role.STACKS, HohenheimRoles.Role.DATABASES, HohenheimRoles.Role.PROXY,
+            HohenheimRoles.Role.INSTANCES);
     }
 
     @Override

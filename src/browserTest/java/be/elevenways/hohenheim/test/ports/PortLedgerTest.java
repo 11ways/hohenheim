@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.ports;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -378,6 +379,48 @@ class PortLedgerTest {
                 .as("step 6: the removed host's held claim survives").isNotNull();
             assertThat(PortLedger.isReleasing(afterHostRemoval))
                 .as("step 6: the removed host's claim is parked in releasing").isTrue();
+        });
+    }
+
+    /**
+     * The instance tier's remove hooks: deleting an instance record must PARK its port
+     * claims in {@code releasing} (its container may still be bound), never delete them
+     * and never leave them {@code held} by a ghost. Without the before/after hook PAIR
+     * on InstanceModel this fails in the worst way: the claim stays {@code held} with
+     * no owner, no observer ever frees it, and the port is permanently unclaimable.
+     */
+    @Test
+    void deletingAnInstanceParksItsClaimsInReleasing() {
+        Db.run(datasource, () -> {
+            int localId = ServerModel.localServerId();
+            // 1. An instance record owning one observed loopback port.
+            Row instance = Models.get(InstanceModel.class).createEmptyRow();
+            instance.set(InstanceModel.NAME, "hook-check");
+            instance.set(InstanceModel.KIND, "hohenheim:docker_container");
+            Models.get(InstanceModel.class).save(instance);
+            int instanceId = instance.get(InstanceModel.ID);
+            PortLedger.claim(localId, "127.0.0.1", 8340, "tcp",
+                InstanceModel.MODEL_ID, instanceId, null);
+            assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId))
+                .as("step 1: the instance holds its claim").hasSize(1);
+
+            // 2. Hard-delete the record (the criteria-only remove path every delete takes).
+            Models.get(InstanceModel.class).delete(instanceId);
+            Row survivor = PortLedger.holderOf(
+                PortLedger.claimKeyOf(localId, "127.0.0.1", 8340, "tcp"));
+            assertThat(survivor)
+                .as("step 2: the claim SURVIVES its owner (a record delete observes nothing)")
+                .isNotNull();
+            assertThat(PortLedger.isReleasing(survivor))
+                .as("step 2: and is parked in releasing, so only an observer frees it")
+                .isTrue();
+
+            // 3. It still blocks a rival until observed free -- reserved-until-observed.
+            assertThatThrownBy(() -> PortLedger.claim(localId, "127.0.0.1", 8340, "tcp",
+                    null, null, "rival"))
+                .as("step 3: the parked claim still refuses a rival")
+                .isInstanceOf(PortLedger.PortConflict.class);
+            PortLedger.releaseObserved(survivor);
         });
     }
 
