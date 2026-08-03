@@ -52,9 +52,14 @@ public final class HostPreflight {
         }
     }
 
-    /** The whole preflight outcome; {@code passed} = no REQUIRED check failed. */
+    /**
+     * The whole preflight outcome; {@code passed} = no REQUIRED check failed.
+     * {@code daemonFailure} carries the TYPED classification of an unreachable daemon so
+     * persistence never has to re-derive a kind out of prose it composed itself.
+     */
     public record Report(@NonNull List<Check> checks, @NonNull Map<String, Object> facts,
-                         boolean passed, @NonNull Instant at) {
+                         boolean passed, @NonNull Instant at,
+                         HostProbe.@Nullable Outcome daemonFailure) {
 
         public @Nullable Check check(@NonNull String name) {
             for (Check check : this.checks) {
@@ -86,7 +91,18 @@ public final class HostPreflight {
         if (server == null) {
             throw new IllegalArgumentException("No server named '" + serverName + "'");
         }
-        Report report = run(servers.clientFor(serverName), nftProbeFor(server));
+        Report report;
+        try {
+            report = run(servers.clientFor(serverName), nftProbeFor(server));
+        } catch (HostKeys.HostTrustException refusal) {
+            // An unpinned host cannot be probed at all -- that refusal is itself the
+            // verdict, and it must be STORED like any other, not thrown at the operator
+            // as an untyped stack trace.
+            HostProbe.Outcome outcome = HostProbe.classify(refusal);
+            report = new Report(List.of(new Check("daemon", STATUS_FAIL, true,
+                outcome.kind().token + ": " + outcome.detail())),
+                Map.of(), false, Instant.now(), outcome);
+        }
         store(serverName, report);
         return report;
     }
@@ -94,11 +110,10 @@ public final class HostPreflight {
     /** The production nft seam per host mode: local sudo, or the same sudo command over ssh. */
     static @NonNull NftProbe nftProbeFor(@NonNull Row server) {
         if (ServerModel.MODE_SSH.equals(server.get(ServerModel.MODE))) {
-            String target = server.get(ServerModel.SSH_TARGET);
             return (args, stdin) -> {
-                List<String> argv = new ArrayList<>(List.of("ssh", "-o", "BatchMode=yes",
-                    "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10",
-                    "--", target, "sudo", "-n", "--", "nft"));
+                // Same pinned/identified ssh lane as the docker transport -- one seam.
+                List<String> argv = new ArrayList<>(HostKeys.sshArgv(server,
+                    List.of("sudo", "-n", "--", "nft")));
                 argv.addAll(args);
                 return NftRunner.Sudo.execute(argv, stdin, 15);
             };
@@ -115,8 +130,9 @@ public final class HostPreflight {
     public static @NonNull Report run(@NonNull DockerClient docker, @NonNull NftProbe nft) {
         List<Check> checks = new ArrayList<>();
         Map<String, Object> facts = new LinkedHashMap<>();
+        HostProbe.Outcome[] daemonFailure = new HostProbe.Outcome[1];
 
-        Map<String, Object> info = probeDaemon(docker, checks, facts);
+        Map<String, Object> info = probeDaemon(docker, checks, facts, daemonFailure);
         if (info != null) {
             checkApiVersion(facts, checks);
             checkDaemonPosture(info, checks);
@@ -131,14 +147,15 @@ public final class HostPreflight {
                 passed = false;
             }
         }
-        return new Report(List.copyOf(checks), facts, passed, Instant.now());
+        return new Report(List.copyOf(checks), facts, passed, Instant.now(), daemonFailure[0]);
     }
 
     // -- individual probes ----------------------------------------------------
 
     private static @Nullable Map<String, Object> probeDaemon(DockerClient docker,
                                                              List<Check> checks,
-                                                             Map<String, Object> facts) {
+                                                             Map<String, Object> facts,
+                                                             HostProbe.Outcome[] failure) {
         try {
             Map<String, Object> version = docker.version();
             Map<String, Object> info = docker.info();
@@ -160,6 +177,7 @@ public final class HostPreflight {
             return info;
         } catch (Exception error) {
             HostProbe.Outcome outcome = HostProbe.classify(error);
+            failure[0] = outcome;
             checks.add(new Check("daemon", STATUS_FAIL, true,
                 outcome.kind().token + ": " + outcome.detail()));
             return null;
@@ -344,17 +362,15 @@ public final class HostPreflight {
         server.set(ServerModel.PROBED_AT, report.at());
         server.set(ServerModel.PREFLIGHT_OK, report.passed());
         server.set(ServerModel.CONTROLLER_VERSION, controllerVersion());
-        Check daemon = report.check("daemon");
-        if (daemon != null && !daemon.failed()) {
-            server.set(ServerModel.LAST_SEEN_AT, report.at());
-            server.set(ServerModel.LAST_ERROR_KIND, null);
-            server.set(ServerModel.LAST_ERROR, null);
-        } else if (daemon != null) {
-            server.set(ServerModel.LAST_ERROR_KIND, daemon.detail().contains(":")
-                ? daemon.detail().substring(0, daemon.detail().indexOf(':')) : "unreachable");
-            server.set(ServerModel.LAST_ERROR, daemon.detail());
-        }
         Models.get(ServerModel.class).save(server);
+        // Health goes through THE typed funnel, which also quarantines a host whose key
+        // changed. Re-parsing the kind back out of the detail string was a second,
+        // divergent classifier over text this class had just composed.
+        if (report.daemonFailure() != null) {
+            HostProbe.recordFailure(serverName, report.daemonFailure());
+        } else if (report.check("daemon") != null) {
+            HostProbe.recordSuccess(serverName);
+        }
         Blast.slog("hohenheim.host.preflight", Map.of(
             "server", serverName,
             "passed", report.passed(),

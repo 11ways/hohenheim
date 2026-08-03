@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -28,6 +29,8 @@ public final class HostProbe {
         DNS("dns"),
         SSH_AUTH("ssh_auth"),
         HOST_KEY_CHANGED("host_key_changed"),
+        NOT_PINNED("not_pinned"),
+        NO_IDENTITY("no_identity"),
         DOCKER_ABSENT("docker_absent"),
         TIMEOUT("timeout");
 
@@ -61,6 +64,10 @@ public final class HostProbe {
     /** Classify a probe failure by its message evidence. */
     public static @NonNull Outcome classify(@NonNull Exception error) {
         String message = error.getMessage() != null ? error.getMessage() : error.toString();
+        // A refusal we RAISED carries its own class; never re-derive it from prose.
+        if (error instanceof HostKeys.HostTrustException refusal) {
+            return Outcome.failure(refusal.kind, message);
+        }
         String folded = BlastString.lower(message);
         FailureKind kind = FailureKind.UNREACHABLE;
         if (folded.contains("timed out") || folded.contains("timeout")) {
@@ -97,7 +104,11 @@ public final class HostProbe {
         Models.get(ServerModel.class).save(server);
     }
 
-    /** Persist a typed probe failure on the host record; {@code last_seen_at} keeps its value. */
+    /**
+     * Persist a typed probe failure on the host record; {@code last_seen_at} keeps its
+     * value. A {@link FailureKind#HOST_KEY_CHANGED} additionally QUARANTINES the host --
+     * see {@link #quarantine}.
+     */
     public static void recordFailure(@NonNull String serverName, @NonNull Outcome outcome) {
         Row server = Models.get(ServerModel.class).findByName(serverName);
         if (server == null || outcome.kind() == null) {
@@ -105,6 +116,29 @@ public final class HostProbe {
         }
         server.set(ServerModel.LAST_ERROR_KIND, outcome.kind().token);
         server.set(ServerModel.LAST_ERROR, outcome.detail());
+        if (outcome.kind() == FailureKind.HOST_KEY_CHANGED) {
+            quarantine(server);
+        }
         Models.get(ServerModel.class).save(server);
+    }
+
+    /**
+     * A host whose identity we can no longer verify stops receiving tenant workloads:
+     * the preflight verdict is dropped (so the admit gate refuses) and an ADMITTED host
+     * falls back to blocked. Running workloads are left alone -- cleanup must stay
+     * possible -- but nothing new lands here until an operator re-pins deliberately.
+     *
+     * AIDEV-NOTE: this is the only automatic admission DOWNgrade in the product. There is
+     * deliberately no matching automatic upgrade: recovery is HostKeys.repin plus a fresh
+     * preflight plus a fresh admit, three explicit operator acts.
+     */
+    private static void quarantine(@NonNull Row server) {
+        server.set(ServerModel.PREFLIGHT_OK, false);
+        if (ServerModel.ADMISSION_ADMITTED.equals(server.get(ServerModel.ADMISSION))) {
+            server.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+        }
+        Blast.slog("hohenheim.host.quarantined", Map.of(
+            "server", String.valueOf((Object) server.get(ServerModel.NAME)),
+            "reason", FailureKind.HOST_KEY_CHANGED.token));
     }
 }

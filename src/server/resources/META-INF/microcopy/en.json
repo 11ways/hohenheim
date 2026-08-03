@@ -4378,5 +4378,157 @@
   "orphan_remove_failed": {
     "text": "Removal refused by the daemon: {$name}",
     "scope": "violations"
+  },
+  "scan_host_key": {
+    "text": "Scan host key",
+    "scope": "server"
+  },
+  "scan_host_key_hint": {
+    "text": "Read the SSH host key this machine presents and pin it. A key that disagrees with the pin is never adopted here.",
+    "scope": "server"
+  },
+  "host_key_pinned_toast": {
+    "text": "Pinned {$fingerprint}. Compare it with what the host's own administrator reports, then confirm it.",
+    "scope": "server"
+  },
+  "host_key_unchanged_toast": {
+    "text": "The host still presents the pinned key ({$fingerprint}).",
+    "scope": "server"
+  },
+  "confirm_host_key": {
+    "text": "Confirm fingerprint",
+    "scope": "server"
+  },
+  "confirm_host_key_hint": {
+    "text": "Record that you compared the pinned fingerprint out of band.",
+    "scope": "server"
+  },
+  "confirm_host_key_generic": {
+    "text": "Confirm this host's pinned SSH fingerprint?",
+    "scope": "server"
+  },
+  "confirm_host_key_body": {
+    "text": "Type the fingerprint to confirm you compared {$fingerprint} for {$name} against what the host's own administrator reports. Until you do, this host cannot be admitted for placement.",
+    "scope": "server"
+  },
+  "host_key_confirmed_toast": {
+    "text": "Host key of {$name} confirmed.",
+    "scope": "server"
+  },
+  "repin_host_key": {
+    "text": "Re-pin changed host key",
+    "scope": "server"
+  },
+  "repin_host_key_hint": {
+    "text": "Adopt the key this host now presents. Only do this once you know why it changed.",
+    "scope": "server"
+  },
+  "repin_host_key_generic": {
+    "text": "Adopt the key this host now presents?",
+    "scope": "server"
+  },
+  "repin_host_key_body": {
+    "text": "{$name} presented a DIFFERENT SSH host key. Pinned: {$pinned}. Offered: {$offered}. If you did not deliberately replace the host's key, this is what a man-in-the-middle looks like and you must not continue. Type the offered fingerprint to adopt it; the host then has to be confirmed, preflighted and admitted again.",
+    "scope": "server"
+  },
+  "host_key_repinned_toast": {
+    "text": "Re-pinned {$fingerprint}. The host is unconfirmed and unadmitted again.",
+    "scope": "server"
+  },
+  "rotate_identity": {
+    "text": "Rotate SSH key",
+    "scope": "server"
+  },
+  "rotate_identity_hint": {
+    "text": "Generate a new client key for this host. The old one stops working immediately.",
+    "scope": "server"
+  },
+  "rotate_identity_generic": {
+    "text": "Generate a new client key for this host?",
+    "scope": "server"
+  },
+  "rotate_identity_body": {
+    "text": "A new client key is generated for {$name} and the current one stops working at once. Hohenheim cannot reach the host again until you install the new public key in its authorized_keys. Type the host name to continue.",
+    "scope": "server"
+  },
+  "identity_rotated_toast": {
+    "text": "New client key generated for {$name}. Install the public key shown on the record.",
+    "scope": "server"
+  },
+  "trust_notice_body": {
+    "text": "Enrolling a host gives Hohenheim control of its Docker daemon, which is equivalent to root on that machine: it can start any container, read any path a container mounts, and it receives every credential Hohenheim injects into workloads there. Only enroll machines you own. After saving, install the shown public key on the host, scan its host key, and confirm the fingerprint out of band.",
+    "scope": "server"
+  },
+  "host_key_local": {
+    "text": "The local daemon is reached over a Unix socket; no SSH host key is involved.",
+    "scope": "server"
+  },
+  "host_key_none": {
+    "text": "Not pinned. Scan the host key before this host can be reached at all.",
+    "scope": "server"
+  },
+  "host_key_confirmed": {
+    "text": "{$fingerprint} (confirmed)",
+    "scope": "server"
+  },
+  "host_key_unconfirmed": {
+    "text": "{$fingerprint} (NOT confirmed -- compare it out of band and confirm it)",
+    "scope": "server"
+  },
+  "host_key_mismatch_state": {
+    "text": "MISMATCH. Pinned {$pinned}, the host now offers {$offered}. Connections are refused and the host is blocked until you re-pin deliberately.",
+    "scope": "server"
+  },
+  "identity_missing": {
+    "text": "No client key yet.",
+    "scope": "server"
+  },
+  "trust_notice": {
+    "text": "What you are granting",
+    "scope": "field"
+  },
+  "identity_public_key": [
+    {
+      "text": "Hohenheim public key",
+      "scope": "field"
+    },
+    {
+      "text": "Add this line to the remote account's ~/.ssh/authorized_keys. It is unique to this host, so revoking it affects nothing else.",
+      "scope": "help"
+    }
+  ],
+  "host_key_state": [
+    {
+      "text": "Host key",
+      "scope": "field"
+    },
+    {
+      "text": "The SSH host key fingerprint Hohenheim enforces on every connection to this machine.",
+      "scope": "help"
+    }
+  ],
+  "host_key_mismatch": {
+    "text": "{$name} presented a different SSH host key (pinned {$pinned}, offered {$offered}). Nothing was re-pinned and the host is blocked; verify out of band before adopting the new key.",
+    "scope": "violations"
+  },
+  "host_key_scan_failed": {
+    "text": "Could not read a usable SSH host key from {$target}: {$detail}",
+    "scope": "violations"
+  },
+  "host_key_not_pinned": {
+    "text": "This host has no pinned SSH host key yet",
+    "scope": "violations"
+  },
+  "host_key_no_offer": {
+    "text": "There is no differing host key to adopt",
+    "scope": "violations"
+  },
+  "identity_generation_failed": {
+    "text": "Could not generate an SSH key: {$detail}",
+    "scope": "violations"
+  },
+  "host_key_unverified": {
+    "text": "Host '{$name}' has no confirmed SSH host key fingerprint; scan the host key and confirm it first",
+    "scope": "violations"
   }
 }

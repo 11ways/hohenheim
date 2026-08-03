@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
+import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -14,6 +15,7 @@ import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
@@ -64,10 +66,42 @@ public final class ServerResource extends RowResource {
         .visibleIn(EditView.EDIT)
         .build();
 
+    /**
+     * The plain statement of what enrolling grants, at the point of enrolling. Driving a
+     * remote Docker daemon IS root-equivalent access to that machine and no mechanism we
+     * add changes that; the honest mitigation is that nobody pastes a target without
+     * being told.
+     */
+    private static final StringField TRUST_NOTICE = StringField.builder("trust_notice")
+        .label(HohenheimFormCopy.label("trust_notice"))
+        .build();
+
+    private static final StringField IDENTITY_PUBLIC_KEY = StringField.builder("identity_public_key")
+        .label(HohenheimFormCopy.label("identity_public_key"))
+        .help(HohenheimFormCopy.help("identity_public_key"))
+        .visibleIn(EditView.EDIT)
+        .build();
+
+    private static final StringField HOST_KEY_STATE = StringField.builder("host_key_state")
+        .label(HohenheimFormCopy.label("host_key_state"))
+        .help(HohenheimFormCopy.help("host_key_state"))
+        .visibleIn(EditView.EDIT)
+        .build();
+
     private final FormSpec formSpec = FormSpec.builder()
         .add(ServerModel.NAME)
         .add(ServerModel.SSH_TARGET)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.POSTURE))
+        .add(Computed.of(TRUST_NOTICE, values -> hostCopy(Microcopy.of("trust_notice_body")))
+            .dependsOn("name")
+            .build())
+        .add(Computed.of(HOST_KEY_STATE, values -> hostKeyState(String.valueOf(values.get("name"))))
+            .dependsOn("name")
+            .build())
+        .add(Computed.of(IDENTITY_PUBLIC_KEY,
+                values -> identityPublicKey(String.valueOf(values.get("name"))))
+            .dependsOn("name")
+            .build())
         .add(Computed.of(LIVE_OVERVIEW, values -> serverOverview(String.valueOf(values.get("name"))))
             .dependsOn("name")
             .build())
@@ -156,6 +190,41 @@ public final class ServerResource extends RowResource {
             .withArg("admission", admission));
     }
 
+    /**
+     * The pin as the operator must be able to READ it: which fingerprint we enforce,
+     * whether a human ever confirmed it, and -- loudly -- that the host has since offered
+     * a different one.
+     */
+    private @NonNull String hostKeyState(@NonNull String name) {
+        Row row = Models.get(ServerModel.class).findByName(name);
+        if (row == null || !ServerModel.MODE_SSH.equals(row.get(ServerModel.MODE))) {
+            return hostCopy(Microcopy.of("host_key_local"));
+        }
+        String fingerprint = row.get(ServerModel.HOST_KEY_FINGERPRINT);
+        if (fingerprint == null || fingerprint.isBlank()) {
+            return hostCopy(Microcopy.of("host_key_none"));
+        }
+        String offered = row.get(ServerModel.HOST_KEY_OFFERED);
+        if (offered != null && !offered.isBlank()) {
+            return hostCopy(Microcopy.of("host_key_mismatch_state")
+                .withArg("pinned", fingerprint)
+                .withArg("offered", HostKeys.fingerprintOf(offered)));
+        }
+        return hostCopy(Microcopy.of(Boolean.TRUE.equals(row.get(ServerModel.HOST_KEY_VERIFIED))
+            ? "host_key_confirmed" : "host_key_unconfirmed").withArg("fingerprint", fingerprint));
+    }
+
+    /** The public half of this host's OWN client key, for the remote's authorized_keys. */
+    private @NonNull String identityPublicKey(@NonNull String name) {
+        Row row = Models.get(ServerModel.class).findByName(name);
+        if (row == null || !ServerModel.MODE_SSH.equals(row.get(ServerModel.MODE))) {
+            return "";
+        }
+        String publicKey = row.get(ServerModel.IDENTITY_PUBLIC_KEY);
+        return publicKey != null && !publicKey.isBlank() ? publicKey
+            : hostCopy(Microcopy.of("identity_missing"));
+    }
+
     /** The detail page's LIVE overview; the probe persists its typed outcome either way. */
     private @NonNull String serverOverview(@NonNull String name) {
         ServerService.Summary summary = this.serverService.probeAndStore(name);
@@ -211,11 +280,169 @@ public final class ServerResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
+        actions.add(this.scanHostKeyAction());
+        actions.add(this.confirmHostKeyAction());
+        actions.add(this.repinHostKeyAction());
+        actions.add(this.rotateIdentityAction());
         actions.add(this.preflightAction());
         actions.add(this.admitAction());
         actions.add(this.cordonAction());
         actions.add(this.uncordonAction());
         return actions;
+    }
+
+    private static boolean isRemote(@NonNull Row row) {
+        return ServerModel.MODE_SSH.equals(row.get(ServerModel.MODE));
+    }
+
+    private static boolean isPinned(@NonNull Row row) {
+        String pinned = row.get(ServerModel.HOST_KEY);
+        return pinned != null && !pinned.isBlank();
+    }
+
+    /**
+     * Ask the host which key it offers and pin it if there is nothing to contradict.
+     * A DIFFERENT key never re-pins here: it is stored as evidence and the host is
+     * quarantined, because "reconnect and it healed itself" is the exact behaviour a
+     * man-in-the-middle needs.
+     */
+    private @NonNull RowAction<Row> scanHostKeyAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "scan_host_key"))
+            .label(Microcopy.of("scan_host_key").withFilter("scope", "server"))
+            .description(Microcopy.of("scan_host_key_hint").withFilter("scope", "server"))
+            .icon(Icon.of("fingerprint"))
+            .visibleFor((row, ctx) -> isRemote(row))
+            .handler((row, ctx) -> {
+                HostKeys.ensureIdentity(row);
+                HostKeys.ScanResult result = HostKeys.scanAndPin(row);
+                if (result.outcome() == HostKeys.ScanOutcome.MISMATCH) {
+                    // Loud and red. The quarantine is already persisted by scanAndPin;
+                    // this is the operator-facing half of the same event.
+                    // AIDEV-NOTE: a thrown Violations is the only ERROR-level action
+                    // outcome zenit-cms offers -- CmsActionResult.Refresh carries a
+                    // success toast only, and errorToast() does not refresh.
+                    throw Violations.ofForm(CmsSupport.violationText("host_key_mismatch")
+                        .withArg("name", String.valueOf((Object) row.get(ServerModel.NAME)))
+                        .withArg("pinned", String.valueOf(result.previous()))
+                        .withArg("offered", result.fingerprint()));
+                }
+                return CmsActionResult.refreshWithToast(Microcopy.of(
+                        result.outcome() == HostKeys.ScanOutcome.PINNED
+                            ? "host_key_pinned_toast" : "host_key_unchanged_toast")
+                    .withFilter("scope", "server")
+                    .withArg("fingerprint", result.fingerprint()));
+            })
+            .build();
+    }
+
+    /**
+     * The operator states, by typing the fingerprint, that they compared it against what
+     * the host's own administrator reports. Nothing else in the product sets this flag.
+     */
+    private @NonNull RowAction<Row> confirmHostKeyAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "confirm_host_key"))
+            .label(Microcopy.of("confirm_host_key").withFilter("scope", "server"))
+            .description(Microcopy.of("confirm_host_key_hint").withFilter("scope", "server"))
+            .icon(Icon.of("shield-halved"))
+            .visibleFor((row, ctx) -> isRemote(row) && isPinned(row)
+                && !Boolean.TRUE.equals(row.get(ServerModel.HOST_KEY_VERIFIED)))
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("confirm_host_key").withFilter("scope", "server"))
+                .body(Microcopy.of("confirm_host_key_generic").withFilter("scope", "server"))
+                .build())
+            .dynamicConfirmation(row -> ConfirmationSpec.builder()
+                .title(Microcopy.of("confirm_host_key").withFilter("scope", "server"))
+                .body(Microcopy.of("confirm_host_key_body").withFilter("scope", "server")
+                    .withArg("name", row.get(ServerModel.NAME))
+                    .withArg("fingerprint", row.get(ServerModel.HOST_KEY_FINGERPRINT)))
+                .requireTypedConfirmation(row.get(ServerModel.HOST_KEY_FINGERPRINT))
+                .build())
+            .handler((row, ctx) -> {
+                HostKeys.confirm(row);
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("host_key_confirmed_toast").withFilter("scope", "server")
+                        .withArg("name", row.get(ServerModel.NAME)));
+            })
+            .build();
+    }
+
+    /**
+     * Adopt the key the host now offers -- the explicit operator act a mismatch demands.
+     * Destructive on purpose: the confirmation names both fingerprints and asks for the
+     * NEW one to be typed, and the re-pinned host lands unverified, unpreflighted and
+     * unadmitted.
+     */
+    private @NonNull RowAction<Row> repinHostKeyAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "repin_host_key"))
+            .label(Microcopy.of("repin_host_key").withFilter("scope", "server"))
+            .description(Microcopy.of("repin_host_key_hint").withFilter("scope", "server"))
+            .icon(Icon.of("triangle-exclamation"))
+            .style(ActionStyle.DESTRUCTIVE)
+            .inlineInRow(false)
+            .visibleFor((row, ctx) -> {
+                String offered = row.get(ServerModel.HOST_KEY_OFFERED);
+                return isRemote(row) && offered != null && !offered.isBlank();
+            })
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("repin_host_key").withFilter("scope", "server"))
+                .body(Microcopy.of("repin_host_key_generic").withFilter("scope", "server"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .build())
+            .dynamicConfirmation(row -> {
+                String offered = row.get(ServerModel.HOST_KEY_OFFERED);
+                ConfirmationSpec.Builder builder = ConfirmationSpec.builder()
+                    .title(Microcopy.of("repin_host_key").withFilter("scope", "server"))
+                    .style(ActionStyle.DESTRUCTIVE);
+                if (offered == null || offered.isBlank()) {
+                    return builder.body(Microcopy.of("repin_host_key_generic")
+                        .withFilter("scope", "server")).build();
+                }
+                String fingerprint = HostKeys.fingerprintOf(offered);
+                return builder
+                    .body(Microcopy.of("repin_host_key_body").withFilter("scope", "server")
+                        .withArg("name", row.get(ServerModel.NAME))
+                        .withArg("pinned", row.get(ServerModel.HOST_KEY_FINGERPRINT))
+                        .withArg("offered", fingerprint))
+                    .requireTypedConfirmation(fingerprint)
+                    .build();
+            })
+            .handler((row, ctx) -> {
+                HostKeys.repin(row);
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("host_key_repinned_toast").withFilter("scope", "server")
+                        .withArg("fingerprint", row.get(ServerModel.HOST_KEY_FINGERPRINT)));
+            })
+            .build();
+    }
+
+    /** Mint a fresh per-host client key; the old one stops working immediately. */
+    private @NonNull RowAction<Row> rotateIdentityAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "rotate_host_identity"))
+            .label(Microcopy.of("rotate_identity").withFilter("scope", "server"))
+            .description(Microcopy.of("rotate_identity_hint").withFilter("scope", "server"))
+            .icon(Icon.of("key"))
+            .style(ActionStyle.DESTRUCTIVE)
+            .inlineInRow(false)
+            .visibleFor((row, ctx) -> isRemote(row))
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("rotate_identity").withFilter("scope", "server"))
+                .body(Microcopy.of("rotate_identity_generic").withFilter("scope", "server"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .build())
+            .dynamicConfirmation(row -> ConfirmationSpec.builder()
+                .title(Microcopy.of("rotate_identity").withFilter("scope", "server"))
+                .body(Microcopy.of("rotate_identity_body").withFilter("scope", "server")
+                    .withArg("name", row.get(ServerModel.NAME)))
+                .style(ActionStyle.DESTRUCTIVE)
+                .requireTypedConfirmation(row.get(ServerModel.NAME))
+                .build())
+            .handler((row, ctx) -> {
+                HostKeys.rotateIdentity(row);
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("identity_rotated_toast").withFilter("scope", "server")
+                        .withArg("name", row.get(ServerModel.NAME)));
+            })
+            .build();
     }
 
     /** Run the full preflight and store its report; the toast states the verdict. */
@@ -302,6 +529,13 @@ public final class ServerResource extends RowResource {
         validate(values, null);
         values.put("mode", ServerService.MODE_SSH);
         Object id = super.persistRow(values, accessContext);
+        // Enrollment mints the host's OWN client key immediately, so the very first
+        // thing the operator sees on the record is the public key to install -- there
+        // is never a window in which the controller's ambient identity would do.
+        Row created = Models.get(ServerModel.class).findById(id);
+        if (created != null) {
+            HostKeys.ensureIdentity(created);
+        }
         ServerOptions.refresh();
         return id;
     }

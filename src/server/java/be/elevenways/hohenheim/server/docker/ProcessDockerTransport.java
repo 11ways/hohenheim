@@ -29,6 +29,9 @@ public class ProcessDockerTransport implements DockerTransport {
             return thread;
         });
 
+    /** How long to wait for the stderr drain to finish once stdout has hit EOF. */
+    private static final long STDERR_DRAIN_GRACE_MS = 2000;
+
     private final List<String> command;
 
     public ProcessDockerTransport(List<String> command) {
@@ -36,15 +39,15 @@ public class ProcessDockerTransport implements DockerTransport {
     }
 
     /**
-     * Drive a remote daemon over SSH; requires key-based ssh access and docker on {@code sshTarget}.
-     * The {@code --} terminator stops ssh from parsing the target as an option (e.g. a target of
-     * {@code -oProxyCommand=...} would otherwise execute an arbitrary command on this host).
+     * The remote command this transport bridges to; the ssh argv around it -- pinned
+     * known_hosts, per-host identity -- is built by {@code HostKeys.sshArgv}.
+     *
+     * AIDEV-NOTE: there is deliberately NO {@code overSsh(String target)} convenience
+     * here any more. It spelled {@code StrictHostKeyChecking=accept-new} against the OS
+     * user's ambient known_hosts, i.e. silent trust-on-first-use with no pin an operator
+     * could ever see; keeping it as a reachable API is how that would come back.
      */
-    public static ProcessDockerTransport overSsh(String sshTarget) {
-        return new ProcessDockerTransport(List.of("ssh", "-o", "BatchMode=yes",
-            "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10",
-            "--", sshTarget, "docker", "system", "dial-stdio"));
-    }
+    public static final List<String> DIAL_STDIO = List.of("docker", "system", "dial-stdio");
 
     @Override
     public byte[] roundTrip(byte[] request, long timeoutMs) throws IOException {
@@ -76,7 +79,23 @@ public class ProcessDockerTransport implements DockerTransport {
             // close), giving us stdout EOF here.
             byte[] response = process.getInputStream().readAllBytes();
             if (response.length == 0) {
-                throw new IOException("Docker transport produced no response (command: " + command + "): "
+                // AIDEV-NOTE: JOIN the drain thread before reading its buffer. Reading it
+                // straight after stdout EOF races the drain, so the diagnostic text --
+                // the ONLY evidence HostProbe classifies on -- came back empty at random
+                // and a host-key-verification failure was reported as plain "unreachable".
+                try {
+                    drain.join(STDERR_DRAIN_GRACE_MS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+                // AIDEV-NOTE: the ARGV must not appear here. HostProbe classifies this
+                // message, and an argv carrying "ConnectTimeout=10" made every remote
+                // failure -- auth refused, host key changed, docker missing -- classify
+                // as "timeout", because the word was in the command we printed rather
+                // than in any evidence the host gave us. Only the program name and the
+                // real stderr belong in a string something else reads for meaning.
+                throw new IOException("Docker transport produced no response ("
+                    + command.get(0) + "): "
                     + new String(stderr.toByteArray(), StandardCharsets.UTF_8).trim());
             }
             return response;
