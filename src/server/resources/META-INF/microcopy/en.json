@@ -1841,6 +1841,10 @@
     {
       "text": "Instances",
       "scope": "instance"
+    },
+    {
+      "text": "Instance Quotas",
+      "scope": "instance_quota"
     }
   ],
   "dashboard": {
@@ -4206,5 +4210,33 @@
   "instance_destroy_failed": {
     "text": "Destroy of {$name} failed: {$reason}. The record is kept; retry once the host is reachable.",
     "scope": "violations"
-  }
+  },
+  "quota_reached": {
+    "text": "Instance quota reached: {$used} of {$limit} in use",
+    "scope": "violations"
+  },
+  "quota_negative": {
+    "text": "A quota cannot be negative (0 means nothing allowed, empty means no override)",
+    "scope": "violations"
+  },
+  "quota_subjects": [
+    {
+      "text": "Owner subjects",
+      "scope": "field"
+    },
+    {
+      "text": "The owner's manage-grant subjects, one \"type:id\" token per line (sorted); leave empty for the operator",
+      "scope": "help"
+    }
+  ],
+  "max_instances": [
+    {
+      "text": "Max instances",
+      "scope": "field"
+    },
+    {
+      "text": "Cap for this owner; 0 refuses every new instance, empty falls back to the global default",
+      "scope": "help"
+    }
+  ]
 }

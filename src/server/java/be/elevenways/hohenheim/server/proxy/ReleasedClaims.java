@@ -19,9 +19,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.LinkedHashSet;
 import java.util.Set;
-import java.util.TreeSet;
 
 /**
  * THE release quarantine: remembers which owner gave up a route claim, and refuses a
@@ -49,9 +47,6 @@ import java.util.TreeSet;
  * there is no update path that could overwrite a real owner with an empty set.
  */
 public final class ReleasedClaims {
-
-    /** How {@link ReleasedRouteClaimModel#FORMER_SUBJECTS} packs a subject set. */
-    private static final String SUBJECT_SEPARATOR = "\n";
 
     private ReleasedClaims() {
     }
@@ -235,25 +230,12 @@ public final class ReleasedClaims {
         return false;
     }
 
-    /** Canonically sorted, so two spellings of one owner set can never compare unequal. */
+    /** The ONE subject-set packing, shared with the quota bucket keys (HohenheimAccess). */
     private static @NonNull String join(@NonNull Set<String> subjects) {
-        return String.join(SUBJECT_SEPARATOR, new TreeSet<>(subjects));
+        return HohenheimAccess.packSubjects(subjects);
     }
 
     private static @NonNull Set<String> parse(@Nullable Object stored) {
-        if (stored == null) {
-            return Set.of();
-        }
-        String raw = String.valueOf(stored);
-        if (raw.isEmpty()) {
-            return Set.of();
-        }
-        Set<String> subjects = new LinkedHashSet<>();
-        for (String part : raw.split(SUBJECT_SEPARATOR)) {
-            if (!part.isEmpty()) {
-                subjects.add(part);
-            }
-        }
-        return subjects;
+        return HohenheimAccess.parseSubjects(stored);
     }
 }

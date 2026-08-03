@@ -87,6 +87,19 @@ public class InstanceModel extends Model {
         .defaultValue(STATUS_CREATED)
         .build());
 
+    /**
+     * The quota bucket this record's reservation was CHARGED to (stamped by the
+     * reserve hook, read back by the release on the soft-delete transition).
+     *
+     * AIDEV-NOTE: bookkeeping of the reservation, NEVER an ownership authority --
+     * ownership stays grant-derived (HohenheimAccess.manageSubjectsOf). Grants added
+     * after create move ownership without moving this column; releasing against the
+     * CHARGED bucket instead of the current derivation is what keeps the ledger's
+     * counts exact when they drift apart.
+     */
+    public static final StringField QUOTA_BUCKET = SCHEMA.addField(
+        StringField.builder().name("quota_bucket").filterable(false).build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());

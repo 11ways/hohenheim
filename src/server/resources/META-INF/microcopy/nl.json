@@ -1837,6 +1837,10 @@
     {
       "text": "Instanties",
       "scope": "instance"
+    },
+    {
+      "text": "Instantiequota's",
+      "scope": "instance_quota"
     }
   ],
   "dashboard": {
@@ -4202,5 +4206,33 @@
   "instance_destroy_failed": {
     "text": "Vernietigen van {$name} is mislukt: {$reason}. Het record blijft bewaard; probeer opnieuw zodra de host bereikbaar is.",
     "scope": "violations"
-  }
+  },
+  "quota_reached": {
+    "text": "Instantiequota bereikt: {$used} van {$limit} in gebruik",
+    "scope": "violations"
+  },
+  "quota_negative": {
+    "text": "Een quota kan niet negatief zijn (0 betekent niets toegestaan, leeg betekent geen uitzondering)",
+    "scope": "violations"
+  },
+  "quota_subjects": [
+    {
+      "text": "Eigenaar-subjecten",
+      "scope": "field"
+    },
+    {
+      "text": "De manage-grant-subjecten van de eigenaar, een \"type:id\"-token per regel (gesorteerd); laat leeg voor de operator",
+      "scope": "help"
+    }
+  ],
+  "max_instances": [
+    {
+      "text": "Max. instanties",
+      "scope": "field"
+    },
+    {
+      "text": "Limiet voor deze eigenaar; 0 weigert elke nieuwe instantie, leeg valt terug op de globale standaard",
+      "scope": "help"
+    }
+  ]
 }

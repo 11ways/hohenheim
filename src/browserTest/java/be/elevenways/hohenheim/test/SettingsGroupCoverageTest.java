@@ -22,7 +22,7 @@ class SettingsGroupCoverageTest {
      */
     private static final Set<String> DECLARED_GROUPS = Set.of(
         "proxy", "roles", "ssl", "dns", "logging", "node", "storage", "stacks",
-        "database", "security", "process", "auth_proteus", "proxy_auth");
+        "database", "security", "process", "auth_proteus", "proxy_auth", "quota");
 
     @Test
     void everyDeclaredSettingsGroupIsGuaranteedBeforeValuesLoad() {

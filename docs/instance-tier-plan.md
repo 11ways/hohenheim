@@ -1662,6 +1662,41 @@ block is what the code does; amend the prose, do not code against it.
   pipeline). A generic reservation ledger is a more-than-one-consumer capability
   and belongs in ZENIT CORE, with hohenheim as the first wired consumer in the
   same phase; the limits and policy stay hohenheim.
+  - **CORRECTED 2026-08-03, supersedes the "because those are transactional"
+    reasoning above:** write hooks are ADJACENT to the write, NOT transactional.
+    `Model.save` opens a transaction only when the schema carries
+    `RevisionableBehaviour`; `SqlDatasource.doCreate` opens none; the CMS create
+    is wrapped in `inMutationTransaction` only because the resource's access
+    function returns a non-null predicate (`InstanceResource` does, because
+    instances soft-delete) -- change it to allow-all and the transaction silently
+    vanishes with green tests. A hook-based reservation must therefore be correct
+    with NO ambient transaction: ONE conditional statement, never a
+    read-then-write. `Leases` is the WRONG primitive here (it refuses
+    in-transaction acquisition on serialized-write engines and deliberately
+    commits OUTSIDE the caller's transaction, so a rolled-back create would leave
+    the reservation spent); the right primitive is the guarded
+    `find().where(cap).increment().updateAll()` shape `AtomicUpdateTest` pins.
+  - **LANDED 2026-08-03 (re-verify, do not assume):** the generic ledger is zenit
+    core `common/orm/quota` (`Quotas.reserve/release` over `zenit_quotas`,
+    bucket-key PK, row birth via `insertIfAbsent`, ONE guarded `updateAll` per
+    operation, floor-clamped release; `QuotaLedgerTest` races 20 reservations
+    over 5 slots on the 6 multi-connection backends -- SQLite/DuckDB fixtures are
+    single-connection and excluded by assumption). hohenheim wires ONE dimension:
+    live-instance count per owner (`InstanceQuota` beforeWrite hook, M055,
+    `hohenheim.quota.max_instances_per_owner` + per-owner `instance_quotas`
+    override rows keyed by the PACKED manage-subject set). Explicitly OUT OF
+    SCOPE in this slice: memory/cpu sums, disk, ports, sites, databases, stacks.
+    Two contracts to keep honest: (1) the release rides the `deleted_at`
+    null->non-null TRANSITION in beforeWrite, because `InstanceService.destroy`
+    soft-deletes via save() and the remove hooks NEVER fire on that path (remove
+    hooks additionally cover hard deletes); (2) `updateAll` is hook-free BY
+    CONTRACT, so any future set-based bulk edit bypasses a hook-based quota --
+    destroys must stay on the save path. For the COUNT dimension an ordinary
+    update cannot increase consumption (verified: the only consumption-changing
+    writes are the two deleted_at transitions, both handled); the moment MEMORY
+    becomes a dimension, the CMS update submit
+    (`ResourcePageEndpoints.updateRowInScope` -> `Model.save`) is a
+    consumption-increasing path and must reserve deltas too.
 - **Container hardening is ZERO.** No `CapDrop`, `SecurityOpt`,
   `no-new-privileges`, `Privileged`, `UsernsMode`, `ReadonlyRootfs` or
   `PidsLimit` anywhere in any non-test file. Every container hohenheim runs
@@ -1875,6 +1910,19 @@ correct for an operator install, but the quota key must then BE the canonical
 subject set, and "the operator" is one quota subject. State it, or the first
 quota test will disagree with the first access test.
 
+STATED AND SHIPPED 2026-08-03: the quota key IS the canonical packed
+manage-subject set (`HohenheimAccess.packSubjects`, the ReleasedClaims packing
+extracted to the one authority), bucket `hohenheim:instances:<packed>`, and the
+empty set -- the operator -- is ONE bucket, deliberately. Two consequences worth
+knowing: at CREATE time no record and therefore no grant exists yet, so every
+create charges the creation-time owner (today always the operator bucket); and
+the bucket a record was CHARGED to is stamped on the row
+(`instances.quota_bucket`) so the release stays exact when grants move ownership
+afterwards -- that column is reservation bookkeeping, NEVER a second ownership
+authority. Follow-up owed with tenant self-service creation: a create flow that
+grants in the same pipeline (or migrates the charged bucket on grant changes) so
+tenant creates charge tenant buckets.
+
 RECON 2026-08-02: what a new `InstanceModel` COLLIDES with, verified in source.
 There are THREE container authorities today and only ONE of them asserts
 ownership in-band: `StackDeployer` labels its containers
@@ -1920,6 +1968,12 @@ Design gaps the old Phase 2 left open, now resolved for a public product:
     minimum tenancy; the full aggregate project/tenant model with hierarchical
     quotas can stay later (see cross-cutting), but a public host cannot ship
     without a create gate and a per-owner cap.
+    CORRECTED 2026-08-03: keyed by the PACKED manage-subject set, never by
+    principal -- a principal-keyed row would be the second, disagreeing owner
+    derivation the no-owner-column decision bans. Shipped as `instance_quotas`
+    (M055) + the `hohenheim.quota.max_instances_per_owner` default; the
+    `hohenheim.instances.create` permission and placement authority are STILL
+    OPEN.
   - Placement authority: which hosts a creator may place on. A creator without
     an explicit host grant cannot pick an arbitrary server.
 - **Capabilities (KnownCapabilities registers the instance vocabulary),

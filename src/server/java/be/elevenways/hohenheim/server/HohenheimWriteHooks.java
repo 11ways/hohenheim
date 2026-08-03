@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.cms.SiteTerminalCsp;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
+import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.process.ReservedEnv;
 import be.elevenways.hohenheim.server.process.SiteApiKeys;
 import be.elevenways.zenit.common.ZenitModule;
@@ -52,5 +53,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         TenantWrites.install();
         // The pl-terminal page gets the wasm concessions; no other admin page does.
         SiteTerminalCsp.install();
+        // Concurrent instance creates cannot both spend the last quota slot, and the
+        // soft-delete transition hands the slot back (the remove hooks never fire on
+        // the destroy path -- it soft-deletes through save()).
+        InstanceQuota.install();
     }
 }

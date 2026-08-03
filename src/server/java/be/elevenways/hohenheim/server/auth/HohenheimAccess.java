@@ -30,8 +30,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -250,6 +252,37 @@ public final class HohenheimAccess {
     /** Site convenience over {@link #manageSubjectsOf(Identifier, Object)}. */
     public static @Nullable Set<String> manageSubjectsOf(int siteId) {
         return manageSubjectsOf(SiteModel.MODEL_ID, siteId);
+    }
+
+    /** How a packed subject set separates its entries; no subject token can contain it. */
+    public static final String SUBJECT_SEPARATOR = "\n";
+
+    /**
+     * THE canonical packing of a subject set (released-claim ledger, quota bucket keys):
+     * sorted and newline-joined, so two spellings of one owner set can never compare
+     * unequal. EMPTY packs to "" -- the operator. A second packing beside this one is how
+     * the quarantine and the quota would end up disagreeing about who an owner is.
+     */
+    public static @NonNull String packSubjects(@NonNull Set<String> subjects) {
+        return String.join(SUBJECT_SEPARATOR, new TreeSet<>(subjects));
+    }
+
+    /** The inverse of {@link #packSubjects}; null/"" parses to the empty (operator) set. */
+    public static @NonNull Set<String> parseSubjects(@Nullable Object packed) {
+        if (packed == null) {
+            return Set.of();
+        }
+        String raw = String.valueOf(packed);
+        if (raw.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> subjects = new LinkedHashSet<>();
+        for (String part : raw.split(SUBJECT_SEPARATOR)) {
+            if (!part.isEmpty()) {
+                subjects.add(part);
+            }
+        }
+        return subjects;
     }
 
     /**
