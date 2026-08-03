@@ -164,6 +164,43 @@ class DockerSiteHandlerTest {
         }
     }
 
+    /**
+     * A same-named container the daemon cannot attribute to this site is never
+     * force-removed: the site stays DOWN (a loud, visible refusal) and the foreign
+     * container survives on the host.
+     */
+    @Test
+    void refusesToReplaceAForeignSameNamedContainer() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+
+        int siteId = 999_004;
+        String containerName = "hohenheim-site-" + siteId;
+        // 1. Plant an UNLABELLED squatter on the site's container name.
+        docker.createContainer(containerName, Map.of(
+            "Image", "alpine:latest", "Cmd", List.of("sleep", "300")));
+        try {
+            // 2. The handler refuses the replace and stays down instead of destroying it.
+            DockerSiteRequestHandler handler = new DockerSiteRequestHandler(siteId, Map.of(
+                "image", "alpine",
+                "tag", "latest",
+                "container_port", 8080,
+                "command", "sleep 3600"
+            ));
+            assertThat(handler.getHealth())
+                .as("step 2: the site stays DOWN rather than stealing the name")
+                .isEqualTo(SiteHealth.DOWN);
+            assertThat(handler.getUpstream())
+                .as("step 2: no upstream was resolved").isNull();
+            // 3. HOST state: the foreign container survives, unlabelled and unharmed.
+            assertThat(docker.inspectContainer(containerName))
+                .as("step 3: the foreign container still exists").isNotNull();
+        } finally {
+            docker.removeContainer(containerName, true);
+        }
+    }
+
     @Test
     void buildsImageFromContextAndRuns() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");

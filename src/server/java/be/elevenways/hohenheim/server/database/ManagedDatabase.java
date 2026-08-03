@@ -209,12 +209,10 @@ public class ManagedDatabase {
 
         docker.ensureImage(imageRef, null);
 
-        // Replace any prior container for this database; a persistent named volume keeps the data.
-        try {
-            docker.removeContainer(containerName, true);
-        } catch (IOException ignored) {
-            // nothing to replace
-        }
+        // Replace a prior container for this database ONLY when the daemon attributes it
+        // to this record (a persistent named volume keeps the data); a same-named foreign
+        // or unattributable container is a loud refusal, never a force-remove.
+        OwnerLabels.removeIfOwnedBy(docker, containerName, DatabaseModel.MODEL_ID, recordId);
 
         Map<String, String> owner = recordId != null
             ? OwnerLabels.of(DatabaseModel.MODEL_ID, recordId) : null;
@@ -229,47 +227,77 @@ public class ManagedDatabase {
         return new Connection(engine, "127.0.0.1", hostPort, user, password, database);
     }
 
-    /** Live container state for a managed database: running plus its published host port. */
-    public record LiveStatus(boolean running, Integer port) {}
+    /**
+     * What the daemon says about a database's container. ABSENT ("this database is gone")
+     * and UNREACHABLE ("I could not ask the daemon") are DISTINCT identities on purpose:
+     * conflating them is how an operator restarts a healthy host chasing a deleted
+     * container, or trusts a "not running" that was really a network failure.
+     */
+    public enum ContainerState { RUNNING, STOPPED, ABSENT, UNREACHABLE }
 
-    /** Best-effort live status of a database's container; (false, null) if absent or unreachable. */
-    public LiveStatus status(String name, Engine engine) {
-        String containerName = "hohenheim-db-" + name;
-        try {
-            Object state = docker.inspectContainer(containerName).get("State");
-            boolean running = state instanceof Map<?, ?> s && Boolean.TRUE.equals(s.get("Running"));
-            Integer port = null;
-            if (running) {
-                try {
-                    port = docker.publishedPort(containerName, engine.port);
-                } catch (IOException ignored) {
-                    // not published yet / not ready
-                }
-            }
-            return new LiveStatus(running, port);
-        } catch (IOException e) {
-            return new LiveStatus(false, null);   // no such container or daemon unreachable
+    /** Live container state for a managed database, plus the published host port when running. */
+    public record LiveStatus(ContainerState state, Integer port) {
+        public boolean running() {
+            return state == ContainerState.RUNNING;
         }
     }
 
-    /** Stop and remove the database container; optionally delete its data volume. */
+    /** Live status of a database's container; never throws (see {@link ContainerState}). */
+    public LiveStatus status(String name, Engine engine) {
+        String containerName = "hohenheim-db-" + name;
+        Map<String, Object> inspect;
+        try {
+            inspect = docker.inspectContainer(containerName);
+        } catch (DockerClient.ApiException e) {
+            return new LiveStatus(e.isNotFound()
+                ? ContainerState.ABSENT : ContainerState.UNREACHABLE, null);
+        } catch (IOException e) {
+            return new LiveStatus(ContainerState.UNREACHABLE, null);
+        }
+        Object state = inspect.get("State");
+        boolean running = state instanceof Map<?, ?> s && Boolean.TRUE.equals(s.get("Running"));
+        if (!running) {
+            return new LiveStatus(ContainerState.STOPPED, null);
+        }
+        Integer port = null;
+        try {
+            port = docker.publishedPort(containerName, engine.port);
+        } catch (IOException ignored) {
+            // not published yet / not ready
+        }
+        return new LiveStatus(ContainerState.RUNNING, port);
+    }
+
+    /**
+     * Stop and remove the database container and (optionally) its data volume, VERIFIED:
+     * every step either gets the daemon's confirmation (2xx or 404 = observed gone) or
+     * this throws. A destroy that cannot verify its teardown must not report success --
+     * the caller keeps the record (and the only copy of {@code db_password}) and retries
+     * or force-destroys explicitly.
+     *
+     * @throws IOException when the daemon cannot confirm container or volume removal
+     */
     public void destroy(String name, boolean removeData) throws IOException {
         String containerName = "hohenheim-db-" + name;
         try {
             docker.stopContainer(containerName, 10);
         } catch (IOException ignored) {
-            // proceed to remove
+            // stop is a courtesy; the force-remove below is the authority
         }
         try {
             docker.removeContainer(containerName, true);
-        } catch (IOException ignored) {
-            // already gone
+        } catch (DockerClient.ApiException e) {
+            if (!e.isNotFound()) {
+                throw e;
+            }
         }
         if (removeData) {
             try {
                 docker.removeVolume(containerName + "-data", true);
-            } catch (IOException ignored) {
-                // already gone
+            } catch (DockerClient.ApiException e) {
+                if (!e.isNotFound()) {
+                    throw e;
+                }
             }
         }
     }

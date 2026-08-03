@@ -1,8 +1,13 @@
 package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.docker.DockerReconciler.Bucket;
@@ -24,6 +29,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -260,6 +267,133 @@ class DockerReconcilerTest {
             assertThat(remaining).hasSize(1);
             assertThat(remaining.get(0).title().key()).isEqualTo("docker_orphans");
         });
+    }
+
+    // -- the releasing-claim observer (daemon-free) ---------------------------
+
+    /**
+     * The reserved-until-observed loop, closed by the reconciler: a releasing claim is
+     * deleted ONLY when neither the daemon listing nor (on the local host) the OS probe
+     * sees the port bound; every other releasing claim is retained, and held claims are
+     * never touched. Runs entirely on fake listings and a fake probe -- this coverage
+     * exists even where every daemon test skips.
+     */
+    @Test
+    void releasingClaimsAreFreedOnlyWhenObservedFreeAndOnlyByTheObserver() {
+        Db.run(datasource, () -> {
+            int localId = ServerModel.localServerId();
+            Row edge = Models.get(ServerModel.class).createEmptyRow();
+            edge.set(ServerModel.NAME, "sweep-edge");
+            edge.set(ServerModel.MODE, ServerModel.MODE_SSH);
+            Models.get(ServerModel.class).save(edge);
+            Integer edgeId = edge.get(ServerModel.ID);
+
+            // 1. Two owning records, so the claims can be PARKED through the real funnel
+            //    (releaseOwner = the unverified release): three local claims + two remote
+            //    ones end up releasing; an unowned local claim stays held.
+            Integer localOwner = sweepOwnerRecord("sweepa");
+            Integer remoteOwner = sweepOwnerRecord("sweepc");
+            PortLedger.claim(localId, "127.0.0.1", 9411, "tcp",
+                DatabaseModel.MODEL_ID, localOwner, "published-still");
+            PortLedger.claim(localId, "", 9412, "tcp",
+                DatabaseModel.MODEL_ID, localOwner, "probe-bound");
+            PortLedger.claim(localId, "127.0.0.1", 9413, "tcp",
+                DatabaseModel.MODEL_ID, localOwner, "observed-free");
+            PortLedger.claim(localId, "", 9414, "udp", null, null, "held-stays");
+            PortLedger.claim(edgeId, "127.0.0.1", 9415, "tcp",
+                DatabaseModel.MODEL_ID, remoteOwner, "remote-published");
+            PortLedger.claim(edgeId, "127.0.0.1", 9416, "tcp",
+                DatabaseModel.MODEL_ID, remoteOwner, "remote-free");
+            PortLedger.releaseOwner(DatabaseModel.MODEL_ID, localOwner);
+            PortLedger.releaseOwner(DatabaseModel.MODEL_ID, remoteOwner);
+
+            // 2. The local daemon still publishes 9411 (whole-host binding overlaps the
+            //    loopback claim); the OS probe says 9412 is bound and 9413 free.
+            List<Object> localContainers = List.of(Map.of(
+                "Names", List.of("/whatever"),
+                "Ports", List.of(
+                    Map.of("IP", "0.0.0.0", "PrivatePort", 80, "PublicPort", 9411, "Type", "tcp"))));
+            DockerReconciler.ReleasingSweep local = DockerReconciler.sweepReleasingClaims(
+                "local", localContainers,
+                (address, port, protocol) -> port != 9412);
+            assertThat(local.released()).as("step 2: exactly one local claim observed free")
+                .isEqualTo(1);
+            assertThat(local.retained()).as("step 2: two local claims still bound").isEqualTo(2);
+            assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "127.0.0.1", 9413, "tcp")))
+                .as("step 2: the observed-free claim was deleted").isNull();
+            assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "127.0.0.1", 9411, "tcp")))
+                .as("step 2: the still-published claim was kept").isNotNull();
+            assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 9412, "tcp")))
+                .as("step 2: the probe-bound claim was kept").isNotNull();
+            Row held = PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 9414, "udp"));
+            assertThat(held != null && !PortLedger.isReleasing(held))
+                .as("step 2: a held claim is never the sweep's business").isTrue();
+
+            // 3. On a REMOTE host the daemon listing is the only witness: the probe must
+            //    never be consulted (it would answer about the controller), so a probe
+            //    that would claim everything bound still frees the unpublished claim.
+            List<Object> remoteContainers = List.of(Map.of(
+                "Names", List.of("/remote"),
+                "Ports", List.of(
+                    Map.of("IP", "127.0.0.1", "PrivatePort", 80, "PublicPort", 9415, "Type", "tcp"))));
+            DockerReconciler.ReleasingSweep remote = DockerReconciler.sweepReleasingClaims(
+                "sweep-edge", remoteContainers,
+                (address, port, protocol) -> false);
+            assertThat(remote.released())
+                .as("step 3: the unpublished remote claim was freed on daemon evidence")
+                .isEqualTo(1);
+            assertThat(remote.retained())
+                .as("step 3: the still-published remote claim was kept").isEqualTo(1);
+
+            // 4. The attention projection: the surviving releasing claims surface as one
+            //    warning per server once past the age threshold (threshold in the future
+            //    makes every parked row "old" without forging timestamps).
+            List<AttentionItem> items = new ArrayList<>();
+            AttentionCollector.stuckReleasingPorts(items, Instant.now().plusSeconds(60));
+            assertThat(items)
+                .as("step 4: local and edge each raise one stuck-releasing warning")
+                .hasSize(2);
+            assertThat(items).allSatisfy(item -> {
+                assertThat(item.severity()).isEqualTo("warning");
+                assertThat(item.title().key()).isEqualTo("ports_releasing");
+            });
+
+            // Cleanup so other tests' ledgers stay unpolluted.
+            for (Row claim : Models.get(PortAllocationModel.class).find()
+                    .where(PortAllocationModel.PORT.gte(9411)).all()) {
+                PortLedger.releaseObserved(claim);
+            }
+        });
+    }
+
+    private static Integer sweepOwnerRecord(String name) {
+        Row db = Models.get(DatabaseModel.class).createEmptyRow();
+        db.set(DatabaseModel.NAME, name);
+        db.set(DatabaseModel.ENGINE, "postgres");
+        db.set(DatabaseModel.DB_USER, "u");
+        db.set(DatabaseModel.DB_PASSWORD, "p");
+        db.set(DatabaseModel.DB_NAME, "d");
+        Models.get(DatabaseModel.class).save(db);
+        return db.get(DatabaseModel.ID);
+    }
+
+    /** The listing parser reads real /containers/json shapes; stopped containers bind nothing. */
+    @Test
+    void publishedPortsReadRealListingShapes() {
+        List<DockerReconciler.PublishedPort> published = DockerReconciler.publishedPorts(List.of(
+            Map.of("Names", List.of("/running"),
+                "Ports", List.of(
+                    Map.of("IP", "0.0.0.0", "PrivatePort", 5432, "PublicPort", 32768, "Type", "tcp"),
+                    Map.of("PrivatePort", 9000))),   // unpublished exposed port: no PublicPort
+            Map.of("Names", List.of("/stopped"), "Ports", List.of())));
+        assertThat(published).as("only real publications are bindings").hasSize(1);
+        assertThat(published.get(0).address()).as("0.0.0.0 folds to the whole-host spelling")
+            .isEmpty();
+        assertThat(published.get(0).port()).isEqualTo(32768);
+        assertThat(DockerReconciler.stillPublished("127.0.0.1", 32768, "tcp", published))
+            .as("a whole-host publication overlaps a loopback claim").isTrue();
+        assertThat(DockerReconciler.stillPublished("", 32768, "udp", published))
+            .as("protocol is a first-class discriminator").isFalse();
     }
 
     // -- the live daemon, report-only -----------------------------------------

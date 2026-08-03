@@ -177,9 +177,15 @@ public final class PortLedger {
     }
 
     /**
-     * Claim one port exclusively.
+     * Claim one port exclusively (state {@code held}).
      *
-     * @throws PortConflict when another owner already holds the tuple
+     * AIDEV-NOTE: a {@code releasing} row blocks a rival claim exactly like a held one --
+     * a port that might still be bound is not available. Only the OWNER re-claiming a
+     * tuple it already holds (typically one of its own releasing rows, e.g. a restored
+     * site landing on the same ephemeral port) replaces its old row instead of
+     * conflicting: one owner cannot contest itself over one kernel resource.
+     *
+     * @throws PortConflict when another owner already holds (or is still releasing) the tuple
      */
     public static void claim(int serverId, @Nullable Object hostIp, int port,
                              @Nullable Object protocol, @Nullable Identifier ownerModel,
@@ -187,7 +193,11 @@ public final class PortLedger {
         String key = claimKeyOf(serverId, hostIp, port, protocol);
         Row overlapping = conflictingHolder(serverId, hostIp, port, protocol);
         if (overlapping != null) {
-            throw new PortConflict(key, describeHolder(overlapping), null);
+            if (ownerModel == null || !isOwnedBy(overlapping, ownerModel, ownerId)) {
+                throw new PortConflict(key, describeHolder(overlapping), null);
+            }
+            Models.get(PortAllocationModel.class)
+                .delete(overlapping.get(PortAllocationModel.ID));
         }
         Model ledger = Models.get(PortAllocationModel.class);
         Row row = ledger.createEmptyRow();
@@ -199,6 +209,7 @@ public final class PortLedger {
         row.set(PortAllocationModel.OWNER_MODEL, ownerModel != null ? ownerModel.toString() : null);
         row.set(PortAllocationModel.OWNER_ID, ownerId);
         row.set(PortAllocationModel.NOTE, note);
+        row.set(PortAllocationModel.STATUS, PortAllocationModel.STATUS_HELD);
         try {
             ledger.save(row);
         } catch (DuplicateKeyException conflict) {
@@ -206,12 +217,58 @@ public final class PortLedger {
         }
     }
 
-    /** Release every claim held by one (model, record) owner. */
+    /**
+     * The UNVERIFIED release: park every claim of one (model, record) owner in
+     * {@code releasing}. This is what a teardown that swallowed (or never attempted)
+     * its Docker calls may do -- the rows keep blocking rival claims until an observer
+     * ({@link #releaseObserved}, the reconciler sweep, or the boot sweep) sees the port
+     * actually free and deletes them.
+     */
     public static void releaseOwner(@NonNull Identifier ownerModel, int ownerId) {
+        markReleasing(claimsOf(ownerModel, ownerId));
+    }
+
+    /**
+     * The VERIFIED release: delete every claim of one owner because the caller OBSERVED
+     * the teardown succeed (the daemon confirmed container removal, or answered 404).
+     * Never call this from a path that swallowed the teardown's failure.
+     */
+    public static void releaseOwnerObserved(@NonNull Identifier ownerModel, int ownerId) {
         Models.get(PortAllocationModel.class).find()
             .where(PortAllocationModel.OWNER_MODEL.eq(ownerModel.toString()))
             .and(PortAllocationModel.OWNER_ID.eq(ownerId))
             .delete();
+    }
+
+    /** Delete one claim row after its port was observed free (the reconciler's authority). */
+    public static void releaseObserved(@NonNull Row claim) {
+        Models.get(PortAllocationModel.class).delete(claim.get(PortAllocationModel.ID));
+    }
+
+    /** Whether a claim row is parked in {@code releasing}. */
+    public static boolean isReleasing(@NonNull Row claim) {
+        return PortAllocationModel.STATUS_RELEASING.equals(claim.get(PortAllocationModel.STATUS));
+    }
+
+    /** Every {@code releasing} claim on one host. */
+    public static @NonNull List<Row> releasingClaimsOf(int serverId) {
+        return Models.get(PortAllocationModel.class).find()
+            .where(PortAllocationModel.SERVER_ID.eq(serverId))
+            .and(PortAllocationModel.STATUS.eq(PortAllocationModel.STATUS_RELEASING))
+            .all();
+    }
+
+    // Idempotent park: an already-releasing row is NOT re-saved, so its updated_at keeps
+    // marking when releasing STARTED -- a crash-looping teardown retrying every start must
+    // not reset the stuck-age clock the attention item runs on.
+    private static void markReleasing(@NonNull List<Row> claims) {
+        Model ledger = Models.get(PortAllocationModel.class);
+        for (Row claim : claims) {
+            if (!isReleasing(claim)) {
+                claim.set(PortAllocationModel.STATUS, PortAllocationModel.STATUS_RELEASING);
+                ledger.save(claim);
+            }
+        }
     }
 
     /** Every claim held by one (model, record) owner. */
@@ -243,7 +300,11 @@ public final class PortLedger {
     public static boolean recordObserved(int serverId, @Nullable Object hostIp, int port,
                                          @Nullable Object protocol, @NonNull Identifier ownerModel,
                                          int ownerId, @Nullable String note) {
-        releaseOwner(ownerModel, ownerId);
+        // The VERIFIED release is legitimate here and only here: both record-after flows
+        // reach this point strictly after OwnerLabels.removeIfOwnedBy verified (via the
+        // daemon) that the owner's previous container is gone, so its old port is an
+        // observed-free fact, not an optimistic guess.
+        releaseOwnerObserved(ownerModel, ownerId);
         try {
             claim(serverId, hostIp, port, protocol, ownerModel, ownerId, note);
             return true;
@@ -256,7 +317,9 @@ public final class PortLedger {
     }
 
     /**
-     * Delete one claim row by its key.
+     * Delete one claim row by its key. An OBSERVED release: the only caller is the
+     * managed-process teardown, which runs after the child process was reaped (and the
+     * boot sweep's OS probe backstops the lingering-socket edge).
      *
      * @return the row that was removed, or null when nothing held the key
      */
@@ -303,9 +366,15 @@ public final class PortLedger {
             String key = claim.get(PortAllocationModel.CLAIM_KEY);
             if (desired.containsKey(key)) {
                 held.add(key);
+                if (isReleasing(claim)) {
+                    // Re-declared while parked: the owner wants it again, so it is held.
+                    claim.set(PortAllocationModel.STATUS, PortAllocationModel.STATUS_HELD);
+                    Models.get(PortAllocationModel.class).save(claim);
+                }
             } else {
-                Models.get(PortAllocationModel.class)
-                    .delete(claim.get(PortAllocationModel.ID));
+                // An un-declared port is NOT observed free -- the stack may still run its
+                // previous deploy, bound to it. Park it; an observer deletes it.
+                markReleasing(List.of(claim));
             }
         }
         for (Map.Entry<String, Row> entry : desired.entrySet()) {
@@ -357,15 +426,20 @@ public final class PortLedger {
         }
     }
 
-    /** Release every claim held by the records the paired before-hook doomed. */
+    /**
+     * Park every claim of the records the paired before-hook doomed in {@code releasing}.
+     * A record delete is not an observation of the port being free -- the container (or
+     * process) it described may outlive it -- so the rows survive their owner, still
+     * blocking rival claims, until an observer deletes them. Verified teardown paths
+     * (DatabaseService.destroy) call {@link #releaseOwnerObserved} BEFORE deleting the
+     * record, so this hook only ever parks what no observer vouched for.
+     */
     public static void releaseDoomedOwners(@NonNull RemoveFromDatasource context) {
         Model model = context.getModel();
         if (model == null
             || !(context.getAttribute(DOOMED_SERVICES) instanceof List<?> doomed) || doomed.isEmpty()) {
             return;
         }
-        // ONE delete for the whole batch: deleting a stack dooms every one of its
-        // services, and a per-service release would be a statement each.
         List<Integer> ids = new ArrayList<>();
         for (Object id : doomed) {
             if (id instanceof Integer ownerId) {
@@ -373,10 +447,33 @@ public final class PortLedger {
             }
         }
         if (!ids.isEmpty()) {
-            Models.get(PortAllocationModel.class).find()
+            markReleasing(Models.get(PortAllocationModel.class).find()
                 .where(PortAllocationModel.OWNER_MODEL.eq(model.getModelId().toString()))
                 .and(PortAllocationModel.OWNER_ID.in(ids))
-                .delete();
+                .all());
+        }
+    }
+
+    /**
+     * Park every claim of the SERVERS the paired before-hook doomed ({@code servers} rows
+     * share {@link #captureDoomedOwners}). A host we removed from the inventory is exactly
+     * the host we can no longer observe, and a {@code servers} row vanishing does not free
+     * ports on the physical machine -- so removal may never delete its claims.
+     */
+    public static void markDoomedServersReleasing(@NonNull RemoveFromDatasource context) {
+        if (!(context.getAttribute(DOOMED_SERVICES) instanceof List<?> doomed) || doomed.isEmpty()) {
+            return;
+        }
+        List<Integer> ids = new ArrayList<>();
+        for (Object id : doomed) {
+            if (id instanceof Integer serverId) {
+                ids.add(serverId);
+            }
+        }
+        if (!ids.isEmpty()) {
+            markReleasing(Models.get(PortAllocationModel.class).find()
+                .where(PortAllocationModel.SERVER_ID.in(ids))
+                .all());
         }
     }
 
@@ -435,6 +532,8 @@ public final class PortLedger {
                     row.set(PortAllocationModel.CLAIM_KEY, key);
                     row.set(PortAllocationModel.OWNER_MODEL, StackServiceModel.MODEL_ID.toString());
                     row.set(PortAllocationModel.OWNER_ID, service.get(StackServiceModel.ID));
+                    // No STATUS here: this runs inside M051, BEFORE M052 adds the column;
+                    // M052's heal stamps these rows "held".
                     ledger.save(row);
                 }
             }

@@ -16,8 +16,9 @@ import be.elevenways.zenit.common.orm.model.Schema;
  * so there is no record to hang a column on, and the table also carries cross-authority
  * capacity queries. OWNER_MODEL/OWNER_ID are therefore NULLABLE: a null owner is a port
  * held by something that is not a record (C5 managed processes), described by NOTE.
- * The planned {@code releasing} state (C6) arrives as an added status column; a
- * releasing row KEEPS its claim row, so the unique key never has to change shape.
+ * The {@code releasing} state (C6) is an added status column; a releasing row KEEPS its
+ * claim row (and therefore keeps blocking rival claims), so the unique key never had to
+ * change shape. Only an OBSERVER of the port being free may delete a row.
  */
 public class PortAllocationModel extends Model {
 
@@ -55,6 +56,20 @@ public class PortAllocationModel extends Model {
     /** Free-form context for ports without an owning record. */
     public static final StringField NOTE = SCHEMA.addField(
         StringField.builder().name("note").build());
+
+    /** {@link #STATUS} value: the claim is held and the port is (believed) bound. */
+    public static final String STATUS_HELD = "held";
+
+    /**
+     * {@link #STATUS} value: the owner tore down (or tried to) without OBSERVING the port
+     * become free; the row keeps blocking rival claims until an observer deletes it. A row
+     * stuck here past {@code AttentionCollector}'s age threshold is the operator alarm.
+     */
+    public static final String STATUS_RELEASING = "releasing";
+
+    /** Claim lifecycle: {@link #STATUS_HELD} or {@link #STATUS_RELEASING}. */
+    public static final StringField STATUS = SCHEMA.addField(
+        StringField.builder().name("status").build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());

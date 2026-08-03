@@ -121,6 +121,17 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
         }
     }
 
+    /**
+     * Tear the container down. Runs on every route rebuild that drops this site
+     * (disable, soft delete, settings edit), so it must never throw -- but it must not
+     * LIE either: the port claim is only deleted when the daemon confirmed the removal
+     * (or answered 404); any swallowed failure parks the claim in {@code releasing},
+     * where it keeps blocking rivals until the reconciler observes the port free.
+     * Soft delete therefore never optimistically frees a port (requirement: soft
+     * delete is not an observation), and the container's volumes are deliberately
+     * untouched -- a soft-deleted site is restorable, and the reconciler surfaces its
+     * volumes as orphans for an explicit operator decision.
+     */
     @Override
     public void destroy() {
         if (containerId == null) {
@@ -129,14 +140,28 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
         try {
             docker.stopContainer(containerId, 10);
         } catch (IOException ignored) {
-            // proceed to force-remove regardless
+            // stop is a courtesy; the force-remove below is the authority
         }
+        boolean observedGone = false;
         try {
             docker.removeContainer(containerId, true);
-        } catch (IOException ignored) {
-            // best effort
+            observedGone = true;
+        } catch (DockerClient.ApiException e) {
+            observedGone = e.isNotFound();
+            if (!observedGone) {
+                Blast.log("DOCKER: teardown of site", siteId, "container failed -", e.getMessage());
+            }
+        } catch (IOException e) {
+            Blast.log("DOCKER: teardown of site", siteId, "could not reach the daemon -",
+                e.getMessage());
         }
-        PortLedger.releaseOwner(SiteModel.MODEL_ID, siteId);
+        if (observedGone) {
+            PortLedger.releaseOwnerObserved(SiteModel.MODEL_ID, siteId);
+        } else {
+            PortLedger.releaseOwner(SiteModel.MODEL_ID, siteId);
+            Blast.log("DOCKER: site", siteId, "port claim(s) parked in 'releasing' -- the"
+                + " container may still hold the port; the reconciler frees it once observed");
+        }
         containerId = null;
         upstream = null;
     }
@@ -159,12 +184,12 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
         return new ServerService().clientFor(ServerModel.nameOf(ServerModel.canonicalServerId(server)));
     }
 
-    private void removeExisting() {
-        try {
-            docker.removeContainer(containerName, true);
-        } catch (IOException ignored) {
-            // 404 when there is nothing to remove -- expected
-        }
+    // Replace only a leftover container the daemon attributes to THIS site; a same-named
+    // container that is not attributably ours is a loud refusal (the site stays down)
+    // instead of a force-remove of someone else's workload. This verified removal is also
+    // what makes recordObserved's owner-row replacement honest.
+    private void removeExisting() throws IOException {
+        OwnerLabels.removeIfOwnedBy(docker, containerName, SiteModel.MODEL_ID, siteId);
     }
 
     private static Map<String, Object> buildSpec(int siteId, String imageRef, int port,

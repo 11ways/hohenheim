@@ -4,6 +4,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.io.IOException;
 import java.util.Map;
 
 /**
@@ -33,6 +34,53 @@ public final class OwnerLabels {
     /** The two owner labels for one record. */
     public static @NonNull Map<String, String> of(@NonNull Identifier model, @NonNull Object recordId) {
         return Map.of(MODEL, model.toString(), ID, String.valueOf(recordId));
+    }
+
+    /**
+     * Remove a same-named container ONLY when the daemon attributes it to this record
+     * via its owner labels; an absent container is a verified no-op.
+     *
+     * AIDEV-NOTE: this is the fix for the legacy replace paths' worst habit -- a bare
+     * force-remove of whatever holds the name, which let any tier destroy any other
+     * tier's (or a stranger's) container on a name collision. The refusal is loud and
+     * names the actual owner; the reconciler's FOREIGN_COLLIDING findings surface the
+     * same hazard from the other side. StackDeployer has its own equivalent refusal
+     * (stack-name label + declared adoption); this covers the record-owned tiers.
+     *
+     * @param recordId the record that must own the container; null (record-less callers:
+     *                 tests, previews) can attribute nothing and refuses ANY existing container
+     * @return true when a container was removed, false when none existed
+     * @throws IOException when the container exists but is not attributably ours, or the
+     *                     daemon cannot be asked
+     */
+    public static boolean removeIfOwnedBy(@NonNull DockerClient docker, @NonNull String containerName,
+                                          @NonNull Identifier model, @Nullable Object recordId)
+            throws IOException {
+        Map<String, Object> inspect;
+        try {
+            inspect = docker.inspectContainer(containerName);
+        } catch (DockerClient.ApiException e) {
+            if (e.isNotFound()) {
+                return false;   // observed absent
+            }
+            throw e;
+        }
+        Object config = inspect.get("Config");
+        Owner owner = parse(config instanceof Map<?, ?> c && c.get("Labels") instanceof Map<?, ?> l
+            ? l : null);
+        boolean ours = owner != null && recordId != null && owner.model().equals(model)
+            && owner.id().equals(String.valueOf(recordId));
+        if (!ours) {
+            throw new IOException("REFUSED to remove container '" + containerName + "': it is not"
+                + " attributably ours (" + (owner != null
+                    ? "owned by " + owner.model() + " #" + owner.id()
+                    : "no hohenheim owner labels")
+                + (recordId == null ? "; this caller has no record identity to match" : "")
+                + "). A same-named foreign container is a name collision, not a replace target;"
+                + " remove it explicitly if it is debris.");
+        }
+        docker.removeContainer(containerName, true);
+        return true;
     }
 
     /**

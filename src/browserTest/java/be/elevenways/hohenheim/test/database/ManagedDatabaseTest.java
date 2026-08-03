@@ -76,6 +76,44 @@ class ManagedDatabaseTest {
         }
     }
 
+    /**
+     * The replace path must never destroy what it cannot attribute: a same-named
+     * container WITHOUT this record's owner labels is a loud, named refusal, and the
+     * foreign container survives untouched on the host.
+     */
+    @Test
+    void provisionRefusesToReplaceAForeignSameNamedContainer() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
+        assumeTrue(imagePresent(docker, "alpine:latest"), "alpine:latest not present locally");
+
+        ManagedDatabase databases = new ManagedDatabase(docker);
+        String name = "foreign" + System.nanoTime();
+        String containerName = "hohenheim-db-" + name;
+        // 1. Plant an UNLABELLED container squatting on the name (what the legacy path
+        //    would have force-removed without a second thought).
+        docker.createContainer(containerName, Map.of(
+            "Image", "alpine:latest", "Cmd", List.of("sleep", "300")));
+        try {
+            // 2. Provisioning over it is a named refusal, not a silent replace.
+            try {
+                databases.provision(name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
+                    "appuser", "secret123", "appdb", true, ResourceLimits.none(), 777);
+                throw new AssertionError("step 2: provision over a foreign container must refuse");
+            } catch (IOException expected) {
+                assertThat(expected.getMessage())
+                    .as("step 2: the refusal is loud and names the attribution failure")
+                    .contains("not attributably ours");
+            }
+            // 3. HOST state: the foreign container survives, unlabelled and unharmed.
+            Map<String, Object> survivor = docker.inspectContainer(containerName);
+            assertThat(survivor).as("step 3: the foreign container still exists").isNotNull();
+        } finally {
+            docker.removeContainer(containerName, true);
+        }
+    }
+
     @Test
     void backsUpPostgresAsSql() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");

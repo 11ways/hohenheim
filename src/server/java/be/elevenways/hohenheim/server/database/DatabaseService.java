@@ -36,6 +36,7 @@ public class DatabaseService extends DatasourceScoped {
     public static final String STATUS_PROVISIONING = DatabaseModel.STATUS_PROVISIONING;
     public static final String STATUS_ACTIVE = DatabaseModel.STATUS_ACTIVE;
     public static final String STATUS_FAILED = DatabaseModel.STATUS_FAILED;
+    public static final String STATUS_DESTROY_FAILED = DatabaseModel.STATUS_DESTROY_FAILED;
 
     // Background pool for provisioning (image pull + container start can take tens of seconds);
     // shared because handlers construct DatabaseService per request. Bounded to limit load.
@@ -207,16 +208,19 @@ public class DatabaseService extends DatasourceScoped {
         return query(() -> model().find().all());
     }
 
-    /** A persisted database plus its best-effort live container status, for the admin list.
-     *  {@code status} is the provisioning lifecycle (provisioning/active/failed); {@code running}
-     *  + {@code port} are the live container state (meaningful once active). */
+    /** A persisted database plus its live container status, for the admin list.
+     *  {@code status} is the provisioning lifecycle (provisioning/active/failed/destroy_failed);
+     *  {@code containerState} is the daemon's answer (running/stopped/absent/unreachable --
+     *  absent and unreachable are DISTINCT identities, see ManagedDatabase.ContainerState). */
     public record Summary(String name, String engine, String image, String database, String user,
-                          boolean ephemeral, String server, String status, boolean running, Integer port) {}
+                          boolean ephemeral, String server, String status, boolean running,
+                          ManagedDatabase.ContainerState containerState, Integer port) {}
 
     /** Full detail for one database, including the password (admin detail page only). */
     public record Detail(String name, String engine, String image, String database, String user,
                          String password, boolean ephemeral, String server, String status,
-                         boolean running, Integer port) {}
+                         boolean running, ManagedDatabase.ContainerState containerState,
+                         Integer port) {}
 
     /** Full detail for one database by name with live status, or null if there is no such record. */
     public Detail detail(String name) {
@@ -243,6 +247,7 @@ public class DatabaseService extends DatasourceScoped {
             serverOf(row),
             statusOf(row),
             live.running(),
+            live.state(),
             live.port());
     }
 
@@ -263,18 +268,20 @@ public class DatabaseService extends DatasourceScoped {
                 serverOf(row),
                 statusOf(row),
                 live.running(),
+                live.state(),
                 live.port()
             ));
         }
         return result;
     }
 
-    // Best-effort live status on the record's target host; never throws (an unreachable host -> down).
+    // Live status on the record's target host; never throws. A host we cannot even build
+    // a client for is UNREACHABLE, never "not running" -- absent and unreachable stay distinct.
     private ManagedDatabase.LiveStatus liveStatus(Row row, ManagedDatabase.Engine engine) {
         try {
             return managedFor.apply(serverOf(row)).status(row.get(DatabaseModel.NAME), engine);
         } catch (Exception e) {
-            return new ManagedDatabase.LiveStatus(false, null);
+            return new ManagedDatabase.LiveStatus(ManagedDatabase.ContainerState.UNREACHABLE, null);
         }
     }
 
@@ -346,12 +353,50 @@ public class DatabaseService extends DatasourceScoped {
         managedFor.apply(serverOf(row)).restoreFromFile(name, engineOf(row), user, password, database, source);
     }
 
-    /** Stop + remove the container (optionally its data volume) and delete the record. */
+    /**
+     * Stop + remove the container (optionally its data volume) and delete the record --
+     * but ONLY when the teardown was verified. A destroy that cannot confirm its
+     * teardown keeps the record (it holds the only copy of {@code db_password}), flips
+     * its status to {@code destroy_failed}, parks the port claim in {@code releasing},
+     * and throws; deleting the record then requires an explicit retry or the recorded
+     * force-destroy action. Silent "success" while the container keeps running was this
+     * codebase's worst instance of a step doing less than it claims.
+     *
+     * @throws IOException when the daemon could not confirm container/volume removal
+     */
     public void destroy(String name, boolean removeData) throws IOException {
         Row row = query(() -> model().findByName(name));
         if (row != null) {
-            managedFor.apply(serverOf(row)).destroy(name, removeData);
+            Integer recordId = row.get(DatabaseModel.ID);
+            try {
+                managedFor.apply(serverOf(row)).destroy(name, removeData);
+            } catch (IOException e) {
+                exec(() -> {
+                    if (recordId != null) {
+                        PortLedger.releaseOwner(DatabaseModel.MODEL_ID, recordId);
+                    }
+                    setStatus(name, STATUS_DESTROY_FAILED);
+                });
+                throw new IOException("Destroy of '" + name + "' could not verify its teardown"
+                    + " (record kept, port claim parked as releasing): " + e.getMessage(), e);
+            }
+            // Teardown verified (2xx/404 from the daemon): the port is an observed-free
+            // fact, so the claim may be deleted before the record goes.
+            if (recordId != null) {
+                exec(() -> PortLedger.releaseOwnerObserved(DatabaseModel.MODEL_ID, recordId));
+            }
         }
+        exec(() -> model().find().where(DatabaseModel.NAME.eq(name)).delete());
+    }
+
+    /**
+     * The recorded escape hatch for a genuinely unreachable host: delete the record
+     * WITHOUT verifying any teardown. The container and volume may survive on the host
+     * (the reconciler will report them as orphans once it can see the host again), and
+     * the record's port claims are parked in {@code releasing} by the model's remove
+     * hooks. Never the default path -- callers must have an explicit operator decision.
+     */
+    public void forceDestroyRecord(String name) {
         exec(() -> model().find().where(DatabaseModel.NAME.eq(name)).delete());
     }
 

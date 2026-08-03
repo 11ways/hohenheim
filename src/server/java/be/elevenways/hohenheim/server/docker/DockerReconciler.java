@@ -2,10 +2,14 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.stack.StackDeployer;
+import be.elevenways.hohenheim.server.util.PortProbe;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -24,10 +28,13 @@ import java.util.Set;
 
 /**
  * Attributes every container, volume and network on a Docker daemon to its owning
- * record and REPORTS the result -- it never removes a resource and never applies a
- * label. The classifier is pure (unit-testable without a daemon, the DockerReclaim
- * discipline); the sweeper lists one daemon, classifies, and REPLACES that server's
- * stored findings, which the dashboard attention list reads.
+ * record and REPORTS the result -- it never removes a Docker resource and never
+ * applies a label. The classifier is pure (unit-testable without a daemon, the
+ * DockerReclaim discipline); the sweeper lists one daemon, classifies, and REPLACES
+ * that server's stored findings, which the dashboard attention list reads. Its ONE
+ * deletion authority (C6) is over LEDGER ROWS, not Docker resources: a port claim
+ * parked in {@code releasing} whose port this sweep OBSERVED free is deleted, closing
+ * the reserved-until-observed loop.
  *
  * AIDEV-NOTE: Authority limits are deliberate and load-bearing. Removal: an orphan
  * VOLUME is the one unrecoverable resource (DockerReclaim refuses volumes for the
@@ -327,18 +334,119 @@ public final class DockerReconciler {
     }
 
     /**
-     * List one daemon, classify everything on it, and replace that server's stored
-     * findings.
+     * List one daemon, classify everything on it, replace that server's stored
+     * findings, and free the {@code releasing} port claims this sweep OBSERVED free.
      *
      * @throws IOException when the daemon cannot be listed; stored findings are kept
      */
     public static @NonNull List<Finding> sweepServer(@NonNull String serverName,
                                                      @NonNull DockerClient docker) throws IOException {
+        List<Object> containers = docker.listContainers(true);
         List<Finding> findings = classifyAll(
-            docker.listContainers(true), docker.listVolumes(), docker.listNetworks(),
+            containers, docker.listVolumes(), docker.listNetworks(),
             new ModelRecords());
         store(serverName, findings);
+        sweepReleasingClaims(serverName, containers, PortProbe::isFree);
         return findings;
+    }
+
+    // -- the releasing-claim observer -----------------------------------------
+
+    /** One published (bind address, host port, protocol) binding read off a listing. */
+    public record PublishedPort(@NonNull String address, int port, @NonNull String protocol) {}
+
+    /** What a releasing sweep did: claims observed free (deleted) vs still bound (kept). */
+    public record ReleasingSweep(int released, int retained) {}
+
+    /** Local-host bind probe seam, injectable so the decision is testable without binding. */
+    public interface Probe {
+        boolean isFree(@NonNull String address, int port, @NonNull String protocol);
+    }
+
+    /**
+     * The published host-port bindings of a {@code /containers/json?all=true} listing.
+     * Stopped containers list no bindings, which is correct: a stopped container binds
+     * nothing at the kernel.
+     */
+    public static @NonNull List<PublishedPort> publishedPorts(@NonNull List<Object> containers) {
+        List<PublishedPort> published = new ArrayList<>();
+        for (Object entry : containers) {
+            if (!(entry instanceof Map<?, ?> summary)
+                || !(summary.get("Ports") instanceof List<?> ports)) {
+                continue;
+            }
+            for (Object binding : ports) {
+                if (binding instanceof Map<?, ?> b && b.get("PublicPort") instanceof Number port) {
+                    String address = b.get("IP") != null ? String.valueOf(b.get("IP")) : "";
+                    if (address.equals("0.0.0.0")) {
+                        address = "";   // the ledger's whole-host canonicalisation
+                    }
+                    String protocol = b.get("Type") != null
+                        ? String.valueOf(b.get("Type")) : "tcp";
+                    published.add(new PublishedPort(address, port.intValue(), protocol));
+                }
+            }
+        }
+        return published;
+    }
+
+    /** Whether a claim tuple overlaps any published binding (the kernel-exclusivity rule:
+     *  a whole-host bind and a specific bind of one port exclude each other). */
+    public static boolean stillPublished(@NonNull String address, int port,
+                                         @NonNull String protocol,
+                                         @NonNull List<PublishedPort> published) {
+        for (PublishedPort binding : published) {
+            if (binding.port() == port && binding.protocol().equals(protocol)
+                && (address.isEmpty() || binding.address().isEmpty()
+                    || binding.address().equals(address))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * THE observer the reserved-until-observed contract waits for: delete each of this
+     * server's {@code releasing} claims whose port the sweep OBSERVED free, keep the
+     * rest. Evidence per host kind: the daemon's own port bindings always count; on the
+     * LOCAL host an OS bind probe must ALSO pass, because managed processes and other
+     * non-docker binders are invisible to the daemon. On a REMOTE host the daemon is the
+     * only honest witness we have -- and every remote claim is docker-born (managed
+     * processes are local-only), so daemon evidence is authoritative there.
+     */
+    public static @NonNull ReleasingSweep sweepReleasingClaims(@NonNull String serverName,
+                                                               @NonNull List<Object> containers,
+                                                               @NonNull Probe probe) {
+        Row server = Models.get(ServerModel.class).findByName(serverName);
+        if (server == null) {
+            return new ReleasingSweep(0, 0);
+        }
+        Integer serverId = server.get(ServerModel.ID);
+        boolean local = ServerModel.MODE_LOCAL.equals(server.get(ServerModel.MODE));
+        List<PublishedPort> published = publishedPorts(containers);
+        int released = 0;
+        int retained = 0;
+        for (Row claim : PortLedger.releasingClaimsOf(serverId)) {
+            String address = String.valueOf(claim.get(PortAllocationModel.HOST_IP));
+            Integer port = claim.get(PortAllocationModel.PORT);
+            String protocol = String.valueOf(claim.get(PortAllocationModel.PROTOCOL));
+            if (port == null) {
+                continue;
+            }
+            boolean bound = stillPublished(address, port, protocol, published)
+                || (local && !probe.isFree(address, port, protocol));
+            if (bound) {
+                retained++;
+            } else {
+                PortLedger.releaseObserved(claim);
+                released++;
+            }
+        }
+        if (released > 0 || retained > 0) {
+            Blast.log("DOCKER RECONCILE:", serverName, "- released", released,
+                "observed-free releasing port claim(s), kept", retained, "still-bound one(s)");
+        }
+        return new ReleasingSweep(released, retained);
     }
 
     /** Replace one server's stored findings with this sweep's result. */

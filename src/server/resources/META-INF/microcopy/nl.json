@@ -4026,5 +4026,47 @@
       "text": "{$count} onbeheerde resource(s) dragen namen in hohenheim-stijl: {$names}",
       "scope": "attention_detail"
     }
-  ]
+  ],
+  "ports_releasing": [
+    {
+      "text": "Poorten wachten op vrijgave-verificatie op {$server}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "{$count} poortclaim(s) staan al meer dan {$hours} uur op vrijgeven: {$ports}. Mogelijk houdt iets buiten ons beheer ze nog vast.",
+      "scope": "attention_detail"
+    }
+  ],
+  "database_unreachable": {
+    "text": "Gekoppelde database {$name} staat op een onbereikbare host",
+    "scope": "attention_detail"
+  },
+  "database_destroy_failed": {
+    "text": "Verwijderen van '{$name}' kon de afbraak niet verifieren: {$reason}. Het record en de inloggegevens blijven bewaard; probeer opnieuw, of gebruik Geforceerd verwijderen voor een onbereikbare host.",
+    "scope": "violations"
+  },
+  "force_delete": {
+    "text": "Geforceerd verwijderen",
+    "scope": "database"
+  },
+  "force_delete_hint": {
+    "text": "Verwijder het record zonder afbraakverificatie (onbereikbare host). Container en volume kunnen blijven bestaan; de reconciler rapporteert ze.",
+    "scope": "database"
+  },
+  "force_delete_confirm_generic": {
+    "text": "Dit databaserecord verwijderen ZONDER te verifieren dat de container weg is? Wat nog draait op de host blijft bestaan, en de inloggegevens gaan verloren.",
+    "scope": "database"
+  },
+  "force_delete_confirm": {
+    "text": "Het record van '{$name}' verwijderen ZONDER te verifieren dat de container weg is? Wat nog draait op de host blijft bestaan, en de inloggegevens gaan verloren. Typ de databasenaam om te bevestigen.",
+    "scope": "database"
+  },
+  "force_delete_ok": {
+    "text": "Geforceerd verwijderen",
+    "scope": "database"
+  },
+  "force_delete_done": {
+    "text": "Record van '{$name}' verwijderd; de resources op de host zijn NIET geverifieerd verwijderd",
+    "scope": "database"
+  }
 }

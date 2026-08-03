@@ -4,13 +4,12 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.util.PortProbe;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.security.SecureRandom;
 import java.util.HashSet;
 import java.util.List;
@@ -183,13 +182,7 @@ public class PortAllocator {
      * only for the instant it runs, which is precisely why it cannot replace the ledger.
      */
     private boolean isPortFree(int port) {
-        try (ServerSocket ss = new ServerSocket()) {
-            ss.setReuseAddress(true);
-            ss.bind(new InetSocketAddress("0.0.0.0", port));
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+        return PortProbe.isFree("", port, "tcp");
     }
 
     /** Privileged or missing values fall back to 4748. */

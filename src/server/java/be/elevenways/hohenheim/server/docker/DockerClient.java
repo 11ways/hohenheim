@@ -40,6 +40,31 @@ public class DockerClient {
     /** Default Docker daemon socket on Linux. */
     public static final String DEFAULT_SOCKET = "/var/run/docker.sock";
 
+    /**
+     * A non-2xx answer from a REACHED daemon, carrying the HTTP status so callers can
+     * tell "the resource is absent" (404, an OBSERVED fact) from "the daemon could not
+     * be asked" (a plain IOException) -- the distinction every verified-teardown path
+     * in C6 hinges on.
+     */
+    public static class ApiException extends IOException {
+
+        private final int status;
+
+        ApiException(int status, String message) {
+            super(message);
+            this.status = status;
+        }
+
+        public int status() {
+            return this.status;
+        }
+
+        /** The daemon answered and the resource does not exist. */
+        public boolean isNotFound() {
+            return this.status == 404;
+        }
+    }
+
     /** Default per-request deadline (connect + full read); generous enough for a
      *  container stop grace period, short enough to catch a truly-hung daemon. */
     public static final long DEFAULT_TIMEOUT_MS = 60_000;
@@ -777,7 +802,7 @@ public class DockerClient {
         // 2xx is success; 304 ("not modified") is the daemon's idempotent answer for
         // start/stop when the container is already in the requested state.
         if ((status < 200 || status >= 300) && status != 304) {
-            throw new IOException("Docker API returned HTTP " + status + ": "
+            throw new ApiException(status, "Docker API returned HTTP " + status + ": "
                 + new String(bodyBytes, StandardCharsets.UTF_8).trim());
         }
         return new RawResponse(status, bodyBytes);

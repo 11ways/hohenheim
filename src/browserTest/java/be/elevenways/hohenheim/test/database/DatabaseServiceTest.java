@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.UnixSocketDockerTransport;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -168,6 +169,113 @@ class DatabaseServiceTest {
             Db.run(datasource, () -> assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(
                     ServerModel.localServerId(), conn.host(), conn.port(), "tcp")))
                 .as("step 3: destroying the database released its port").isNull());
+        } finally {
+            try {
+                service.destroy(name, true);
+            } catch (IOException ignored) {
+                // best effort
+            }
+        }
+    }
+
+    /**
+     * The C6 destroy contract, end to end on a real daemon: a destroy that cannot reach
+     * the daemon REFUSES (record + credentials kept, status destroy_failed, port claim
+     * parked releasing, container STILL RUNNING on the host), a verified destroy then
+     * cleans everything, and absent vs unreachable are distinct container states.
+     */
+    @Test
+    void destroyRefusesToLieWhenTheDaemonIsUnreachable() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
+
+        SqliteDatasource datasource = freshDatasource();
+        DatabaseService service = new DatabaseService(docker, datasource);
+        DockerClient unreachable = new DockerClient(
+            new UnixSocketDockerTransport("/nonexistent/hohenheim-test.sock"));
+        DatabaseService broken = new DatabaseService(unreachable, datasource);
+
+        String name = "c6destroy" + System.nanoTime();
+        String containerName = "hohenheim-db-" + name;
+        try {
+            // 1. Provision for real; the record owns a ledger claim.
+            ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
+                PG_IMAGE, "appuser", "secret123", "appdb", true, ServerService.LOCAL);
+            Db.run(datasource, () -> {
+                Integer recordId = service.list().get(0).get(DatabaseModel.ID);
+                assertThat(PortLedger.claimsOf(DatabaseModel.MODEL_ID, recordId))
+                    .as("step 1: the provisioned port is claimed").hasSize(1);
+            });
+
+            // 2. A destroy through an unreachable daemon REFUSES instead of lying.
+            try {
+                broken.destroy(name, true);
+                throw new AssertionError("step 2: destroy through an unreachable daemon"
+                    + " must throw, not report success");
+            } catch (IOException expected) {
+                assertThat(expected.getMessage())
+                    .as("step 2: the refusal names the unverified teardown")
+                    .contains("could not verify its teardown");
+            }
+
+            // 3. Nothing was deleted and nothing was freed optimistically: record kept
+            //    with status destroy_failed, password still readable, container STILL
+            //    RUNNING on the host, claim parked in releasing (blocking rivals).
+            Db.run(datasource, () -> {
+                Row kept = service.list().isEmpty() ? null : service.list().get(0);
+                assertThat(kept).as("step 3: the record survives the failed destroy").isNotNull();
+                assertThat((String) kept.get(DatabaseModel.STATUS))
+                    .as("step 3: the failure has its own named status")
+                    .isEqualTo(DatabaseModel.STATUS_DESTROY_FAILED);
+                assertThat((String) kept.get(DatabaseModel.DB_PASSWORD))
+                    .as("step 3: the only copy of the password is kept")
+                    .isEqualTo("secret123");
+                List<Row> claims = PortLedger.claimsOf(DatabaseModel.MODEL_ID,
+                    kept.get(DatabaseModel.ID));
+                assertThat(claims).as("step 3: the port claim survives").hasSize(1);
+                assertThat(PortLedger.isReleasing(claims.get(0)))
+                    .as("step 3: the surviving claim is parked in releasing").isTrue();
+            });
+            Object state = docker.inspectContainer(containerName).get("State");
+            assertThat(state instanceof Map<?, ?> s && Boolean.TRUE.equals(s.get("Running")))
+                .as("step 3: HOST state -- the container is genuinely still running").isTrue();
+
+            // 4. Absent vs unreachable are DISTINCT identities.
+            assertThat(new ManagedDatabase(unreachable)
+                    .status(name, ManagedDatabase.Engine.POSTGRES).state())
+                .as("step 4: an unaskable daemon is UNREACHABLE, not 'gone'")
+                .isEqualTo(ManagedDatabase.ContainerState.UNREACHABLE);
+            assertThat(new ManagedDatabase(docker)
+                    .status(name, ManagedDatabase.Engine.POSTGRES).state())
+                .as("step 4: the reachable daemon reports the container RUNNING")
+                .isEqualTo(ManagedDatabase.ContainerState.RUNNING);
+
+            // 5. The VERIFIED destroy then succeeds completely: record gone, container
+            //    gone on the host, ledger empty, and the name reads ABSENT (not
+            //    unreachable) through the live daemon.
+            Db.run(datasource, () -> {
+                Integer recordId = service.list().get(0).get(DatabaseModel.ID);
+                try {
+                    service.destroy(name, true);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                assertThat(service.list()).as("step 5: the record is gone").isEmpty();
+                assertThat(PortLedger.claimsOf(DatabaseModel.MODEL_ID, recordId))
+                    .as("step 5: the verified destroy freed the claim entirely").isEmpty();
+            });
+            try {
+                docker.inspectContainer(containerName);
+                throw new AssertionError("step 5: expected the container to be gone");
+            } catch (DockerClient.ApiException e) {
+                assertThat(e.isNotFound())
+                    .as("step 5: HOST state -- the daemon reports the container absent").isTrue();
+            }
+            assertThat(new ManagedDatabase(docker)
+                    .status(name, ManagedDatabase.Engine.POSTGRES).state())
+                .as("step 5: a genuinely gone database reads ABSENT")
+                .isEqualTo(ManagedDatabase.ContainerState.ABSENT);
         } finally {
             try {
                 service.destroy(name, true);
