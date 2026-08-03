@@ -261,16 +261,28 @@
       "scope": "help"
     }
   ],
-  "key": {
-    "text": "Username",
-    "scope": "form",
-    "field": "credentials"
-  },
-  "value": {
-    "text": "Password",
-    "scope": "form",
-    "field": "credentials"
-  },
+  "key": [
+    {
+      "text": "Username",
+      "scope": "form",
+      "field": "credentials"
+    },
+    {
+      "text": "Key",
+      "scope": "template_contents"
+    }
+  ],
+  "value": [
+    {
+      "text": "Password",
+      "scope": "form",
+      "field": "credentials"
+    },
+    {
+      "text": "Value",
+      "scope": "instance_provisioning"
+    }
+  ],
   "proteus_endpoint": [
     {
       "text": "Endpoint",
@@ -741,6 +753,10 @@
     {
       "text": "Use files already on this server or deploy them from a Git repository.",
       "scope": "help"
+    },
+    {
+      "text": "Source",
+      "scope": "template_import"
     }
   ],
   "start_command": [
@@ -919,6 +935,10 @@
     {
       "text": "Cancel",
       "scope": "certificate_request"
+    },
+    {
+      "text": "Cancel",
+      "scope": "instance_from_template"
     }
   ],
   "captured": {
@@ -1219,10 +1239,16 @@
     "text": "No stored logs yet.",
     "scope": "site_processes"
   },
-  "none": {
-    "text": "None",
-    "scope": "site_domains"
-  },
+  "none": [
+    {
+      "text": "None",
+      "scope": "site_domains"
+    },
+    {
+      "text": "No install step",
+      "scope": "install_state"
+    }
+  ],
   "none_running": {
     "text": "No processes running.",
     "scope": "site_processes"
@@ -1257,10 +1283,16 @@
     "text": "Primary",
     "scope": "site_databases"
   },
-  "provisioning": {
-    "text": "Provisioning",
-    "scope": "site_databases"
-  },
+  "provisioning": [
+    {
+      "text": "Provisioning",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Provisioning",
+      "scope": "instance"
+    }
+  ],
   "provisioning_failed": {
     "text": "Provisioning failed",
     "scope": "attention_detail"
@@ -1341,10 +1373,20 @@
       "scope": "stack"
     }
   ],
-  "secret": {
-    "text": "Secret",
-    "scope": "site_deployments"
-  },
+  "secret": [
+    {
+      "text": "Secret",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Secret",
+      "scope": "variable_kind"
+    },
+    {
+      "text": "Secret",
+      "scope": "variable_type"
+    }
+  ],
   "site": {
     "text": "Site {$name}",
     "scope": "attention_title"
@@ -1459,10 +1501,16 @@
     "text": "User",
     "scope": "database_tab"
   },
-  "variables": {
-    "text": "Injected variables",
-    "scope": "site_databases"
-  },
+  "variables": [
+    {
+      "text": "Injected variables",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Variables",
+      "scope": "template_contents"
+    }
+  ],
   "webhook": {
     "text": "Push webhook",
     "scope": "site_deployments"
@@ -1867,6 +1915,22 @@
     {
       "text": "Reconcile findings",
       "scope": "reconcile_finding"
+    },
+    {
+      "text": "Instance templates",
+      "scope": "instance_template"
+    },
+    {
+      "text": "Template variables",
+      "scope": "template_variable"
+    },
+    {
+      "text": "Template files",
+      "scope": "template_file"
+    },
+    {
+      "text": "Instance files",
+      "scope": "instance_file"
     }
   ],
   "dashboard": {
@@ -2481,10 +2545,16 @@
     "text": "Importing replaces every record of this zone except ACME-managed entries. SOA lines are ignored; the zone form owns those values.",
     "scope": "dns_zone"
   },
-  "import_action": {
-    "text": "Import",
-    "scope": "dns_zone"
-  },
+  "import_action": [
+    {
+      "text": "Import",
+      "scope": "dns_zone"
+    },
+    {
+      "text": "Import",
+      "scope": "template_import"
+    }
+  ],
   "import_done": {
     "text": "Imported {$count} records.",
     "scope": "dns_zone"
@@ -3465,10 +3535,16 @@
     "text": "Key revoked",
     "scope": "spamservice_key"
   },
-  "type": {
-    "text": "Type",
-    "scope": "spamservice_event"
-  },
+  "type": [
+    {
+      "text": "Type",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "Type",
+      "scope": "template_contents"
+    }
+  ],
   "day": {
     "text": "Day",
     "scope": "spamservice_event"
@@ -3885,10 +3961,16 @@
     "text": "State",
     "scope": "stack_services"
   },
-  "add_file": {
-    "text": "Add file",
-    "scope": "stack_services"
-  },
+  "add_file": [
+    {
+      "text": "Add file",
+      "scope": "stack_services"
+    },
+    {
+      "text": "Add file",
+      "scope": "template_contents"
+    }
+  ],
   "stack_name_format": {
     "text": "Use lowercase letters, digits and dashes (max 63 characters)",
     "scope": "violations"
@@ -3929,10 +4011,16 @@
     "text": "Use octal permissions such as 0644",
     "scope": "violations"
   },
-  "files": {
-    "text": "Files",
-    "scope": "stack_services"
-  },
+  "files": [
+    {
+      "text": "Files",
+      "scope": "stack_services"
+    },
+    {
+      "text": "Config files",
+      "scope": "template_contents"
+    }
+  ],
   "disabled": {
     "text": "Disabled",
     "scope": "stack_services"
@@ -4776,5 +4864,482 @@
   "backup_ssh_host_key": {
     "text": "known_hosts line to pin the host key; without it the controller user's own known_hosts must already trust the host",
     "scope": "help"
+  },
+  "variable_wrong_carrier": {
+    "text": "A {$kind} variable must carry its value in the matching column only",
+    "scope": "violations"
+  },
+  "variable_type_unknown": {
+    "text": "No handler is registered for variable type {$type}",
+    "scope": "violations"
+  },
+  "template_not_approved": {
+    "text": "Template {$name} is not approved for use yet",
+    "scope": "violations"
+  },
+  "template_in_use": {
+    "text": "Template {$name} is still used by {$count} instance(s)",
+    "scope": "violations"
+  },
+  "variable_key_taken": {
+    "text": "This template already declares a variable named {$key}",
+    "scope": "violations"
+  },
+  "image_requires_capability": {
+    "text": "Running an arbitrary image requires the image_any capability; create from an approved template instead",
+    "scope": "violations"
+  },
+  "install_incomplete": {
+    "text": "Instance {$name} cannot start: its install step is {$state}",
+    "scope": "violations"
+  },
+  "install_needs_template": {
+    "text": "Instance {$name} has no template, so there is no install step to run",
+    "scope": "violations"
+  },
+  "install_requires_stopped": {
+    "text": "Stop instance {$name} before running its install step",
+    "scope": "violations"
+  },
+  "install_unsupported": {
+    "text": "The runtime of instance {$name} cannot run install steps",
+    "scope": "violations"
+  },
+  "install_failed": [
+    {
+      "text": "The install step for instance {$name} failed; see the provisioning tab for its output",
+      "scope": "violations"
+    },
+    {
+      "text": "Install failed",
+      "scope": "install_state"
+    }
+  ],
+  "reinstall_no_step": {
+    "text": "The template of instance {$name} declares no install step to re-run",
+    "scope": "violations"
+  },
+  "reinstall_clear_failed": {
+    "text": "Clearing the data of instance {$name} failed: {$reason}",
+    "scope": "violations"
+  },
+  "files_unsupported": {
+    "text": "The runtime of instance {$name} cannot stage config files",
+    "scope": "violations"
+  },
+  "template_import_unparseable": {
+    "text": "That document is not a parseable template export",
+    "scope": "violations"
+  },
+  "template_import_format": {
+    "text": "That document is not a hohenheim instance template export",
+    "scope": "violations"
+  },
+  "template_import_version": {
+    "text": "Unsupported template format version {$version} (this build reads {$supported})",
+    "scope": "violations"
+  },
+  "template_import_checksum": {
+    "text": "The document's checksum does not match its contents; refusing a tampered or corrupted template",
+    "scope": "violations"
+  },
+  "document_required": {
+    "text": "Paste an exported template document first",
+    "scope": "violations"
+  },
+  "variable_key_format": {
+    "text": "Variable keys are UPPER_CASE environment names (A-Z, 0-9, underscores)"
+  },
+  "import": {
+    "text": "Import template",
+    "scope": "instance_template"
+  },
+  "export": {
+    "text": "Export",
+    "scope": "instance_template"
+  },
+  "approve": {
+    "text": "Approve",
+    "scope": "instance_template"
+  },
+  "unapprove": {
+    "text": "Withdraw approval",
+    "scope": "instance_template"
+  },
+  "approve_confirm": {
+    "text": "Approve this template? Approved templates become selectable as an instance source.",
+    "scope": "instance_template"
+  },
+  "unapprove_confirm": {
+    "text": "Withdraw approval? The template stops being selectable; existing instances keep running.",
+    "scope": "instance_template"
+  },
+  "approved_toast": {
+    "text": "Approved {$name}",
+    "scope": "instance_template"
+  },
+  "unapproved_toast": {
+    "text": "Withdrew approval of {$name}",
+    "scope": "instance_template"
+  },
+  "create_instance": {
+    "text": "Create instance",
+    "scope": "instance_template"
+  },
+  "contents": {
+    "text": "Contents",
+    "scope": "instance_template"
+  },
+  "template": [
+    {
+      "text": "Template",
+      "scope": "field"
+    },
+    {
+      "text": "Template",
+      "scope": "instance_provisioning"
+    }
+  ],
+  "template_version": [
+    {
+      "text": "Version",
+      "scope": "field"
+    },
+    {
+      "text": "Bump when the template changes; carried through export and import",
+      "scope": "help"
+    }
+  ],
+  "install_image": [
+    {
+      "text": "Install image",
+      "scope": "field"
+    },
+    {
+      "text": "Image the install script runs in; empty uses the template's own image",
+      "scope": "help"
+    }
+  ],
+  "install_script": [
+    {
+      "text": "Install script",
+      "scope": "field"
+    },
+    {
+      "text": "Shell script run once with the instance's volumes mounted and its variables as environment",
+      "scope": "help"
+    }
+  ],
+  "reinstall_policy": [
+    {
+      "text": "Reinstall policy",
+      "scope": "field"
+    },
+    {
+      "text": "What a reinstall does with existing data: preserve keeps the volumes, clear wipes them after a typed confirmation",
+      "scope": "help"
+    }
+  ],
+  "readiness_line": [
+    {
+      "text": "Readiness line",
+      "scope": "field"
+    },
+    {
+      "text": "Console line marking the workload ready; consumed by the console-matcher wave, stored and exported now",
+      "scope": "help"
+    }
+  ],
+  "stop_command": [
+    {
+      "text": "Stop command",
+      "scope": "field"
+    },
+    {
+      "text": "Console command for a graceful stop; consumed by the console-matcher wave, stored and exported now",
+      "scope": "help"
+    }
+  ],
+  "approved_at": {
+    "text": "Approved",
+    "scope": "field"
+  },
+  "template_source": {
+    "text": "Source",
+    "scope": "field"
+  },
+  "variable_key": [
+    {
+      "text": "Key",
+      "scope": "field"
+    },
+    {
+      "text": "UPPER_CASE environment name; also the {{KEY}} token in command and config files",
+      "scope": "help"
+    }
+  ],
+  "variable_label": [
+    {
+      "text": "Label",
+      "scope": "field"
+    },
+    {
+      "text": "Shown above the input on the create-instance form",
+      "scope": "help"
+    }
+  ],
+  "variable_type": [
+    {
+      "text": "Type",
+      "scope": "field"
+    },
+    {
+      "text": "The typed field a submitted value is validated through",
+      "scope": "help"
+    }
+  ],
+  "variable_required": {
+    "text": "Required",
+    "scope": "field"
+  },
+  "variable_default": [
+    {
+      "text": "Default value",
+      "scope": "field"
+    },
+    {
+      "text": "Prefilled on the create-instance form; used when the submit leaves the field blank",
+      "scope": "help"
+    }
+  ],
+  "variable_pattern": [
+    {
+      "text": "Pattern",
+      "scope": "field"
+    },
+    {
+      "text": "Regular expression a submitted value must match",
+      "scope": "help"
+    }
+  ],
+  "variable_max_length": {
+    "text": "Maximum length",
+    "scope": "field"
+  },
+  "variable_min": {
+    "text": "Minimum",
+    "scope": "field"
+  },
+  "variable_max": {
+    "text": "Maximum",
+    "scope": "field"
+  },
+  "variable_options": [
+    {
+      "text": "Options",
+      "scope": "field"
+    },
+    {
+      "text": "The closed set of allowed values",
+      "scope": "help"
+    }
+  ],
+  "variable_generate": [
+    {
+      "text": "Generate when blank",
+      "scope": "field"
+    },
+    {
+      "text": "Mint a random token when the create form leaves this secret blank",
+      "scope": "help"
+    }
+  ],
+  "variable_generate_bytes": {
+    "text": "Generated entropy (bytes)",
+    "scope": "field"
+  },
+  "variable_value": {
+    "text": "Value",
+    "scope": "field"
+  },
+  "template_description": {
+    "text": "Shown to whoever picks this template as an instance source",
+    "scope": "help"
+  },
+  "template_kind": {
+    "text": "What created instances run; the kind decides the settings baseline and the runtime driver",
+    "scope": "help"
+  },
+  "template_file_content": {
+    "text": "May contain {{KEY}} variable placeholders, substituted when the file is placed into the container",
+    "scope": "help"
+  },
+  "preserve": {
+    "text": "Preserve data",
+    "scope": "reinstall_policy"
+  },
+  "clear": {
+    "text": "Clear data",
+    "scope": "reinstall_policy"
+  },
+  "pending": {
+    "text": "Install pending",
+    "scope": "install_state"
+  },
+  "installing": {
+    "text": "Installing",
+    "scope": "install_state"
+  },
+  "installed": {
+    "text": "Installed",
+    "scope": "install_state"
+  },
+  "plain": {
+    "text": "Plain",
+    "scope": "variable_kind"
+  },
+  "string": {
+    "text": "Text",
+    "scope": "variable_type"
+  },
+  "integer": {
+    "text": "Number",
+    "scope": "variable_type"
+  },
+  "boolean": {
+    "text": "Switch",
+    "scope": "variable_type"
+  },
+  "select": {
+    "text": "Choice",
+    "scope": "variable_type"
+  },
+  "install": {
+    "text": "Run install",
+    "scope": "instance"
+  },
+  "reinstall": {
+    "text": "Reinstall",
+    "scope": "instance"
+  },
+  "installed_toast": {
+    "text": "Install completed for {$name}",
+    "scope": "instance"
+  },
+  "reinstalled_toast": {
+    "text": "Reinstalled {$name}",
+    "scope": "instance"
+  },
+  "reinstall_confirm": {
+    "text": "Re-run the install step? Data volumes are preserved.",
+    "scope": "instance"
+  },
+  "reinstall_clear_confirm": {
+    "text": "Reinstall {$name}? This template's policy WIPES its data volumes first. Type the instance name to confirm.",
+    "scope": "instance"
+  },
+  "add_variable": {
+    "text": "Add variable",
+    "scope": "template_contents"
+  },
+  "label": {
+    "text": "Label",
+    "scope": "template_contents"
+  },
+  "required": {
+    "text": "Required",
+    "scope": "template_contents"
+  },
+  "default": {
+    "text": "Default",
+    "scope": "template_contents"
+  },
+  "yes": {
+    "text": "Yes",
+    "scope": "template_contents"
+  },
+  "path": {
+    "text": "Path",
+    "scope": "template_contents"
+  },
+  "mode": {
+    "text": "Mode",
+    "scope": "template_contents"
+  },
+  "no_variables": {
+    "text": "No variables",
+    "scope": "template_contents"
+  },
+  "no_variables_description": {
+    "text": "This template declares no variables yet.",
+    "scope": "template_contents"
+  },
+  "no_files": {
+    "text": "No config files",
+    "scope": "template_contents"
+  },
+  "no_files_description": {
+    "text": "This template declares no config files yet.",
+    "scope": "template_contents"
+  },
+  "no_template": {
+    "text": "none",
+    "scope": "instance_provisioning"
+  },
+  "install_state": {
+    "text": "Install state",
+    "scope": "instance_provisioning"
+  },
+  "secret_set": {
+    "text": "secret set",
+    "scope": "instance_provisioning"
+  },
+  "create_from": {
+    "text": "Create instance from",
+    "scope": "instance_from_template"
+  },
+  "instance_name": {
+    "text": "Instance name",
+    "scope": "instance_from_template"
+  },
+  "host": {
+    "text": "Host",
+    "scope": "instance_from_template"
+  },
+  "unapproved_note": {
+    "text": "This template is not approved yet; only administrators can use it.",
+    "scope": "instance_from_template"
+  },
+  "install_note": {
+    "text": "This template runs an install step after creation; the instance can start once it completes.",
+    "scope": "instance_from_template"
+  },
+  "create": {
+    "text": "Create instance",
+    "scope": "instance_from_template"
+  },
+  "approval_note": {
+    "text": "An imported template always lands unapproved: an operator must approve it before it becomes selectable.",
+    "scope": "template_import"
+  },
+  "source_placeholder": {
+    "text": "e.g. community/minecraft-paper",
+    "scope": "template_import"
+  },
+  "source_help": {
+    "text": "Where this document came from; stored on the template for provenance",
+    "scope": "template_import"
+  },
+  "document": {
+    "text": "Template document",
+    "scope": "template_import"
+  },
+  "document_help": {
+    "text": "Paste the exported .template.json contents; the embedded checksum is verified",
+    "scope": "template_import"
+  },
+  "image_any": {
+    "text": "Run arbitrary images",
+    "scope": "capability"
   }
 }

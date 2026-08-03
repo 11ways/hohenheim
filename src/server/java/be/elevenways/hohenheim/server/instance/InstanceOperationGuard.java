@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * The settle-then-refuse discipline shared by every instance operation: ONE fenced
@@ -35,6 +36,55 @@ final class InstanceOperationGuard {
                 .withFilter("scope", "violations")
                 .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)))
                 .withArg("status", status));
+        }
+    }
+
+    /**
+     * Refuse deploy while the template's install lifecycle is unfinished: starting a
+     * workload whose install step never completed runs it on half-written data.
+     * {@code none} and {@code installed} pass; stop and destroy stay ungated.
+     *
+     * @throws Violations {@code install_incomplete}
+     */
+    static void requireInstalled(@NonNull Row row) {
+        String state = row.get(InstanceModel.INSTALL_STATE);
+        if (state == null || InstanceModel.INSTALL_NONE.equals(state)
+                || InstanceModel.INSTALL_INSTALLED.equals(state)) {
+            return;
+        }
+        throw Violations.ofForm(Microcopy.of("install_incomplete")
+            .withFilter("scope", "violations")
+            .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)))
+            .withArg("state", state));
+    }
+
+    /**
+     * THE fenced install-state write: same guard as {@link #stamp} ({@code deleted_at
+     * IS NULL AND claim_fence <= :myFence}), assigning the install lifecycle columns
+     * while leaving the runtime status untouched. Zero rows is the same hard
+     * fenced-out failure.
+     *
+     * @throws Violations {@code instance_fenced_out}
+     */
+    static void stampInstall(@NonNull HostLeases leases, int instanceId, int serverId, long fence,
+                             @NonNull String installState, @Nullable String installError,
+                             @NonNull Object instanceName) {
+        int matched = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(instanceId))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .where(Criteria.or(
+                InstanceModel.CLAIM_FENCE.isNull(),
+                InstanceModel.CLAIM_FENCE.lte(fence)))
+            .assign(InstanceModel.INSTALL_STATE, installState)
+            .assign(InstanceModel.INSTALL_ERROR, installError)
+            .assign(InstanceModel.CLAIM_FENCE, fence)
+            .updateAll();
+        if (matched == 0) {
+            leases.fencedOut(serverId);
+            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
+                .withFilter("scope", "violations")
+                .withArg("name", String.valueOf(instanceName))
+                .withArg("server", ServerModel.nameOf(serverId)));
         }
     }
 

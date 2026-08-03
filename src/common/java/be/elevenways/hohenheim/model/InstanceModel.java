@@ -103,6 +103,55 @@ public class InstanceModel extends Model {
         .defaultValue(STATUS_CREATED)
         .build());
 
+    /** {@link #INSTALL_STATE}: this instance has no install lifecycle (no template step). */
+    public static final String INSTALL_NONE = "none";
+
+    /** {@link #INSTALL_STATE}: the template declares an install step that has not run yet. */
+    public static final String INSTALL_PENDING = "pending";
+
+    /** {@link #INSTALL_STATE}: an install/reinstall is in flight (or was interrupted mid-run). */
+    public static final String INSTALL_INSTALLING = "installing";
+
+    /** {@link #INSTALL_STATE}: the template's install step completed. */
+    public static final String INSTALL_INSTALLED = "installed";
+
+    /** {@link #INSTALL_STATE}: the install step failed; retry re-runs it, variables untouched. */
+    public static final String INSTALL_FAILED = "failed";
+
+    /**
+     * The template this instance was created from (instance_templates.id), or null for a
+     * template-less instance. Together with the settings image it is what
+     * InstanceImagePolicy judges: a tenant instance either carries an APPROVED template's
+     * image or its actor holds {@code image_any}.
+     */
+    public static final IntegerField TEMPLATE_ID = SCHEMA.addField(
+        IntegerField.builder().name("template_id")
+            .label(HohenheimFormCopy.label("template"))
+            .build());
+
+    /**
+     * Durable install/reinstall state -- a COLUMN, not a settings key, because the
+     * dynamic settings form entry rewrites the whole map on every admin save. An
+     * interrupted run leaves {@code installing} behind as evidence; retry resumes it.
+     */
+    public static final EnumField INSTALL_STATE = SCHEMA.addField(EnumField.builder("install_state")
+        .value(INSTALL_NONE, v -> v.displayName("None")
+            .label(Microcopy.of("none").withFilter("scope", "install_state")).color("gray"))
+        .value(INSTALL_PENDING, v -> v.displayName("Install pending").icon("clock")
+            .label(Microcopy.of("pending").withFilter("scope", "install_state")).color("orange"))
+        .value(INSTALL_INSTALLING, v -> v.displayName("Installing").icon("hourglass-half")
+            .label(Microcopy.of("installing").withFilter("scope", "install_state")).color("blue"))
+        .value(INSTALL_INSTALLED, v -> v.displayName("Installed").icon("circle-check")
+            .label(Microcopy.of("installed").withFilter("scope", "install_state")).color("green"))
+        .value(INSTALL_FAILED, v -> v.displayName("Install failed").icon("circle-exclamation")
+            .label(Microcopy.of("install_failed").withFilter("scope", "install_state")).color("red"))
+        .defaultValue(INSTALL_NONE)
+        .build());
+
+    /** Tail of the failed install run's output (operator diagnosis; cleared on success). */
+    public static final TextField INSTALL_ERROR = SCHEMA.addField(
+        TextField.builder().name("install_error").filterable(false).build());
+
     /** Whether the nightly instance-backup task includes this instance. */
     public static final BooleanField BACKUP_ENABLED = SCHEMA.addField(
         BooleanField.builder("backup_enabled")

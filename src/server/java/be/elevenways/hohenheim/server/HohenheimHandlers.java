@@ -86,6 +86,7 @@ public final class HohenheimHandlers {
         FilesystemBrowserRegistry.INSTANCE.register(FilesystemBrowserSource.of(
             HohenheimPaths.SERVER_FILES, HohenheimPanel.ACCESS, Path.of("/")));
         initHealth();
+        be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers.init();
         initCertificates();
         initDnsZones();
         initDnsRecordApi();

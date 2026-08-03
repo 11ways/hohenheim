@@ -261,16 +261,28 @@
       "scope": "help"
     }
   ],
-  "key": {
-    "text": "Gebruikersnaam",
-    "scope": "form",
-    "field": "credentials"
-  },
-  "value": {
-    "text": "Wachtwoord",
-    "scope": "form",
-    "field": "credentials"
-  },
+  "key": [
+    {
+      "text": "Gebruikersnaam",
+      "scope": "form",
+      "field": "credentials"
+    },
+    {
+      "text": "Sleutel",
+      "scope": "template_contents"
+    }
+  ],
+  "value": [
+    {
+      "text": "Wachtwoord",
+      "scope": "form",
+      "field": "credentials"
+    },
+    {
+      "text": "Waarde",
+      "scope": "instance_provisioning"
+    }
+  ],
   "proteus_endpoint": [
     {
       "text": "Endpoint",
@@ -741,6 +753,10 @@
     {
       "text": "Gebruik lokale bestanden of rol uit vanuit een Git-repository.",
       "scope": "help"
+    },
+    {
+      "text": "Bron",
+      "scope": "template_import"
     }
   ],
   "start_command": [
@@ -919,6 +935,10 @@
     {
       "text": "Annuleren",
       "scope": "certificate_request"
+    },
+    {
+      "text": "Annuleren",
+      "scope": "instance_from_template"
     }
   ],
   "captured": {
@@ -1219,10 +1239,16 @@
     "text": "Nog geen opgeslagen logs.",
     "scope": "site_processes"
   },
-  "none": {
-    "text": "Geen",
-    "scope": "site_domains"
-  },
+  "none": [
+    {
+      "text": "Geen",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Geen installatiestap",
+      "scope": "install_state"
+    }
+  ],
   "none_running": {
     "text": "Er draaien geen processen.",
     "scope": "site_processes"
@@ -1257,10 +1283,16 @@
     "text": "Primair",
     "scope": "site_databases"
   },
-  "provisioning": {
-    "text": "Wordt aangemaakt",
-    "scope": "site_databases"
-  },
+  "provisioning": [
+    {
+      "text": "Wordt aangemaakt",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Provisioning",
+      "scope": "instance"
+    }
+  ],
   "provisioning_failed": {
     "text": "Aanmaken mislukt",
     "scope": "attention_detail"
@@ -1341,10 +1373,20 @@
       "scope": "stack"
     }
   ],
-  "secret": {
-    "text": "Geheim",
-    "scope": "site_deployments"
-  },
+  "secret": [
+    {
+      "text": "Geheim",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "Geheim",
+      "scope": "variable_kind"
+    },
+    {
+      "text": "Geheim",
+      "scope": "variable_type"
+    }
+  ],
   "site": {
     "text": "Site {$name}",
     "scope": "attention_title"
@@ -1455,10 +1497,16 @@
     "text": "Gebruiker",
     "scope": "database_tab"
   },
-  "variables": {
-    "text": "Geïnjecteerde variabelen",
-    "scope": "site_databases"
-  },
+  "variables": [
+    {
+      "text": "Geïnjecteerde variabelen",
+      "scope": "site_databases"
+    },
+    {
+      "text": "Variabelen",
+      "scope": "template_contents"
+    }
+  ],
   "webhook": {
     "text": "Push-webhook",
     "scope": "site_deployments"
@@ -1863,6 +1911,22 @@
     {
       "text": "Reconciliatiebevindingen",
       "scope": "reconcile_finding"
+    },
+    {
+      "text": "Instantiesjablonen",
+      "scope": "instance_template"
+    },
+    {
+      "text": "Sjabloonvariabelen",
+      "scope": "template_variable"
+    },
+    {
+      "text": "Sjabloonbestanden",
+      "scope": "template_file"
+    },
+    {
+      "text": "Instantiebestanden",
+      "scope": "instance_file"
     }
   ],
   "dashboard": {
@@ -2477,10 +2541,16 @@
     "text": "Importeren vervangt elk record van deze zone behalve ACME-beheerde items. SOA-regels worden genegeerd; het zoneformulier beheert die waarden.",
     "scope": "dns_zone"
   },
-  "import_action": {
-    "text": "Importeren",
-    "scope": "dns_zone"
-  },
+  "import_action": [
+    {
+      "text": "Importeren",
+      "scope": "dns_zone"
+    },
+    {
+      "text": "Importeren",
+      "scope": "template_import"
+    }
+  ],
   "import_done": {
     "text": "{$count} records geimporteerd.",
     "scope": "dns_zone"
@@ -3461,10 +3531,16 @@
     "text": "Sleutel ingetrokken",
     "scope": "spamservice_key"
   },
-  "type": {
-    "text": "Type",
-    "scope": "spamservice_event"
-  },
+  "type": [
+    {
+      "text": "Type",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "Type",
+      "scope": "template_contents"
+    }
+  ],
   "day": {
     "text": "Dag",
     "scope": "spamservice_event"
@@ -3881,10 +3957,16 @@
     "text": "Toestand",
     "scope": "stack_services"
   },
-  "add_file": {
-    "text": "Bestand toevoegen",
-    "scope": "stack_services"
-  },
+  "add_file": [
+    {
+      "text": "Bestand toevoegen",
+      "scope": "stack_services"
+    },
+    {
+      "text": "Bestand toevoegen",
+      "scope": "template_contents"
+    }
+  ],
   "stack_name_format": {
     "text": "Gebruik kleine letters, cijfers en streepjes (max 63 tekens)",
     "scope": "violations"
@@ -3925,10 +4007,16 @@
     "text": "Gebruik octale permissies zoals 0644",
     "scope": "violations"
   },
-  "files": {
-    "text": "Bestanden",
-    "scope": "stack_services"
-  },
+  "files": [
+    {
+      "text": "Bestanden",
+      "scope": "stack_services"
+    },
+    {
+      "text": "Configuratiebestanden",
+      "scope": "template_contents"
+    }
+  ],
   "disabled": {
     "text": "Uitgeschakeld",
     "scope": "stack_services"
@@ -4772,5 +4860,482 @@
   "backup_ssh_host_key": {
     "text": "known_hosts-regel om de hostsleutel te pinnen; zonder pin moet de known_hosts van de controllergebruiker de host al vertrouwen",
     "scope": "help"
+  },
+  "variable_wrong_carrier": {
+    "text": "Een {$kind}-variabele mag zijn waarde enkel in de bijhorende kolom dragen",
+    "scope": "violations"
+  },
+  "variable_type_unknown": {
+    "text": "Er is geen handler geregistreerd voor variabeletype {$type}",
+    "scope": "violations"
+  },
+  "template_not_approved": {
+    "text": "Sjabloon {$name} is nog niet goedgekeurd voor gebruik",
+    "scope": "violations"
+  },
+  "template_in_use": {
+    "text": "Sjabloon {$name} wordt nog gebruikt door {$count} instantie(s)",
+    "scope": "violations"
+  },
+  "variable_key_taken": {
+    "text": "Dit sjabloon heeft al een variabele met de naam {$key}",
+    "scope": "violations"
+  },
+  "image_requires_capability": {
+    "text": "Een willekeurige image draaien vereist de image_any-machtiging; maak in plaats daarvan aan vanuit een goedgekeurd sjabloon",
+    "scope": "violations"
+  },
+  "install_incomplete": {
+    "text": "Instantie {$name} kan niet starten: de installatiestap is {$state}",
+    "scope": "violations"
+  },
+  "install_needs_template": {
+    "text": "Instantie {$name} heeft geen sjabloon, dus er is geen installatiestap om uit te voeren",
+    "scope": "violations"
+  },
+  "install_requires_stopped": {
+    "text": "Stop instantie {$name} voordat je de installatiestap uitvoert",
+    "scope": "violations"
+  },
+  "install_unsupported": {
+    "text": "De runtime van instantie {$name} kan geen installatiestappen uitvoeren",
+    "scope": "violations"
+  },
+  "install_failed": [
+    {
+      "text": "De installatiestap voor instantie {$name} is mislukt; zie het provisioningtabblad voor de uitvoer",
+      "scope": "violations"
+    },
+    {
+      "text": "Installatie mislukt",
+      "scope": "install_state"
+    }
+  ],
+  "reinstall_no_step": {
+    "text": "Het sjabloon van instantie {$name} heeft geen installatiestap om opnieuw uit te voeren",
+    "scope": "violations"
+  },
+  "reinstall_clear_failed": {
+    "text": "Het wissen van de gegevens van instantie {$name} is mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "files_unsupported": {
+    "text": "De runtime van instantie {$name} kan geen configuratiebestanden plaatsen",
+    "scope": "violations"
+  },
+  "template_import_unparseable": {
+    "text": "Dat document is geen leesbare sjabloonexport",
+    "scope": "violations"
+  },
+  "template_import_format": {
+    "text": "Dat document is geen hohenheim-instantiesjabloonexport",
+    "scope": "violations"
+  },
+  "template_import_version": {
+    "text": "Niet-ondersteunde sjabloonformaatversie {$version} (deze build leest {$supported})",
+    "scope": "violations"
+  },
+  "template_import_checksum": {
+    "text": "De checksum van het document komt niet overeen met de inhoud; een gemanipuleerd of beschadigd sjabloon wordt geweigerd",
+    "scope": "violations"
+  },
+  "document_required": {
+    "text": "Plak eerst een geexporteerd sjabloondocument",
+    "scope": "violations"
+  },
+  "variable_key_format": {
+    "text": "Variabelesleutels zijn UPPER_CASE-omgevingsnamen (A-Z, 0-9, underscores)"
+  },
+  "import": {
+    "text": "Sjabloon importeren",
+    "scope": "instance_template"
+  },
+  "export": {
+    "text": "Exporteren",
+    "scope": "instance_template"
+  },
+  "approve": {
+    "text": "Goedkeuren",
+    "scope": "instance_template"
+  },
+  "unapprove": {
+    "text": "Goedkeuring intrekken",
+    "scope": "instance_template"
+  },
+  "approve_confirm": {
+    "text": "Dit sjabloon goedkeuren? Goedgekeurde sjablonen worden selecteerbaar als instantiebron.",
+    "scope": "instance_template"
+  },
+  "unapprove_confirm": {
+    "text": "Goedkeuring intrekken? Het sjabloon is niet langer selecteerbaar; bestaande instanties blijven draaien.",
+    "scope": "instance_template"
+  },
+  "approved_toast": {
+    "text": "{$name} goedgekeurd",
+    "scope": "instance_template"
+  },
+  "unapproved_toast": {
+    "text": "Goedkeuring van {$name} ingetrokken",
+    "scope": "instance_template"
+  },
+  "create_instance": {
+    "text": "Instantie aanmaken",
+    "scope": "instance_template"
+  },
+  "contents": {
+    "text": "Inhoud",
+    "scope": "instance_template"
+  },
+  "template": [
+    {
+      "text": "Sjabloon",
+      "scope": "field"
+    },
+    {
+      "text": "Sjabloon",
+      "scope": "instance_provisioning"
+    }
+  ],
+  "template_version": [
+    {
+      "text": "Versie",
+      "scope": "field"
+    },
+    {
+      "text": "Verhoog bij wijzigingen aan het sjabloon; reist mee met export en import",
+      "scope": "help"
+    }
+  ],
+  "install_image": [
+    {
+      "text": "Installatie-image",
+      "scope": "field"
+    },
+    {
+      "text": "Image waarin het installatiescript draait; leeg gebruikt de image van het sjabloon zelf",
+      "scope": "help"
+    }
+  ],
+  "install_script": [
+    {
+      "text": "Installatiescript",
+      "scope": "field"
+    },
+    {
+      "text": "Shellscript dat eenmalig draait met de volumes van de instantie gekoppeld en haar variabelen als omgeving",
+      "scope": "help"
+    }
+  ],
+  "reinstall_policy": [
+    {
+      "text": "Herinstallatiebeleid",
+      "scope": "field"
+    },
+    {
+      "text": "Wat een herinstallatie met bestaande gegevens doet: behouden laat de volumes staan, wissen maakt ze leeg na een getypte bevestiging",
+      "scope": "help"
+    }
+  ],
+  "readiness_line": [
+    {
+      "text": "Gereedheidsregel",
+      "scope": "field"
+    },
+    {
+      "text": "Consoleregel die aangeeft dat de workload klaar is; gebruikt door de console-matchergolf, nu al opgeslagen en geexporteerd",
+      "scope": "help"
+    }
+  ],
+  "stop_command": [
+    {
+      "text": "Stopcommando",
+      "scope": "field"
+    },
+    {
+      "text": "Consolecommando voor een nette stop; gebruikt door de console-matchergolf, nu al opgeslagen en geexporteerd",
+      "scope": "help"
+    }
+  ],
+  "approved_at": {
+    "text": "Goedgekeurd",
+    "scope": "field"
+  },
+  "template_source": {
+    "text": "Bron",
+    "scope": "field"
+  },
+  "variable_key": [
+    {
+      "text": "Sleutel",
+      "scope": "field"
+    },
+    {
+      "text": "UPPER_CASE-omgevingsnaam; ook het {{KEY}}-token in commando en configuratiebestanden",
+      "scope": "help"
+    }
+  ],
+  "variable_label": [
+    {
+      "text": "Label",
+      "scope": "field"
+    },
+    {
+      "text": "Getoond boven het invoerveld op het aanmaakformulier",
+      "scope": "help"
+    }
+  ],
+  "variable_type": [
+    {
+      "text": "Type",
+      "scope": "field"
+    },
+    {
+      "text": "Het getypeerde veld waarmee een ingediende waarde gevalideerd wordt",
+      "scope": "help"
+    }
+  ],
+  "variable_required": {
+    "text": "Verplicht",
+    "scope": "field"
+  },
+  "variable_default": [
+    {
+      "text": "Standaardwaarde",
+      "scope": "field"
+    },
+    {
+      "text": "Vooraf ingevuld op het aanmaakformulier; gebruikt wanneer het veld leeg blijft",
+      "scope": "help"
+    }
+  ],
+  "variable_pattern": [
+    {
+      "text": "Patroon",
+      "scope": "field"
+    },
+    {
+      "text": "Reguliere expressie waaraan een ingediende waarde moet voldoen",
+      "scope": "help"
+    }
+  ],
+  "variable_max_length": {
+    "text": "Maximale lengte",
+    "scope": "field"
+  },
+  "variable_min": {
+    "text": "Minimum",
+    "scope": "field"
+  },
+  "variable_max": {
+    "text": "Maximum",
+    "scope": "field"
+  },
+  "variable_options": [
+    {
+      "text": "Opties",
+      "scope": "field"
+    },
+    {
+      "text": "De gesloten verzameling toegelaten waarden",
+      "scope": "help"
+    }
+  ],
+  "variable_generate": [
+    {
+      "text": "Genereren indien leeg",
+      "scope": "field"
+    },
+    {
+      "text": "Genereer een willekeurig token wanneer het aanmaakformulier dit geheim leeg laat",
+      "scope": "help"
+    }
+  ],
+  "variable_generate_bytes": {
+    "text": "Gegenereerde entropie (bytes)",
+    "scope": "field"
+  },
+  "variable_value": {
+    "text": "Waarde",
+    "scope": "field"
+  },
+  "template_description": {
+    "text": "Getoond aan wie dit sjabloon als instantiebron kiest",
+    "scope": "help"
+  },
+  "template_kind": {
+    "text": "Wat aangemaakte instanties draaien; de soort bepaalt de instellingenbasis en de runtimedriver",
+    "scope": "help"
+  },
+  "template_file_content": {
+    "text": "Mag {{KEY}}-variabeleplaatshouders bevatten, vervangen wanneer het bestand in de container geplaatst wordt",
+    "scope": "help"
+  },
+  "preserve": {
+    "text": "Gegevens behouden",
+    "scope": "reinstall_policy"
+  },
+  "clear": {
+    "text": "Gegevens wissen",
+    "scope": "reinstall_policy"
+  },
+  "pending": {
+    "text": "Installatie wacht",
+    "scope": "install_state"
+  },
+  "installing": {
+    "text": "Installeren",
+    "scope": "install_state"
+  },
+  "installed": {
+    "text": "Geinstalleerd",
+    "scope": "install_state"
+  },
+  "plain": {
+    "text": "Gewoon",
+    "scope": "variable_kind"
+  },
+  "string": {
+    "text": "Tekst",
+    "scope": "variable_type"
+  },
+  "integer": {
+    "text": "Getal",
+    "scope": "variable_type"
+  },
+  "boolean": {
+    "text": "Schakelaar",
+    "scope": "variable_type"
+  },
+  "select": {
+    "text": "Keuze",
+    "scope": "variable_type"
+  },
+  "install": {
+    "text": "Installatie uitvoeren",
+    "scope": "instance"
+  },
+  "reinstall": {
+    "text": "Herinstalleren",
+    "scope": "instance"
+  },
+  "installed_toast": {
+    "text": "Installatie voltooid voor {$name}",
+    "scope": "instance"
+  },
+  "reinstalled_toast": {
+    "text": "{$name} geherinstalleerd",
+    "scope": "instance"
+  },
+  "reinstall_confirm": {
+    "text": "De installatiestap opnieuw uitvoeren? Datavolumes blijven behouden.",
+    "scope": "instance"
+  },
+  "reinstall_clear_confirm": {
+    "text": "{$name} herinstalleren? Het beleid van dit sjabloon WIST eerst de datavolumes. Typ de instantienaam om te bevestigen.",
+    "scope": "instance"
+  },
+  "add_variable": {
+    "text": "Variabele toevoegen",
+    "scope": "template_contents"
+  },
+  "label": {
+    "text": "Label",
+    "scope": "template_contents"
+  },
+  "required": {
+    "text": "Verplicht",
+    "scope": "template_contents"
+  },
+  "default": {
+    "text": "Standaard",
+    "scope": "template_contents"
+  },
+  "yes": {
+    "text": "Ja",
+    "scope": "template_contents"
+  },
+  "path": {
+    "text": "Pad",
+    "scope": "template_contents"
+  },
+  "mode": {
+    "text": "Modus",
+    "scope": "template_contents"
+  },
+  "no_variables": {
+    "text": "Geen variabelen",
+    "scope": "template_contents"
+  },
+  "no_variables_description": {
+    "text": "Dit sjabloon heeft nog geen variabelen.",
+    "scope": "template_contents"
+  },
+  "no_files": {
+    "text": "Geen configuratiebestanden",
+    "scope": "template_contents"
+  },
+  "no_files_description": {
+    "text": "Dit sjabloon heeft nog geen configuratiebestanden.",
+    "scope": "template_contents"
+  },
+  "no_template": {
+    "text": "geen",
+    "scope": "instance_provisioning"
+  },
+  "install_state": {
+    "text": "Installatiestatus",
+    "scope": "instance_provisioning"
+  },
+  "secret_set": {
+    "text": "geheim ingesteld",
+    "scope": "instance_provisioning"
+  },
+  "create_from": {
+    "text": "Instantie aanmaken van",
+    "scope": "instance_from_template"
+  },
+  "instance_name": {
+    "text": "Instantienaam",
+    "scope": "instance_from_template"
+  },
+  "host": {
+    "text": "Host",
+    "scope": "instance_from_template"
+  },
+  "unapproved_note": {
+    "text": "Dit sjabloon is nog niet goedgekeurd; enkel beheerders kunnen het gebruiken.",
+    "scope": "instance_from_template"
+  },
+  "install_note": {
+    "text": "Dit sjabloon voert na aanmaak een installatiestap uit; de instantie kan starten zodra die voltooid is.",
+    "scope": "instance_from_template"
+  },
+  "create": {
+    "text": "Instantie aanmaken",
+    "scope": "instance_from_template"
+  },
+  "approval_note": {
+    "text": "Een geimporteerd sjabloon is altijd niet-goedgekeurd: een operator moet het goedkeuren voordat het selecteerbaar wordt.",
+    "scope": "template_import"
+  },
+  "source_placeholder": {
+    "text": "bv. community/minecraft-paper",
+    "scope": "template_import"
+  },
+  "source_help": {
+    "text": "Waar dit document vandaan komt; opgeslagen op het sjabloon voor herkomst",
+    "scope": "template_import"
+  },
+  "document": {
+    "text": "Sjabloondocument",
+    "scope": "template_import"
+  },
+  "document_help": {
+    "text": "Plak de inhoud van het geexporteerde .template.json; de ingebedde checksum wordt gecontroleerd",
+    "scope": "template_import"
+  },
+  "image_any": {
+    "text": "Willekeurige images draaien",
+    "scope": "capability"
   }
 }

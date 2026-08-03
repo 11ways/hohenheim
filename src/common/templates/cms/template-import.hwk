@@ -1,0 +1,35 @@
+{#- Paste-import of an exported template document. The imported template ALWAYS
+    lands unapproved; approval is a separate operator act on the catalog list. -#}
+{% declare title: String %}
+{% declare error: String = "" %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-form-page">
+    <header class="cms-resource-list-header"><h1>{{ title }}</h1></header>
+
+    {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
+    <pl-alert variant="warning">{{ t("approval_note", scope: "template_import") }}</pl-alert>
+
+    <form method="POST" action="/admin/instance-templates-import">
+        {% csrf() %}
+        <pl-card><pl-card-content><zf-form-scope><div class="zf-entries">
+            <pl-field>
+                <pl-label target="source">{{ t("source", scope: "template_import") }}</pl-label>
+                <pl-input inputId="source" type="text" name="source" placeholder={% t("source_placeholder", scope: "template_import") %}></pl-input>
+                <pl-field-description>{{ t("source_help", scope: "template_import") }}</pl-field-description>
+            </pl-field>
+            <pl-field>
+                <pl-label target="document">{{ t("document", scope: "template_import") }}</pl-label>
+                <pl-textarea inputId="document" name="document" rows={% 16 %}></pl-textarea>
+                <pl-field-description>{{ t("document_help", scope: "template_import") }}</pl-field-description>
+            </pl-field>
+        </div></zf-form-scope></pl-card-content></pl-card>
+        <div class="cms-form-actions">
+            <pl-button variant="primary" type="submit">{{ t("import_action", scope: "template_import") }}</pl-button>
+            <a href="/admin/instance-templates">{{ t("cancel", scope: "instance_from_template") }}</a>
+        </div>
+    </form>
+</section>
+{% /block %}
