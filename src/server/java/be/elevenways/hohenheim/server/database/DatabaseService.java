@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -98,6 +99,7 @@ public class DatabaseService extends DatasourceScoped {
         try {
             ManagedDatabase.Connection connection = managedFor.apply(serverName)
                 .provision(name, engine, image, user, password, database, ephemeral, limits, recordId);
+            recordPublishedPort(recordId, serverName, connection);
             setStatus(name, STATUS_ACTIVE);
             return connection;
         } catch (IOException e) {
@@ -132,15 +134,35 @@ public class DatabaseService extends DatasourceScoped {
             serverName, limits, STATUS_PROVISIONING);
         PROVISION_EXECUTOR.submit(() -> {
             try {
-                managedFor.apply(serverName)
+                recordPublishedPort(recordId, serverName, managedFor.apply(serverName)
                     .provision(name, engine, image, user, password, database, ephemeral, limits,
-                        recordId);
+                        recordId));
                 setStatus(name, STATUS_ACTIVE);
             } catch (Exception e) {
                 setStatus(name, STATUS_FAILED);
                 Blast.log("DB: provisioning failed for", name, "-", e.getMessage());
             }
         });
+    }
+
+    /**
+     * Record-after: the container published on an ephemeral host port, so the ledger
+     * learns which port this database record now holds. The RELEASE side is the model's
+     * remove hooks (DatabaseModel), not this class -- deleting the record through the
+     * admin panel must free the port too, and only a hook sees every delete path.
+     *
+     * AIDEV-NOTE: TCP-only by construction, not by omission -- ManagedDatabase reads the
+     * port back through DockerClient.publishedPort, which looks up "{port}/tcp" and can
+     * see nothing else. No supported engine publishes UDP; one that did would need the
+     * declared pre-allocation mode (instance-tier-plan fork 2), never a silent tcp row.
+     */
+    private void recordPublishedPort(Integer recordId, String serverName,
+                                     ManagedDatabase.Connection connection) {
+        if (recordId == null) {
+            return;
+        }
+        exec(() -> PortLedger.recordObserved(ServerModel.canonicalServerId(serverName),
+            connection.host(), connection.port(), "tcp", DatabaseModel.MODEL_ID, recordId, null));
     }
 
     /** @return the persisted record's id, so provisioning can label its resources */

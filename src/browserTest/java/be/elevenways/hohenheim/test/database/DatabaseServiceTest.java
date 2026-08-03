@@ -2,12 +2,14 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -121,6 +124,56 @@ class DatabaseServiceTest {
             assertThat(service.detail(name).running()).isTrue();
         } finally {
             service.destroy(name, true);
+        }
+    }
+
+    /**
+     * Record-after against the real daemon: the port the kernel handed the container is
+     * in the ledger, attributed to the database record, and released when it is destroyed.
+     * The live half of PortLedgerTest.recordAfterLearnsRelearnsReportsAndReleases -- that
+     * one proves the logic without a daemon, this one proves the wiring reaches it.
+     */
+    @Test
+    void theProvisionedPortIsClaimedInTheLedgerAndFreedOnDestroy() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
+
+        SqliteDatasource datasource = freshDatasource();
+        DatabaseService service = new DatabaseService(docker, datasource);
+        String name = "ledger" + System.nanoTime();
+        try {
+            ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
+                PG_IMAGE, "appuser", "secret123", "appdb", true, ServerService.LOCAL);
+
+            Db.run(datasource, () -> {
+                Integer recordId = service.list().get(0).get(DatabaseModel.ID);
+                String key = PortLedger.claimKeyOf(ServerModel.localServerId(),
+                    conn.host(), conn.port(), "tcp");
+                // 1. The published port is a ledger claim owned by the database record.
+                Row claim = PortLedger.holderOf(key);
+                assertThat(claim).as("step 1: the published port is in the ledger").isNotNull();
+                assertThat(PortLedger.isOwnedBy(claim, DatabaseModel.MODEL_ID, recordId))
+                    .as("step 1: the claim names the database record as owner").isTrue();
+                // 2. It is therefore visible to EVERY other authority: a stack declaring
+                //    the same host port now collides instead of silently double-booking.
+                assertThatThrownBy(() -> PortLedger.claim(ServerModel.localServerId(), "0.0.0.0",
+                        conn.port(), "tcp", null, null, "a rival stack service"))
+                    .as("step 2: another authority is refused the same port")
+                    .isInstanceOf(PortLedger.PortConflict.class)
+                    .hasMessageContaining(name);
+            });
+
+            service.destroy(name, true);
+            Db.run(datasource, () -> assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(
+                    ServerModel.localServerId(), conn.host(), conn.port(), "tcp")))
+                .as("step 3: destroying the database released its port").isNull());
+        } finally {
+            try {
+                service.destroy(name, true);
+            } catch (IOException ignored) {
+                // best effort
+            }
         }
     }
 

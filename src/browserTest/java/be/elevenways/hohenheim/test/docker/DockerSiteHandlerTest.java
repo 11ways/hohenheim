@@ -1,10 +1,15 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerSiteRequestHandler;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -15,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -27,6 +33,13 @@ class DockerSiteHandlerTest {
     private static final String TEST_IMAGE = "alpine:latest";
     private static final int TEST_SITE_ID = 999_001;
     private static final String CONTAINER_NAME = "hohenheim-site-" + TEST_SITE_ID;
+
+    // The handler records its published port in the port ledger, so every start here
+    // needs a datasource -- a claim that cannot be written is a failure, not a shrug.
+    @BeforeAll
+    static void bootRuntime() {
+        HohenheimTestRuntime.ensureBooted();
+    }
 
     @Test
     @SuppressWarnings("unchecked")
@@ -75,6 +88,19 @@ class DockerSiteHandlerTest {
             assertThat(volumeOwner).as("volume carries owner labels from birth").isNotNull();
             assertThat(volumeOwner.model()).isEqualTo(SiteModel.MODEL_ID);
             assertThat(volumeOwner.id()).isEqualTo(String.valueOf(TEST_SITE_ID));
+
+            // Record-after: the port the KERNEL picked is in the ledger, owned by the
+            // site record and therefore visible to every other port authority.
+            String key = PortLedger.claimKeyOf(ServerModel.localServerId(),
+                "127.0.0.1", upstream.getPort(), "tcp");
+            Row claim = PortLedger.holderOf(key);
+            assertThat(claim).as("the published port is claimed in the ledger").isNotNull();
+            assertThat(PortLedger.isOwnedBy(claim, SiteModel.MODEL_ID, TEST_SITE_ID))
+                .as("the claim names the site record as owner").isTrue();
+            assertThatThrownBy(() -> PortLedger.claim(ServerModel.localServerId(), "0.0.0.0",
+                    upstream.getPort(), "tcp", null, null, "a rival authority"))
+                .as("another authority cannot double-book the same host port")
+                .isInstanceOf(PortLedger.PortConflict.class);
         } finally {
             handler.destroy();
             try {
@@ -85,6 +111,9 @@ class DockerSiteHandlerTest {
         }
 
         assertThat(handler.getHealth()).isEqualTo(SiteHealth.DOWN);
+        // The teardown gave the port back: no claim survives the container.
+        assertThat(PortLedger.claimsOf(SiteModel.MODEL_ID, TEST_SITE_ID))
+            .as("destroying the handler released the site's port claim").isEmpty();
         // After destroy the container is gone: inspect must fail.
         try {
             docker.inspectContainer(CONTAINER_NAME);

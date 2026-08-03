@@ -202,8 +202,8 @@ public class StackServiceModel extends Model {
         // context (getRow() is null) -- for delete(id), criteria deletes and deleteAll
         // alike. The doomed ids must therefore be read in the BEFORE hook and released
         // in the AFTER hook; an afterRemove-only hook reading getRow() releases nothing.
-        SCHEMA.addBeforeRemoveHook(PortLedger::captureDoomedServices);
-        SCHEMA.addAfterRemoveHook(PortLedger::releaseDoomedServices);
+        SCHEMA.addBeforeRemoveHook(PortLedger::captureDoomedOwners);
+        SCHEMA.addAfterRemoveHook(PortLedger::releaseDoomedOwners);
     }
 
     /**
