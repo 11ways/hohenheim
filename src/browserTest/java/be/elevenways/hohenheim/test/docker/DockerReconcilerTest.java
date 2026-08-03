@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.docker.DockerReconciler.Bucket;
@@ -464,7 +465,7 @@ class DockerReconcilerTest {
         spec.put("Image", "alpine:latest");
         spec.put("Cmd", List.of("sleep", "60"));
         spec.put("Labels", OwnerLabels.of(SiteModel.MODEL_ID, 987_654));
-        docker.createContainer(name, spec);
+        docker.createContainer(name, spec, ContainerHardening.STRICT);
 
         try {
             Db.run(datasource, () -> {

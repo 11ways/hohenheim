@@ -466,9 +466,23 @@ public class HohenheimSettings {
     public abstract class Security {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("security")
             .label("Security")
-            .describe("Hostname-scan detection, native IP bans, spamservice reputation and "
-                + "the released-hostname quarantine")
+            .describe("Container isolation, hostname-scan detection, native IP bans, "
+                + "spamservice reputation and the released-hostname quarantine")
             .icon("shield");
+
+        // AIDEV-NOTE: the ONLY tunable part of ContainerHardening. Everything else in the
+        // baseline (drop-ALL capabilities, no-new-privileges, the escape refusals) is
+        // deliberately not a setting: a security policy an operator can switch off from a
+        // form is a policy a compromised admin session can switch off.
+        public static final SettingDefinition<Integer> CONTAINER_PIDS_LIMIT = GROUP
+            .buildSetting("container_pids_limit", Integer.class)
+            .defaultValue(512)
+            .description("Maximum number of processes a single managed container may have "
+                + "(stacks, Docker sites, managed databases and instances alike). A fork "
+                + "bomb inside one tenant's container then exhausts its own cgroup instead "
+                + "of the host's process table. Raise it only for a workload that genuinely "
+                + "forks per connection; 0 or less falls back to the default")
+            .build();
 
         public static final SettingDefinition<Integer> RELEASE_QUARANTINE_DAYS = GROUP.buildSetting("release_quarantine_days", Integer.class)
             .defaultValue(30)

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ProcessDockerTransport;
 import org.junit.jupiter.api.Test;
@@ -100,7 +101,7 @@ class DockerClientTest {
         String id = docker.createContainer(name, Map.of(
             "Image", TEST_IMAGE,
             "Cmd", List.of("sleep", "30")
-        ));
+        ), ContainerHardening.STRICT);
         assertThat(id).isNotBlank();
 
         try {
@@ -136,7 +137,7 @@ class DockerClientTest {
         String id = docker.createContainer(name, Map.of(
             "Image", TEST_IMAGE,
             "Cmd", List.of("sh", "-c", "echo hohenheim-out; echo hohenheim-err 1>&2")
-        ));
+        ), ContainerHardening.STRICT);
         try {
             docker.startContainer(id);
             waitForExit(docker, id, 10_000);
@@ -177,7 +178,7 @@ class DockerClientTest {
         String id = docker.createContainer(name, Map.of(
             "Image", TEST_IMAGE,
             "Cmd", List.of("sleep", "30")   // long-lived so we can exec into it
-        ));
+        ), ContainerHardening.STRICT);
         try {
             docker.startContainer(id);
 
@@ -235,7 +236,7 @@ class DockerClientTest {
             containerId = docker.createContainer("hohenheim-nettest-c-" + System.nanoTime(), Map.of(
                 "Image", TEST_IMAGE,
                 "Cmd", List.of("sleep", "30")
-            ));
+            ), ContainerHardening.STRICT);
             docker.startContainer(containerId);
             docker.connectContainerToNetwork(networkName, containerId, List.of("svc-alias"));
 
@@ -333,7 +334,7 @@ class DockerClientTest {
                 "7000/tcp", List.of(Map.of("HostIp", "127.0.0.1", "HostPort", String.valueOf(tcpPort))),
                 "7001/udp", List.of(Map.of("HostIp", "127.0.0.1", "HostPort", String.valueOf(udpPort)))
             ))
-        ));
+        ), ContainerHardening.STRICT);
         try {
             docker.startContainer(id);
 
@@ -364,7 +365,7 @@ class DockerClientTest {
         String id = docker.createContainer("hohenheim-restarttest-" + System.nanoTime(), Map.of(
             "Image", TEST_IMAGE,
             "Cmd", List.of("sleep", "30")
-        ));
+        ), ContainerHardening.STRICT);
         try {
             docker.startContainer(id);
             String firstStart = startedAt(docker, id);

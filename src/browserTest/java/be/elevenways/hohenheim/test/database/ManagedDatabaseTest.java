@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -94,7 +95,7 @@ class ManagedDatabaseTest {
         // 1. Plant an UNLABELLED container squatting on the name (what the legacy path
         //    would have force-removed without a second thought).
         docker.createContainer(containerName, Map.of(
-            "Image", "alpine:latest", "Cmd", List.of("sleep", "300")));
+            "Image", "alpine:latest", "Cmd", List.of("sleep", "300")), ContainerHardening.STRICT);
         try {
             // 2. Provisioning over it is a named refusal, not a silent replace.
             try {

@@ -1669,6 +1669,25 @@ block is what the code does; amend the prose, do not code against it.
   `ResourceLimits` type reads as though isolation is configured; it is two
   cgroup knobs. This is parallel work, needed by everything, and independently
   testable -- do it early.
+  - **LANDED 2026-08-03 (re-verify, do not assume):** `ContainerHardening` is the
+    baseline and it is applied INSIDE `DockerClient.createContainer`, which now has
+    no overload without a `Profile` -- so the four authorities cannot omit it and a
+    fifth cannot either (removing the argument from one of them is a compile error,
+    not an unhardened container). Shipped: drop-ALL capabilities with a per-workload
+    DECLARED add-back (`STRICT` = nothing, used by the instance tier;
+    `SERVICE` = CHOWN|DAC_OVERRIDE|FOWNER|SETGID|SETUID, declared by stacks, Docker
+    sites and each database `Engine`), `no-new-privileges`, `PidsLimit`
+    (`security.container_pids_limit`, default 512), and a REFUSAL of `Privileged`,
+    `CapAdd`, `SecurityOpt`, `UsernsMode`, devices, host namespaces and host bind
+    mounts. Deliberately NOT shipped, with reasons: `ReadonlyRootfs` (not viable for
+    arbitrary images; a knob nobody can set is theater), `NET_BIND_SERVICE` (Docker
+    sets `net.ipv4.ip_unprivileged_port_start=0` in every container, so it grants
+    nothing here) and userns remapping (daemon-level `userns-remap` in daemon.json,
+    which hohenheim does not own -- the host preflight this section already demands
+    is where it belongs). `ContainerHardeningTest` asserts CapBnd/NoNewPrivs/pids.max
+    read from INSIDE the running container, not the spec that was sent. STILL OPEN
+    from this bullet: per-stack-SERVICE capability declaration (StackSpec.ServiceSpec
+    has no field for it) and the host preflight that verifies userns/seccomp/AppArmor.
 - **Per-tenant networking is essentially absent.** `NftService` covers IP BANS
   only (one input-hook chain, timeout sets) -- no forward chain, no per-tenant
   chain, no egress rule, no metadata-range deny, nothing about container IPv6.

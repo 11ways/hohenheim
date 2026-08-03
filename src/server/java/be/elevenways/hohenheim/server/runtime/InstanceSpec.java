@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.runtime;
 
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -22,6 +23,9 @@ import java.util.Map;
  *                      {@code {port}/tcp}, so UDP needs the declared pre-allocation
  *                      mode, which does not exist yet -- do not pretend otherwise.
  * @param limits        cgroup resource caps
+ * @param hardening     the kind's DECLARED capability profile; a required component so a
+ *                      new kind cannot inherit isolation by accident (see
+ *                      {@link ContainerHardening})
  * @param ownerLabels   the OwnerLabels pair of the owning record
  */
 public record InstanceSpec(@NonNull String handle,
@@ -31,4 +35,5 @@ public record InstanceSpec(@NonNull String handle,
                            @NonNull Map<String, String> volumes,
                            @Nullable Integer publishPort,
                            @NonNull ResourceLimits limits,
+                           ContainerHardening.@NonNull Profile hardening,
                            @NonNull Map<String, String> ownerLabels) {}
