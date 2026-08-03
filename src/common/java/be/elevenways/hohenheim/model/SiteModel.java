@@ -7,12 +7,17 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.behaviour.RevisionableBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
+import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 
+import java.util.ArrayList;
 import java.util.List;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -143,6 +148,14 @@ public class SiteModel extends Model {
                 }
             }
         });
+        // AIDEV-NOTE: a HARD site delete used to leave its site_domains rows behind holding
+        // a non-null live_route_key. The conflict scan skips them (the site lookup returns
+        // null, so they read as not-live) but the UNIQUE index on live_route_key still
+        // enforces, so the next claimant got a DuplicateKeyException whose holder name
+        // resolved to null: the operator was told the route is taken by "?" and the hostname
+        // was permanently unclaimable with no nameable holder. Only tests hard-delete sites
+        // today; that is the reason it stayed invisible, not a reason to leave it.
+        SCHEMA.addBeforeRemoveHook(SiteModel::cascadeDomainRows);
         SCHEMA.addAfterSaveHook(context -> {
             Row site = context.getRow();
             if (site == null || !SITE_TYPE_TLS_PASSTHROUGH.equals(effective(site, SITE_TYPE))) return;
@@ -154,6 +167,38 @@ public class SiteModel extends Model {
                 .assign(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, true)
                 .updateAll();
         });
+    }
+
+    /**
+     * Remove the domain rows of every site a pending delete will remove.
+     *
+     * A remove hook fires ONCE for the whole delete with a criteria-only context whose row
+     * is null, so the doomed ids are read back from the criteria here (the framework's
+     * documented seam, mirroring PortLedger.captureDoomedOwners). Deleting the children
+     * BEFORE the parents also keeps the claim release ordered: SiteDomainModel's own remove
+     * hook still sees rows whose site exists.
+     */
+    private static void cascadeDomainRows(RemoveFromDatasource context) {
+        Model sites = context.getModel();
+        if (sites == null) {
+            return;
+        }
+        QueryContext queryContext = context.getQueryContext();
+        Criteria criteria = queryContext != null ? queryContext.getCriteria() : null;
+        QueryBuilder<Row> builder = sites.find();
+        if (criteria != null) {
+            builder.where(criteria);
+        }
+        List<Integer> doomed = new ArrayList<>();
+        for (Row site : builder.all()) {
+            if (site.get(ID) instanceof Integer siteId) {
+                doomed.add(siteId);
+            }
+        }
+        if (!doomed.isEmpty()) {
+            Models.get(SiteDomainModel.class).find()
+                .where(SiteDomainModel.SITE_ID.in(doomed)).delete();
+        }
     }
 
     private static Object effective(Row row, Field<?, ?> field) {

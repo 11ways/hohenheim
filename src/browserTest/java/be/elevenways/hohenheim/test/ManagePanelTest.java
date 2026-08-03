@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -680,6 +681,20 @@ class ManagePanelTest extends HohenheimTestBase {
             //    step 5 was refused by the invariant, not by a malformed body.
             victim.set(SiteModel.ENABLED, false);
             siteModel.save(victim);
+
+            // 5b. Standing the victim down RELEASES its hostname, and the release
+            //     quarantine (ReleasedClaims) keeps it reserved for its former owner: the
+            //     victim was operator-owned, the staged site carries a manage grant, so
+            //     this is still a cross-owner takeover and is still refused -- on the real
+            //     admin HTTP path. Lift it the way an administrator does, so step 6 keeps
+            //     proving what it claims.
+            assertThat(adminPost("/admin/sites/" + stagedId, adminEnableBody).statusCode())
+                .isIn(200, 422);
+            assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
+                .as("a just-released hostname stays quarantined against a different owner")
+                .isEqualTo(false);
+            Models.get(ReleasedRouteClaimModel.class).find().delete();
+
             assertThat(adminPost("/admin/sites/" + stagedId, adminEnableBody).statusCode())
                 .isIn(302, 303);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
@@ -696,6 +711,9 @@ class ManagePanelTest extends HohenheimTestBase {
             domainModel.delete(stagedDomain);
             domainModel.delete(innocentDomain);
             domainModel.delete(victimDomain);
+            // Tearing live sites down IS a release, so the fixture ledgers quarantine rows
+            // that would otherwise refuse another test class's claim on these hostnames.
+            Models.get(ReleasedRouteClaimModel.class).find().delete();
         }
     }
 }

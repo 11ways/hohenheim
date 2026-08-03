@@ -2,11 +2,13 @@ package be.elevenways.hohenheim.server.cms;
 
 
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.hohenheim.server.proxy.ListenerAddressMatcher;
+import be.elevenways.hohenheim.server.proxy.ReleasedClaims;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
@@ -180,9 +182,31 @@ public class SiteDomainResource extends RowResource {
             Object siteIdValue = SiteDomainModel.effective(row, SiteDomainModel.SITE_ID);
             Row site = siteIdValue instanceof Integer siteId
                 ? Models.get(SiteModel.class).findById(siteId) : null;
-            row.set(SiteDomainModel.LIVE_ROUTE_KEY,
-                RouteClaims.isLive(site) ? RouteClaims.keyOfPendingWrite(row) : null);
+            String key = RouteClaims.isLive(site) ? RouteClaims.keyOfPendingWrite(row) : null;
+            // RELEASE PATH 2 of 3: editing the hostname, path or listener set of a LIVE row
+            // frees the departing key with nothing else observing it -- the site write hook
+            // never runs for a domain-only edit. The stored row is still readable here, and
+            // (unlike a site delete) its grants are untouched, so the owner set is exact.
+            Row stored = storedDomainOf(row);
+            if (stored != null && !Objects.equals(key, stored.get(SiteDomainModel.LIVE_ROUTE_KEY))) {
+                ReleasedClaims.recordReleaseOf(stored);
+            }
+            row.set(SiteDomainModel.LIVE_ROUTE_KEY, key);
         });
+        // RELEASE PATH 3 of 3: deleting the domain row itself. SiteDomainResource inherits
+        // RowResource.deleteRow's plain model.delete(), which runs no write hook at all --
+        // and abandoning one hostname while keeping the site is the most ordinary way a
+        // tenant releases a name. A ledger written at only SOME release points is worse
+        // than none: it would quarantine some hostnames and silently free others.
+        SiteDomainModel.SCHEMA.addBeforeRemoveHook(ReleasedClaims::recordReleaseOfDoomedRows);
+    }
+
+    /** The stored domain row a write targets, or null for a create. */
+    private static @Nullable Row storedDomainOf(@NonNull Row row) {
+        if (!row.has(SiteDomainModel.ID.getName()) || row.get(SiteDomainModel.ID) == null) {
+            return null;
+        }
+        return Models.get(SiteDomainModel.class).findById(row.get(SiteDomainModel.ID));
     }
 
     /**
@@ -306,6 +330,37 @@ public class SiteDomainResource extends RowResource {
             }
             throw Violations.ofField("path", path, CmsSupport.violationText("route_taken"));
         }
+
+        // The QUARANTINE tier, last: a live holder is the more actionable refusal and keeps
+        // naming itself, so this only speaks when the route is genuinely unheld. It is an
+        // INDEXED lookup on the claim key, never another scan. Rows of a site that does not
+        // route are exempt here exactly like they are above -- staging is legal, and the
+        // enable seam re-judges (refuseEnableRouteConflicts), which is what closes the
+        // stage-on-a-disabled-site-then-enable two-step.
+        if (ownSiteLive) {
+            Row quarantine = ReleasedClaims.refusalFor(RouteClaims.keyOfPendingWrite(row), siteId);
+            if (quarantine != null) {
+                throw Violations.ofField("hostname", hostname, quarantineViolation(quarantine,
+                    "route_quarantined"));
+            }
+        }
+    }
+
+    /**
+     * The quarantine refusal text.
+     *
+     * AIDEV-NOTE: it must NOT name the former owner. The refusals above name the holding
+     * SITE because that site is live, visible and actionable for the operator reading the
+     * message; a released claim's former owner is typically a DELETED tenant, and naming it
+     * would leak one tenant's identity to the next -- a tenancy boundary none of the
+     * existing refusals cross. Copying one of those messages here is the single most likely
+     * way this leaks.
+     */
+    private static @NonNull Microcopy quarantineViolation(@NonNull Row quarantine,
+                                                          @NonNull String key) {
+        return CmsSupport.violationText(key)
+            .withArg("hostname", String.valueOf(quarantine.get(ReleasedRouteClaimModel.HOSTNAME)))
+            .withArg("days", String.valueOf(ReleasedClaims.remainingDays(quarantine)));
     }
 
     /**
@@ -367,6 +422,16 @@ public class SiteDomainResource extends RowResource {
                         .withArg("hostname", String.valueOf(own.get(SiteDomainModel.HOSTNAME)))
                         .withArg("pattern", String.valueOf(candidateHostname))
                         .withArg("site", String.valueOf(candidateSite.get(SiteModel.NAME))));
+            }
+
+            // The quarantine tier of the ENABLE seam. Omitting it here would leave the
+            // whole mechanism bypassable by a two-step the code above documents as LEGAL:
+            // stage the released hostname on a DISABLED site (exempt by design), then
+            // enable it. Anchored on 'enabled', like every other refusal on this path.
+            Row quarantine = ReleasedClaims.refusalFor(RouteClaims.keyOf(own), siteId);
+            if (quarantine != null) {
+                throw Violations.ofField("enabled", true,
+                    quarantineViolation(quarantine, "enable_route_quarantined"));
             }
         }
     }

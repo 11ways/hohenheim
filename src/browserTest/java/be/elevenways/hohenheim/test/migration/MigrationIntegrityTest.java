@@ -440,7 +440,12 @@ class MigrationIntegrityTest {
         return new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
     }
 
-    private static void withIntegrityMode(String mode, Runnable body) {
+    /**
+     * Run a body under a temporary {@code database.migration_integrity} mode. Package-visible
+     * so a fixture that DELIBERATELY builds an out-of-order install (EncryptedSecretsAtRest's
+     * heal test skips one migration on purpose) does not need a second copy.
+     */
+    static void withIntegrityMode(String mode, Runnable body) {
         String previous = ServerSettings.VALUES.getValue(ServerSettings.Database.MIGRATION_INTEGRITY);
         ServerSettings.VALUES.setValue(ServerSettings.Database.MIGRATION_INTEGRITY, mode);
         try {

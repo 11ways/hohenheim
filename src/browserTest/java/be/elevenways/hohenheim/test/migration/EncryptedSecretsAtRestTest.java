@@ -230,7 +230,13 @@ class EncryptedSecretsAtRestTest {
             "{\"A\":\"PLAIN-env\"}");
 
         // 3. The full migrate applies ONLY M047, and its heal encrypts every column.
-        new MigrationRunner(datasource).migrate().requireSuccess();
+        //    AIDEV-NOTE: integrity is relaxed to "warn" for this one call because step 1
+        //    built an out-of-order install ON PURPOSE -- every migration after M047 is
+        //    already recorded while M047 is still pending, which is exactly the shipped
+        //    integrity check's out-of-order finding. Under the default "fail" posture this
+        //    fixture cannot migrate at all, and the heal it exists to exercise never runs.
+        MigrationIntegrityTest.withIntegrityMode("warn",
+            () -> new MigrationRunner(datasource).migrate().requireSuccess());
         List<String> envelopes = allEnvelopes(datasource);
         assertThat(envelopes).as("step 3: nine healed envelopes").hasSize(9);
         for (String envelope : envelopes) {

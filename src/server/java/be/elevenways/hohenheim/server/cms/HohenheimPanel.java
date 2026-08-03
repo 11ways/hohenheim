@@ -70,6 +70,7 @@ public final class HohenheimPanel extends Panel {
         peers.add(new AdminDashboard());
         addIf(peers, new SiteResource(), Role.PROXY);
         addIf(peers, new SiteDomainResource(), Role.PROXY);
+        addIf(peers, new ReleasedClaimResource(), Role.PROXY);
         addIf(peers, new SiteDatabaseResource(), Role.DATABASES);
         addIf(peers, new CertificateResource(), Role.PROXY);
         addIf(peers, new AccessListResource(), Role.PROXY);

@@ -459,8 +459,21 @@ public class HohenheimSettings {
     public abstract class Security {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("security")
             .label("Security")
-            .describe("Hostname-scan detection, native IP bans and spamservice reputation")
+            .describe("Hostname-scan detection, native IP bans, spamservice reputation and "
+                + "the released-hostname quarantine")
             .icon("shield");
+
+        public static final SettingDefinition<Integer> RELEASE_QUARANTINE_DAYS = GROUP.buildSetting("release_quarantine_days", Integer.class)
+            .defaultValue(30)
+            .suffix("d")
+            .description("Days a hostname stays reserved for its former owner after the site "
+                + "releasing it is deleted, disabled, renamed or has the domain row removed. "
+                + "A DIFFERENT owner claiming it inside this window is refused (an "
+                + "administrator can lift a quarantine per hostname); the same owner may "
+                + "always re-claim, and operator-owned sites never quarantine each other. "
+                + "This is what stops a subdomain takeover through a CNAME that still points "
+                + "here from a zone we do not host. 0 disables the quarantine entirely")
+            .build();
 
         public static final SettingDefinition<Integer> DOMAIN_MISS_THRESHOLD = GROUP.buildSetting("domain_miss_threshold", Integer.class)
             .defaultValue(5)

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -212,6 +213,23 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             //    missing permission. A takes the hostname and is again its sole owner.
             siteB.set(SiteModel.ENABLED, false);
             siteModel.save(siteB);
+
+            // 8a. B standing down RELEASES the hostname, and a released hostname is not a
+            //     free hostname (ReleasedClaims): B was operator-owned, A carries a tenant
+            //     manage grant, so the restore is still refused -- now by the quarantine
+            //     tier rather than the live-conflict tier. Prove that, then lift the
+            //     quarantine the way an administrator does, so step 8's positive control
+            //     still proves what it claims.
+            HttpResponse<String> quarantinedRestore = post(
+                "/admin/sites/" + aId + "/revision/" + enabledRevA + "/restore",
+                "", sessionToken, csrfToken);
+            assertThat(quarantinedRestore.statusCode())
+                .as("the quarantined restore is refused, never a server error")
+                .isIn(200, 302, 303);
+            assertThat((Boolean) siteModel.findById(aId).get(SiteModel.ENABLED))
+                .as("a different owner cannot restore onto a just-released hostname").isFalse();
+            Models.get(ReleasedRouteClaimModel.class).find().delete();
+
             HttpResponse<String> cleanRestore = post(
                 "/admin/sites/" + aId + "/revision/" + enabledRevA + "/restore",
                 "", sessionToken, csrfToken);
@@ -229,6 +247,9 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             for (Row d : domainModel.findBySiteId(bId)) domainModel.delete(d);
             siteModel.delete(siteA);
             siteModel.delete(siteB);
+            // Tearing live sites down IS a release, so the fixture ledgers quarantine rows
+            // that would otherwise refuse another test class's claim on these hostnames.
+            Models.get(ReleasedRouteClaimModel.class).find().delete();
         }
     }
 }
