@@ -63,10 +63,11 @@ public final class SiteTerminalCsp {
     }
 
     /**
-     * True only for the record-subpage route that actually dispatches to THIS
-     * page: {@code {panel}/{resource}/{id}/page/processes} where the panel is
+     * True only for a record-subpage route that actually dispatches to a terminal
+     * page: {@code {panel}/{resource}/{id}/page/{slug}} where the panel is
      * registered, the resource is one of its peers, and the subpage that slug
-     * resolves to really is {@link SiteProcessesPage}.
+     * resolves to is marked {@link TerminalCspPage} (the site processes tab, the
+     * instance console tab).
      *
      * AIDEV-NOTE: this used to be a SUFFIX test ("ends with /page/processes")
      * plus "the first segment is a registered panel", which handed the widened
@@ -79,9 +80,7 @@ public final class SiteTerminalCsp {
      */
     private static boolean claims(String path) {
         String[] segments = path.split("/", -1);
-        if (segments.length != 5
-                || !"page".equals(segments[3])
-                || !SiteProcessesPage.SLUG.equals(segments[4])) {
+        if (segments.length != 5 || !"page".equals(segments[3]) || segments[4].isEmpty()) {
             return false;
         }
 
@@ -96,8 +95,8 @@ public final class SiteTerminalCsp {
         // resolve() applies the shadowing rule the dispatcher applies, so the page
         // claimed here is the page that would render.
         for (RecordScopedPage<?> subpage : RecordSubpageRegistry.INSTANCE.resolve(resource.subpages())) {
-            if (SiteProcessesPage.SLUG.equals(subpage.slug())) {
-                return subpage instanceof SiteProcessesPage;
+            if (segments[4].equals(subpage.slug())) {
+                return subpage instanceof TerminalCspPage;
             }
         }
         return false;

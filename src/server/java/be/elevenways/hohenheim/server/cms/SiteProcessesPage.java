@@ -31,7 +31,7 @@ import java.util.Map;
  * start/kill/isolate actions, the interactive terminal, and the stored
  * process-log history (a {@code ?log=<id>} query renders one stored log).
  */
-public final class SiteProcessesPage implements RecordScopedPage<Row> {
+public final class SiteProcessesPage implements RecordScopedPage<Row>, TerminalCspPage {
 
     /** The route slug, shared with the terminal's scoped-CSP claim. */
     public static final String SLUG = "processes";

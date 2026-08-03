@@ -15,11 +15,13 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The default {@link DockerTransport}: HTTP/1.1 over the daemon's local unix socket.
+ * Also the local {@link DockerStreamTransport}: a stream is the same channel WITHOUT
+ * the read-to-EOF discipline, living until either side closes it.
  *
  * @author  Jelle De Loecker
  * @since   0.1.0
  */
-public class UnixSocketDockerTransport implements DockerTransport {
+public class UnixSocketDockerTransport implements DockerTransport, DockerStreamTransport {
 
     // AIDEV-NOTE: A blocking SocketChannel over AF_UNIX can't use Socket.setSoTimeout, so we bound
     // each request with a watchdog that closes the channel on expiry; the blocked connect/read then
@@ -98,6 +100,64 @@ public class UnixSocketDockerTransport implements DockerTransport {
             channel.close();
         } catch (IOException ignored) {
             // best effort
+        }
+    }
+
+    @Override
+    public DockerStreamConnection openStream(byte[] request, long connectTimeoutMs)
+            throws IOException {
+        SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX);
+        // The watchdog covers connect + request write ONLY: once the stream is
+        // handed over, its lifetime is the consumer's decision, not a deadline's.
+        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
+            () -> closeQuietly(channel), connectTimeoutMs, TimeUnit.MILLISECONDS);
+        try {
+            channel.connect(address);
+            writeFully(channel, ByteBuffer.wrap(request));
+        } catch (ClosedChannelException e) {
+            throw new IOException("Docker stream connect timed out after " + connectTimeoutMs + "ms");
+        } catch (IOException e) {
+            closeQuietly(channel);
+            throw e;
+        } finally {
+            watchdog.cancel(false);
+        }
+        return new SocketStreamConnection(channel);
+    }
+
+    /** Blocking channel pipe; close() from any thread unblocks a pending read. */
+    private static final class SocketStreamConnection implements DockerStreamConnection {
+
+        private final SocketChannel channel;
+
+        SocketStreamConnection(SocketChannel channel) {
+            this.channel = channel;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            ByteBuffer slice = ByteBuffer.wrap(buffer, offset, length);
+            return this.channel.read(slice);
+        }
+
+        @Override
+        public void write(byte[] data) throws IOException {
+            writeFully(this.channel, ByteBuffer.wrap(data));
+        }
+
+        @Override
+        public void close() {
+            closeQuietly(this.channel);
+        }
+
+        @Override
+        public boolean isReleased() {
+            return !this.channel.isOpen();
+        }
+
+        @Override
+        public String diagnostics() {
+            return "";
         }
     }
 }

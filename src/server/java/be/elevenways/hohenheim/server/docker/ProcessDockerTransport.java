@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author  Jelle De Loecker
  * @since   0.1.0
  */
-public class ProcessDockerTransport implements DockerTransport {
+public class ProcessDockerTransport implements DockerTransport, DockerStreamTransport {
 
     private static final ScheduledExecutorService WATCHDOG =
         Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -112,6 +112,109 @@ public class ProcessDockerTransport implements DockerTransport {
         } finally {
             watchdog.cancel(false);
             process.destroyForcibly();
+        }
+    }
+
+    @Override
+    public DockerStreamConnection openStream(byte[] request, long connectTimeoutMs)
+            throws IOException {
+        Process process = new ProcessBuilder(command).start();
+        ProcessStreamConnection connection = new ProcessStreamConnection(process);
+        // Bound only the request write: ssh may take seconds to connect, but once the
+        // stream is live its lifetime belongs to the consumer.
+        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
+            connection::close, connectTimeoutMs, TimeUnit.MILLISECONDS);
+        try {
+            connection.write(request);
+        } catch (IOException e) {
+            connection.close();
+            throw new IOException("Docker stream request could not be sent ("
+                + command.get(0) + "): " + connection.diagnostics(), e);
+        } finally {
+            watchdog.cancel(false);
+        }
+        return connection;
+    }
+
+    /**
+     * A stream over one ssh/dial-stdio subprocess. The subprocess IS the connection:
+     * close() destroys it forcibly, and {@link #isReleased()} reports the observed
+     * process/thread state so the leak test counts reality, not a flag.
+     */
+    private static final class ProcessStreamConnection implements DockerStreamConnection {
+
+        /** Bytes of stderr tail kept for diagnostics on a long-lived stream. */
+        private static final int STDERR_TAIL_BYTES = 4096;
+
+        private final Process process;
+        private final Thread drain;
+        private final byte[] stderrTail = new byte[STDERR_TAIL_BYTES];
+        private int stderrTailLength;
+
+        ProcessStreamConnection(Process process) {
+            this.process = process;
+            this.drain = new Thread(this::drainStderr, "docker-stream-stderr-" + process.pid());
+            this.drain.setDaemon(true);
+            this.drain.start();
+        }
+
+        private void drainStderr() {
+            byte[] buffer = new byte[1024];
+            try (var err = this.process.getErrorStream()) {
+                int n;
+                while ((n = err.read(buffer)) != -1) {
+                    synchronized (this.stderrTail) {
+                        // Keep only the most recent tail: shift when full, never grow.
+                        int keep = Math.min(n, STDERR_TAIL_BYTES);
+                        int from = n - keep;
+                        if (this.stderrTailLength + keep > STDERR_TAIL_BYTES) {
+                            int shift = this.stderrTailLength + keep - STDERR_TAIL_BYTES;
+                            System.arraycopy(this.stderrTail, shift, this.stderrTail, 0,
+                                this.stderrTailLength - shift);
+                            this.stderrTailLength -= shift;
+                        }
+                        System.arraycopy(buffer, from, this.stderrTail, this.stderrTailLength, keep);
+                        this.stderrTailLength += keep;
+                    }
+                }
+            } catch (IOException ignored) {
+                // process gone
+            }
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            return this.process.getInputStream().read(buffer, offset, length);
+        }
+
+        @Override
+        public void write(byte[] data) throws IOException {
+            OutputStream stdin = this.process.getOutputStream();
+            stdin.write(data);
+            stdin.flush();
+        }
+
+        @Override
+        public void close() {
+            this.process.destroyForcibly();
+        }
+
+        @Override
+        public boolean isReleased() {
+            return !this.process.isAlive() && !this.drain.isAlive();
+        }
+
+        @Override
+        public String diagnostics() {
+            String tail;
+            synchronized (this.stderrTail) {
+                tail = new String(this.stderrTail, 0, this.stderrTailLength,
+                    StandardCharsets.UTF_8).trim();
+            }
+            if (!this.process.isAlive()) {
+                return "exit " + this.process.exitValue() + (tail.isEmpty() ? "" : ": " + tail);
+            }
+            return tail;
         }
     }
 

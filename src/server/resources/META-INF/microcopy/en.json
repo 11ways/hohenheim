@@ -1247,6 +1247,10 @@
     {
       "text": "No install step",
       "scope": "install_state"
+    },
+    {
+      "text": "None",
+      "scope": "crash_policy"
     }
   ],
   "none_running": {
@@ -1423,6 +1427,10 @@
     {
       "text": "Starting",
       "scope": "stack_state"
+    },
+    {
+      "text": "Starting",
+      "scope": "instance_status"
     }
   ],
   "status": [
@@ -1547,6 +1555,10 @@
     {
       "text": "Site management",
       "scope": "manage"
+    },
+    {
+      "text": "Console",
+      "scope": "instance_console"
     }
   ],
   "description": [
@@ -1561,6 +1573,10 @@
     {
       "text": "Description",
       "scope": "field"
+    },
+    {
+      "text": "Live output of this instance's workload. Commands are sent with the form below.",
+      "scope": "instance_console"
     }
   ],
   "create_site": {
@@ -3385,10 +3401,16 @@
       "scope": "instance"
     }
   ],
-  "stop_hint": {
-    "text": "Stop Spamservice without changing its enabled setting.",
-    "scope": "spamservice"
-  },
+  "stop_hint": [
+    {
+      "text": "Stop Spamservice without changing its enabled setting.",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Sending '{$command}' stops this instance gracefully.",
+      "scope": "instance_console"
+    }
+  ],
   "stop_confirm": [
     {
       "text": "Stop Spamservice now? Scoring and reputation administration become unavailable.",
@@ -3403,10 +3425,16 @@
       "scope": "instance"
     }
   ],
-  "restart": {
-    "text": "Restart",
-    "scope": "spamservice"
-  },
+  "restart": [
+    {
+      "text": "Restart",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Restart on crash",
+      "scope": "crash_policy"
+    }
+  ],
   "restart_hint": {
     "text": "Restart Spamservice and reload its runtime configuration.",
     "scope": "spamservice"
@@ -5341,5 +5369,51 @@
   "image_any": {
     "text": "Run arbitrary images",
     "scope": "capability"
+  },
+  "console": {
+    "text": "Console",
+    "scope": "instance"
+  },
+  "console_unsupported": {
+    "text": "The runtime of instance '{$name}' has no console streaming support",
+    "scope": "violations"
+  },
+  "console_not_running": {
+    "text": "Instance '{$name}' is not running, so there is no console to attach to",
+    "scope": "violations"
+  },
+  "console_open_failed": {
+    "text": "Could not open the console of instance '{$name}': {$reason}",
+    "scope": "violations"
+  },
+  "console_send_failed": {
+    "text": "Could not send the console command: {$reason}",
+    "scope": "violations"
+  },
+  "crash_policy": [
+    {
+      "text": "Crash policy",
+      "scope": "field"
+    },
+    {
+      "text": "What happens when the workload exits without an observed stop: restart redeploys it (any exit code counts as a crash), none records the exit.",
+      "scope": "help"
+    }
+  ],
+  "command_placeholder": {
+    "text": "Console command",
+    "scope": "instance_console"
+  },
+  "send": {
+    "text": "Send",
+    "scope": "instance_console"
+  },
+  "not_running": {
+    "text": "Not running",
+    "scope": "instance_console"
+  },
+  "not_running_description": {
+    "text": "Deploy the instance to attach to its console.",
+    "scope": "instance_console"
   }
 }

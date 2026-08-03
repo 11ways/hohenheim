@@ -1247,6 +1247,10 @@
     {
       "text": "Geen installatiestap",
       "scope": "install_state"
+    },
+    {
+      "text": "Geen",
+      "scope": "crash_policy"
     }
   ],
   "none_running": {
@@ -1423,6 +1427,10 @@
     {
       "text": "Opstarten",
       "scope": "stack_state"
+    },
+    {
+      "text": "Wordt gestart",
+      "scope": "instance_status"
     }
   ],
   "status": [
@@ -1543,6 +1551,10 @@
     {
       "text": "Sitebeheer",
       "scope": "manage"
+    },
+    {
+      "text": "Console",
+      "scope": "instance_console"
     }
   ],
   "description": [
@@ -1557,6 +1569,10 @@
     {
       "text": "Beschrijving",
       "scope": "field"
+    },
+    {
+      "text": "Live uitvoer van de workload van deze instantie. Commando's verstuur je met het formulier hieronder.",
+      "scope": "instance_console"
     }
   ],
   "create_site": {
@@ -3381,10 +3397,16 @@
       "scope": "instance"
     }
   ],
-  "stop_hint": {
-    "text": "Stop Spamservice zonder de instelling Ingeschakeld te wijzigen.",
-    "scope": "spamservice"
-  },
+  "stop_hint": [
+    {
+      "text": "Stop Spamservice zonder de instelling Ingeschakeld te wijzigen.",
+      "scope": "spamservice"
+    },
+    {
+      "text": "'{$command}' versturen stopt deze instantie netjes.",
+      "scope": "instance_console"
+    }
+  ],
   "stop_confirm": [
     {
       "text": "Spamservice nu stoppen? Scoring en reputatiebeheer worden onbeschikbaar.",
@@ -3399,10 +3421,16 @@
       "scope": "instance"
     }
   ],
-  "restart": {
-    "text": "Herstarten",
-    "scope": "spamservice"
-  },
+  "restart": [
+    {
+      "text": "Herstarten",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Herstarten bij crash",
+      "scope": "crash_policy"
+    }
+  ],
   "restart_hint": {
     "text": "Herstart Spamservice en laad de runtimeconfiguratie opnieuw.",
     "scope": "spamservice"
@@ -5337,5 +5365,51 @@
   "image_any": {
     "text": "Willekeurige images draaien",
     "scope": "capability"
+  },
+  "console": {
+    "text": "Console",
+    "scope": "instance"
+  },
+  "console_unsupported": {
+    "text": "De runtime van instantie '{$name}' ondersteunt geen consolestreaming",
+    "scope": "violations"
+  },
+  "console_not_running": {
+    "text": "Instantie '{$name}' draait niet, dus er is geen console om aan te koppelen",
+    "scope": "violations"
+  },
+  "console_open_failed": {
+    "text": "Kon de console van instantie '{$name}' niet openen: {$reason}",
+    "scope": "violations"
+  },
+  "console_send_failed": {
+    "text": "Kon het consolecommando niet versturen: {$reason}",
+    "scope": "violations"
+  },
+  "crash_policy": [
+    {
+      "text": "Crashbeleid",
+      "scope": "field"
+    },
+    {
+      "text": "Wat er gebeurt als de workload stopt zonder waargenomen stop: herstarten rolt hem opnieuw uit (elke exitcode telt als crash), geen registreert enkel de stop.",
+      "scope": "help"
+    }
+  ],
+  "command_placeholder": {
+    "text": "Consolecommando",
+    "scope": "instance_console"
+  },
+  "send": {
+    "text": "Versturen",
+    "scope": "instance_console"
+  },
+  "not_running": {
+    "text": "Draait niet",
+    "scope": "instance_console"
+  },
+  "not_running_description": {
+    "text": "Rol de instantie uit om aan de console te koppelen.",
+    "scope": "instance_console"
   }
 }

@@ -1,0 +1,58 @@
+{#- Console tab on an instance: the live output terminal (instance-console
+    WebSocket) and the command form (POST; a non-TTY container echoes nothing,
+    so input never rides raw terminal keystrokes). -#}
+{% declare title: String %}
+{% declare instanceName: String %}
+{% declare instanceId: Integer %}
+{% declare status: String %}
+{% declare running: Boolean = false %}
+{% declare stopCommand: String = "" %}
+{% declare commandError: String = "" %}
+{% declare returnUrl: String = "" %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+    <section class="cms-resource-list-page">
+        <header class="cms-resource-list-header">
+            <h1>{{ instanceName }}</h1>
+        </header>
+
+        {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+        {% if commandError != "" %}
+            <pl-alert variant="destructive">{{ commandError }}</pl-alert>
+        {% /if %}
+
+        {% if running %}
+            <pl-card>
+                <pl-card-header>
+                    <pl-card-title>{{ t("title", scope: "instance_console") }}</pl-card-title>
+                    <pl-card-description>{{ t("description", scope: "instance_console") }}</pl-card-description>
+                </pl-card-header>
+                <pl-card-content>
+                    <pl-terminal
+                        rows={% 24{:} %}
+                        cols={% 100{:} %}
+                        readOnly={% true %}
+                        wsUrl={% "/ws/instance-console/" + instanceId %}>
+                    </pl-terminal>
+                    <form method="POST" action={% "/instances/" + instanceId + "/console/command" %} class="instance-console-command">
+                        {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+                        <pl-input name="command" placeholder={% t("command_placeholder", scope: "instance_console") %}></pl-input>
+                        <pl-button variant="outline" type={% "submit" %}>{{ t("send", scope: "instance_console") }}</pl-button>
+                    </form>
+                    {% if stopCommand != "" %}
+                        <p class="instance-console-hint">{{ t("stop_hint", scope: "instance_console", command: stopCommand) }}</p>
+                    {% /if %}
+                </pl-card-content>
+            </pl-card>
+        {% else %}
+            <pl-empty-state icon="terminal">
+                <pl-empty-state-title>{{ t("not_running", scope: "instance_console") }}</pl-empty-state-title>
+                <pl-empty-state-description>{{ t("not_running_description", scope: "instance_console") }}</pl-empty-state-description>
+            </pl-empty-state>
+        {% /if %}
+    </section>
+{% /block %}

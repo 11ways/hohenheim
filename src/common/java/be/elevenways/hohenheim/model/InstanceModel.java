@@ -34,6 +34,13 @@ public class InstanceModel extends Model {
     /** {@link #STATUS}: record exists, nothing was ever deployed. */
     public static final String STATUS_CREATED = "created";
 
+    /**
+     * {@link #STATUS}: deployed and started, awaiting the template's {@code
+     * readiness_line} on the console before it counts as Running (Phase 5's
+     * console-matcher clause). Only instances with a readiness line pass through here.
+     */
+    public static final String STATUS_STARTING = "starting";
+
     /** {@link #STATUS}: last deploy reached a running container. */
     public static final String STATUS_RUNNING = "running";
 
@@ -90,6 +97,8 @@ public class InstanceModel extends Model {
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_CREATED, v -> v.displayName("Created").icon("circle")
             .label(Microcopy.of("created").withFilter("scope", "instance_status")).color("gray"))
+        .value(STATUS_STARTING, v -> v.displayName("Starting").icon("hourglass-half")
+            .label(Microcopy.of("starting").withFilter("scope", "instance_status")).color("blue"))
         .value(STATUS_RUNNING, v -> v.displayName("Running").icon("circle-play")
             .label(Microcopy.of("running").withFilter("scope", "instance_status")).color("green"))
         .value(STATUS_STOPPED, v -> v.displayName("Stopped").icon("circle-stop")
@@ -146,6 +155,31 @@ public class InstanceModel extends Model {
         .value(INSTALL_FAILED, v -> v.displayName("Install failed").icon("circle-exclamation")
             .label(Microcopy.of("install_failed").withFilter("scope", "install_state")).color("red"))
         .defaultValue(INSTALL_NONE)
+        .build());
+
+    /** {@link #CRASH_POLICY}: an unexpected exit stamps Stopped and nothing restarts. */
+    public static final String CRASH_NONE = "none";
+
+    /**
+     * {@link #CRASH_POLICY}: ANY exit not preceded by an observed stop (command or
+     * operator stop) is a crash -- clean exit code included, the game-template default
+     * per the plan -- and the console watcher redeploys it, flap-protected.
+     */
+    public static final String CRASH_RESTART = "restart";
+
+    /**
+     * What the console watcher does when the workload exits without an observed stop.
+     * Only enforced while a console session is attached (readiness/stop matcher, crash
+     * policy or an open admin console); without one, nothing observes the exit.
+     */
+    public static final EnumField CRASH_POLICY = SCHEMA.addField(EnumField.builder("crash_policy")
+        .value(CRASH_NONE, v -> v.displayName("None")
+            .label(Microcopy.of("none").withFilter("scope", "crash_policy")).color("gray"))
+        .value(CRASH_RESTART, v -> v.displayName("Restart on crash").icon("rotate")
+            .label(Microcopy.of("restart").withFilter("scope", "crash_policy")).color("green"))
+        .defaultValue(CRASH_NONE)
+        .label(HohenheimFormCopy.label("crash_policy"))
+        .help(HohenheimFormCopy.help("crash_policy"))
         .build());
 
     /** Tail of the failed install run's output (operator diagnosis; cleared on success). */

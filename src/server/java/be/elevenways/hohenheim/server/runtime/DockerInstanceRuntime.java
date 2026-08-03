@@ -28,7 +28,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * the shared default bridge -- a declared difference, not an accident.
  */
 public final class DockerInstanceRuntime
-        implements InstanceRuntime, VolumeSnapshotSupport, FileStagingSupport, InstallSupport {
+        implements InstanceRuntime, VolumeSnapshotSupport, FileStagingSupport, InstallSupport,
+                   ConsoleStreamSupport {
 
     /** Published ports bind loopback only: the reverse proxy / operator reaches them, the world does not. */
     private static final String HOST_BIND_ADDRESS = "127.0.0.1";
@@ -263,6 +264,37 @@ public final class DockerInstanceRuntime
         }
     }
 
+    // -- ConsoleStreamSupport -------------------------------------------------
+
+    @Override
+    public @NonNull Console openConsole(@NonNull String handle) throws IOException {
+        // stdinDelivered is an OBSERVED fact off the daemon's inspect, because Docker
+        // silently discards attach stdin on a container created without OpenStdin --
+        // promising delivery there would be the exact silent-success shape this
+        // codebase hunts by name.
+        Map<String, Object> inspect = this.docker.inspectContainer(handle);
+        boolean stdinOpen = inspect.get("Config") instanceof Map<?, ?> config
+            && Boolean.TRUE.equals(config.get("OpenStdin"));
+        return new Console(this.docker.attach(handle), stdinOpen);
+    }
+
+    @Override
+    public @NonNull String consoleTail(@NonNull String handle, int lines) throws IOException {
+        return this.docker.containerLogs(handle, true, true, lines);
+    }
+
+    @Override
+    public @Nullable Integer exitCode(@NonNull String handle) throws IOException {
+        Map<String, Object> inspect = this.docker.inspectContainer(handle);
+        if (!(inspect.get("State") instanceof Map<?, ?> state)) {
+            throw new IOException("Container '" + handle + "' inspect carried no State");
+        }
+        if (Boolean.TRUE.equals(state.get("Running"))) {
+            return null;
+        }
+        return state.get("ExitCode") instanceof Number code ? code.intValue() : -1;
+    }
+
     // -- InstallSupport -------------------------------------------------------
 
     /** How often the install waiter re-inspects the one-shot workload. */
@@ -406,6 +438,11 @@ public final class DockerInstanceRuntime
         Map<String, Object> containerSpec = new LinkedHashMap<>();
         containerSpec.put("Image", spec.image());
         containerSpec.put("Labels", spec.ownerLabels());
+        // Console stdin: game servers take commands on stdin, and attach stdin is
+        // silently DISCARDED unless the container was created with OpenStdin. StdinOnce
+        // stays false so console reconnects never half-close the workload's stdin.
+        containerSpec.put("OpenStdin", true);
+        containerSpec.put("StdinOnce", false);
         // AIDEV-NOTE: attached in the CREATE body, never with a connect call afterwards.
         // A post-hoc connect leaves the container on the DEFAULT BRIDGE for the interval in
         // between -- a real window of unisolated tenant runtime, next to every other

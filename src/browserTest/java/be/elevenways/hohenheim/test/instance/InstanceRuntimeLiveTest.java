@@ -62,6 +62,8 @@ class InstanceRuntimeLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
+        // Unique per-class instance ids => unique daemon handles (no cross-class 409s).
+        InstanceIdOffsets.apply(datasource);
         HohenheimTestRuntime.ensureBooted();
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
