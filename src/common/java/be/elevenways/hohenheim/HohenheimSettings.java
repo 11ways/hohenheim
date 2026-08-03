@@ -672,4 +672,24 @@ public class HohenheimSettings {
             .description("Lifetime of a proxy-auth persistent (remember-me) cookie (seconds)")
             .build();
     }
+
+    // --- Per-owner consumption caps (the reservation ledger's policy side) ---
+    public abstract class Quota {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("quota")
+            .label("Quotas")
+            .describe("Per-owner caps on what tenants may consume; the atomic "
+                + "reservation ledger enforces them at write time")
+            .icon("gauge");
+
+        public static final SettingDefinition<Integer> MAX_INSTANCES_PER_OWNER = GROUP
+            .buildSetting("max_instances_per_owner", Integer.class)
+            .defaultValue(0)
+            .description("Default maximum number of live instances one owner (a manage-grant "
+                + "subject set; every operator-owned instance shares one bucket) may hold. "
+                + "A per-owner Instance Quota record overrides this. 0 or less means NO cap "
+                + "-- explicitly set a cap before exposing instance creation to tenants; "
+                + "usage is counted either way, so enabling a cap later takes effect "
+                + "immediately")
+            .build();
+    }
 }
