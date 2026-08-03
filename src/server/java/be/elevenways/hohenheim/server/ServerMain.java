@@ -14,6 +14,8 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
+import be.elevenways.hohenheim.server.process.PortAllocator;
+import be.elevenways.hohenheim.server.process.ProcessInfrastructure;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
 import be.elevenways.protoblast.common.Blast;
@@ -133,6 +135,15 @@ public class ServerMain {
         HohenheimAccess.declareGrantableModels();
         HohenheimDatabase.init();   // also registers the SQLite datasource as the framework default
 
+        // Managed-process port claims outlive the JVM that made them, so a previous run's
+        // rows are reconciled HERE: after the database exists (SiteTypes.boot() runs long
+        // before it) and before anything can load a site and allocate. A port still bound
+        // by a child that outlived its controller keeps its claim -- see the sweep's note.
+        PortAllocator allocator = ProcessInfrastructure.portAllocator();
+        if (allocator != null) {
+            allocator.sweepPreviousControllerClaims();
+        }
+
         // Install zenit-auth (session store, CSRF, middleware, /login + /setup + /account + /admin).
         // Password login is native; Proteus SSO is added below when configured.
         ZenitAuth.init(HohenheimDatabase.datasource());
@@ -227,7 +238,7 @@ public class ServerMain {
             if (dnsServer != null) dnsServer.stop();
             if (secondaryZoneService != null) secondaryZoneService.stop();
             SpamserviceManager.get().shutdown();
-            NodeSiteType.shutdownSharedInfrastructure();
+            ProcessInfrastructure.shutdown();
         }, "hohenheim-shutdown"));
     }
 

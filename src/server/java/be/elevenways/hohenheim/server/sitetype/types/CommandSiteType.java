@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.WorkloadIdentity;
 import be.elevenways.hohenheim.server.options.SystemUserOptions;
+import be.elevenways.hohenheim.server.process.ProcessInfrastructure;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -124,7 +125,7 @@ public class CommandSiteType implements SiteTypeHandler {
 
         CommandProcessHandler(int siteId, String siteName, Map<String, Object> settings) {
             super(siteId, siteName, settings,
-                NodeSiteType.getPortAllocator(), NodeSiteType.getProcessMonitor());
+                ProcessInfrastructure.portAllocator(), ProcessInfrastructure.processMonitor());
 
             this.startCommand = (String) settings.getOrDefault("start_command", "");
             this.workingDirectory = (String) settings.get("working_directory");
