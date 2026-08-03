@@ -352,6 +352,28 @@ public final class HohenheimAccess {
     }
 
     /**
+     * Whether the context holds {@link #MANAGE} on the instance -- the SAME precedence
+     * walk as {@link #canManageSite}, over the instance grant vocabulary.
+     */
+    public static boolean canManageInstance(@NonNull AccessContext ctx, int instanceId) {
+        return ctx.hasCapability(InstanceModel.MODEL_ID, instanceId, MANAGE);
+    }
+
+    /** Conduit convenience for HTTP handlers. */
+    public static boolean canManageInstance(@NonNull Conduit conduit, int instanceId) {
+        return canManageInstance(RecordSourceGate.accessContextOf(conduit), instanceId);
+    }
+
+    /**
+     * Principal-only variant for WebSocket contexts (no conduit at open time), riding
+     * the installed WebSocket authenticator's precedence walk.
+     */
+    public static boolean canManageInstance(@NonNull Principal principal, int instanceId) {
+        return Zenit.getWebSocketAuthenticator()
+            .hasCapability(principal, InstanceModel.MODEL_ID, instanceId, MANAGE);
+    }
+
+    /**
      * THE managed-site scoping shape, shared by every source and resource whose rows hang
      * off a site: admins are unconstrained, a principal with no managed sites matches
      * NOTHING, and everyone else gets the criteria {@code forManagedIds} spells over the

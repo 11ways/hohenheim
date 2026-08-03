@@ -20,8 +20,11 @@ import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
+import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.cms.CertificateRequestForm;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -96,6 +99,7 @@ public final class HohenheimHandlers {
         initProcessControl();
         initDeployControl();
         initTerminal();
+        initInstanceConsole();
         initDevTunnel();
         initApi();
     }
@@ -851,6 +855,37 @@ public final class HohenheimHandlers {
 
     private static void initDevTunnel() {
         HohenheimEndpoints.DEV_TUNNEL.setHandlerFactory(DevTunnelServerHandler::new);
+    }
+
+    private static void initInstanceConsole() {
+        HohenheimEndpoints.INSTANCE_CONSOLE.setHandlerFactory(session ->
+            new InstanceConsoleHandler(session,
+                session.getParameter(HohenheimEndpoints.INSTANCE_ID)));
+
+        HohenheimEndpoints.INSTANCE_CONSOLE_COMMAND.setHandler(conduit -> {
+            Integer instanceId = conduit.getParameter(HohenheimEndpoints.INSTANCE_ID);
+            if (instanceId == null || !HohenheimAccess.canManageInstance(conduit, instanceId)) {
+                conduit.forbidden();
+                return null;
+            }
+            String backUrl = ReturnTarget.or(ReturnTarget.read(conduit),
+                "/admin/instances/" + instanceId + "/page/console");
+            String command = formMap(conduit).getOrDefault("command", "").strip();
+            if (command.isEmpty()) {
+                return redirectUntyped(backUrl);
+            }
+            try {
+                InstanceConsoles.sendCommand(instanceId, command);
+            } catch (Violations refused) {
+                // NEVER a silent swallow: the console page renders ?error= verbatim.
+                return redirectUntyped(backUrl + (backUrl.contains("?") ? "&" : "?")
+                    + "error=" + URLEncoder.encode(String.valueOf(refused.getMessage()),
+                        StandardCharsets.UTF_8));
+            }
+            ActivityLog.record(Models.get(InstanceModel.class),
+                instanceId, "console_command", command);
+            return redirectUntyped(backUrl);
+        });
     }
 
     private static void initTerminal() {

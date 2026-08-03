@@ -59,6 +59,11 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
+    public static final ParameterDefinition<Integer> INSTANCE_ID = ParameterDefinition.builder(Integer.class)
+        .name("instanceId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
     // --- Rate limits: expensive or upstream-quota-bound operations. ---
     // The LE request burns Let's Encrypt quota; db dump/restore stream whole
     // databases; deploys spawn builds. Keyed per principal (per IP for
@@ -315,6 +320,33 @@ public class HohenheimEndpoints {
         .requiresLogin()
         .revalidateEvery(TERMINAL_REVALIDATION_INTERVAL_MS)
         .handler(session -> null) // Placeholder: set in HohenheimHandlers.init(), at the MODULES stage
+        .build();
+
+    // --- Instance console: live output over a WebSocket, commands over a POST form ---
+
+    /**
+     * Live console output of one instance (pl-terminal reads it; read-only -- commands
+     * go through {@link #INSTANCE_CONSOLE_COMMAND}, never raw keystrokes: a non-TTY
+     * container echoes nothing, so keystroke input would be invisible typing).
+     * Authorization is the handshake's requiresLogin plus the handler's per-record
+     * manage check, revalidated mid-session.
+     */
+    public static final WebSocketEndpoint INSTANCE_CONSOLE = WebSocketEndpoint.builder()
+        .identifier(Identifier.of("hohenheim", "instance_console"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("ws").addDelimiter().addStatic("instance-console")
+            .addDelimiter().addParameter(INSTANCE_ID).build())
+        .requiresLogin()
+        .revalidateEvery(TERMINAL_REVALIDATION_INTERVAL_MS)
+        .handler(session -> null) // Placeholder: set in HohenheimHandlers.init(), at the MODULES stage
+        .build();
+
+    /** One console command line to a running instance (the console tab's form). */
+    public static final Endpoint<Object> INSTANCE_CONSOLE_COMMAND = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "instance_console_command"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("console").addDelimiter().addStatic("command").build())
         .build();
 
     // --- Dev-tunnel registration (remote dev servers; token-authenticated in-band) ---

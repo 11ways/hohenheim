@@ -78,27 +78,46 @@ public final class InstanceService {
         InstanceOperationGuard.requireInstalled(resolved.row());
         long fence = this.leases.requireFence(resolved.serverId());
         HostAdmission.requireInstancePlacement(resolved.serverId());
+        InstanceConsoles.Watch watch = null;
         try {
+            // A previous run's console session (if any) watches a container this
+            // deploy is about to replace; end it before the daemon work starts.
+            InstanceConsoles.closeSession(instanceId);
             String handle = resolved.runtime().create(resolved.spec());
             stageConfigFiles(resolved, instanceId);
+            // The console attaches BETWEEN create and start (docker run's own order),
+            // so a readiness line printed in the first instant cannot be missed.
+            watch = InstanceConsoles.prepare(resolved, instanceId, this.leases);
             resolved.runtime().start(handle);
             InstanceStatus status = resolved.runtime().status(handle);
             this.beforeOutcomeWrite.run();
             // The fence gate comes BEFORE any ledger write: a stale controller that
             // reached the ledger first would delete the winner's fresh port claim.
-            stampGuarded(resolved, fence, InstanceModel.STATUS_RUNNING);
+            // With a readiness matcher the stamp is STARTING; the matcher's own
+            // fenced write flips it to RUNNING when the line is observed.
+            stampGuarded(resolved, fence, watch != null
+                ? watch.initialStatus() : InstanceModel.STATUS_RUNNING);
             if (status.publishedPort() != null) {
                 PortLedger.recordObserved(resolved.serverId(), BIND_ADDRESS,
                     status.publishedPort(), "tcp", InstanceModel.MODEL_ID, instanceId, null);
             }
+            if (watch != null) {
+                InstanceConsoles.arm(watch, instanceId);
+            }
             return status;
         } catch (IOException e) {
+            InstanceConsoles.closeSession(instanceId);
             // Fence first, ledger second: a fenced-out loser must not park the
             // winner's claims. Whatever the previous deploy held is unverifiable
             // for a still-fenced controller: park, never delete.
             stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
             throw refusal("instance_deploy_failed", resolved.row(), e);
+        } catch (Violations refused) {
+            // stampGuarded (fenced out) or the console's own named refusal: never
+            // leave a console session attached to a deploy this controller lost.
+            InstanceConsoles.closeSession(instanceId);
+            throw refused;
         }
     }
 
@@ -116,6 +135,17 @@ public final class InstanceService {
         InstanceOperationGuard.requireOperable(resolved.row());
         long fence = this.leases.requireFence(resolved.serverId());
         try {
+            // The console half of a stop: mark the coming exit OBSERVED (crash
+            // detection must not fire on an operator stop), then try the template's
+            // stop command over stdin. The daemon stop below runs either way -- it is
+            // the daemon's idempotent no-op after a successful console stop, and the
+            // enforcement (SIGTERM, then SIGKILL after grace) when there was none.
+            InstanceConsoles.markStopExpected(instanceId);
+            boolean graceful = InstanceConsoles.tryGracefulStop(instanceId, 10);
+            if (graceful) {
+                Blast.log("INSTANCE: stop of", resolved.spec().handle(),
+                    "settled via the console stop command");
+            }
             resolved.runtime().stop(resolved.spec().handle(), 10);
             this.beforeOutcomeWrite.run();
             stampGuarded(resolved, fence, InstanceModel.STATUS_STOPPED);
@@ -146,6 +176,9 @@ public final class InstanceService {
         Resolved resolved = resolve(instanceId);
         long fence = this.leases.requireFence(resolved.serverId());
         try {
+            // Destroy is an intended end: never a crash, and no session survives it.
+            InstanceConsoles.markStopExpected(instanceId);
+            InstanceConsoles.closeSession(instanceId);
             resolved.runtime().destroy(resolved.spec().handle());
         } catch (IOException e) {
             stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);

@@ -617,6 +617,68 @@ public class DockerClient {
             new String(stderr.toByteArray(), StandardCharsets.UTF_8));
     }
 
+    // -----------------------------------------------------------------------
+    // Streaming (the SECOND transport contract; see DockerStreamTransport)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Attach to a container's console: live stdout/stderr frames plus stdin writes.
+     * The daemon HIJACKS this connection (raw stream after the header block), and it
+     * ends when the container exits -- which is exactly the observation the console
+     * hub's crash detection rides. Works on a CREATED container too (`docker run`'s own
+     * create-attach-start order), which is how output between create and attach is
+     * never missed.
+     *
+     * Stdin only reaches the workload when the container was created with
+     * {@code OpenStdin: true}; the daemon silently discards writes otherwise, so
+     * callers that promise delivery must check the inspect payload first.
+     *
+     * @throws IOException also when this client's transport has no streaming lane
+     */
+    public ContainerStream attach(String id) throws IOException {
+        String path = "/containers/" + id + "/attach?stream=1&stdout=1&stderr=1&stdin=1";
+        byte[] request = buildStreamRequest("POST", path);
+        return ContainerStream.open(streamTransport(), request, timeoutMillis, true);
+    }
+
+    /**
+     * Follow a container's logs from {@code tail} lines back: history plus live frames,
+     * chunked by the daemon, ending when the container stops (or the consumer closes).
+     *
+     * @param tail max trailing history lines, or {@code <= 0} for the full log
+     */
+    public ContainerStream followLogs(String id, int tail) throws IOException {
+        String path = "/containers/" + id + "/logs?follow=1&stdout=1&stderr=1"
+            + (tail > 0 ? "&tail=" + tail : "");
+        byte[] request = buildStreamRequest("GET", path);
+        return ContainerStream.open(streamTransport(), request, timeoutMillis, false);
+    }
+
+    /**
+     * The streaming lane of this client's transport -- a NAMED refusal when the
+     * transport cannot stream, never a silent no-op (the capability-interface doctrine).
+     */
+    private DockerStreamTransport streamTransport() throws IOException {
+        if (this.transport instanceof DockerStreamTransport streaming) {
+            return streaming;
+        }
+        throw new IOException("Docker transport " + this.transport.getClass().getSimpleName()
+            + " has no streaming lane; console/follow endpoints are unavailable on it");
+    }
+
+    /**
+     * A streaming request head: no {@code Connection: close} (the stream's lifetime is
+     * the consumer's, and attach needs the write half alive), explicit
+     * {@code Upgrade: tcp} so the daemon treats attach as the bidirectional stream it is.
+     */
+    private static byte[] buildStreamRequest(String method, String path) {
+        String head = method + ' ' + path + " HTTP/1.1\r\n"
+            + "Host: docker\r\n"
+            + "Connection: Upgrade\r\n"
+            + "Upgrade: tcp\r\n\r\n";
+        return head.getBytes(StandardCharsets.ISO_8859_1);
+    }
+
     /**
      * @return the host port Docker published for {@code containerPort}/tcp on the container
      * @throws IOException if the container did not publish that port

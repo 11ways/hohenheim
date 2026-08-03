@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.InstanceNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.instance.InstanceIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -73,6 +74,8 @@ class InstanceNetworkIsolationTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
+        // Unique per-class instance ids => unique daemon handles (no cross-class 409s).
+        InstanceIdOffsets.apply(datasource);
         HohenheimTestRuntime.ensureBooted();
     }
 

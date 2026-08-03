@@ -54,6 +54,7 @@ public final class InstanceResource extends RowResource {
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.KIND))
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
         .add(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID).build())
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.CRASH_POLICY))
         .add(InstanceModel.BACKUP_ENABLED)
         .add(RelationPick.of(InstanceModel.BACKUP_TARGET_ID, BackupTargetModel.MODEL_ID)
             .clearable(true).build())
@@ -127,7 +128,8 @@ public final class InstanceResource extends RowResource {
 
     @Override
     public @NonNull List<RecordScopedPage<Row>> subpages() {
-        List<RecordScopedPage<Row>> pages = new ArrayList<>(List.of(new InstanceProvisioningPage()));
+        List<RecordScopedPage<Row>> pages = new ArrayList<>(List.of(
+            new InstanceConsolePage(), new InstanceProvisioningPage()));
         pages.addAll(this.frameworkSubpages());
         return pages;
     }
