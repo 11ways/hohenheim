@@ -20,6 +20,15 @@ import java.util.Map;
  * reaches no daemon at all. ResourceLimits is the caller-supplied half (cgroup caps
  * the operator configures per workload); this is the half the operator does not get
  * to weaken.
+ *
+ * AIDEV-NOTE: a {@link Profile} is an IMAGE-SHAPE declaration, NOT a trust declaration.
+ * All four authorities declare {@link #SERVICE} today, tenant-authored instances
+ * included, because ordinary published images are all built the same way (chown the data
+ * directory as root, then drop to a service user). Nobody decided tenants are trusted.
+ * The tenant-vs-operator boundary lives in the parts of this class that no profile can
+ * move -- drop-ALL as the base, no-new-privileges, the pids cap and the structural
+ * refusals -- plus the per-tenant network policy that does NOT exist yet
+ * (docs/instance-tier-plan.md, "Per-tenant networking is essentially absent").
  */
 public final class ContainerHardening {
 
@@ -32,8 +41,17 @@ public final class ContainerHardening {
 
     /**
      * Drop ALL, add nothing back: a container that never needs to touch a uid, a gid
-     * or a file it does not already own. The floor, and what a workload kind that
-     * declares nothing gets.
+     * or a file it does not already own.
+     *
+     * AIDEV-NOTE: as of 2026-08-03 NO production workload kind declares this -- all four
+     * authorities declare {@link #SERVICE}, because every one of them runs images of the
+     * chown-then-drop shape (the instance tier moved here after the product decision that
+     * generic tenant images must work out of the box). It is kept, and it is not theater:
+     * it is the base every profile is built from (the drop-ALL half of {@link #applyTo}
+     * is unconditional), it is what the hardening tests pin the alpine-shaped containers
+     * to, and a kind whose image genuinely needs nothing declares it without a new
+     * mechanism. If it is still undeclared by production code when a third profile is
+     * proposed, that is the moment to argue it away -- not before.
      */
     public static final Profile STRICT = new Profile("strict", List.of());
 
