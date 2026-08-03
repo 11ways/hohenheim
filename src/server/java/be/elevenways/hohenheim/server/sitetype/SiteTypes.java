@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype;
 
+import be.elevenways.hohenheim.server.process.ProcessInfrastructure;
 import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
 import be.elevenways.hohenheim.sitetype.SiteTypeRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -45,7 +46,7 @@ public class SiteTypes {
      * the server had bound.
      */
     public static void boot() {
-        NodeSiteType.initSharedInfrastructure();
+        ProcessInfrastructure.init();
     }
 
     public static SiteTypeHandler getHandler(String typeIdentifier) {

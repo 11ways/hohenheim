@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.process.ProcessInfrastructure;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -84,7 +85,7 @@ class RoleRestrictedBootTest {
         assertThat(ServerMain.getDnsServer())
             .as("step 3: the DNS subsystem, the one enabled role, IS constructed")
             .isNotNull();
-        assertThat(NodeSiteType.getProcessMonitor())
+        assertThat(ProcessInfrastructure.processMonitor())
             .as("step 3: roles.processes=false means the process monitor never started")
             .isNull();
 

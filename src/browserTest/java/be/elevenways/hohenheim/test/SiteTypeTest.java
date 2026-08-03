@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.ServerModel;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -82,8 +83,12 @@ class SiteTypeTest extends HohenheimTestBase {
 
         selectSiteType("hohenheim:docker");
         openPlSelect("pl-select[name='settings.server']");
-        assertThat(page.locator(OPEN_SELECT_POPUP
-            + " div[role='option'][data-value='hohenheim:local']").count()).isEqualTo(1);
+        // The server picker is keyed by the canonical host key -- the servers.id, not the
+        // name (M051), so a rename never orphans a stored placement. The option must be
+        // THE local daemon's id key; asserting the literal "hohenheim:local" would pass
+        // only against the pre-FK spelling that no longer exists anywhere.
+        assertThat(page.locator(OPEN_SELECT_POPUP + " div[role='option'][data-value='"
+            + ServerModel.registryKeyOf(ServerModel.localServerId()) + "']").count()).isEqualTo(1);
         page.keyboard().press("Escape");
 
         selectSiteType("hohenheim:tls_passthrough");

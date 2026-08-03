@@ -9,9 +9,7 @@ import be.elevenways.hohenheim.server.options.NodeVersionOptions;
 import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.hohenheim.server.process.ChildWrapper;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
-import be.elevenways.hohenheim.server.process.PortAllocator;
-import be.elevenways.hohenheim.server.process.ProcessMonitor;
-import be.elevenways.hohenheim.server.process.SocketAllocator;
+import be.elevenways.hohenheim.server.process.ProcessInfrastructure;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
@@ -102,26 +100,6 @@ public class NodeSiteType implements SiteTypeHandler {
         BooleanField.builder("use_ports").defaultValue(false)
             .label(HohenheimFormCopy.label("use_ports")).help(HohenheimFormCopy.help("use_ports")).build());
 
-    // Shared infrastructure (singleton per server)
-    private static PortAllocator portAllocator;
-    private static SocketAllocator socketAllocator;
-    private static ProcessMonitor processMonitor;
-
-    public static void initSharedInfrastructure() {
-        portAllocator = new PortAllocator();
-        socketAllocator = new SocketAllocator();
-        processMonitor = new ProcessMonitor();
-        processMonitor.start();
-    }
-
-    public static void shutdownSharedInfrastructure() {
-        if (processMonitor != null) processMonitor.stop();
-    }
-
-    public static PortAllocator getPortAllocator() { return portAllocator; }
-    public static SocketAllocator getSocketAllocator() { return socketAllocator; }
-    public static ProcessMonitor getProcessMonitor() { return processMonitor; }
-
     @Override
     public Identifier typeId() { return ID; }
 
@@ -191,7 +169,8 @@ public class NodeSiteType implements SiteTypeHandler {
 
         NodeProcessHandler(int siteId, String siteName, Map<String, Object> settings,
                            List<String> defaultArgs, boolean useChildWrapper) {
-            super(siteId, siteName, settings, portAllocator, processMonitor);
+            super(siteId, siteName, settings, ProcessInfrastructure.portAllocator(),
+                ProcessInfrastructure.processMonitor());
             this.script = (String) settings.getOrDefault("script", "");
             this.nodePath = NodeVersionOptions.resolvePath(settings.get("node"));
             this.defaultArgs = defaultArgs;
@@ -251,12 +230,12 @@ public class NodeSiteType implements SiteTypeHandler {
 
         @Override
         protected String allocateSocketPath() {
-            return socketAllocator.allocate(siteId);
+            return ProcessInfrastructure.socketAllocator().allocate(siteId);
         }
 
         @Override
         protected void releaseSocketPath(String socketPath) {
-            socketAllocator.release(socketPath);
+            ProcessInfrastructure.socketAllocator().release(socketPath);
         }
 
         @Override
