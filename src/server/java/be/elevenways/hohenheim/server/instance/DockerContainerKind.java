@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -33,6 +34,21 @@ public final class DockerContainerKind implements InstanceKindHandler {
 
     public static final Identifier ID = Identifier.of("hohenheim", "docker_container");
     public static final Schema SETTINGS_SCHEMA = new Schema();
+
+    /**
+     * The DECLARED isolation profile of this kind, and the reason it is the strict one:
+     * the instance tier is the tier whose workloads are hostile-tenant by definition, and
+     * a generic "run this image" kind has nothing on which to earn a capability.
+     *
+     * AIDEV-NOTE: this is where the trust asymmetry lives as data. The operator-authored
+     * tiers (stacks, managed databases, Docker sites) declare SERVICE because their images
+     * are the chown-then-drop-privileges shape; this one does not, and an image that needs
+     * SERVICE fails LOUDLY in its own container log ("Operation not permitted") rather
+     * than quietly running with capabilities nobody asked for. A future kind whose image
+     * shape is known -- a game-server kind, an Incus kind -- declares its own profile
+     * here; never widen this one to make a particular image work.
+     */
+    public static final ContainerHardening.Profile HARDENING = ContainerHardening.STRICT;
 
     public static final StringField IMAGE = SETTINGS_SCHEMA.addField(
         StringField.builder().name("image").label(HohenheimFormCopy.label("image"))
@@ -125,7 +141,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
 
         return new InstanceSpec(handle, imageRef, cmd,
             EnvVars.toMap(settings.get("environment_variables")), volumes, publishPort,
-            ResourceLimits.fromSettings(settings),
+            ResourceLimits.fromSettings(settings), HARDENING,
             OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
     }
 

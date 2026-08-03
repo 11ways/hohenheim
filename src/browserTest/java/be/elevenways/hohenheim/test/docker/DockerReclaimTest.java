@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerReclaim;
 import org.junit.jupiter.api.Test;
@@ -153,7 +154,7 @@ class DockerReclaimTest {
 
             // 3. A container pins the older image, so even unreferenced it stays.
             containerId = docker.createContainer("hohenheim-reclaim-test-" + System.nanoTime(),
-                Map.of("Image", supersededTag, "Cmd", List.of("sleep", "30")));
+                Map.of("Image", supersededTag, "Cmd", List.of("sleep", "30")), ContainerHardening.STRICT);
             new DockerReclaim(docker, Duration.ZERO, false, null).reclaimImages(declared, Instant.now());
             assertThat(imageIds(docker))
                 .as("an image a container references is never removed")

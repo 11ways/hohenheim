@@ -480,17 +480,30 @@ public class DockerClient {
     }
 
     /**
-     * Create a container from a spec (e.g. {@code Image}, {@code Cmd}, {@code Env},
-     * {@code ExposedPorts}, {@code HostConfig}). The image must already be present
-     * locally (call {@link #pullImage} first if unsure).
+     * Create a HARDENED container from a spec (e.g. {@code Image}, {@code Cmd},
+     * {@code Env}, {@code ExposedPorts}, {@code HostConfig}). The image must already be
+     * present locally (call {@link #pullImage} first if unsure).
      *
-     * @param name optional container name (null/blank for a daemon-assigned name)
+     * AIDEV-NOTE: THE single /containers/create call in the codebase, and the profile is
+     * a required parameter on purpose -- this is the one funnel that makes container
+     * hardening unskippable. There is deliberately no overload without it: a caller that
+     * would rather not think about isolation still has to name a profile, and STRICT is
+     * the answer when it does not know. Do not add a two-argument convenience.
+     *
+     * @param name    optional container name (null/blank for a daemon-assigned name)
+     * @param profile the workload kind's declared capability needs
      * @return the new container's id
+     * @throws IllegalArgumentException when the spec carries a privilege escape
+     *                                  (see {@link ContainerHardening#ESCAPE_KEYS})
      */
     @SuppressWarnings("unchecked")
-    public String createContainer(String name, Map<String, Object> spec) throws IOException {
+    public String createContainer(String name, Map<String, Object> spec,
+                                  ContainerHardening.Profile profile) throws IOException {
+        Map<String, Object> hardened = new LinkedHashMap<>(spec);
+        ContainerHardening.applyTo(hardened, profile);
         String path = "/containers/create" + (name != null && !name.isBlank() ? "?name=" + enc(name) : "");
-        Map<String, Object> result = (Map<String, Object>) parseJson(request("POST", path, toJson(spec)).body());
+        Map<String, Object> result = (Map<String, Object>) parseJson(
+            request("POST", path, toJson(hardened)).body());
         return (String) result.get("Id");
     }
 

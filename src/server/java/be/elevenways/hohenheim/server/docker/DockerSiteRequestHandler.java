@@ -40,6 +40,21 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
     /** The one bind address a docker site's port is published on, and claimed under. */
     private static final String HOST_BIND_ADDRESS = "127.0.0.1";
 
+    /**
+     * The DECLARED isolation profile of the Docker site workload kind: a site image is a
+     * web server, and web-server images are the chown-then-drop-to-a-service-user shape
+     * (measured: nginx:alpine refuses to start under STRICT with
+     * {@code chown("/var/cache/nginx/client_temp", 101) failed}).
+     *
+     * AIDEV-NOTE: NET_BIND_SERVICE is deliberately NOT in this profile even though site
+     * images routinely listen on port 80. It would be theater here: Docker sets
+     * {@code net.ipv4.ip_unprivileged_port_start=0} inside every container (verified 0 on
+     * this daemon), so binding a low port needs no capability at all. If a future host
+     * ever ships that sysctl non-zero, add the capability then and say why -- do not add
+     * it "because web servers bind 80".
+     */
+    static final ContainerHardening.Profile HARDENING = ContainerHardening.SERVICE;
+
     private final int siteId;
     private final DockerClient docker;
     private final String containerName;
@@ -80,7 +95,8 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
 
             removeExisting();   // clean up a leftover container from a previous run
             // Record the id before starting so a failed start/upstream-resolve is torn down by destroy().
-            this.containerId = docker.createContainer(containerName, buildSpec(siteId, imageRef, port, settings));
+            this.containerId = docker.createContainer(containerName,
+                buildSpec(siteId, imageRef, port, settings), HARDENING);
             docker.startContainer(this.containerId);
             this.upstream = resolveUpstream(this.containerId, port);
             recordPublishedPort(settings, this.upstream.getPort());

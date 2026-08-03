@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.stack;
 
 import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.stack.StackDeployer;
@@ -208,7 +209,7 @@ class StackDeployerTest {
         impostorSpec.put("Image", TEST_IMAGE);
         impostorSpec.put("Cmd", List.of("sleep", "600"));
         impostorSpec.put("Labels", OwnerLabels.of(StackModel.MODEL_ID, stackRecordId));
-        docker.createContainer(containerName, impostorSpec);
+        docker.createContainer(containerName, impostorSpec, ContainerHardening.STRICT);
         assertThatThrownBy(() -> deployer(null).deploy(spec))
             .as("owner labels alone never make a resource replaceable")
             .isInstanceOf(IOException.class)
@@ -249,7 +250,7 @@ class StackDeployerTest {
         // Somebody else's container squats the name (no ownership labels).
         String squatted = StackDeployer.containerName(strict, "app");
         strayContainers.add(squatted);
-        docker.createContainer(squatted, Map.of("Image", TEST_IMAGE, "Cmd", List.of("sleep", "600")));
+        docker.createContainer(squatted, Map.of("Image", TEST_IMAGE, "Cmd", List.of("sleep", "600")), ContainerHardening.STRICT);
 
         assertThatThrownBy(() -> deployer(null).deploy(strict))
             .isInstanceOf(IOException.class)
@@ -322,7 +323,7 @@ class StackDeployerTest {
 
         docker.createContainer(bystander, Map.of(
             "Image", TEST_IMAGE,
-            "Cmd", List.of("sleep", "600")));
+            "Cmd", List.of("sleep", "600")), ContainerHardening.STRICT);
         strayContainers.add(bystander);
         docker.startContainer(bystander);
 

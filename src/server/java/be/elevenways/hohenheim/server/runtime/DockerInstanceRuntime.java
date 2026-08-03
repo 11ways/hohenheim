@@ -39,7 +39,7 @@ public final class DockerInstanceRuntime implements InstanceRuntime {
                 + " labels; an unattributable instance container is forbidden by design");
         }
         OwnerLabels.removeIfOwnedBy(this.docker, spec.handle(), owner.model(), owner.id());
-        this.docker.createContainer(spec.handle(), buildSpec(spec));
+        this.docker.createContainer(spec.handle(), buildSpec(spec), spec.hardening());
         return spec.handle();
     }
 

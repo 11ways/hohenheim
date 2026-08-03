@@ -5,8 +5,16 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.Map;
 
 /**
- * Optional container resource caps: memory in MiB and CPUs as a decimal
+ * Optional, OPERATOR-CONFIGURED cgroup caps: memory in MiB and CPUs as a decimal
  * (1.5 = one and a half cores). Null or non-positive members mean "unlimited".
+ *
+ * AIDEV-NOTE: this type is two cgroup knobs and NOTHING about isolation -- the name once
+ * read as though a container carrying a ResourceLimits was confined, and it never was.
+ * Container isolation (capability dropping, no-new-privileges, the per-container process
+ * cap, the privilege-escape refusals) is {@link ContainerHardening}, applied inside
+ * DockerClient.createContainer where no caller can omit it. The split is deliberate and
+ * is about PROVENANCE: what is here is per-workload configuration an operator chooses,
+ * what is there is policy an operator does not get to weaken. Do not merge them.
  */
 public record ResourceLimits(@Nullable Integer memoryMb, @Nullable Double cpus) {
 

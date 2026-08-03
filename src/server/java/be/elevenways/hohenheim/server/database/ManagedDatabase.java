@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -41,6 +42,20 @@ public class ManagedDatabase {
             this.defaultImage = defaultImage;
             this.port = port;
             this.dataPath = dataPath;
+        }
+
+        /**
+         * This engine's DECLARED container isolation profile.
+         *
+         * AIDEV-NOTE: measured against the real daemon, not assumed -- every one of the
+         * four engine images chowns its data directory and drops root to a service user
+         * at entrypoint, and every one of them refuses to start under STRICT. A new
+         * engine declares its own value here; it never gets one by resembling another.
+         */
+        public ContainerHardening.Profile hardening() {
+            return switch (this) {
+                case POSTGRES, MYSQL, REDIS, MONGO -> ContainerHardening.SERVICE;
+            };
         }
 
         Map<String, String> env(String user, String password, String database) {
@@ -219,7 +234,8 @@ public class ManagedDatabase {
             ? OwnerLabels.of(DatabaseModel.MODEL_ID, recordId) : null;
         String id = docker.createContainer(containerName,
             buildSpec(engine, imageRef, volumeName, engine.env(user, password, database),
-                engine.containerCommand(password), ephemeral, limits, owner));
+                engine.containerCommand(password), ephemeral, limits, owner),
+            engine.hardening());
         docker.startContainer(id);
 
         waitForReady(id, engine, user, password, database, 60_000);

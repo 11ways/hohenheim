@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.docker;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerSiteRequestHandler;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -179,7 +180,7 @@ class DockerSiteHandlerTest {
         String containerName = "hohenheim-site-" + siteId;
         // 1. Plant an UNLABELLED squatter on the site's container name.
         docker.createContainer(containerName, Map.of(
-            "Image", "alpine:latest", "Cmd", List.of("sleep", "300")));
+            "Image", "alpine:latest", "Cmd", List.of("sleep", "300")), ContainerHardening.STRICT);
         try {
             // 2. The handler refuses the replace and stays down instead of destroying it.
             DockerSiteRequestHandler handler = new DockerSiteRequestHandler(siteId, Map.of(

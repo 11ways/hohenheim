@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -182,7 +183,7 @@ class InstanceRuntimeLiveTest {
                 spec.put("Image", "alpine:latest");
                 spec.put("Cmd", List.of("sleep", "60"));
                 try {
-                    docker.createContainer(handle, spec);
+                    docker.createContainer(handle, spec, ContainerHardening.STRICT);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }

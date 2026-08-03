@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.stack;
 
 import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -34,6 +35,19 @@ public class StackDeployer {
 
     /** Ownership label carrying the service name. */
     public static final String LABEL_SERVICE = "be.elevenways.hohenheim.stack.service";
+
+    /**
+     * The DECLARED isolation profile of every stack service container.
+     *
+     * AIDEV-NOTE: stacks are OPERATOR-authored (the compose-shaped tier), and their
+     * services are the ordinary published-image mix -- nginx, postgres, redis -- all of
+     * which chown and drop privileges at entrypoint and all of which refuse to start
+     * under STRICT. Tier-level, not per-service, and that is the current honest limit:
+     * StackSpec.ServiceSpec has no capability declaration, so a service needing more than
+     * SERVICE cannot express it. Adding one is a model field + migration, not an
+     * if-chain here, and it must never be reachable by a non-operator author.
+     */
+    public static final ContainerHardening.Profile HARDENING = ContainerHardening.SERVICE;
 
     private static final int STOP_GRACE_SECONDS = 10;
     private static final long CONDITION_POLL_MS = 500;
@@ -351,7 +365,7 @@ public class StackDeployer {
             docker.removeContainer(idOf(existing), true);
         }
 
-        String id = docker.createContainer(name, containerSpec(spec, service));
+        String id = docker.createContainer(name, containerSpec(spec, service), HARDENING);
         uploadFiles(id, service);
         docker.startContainer(id);
         log.accept("Started " + name);
