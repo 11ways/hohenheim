@@ -21,7 +21,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Minimal Docker Engine API client speaking HTTP/1.1 over a pluggable {@link DockerTransport}
- * -- a local unix socket by default, or a remote daemon over SSH ({@link #overSsh}). The
+ * -- a local unix socket by default, or a remote daemon over SSH, whose argv comes from
+ * {@code HostKeys.sshArgv} so the pin is always enforced. The
  * foundation for Hohenext's container/app/database layer.
  *
  * Each call opens a fresh connection with {@code Connection: close} (no keep-alive) and reads to
