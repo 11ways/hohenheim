@@ -220,7 +220,7 @@ class DockerClientTest {
         String networkId = null;
         try {
             networkId = docker.createNetwork(networkName,
-                Map.of("be.elevenways.hohenheim.test", "true"), "172.29.111.0/24", "172.29.111.1");
+                Map.of("be.elevenways.hohenheim.test", "true"), "172.29.111.0/24", "172.29.111.1", false);
             assertThat(networkId).isNotBlank();
 
             Map<String, Object> inspected = docker.inspectNetwork(networkName);

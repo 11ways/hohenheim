@@ -5,11 +5,8 @@ import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
 /**
@@ -25,6 +22,12 @@ import java.util.function.BooleanSupplier;
  * {@code security.bans.nftables_enabled}-style setting
  * ({@code security.nftables_enabled}, default false).
  *
+ * AIDEV-NOTE: this class's NEVER-THROW contract is a BAN-enforcement decision and
+ * must not be reused for anything a workload's isolation depends on -- a policy
+ * materialized through here returns normally on a host where nothing was applied.
+ * {@link WorkloadNetworkPolicy} is the throwing, read-back-verifying applier; it shares
+ * the {@link NftRunner} seam and nothing else.
+ *
  * AIDEV-NOTE: commands run as ROOT via {@code sudo -n -- nft ...},
  * deliberately NOT through SystemUsers.executionBuilder (which exists to DROP
  * privilege and refuses uid 0). nft only works as root; the sudoers rule on
@@ -34,34 +37,22 @@ import java.util.function.BooleanSupplier;
  */
 public class NftService {
 
-    /** One nft invocation: argv AFTER the sudo/nft prefix. */
-    public interface CommandRunner {
-        Result run(@NonNull List<String> nftArgs);
-    }
-
-    public record Result(int exitCode, @NonNull String stderr) {
-        public boolean ok() {
-            return exitCode == 0;
-        }
-    }
-
     static final String TABLE = "hohenheim";
     static final String CHAIN = "banned";
     static final String SET_V4 = "banned_v4";
     static final String SET_V6 = "banned_v6";
-    private static final long COMMAND_TIMEOUT_SECONDS = 10;
 
-    private final CommandRunner runner;
+    private final NftRunner runner;
     private final BooleanSupplier enabled;
 
     public NftService() {
-        this(new SudoNftRunner(),
+        this(new NftRunner.Sudo(),
             () -> Boolean.TRUE.equals(
                 HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NFTABLES_ENABLED)));
     }
 
     /** Test constructor: inject the executor and the enable gate. */
-    public NftService(@NonNull CommandRunner runner, @NonNull BooleanSupplier enabled) {
+    public NftService(@NonNull NftRunner runner, @NonNull BooleanSupplier enabled) {
         this.runner = runner;
         this.enabled = enabled;
     }
@@ -178,7 +169,7 @@ public class NftService {
 
     private boolean run(@NonNull List<String> nftArgs) {
         try {
-            Result result = runner.run(nftArgs);
+            NftRunner.Result result = runner.run(nftArgs, null);
             if (!result.ok()) {
                 Blast.log("NFT: command failed (exit", result.exitCode() + "):",
                     String.join(" ", nftArgs), "-", result.stderr().trim());
@@ -187,36 +178,6 @@ public class NftService {
         } catch (Exception e) {
             Blast.log("NFT: command error:", String.join(" ", nftArgs), "-", e.getMessage());
             return false;
-        }
-    }
-
-    /**
-     * Executes {@code sudo -n -- nft <args>} as root. This is the ONE root-command
-     * seam in the app; site processes keep going through SystemUsers (which
-     * refuses root by design and must stay that way).
-     */
-    static final class SudoNftRunner implements CommandRunner {
-        @Override
-        public Result run(@NonNull List<String> nftArgs) {
-            List<String> argv = new ArrayList<>(List.of("/usr/bin/sudo", "-n", "--", "nft"));
-            argv.addAll(nftArgs);
-            try {
-                Process process = new ProcessBuilder(argv)
-                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                    .start();
-                if (!process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    return new Result(-1, "timed out after " + COMMAND_TIMEOUT_SECONDS + "s");
-                }
-                String stderr = new String(process.getErrorStream().readAllBytes(),
-                    StandardCharsets.UTF_8);
-                return new Result(process.exitValue(), stderr);
-            } catch (IOException e) {
-                return new Result(-1, String.valueOf(e.getMessage()));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return new Result(-1, "interrupted");
-            }
         }
     }
 }

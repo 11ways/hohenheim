@@ -311,7 +311,7 @@ public class StackDeployer {
                 + " enable resource adoption to reuse it");
         }
         log.accept("Creating network " + name);
-        docker.createNetwork(name, ownershipLabels(spec, null), spec.subnet(), null);
+        docker.createNetwork(name, ownershipLabels(spec, null), spec.subnet(), null, false);
     }
 
     private void ensureVolumes(StackSpec spec) throws IOException {

@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.stack.StackDeployer;
 import be.elevenways.hohenheim.server.stack.StackSpec;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.network.PrivateNetns;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -86,6 +87,8 @@ class ContainerHardeningTest {
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
         assumeTrue(imagePresent(docker, REDIS_IMAGE), REDIS_IMAGE + " not present locally");
+        assumeTrue(PrivateNetns.available(), "no private netns: the instance tier refuses to"
+            + " deploy where its network policy cannot be enforced");
         int pids = ContainerHardening.pidsLimit();
 
         // 1. INSTANCE TIER -- declares SERVICE like the other three, because generic
@@ -94,13 +97,15 @@ class ContainerHardeningTest {
         int instanceId = 999_101;
         InstanceSpec spec = new DockerContainerKind().specFor(instanceId, Map.of(
             "image", "alpine", "tag", "latest", "command", "sleep 600"));
-        DockerInstanceRuntime runtime = new DockerInstanceRuntime(docker);
+        PrivateNetns netns = new PrivateNetns();
+        DockerInstanceRuntime runtime = new DockerInstanceRuntime(docker, netns.enforcingPolicy());
         String handle = runtime.create(spec);
         try {
             runtime.start(handle);
             assertKernelState(docker, handle, "step 1: instance tier", SERVICE_CAPS, pids);
         } finally {
             runtime.destroy(handle);
+            netns.close();
         }
 
         // 2. DOCKER SITE -- declares SERVICE (web-server images chown and drop privileges).
@@ -165,6 +170,8 @@ class ContainerHardeningTest {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, POSTGRES_IMAGE), POSTGRES_IMAGE + " not present locally");
+        assumeTrue(PrivateNetns.available(), "no private netns: the instance tier refuses to"
+            + " deploy where its network policy cannot be enforced");
 
         int instanceId = 999_104;
         InstanceSpec spec = new DockerContainerKind().specFor(instanceId, Map.of(
@@ -172,7 +179,8 @@ class ContainerHardeningTest {
             "environment_variables", Map.of("POSTGRES_PASSWORD", "hardening-probe"),
             "volumes", Map.of("data", "/var/lib/postgresql/data")));
         String volume = "hohenheim-instance-" + instanceId + "-vol-data";
-        DockerInstanceRuntime runtime = new DockerInstanceRuntime(docker);
+        PrivateNetns netns = new PrivateNetns();
+        DockerInstanceRuntime runtime = new DockerInstanceRuntime(docker, netns.enforcingPolicy());
         String handle = runtime.create(spec);
         try {
             // 1. It STARTS: the root entrypoint chowned a freshly created, root-owned
@@ -212,6 +220,7 @@ class ContainerHardeningTest {
                 .as("step 5: still unprivileged after the restart").isEqualTo("70");
         } finally {
             runtime.destroy(handle);
+            netns.close();
             try {
                 docker.removeVolume(volume, true);
             } catch (IOException ignored) {
@@ -264,6 +273,14 @@ class ContainerHardeningTest {
         for (String key : List.of("PidMode", "IpcMode", "UTSMode", "NetworkMode", "CgroupnsMode")) {
             assertRefused(docker, profile, "hh-inst-ns" + index++,
                 Map.of(key, "host"), "shares a host namespace");
+        }
+
+        // 2b. Joining ANOTHER container's namespace, which is how a workload opts out of
+        //     the per-workload network policy with a string instead of a capability.
+        index = 0;
+        for (String key : List.of("PidMode", "IpcMode", "UTSMode", "NetworkMode", "CgroupnsMode")) {
+            assertRefused(docker, profile, "hh-inst-join" + index++,
+                Map.of(key, "container:deadbeef"), "joins another container's namespace");
         }
 
         // 3. A host bind mount, the Docker-socket-is-root-on-the-host case.

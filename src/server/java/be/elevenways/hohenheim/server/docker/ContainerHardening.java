@@ -27,8 +27,11 @@ import java.util.Map;
  * directory as root, then drop to a service user). Nobody decided tenants are trusted.
  * The tenant-vs-operator boundary lives in the parts of this class that no profile can
  * move -- drop-ALL as the base, no-new-privileges, the pids cap and the structural
- * refusals -- plus the per-tenant network policy that does NOT exist yet
- * (docs/instance-tier-plan.md, "Per-tenant networking is essentially absent").
+ * refusals -- plus the per-workload network policy, which since 2026-08-03 exists for the
+ * INSTANCE tier only ({@code be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy},
+ * wired through DockerInstanceRuntime). Stacks, Docker sites and managed databases still
+ * share the default bridge and reach each other, the host and the metadata address; they
+ * are operator-authored, which is a stated posture, not an accident.
  */
 public final class ContainerHardening {
 
@@ -67,9 +70,11 @@ public final class ContainerHardening {
      * lets postgres come up on a FIRST boot and report "accepting connections", and
      * then the container dies on the next restart -- a silent-success shape, do not
      * "tighten" this without re-running the restart case. It is still far below the
-     * Docker default: NET_RAW (ARP/DNS spoofing on the shared bridge every site and
-     * database sits on), SETPCAP, SETFCAP, MKNOD, SYS_CHROOT, AUDIT_WRITE, KILL and
-     * NET_BIND_SERVICE are all gone.
+     * Docker default: NET_RAW (ARP/DNS spoofing on the bridge the container sits on --
+     * still the SHARED default bridge for sites, databases and stacks; an instance has its
+     * own network, and note that dropping NET_RAW never blocked an ordinary connect() to a
+     * neighbour, which is what the network policy is for), SETPCAP, SETFCAP, MKNOD,
+     * SYS_CHROOT, AUDIT_WRITE, KILL and NET_BIND_SERVICE are all gone.
      */
     public static final Profile SERVICE = new Profile("service",
         List.of("CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"));
@@ -97,9 +102,23 @@ public final class ContainerHardening {
         "Devices", "DeviceCgroupRules", "DeviceRequests", "CgroupParent", "Sysctls",
         "Binds", "ReadonlyPaths", "MaskedPaths");
 
-    /** HostConfig namespace-sharing keys whose "host" value defeats the container boundary. */
+    /**
+     * HostConfig namespace-sharing keys: "host" defeats the container boundary outright,
+     * and {@code container:<id>} joins ANOTHER container's namespace.
+     *
+     * AIDEV-NOTE: the {@code container:} half is the network isolation's opt-out. A
+     * workload created with {@code NetworkMode: "container:<other>"} runs in the other
+     * container's network namespace -- it gets that container's addresses, is not on its
+     * own private network, and the per-workload policy chains (which are scoped to a
+     * SUBNET) match nothing for it. The private network would then be defeated by a
+     * string, which is why this refusal lives here at the funnel and not in the instance
+     * driver.
+     */
     private static final List<String> NAMESPACE_KEYS = List.of(
         "PidMode", "IpcMode", "UTSMode", "NetworkMode", "CgroupnsMode");
+
+    /** Prefix of a namespace value that joins another container's namespace. */
+    private static final String JOIN_CONTAINER = "container:";
 
     private ContainerHardening() {}
 
@@ -153,10 +172,18 @@ public final class ContainerHardening {
             }
         }
         for (String key : NAMESPACE_KEYS) {
-            if ("host".equals(hostConfig.get(key))) {
+            Object value = hostConfig.get(key);
+            if ("host".equals(value)) {
                 throw new IllegalArgumentException("REFUSED to create container: HostConfig."
                     + key + " = \"host\" shares a host namespace with the container, which is a"
                     + " container escape by definition.");
+            }
+            if (value instanceof String text && text.startsWith(JOIN_CONTAINER)) {
+                throw new IllegalArgumentException("REFUSED to create container: HostConfig."
+                    + key + " = \"" + text + "\" joins another container's namespace, which"
+                    + " inherits that container's isolation instead of having any of its own"
+                    + " (a workload sharing another workload's network namespace is not on its"
+                    + " own private network and no per-workload policy applies to it).");
             }
         }
         if (hostConfig.get("Mounts") instanceof List<?> mounts) {

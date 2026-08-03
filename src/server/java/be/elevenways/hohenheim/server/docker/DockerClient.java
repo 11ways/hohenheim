@@ -376,17 +376,26 @@ public class DockerClient {
      * name (Docker allows duplicate names); callers wanting ensure-semantics use
      * {@link #findNetworkByName} first.
      *
+     * AIDEV-NOTE: {@code EnableIPv6} is sent EXPLICITLY rather than omitted. A daemon can
+     * default it on (daemon-level default network options), and a v6-enabled network under
+     * a v4-only host policy is a bypass -- see WorkloadNetworkPolicy. Saying false out loud
+     * is what makes the intent survive a daemon-side default change; the applier still
+     * reads the answer back rather than trusting this.
+     *
      * @param labels optional network labels (null for none)
      * @param subnet optional IPAM subnet in CIDR form (null lets Docker pick)
      * @param gateway optional IPAM gateway (null lets Docker pick; requires subnet)
+     * @param enableIpv6 whether the network gets IPv6 addressing
      * @return the new network's id
      */
     @SuppressWarnings("unchecked")
     public String createNetwork(String name, Map<String, String> labels,
-                                String subnet, String gateway) throws IOException {
+                                String subnet, String gateway, boolean enableIpv6)
+            throws IOException {
         Map<String, Object> spec = new LinkedHashMap<>();
         spec.put("Name", name);
         spec.put("Driver", "bridge");
+        spec.put("EnableIPv6", enableIpv6);
         if (labels != null && !labels.isEmpty()) {
             spec.put("Labels", labels);
         }

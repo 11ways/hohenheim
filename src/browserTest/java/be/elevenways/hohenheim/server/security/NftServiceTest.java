@@ -15,13 +15,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class NftServiceTest {
 
     /** Records every nft argv and answers success. */
-    private static final class RecordingRunner implements NftService.CommandRunner {
+    private static final class RecordingRunner implements NftRunner {
         final List<String> commands = new ArrayList<>();
 
         @Override
-        public NftService.Result run(List<String> nftArgs) {
+        public NftRunner.Result run(List<String> nftArgs, String stdin) {
             commands.add(String.join(" ", nftArgs));
-            return new NftService.Result(0, "");
+            return new NftRunner.Result(0, "", "");
         }
     }
 
@@ -111,7 +111,7 @@ class NftServiceTest {
 
     @Test
     void failingCommandsNeverThrow() {
-        NftService nft = new NftService(args -> new NftService.Result(1, "boom"), () -> true);
+        NftService nft = new NftService((args, stdin) -> new NftRunner.Result(1, "", "boom"), () -> true);
         assertThat(nft.addBan("203.0.113.9", 60L)).isFalse();
     }
 
