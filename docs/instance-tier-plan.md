@@ -2393,6 +2393,38 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   Use a privileged testcontainer or dedicated CI host; if neither is feasible,
   use a fake plus one live smoke script and state that honestly (open decision 6).
 
+  STATUS (2026-08-03): the SNAPSHOT/BACKUP half LANDED, proven on the DOCKER
+  driver (no Incus daemon exists on any machine in the loop -- the Incus driver
+  is a separate wave). What shipped: `VolumeSnapshotSupport` (the driver seam's
+  snapshot half; a driver that lacks it gets a named `snapshots_unsupported`
+  refusal, never a no-op; DockerInstanceRuntime implements it over the archive
+  endpoints with owner-label-verified volume removal), `InstanceSnapshots`
+  (cold capture -- the EXPLICIT consistency model, workload stopped for the
+  copy and redeployed through the ordinary funnel -- plus verified in-place
+  restore that REPLACES volumes, never merges), `InstanceBackups` (encrypted
+  `.hib` export: zip of `manifest.dry` + volume tars, AES-256-GCM whole-file
+  under the field-encryption keyring, per-payload sha256 pins inside the
+  manifest; restore-to-NEW runs the FULL create story incl. quota reservation,
+  admission and the fenced deploy), the `BackupTarget` seam (staging-then-
+  commit, target-side sha verification) with `filesystem` and `ssh` kinds
+  (registry-driven type enum, admin resource + live connection test),
+  count-based per-instance retention (the database-backup pattern), statuses
+  `capturing`/`restoring` gating deploy AND stop (destroy stays ungated:
+  cleanup doctrine), `snapshots`/`backups` capabilities registered WITH their
+  actions, M058, and the nightly `BackupInstances` task. Proven by
+  `InstanceSnapshotBackupLiveTest` (real daemon: marker round trip incl.
+  merge-vs-replace, restore-to-new with own id/port claim/quota slot and
+  intact secret variables, corrupt-artifact refusal BEFORE any state change,
+  interrupted upload leaving a FAILED row and zero artifacts),
+  `BackupArchiveTest`, `BackupTargetsTest` (ssh target live against localhost
+  sshd -- REAL transport, SIMULATED failure domain; one machine cannot prove
+  two). HONEST GAPS, deliberate: `record_schedules` STILL does not exist --
+  the nightly task rides the existing TaskService (the BackupDatabases shape),
+  per-instance cron waits for the record-schedule mechanism; captures are
+  memory-buffered under the `hohenheim.backup.max_archive_mb` cap (true
+  streaming is the Phase 6 transport contract); remote-host capacity probes
+  ride ssh `df`; consistency hooks beyond cold capture are not built.
+
 ---
 
 ## Phase 5 -- Templates and the game surface

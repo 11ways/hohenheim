@@ -5,7 +5,9 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +27,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * tiers (stacks, Docker sites, managed databases) deliberately do NOT refuse and stay on
  * the shared default bridge -- a declared difference, not an accident.
  */
-public final class DockerInstanceRuntime implements InstanceRuntime {
+public final class DockerInstanceRuntime implements InstanceRuntime, VolumeSnapshotSupport {
 
     /** Published ports bind loopback only: the reverse proxy / operator reaches them, the world does not. */
     private static final String HOST_BIND_ADDRESS = "127.0.0.1";
@@ -108,6 +110,113 @@ public final class DockerInstanceRuntime implements InstanceRuntime {
             return new InstanceStatus(ContainerState.STOPPED, null);
         }
         return new InstanceStatus(ContainerState.RUNNING, firstPublishedPort(inspect));
+    }
+
+    // -- VolumeSnapshotSupport ------------------------------------------------
+
+    @Override
+    public @NonNull List<CapturedVolume> captureVolumes(
+            @NonNull InstanceSpec spec, @NonNull Map<String, String> logicalVolumes,
+            @NonNull Path directory, long maxBytesPerVolume) throws IOException {
+        List<CapturedVolume> captured = new ArrayList<>();
+        for (Map.Entry<String, String> volume : logicalVolumes.entrySet()) {
+            // Resolving through the SPEC's materialized map (by container path) keeps the
+            // volume-naming convention in ONE place -- the kind that materialized it.
+            requireMaterialized(spec, volume.getValue());
+            Path file = directory.resolve(volume.getKey() + ".tar");
+            long size = this.docker.getArchiveTar(spec.handle(), volume.getValue(),
+                file, maxBytesPerVolume);
+            captured.add(new CapturedVolume(volume.getKey(), volume.getValue(), file, size));
+        }
+        return captured;
+    }
+
+    @Override
+    public void restoreVolumes(@NonNull InstanceSpec spec,
+                               @NonNull Map<String, String> logicalVolumes,
+                               @NonNull Map<String, Path> tars) throws IOException {
+        for (Map.Entry<String, Path> tar : tars.entrySet()) {
+            String containerPath = logicalVolumes.get(tar.getKey());
+            if (containerPath == null) {
+                throw new IOException("Backup payload names volume '" + tar.getKey()
+                    + "' which this instance's settings do not declare; restore refuses a"
+                    + " payload it cannot place");
+            }
+            requireMaterialized(spec, containerPath);
+            // The captured tar is rooted at the directory's basename (Docker's archive
+            // envelope), so it extracts at the PARENT of the mount path.
+            this.docker.putArchiveTar(spec.handle(), parentOf(containerPath), tar.getValue());
+        }
+    }
+
+    @Override
+    public void removeVolumesForRestore(@NonNull InstanceSpec spec,
+                                        @NonNull Map<String, String> logicalVolumes,
+                                        @NonNull Collection<String> names) throws IOException {
+        OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());
+        if (owner == null) {
+            throw new IOException("InstanceSpec '" + spec.handle() + "' carries no valid owner"
+                + " labels; a restore cannot verify volume ownership without them");
+        }
+        for (String name : names) {
+            String containerPath = logicalVolumes.get(name);
+            if (containerPath == null) {
+                continue;
+            }
+            String materialized = requireMaterialized(spec, containerPath);
+            Map<String, Object> inspect;
+            try {
+                inspect = this.docker.inspectVolume(materialized);
+            } catch (DockerClient.ApiException e) {
+                if (e.isNotFound()) {
+                    continue;   // observed absent: nothing to remove, create will mint it
+                }
+                throw e;
+            }
+            OwnerLabels.Owner volumeOwner = inspect.get("Labels") instanceof Map<?, ?> labels
+                ? OwnerLabels.parse(labels) : null;
+            boolean ours = volumeOwner != null && volumeOwner.model().equals(owner.model())
+                && volumeOwner.id().equals(owner.id());
+            if (!ours) {
+                throw new IOException("REFUSED to remove volume '" + materialized + "' for a"
+                    + " restore: the daemon does not attribute it to this record ("
+                    + (volumeOwner != null
+                        ? "owned by " + volumeOwner.model() + " #" + volumeOwner.id()
+                        : "no hohenheim owner labels")
+                    + "). A same-named foreign volume is a name collision, not restore debris.");
+            }
+            this.docker.removeVolume(materialized, false);
+        }
+    }
+
+    @Override
+    public @NonNull ImageIdentity imageIdentity(@NonNull InstanceSpec spec) throws IOException {
+        Map<String, Object> inspect = this.docker.inspectContainer(spec.handle());
+        Object config = inspect.get("Config");
+        String reference = config instanceof Map<?, ?> c && c.get("Image") instanceof String ref
+            ? ref : spec.image();
+        String id = inspect.get("Image") instanceof String imageId ? imageId : null;
+        return new ImageIdentity(reference, id);
+    }
+
+    /** The materialized volume name behind a container path, resolved off the spec. */
+    private static String requireMaterialized(InstanceSpec spec, String containerPath)
+            throws IOException {
+        for (Map.Entry<String, String> entry : spec.volumes().entrySet()) {
+            if (entry.getValue().equals(containerPath)) {
+                return entry.getKey();
+            }
+        }
+        throw new IOException("Instance '" + spec.handle() + "' declares no volume mounted at '"
+            + containerPath + "'; the snapshot inventory and the instance settings disagree");
+    }
+
+    /** The parent directory of a mount path ("/data" -> "/"). */
+    private static String parentOf(String containerPath) {
+        String normalized = containerPath.endsWith("/") && containerPath.length() > 1
+            ? containerPath.substring(0, containerPath.length() - 1) : containerPath;
+        int slash = normalized.lastIndexOf('/');
+        return slash <= 0 ? "/" : normalized.substring(0, slash);
     }
 
     /** The one published host port of the inspect payload, or null (our specs publish at most one). */

@@ -39,13 +39,18 @@ public class UnixSocketDockerTransport implements DockerTransport {
 
     @Override
     public byte[] roundTrip(byte[] request, long timeoutMs) throws IOException {
+        return roundTrip(request, timeoutMs, Long.MAX_VALUE);
+    }
+
+    @Override
+    public byte[] roundTrip(byte[] request, long timeoutMs, long maxResponseBytes) throws IOException {
         SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX);
         ScheduledFuture<?> watchdog = WATCHDOG.schedule(
             () -> closeQuietly(channel), timeoutMs, TimeUnit.MILLISECONDS);
         try {
             channel.connect(address);
             writeFully(channel, ByteBuffer.wrap(request));
-            return readToEnd(channel);
+            return readToEnd(channel, maxResponseBytes);
         } catch (ClosedChannelException e) {
             throw new IOException("Docker request timed out after " + timeoutMs + "ms");
         } finally {
@@ -60,7 +65,7 @@ public class UnixSocketDockerTransport implements DockerTransport {
         }
     }
 
-    private static byte[] readToEnd(SocketChannel channel) throws IOException {
+    private static byte[] readToEnd(SocketChannel channel, long maxResponseBytes) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteBuffer buf = ByteBuffer.allocate(8192);
         try {
@@ -69,6 +74,12 @@ public class UnixSocketDockerTransport implements DockerTransport {
                 buf.flip();
                 out.write(buf.array(), buf.arrayOffset(), n);
                 buf.clear();
+                if (out.size() > maxResponseBytes) {
+                    // Abort DURING the read: the cap protects the heap, so checking
+                    // after readToEnd would be a check that cannot fire in time.
+                    throw new IOException("Docker response exceeded the configured cap of "
+                        + maxResponseBytes + " bytes");
+                }
             }
         } catch (SocketException e) {
             // AIDEV-NOTE: Docker RSTs some Connection: close streams (notably /build) after sending

@@ -51,6 +51,11 @@ public class ProcessDockerTransport implements DockerTransport {
 
     @Override
     public byte[] roundTrip(byte[] request, long timeoutMs) throws IOException {
+        return roundTrip(request, timeoutMs, Long.MAX_VALUE);
+    }
+
+    @Override
+    public byte[] roundTrip(byte[] request, long timeoutMs, long maxResponseBytes) throws IOException {
         Process process = new ProcessBuilder(command).start();   // stdout + stderr kept separate
 
         // Drain stderr so it can't block the process, and keep it for diagnostics on failure.
@@ -77,7 +82,7 @@ public class ProcessDockerTransport implements DockerTransport {
             // Keep stdin OPEN while reading: dial-stdio tears down the connection on stdin EOF,
             // which truncates the response. The daemon closes after the response (Connection:
             // close), giving us stdout EOF here.
-            byte[] response = process.getInputStream().readAllBytes();
+            byte[] response = readBounded(process.getInputStream(), maxResponseBytes);
             if (response.length == 0) {
                 // AIDEV-NOTE: JOIN the drain thread before reading its buffer. Reading it
                 // straight after stdout EOF races the drain, so the diagnostic text --
@@ -108,5 +113,20 @@ public class ProcessDockerTransport implements DockerTransport {
             watchdog.cancel(false);
             process.destroyForcibly();
         }
+    }
+
+    /** Read stdout to EOF, aborting DURING the read once it exceeds the cap. */
+    private static byte[] readBounded(java.io.InputStream in, long maxResponseBytes) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int n;
+        while ((n = in.read(buffer)) != -1) {
+            out.write(buffer, 0, n);
+            if (out.size() > maxResponseBytes) {
+                throw new IOException("Docker response exceeded the configured cap of "
+                    + maxResponseBytes + " bytes");
+            }
+        }
+        return out.toByteArray();
     }
 }

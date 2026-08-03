@@ -1145,6 +1145,14 @@
     {
       "text": "Mislukt",
       "scope": "stack_deploy_status"
+    },
+    {
+      "text": "Mislukt",
+      "scope": "snapshot_status"
+    },
+    {
+      "text": "Mislukt",
+      "scope": "backup_status"
     }
   ],
   "forced": {
@@ -1285,6 +1293,10 @@
     {
       "text": "Terugzetten",
       "scope": "database"
+    },
+    {
+      "text": "Herstellen",
+      "scope": "instance_snapshot"
     }
   ],
   "restore_description": {
@@ -1295,10 +1307,16 @@
     "text": "Uit dump herstellen",
     "scope": "database_tab"
   },
-  "restored": {
-    "text": "Back-up hersteld in '{$name}'.",
-    "scope": "database_tab"
-  },
+  "restored": [
+    {
+      "text": "Back-up hersteld in '{$name}'.",
+      "scope": "database_tab"
+    },
+    {
+      "text": "Snapshot hersteld op {$name}",
+      "scope": "instance_snapshot"
+    }
+  ],
   "rollback": [
     {
       "text": "Terugrollen",
@@ -1885,10 +1903,16 @@
       "scope": "spamservice"
     }
   ],
-  "test_failed": {
-    "text": "Testbezorging mislukt",
-    "scope": "notification_channel"
-  },
+  "test_failed": [
+    {
+      "text": "Testbezorging mislukt",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "Test van back-updoel mislukt: {$reason}",
+      "scope": "backup_target"
+    }
+  ],
   "test_subject": {
     "text": "Hohenheim-test",
     "scope": "notification_channel"
@@ -1905,6 +1929,10 @@
     {
       "text": "Spamservice antwoordde: {$status}",
       "scope": "spamservice"
+    },
+    {
+      "text": "Back-updoel {$name} is bereikbaar en beschrijfbaar",
+      "scope": "backup_target"
     }
   ],
   "host_status": {
@@ -4526,5 +4554,223 @@
   "host_key_unverified": {
     "text": "Host '{$name}' heeft geen bevestigde SSH-vingerafdruk; scan de hostsleutel en bevestig ze eerst",
     "scope": "violations"
+  },
+  "instance_busy": {
+    "text": "Instantie {$name} is bezig ({$status}); wacht tot de lopende snapshot of restore klaar is",
+    "scope": "violations"
+  },
+  "instance_snapshot_failed": {
+    "text": "Snapshot van {$name} mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "instance_restore_failed": {
+    "text": "Herstel van {$name} mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "instance_backup_failed": {
+    "text": "Back-up van {$name} mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "instance_workload_absent": {
+    "text": "Instantie {$name} heeft geen workload bij de daemon; deploy ze eerst",
+    "scope": "violations"
+  },
+  "instance_unreachable": {
+    "text": "De daemon voor instantie {$name} is onbereikbaar",
+    "scope": "violations"
+  },
+  "backup_target_missing": {
+    "text": "Er is geen back-updoel ingesteld voor deze instantie",
+    "scope": "violations"
+  },
+  "backup_target_kind_unknown": {
+    "text": "Onbekend back-updoeltype '{$kind}'",
+    "scope": "violations"
+  },
+  "backup_target_invalid": {
+    "text": "Back-updoel {$name} is verkeerd ingesteld: {$reason}",
+    "scope": "violations"
+  },
+  "backup_target_unhealthy": {
+    "text": "Het back-updoel faalde zijn gezondheidstest: {$reason}",
+    "scope": "violations"
+  },
+  "backup_corrupt": {
+    "text": "De back-up is corrupt en werd volledig geweigerd; er is niets hersteld: {$reason}",
+    "scope": "violations"
+  },
+  "backup_not_restorable": {
+    "text": "Back-up {$id} is niet compleet en kan niet hersteld worden",
+    "scope": "violations"
+  },
+  "backup_delete_failed": {
+    "text": "Het back-upbestand kon niet van zijn doel verwijderd worden: {$reason}",
+    "scope": "violations"
+  },
+  "snapshot_not_restorable": {
+    "text": "Snapshot {$id} is niet compleet en kan niet hersteld worden",
+    "scope": "violations"
+  },
+  "snapshot_corrupt": {
+    "text": "Snapshotbestand voor volume '{$volume}' is corrupt; er is niets hersteld: {$reason}",
+    "scope": "violations"
+  },
+  "snapshot_mismatch": {
+    "text": "Snapshotvolume '{$volume}' past niet meer bij de instellingen van {$name}; herstel geweigerd",
+    "scope": "violations"
+  },
+  "snapshot_no_volumes": {
+    "text": "Instantie {$name} declareert geen volumes; er valt niets te snapshotten",
+    "scope": "violations"
+  },
+  "snapshots_unsupported": {
+    "text": "De {$kind}-driver kan geen volumesnapshots maken",
+    "scope": "violations"
+  },
+  "restore_capacity": {
+    "text": "Host {$server} heeft onvoldoende ruimte voor dit herstel ({$needed} bytes nodig, {$available} beschikbaar)",
+    "scope": "violations"
+  },
+  "restore_capacity_unknown": {
+    "text": "Capaciteit op host {$server} kan niet geverifieerd worden: {$reason}",
+    "scope": "violations"
+  },
+  "snapshot": {
+    "text": "Snapshot",
+    "scope": "instance"
+  },
+  "snapshot_confirm": {
+    "text": "Snapshot nemen? Een draaiende instantie wordt kort gestopt terwijl de volumes gekopieerd worden, en daarna weer gestart.",
+    "scope": "instance"
+  },
+  "snapshot_taken": {
+    "text": "Snapshot van {$name} gemaakt",
+    "scope": "instance"
+  },
+  "backup_now": {
+    "text": "Nu back-uppen",
+    "scope": "instance"
+  },
+  "backup_confirm": {
+    "text": "Nu een back-up exporteren? Een draaiende instantie wordt kort gestopt voor de kopie, en herstart voor de upload.",
+    "scope": "instance"
+  },
+  "backup_done": {
+    "text": "Back-up van {$name} geexporteerd en geverifieerd",
+    "scope": "instance"
+  },
+  "capturing": {
+    "text": "Bezig met kopie",
+    "scope": "instance_status"
+  },
+  "restoring": {
+    "text": "Bezig met herstel",
+    "scope": "instance_status"
+  },
+  "uploading": {
+    "text": "Bezig met upload",
+    "scope": "backup_status"
+  },
+  "complete": [
+    {
+      "text": "Compleet",
+      "scope": "snapshot_status"
+    },
+    {
+      "text": "Compleet",
+      "scope": "backup_status"
+    }
+  ],
+  "restore_confirm_generic": {
+    "text": "Deze snapshot herstellen? De huidige volume-inhoud wordt VERVANGEN door de vastgelegde staat.",
+    "scope": "instance_snapshot"
+  },
+  "restore_confirm": {
+    "text": "Deze snapshot herstellen op {$name}? Alles wat sinds de opname geschreven is gaat verloren. Typ de naam van de instantie om te bevestigen.",
+    "scope": "instance_snapshot"
+  },
+  "restore_new": {
+    "text": "Herstellen naar nieuwe instantie",
+    "scope": "instance_backup"
+  },
+  "restore_new_confirm": {
+    "text": "Deze back-up herstellen naar een NIEUWE instantie? De broninstantie blijft onaangeroerd.",
+    "scope": "instance_backup"
+  },
+  "restored_new": {
+    "text": "Back-up hersteld naar nieuwe instantie #{$id}",
+    "scope": "instance_backup"
+  },
+  "test_connection": {
+    "text": "Verbinding testen",
+    "scope": "backup_target"
+  },
+  "filesystem": {
+    "text": "Map op schijf",
+    "scope": "backup_target_kind"
+  },
+  "ssh": {
+    "text": "SSH-host",
+    "scope": "backup_target_kind"
+  },
+  "snapshots": {
+    "text": "Snapshots",
+    "scope": "capability"
+  },
+  "backups": {
+    "text": "Back-ups",
+    "scope": "capability"
+  },
+  "backup_enabled": {
+    "text": "Nachtelijke back-up",
+    "scope": "field"
+  },
+  "backup_target": {
+    "text": "Back-updoel",
+    "scope": "field"
+  },
+  "instance": {
+    "text": "Instantie",
+    "scope": "field"
+  },
+  "note": {
+    "text": "Notitie",
+    "scope": "field"
+  },
+  "directory": {
+    "text": "Map",
+    "scope": "field"
+  },
+  "ssh_target": {
+    "text": "SSH-doel",
+    "scope": "field"
+  },
+  "host_key": {
+    "text": "Hostsleutel",
+    "scope": "field"
+  },
+  "instance_backup_enabled": {
+    "text": "Neem deze instantie mee in de nachtelijke back-uptaak (vereist een back-updoel)",
+    "scope": "help"
+  },
+  "backup_target_kind": {
+    "text": "Waar back-upexports terechtkomen; of dat een ander faaldomein is, is een deploymentfeit dat jij beheert",
+    "scope": "help"
+  },
+  "backup_target_path": {
+    "text": "Map voor back-uparchieven. Een lokale map op deze host is NIET off-host; wijs naar gerepliceerde of gemounte externe opslag",
+    "scope": "help"
+  },
+  "backup_ssh_target": {
+    "text": "user@host van de back-uphost",
+    "scope": "help"
+  },
+  "backup_ssh_path": {
+    "text": "Absolute map op de back-uphost",
+    "scope": "help"
+  },
+  "backup_ssh_host_key": {
+    "text": "known_hosts-regel om de hostsleutel te pinnen; zonder pin moet de known_hosts van de controllergebruiker de host al vertrouwen",
+    "scope": "help"
   }
 }

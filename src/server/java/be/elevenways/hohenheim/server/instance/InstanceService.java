@@ -12,7 +12,6 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -68,6 +67,9 @@ public final class InstanceService {
      */
     public @NonNull InstanceStatus deploy(int instanceId) {
         Resolved resolved = resolve(instanceId);
+        // Settle-then-refuse: a start under a live capture/restore corrupts the very
+        // data those operations exist to protect.
+        InstanceOperationGuard.requireOperable(resolved.row());
         long fence = this.leases.requireFence(resolved.serverId());
         HostAdmission.requireInstancePlacement(resolved.serverId());
         try {
@@ -102,6 +104,9 @@ public final class InstanceService {
      */
     public void stop(int instanceId) {
         Resolved resolved = resolve(instanceId);
+        // An operator stop mid-capture/mid-restore would stamp STOPPED over the
+        // protected status and un-protect the operation; destroy stays ungated.
+        InstanceOperationGuard.requireOperable(resolved.row());
         long fence = this.leases.requireFence(resolved.serverId());
         try {
             resolved.runtime().stop(resolved.spec().handle(), 10);
@@ -171,21 +176,14 @@ public final class InstanceService {
      * @throws Violations {@code instance_fenced_out}
      */
     private void stampGuarded(@NonNull Resolved resolved, long fence, @NonNull String status) {
-        int matched = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.ID.eq(resolved.row().get(InstanceModel.ID)))
-            .where(InstanceModel.DELETED_AT.isNull())
-            .where(Criteria.or(
-                InstanceModel.CLAIM_FENCE.isNull(),
-                InstanceModel.CLAIM_FENCE.lte(fence)))
-            .assign(InstanceModel.STATUS, status)
-            .assign(InstanceModel.CLAIM_FENCE, fence)
-            .updateAll();
-        if (matched == 0) {
-            this.leases.fencedOut(resolved.serverId());
-            throw Violations.ofForm(violationText("instance_fenced_out")
-                .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME)))
-                .withArg("server", ServerModel.nameOf(resolved.serverId())));
-        }
+        InstanceOperationGuard.stamp(this.leases, resolved.row().get(InstanceModel.ID),
+            resolved.serverId(), fence, status,
+            String.valueOf((Object) resolved.row().get(InstanceModel.NAME)));
+    }
+
+    /** The lease set this service mutates hosts under (shared with snapshot/backup ops). */
+    @NonNull HostLeases leases() {
+        return this.leases;
     }
 
     // -- resolution -----------------------------------------------------------

@@ -1145,6 +1145,14 @@
     {
       "text": "Failed",
       "scope": "stack_deploy_status"
+    },
+    {
+      "text": "Failed",
+      "scope": "snapshot_status"
+    },
+    {
+      "text": "Failed",
+      "scope": "backup_status"
     }
   ],
   "forced": {
@@ -1285,6 +1293,10 @@
     {
       "text": "Restore",
       "scope": "database"
+    },
+    {
+      "text": "Restore",
+      "scope": "instance_snapshot"
     }
   ],
   "restore_description": {
@@ -1295,10 +1307,16 @@
     "text": "Restore from dump",
     "scope": "database_tab"
   },
-  "restored": {
-    "text": "Backup restored into '{$name}'.",
-    "scope": "database_tab"
-  },
+  "restored": [
+    {
+      "text": "Backup restored into '{$name}'.",
+      "scope": "database_tab"
+    },
+    {
+      "text": "Snapshot restored onto {$name}",
+      "scope": "instance_snapshot"
+    }
+  ],
   "rollback": [
     {
       "text": "Roll back",
@@ -1889,10 +1907,16 @@
       "scope": "spamservice"
     }
   ],
-  "test_failed": {
-    "text": "Test delivery failed",
-    "scope": "notification_channel"
-  },
+  "test_failed": [
+    {
+      "text": "Test delivery failed",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "Backup target test failed: {$reason}",
+      "scope": "backup_target"
+    }
+  ],
   "test_subject": {
     "text": "Hohenheim test",
     "scope": "notification_channel"
@@ -1909,6 +1933,10 @@
     {
       "text": "Spamservice answered: {$status}",
       "scope": "spamservice"
+    },
+    {
+      "text": "Backup target {$name} is reachable and writable",
+      "scope": "backup_target"
     }
   ],
   "host_status": {
@@ -4530,5 +4558,223 @@
   "host_key_unverified": {
     "text": "Host '{$name}' has no confirmed SSH host key fingerprint; scan the host key and confirm it first",
     "scope": "violations"
+  },
+  "instance_busy": {
+    "text": "Instance {$name} is busy ({$status}); wait for the running snapshot or restore to finish",
+    "scope": "violations"
+  },
+  "instance_snapshot_failed": {
+    "text": "Snapshot of {$name} failed: {$reason}",
+    "scope": "violations"
+  },
+  "instance_restore_failed": {
+    "text": "Restore of {$name} failed: {$reason}",
+    "scope": "violations"
+  },
+  "instance_backup_failed": {
+    "text": "Backup of {$name} failed: {$reason}",
+    "scope": "violations"
+  },
+  "instance_workload_absent": {
+    "text": "Instance {$name} has no workload at the daemon; deploy it first",
+    "scope": "violations"
+  },
+  "instance_unreachable": {
+    "text": "The daemon for instance {$name} cannot be reached",
+    "scope": "violations"
+  },
+  "backup_target_missing": {
+    "text": "No backup target is configured for this instance",
+    "scope": "violations"
+  },
+  "backup_target_kind_unknown": {
+    "text": "Unknown backup target kind '{$kind}'",
+    "scope": "violations"
+  },
+  "backup_target_invalid": {
+    "text": "Backup target {$name} is misconfigured: {$reason}",
+    "scope": "violations"
+  },
+  "backup_target_unhealthy": {
+    "text": "The backup target failed its health check: {$reason}",
+    "scope": "violations"
+  },
+  "backup_corrupt": {
+    "text": "The backup is corrupt and was refused whole; nothing was restored: {$reason}",
+    "scope": "violations"
+  },
+  "backup_not_restorable": {
+    "text": "Backup {$id} is not complete and cannot be restored",
+    "scope": "violations"
+  },
+  "backup_delete_failed": {
+    "text": "Could not remove the backup artifact from its target: {$reason}",
+    "scope": "violations"
+  },
+  "snapshot_not_restorable": {
+    "text": "Snapshot {$id} is not complete and cannot be restored",
+    "scope": "violations"
+  },
+  "snapshot_corrupt": {
+    "text": "Snapshot payload for volume '{$volume}' is corrupt; nothing was restored: {$reason}",
+    "scope": "violations"
+  },
+  "snapshot_mismatch": {
+    "text": "Snapshot volume '{$volume}' no longer matches the settings of {$name}; restore refused",
+    "scope": "violations"
+  },
+  "snapshot_no_volumes": {
+    "text": "Instance {$name} declares no volumes; there is nothing to snapshot",
+    "scope": "violations"
+  },
+  "snapshots_unsupported": {
+    "text": "The {$kind} driver cannot snapshot volumes",
+    "scope": "violations"
+  },
+  "restore_capacity": {
+    "text": "Host {$server} lacks capacity for this restore (needs {$needed} bytes, {$available} available)",
+    "scope": "violations"
+  },
+  "restore_capacity_unknown": {
+    "text": "Capacity on host {$server} cannot be verified: {$reason}",
+    "scope": "violations"
+  },
+  "snapshot": {
+    "text": "Snapshot",
+    "scope": "instance"
+  },
+  "snapshot_confirm": {
+    "text": "Take a snapshot? A running instance is stopped briefly while its volumes are copied, then started again.",
+    "scope": "instance"
+  },
+  "snapshot_taken": {
+    "text": "Snapshot of {$name} captured",
+    "scope": "instance"
+  },
+  "backup_now": {
+    "text": "Back up now",
+    "scope": "instance"
+  },
+  "backup_confirm": {
+    "text": "Export a backup now? A running instance is stopped briefly for the copy, then started again before the upload.",
+    "scope": "instance"
+  },
+  "backup_done": {
+    "text": "Backup of {$name} exported and verified",
+    "scope": "instance"
+  },
+  "capturing": {
+    "text": "Capturing",
+    "scope": "instance_status"
+  },
+  "restoring": {
+    "text": "Restoring",
+    "scope": "instance_status"
+  },
+  "uploading": {
+    "text": "Uploading",
+    "scope": "backup_status"
+  },
+  "complete": [
+    {
+      "text": "Complete",
+      "scope": "snapshot_status"
+    },
+    {
+      "text": "Complete",
+      "scope": "backup_status"
+    }
+  ],
+  "restore_confirm_generic": {
+    "text": "Restore this snapshot? Current volume contents are REPLACED with the captured state.",
+    "scope": "instance_snapshot"
+  },
+  "restore_confirm": {
+    "text": "Restore this snapshot onto {$name}? Everything written since the capture is lost. Type the instance name to confirm.",
+    "scope": "instance_snapshot"
+  },
+  "restore_new": {
+    "text": "Restore to new instance",
+    "scope": "instance_backup"
+  },
+  "restore_new_confirm": {
+    "text": "Restore this backup to a NEW instance? The source instance is untouched.",
+    "scope": "instance_backup"
+  },
+  "restored_new": {
+    "text": "Backup restored to new instance #{$id}",
+    "scope": "instance_backup"
+  },
+  "test_connection": {
+    "text": "Test connection",
+    "scope": "backup_target"
+  },
+  "filesystem": {
+    "text": "Filesystem directory",
+    "scope": "backup_target_kind"
+  },
+  "ssh": {
+    "text": "SSH host",
+    "scope": "backup_target_kind"
+  },
+  "snapshots": {
+    "text": "Snapshots",
+    "scope": "capability"
+  },
+  "backups": {
+    "text": "Backups",
+    "scope": "capability"
+  },
+  "backup_enabled": {
+    "text": "Nightly backup",
+    "scope": "field"
+  },
+  "backup_target": {
+    "text": "Backup target",
+    "scope": "field"
+  },
+  "instance": {
+    "text": "Instance",
+    "scope": "field"
+  },
+  "note": {
+    "text": "Note",
+    "scope": "field"
+  },
+  "directory": {
+    "text": "Directory",
+    "scope": "field"
+  },
+  "ssh_target": {
+    "text": "SSH target",
+    "scope": "field"
+  },
+  "host_key": {
+    "text": "Host key",
+    "scope": "field"
+  },
+  "instance_backup_enabled": {
+    "text": "Include this instance in the nightly backup task (needs a backup target)",
+    "scope": "help"
+  },
+  "backup_target_kind": {
+    "text": "Where backup exports are written; whether it is a different failure domain is a deployment fact you own",
+    "scope": "help"
+  },
+  "backup_target_path": {
+    "text": "Directory for backup archives. A local directory on this host is NOT off-host; point it at replicated or mounted remote storage",
+    "scope": "help"
+  },
+  "backup_ssh_target": {
+    "text": "user@host of the backup host",
+    "scope": "help"
+  },
+  "backup_ssh_path": {
+    "text": "Absolute directory on the backup host",
+    "scope": "help"
+  },
+  "backup_ssh_host_key": {
+    "text": "known_hosts line to pin the host key; without it the controller user's own known_hosts must already trust the host",
+    "scope": "help"
   }
 }

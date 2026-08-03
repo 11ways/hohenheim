@@ -649,6 +649,42 @@ public class DockerClient {
     }
 
     /**
+     * Download a directory from a container ({@code GET /containers/{id}/archive}) as a raw
+     * tar, written to {@code outFile}. Works on stopped containers -- the volume-snapshot
+     * mechanism's read primitive. The tar's entries are rooted at the directory's basename
+     * (Docker's envelope), which {@link #putArchiveTar} relies on for the restore side.
+     *
+     * @param maxBytes response cap enforced DURING the read (see DockerTransport); the
+     *                 whole tar is buffered through memory, so the cap is the heap guard
+     * @return the number of bytes written to {@code outFile}
+     */
+    public long getArchiveTar(String containerId, String path, Path outFile, long maxBytes)
+            throws IOException {
+        RawResponse response = exchangeBounded("GET",
+            "/containers/" + containerId + "/archive?path=" + enc(path), maxBytes);
+        Files.write(outFile, response.body());
+        return response.body().length;
+    }
+
+    /**
+     * Upload a raw tar into a container ({@code PUT /containers/{id}/archive}), extracting
+     * it at {@code targetDir} (which must exist). Works on stopped containers -- the
+     * volume-snapshot mechanism's write primitive. Extraction MERGES into the target; a
+     * faithful restore must therefore write into freshly recreated volumes, never over
+     * live contents.
+     */
+    public void putArchiveTar(String containerId, String targetDir, Path tarFile) throws IOException {
+        String path = "/containers/" + containerId + "/archive?path=" + enc(targetDir);
+        request("PUT", path, Files.readAllBytes(tarFile), "application/x-tar", LONG_OP_TIMEOUT_MS);
+    }
+
+    // A bounded exchange for endpoints whose response size is data-dependent (archives).
+    private RawResponse exchangeBounded(String method, String path, long maxBytes) throws IOException {
+        return parseHttpRaw(transport.roundTrip(
+            buildRequest(method, path, null, null, null), LONG_OP_TIMEOUT_MS, maxBytes));
+    }
+
+    /**
      * Download a single file from a container ({@code GET /containers/{id}/archive}) and return
      * its raw bytes, unwrapping Docker's tar envelope. Binary-safe (used for RDB / mongodump
      * archives). {@code path} must point at a single file, not a directory.

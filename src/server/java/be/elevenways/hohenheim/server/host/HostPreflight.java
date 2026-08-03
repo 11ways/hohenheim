@@ -378,7 +378,7 @@ public final class HostPreflight {
     }
 
     /** This controller build's version string; "dev" when running from classes. */
-    static @NonNull String controllerVersion() {
+    public static @NonNull String controllerVersion() {
         String version = HostPreflight.class.getPackage() != null
             ? HostPreflight.class.getPackage().getImplementationVersion() : null;
         return version != null ? version : "dev";
