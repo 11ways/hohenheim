@@ -1,8 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
@@ -48,6 +51,9 @@ public final class InstanceResource extends RowResource {
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.KIND))
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
         .add(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID).build())
+        .add(InstanceModel.BACKUP_ENABLED)
+        .add(RelationPick.of(InstanceModel.BACKUP_TARGET_ID, BackupTargetModel.MODEL_ID)
+            .clearable(true).build())
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -108,7 +114,49 @@ public final class InstanceResource extends RowResource {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
         actions.add(this.deployAction());
         actions.add(this.stopAction());
+        actions.add(this.snapshotAction());
+        actions.add(this.backupAction());
         return actions;
+    }
+
+    /** Cold capture: a running instance is stopped for the copy and redeployed after. */
+    private @NonNull RowAction<Row> snapshotAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "snapshot_instance"))
+            .label(Microcopy.of("snapshot").withFilter("scope", "instance"))
+            .icon(Icon.of("camera"))
+            .inlineInRow(false)
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("snapshot").withFilter("scope", "instance"))
+                .body(Microcopy.of("snapshot_confirm").withFilter("scope", "instance"))
+                .confirmLabel(Microcopy.of("snapshot").withFilter("scope", "instance"))
+                .build())
+            .handler((row, ctx) -> {
+                new InstanceSnapshots().create(row.get(InstanceModel.ID), null);
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("snapshot_taken").withFilter("scope", "instance")
+                        .withArg("name", row.get(InstanceModel.NAME)));
+            })
+            .build();
+    }
+
+    /** Export to the configured backup target (refuses, named, when none is set). */
+    private @NonNull RowAction<Row> backupAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "backup_instance"))
+            .label(Microcopy.of("backup_now").withFilter("scope", "instance"))
+            .icon(Icon.of("box-archive"))
+            .inlineInRow(false)
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("backup_now").withFilter("scope", "instance"))
+                .body(Microcopy.of("backup_confirm").withFilter("scope", "instance"))
+                .confirmLabel(Microcopy.of("backup_now").withFilter("scope", "instance"))
+                .build())
+            .handler((row, ctx) -> {
+                new InstanceBackups().backupNow(row.get(InstanceModel.ID));
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("backup_done").withFilter("scope", "instance")
+                        .withArg("name", row.get(InstanceModel.NAME)));
+            })
+            .build();
     }
 
     private @NonNull RowAction<Row> deployAction() {

@@ -18,4 +18,15 @@ public interface DockerTransport {
      * the entire raw response, bounded by {@code timeoutMs}.
      */
     byte[] roundTrip(byte[] request, long timeoutMs) throws IOException;
+
+    /**
+     * Like {@link #roundTrip(byte[], long)} but ABORTS -- during the read, before the
+     * heap holds it -- once the raw response exceeds {@code maxResponseBytes}. The cap
+     * is what lets volume-archive downloads run against an unbounded-size endpoint
+     * without an OOM being the failure mode; true streaming is a later transport
+     * contract, not a patch here.
+     *
+     * @throws IOException naming the cap when the response exceeds it
+     */
+    byte[] roundTrip(byte[] request, long timeoutMs, long maxResponseBytes) throws IOException;
 }

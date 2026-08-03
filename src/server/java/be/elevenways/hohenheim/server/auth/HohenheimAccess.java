@@ -68,6 +68,12 @@ public final class HohenheimAccess {
     /** Order or renew a certificate for names the holder already answers for. */
     public static final String REQUEST = "request";
 
+    /** Take and restore driver-level snapshots of an instance (data-destructive on restore). */
+    public static final String SNAPSHOTS = "snapshots";
+
+    /** Export instance backups and restore them to new instances. */
+    public static final String BACKUPS = "backups";
+
     private HohenheimAccess() {
     }
 
@@ -151,6 +157,18 @@ public final class HohenheimAccess {
         KnownCapabilities.register(InstanceModel.MODEL_ID,
             KnownCapability.of(MANAGE)
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable(),
+            // Phase 4: the snapshot/backup actions now exist (InstanceSnapshots /
+            // InstanceBackups behind the admin resources), so their capabilities
+            // register per the plan's no-unwired rule. Elevated -- a snapshot
+            // restore destroys data and a backup export carries secret variables.
+            KnownCapability.of(SNAPSHOTS)
+                .label(Microcopy.of("snapshots").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable(),
+            KnownCapability.of(BACKUPS)
+                .label(Microcopy.of("backups").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
         RecordGrantCapabilityChecker.declareRules(InstanceModel.MODEL_ID,

@@ -692,4 +692,45 @@ public class HohenheimSettings {
                 + "immediately")
             .build();
     }
+
+    // --- Instance snapshots and backups ---
+    public abstract class Backup {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("backup")
+            .label("Instance backups")
+            .describe("Instance snapshots (host-local) and encrypted off-host backup exports")
+            .icon("box-archive");
+
+        public static final SettingDefinition<String> SNAPSHOT_PATH = GROUP
+            .buildSetting("snapshot_path", String.class)
+            .defaultValue("data/snapshots")
+            .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
+            .description("Directory for instance snapshots. A snapshot is NOT a backup: it "
+                + "lives on the controller host and dies with it; only backup exports "
+                + "leave the failure domain")
+            .build();
+
+        public static final SettingDefinition<String> STAGING_PATH = GROUP
+            .buildSetting("staging_path", String.class)
+            .defaultValue("data/backup-staging")
+            .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
+            .description("Working directory for building and verifying backup archives "
+                + "before they are uploaded to their target")
+            .build();
+
+        public static final SettingDefinition<Integer> RETENTION = GROUP
+            .buildSetting("retention", Integer.class)
+            .defaultValue(7)
+            .description("Number of completed backups to keep per instance (the managed-"
+                + "database retention pattern); 0 or less keeps everything")
+            .build();
+
+        public static final SettingDefinition<Integer> MAX_ARCHIVE_MB = GROUP
+            .buildSetting("max_archive_mb", Integer.class)
+            .defaultValue(1024)
+            .description("Upper bound in MiB for one captured volume archive. Captures are "
+                + "buffered through controller memory (streaming transports are a later "
+                + "wave), so this cap is what protects the heap -- a volume larger than "
+                + "this refuses to snapshot instead of taking the controller down")
+            .build();
+    }
 }

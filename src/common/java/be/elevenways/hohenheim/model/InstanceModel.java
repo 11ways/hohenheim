@@ -43,6 +43,18 @@ public class InstanceModel extends Model {
     /** {@link #STATUS}: the last runtime operation failed; the daemon may disagree. */
     public static final String STATUS_ERROR = "error";
 
+    /**
+     * {@link #STATUS}: a snapshot or backup capture is in flight (settle-then-refuse:
+     * deploy is refused while set, so a concurrent start cannot corrupt the capture).
+     */
+    public static final String STATUS_CAPTURING = "capturing";
+
+    /**
+     * {@link #STATUS}: a restore is replacing this instance's volumes (the Pterodactyl
+     * {@code restoring_backup} lesson: a protected status gating power actions).
+     */
+    public static final String STATUS_RESTORING = "restoring";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     // User data, NOT localized (the plan's explicit call: names are the user's own words).
@@ -84,8 +96,26 @@ public class InstanceModel extends Model {
             .label(Microcopy.of("stopped").withFilter("scope", "instance_status")).color("orange"))
         .value(STATUS_ERROR, v -> v.displayName("Error").icon("circle-exclamation")
             .label(Microcopy.of("error").withFilter("scope", "instance_status")).color("red"))
+        .value(STATUS_CAPTURING, v -> v.displayName("Capturing").icon("camera")
+            .label(Microcopy.of("capturing").withFilter("scope", "instance_status")).color("blue"))
+        .value(STATUS_RESTORING, v -> v.displayName("Restoring").icon("clock-rotate-left")
+            .label(Microcopy.of("restoring").withFilter("scope", "instance_status")).color("blue"))
         .defaultValue(STATUS_CREATED)
         .build());
+
+    /** Whether the nightly instance-backup task includes this instance. */
+    public static final BooleanField BACKUP_ENABLED = SCHEMA.addField(
+        BooleanField.builder("backup_enabled")
+            .defaultValue(false)
+            .label(HohenheimFormCopy.label("backup_enabled"))
+            .help(HohenheimFormCopy.help("instance_backup_enabled"))
+            .build());
+
+    /** The backup target (backup_targets.id) exports of this instance are written to. */
+    public static final IntegerField BACKUP_TARGET_ID = SCHEMA.addField(
+        IntegerField.builder().name("backup_target_id")
+            .label(HohenheimFormCopy.label("backup_target"))
+            .build());
 
     /**
      * The quota bucket this record's reservation was CHARGED to (stamped by the
