@@ -56,8 +56,15 @@ class ContainerHardeningTest {
     /** CapBnd of {@link ContainerHardening#SERVICE}: CHOWN|DAC_OVERRIDE|FOWNER|SETGID|SETUID. */
     private static final long SERVICE_CAPS = 0xcbL;
 
+    /** Log lines to read back: comfortably more than any boot here writes, so an
+     * occurrence COUNT taken before a restart stays comparable after it. */
+    private static final int LOG_TAIL = 500;
+
     /** CAP_NET_RAW (bit 13): in Docker's default set, in NO hohenheim profile. */
     private static final long NET_RAW = 1L << 13;
+
+    /** The postgres line that means the server really came up. */
+    private static final String READY_LINE = "database system is ready to accept connections";
 
     /** Key {@link #kernelStatusOf} files the pids cgroup cap under. */
     private static final String PIDS_MAX = "PidsMax";
@@ -171,7 +178,7 @@ class ContainerHardeningTest {
             // 1. It STARTS: the root entrypoint chowned a freshly created, root-owned
             //    named volume and switched user, which is exactly what STRICT forbids.
             runtime.start(handle);
-            waitForLog(docker, handle, "database system is ready to accept connections",
+            waitForLog(docker, handle, READY_LINE,
                 "step 1: the chown-then-drop entrypoint completed");
 
             // 2. It really dropped privileges: pid 1 runs as the image's service user,
@@ -193,9 +200,13 @@ class ContainerHardeningTest {
             assertKernelState(docker, handle, "step 4: instance floor", SERVICE_CAPS,
                 ContainerHardening.pidsLimit());
 
-            // 5. RESTART: the narrower sets that pass step 1 die here.
+            // 5. RESTART: the narrower sets that pass step 1 die here. The log KEEPS every
+            //    earlier boot's ready line (postgres logs one for its init-phase temporary
+            //    server too), so the wait is for one MORE than we have -- waiting for "a"
+            //    ready line would pass without the container ever coming back.
+            int readyLines = logOccurrences(docker, handle, READY_LINE);
             docker.restartContainer(handle, 10);
-            waitForLog(docker, handle, "database system is ready to accept connections",
+            waitForLog(docker, handle, READY_LINE, readyLines + 1,
                 "step 5: it survives a restart onto the already-chowned volume");
             assertThat(kernelStatusOf(docker, handle).get("Uid").split("\\s+")[0])
                 .as("step 5: still unprivileged after the restart").isEqualTo("70");
@@ -380,21 +391,42 @@ class ContainerHardeningTest {
         return kernel;
     }
 
-    /**
-     * Wait for a line in the container's own log, failing with the FULL log the moment the
-     * container exits -- that log is the whole point on a hardening regression.
-     */
     private static void waitForLog(DockerClient docker, String container, String needle,
                                    String step) throws IOException {
+        waitForLog(docker, container, needle, 1, step);
+    }
+
+    /** How often the container's log carries {@code needle} right now. */
+    private static int logOccurrences(DockerClient docker, String container, String needle)
+            throws IOException {
+        return occurrences(docker.containerLogs(container, true, true, LOG_TAIL), needle);
+    }
+
+    private static int occurrences(String haystack, String needle) {
+        int count = 0;
+        for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
+            count++;
+        }
+        return count;
+    }
+
+    /**
+     * Wait until the container's own log carries {@code needle} at least {@code times},
+     * failing with the FULL log the moment the container exits -- that log is the whole
+     * point on a hardening regression, and the OCCURRENCE COUNT is what makes a wait after
+     * a restart mean anything (the log keeps the previous boot's lines).
+     */
+    private static void waitForLog(DockerClient docker, String container, String needle,
+                                   int times, String step) throws IOException {
         for (int attempt = 0; attempt < 120; attempt++) {
-            String logs = docker.containerLogs(container, true, true, 200);
-            if (logs.contains(needle)) {
+            String logs = docker.containerLogs(container, true, true, LOG_TAIL);
+            if (occurrences(logs, needle) >= times) {
                 return;
             }
             Object state = docker.inspectContainer(container).get("State");
             if (state instanceof Map<?, ?> map && !Boolean.TRUE.equals(map.get("Running"))) {
                 throw new AssertionError(step + ": the container EXITED before logging \""
-                    + needle + "\". Its own log says:\n" + logs);
+                    + needle + "\" " + times + " time(s). Its own log says:\n" + logs);
             }
             try {
                 Thread.sleep(500);
@@ -403,8 +435,9 @@ class ContainerHardeningTest {
                 break;
             }
         }
-        throw new AssertionError(step + ": never logged \"" + needle + "\" within 60s:\n"
-            + docker.containerLogs(container, true, true, 200));
+        throw new AssertionError(step + ": never logged \"" + needle + "\" " + times
+            + " time(s) within 60s:\n"
+            + docker.containerLogs(container, true, true, LOG_TAIL));
     }
 
     private static void assertRefused(DockerClient docker, ContainerHardening.Profile profile,
