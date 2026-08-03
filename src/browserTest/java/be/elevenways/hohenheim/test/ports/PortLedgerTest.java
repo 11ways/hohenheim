@@ -125,6 +125,101 @@ class PortLedgerTest {
     }
 
     /**
+     * Kernel exclusivity, not key equality: a whole-host bind and a specific-address bind
+     * of the same port cannot both exist, and the ledger must refuse the second even
+     * though their claim keys differ. Two DIFFERENT specific addresses may co-exist.
+     */
+    @Test
+    void wholeHostAndSpecificAddressClaimsOfOnePortExcludeEachOther() {
+        Db.run(datasource, () -> {
+            int localId = ServerModel.localServerId();
+
+            // 1. A loopback-specific claim (what a docker publication looks like).
+            PortLedger.claim(localId, "127.0.0.1", 8320, "tcp", null, null, "docker publication");
+            // 2. A whole-host claim of the same port is impossible at the kernel, so refused.
+            assertThatThrownBy(() -> PortLedger.claim(localId, "0.0.0.0", 8320, "tcp", null, null, "stack"))
+                .as("step 2: a whole-host bind cannot co-exist with a loopback bind")
+                .isInstanceOf(PortLedger.PortConflict.class)
+                .hasMessageContaining("docker publication");
+            // 3. ... and the reverse direction is refused too.
+            PortLedger.claim(localId, "", 8321, "tcp", null, null, "stack whole host");
+            assertThatThrownBy(() ->
+                    PortLedger.claim(localId, "127.0.0.1", 8321, "tcp", null, null, "docker"))
+                .as("step 3: a loopback bind cannot co-exist with a whole-host bind")
+                .isInstanceOf(PortLedger.PortConflict.class)
+                .hasMessageContaining("stack whole host");
+            // 4. Two distinct specific addresses genuinely do not exclude each other.
+            PortLedger.claim(localId, "10.0.0.5", 8320, "tcp", null, null, "lan bind");
+            assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "10.0.0.5", 8320, "tcp")))
+                .as("step 4: a different specific address is a different kernel resource")
+                .isNotNull();
+            // 5. A different PROTOCOL on a taken port is untouched by the overlap rule.
+            PortLedger.claim(localId, "", 8320, "udp", null, null, "udp is another resource");
+            assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8320, "udp")))
+                .as("step 5: udp/tcp overlap nothing").isNotNull();
+        });
+    }
+
+    /**
+     * The record-after contract end to end: the kernel already handed the port out, so
+     * the ledger LEARNS it, re-learns it when the container is recreated on a different
+     * ephemeral port, never steals a tuple, never throws at the caller, and gives the
+     * port back when the owning record dies.
+     */
+    @Test
+    void recordAfterLearnsRelearnsReportsAndReleasesWithTheRecord() {
+        Db.run(datasource, () -> {
+            int localId = ServerModel.localServerId();
+            Row db = Models.get(DatabaseModel.class).createEmptyRow();
+            db.set(DatabaseModel.NAME, "recordafter");
+            db.set(DatabaseModel.ENGINE, "postgres");
+            db.set(DatabaseModel.DB_USER, "u");
+            db.set(DatabaseModel.DB_PASSWORD, "p");
+            db.set(DatabaseModel.DB_NAME, "d");
+            Models.get(DatabaseModel.class).save(db);
+            Integer dbId = db.get(DatabaseModel.ID);
+
+            // 1. The observed port is learned, owned by the record.
+            assertThat(PortLedger.recordObserved(localId, "127.0.0.1", 8330, "tcp",
+                    DatabaseModel.MODEL_ID, dbId, null))
+                .as("step 1: the observed port is recorded").isTrue();
+            Row held = PortLedger.holderOf(PortLedger.claimKeyOf(localId, "127.0.0.1", 8330, "tcp"));
+            assertThat(held).as("step 1: the claim row exists").isNotNull();
+            assertThat(PortLedger.isOwnedBy(held, DatabaseModel.MODEL_ID, dbId))
+                .as("step 1: it is owned by the database record").isTrue();
+
+            // 2. A recreate that lands on a different ephemeral port re-keys the claim:
+            //    exactly one row per owner, and the abandoned port becomes free again.
+            assertThat(PortLedger.recordObserved(localId, "127.0.0.1", 8331, "tcp",
+                    DatabaseModel.MODEL_ID, dbId, null))
+                .as("step 2: the new port is recorded").isTrue();
+            assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "127.0.0.1", 8330, "tcp")))
+                .as("step 2: the port the container no longer holds was released").isNull();
+            assertThat(PortLedger.claimsOf(DatabaseModel.MODEL_ID, dbId))
+                .as("step 2: an owner holds exactly one recorded port").hasSize(1);
+
+            // 3. A tuple another owner already holds is REPORTED, not thrown, and not
+            //    stolen: the running container keeps the port, the stale row keeps the row.
+            PortLedger.claim(localId, "", 8332, "tcp", null, null, "an older claimant");
+            assertThat(PortLedger.recordObserved(localId, "127.0.0.1", 8332, "tcp",
+                    DatabaseModel.MODEL_ID, dbId, null))
+                .as("step 3: a contested observation reports failure instead of throwing").isFalse();
+            assertThat(PortLedger.describeHolder(
+                    PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8332, "tcp"))))
+                .as("step 3: the rival still holds its tuple").isEqualTo("an older claimant");
+
+            // 4. Deleting the owning record releases its claims -- through the model's
+            //    remove hooks, so EVERY delete path frees the port, not just destroy().
+            assertThat(PortLedger.recordObserved(localId, "127.0.0.1", 8333, "tcp",
+                    DatabaseModel.MODEL_ID, dbId, null))
+                .as("step 4: the record holds a port again before it is deleted").isTrue();
+            Models.get(DatabaseModel.class).delete(dbId);
+            assertThat(PortLedger.claimsOf(DatabaseModel.MODEL_ID, dbId))
+                .as("step 4: the record's death released its port").isEmpty();
+        });
+    }
+
+    /**
      * The stacks consumer end to end at the MODEL tier: saving a service syncs its
      * declared claims, editing diff-syncs, a contested save is refused AND rolled back,
      * moving the stack re-keys, deleting releases.

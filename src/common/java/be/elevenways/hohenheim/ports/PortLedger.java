@@ -113,6 +113,38 @@ public final class PortLedger {
             .where(PortAllocationModel.CLAIM_KEY.eq(claimKey)).first();
     }
 
+    /**
+     * The row that would make this claim impossible AT THE KERNEL, not merely the row
+     * with the same key: a whole-host bind and a specific-address bind of the same
+     * (server, port, protocol) exclude each other, and only the unique index on the
+     * exact key can see the first kind of clash.
+     *
+     * AIDEV-NOTE: this pre-write overlap read is REQUIRED, not a convenience. Until C4
+     * every claim was whole-host (stacks declare {@code 0.0.0.0}), so key equality and
+     * kernel exclusivity coincided; the two Docker cases publish on {@code 127.0.0.1},
+     * so without this a docker site's 127.0.0.1:8080 and a stack's 0.0.0.0:8080 are two
+     * happily co-existing rows for one impossible pair of binds -- a conflict check that
+     * cannot catch the conflict it exists for. Two DIFFERENT specific addresses do not
+     * exclude each other and are deliberately allowed. The unique index stays the
+     * storage-level backstop for the exact-key race.
+     */
+    public static @Nullable Row conflictingHolder(int serverId, @Nullable Object hostIp, int port,
+                                                  @Nullable Object protocol) {
+        String key = claimKeyOf(serverId, hostIp, port, protocol);
+        String address = canonicalAddressOf(key);
+        for (Row claim : Models.get(PortAllocationModel.class).find()
+                .where(PortAllocationModel.SERVER_ID.eq(serverId))
+                .and(PortAllocationModel.PORT.eq(port))
+                .and(PortAllocationModel.PROTOCOL.eq(canonicalProtocolOf(key)))
+                .all()) {
+            String held = String.valueOf(claim.get(PortAllocationModel.HOST_IP));
+            if (address.isEmpty() || held.isEmpty() || held.equals(address)) {
+                return claim;
+            }
+        }
+        return null;
+    }
+
     /** Whether a ledger row is owned by this (model, record) tuple. */
     public static boolean isOwnedBy(@NonNull Row claim, @NonNull Identifier ownerModel,
                                     @Nullable Integer ownerId) {
@@ -153,6 +185,10 @@ public final class PortLedger {
                              @Nullable Object protocol, @Nullable Identifier ownerModel,
                              @Nullable Integer ownerId, @Nullable String note) {
         String key = claimKeyOf(serverId, hostIp, port, protocol);
+        Row overlapping = conflictingHolder(serverId, hostIp, port, protocol);
+        if (overlapping != null) {
+            throw new PortConflict(key, describeHolder(overlapping), null);
+        }
         Model ledger = Models.get(PortAllocationModel.class);
         Row row = ledger.createEmptyRow();
         row.set(PortAllocationModel.SERVER_ID, serverId);
@@ -184,6 +220,52 @@ public final class PortLedger {
             .where(PortAllocationModel.OWNER_MODEL.eq(ownerModel.toString()))
             .and(PortAllocationModel.OWNER_ID.eq(ownerId))
             .all();
+    }
+
+    /**
+     * THE record-after primitive: write the claim for a port the KERNEL has already
+     * handed out, replacing whatever this owner held before.
+     *
+     * AIDEV-NOTE: record-after is the decided default (instance-tier-plan, fork 2) --
+     * pre-allocating does not remove the TOCTOU, it adds a second one seconds wide (an
+     * image pull sits inside it) and, on a REMOTE host, is an unevidenced guess, because
+     * isPortFree binds a LOCAL socket. Two consequences are deliberate. (1) A conflict is
+     * REPORTED, never thrown: the container is already bound to this port, so a ledger row
+     * that disagrees is the stale one, and failing the caller here would tear down a
+     * working workload on the word of a row we know to be wrong. (2) The table lags reality
+     * by the width of create -> start -> inspect; a controller death inside that window
+     * leaves a port held by a container with NO row. That is survivable only because the
+     * OwnerLabels land at container-CREATE, before the port exists, so DockerReconciler can
+     * still attribute the container. Never move the labels after the readback.
+     *
+     * @return whether the claim was recorded; false means a stale/rival row holds the tuple
+     */
+    public static boolean recordObserved(int serverId, @Nullable Object hostIp, int port,
+                                         @Nullable Object protocol, @NonNull Identifier ownerModel,
+                                         int ownerId, @Nullable String note) {
+        releaseOwner(ownerModel, ownerId);
+        try {
+            claim(serverId, hostIp, port, protocol, ownerModel, ownerId, note);
+            return true;
+        } catch (PortConflict conflict) {
+            Blast.log("PORTS: observed port", port, "of", ownerModel + " #" + ownerId,
+                "could not be recorded -", conflict.getMessage(),
+                "- the container holds the port regardless; the ledger row is stale");
+            return false;
+        }
+    }
+
+    /**
+     * Delete one claim row by its key.
+     *
+     * @return the row that was removed, or null when nothing held the key
+     */
+    public static @Nullable Row releaseKey(@NonNull String claimKey) {
+        Row held = holderOf(claimKey);
+        if (held != null) {
+            Models.get(PortAllocationModel.class).delete(held.get(PortAllocationModel.ID));
+        }
+        return held;
     }
 
     // -- stacks: the first wired consumer ------------------------------------
@@ -241,20 +323,23 @@ public final class PortLedger {
     /**
      * A delete carries only CRITERIA -- {@code Model.delete(id)}, a criteria delete and
      * {@code deleteAll} all fire the remove hooks ONCE with a criteria-only context whose
-     * row is null -- so the doomed service ids are read here, before the rows disappear,
-     * and consumed by {@link #releaseDoomedServices} on the SAME context instance.
+     * row is null -- so the doomed owners' primary keys are read here, before the rows
+     * disappear, and consumed by {@link #releaseDoomedOwners} on the SAME context instance.
      *
      * AIDEV-NOTE: this before/after pairing is the framework's documented seam
      * (RemoveFromDatasource's own docblock; zenit-auth's RecordGrantCleanup is the
      * reference consumer). An afterRemove-only hook reading {@code context.getRow()}
      * silently releases NOTHING -- the claims outlive their owner and the port stays
-     * permanently unclaimable.
+     * permanently unclaimable. Model-agnostic on purpose: stack services and managed
+     * databases are the same "the owning record is going away" case, and a second copy
+     * of this pairing per model is how one of them silently stops releasing.
      */
-    public static void captureDoomedServices(@NonNull RemoveFromDatasource context) {
+    public static void captureDoomedOwners(@NonNull RemoveFromDatasource context) {
         Model model = context.getModel();
         if (model == null) {
             return;
         }
+        String primaryKey = model.getPrimaryKeyField().getName();
         QueryContext queryContext = context.getQueryContext();
         Criteria criteria = queryContext != null ? queryContext.getCriteria() : null;
         QueryBuilder<Row> builder = model.find();
@@ -262,10 +347,9 @@ public final class PortLedger {
             builder.where(criteria);
         }
         List<Integer> doomed = new ArrayList<>();
-        for (Row service : builder.all()) {
-            Integer serviceId = service.get(StackServiceModel.ID);
-            if (serviceId != null) {
-                doomed.add(serviceId);
+        for (Row owner : builder.all()) {
+            if (owner.get(primaryKey) instanceof Integer ownerId) {
+                doomed.add(ownerId);
             }
         }
         if (!doomed.isEmpty()) {
@@ -273,22 +357,24 @@ public final class PortLedger {
         }
     }
 
-    /** Release every claim held by the services the paired before-hook doomed. */
-    public static void releaseDoomedServices(@NonNull RemoveFromDatasource context) {
-        if (!(context.getAttribute(DOOMED_SERVICES) instanceof List<?> doomed) || doomed.isEmpty()) {
+    /** Release every claim held by the records the paired before-hook doomed. */
+    public static void releaseDoomedOwners(@NonNull RemoveFromDatasource context) {
+        Model model = context.getModel();
+        if (model == null
+            || !(context.getAttribute(DOOMED_SERVICES) instanceof List<?> doomed) || doomed.isEmpty()) {
             return;
         }
         // ONE delete for the whole batch: deleting a stack dooms every one of its
         // services, and a per-service release would be a statement each.
         List<Integer> ids = new ArrayList<>();
         for (Object id : doomed) {
-            if (id instanceof Integer serviceId) {
-                ids.add(serviceId);
+            if (id instanceof Integer ownerId) {
+                ids.add(ownerId);
             }
         }
         if (!ids.isEmpty()) {
             Models.get(PortAllocationModel.class).find()
-                .where(PortAllocationModel.OWNER_MODEL.eq(StackServiceModel.MODEL_ID.toString()))
+                .where(PortAllocationModel.OWNER_MODEL.eq(model.getModelId().toString()))
                 .and(PortAllocationModel.OWNER_ID.in(ids))
                 .delete();
         }

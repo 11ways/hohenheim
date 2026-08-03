@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -35,6 +36,9 @@ import java.util.Map;
  * @since   0.1.0
  */
 public class DockerSiteRequestHandler implements SiteRequestHandler {
+
+    /** The one bind address a docker site's port is published on, and claimed under. */
+    private static final String HOST_BIND_ADDRESS = "127.0.0.1";
 
     private final int siteId;
     private final DockerClient docker;
@@ -79,6 +83,7 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
             this.containerId = docker.createContainer(containerName, buildSpec(siteId, imageRef, port, settings));
             docker.startContainer(this.containerId);
             this.upstream = resolveUpstream(this.containerId, port);
+            recordPublishedPort(settings, this.upstream.getPort());
         } catch (IOException e) {
             Blast.log("DOCKER: failed to start site", siteId, "-", e.getMessage());
             destroy();   // tear down a partial start so a retry is clean
@@ -131,6 +136,7 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
         } catch (IOException ignored) {
             // best effort
         }
+        PortLedger.releaseOwner(SiteModel.MODEL_ID, siteId);
         containerId = null;
         upstream = null;
     }
@@ -182,7 +188,7 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
         spec.put("ExposedPorts", Map.of(portKey, Map.of()));
 
         Map<String, Object> hostConfig = new LinkedHashMap<>();
-        hostConfig.put("PortBindings", Map.of(portKey, List.of(Map.of("HostIp", "127.0.0.1", "HostPort", ""))));
+        hostConfig.put("PortBindings", Map.of(portKey, List.of(Map.of("HostIp", HOST_BIND_ADDRESS, "HostPort", ""))));
 
         // Persistent named volumes (logical name -> container path); the stable volume
         // name keys on the site id, so data survives redeploys and container swaps.
@@ -209,10 +215,27 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
         return spec;
     }
 
+    /**
+     * Record-after: the kernel picked the host port, so the ledger learns it here, owned
+     * by the site record. Deliberately the LAST step of the start sequence.
+     *
+     * AIDEV-NOTE: the claim is TCP-only and that is a property of the readback, not a
+     * simplification -- DockerClient.publishedPort looks up "{port}/tcp" in the inspect
+     * output and can see no other protocol, so record-after structurally cannot serve a
+     * UDP publication. A UDP-publishing site needs the DECLARED pre-allocation mode (the
+     * decided fork 2), not a wider readback bolted on here. Bind address 127.0.0.1
+     * matches buildSpec's PortBindings exactly; PortLedger.conflictingHolder is what makes
+     * that specific-address claim exclude a whole-host claim of the same port.
+     */
+    private void recordPublishedPort(Map<String, Object> settings, int hostPort) {
+        PortLedger.recordObserved(ServerModel.canonicalServerId(settings.get("server")),
+            HOST_BIND_ADDRESS, hostPort, "tcp", SiteModel.MODEL_ID, siteId, null);
+    }
+
     private URI resolveUpstream(String id, int port) throws IOException {
         int hostPort = docker.publishedPort(id, port);
         try {
-            return new URI("http", null, "127.0.0.1", hostPort, "/", null, null);
+            return new URI("http", null, HOST_BIND_ADDRESS, hostPort, "/", null, null);
         } catch (URISyntaxException e) {
             throw new IOException("Bad upstream URI for site " + siteId, e);
         }

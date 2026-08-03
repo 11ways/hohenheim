@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -95,6 +96,13 @@ public class DatabaseModel extends Model {
                 row.set(SERVER_ID, ServerModel.localServerId());
             }
         });
+        // A database's published host port is recorded in the ledger after the container
+        // hands it out (DatabaseService), so the record's death must release it. Via the
+        // before/after pairing because a remove context carries CRITERIA, not a row --
+        // see PortLedger.captureDoomedOwners. Without this, deleting the record through
+        // ANY path other than DatabaseService.destroy leaves the port unclaimable forever.
+        SCHEMA.addBeforeRemoveHook(PortLedger::captureDoomedOwners);
+        SCHEMA.addAfterRemoveHook(PortLedger::releaseDoomedOwners);
     }
 
     /** The database with this unique name, or null if none. */
