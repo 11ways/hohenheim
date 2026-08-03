@@ -11,10 +11,10 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /**
- * The boot-time local Docker daemon probe behind {@code roles.stacks}: a stacks
- * node whose daemon is unreachable must be LOUD at boot (the old behaviour was a
- * silent per-call null), and a node without the role must never construct a
- * {@link DockerClient} at all.
+ * The boot-time local Docker daemon probe behind the docker-requiring roles
+ * (stacks, instances): a node whose daemon is unreachable must be LOUD at boot
+ * (the old behaviour was a silent per-call null), and a node without any such
+ * role must never construct a {@link DockerClient} at all.
  *
  * The gate and the client factory are injected (the NftService shape) so tests
  * exercise both faces without a real daemon or global settings.
@@ -24,25 +24,30 @@ public final class DockerHealth {
     public enum Status {
         /** No probe ran in this process (test boots that skip ServerMain). */
         UNPROBED,
-        /** roles.stacks is off: docker is not part of this install. */
+        /** No docker-requiring role (stacks, instances) is on: docker is not part of this install. */
         DISABLED,
         REACHABLE,
         UNREACHABLE
     }
 
+    // STACKS or INSTANCES: both roles REQUIRE a daemon by definition, so either alone
+    // makes silent absence unacceptable (the recon's "do not repeat the role gating"
+    // warning). PROXY and DATABASES only MAY use docker, so they stay out -- probing for
+    // them would raise a false daemon-down alarm on every docker-less proxy install.
     private static final DockerHealth BOOT = new DockerHealth(
-        () -> HohenheimRoles.enabled(HohenheimRoles.Role.STACKS),
+        () -> HohenheimRoles.anyEnabled(HohenheimRoles.Role.STACKS,
+            HohenheimRoles.Role.INSTANCES),
         DockerClient::new);
 
-    private final @NonNull BooleanSupplier stacksEnabled;
+    private final @NonNull BooleanSupplier dockerRoleEnabled;
     private final @NonNull Supplier<DockerClient> clientFactory;
     private volatile @NonNull Status status = Status.UNPROBED;
     private volatile @Nullable String problem;
 
     /** Test constructor: inject the role gate and the client factory. */
-    public DockerHealth(@NonNull BooleanSupplier stacksEnabled,
+    public DockerHealth(@NonNull BooleanSupplier dockerRoleEnabled,
                         @NonNull Supplier<DockerClient> clientFactory) {
-        this.stacksEnabled = stacksEnabled;
+        this.dockerRoleEnabled = dockerRoleEnabled;
         this.clientFactory = clientFactory;
     }
 
@@ -57,11 +62,11 @@ public final class DockerHealth {
     }
 
     /**
-     * Probe the local daemon when the stacks role is on; never constructs a
-     * client when it is off.
+     * Probe the local daemon when a docker-requiring role is on; never constructs
+     * a client when none is.
      */
     public synchronized @NonNull Status probe() {
-        if (!stacksEnabled.getAsBoolean()) {
+        if (!dockerRoleEnabled.getAsBoolean()) {
             status = Status.DISABLED;
             problem = null;
             return status;

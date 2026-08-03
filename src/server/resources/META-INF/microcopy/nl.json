@@ -1021,6 +1021,10 @@
     {
       "text": "Deployen",
       "scope": "stack"
+    },
+    {
+      "text": "Deployen",
+      "scope": "instance"
     }
   ],
   "deploy_now": {
@@ -1829,6 +1833,10 @@
     {
       "text": "Vrijgegeven hostnamen",
       "scope": "released_claim"
+    },
+    {
+      "text": "Instanties",
+      "scope": "instance"
     }
   ],
   "dashboard": {
@@ -3261,6 +3269,10 @@
     {
       "text": "Stoppen",
       "scope": "stack"
+    },
+    {
+      "text": "Stoppen",
+      "scope": "instance"
     }
   ],
   "stop_hint": {
@@ -3275,6 +3287,10 @@
     {
       "text": "Alle containers van deze stack stoppen?",
       "scope": "stack"
+    },
+    {
+      "text": "Deze instantie stoppen? De gepubliceerde poort wordt vrijgegeven; de container en zijn data blijven bestaan.",
+      "scope": "instance"
     }
   ],
   "restart": {
@@ -3965,6 +3981,10 @@
     {
       "text": "Bezig",
       "scope": "stack_deploy_status"
+    },
+    {
+      "text": "Actief",
+      "scope": "instance_status"
     }
   ],
   "unhealthy": {
@@ -3979,6 +3999,10 @@
     {
       "text": "Gestopt",
       "scope": "stack_status"
+    },
+    {
+      "text": "Gestopt",
+      "scope": "instance_status"
     }
   ],
   "missing": {
@@ -4117,6 +4141,66 @@
   },
   "enable_route_quarantined": {
     "text": "Kan deze site niet inschakelen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dag(en) gereserveerd; een beheerder kan de quarantaine opheffen",
+    "scope": "violations"
+  },
+  "kind": {
+    "text": "Soort",
+    "scope": "field"
+  },
+  "instance_kind": {
+    "text": "Wat deze instantie draait; de soort bepaalt de instellingen en de runtime-driver",
+    "scope": "help"
+  },
+  "instance_container_port": {
+    "text": "Container-TCP-poort gepubliceerd op 127.0.0.1 met een tijdelijke hostpoort; laat leeg voor geen (UDP wordt nog niet ondersteund)",
+    "scope": "help"
+  },
+  "instance_volumes": {
+    "text": "Persistente benoemde volumes: logische naam naar containerpad; data overleeft herdeployments",
+    "scope": "help"
+  },
+  "docker_container": {
+    "text": "Docker-container",
+    "scope": "instance_kind"
+  },
+  "created": {
+    "text": "Aangemaakt",
+    "scope": "instance_status"
+  },
+  "error": {
+    "text": "Fout",
+    "scope": "instance_status"
+  },
+  "deployed": {
+    "text": "Instantie {$name} draait",
+    "scope": "instance"
+  },
+  "stopped_toast": {
+    "text": "Instantie {$name} gestopt",
+    "scope": "instance"
+  },
+  "instance_not_found": {
+    "text": "Instantie #{$id} bestaat niet (of is verwijderd)",
+    "scope": "violations"
+  },
+  "instance_kind_unknown": {
+    "text": "Geen runtime kan instantiesoort {$kind} uitvoeren",
+    "scope": "violations"
+  },
+  "instance_image_required": {
+    "text": "Een image is vereist voordat deze instantie gedeployd kan worden",
+    "scope": "violations"
+  },
+  "instance_deploy_failed": {
+    "text": "Deploy van {$name} is mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "instance_stop_failed": {
+    "text": "Stoppen van {$name} is mislukt: {$reason}. De poortclaims blijven gereserveerd tot ze vrij zijn waargenomen.",
+    "scope": "violations"
+  },
+  "instance_destroy_failed": {
+    "text": "Vernietigen van {$name} is mislukt: {$reason}. Het record blijft bewaard; probeer opnieuw zodra de host bereikbaar is.",
     "scope": "violations"
   }
 }

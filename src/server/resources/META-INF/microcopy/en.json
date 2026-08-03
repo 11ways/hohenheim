@@ -1021,6 +1021,10 @@
     {
       "text": "Deploy",
       "scope": "stack"
+    },
+    {
+      "text": "Deploy",
+      "scope": "instance"
     }
   ],
   "deploy_now": {
@@ -1833,6 +1837,10 @@
     {
       "text": "Released hostnames",
       "scope": "released_claim"
+    },
+    {
+      "text": "Instances",
+      "scope": "instance"
     }
   ],
   "dashboard": {
@@ -3265,6 +3273,10 @@
     {
       "text": "Stop",
       "scope": "stack"
+    },
+    {
+      "text": "Stop",
+      "scope": "instance"
     }
   ],
   "stop_hint": {
@@ -3279,6 +3291,10 @@
     {
       "text": "Stop all containers of this stack?",
       "scope": "stack"
+    },
+    {
+      "text": "Stop this instance? Its published port is released; the container and its data are kept.",
+      "scope": "instance"
     }
   ],
   "restart": {
@@ -3969,6 +3985,10 @@
     {
       "text": "Running",
       "scope": "stack_deploy_status"
+    },
+    {
+      "text": "Running",
+      "scope": "instance_status"
     }
   ],
   "unhealthy": {
@@ -3983,6 +4003,10 @@
     {
       "text": "Stopped",
       "scope": "stack_status"
+    },
+    {
+      "text": "Stopped",
+      "scope": "instance_status"
     }
   ],
   "missing": {
@@ -4121,6 +4145,66 @@
   },
   "enable_route_quarantined": {
     "text": "Cannot enable this site: {$hostname} was recently released by another owner and stays reserved for {$days} more day(s); an administrator can lift the quarantine",
+    "scope": "violations"
+  },
+  "kind": {
+    "text": "Kind",
+    "scope": "field"
+  },
+  "instance_kind": {
+    "text": "What this instance runs; the kind decides its settings and its runtime driver",
+    "scope": "help"
+  },
+  "instance_container_port": {
+    "text": "Container TCP port published on 127.0.0.1 with an ephemeral host port; leave blank for none (UDP is not supported yet)",
+    "scope": "help"
+  },
+  "instance_volumes": {
+    "text": "Persistent named volumes: logical name to container path; data survives redeploys",
+    "scope": "help"
+  },
+  "docker_container": {
+    "text": "Docker container",
+    "scope": "instance_kind"
+  },
+  "created": {
+    "text": "Created",
+    "scope": "instance_status"
+  },
+  "error": {
+    "text": "Error",
+    "scope": "instance_status"
+  },
+  "deployed": {
+    "text": "Instance {$name} is running",
+    "scope": "instance"
+  },
+  "stopped_toast": {
+    "text": "Instance {$name} stopped",
+    "scope": "instance"
+  },
+  "instance_not_found": {
+    "text": "Instance #{$id} does not exist (or was deleted)",
+    "scope": "violations"
+  },
+  "instance_kind_unknown": {
+    "text": "No runtime handles instance kind {$kind}",
+    "scope": "violations"
+  },
+  "instance_image_required": {
+    "text": "An image is required before this instance can be deployed",
+    "scope": "violations"
+  },
+  "instance_deploy_failed": {
+    "text": "Deploy of {$name} failed: {$reason}",
+    "scope": "violations"
+  },
+  "instance_stop_failed": {
+    "text": "Stop of {$name} failed: {$reason}. Its port claims stay reserved until observed free.",
+    "scope": "violations"
+  },
+  "instance_destroy_failed": {
+    "text": "Destroy of {$name} failed: {$reason}. The record is kept; retry once the host is reachable.",
     "scope": "violations"
   }
 }

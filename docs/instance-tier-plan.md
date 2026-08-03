@@ -2091,6 +2091,43 @@ Driver and infrastructure:
   (stats, follow-logs, attach, TTY exec) is a SECOND transport contract, not a
   patch to `DockerTransport`'s single-shot `byte[] roundTrip`, and it is Phase 6.
 
+  LANDED 2026-08-03 (C7), in the C7 ORDER above, one commit: `sameOwner`/
+  `manageSubjectsOf` generalized to `(Identifier, Object)` with the site forms
+  delegating; `InstanceModel` (M054, no owner column, no fence columns, kind =
+  `hohenheim:docker_container` RegistryEnumField + `schemaFrom("kind")` settings,
+  `server_id` FK folded through `canonicalServerId` in beforeValidate);
+  grantable + `manage` capability registered in the same commit (counterfactual:
+  without it the grant is REFUSED as undeclared and the tenancy check cannot
+  fail); the two PortLedger remove hooks (counterfactual: claim stays `held` by
+  a ghost); `ModelRecords` resolves instances with the soft-delete predicate
+  (counterfactual: live instance classified ORPHANED), and label-less
+  `hohenheim-instance-*` names stay FOREIGN_COLLIDING by decision -- the tier
+  was born after the labels, so there is deliberately NO name-scheme fallback;
+  `InstanceRuntime` seam (five methods, typed `ContainerState` now SHARED with
+  `ManagedDatabase.LiveStatus`) + `DockerInstanceRuntime` wrapping DockerClient,
+  labels at create on container AND volumes, record-after loopback TCP port;
+  `InstanceService` (deploy/stop/verified destroy + soft delete, Violations
+  refusals) + admin `InstanceResource` behind a new `roles.instances` (also
+  gates the boot daemon probe and joins the reconciler schedule). Proven by a
+  real-daemon deploy/stop/redeploy/destroy journey asserting HOST state, plus
+  the foreign-name refusal. Still owed from this section: quotas, create
+  authority, hardening, per-tenant networks, console/exec, /manage projection,
+  `instance_variables`, UDP pre-allocation mode.
+
+  REGRESSION CAUGHT AND FIXED 2026-08-03, second pass over the LANDED claim
+  above: `roles.instances` defaults to enabled (like every role), and
+  `RoleRestrictedBootTest` hand-listed the roles it switched off -- so the
+  DNS-only boot silently kept INSTANCES on and the shared daemon probe
+  constructed a DockerClient (expected 0 constructions, observed 1). Fix:
+  `HohenheimRoles.Role` gained a public `setting()` accessor and the test now
+  ENUMERATES `Role.values()` to declare its complete role set, so a future
+  role addition can never silently re-enable a subsystem in that boot. The
+  three named C7 counterfactuals were also demonstrated for real in this pass
+  (capability registration: grant REFUSED as undeclared, fail-closed at the
+  framework, so the empty-set theater cannot even be staged; ModelRecords
+  branch: live instance ORPHANED; remove hooks: claim stays held by a ghost,
+  never parked in releasing).
+
   RISK: C5's boot sweep is the one most likely to break a dev environment
   SILENTLY. Managed-process children are spawned via `ProcessBuilder` with no
   evidence they die with the controller; if any survive, the sweep frees a port

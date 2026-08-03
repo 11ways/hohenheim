@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -217,6 +218,59 @@ class DockerReconcilerTest {
         assertThat(findings.get(1).bucket()).as("label-less volume classified by name")
             .isEqualTo(Bucket.ORPHANED);
         assertThat(findings.get(2).bucket()).isEqualTo(Bucket.FOREIGN_KNOWN);
+    }
+
+    /**
+     * The REAL record resolver knows the instance tier (C7): a live instance's
+     * labelled container is OWNED, a soft-deleted one's is ORPHANED. This runs
+     * through {@code ModelRecords} on purpose -- the fake above would keep passing
+     * with the resolver branch missing, and a missing branch means EVERY live
+     * instance lands on the attention list as a false orphan.
+     */
+    @Test
+    void modelRecordsResolveInstancesHonouringSoftDelete() {
+        Db.run(datasource, () -> {
+            // 1. A live instance record: its labelled container attributes as OWNED.
+            Row instance = Models.get(InstanceModel.class)
+                .createEmptyRow();
+            instance.set(InstanceModel.NAME, "reconciled");
+            instance.set(InstanceModel.KIND,
+                "hohenheim:docker_container");
+            Models.get(InstanceModel.class).save(instance);
+            int id = instance.get(InstanceModel.ID);
+            DockerReconciler.Records records = new DockerReconciler.ModelRecords();
+
+            Finding live = DockerReconciler.classify("container", "hohenheim-instance-" + id,
+                mapOf(OwnerLabels.of(InstanceModel.MODEL_ID, id)),
+                records);
+            assertThat(live.bucket())
+                .as("step 1: a live instance's labelled container is OWNED, not a false alarm")
+                .isEqualTo(Bucket.OWNED);
+            assertThat(live.evidence()).isEqualTo(Evidence.OWNER_LABEL);
+
+            // 2. Soft-delete the record: the same container is now the orphan the
+            //    attention list exists for (soft-deleted = not live).
+            instance.set(InstanceModel.DELETED_AT,
+                Instant.now());
+            Models.get(InstanceModel.class).save(instance);
+            Finding trashed = DockerReconciler.classify("container", "hohenheim-instance-" + id,
+                mapOf(OwnerLabels.of(InstanceModel.MODEL_ID, id)),
+                records);
+            assertThat(trashed.bucket())
+                .as("step 2: a soft-deleted instance's container is ORPHANED")
+                .isEqualTo(Bucket.ORPHANED);
+
+            // 3. A label-less hohenheim-instance-* name is DELIBERATELY not attributed by
+            //    name: the tier was born after the owner labels, so an unlabelled
+            //    lookalike is a collision, never adopted-by-name.
+            Finding lookalike = DockerReconciler.classify("container",
+                "hohenheim-instance-" + id, Map.of(), records);
+            assertThat(lookalike.bucket())
+                .as("step 3: an unlabelled instance-named container is FOREIGN_COLLIDING")
+                .isEqualTo(Bucket.FOREIGN_COLLIDING);
+
+            Models.get(InstanceModel.class).delete(id);
+        });
     }
 
     // -- persistence + attention ----------------------------------------------

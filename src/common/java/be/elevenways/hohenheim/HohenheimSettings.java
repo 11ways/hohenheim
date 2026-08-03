@@ -231,6 +231,13 @@ public class HohenheimSettings {
             .description("Run managed databases: provisioning, backups and the site database links")
             .restartRequired()
             .build();
+
+        public static final SettingDefinition<Boolean> INSTANCES = GROUP.buildSetting("instances", Boolean.class)
+            .defaultValue(true)
+            .description("Run managed instances (the instance tier): tenant runtime units via "
+                + "the instance drivers; requires a reachable Docker daemon, probed loudly at boot")
+            .restartRequired()
+            .build();
     }
 
     // --- SSL/TLS ---

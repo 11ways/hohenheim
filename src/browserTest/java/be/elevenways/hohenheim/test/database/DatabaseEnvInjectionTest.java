@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -86,7 +87,7 @@ class DatabaseEnvInjectionTest {
         link(siteId, database("cachedb", "redis", DatabaseModel.STATUS_ACTIVE), "CACHE");
 
         Map<String, String> env = DatabaseEnvInjection.envForSite(siteId,
-            row -> new ManagedDatabase.LiveStatus(ManagedDatabase.ContainerState.RUNNING,
+            row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING,
                 "maindb".equals(row.get(DatabaseModel.NAME)) ? 5544 : 6380));
 
         String pgUrl = "postgres://appuser:s3cret@127.0.0.1:5544/appdb";
@@ -110,8 +111,8 @@ class DatabaseEnvInjectionTest {
         // The primary (first) link's container is stopped; the second resolves.
         Map<String, String> env = DatabaseEnvInjection.envForSite(siteId,
             row -> "downdb".equals(row.get(DatabaseModel.NAME))
-                ? new ManagedDatabase.LiveStatus(ManagedDatabase.ContainerState.STOPPED, null)
-                : new ManagedDatabase.LiveStatus(ManagedDatabase.ContainerState.RUNNING, 3311));
+                ? new ManagedDatabase.LiveStatus(ContainerState.STOPPED, null)
+                : new ManagedDatabase.LiveStatus(ContainerState.RUNNING, 3311));
 
         assertThat(env).doesNotContainKey("DB_HOST");
         assertThat(env).doesNotContainKey("DB_URL");
@@ -126,7 +127,7 @@ class DatabaseEnvInjectionTest {
         link(siteId, database("faileddb", "postgres", DatabaseModel.STATUS_FAILED), "DB");
 
         Map<String, String> env = DatabaseEnvInjection.envForSite(siteId,
-            row -> new ManagedDatabase.LiveStatus(ManagedDatabase.ContainerState.RUNNING, 5544));
+            row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, 5544));
         assertThat(env).isEmpty();
 
         // A site with no links resolves to nothing without touching the resolver.

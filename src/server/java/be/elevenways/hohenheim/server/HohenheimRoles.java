@@ -32,7 +32,8 @@ public final class HohenheimRoles {
         FIREWALL(HohenheimSettings.Roles.FIREWALL),
         STACKS(HohenheimSettings.Roles.STACKS),
         PROCESSES(HohenheimSettings.Roles.PROCESSES),
-        DATABASES(HohenheimSettings.Roles.DATABASES);
+        DATABASES(HohenheimSettings.Roles.DATABASES),
+        INSTANCES(HohenheimSettings.Roles.INSTANCES);
 
         private final SettingDefinition<Boolean> setting;
 
@@ -43,6 +44,16 @@ public final class HohenheimRoles {
         /** The lowercase settings-key token, e.g. "proxy" for roles.proxy. */
         public @NonNull String token() {
             return name().toLowerCase(java.util.Locale.ROOT);
+        }
+
+        /**
+         * The backing {@code roles.*} setting, so a caller declaring a COMPLETE role
+         * set can enumerate {@code values()} instead of naming roles one by one --
+         * a hand-list silently keeps every later-added role at its default, which is
+         * exactly how the INSTANCES role slipped past the DNS-only boot test.
+         */
+        public @NonNull SettingDefinition<Boolean> setting() {
+            return this.setting;
         }
     }
 
