@@ -4374,5 +4374,157 @@
   "orphan_remove_failed": {
     "text": "Verwijdering geweigerd door de daemon: {$name}",
     "scope": "violations"
+  },
+  "scan_host_key": {
+    "text": "Hostsleutel scannen",
+    "scope": "server"
+  },
+  "scan_host_key_hint": {
+    "text": "Lees de SSH-hostsleutel die deze machine aanbiedt en pin ze vast. Een sleutel die niet overeenkomt met de pin wordt hier nooit overgenomen.",
+    "scope": "server"
+  },
+  "host_key_pinned_toast": {
+    "text": "{$fingerprint} vastgepind. Vergelijk ze met wat de beheerder van de host zelf meldt en bevestig ze dan.",
+    "scope": "server"
+  },
+  "host_key_unchanged_toast": {
+    "text": "De host biedt nog altijd de vastgepinde sleutel aan ({$fingerprint}).",
+    "scope": "server"
+  },
+  "confirm_host_key": {
+    "text": "Vingerafdruk bevestigen",
+    "scope": "server"
+  },
+  "confirm_host_key_hint": {
+    "text": "Leg vast dat je de vastgepinde vingerafdruk buiten dit kanaal om vergeleken hebt.",
+    "scope": "server"
+  },
+  "confirm_host_key_generic": {
+    "text": "De vastgepinde SSH-vingerafdruk van deze host bevestigen?",
+    "scope": "server"
+  },
+  "confirm_host_key_body": {
+    "text": "Typ de vingerafdruk om te bevestigen dat je {$fingerprint} voor {$name} vergeleken hebt met wat de beheerder van de host zelf meldt. Tot dan kan deze host niet toegelaten worden voor plaatsing.",
+    "scope": "server"
+  },
+  "host_key_confirmed_toast": {
+    "text": "Hostsleutel van {$name} bevestigd.",
+    "scope": "server"
+  },
+  "repin_host_key": {
+    "text": "Gewijzigde hostsleutel opnieuw vastpinnen",
+    "scope": "server"
+  },
+  "repin_host_key_hint": {
+    "text": "Neem de sleutel over die deze host nu aanbiedt. Doe dit pas als je weet waarom ze veranderd is.",
+    "scope": "server"
+  },
+  "repin_host_key_generic": {
+    "text": "De sleutel overnemen die deze host nu aanbiedt?",
+    "scope": "server"
+  },
+  "repin_host_key_body": {
+    "text": "{$name} bood een ANDERE SSH-hostsleutel aan. Vastgepind: {$pinned}. Aangeboden: {$offered}. Als je de sleutel van de host niet zelf vervangen hebt, ziet dit eruit als een man-in-the-middle en mag je niet doorgaan. Typ de aangeboden vingerafdruk om ze over te nemen; daarna moet de host opnieuw bevestigd, gecontroleerd en toegelaten worden.",
+    "scope": "server"
+  },
+  "host_key_repinned_toast": {
+    "text": "{$fingerprint} opnieuw vastgepind. De host is opnieuw onbevestigd en niet toegelaten.",
+    "scope": "server"
+  },
+  "rotate_identity": {
+    "text": "SSH-sleutel vervangen",
+    "scope": "server"
+  },
+  "rotate_identity_hint": {
+    "text": "Genereer een nieuwe clientsleutel voor deze host. De oude werkt meteen niet meer.",
+    "scope": "server"
+  },
+  "rotate_identity_generic": {
+    "text": "Een nieuwe clientsleutel genereren voor deze host?",
+    "scope": "server"
+  },
+  "rotate_identity_body": {
+    "text": "Er wordt een nieuwe clientsleutel gegenereerd voor {$name} en de huidige werkt meteen niet meer. Hohenheim bereikt de host pas opnieuw wanneer je de nieuwe publieke sleutel in authorized_keys zet. Typ de hostnaam om door te gaan.",
+    "scope": "server"
+  },
+  "identity_rotated_toast": {
+    "text": "Nieuwe clientsleutel gegenereerd voor {$name}. Installeer de publieke sleutel die op het record staat.",
+    "scope": "server"
+  },
+  "trust_notice_body": {
+    "text": "Een host toevoegen geeft Hohenheim controle over zijn Docker-daemon, wat gelijkstaat aan root op die machine: het kan elke container starten, elk pad lezen dat een container koppelt, en het ontvangt elke inloggegeven die Hohenheim daar in werklasten injecteert. Voeg alleen machines toe die van jou zijn. Installeer na het opslaan de getoonde publieke sleutel op de host, scan de hostsleutel en bevestig de vingerafdruk buiten dit kanaal om.",
+    "scope": "server"
+  },
+  "host_key_local": {
+    "text": "De lokale daemon wordt via een Unix-socket bereikt; er komt geen SSH-hostsleutel aan te pas.",
+    "scope": "server"
+  },
+  "host_key_none": {
+    "text": "Niet vastgepind. Scan de hostsleutel voordat deze host uberhaupt bereikt kan worden.",
+    "scope": "server"
+  },
+  "host_key_confirmed": {
+    "text": "{$fingerprint} (bevestigd)",
+    "scope": "server"
+  },
+  "host_key_unconfirmed": {
+    "text": "{$fingerprint} (NIET bevestigd -- vergelijk ze buiten dit kanaal om en bevestig ze)",
+    "scope": "server"
+  },
+  "host_key_mismatch_state": {
+    "text": "KOMT NIET OVEREEN. Vastgepind {$pinned}, de host biedt nu {$offered} aan. Verbindingen worden geweigerd en de host is geblokkeerd tot je bewust opnieuw vastpint.",
+    "scope": "server"
+  },
+  "identity_missing": {
+    "text": "Nog geen clientsleutel.",
+    "scope": "server"
+  },
+  "trust_notice": {
+    "text": "Wat je toekent",
+    "scope": "field"
+  },
+  "identity_public_key": [
+    {
+      "text": "Publieke sleutel van Hohenheim",
+      "scope": "field"
+    },
+    {
+      "text": "Zet deze regel in ~/.ssh/authorized_keys van het account op de host. Ze is uniek voor deze host, dus intrekken raakt niets anders.",
+      "scope": "help"
+    }
+  ],
+  "host_key_state": [
+    {
+      "text": "Hostsleutel",
+      "scope": "field"
+    },
+    {
+      "text": "De vingerafdruk van de SSH-hostsleutel die Hohenheim afdwingt bij elke verbinding met deze machine.",
+      "scope": "help"
+    }
+  ],
+  "host_key_mismatch": {
+    "text": "{$name} bood een andere SSH-hostsleutel aan (vastgepind {$pinned}, aangeboden {$offered}). Er is niets opnieuw vastgepind en de host is geblokkeerd; verifieer buiten dit kanaal om voor je de nieuwe sleutel overneemt.",
+    "scope": "violations"
+  },
+  "host_key_scan_failed": {
+    "text": "Kon geen bruikbare SSH-hostsleutel lezen van {$target}: {$detail}",
+    "scope": "violations"
+  },
+  "host_key_not_pinned": {
+    "text": "Deze host heeft nog geen vastgepinde SSH-hostsleutel",
+    "scope": "violations"
+  },
+  "host_key_no_offer": {
+    "text": "Er is geen afwijkende hostsleutel om over te nemen",
+    "scope": "violations"
+  },
+  "identity_generation_failed": {
+    "text": "Kon geen SSH-sleutel genereren: {$detail}",
+    "scope": "violations"
+  },
+  "host_key_unverified": {
+    "text": "Host '{$name}' heeft geen bevestigde SSH-vingerafdruk; scan de hostsleutel en bevestig ze eerst",
+    "scope": "violations"
   }
 }

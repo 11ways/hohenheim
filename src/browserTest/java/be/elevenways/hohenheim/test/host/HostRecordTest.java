@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
+import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -161,12 +162,26 @@ class HostRecordTest {
             ServerService servers = new ServerService();
             servers.add("edge-dark", "nobody@edge-dark.hohenheim-test.invalid");
 
-            // 1. The live probe fails with a NAMED class, not a silent null.
+            // 1. A remote host with no pinned key is not even attempted: the refusal is
+            //    OURS and typed, never an ssh error we would have to guess at.
+            assertThat(servers.probeAndStore("edge-dark").errorKind())
+                .as("step 1: an unpinned host fails closed with its own class")
+                .isEqualTo("not_pinned");
+
+            // 1b. Once it is pinned and credentialled, the live probe fails with a NAMED
+            //     class, not a silent null. (The pin is a locally generated key: this
+            //     host does not resolve, so nothing ever presents one.)
+            Row dark = Models.get(ServerModel.class).findByName("edge-dark");
+            HostKeys.ensureIdentity(dark);
+            dark.set(ServerModel.HOST_KEY, dark.get(ServerModel.IDENTITY_PUBLIC_KEY));
+            dark.set(ServerModel.HOST_KEY_FINGERPRINT,
+                HostKeys.fingerprintOf(dark.get(ServerModel.IDENTITY_PUBLIC_KEY)));
+            Models.get(ServerModel.class).save(dark);
             ServerService.Summary summary = servers.probeAndStore("edge-dark");
             assertThat(summary.reachable())
-                .as("step 1: the invalid host is unreachable").isFalse();
+                .as("step 1b: the invalid host is unreachable").isFalse();
             assertThat(summary.errorKind())
-                .as("step 1: and the failure is typed, never a zeroed shrug")
+                .as("step 1b: and the failure is typed, never a zeroed shrug")
                 .isIn("dns", "unreachable", "timeout");
 
             // 2. The typed outcome is STORED on the record: columns, not memory.

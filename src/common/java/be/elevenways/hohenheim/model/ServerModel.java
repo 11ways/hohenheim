@@ -125,13 +125,58 @@ public class ServerModel extends Model {
         TextField.builder().name("last_error").nullable(true).build());
 
     /**
-     * AIDEV-NOTE: deliberately UNPOPULATED. SSH host-key pinning and enrollment
-     * credential handling are a separate security wave (today enrollment is
-     * StrictHostKeyChecking=accept-new with no pinning); the column exists so that wave
-     * has a home, and nothing here reads or writes it yet.
+     * The operator-facing digest of {@link #HOST_KEY} ({@code SHA256:...}, exactly what
+     * {@code ssh-keygen -lf} prints), derived at pin time and never entered by hand.
+     *
+     * AIDEV-NOTE: populated since the pinning wave (M057). An operator who cannot SEE a
+     * fingerprint can never notice it changed, so this is displayed on the host form and
+     * is the phrase the confirm/re-pin ceremonies make the operator type.
      */
     public static final StringField HOST_KEY_FINGERPRINT = SCHEMA.addField(
         StringField.builder().name("host_key_fingerprint").nullable(true).build());
+
+    /**
+     * The PINNED host public key in {@code known_hosts} spelling
+     * ({@code ssh-ed25519 AAAA...}); every SSH connection verifies against exactly this
+     * and fails closed on mismatch. Null means unpinned -- and an unpinned remote host
+     * is not connectable at all.
+     */
+    public static final TextField HOST_KEY = SCHEMA.addField(
+        TextField.builder().name("host_key").nullable(true).build());
+
+    /**
+     * Whether an operator confirmed {@link #HOST_KEY_FINGERPRINT} out of band. A scan
+     * pins UNVERIFIED; only the explicit confirm action sets this, and nothing else may
+     * -- an unverified pin silently becoming a verified one is the whole ceremony
+     * defeating itself.
+     */
+    public static final BooleanField HOST_KEY_VERIFIED = SCHEMA.addField(
+        BooleanField.builder("host_key_verified").defaultValue(false).build());
+
+    /** When {@link #HOST_KEY} was pinned (or re-pinned). */
+    public static final DateTimeField HOST_KEY_PINNED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("host_key_pinned_at").build());
+
+    /**
+     * The key a rescan most recently saw the host OFFER while it disagreed with
+     * {@link #HOST_KEY}: evidence for the re-pin ceremony, never a value anything
+     * connects against.
+     */
+    public static final TextField HOST_KEY_OFFERED = SCHEMA.addField(
+        TextField.builder().name("host_key_offered").nullable(true).build());
+
+    /** The per-host client public key an operator installs in the remote's authorized_keys. */
+    public static final TextField IDENTITY_PUBLIC_KEY = SCHEMA.addField(
+        TextField.builder().name("identity_public_key").nullable(true).build());
+
+    /**
+     * The per-host client PRIVATE key; encrypted at rest and never rendered. One key per
+     * host, so a rotated or leaked credential is scoped to one machine instead of every
+     * host the controller account can reach.
+     */
+    public static final TextField IDENTITY_PRIVATE_KEY = SCHEMA.addField(
+        TextField.builder().name("identity_private_key").nullable(true)
+            .secret().encrypted().build());
 
     /** The controller version that last probed this host (compatibility-window bookkeeping). */
     public static final StringField CONTROLLER_VERSION = SCHEMA.addField(

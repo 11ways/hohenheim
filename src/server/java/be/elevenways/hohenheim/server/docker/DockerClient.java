@@ -103,11 +103,6 @@ public class DockerClient {
         return CONSTRUCTED.get();
     }
 
-    /** Talk to a remote Docker daemon over SSH (key-based ssh + docker required on {@code sshTarget}). */
-    public static DockerClient overSsh(String sshTarget) {
-        return new DockerClient(ProcessDockerTransport.overSsh(sshTarget));
-    }
-
     // -----------------------------------------------------------------------
     // Daemon
     // -----------------------------------------------------------------------

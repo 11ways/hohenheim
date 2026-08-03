@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -183,7 +184,10 @@ public class ServerService extends DatasourceScoped {
 
     private static DockerTransport transportFor(Row row) {
         if (MODE_SSH.equals(row.get(ServerModel.MODE))) {
-            return ProcessDockerTransport.overSsh(row.get(ServerModel.SSH_TARGET));
+            // Fails closed (HostKeys.HostTrustException) on an unpinned host or one with
+            // no client identity, rather than falling back to ambient ssh trust.
+            return new ProcessDockerTransport(
+                HostKeys.sshArgv(row, ProcessDockerTransport.DIAL_STDIO));
         }
         return new UnixSocketDockerTransport(DockerClient.DEFAULT_SOCKET);
     }

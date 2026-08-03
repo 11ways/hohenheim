@@ -35,6 +35,7 @@ public final class HostAdmission {
             throw Violations.ofForm(violation("host_not_admitted")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
+        requireVerifiedIdentity(server);
         String posture = server.get(ServerModel.POSTURE);
         if (posture == null || ServerModel.POSTURE_TRUSTED_ONLY.equals(posture)) {
             throw Violations.ofForm(violation("host_posture_refuses")
@@ -43,12 +44,34 @@ public final class HostAdmission {
     }
 
     /**
-     * The admit transition's own gate: only a host whose LAST preflight passed may be
-     * admitted, so admission can never outrun verification.
+     * A remote host must have a pinned host key an operator CONFIRMED out of band.
+     * Checked at placement as well as at admit: the admission column is a stored
+     * decision, the pin is the thing that decides whether the machine we would be
+     * talking to is the machine that decision was about.
      *
-     * @throws Violations {@code admit_needs_preflight}
+     * @throws Violations {@code host_key_unverified}
+     */
+    public static void requireVerifiedIdentity(@NonNull Row server) {
+        if (!ServerModel.MODE_SSH.equals(server.get(ServerModel.MODE))) {
+            return;
+        }
+        String pinned = server.get(ServerModel.HOST_KEY);
+        if (pinned == null || pinned.isBlank()
+            || !Boolean.TRUE.equals(server.get(ServerModel.HOST_KEY_VERIFIED))) {
+            throw Violations.ofForm(violation("host_key_unverified")
+                .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
+        }
+    }
+
+    /**
+     * The admit transition's own gate: only a host whose LAST preflight passed -- and
+     * whose identity an operator confirmed -- may be admitted, so admission can never
+     * outrun verification.
+     *
+     * @throws Violations {@code host_key_unverified} or {@code admit_needs_preflight}
      */
     public static void requireAdmittable(@NonNull Row server) {
+        requireVerifiedIdentity(server);
         if (!Boolean.TRUE.equals(server.get(ServerModel.PREFLIGHT_OK))) {
             throw Violations.ofForm(violation("admit_needs_preflight")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
