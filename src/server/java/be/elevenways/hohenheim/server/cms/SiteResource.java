@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
+import be.elevenways.hohenheim.server.docker.SiteReleases;
+import be.elevenways.hohenheim.server.sitetype.types.DockerSiteType;
 import be.elevenways.hohenheim.server.process.SiteApiKeys;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.hohenheim.server.proxy.RouteClaims.ClaimConflict;
@@ -19,6 +21,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
@@ -360,8 +363,34 @@ public class SiteResource extends RowResource {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
         actions.add(this.toggleAction());
         actions.add(this.cloneAction());
+        actions.add(this.rollbackAction());
         actions.add(this.generateApiKeyAction());
         return actions;
+    }
+
+    /**
+     * Roll a Docker site back to its retained release: one durable operation over the
+     * digest-pinned prior spec, through the same health gate as a forward release. The
+     * engine refuses with a toast when no rollback target exists.
+     */
+    private @NonNull RowAction<Row> rollbackAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "rollback_release"))
+            .label(Microcopy.of("rollback").withFilter("scope", "site"))
+            .icon(Icon.of("clock-rotate-left"))
+            .description(Microcopy.of("rollback_hint").withFilter("scope", "site"))
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("rollback").withFilter("scope", "site"))
+                .body(Microcopy.of("rollback_confirm").withFilter("scope", "site"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .build())
+            .visibleFor((row, ctx) -> DockerSiteType.ID.toString()
+                .equals(row.get(SiteModel.SITE_TYPE)))
+            .handler((row, ctx) -> {
+                SiteReleases.rollback(row.get(SiteModel.ID));
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("rollback_done").withFilter("scope", "site"));
+            })
+            .build();
     }
 
     /**

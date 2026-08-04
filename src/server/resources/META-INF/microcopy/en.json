@@ -1407,6 +1407,10 @@
     {
       "text": "Rollback",
       "scope": "stack_deploy_reason"
+    },
+    {
+      "text": "Roll back release",
+      "scope": "site"
     }
   ],
   "rollback_confirm": [
@@ -1417,6 +1421,10 @@
     {
       "text": "Re-deploy the last successful deployment? Current configuration changes stay saved but are not deployed.",
       "scope": "stack"
+    },
+    {
+      "text": "Replace the serving release with the retained prior release? The current release is retained as the new rollback target.",
+      "scope": "site"
     }
   ],
   "secret": [
@@ -1989,6 +1997,10 @@
     {
       "text": "Builds",
       "scope": "build_operation"
+    },
+    {
+      "text": "Releases",
+      "scope": "release_operation"
     },
     {
       "text": "Reconcile findings",
@@ -4177,10 +4189,16 @@
     "text": "Stop queued",
     "scope": "stack"
   },
-  "rollback_hint": {
-    "text": "Re-deploy the last successful deployment's configuration",
-    "scope": "stack"
-  },
+  "rollback_hint": [
+    {
+      "text": "Re-deploy the last successful deployment's configuration",
+      "scope": "stack"
+    },
+    {
+      "text": "Redeploy the retained prior release, pinned by image digest, through the same health gate",
+      "scope": "site"
+    }
+  ],
   "rollback_queued": {
     "text": "Rollback queued",
     "scope": "stack"
@@ -6054,6 +6072,52 @@
   },
   "site_image_build_failed": {
     "text": "Building the site image failed: {$reason}",
+    "scope": "violations"
+  },
+  "serving": {
+    "text": "Serving",
+    "scope": "runtime_role"
+  },
+  "candidate": {
+    "text": "Candidate",
+    "scope": "runtime_role"
+  },
+  "retired": {
+    "text": "Retired",
+    "scope": "runtime_role"
+  },
+  "health_path": [
+    {
+      "text": "Health path",
+      "scope": "field"
+    },
+    {
+      "text": "Path the release health gate probes on the published port before a new release may take traffic. Defaults to /; any complete HTTP response below 500 passes.",
+      "scope": "help"
+    }
+  ],
+  "rollback_done": {
+    "text": "Rolled back to the retained release",
+    "scope": "site"
+  },
+  "release_probe_failed": {
+    "text": "The candidate release never answered a healthy HTTP response: {$reason}",
+    "scope": "violations"
+  },
+  "release_no_published_port": {
+    "text": "The candidate release published no port, so it can never serve traffic",
+    "scope": "violations"
+  },
+  "release_no_rollback_target": {
+    "text": "This site has no retained release to roll back to",
+    "scope": "violations"
+  },
+  "release_no_serving_release": {
+    "text": "This site has no running release to switch traffic away from",
+    "scope": "violations"
+  },
+  "site_image_unresolvable": {
+    "text": "The site image could not be resolved to a digest: {$reason}",
     "scope": "violations"
   }
 }

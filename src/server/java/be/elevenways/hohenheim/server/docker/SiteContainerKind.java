@@ -55,12 +55,33 @@ public final class SiteContainerKind implements InstanceKindHandler {
 
     /**
      * The content-addressed ID of the build SiteInstances last ran (git-sourced sites
-     * only). Never handed to the daemon -- the spec runs the site's tag -- it exists so
-     * a NEW build is a visible settings change the convergence check redeploys on,
-     * while an unchanged rebuild converges to the cached ID and rolls nothing.
+     * only). It exists so a NEW build is a visible settings change the convergence check
+     * releases on, while an unchanged rebuild converges to the cached ID and rolls
+     * nothing; since the digest-pinning wave {@code image} carries the same digest.
      */
     public static final StringField BUILT_IMAGE_ID = SETTINGS_SCHEMA.addField(
         StringField.builder().name("built_image_id").filterable(false).build());
+
+    /**
+     * The operator-spelled image reference {@code image} was resolved FROM
+     * (image-sourced sites only): {@code image} pins the content-addressed digest the
+     * release actually runs, this keeps the human-findable name. Never an identity.
+     */
+    public static final StringField IMAGE_REF = SETTINGS_SCHEMA.addField(
+        StringField.builder().name("image_ref").filterable(false).build());
+
+    /**
+     * Identity of the SOURCE inputs this spec was resolved from (site settings with
+     * build_context replaced by commit_sha) -- the release wave's convergence
+     * discriminator. Matching it is what lets a routing reload of an unchanged
+     * git-sourced site skip the sandbox build entirely.
+     */
+    public static final StringField SOURCE_FINGERPRINT = SETTINGS_SCHEMA.addField(
+        StringField.builder().name("source_fingerprint").filterable(false).build());
+
+    /** Path the release health gate probes on the published port (default "/"). */
+    public static final StringField HEALTH_PATH = SETTINGS_SCHEMA.addField(
+        StringField.builder().name("health_path").filterable(false).build());
 
     public static final StringField TAG = SETTINGS_SCHEMA.addField(
         StringField.builder().name("tag").label(HohenheimFormCopy.label("image_tag"))

@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
+import be.elevenways.hohenheim.server.docker.SiteReleases;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.process.PortAllocator;
 import be.elevenways.hohenheim.server.process.ProcessInfrastructure;
@@ -179,6 +180,17 @@ public class ServerMain {
         } else {
             roleSkip(HohenheimRoles.Role.STACKS,
                 "stack runtime not started, interrupted-deploy sweep skipped");
+        }
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.PROXY)) {
+            // A restart mid-release leaves a durable operation claiming to be in
+            // flight: pre-switch ones lose their candidate (the prior release was
+            // never replaced), a half-flipped switch is completed and a lost drain is
+            // finished. Virtual thread for the same reason as the stack sweep: it
+            // does live daemon work and must never hold the listeners off the wire.
+            JobRunner.startVirtualThread(SiteReleases::recoverInterrupted);
+        } else {
+            roleSkip(HohenheimRoles.Role.PROXY,
+                "release recovery skipped, no sites are served here");
         }
         installShutdownHook();
         if (HohenheimRoles.enabled(HohenheimRoles.Role.FIREWALL)) {
