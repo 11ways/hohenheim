@@ -38,12 +38,16 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * The buildpack (nixpacks) lane against a REAL daemon: detection asserted on what the
  * artifact actually RUNS, the sandbox properties re-proven from INSIDE a buildpack
  * build with discriminating probes, digest stability across two identical builds, and
- * the named refusal of an undetectable repository -- nixpacks itself exits 0 on those,
- * so the refusal under test is OURS.
+ * the named refusal of an undetectable repository -- a refusal that is OURS, because
+ * nixpacks' own exit code says nothing usable about detectability ({@code plan} exits 0
+ * on an undetectable repo; {@code build} exits 1 inside a container and 0 elsewhere).
  *
  * AIDEV-NOTE: these builds pull the nixpacks runtime base image from ghcr.io INSIDE the
  * sandbox on every build (kaniko has no cross-build cache here, by design), so this
- * suite is network-heavy and the first run on a host is the slowest.
+ * suite is network-heavy and the first run on a host is the slowest. Every full build
+ * costs ~2 minutes of nix resolution that no fixture can shrink, so the class runs
+ * exactly TWO of them -- the journey's site build plus the identical twin the digest
+ * comparison needs -- and the refusal test never builds an image at all.
  */
 class NixpacksBuildLiveTest {
 
@@ -52,7 +56,7 @@ class NixpacksBuildLiveTest {
     /** Owner of the end-to-end nixpacks site journey. */
     private static final int JOURNEY_SITE_ID = 977_201;
 
-    /** Owner of the digest-stability builds; distinct so histories never mix. */
+    /** Owner of the digest-stability twin build; distinct so histories never mix. */
     private static final int STABILITY_SITE_ID = 977_202;
 
     /** Owner of the undetectable-repository refusal. */
@@ -86,20 +90,24 @@ class NixpacksBuildLiveTest {
     }
 
     /**
-     * Detection is REAL and the sandbox holds on this lane, in one journey: a
+     * Detection is REAL, the sandbox holds, and the digest is stable, in one journey: a
      * Dockerfile-less node repository, configured on the SITE as builder=nixpacks,
      * builds through the ordinary site convergence and the running artifact answers as
      * a node app -- asserted on what RUNS, not on a detection field. The same build
      * carries the in-build sandbox probes (npm build script = tenant code inside the
-     * kaniko build), each with a positive control so the probes discriminate.
+     * kaniko build), each with a positive control so the probes discriminate. An
+     * IDENTICAL twin context then builds through the direct lane and must land on the
+     * identical digest -- the same two-full-builds proof the digest property always
+     * needed, without a third build paying the nix bill a second test would cost.
      */
     @Test
-    void aNodeRepositoryWithoutADockerfileBuildsAndRunsAsANodeApp() {
+    void aNodeRepositoryBuildsRunsAndRebuildsToTheSameDigest() {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         assumeTrue(netns != null, "no private netns: the sandbox refuses to build unprotected");
         DockerClient docker = new DockerClient();
         String nonce = "n" + System.nanoTime();
-        Path context = createNodeContext("journey", nonce, true);
+        Path context = createNodeContext("journey", nonce);
+        Path twinContext = createNodeContext("journey-twin", nonce);
 
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
@@ -108,8 +116,10 @@ class NixpacksBuildLiveTest {
                 "builder", BuildOperationModel.KIND_NIXPACKS,
                 "container_port", 8080);
 
+            long buildStarted = System.nanoTime();
             SiteInstances.SiteRuntime runtime =
                 SiteInstances.ensureRunning(JOURNEY_SITE_ID, "nixpacks-journey", settings);
+            System.out.println("[timing] site build + start: " + seconds(buildStarted) + "s");
             int instanceId = runtime.instanceId();
             String handle = "hohenheim-instance-" + instanceId;
             try {
@@ -164,8 +174,40 @@ class NixpacksBuildLiveTest {
 
                 // 4. The release is pinned by digest, same contract as the dockerfile
                 //    lane -- one artifact path, one pinning discipline.
-                assertThat((String) build.get(BuildOperationModel.IMAGE_ID))
+                String journeyDigest = build.get(BuildOperationModel.IMAGE_ID);
+                assertThat(journeyDigest)
                     .as("step 4: the artifact is digest-pinned").startsWith("sha256:");
+                System.out.println("[timing] journey artifact: " + artifactMb(build) + " MB");
+
+                // 5. Digest stability, the load-bearing release property: an IDENTICAL
+                //    context built again, through the DIRECT lane this time, lands on
+                //    the identical digest. An unstable digest would roll every
+                //    buildpack site on every routing reload; a lane-dependent one would
+                //    make convergence and manual builds disagree about "unchanged", so
+                //    crossing the lanes here is deliberate and strictly stronger than
+                //    comparing two builds of the same lane.
+                //    AIDEV-NOTE: this step FAILED for real until 2026-08-05 and the
+                //    lane was NOT the reason -- nix wrote /nix/var/nix/userpool only on
+                //    the run that built a derivation locally instead of substituting it
+                //    from cache, so the assertion passed or failed on cache weather.
+                //    That is why an earlier pass of it was never a proof.
+                long twinStarted = System.nanoTime();
+                SandboxedBuilds.Result twin =
+                    nixpacksBuild(docker, STABILITY_SITE_ID, twinContext);
+                System.out.println("[timing] twin build: " + seconds(twinStarted) + "s, artifact: "
+                    + artifactMb(Models.get(BuildOperationModel.class).findById(twin.buildId()))
+                    + " MB");
+                try {
+                    assertThat(twin.succeeded())
+                        .as("step 5: the twin build succeeded (log tail: "
+                            + tail(logOf(twin)) + ")").isTrue();
+                    assertThat(twin.imageId())
+                        .as("step 5: an identical context builds to the identical digest")
+                        .isEqualTo(journeyDigest);
+                } finally {
+                    removeImage(docker, twin.tag());
+                    removeImage(docker, twin.imageId());
+                }
             } finally {
                 try {
                     SiteInstances.destroyFor(JOURNEY_SITE_ID);
@@ -181,51 +223,14 @@ class NixpacksBuildLiveTest {
             }
         });
         deleteRecursively(context);
-    }
-
-    /**
-     * Digest stability: two builds over two IDENTICAL fresh contexts produce the SAME
-     * image identity. Load-bearing for the release engine -- the digest is what a
-     * release pins, and an unstable one would roll every site on every reload.
-     */
-    @Test
-    void twoIdenticalContextsBuildToTheSameDigest() {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
-        assumeTrue(netns != null, "no private netns: the sandbox refuses to build unprotected");
-        DockerClient docker = new DockerClient();
-        String nonce = "stable";
-        Path first = createNodeContext("stable-a", nonce, false);
-        Path second = createNodeContext("stable-b", nonce, false);
-
-        Db.run(datasource, () -> {
-            HostFixtures.admitLocal();
-            SandboxedBuilds.Result one = nixpacksBuild(docker, STABILITY_SITE_ID, first);
-            SandboxedBuilds.Result two = nixpacksBuild(docker, STABILITY_SITE_ID, second);
-            try {
-                assertThat(one.succeeded())
-                    .as("step 1: the first build succeeded (log tail: "
-                        + tail(logOf(one)) + ")").isTrue();
-                assertThat(two.succeeded())
-                    .as("step 1: the second build succeeded (log tail: "
-                        + tail(logOf(two)) + ")").isTrue();
-                assertThat(two.imageId())
-                    .as("step 2: an identical context builds to the identical digest")
-                    .isEqualTo(one.imageId());
-            } finally {
-                removeImage(docker, one.tag());
-                removeImage(docker, two.tag());
-                removeImage(docker, one.imageId());
-                removeImage(docker, two.imageId());
-            }
-        });
-        deleteRecursively(first);
-        deleteRecursively(second);
+        deleteRecursively(twinContext);
     }
 
     /**
      * An undetectable repository is refused BY NAME, before anything is spent: no image
-     * build starts, no artifact exists, and the refusal is a recorded status with the
-     * detector's empty observation -- never nixpacks' own silent exit 0.
+     * build starts, no artifact exists, and the refusal is a recorded status carrying
+     * the detector's empty observation -- judged on WHAT THE DETECTOR SAW (no provider
+     * and no configured phase), never on nixpacks' own environment-dependent exit code.
      */
     @Test
     void anUndetectableRepositoryIsRefusedByName() {
@@ -240,7 +245,9 @@ class NixpacksBuildLiveTest {
             SandboxedBuilds.Result result = nixpacksBuild(docker, REFUSED_SITE_ID, context);
             String log = logOf(result);
 
-            // 1. The refusal is OURS and it is named: nixpacks exits 0 on this input.
+            // 1. The refusal is OURS and it is named. It cannot be nixpacks': `plan`
+            //    exits 0 on this input, and `build`'s exit is environment-dependent
+            //    (1 in a container, 0 elsewhere), so no exit code is a signal here.
             assertThat(result.succeeded()).as("step 1: an undetectable repo is not a success")
                 .isFalse();
             assertThat(result.status()).as("step 1: it is REFUSED, not merely failed")
@@ -250,7 +257,13 @@ class NixpacksBuildLiveTest {
                 .contains("nixpacks detected no provider");
 
             // 2. Nothing was spent past detection: the kaniko sandbox never ran (its
-            //    start line is printed only by the main build) and no artifact exists.
+            //    start line is printed only by BuildSandbox.run, never by runPhase) and
+            //    no artifact exists. The negative gets a POSITIVE ANCHOR first -- an
+            //    empty or unwritten log would satisfy doesNotContain by saying nothing,
+            //    so the same log must be shown to have captured the phase that DID run.
+            assertThat(log).as("step 2: control -- the detection phase did run and was logged")
+                .contains("nixpacks detection phase starting")
+                .contains("[nixpacks] providers:");
             assertThat(log).as("step 2: the image build never started")
                 .doesNotContain("build started under quota");
             Row row = Models.get(BuildOperationModel.class).findById(result.buildId());
@@ -286,30 +299,25 @@ class NixpacksBuildLiveTest {
 
     /**
      * A dependency-free node app: an HTTP server answering the nonce plus the node
-     * runtime version. With {@code probes}, the npm {@code build} script runs the
-     * sandbox probes as tenant code inside the image build.
+     * runtime version. The npm {@code build} script runs the sandbox probes as tenant
+     * code inside the image build.
      */
-    private static Path createNodeContext(String name, String nonce, boolean probes) {
-        String scripts = probes
-            ? "\"build\": \"node probe.js\", \"start\": \"node index.js\""
-            : "\"start\": \"node index.js\"";
+    private static Path createNodeContext(String name, String nonce) {
         Path context = createContextWith(name, Map.of(
             "package.json", """
                 {
                   "name": "hh-nixpacks-app",
                   "version": "1.0.0",
-                  "scripts": { %s }
+                  "scripts": { "build": "node probe.js", "start": "node index.js" }
                 }
-                """.formatted(scripts),
+                """,
             "index.js", """
                 const http = require('http');
                 http.createServer((req, res) => {
                   res.end('hello-%s-' + process.version + '-env=' + process.env.NODE_ENV);
                 }).listen(8080);
                 """.formatted(nonce)));
-        if (probes) {
-            write(context.resolve("probe.js"), PROBE_JS);
-        }
+        write(context.resolve("probe.js"), PROBE_JS);
         return context;
     }
 
@@ -318,6 +326,14 @@ class NixpacksBuildLiveTest {
      * beside it: the socket probe also inspects a unix socket node itself creates, and
      * the daemon probe also connects to a TCP port node itself listens on -- so
      * "absent"/"unreachable" are discriminating observations, not constants.
+     *
+     * AIDEV-NOTE: the control socket MUST stay under /tmp. /var/run looks natural but is
+     * on kaniko's default ignore list, which kaniko also skips when UNPACKING the base
+     * rootfs -- measured: /var/run does not exist at RUN time and the listen fails,
+     * killing the build. /tmp is digest-safe, also measured: two reproducible kaniko
+     * builds running this listen+close 2s apart produce byte-identical artifacts (a
+     * socket cannot enter a tar, and the dir-mtime wobble is not recorded), so the
+     * probe-bearing context stays valid for the digest-stability comparison.
      */
     private static final String PROBE_JS = """
         const fs = require('fs');
@@ -370,10 +386,13 @@ class NixpacksBuildLiveTest {
 
     /**
      * AIDEV-NOTE: the mtime pin mirrors production, where checkout slots are REUSED so
-     * unchanged tenant files keep their timestamps -- kaniko's COPY layers hash mtimes
-     * even under --reproducible, so "identical contexts" means content AND mtimes.
-     * Without it this test would depend on both temp dirs landing in the same clock
-     * second (it did, flakily).
+     * unchanged tenant files keep their timestamps. It is NOT what makes the digest
+     * stable: measured 2026-08-05 on the shipped default executor (kaniko v1.23.2),
+     * --reproducible normalizes COPY-layer mtimes for files and directories alike, so
+     * contexts differing only in mtime export byte-identical tars. Step 5 has TWO
+     * counterfactuals that really fail it -- removing --reproducible, and restoring
+     * /nix/var/nix/userpool to the snapshot -- and neither is this pin. See
+     * {@link be.elevenways.hohenheim.server.build.NixpacksBuilder}.
      */
     private static void write(Path file, String content) {
         try {
@@ -425,6 +444,23 @@ class NixpacksBuildLiveTest {
         } catch (IOException ignored) {
             // the artifact is this test's own debris
         }
+    }
+
+    /** Whole seconds since {@code startedNanos}; the class's budget is policed by wall clock. */
+    private static long seconds(long startedNanos) {
+        return (System.nanoTime() - startedNanos) / 1_000_000_000L;
+    }
+
+    /**
+     * AIDEV-NOTE: reported because it is the class's HEAP budget, not trivia -- the
+     * artifact tar crosses the sandbox boundary as one {@code byte[]} in controller
+     * memory, so this number is what decides whether two builds may ever overlap in one
+     * test fork (browserTestIsolated gives each fork 2g).
+     */
+    private static String artifactMb(Row build) {
+        Object bytes = build.get(BuildOperationModel.ARTIFACT_BYTES);
+        return bytes instanceof Number size
+            ? String.valueOf(size.longValue() / (1024 * 1024)) : "unknown";
     }
 
     private static String tail(String log) {
