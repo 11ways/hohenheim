@@ -189,28 +189,14 @@ class DockerReclaimTest {
             remove(() -> docker.removeImage(repository + ":one-alias", true));
             remove(() -> docker.removeImage(currentTag, true));
             remove(() -> docker.removeImage(unmanagedTag, true));
-            Files.deleteIfExists(context.resolve("Dockerfile"));
             Files.deleteIfExists(context);
         }
     }
 
-    /** Builds {@code tag} with a marker that makes the layer unique, returning its id. */
+    /** Loads {@code tag} with a marker that makes the layer unique, returning its id. */
     private static String build(DockerClient docker, Path context, String tag, String marker)
             throws IOException {
-        Files.writeString(context.resolve("Dockerfile"),
-            "FROM " + BASE_IMAGE + "\nRUN echo " + marker + " > /marker.txt\n");
-        docker.buildImage(context, tag, "Dockerfile");
-        return idOf(docker, tag);
-    }
-
-    private static String idOf(DockerClient docker, String tag) throws IOException {
-        for (Object entry : docker.listImages()) {
-            Map<?, ?> image = (Map<?, ?>) entry;
-            if (image.get("RepoTags") instanceof List<?> tags && tags.contains(tag)) {
-                return String.valueOf(image.get("Id"));
-            }
-        }
-        throw new AssertionError("image not present: " + tag);
+        return TestImages.load(docker, tag, marker);
     }
 
     private static List<String> imageIds(DockerClient docker) throws IOException {

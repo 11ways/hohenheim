@@ -1,9 +1,14 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.build.BuildArtifacts;
+import be.elevenways.hohenheim.server.build.BuildQuota;
+import be.elevenways.hohenheim.server.build.BuildRequest;
+import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
@@ -203,6 +208,12 @@ public final class SiteInstances {
                 new InstanceService().destroy(instance.get(InstanceModel.ID));
                 return null;
             });
+            // The workload is gone, so nothing holds the site's build artifacts any more.
+            // Without this they dangle forever: the per-build prune skips whatever a
+            // container was still using at the time, and a deleted site never builds
+            // again to retry it. Keeping NOTHING is correct here -- the release is dead.
+            BuildArtifacts.pruneSuperseded(dockerFor(Map.of()), SiteModel.MODEL_ID.toString(),
+                siteId, "");
         } catch (Violations refused) {
             throw refused;
         } catch (RuntimeException | Error unchecked) {
@@ -254,9 +265,16 @@ public final class SiteInstances {
 
     /**
      * Map the SITE settings onto the site_container kind settings. Git-sourced sites
-     * ({@code build_context} staged by GitDeployment) build the image HERE and pin the
-     * instance to the built IMAGE ID -- a new build is a visible settings change, an
-     * unchanged rebuild converges to the cached ID and does not roll the container.
+     * ({@code build_context} staged by GitDeployment) build the image in a SANDBOX here
+     * and pin the instance to the artifact's DIGEST.
+     *
+     * AIDEV-NOTE: {@code image} is set to the digest, not to the tag, and that is the
+     * point of the wave -- the deployed thing is the built thing. A tag is a mutable
+     * pointer: anything that retags {@code hohenheim-site-N:latest} at the daemon (a
+     * second controller, an operator, another build) would change what a tag-pinned
+     * release runs without changing a single record. {@code built_image_id} keeps its
+     * convergence-discriminator job (an unchanged rebuild converges to the same digest
+     * and rolls nothing), it is simply no longer the only place the digest appears.
      */
     private static @NonNull Map<String, Object> desiredSettings(@NonNull DockerClient docker,
                                                                 int siteId,
@@ -266,18 +284,22 @@ public final class SiteInstances {
         String buildContext = str(settings.get("build_context"));
         if (!buildContext.isEmpty()) {
             String tag = "hohenheim-site-" + siteId + ":latest";
-            try {
-                docker.buildImage(Path.of(buildContext), tag, str(settings.get("dockerfile")));
-                desired.put("image", tag);
-                String imageId = imageIdOf(docker, tag);
-                if (imageId != null) {
-                    desired.put("built_image_id", imageId);
-                }
-            } catch (IOException e) {
+            SandboxedBuilds.Result build = new SandboxedBuilds(docker).run(new BuildRequest(
+                SiteModel.MODEL_ID, siteId, BuildOperationModel.KIND_DOCKERFILE,
+                Path.of(buildContext), str(settings.get("dockerfile")), tag,
+                // BUILD-time args only. The site's runtime environment_variables are
+                // deliberately NOT passed: a build has no business seeing the workload's
+                // database password, and the log it produces is tenant-readable.
+                EnvVars.toMap(settings.get("build_arguments")),
+                str(settings.get("commit_sha")), null, BuildQuota.fromSettings()));
+            if (!build.succeeded() || build.imageId() == null) {
                 throw Violations.ofField("settings.image", tag,
                     Microcopy.of("site_image_build_failed").withFilter("scope", "violations")
-                        .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+                        .withArg("reason", build.failureReason() != null
+                            ? build.failureReason() : build.status()));
             }
+            desired.put("image", build.imageId());
+            desired.put("built_image_id", build.imageId());
         } else {
             String image = str(settings.get("image"));
             String tag = str(settings.get("tag"));
@@ -356,22 +378,6 @@ public final class SiteInstances {
         } catch (IOException notReusable) {
             return null;
         }
-    }
-
-    /** Resolve a local image reference to its content-addressed ID via the listing. */
-    private static @Nullable String imageIdOf(@NonNull DockerClient docker, @NonNull String tag)
-            throws IOException {
-        for (Object entry : docker.listImages()) {
-            if (!(entry instanceof Map<?, ?> image)) {
-                continue;
-            }
-            Object tags = image.get("RepoTags");
-            if (tags instanceof List<?> list && list.contains(tag)
-                    && image.get("Id") instanceof String id) {
-                return id;
-            }
-        }
-        return null;
     }
 
     /**

@@ -65,28 +65,29 @@ class DockerClientTest {
         }
     }
 
+    /**
+     * Loading an image tar is how a SANDBOXED build's artifact enters this daemon --
+     * there is no daemon-side build endpoint any more, on purpose.
+     */
     @Test
-    void buildsImageFromDockerfile() throws IOException {
+    void loadsAnImageTarAndResolvesItsDigest() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " (build base) not present");
 
-        Path context = Files.createTempDirectory("hohenheim-build-test");
-        String tag = "hohenheim-buildtest-" + System.nanoTime() + ":latest";
+        String tag = "hohenheim-loadtest-" + System.nanoTime() + ":latest";
         try {
-            Files.writeString(context.resolve("Dockerfile"),
-                "FROM alpine:latest\nRUN echo hohenheim > /built.txt\n");
-
-            docker.buildImage(context, tag, "Dockerfile");
+            String id = TestImages.load(docker, tag, "hohenheim-load-test");
+            assertThat(id).as("the loaded artifact has a content-addressed id")
+                .startsWith("sha256:");
             assertThat(imagePresent(docker, tag)).isTrue();
+            assertThat(docker.inspectImage(tag).get("Id"))
+                .as("the daemon resolves the tag to the same digest").isEqualTo(id);
         } finally {
             try {
                 docker.removeImage(tag, true);
             } catch (IOException ignored) {
                 // best effort cleanup
             }
-            Files.deleteIfExists(context.resolve("Dockerfile"));
-            Files.deleteIfExists(context);
         }
     }
 

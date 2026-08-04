@@ -443,6 +443,16 @@
       "scope": "help"
     }
   ],
+  "build_arguments": [
+    {
+      "text": "Build-argumenten",
+      "scope": "field"
+    },
+    {
+      "text": "Waarden die tijdens het BOUWEN aan de Dockerfile worden meegegeven. De runtime-omgevingsvariabelen zijn bewust niet beschikbaar voor de build, zodat een buildlog ze nooit kan lekken; een build-argument belandt wel in de image-history, zet er dus nooit een geheim in.",
+      "scope": "help"
+    }
+  ],
   "environment_variables": [
     {
       "text": "Omgevingsvariabelen",
@@ -1971,6 +1981,10 @@
     {
       "text": "Instantiequota's",
       "scope": "instance_quota"
+    },
+    {
+      "text": "Builds",
+      "scope": "build_operation"
     },
     {
       "text": "Reconciliatiebevindingen",

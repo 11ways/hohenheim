@@ -89,7 +89,7 @@ public class GitDeployment {
 
             // Step 4: Create new inner handler with adjusted paths
             if (Thread.interrupted()) throw new InterruptedException();
-            Map<String, Object> adjustedSettings = adjustPaths(targetDir);
+            Map<String, Object> adjustedSettings = adjustPaths(targetDir, commitSha);
             SiteRequestHandler newHandler = typeHandler.createHandler(site, adjustedSettings);
             return activate(newHandler, targetSlot, commitSha);
 
@@ -116,7 +116,7 @@ public class GitDeployment {
             }
             String commitSha = gitRepo.getCurrentCommit(slotDir);
             log("Rolling back to slot " + slot + " at commit " + commitSha);
-            Map<String, Object> adjustedSettings = adjustPaths(slotDir);
+            Map<String, Object> adjustedSettings = adjustPaths(slotDir, commitSha);
             SiteRequestHandler newHandler = typeHandler.createHandler(site, adjustedSettings);
             return activate(newHandler, slot, commitSha);
         } catch (InterruptedException e) {
@@ -186,7 +186,7 @@ public class GitDeployment {
             return null;
         }
 
-        Map<String, Object> adjustedSettings = adjustPaths(activeDir);
+        Map<String, Object> adjustedSettings = adjustPaths(activeDir, gitRepo.getCurrentCommit(activeDir));
         return typeHandler.createHandler(site, adjustedSettings);
     }
 
@@ -333,7 +333,7 @@ public class GitDeployment {
     /**
      * Adjust type settings by resolving relative paths against the target slot.
      */
-    private Map<String, Object> adjustPaths(File slotDir) {
+    private Map<String, Object> adjustPaths(File slotDir, String commitSha) {
         Map<String, Object> adjusted = new HashMap<>(typeSettings);
 
         String buildDir = (String) sourceSettings.get("build_directory");
@@ -358,6 +358,11 @@ public class GitDeployment {
         // DockerSiteRequestHandler builds-from-source instead of pulling a remote image.
         // Harmless for other site types, which ignore unknown settings.
         adjusted.put("build_context", baseDir.getAbsolutePath());
+        // The source identity of what is about to be built, recorded on the build
+        // operation. Harmless for site types that ignore it.
+        if (commitSha != null && !commitSha.isBlank()) {
+            adjusted.put("commit_sha", commitSha);
+        }
 
         return adjusted;
     }

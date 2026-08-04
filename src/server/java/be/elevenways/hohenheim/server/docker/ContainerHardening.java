@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -132,6 +133,24 @@ public final class ContainerHardening {
      *                                  host namespace -- loud, never silently overwritten
      */
     public static void applyTo(@NonNull Map<String, Object> containerSpec, @NonNull Profile profile) {
+        applyTo(containerSpec, profile, null);
+    }
+
+    /**
+     * Stamp the baseline, optionally with a TIGHTER process cap than the host default.
+     *
+     * AIDEV-NOTE: {@code tighterPidsLimit} can only ever LOWER the cap -- the value used
+     * is the minimum of it and {@link #pidsLimit()}. That direction is the whole reason
+     * this parameter is allowed to exist next to {@code PidsLimit} being an
+     * {@link #ESCAPE_KEYS} entry: a caller still cannot raise or remove the cap, and a
+     * workload class that wants a smaller one (the build sandbox: a Dockerfile has no
+     * business forking 512 processes) does not need a second funnel to get it.
+     *
+     * @param tighterPidsLimit the caller's own cap, or null for the host default
+     */
+    public static void applyTo(@NonNull Map<String, Object> containerSpec,
+                               @NonNull Profile profile,
+                               @Nullable Integer tighterPidsLimit) {
         Object existing = containerSpec.get("HostConfig");
         Map<String, Object> hostConfig;
         if (existing instanceof Map<?, ?> map) {
@@ -150,7 +169,11 @@ public final class ContainerHardening {
         // Blocks every setuid/file-capability escalation lane inside the container, which
         // is what makes dropping SETPCAP/SETFCAP stick rather than being re-earned.
         hostConfig.put("SecurityOpt", List.of("no-new-privileges"));
-        hostConfig.put("PidsLimit", (long) pidsLimit());
+        int pids = pidsLimit();
+        if (tighterPidsLimit != null && tighterPidsLimit > 0) {
+            pids = Math.min(pids, tighterPidsLimit);
+        }
+        hostConfig.put("PidsLimit", (long) pids);
 
         containerSpec.put("HostConfig", hostConfig);
     }

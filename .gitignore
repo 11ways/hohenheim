@@ -1,7 +1,11 @@
-# Build
+# Build. ANCHORED to the repo root deliberately: a bare "build/" matches a
+# directory of that name at ANY depth, which silently excluded the entire
+# server/build source package from a commit (the ignore is why "git add" and
+# "git status" both said nothing was missing). This is a single-project Gradle
+# build; its output is /build only.
 .gradle/
-build/
-bin/
+/build/
+/bin/
 
 # Generated artifacts
 public/cms.js

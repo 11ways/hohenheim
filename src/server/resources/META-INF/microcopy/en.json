@@ -443,6 +443,16 @@
       "scope": "help"
     }
   ],
+  "build_arguments": [
+    {
+      "text": "Build arguments",
+      "scope": "field"
+    },
+    {
+      "text": "Values passed to the Dockerfile at BUILD time only. The runtime environment variables are deliberately not available to the build, so a build log can never leak them; a build argument does end up in the image history, so never put a secret here.",
+      "scope": "help"
+    }
+  ],
   "environment_variables": [
     {
       "text": "Environment variables",
@@ -1975,6 +1985,10 @@
     {
       "text": "Instance Quotas",
       "scope": "instance_quota"
+    },
+    {
+      "text": "Builds",
+      "scope": "build_operation"
     },
     {
       "text": "Reconcile findings",

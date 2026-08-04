@@ -196,21 +196,51 @@ public class DockerClient {
     }
 
     /**
-     * Build an image from a source directory containing a Dockerfile (the basis of
-     * Hohenext's build-from-source pipeline). Blocks until the build finishes; the
-     * daemon streams progress (HTTP 200 even on failure), so this throws if the stream
-     * carries an error object.
+     * Load a docker-format image tar into the daemon ({@code POST /images/load}) -- the
+     * ONE way a built artifact enters this daemon.
      *
-     * @param contextDir build context (tarred and sent as the request body)
-     * @param tag        image tag to apply, e.g. {@code "myapp:latest"}
-     * @param dockerfile path to the Dockerfile within the context (null -> "Dockerfile")
+     * AIDEV-NOTE: there is deliberately no {@code buildImage} here any more. The daemon's
+     * own {@code /build} endpoint executes the tenant's Dockerfile INSIDE the daemon, as
+     * root on the host, with the daemon's network and no quota of any kind -- it is the
+     * control-plane trust domain by definition, which is precisely what the sandboxed
+     * builders wave exists to leave. Builds run in a hardened, quota-bound, daemonless
+     * container ({@code server.build.BuildSandbox}) and their artifact arrives here as a
+     * tar. Do not reintroduce /build: it has no sandbox to add.
+     *
+     * @return the daemon's NDJSON progress stream (the loaded reference is in it)
+     * @throws IOException when the stream carries an error object
      */
-    public void buildImage(Path contextDir, String tag, String dockerfile) throws IOException {
-        byte[] context = tarDirectory(contextDir);
-        String file = (dockerfile == null || dockerfile.isBlank()) ? "Dockerfile" : dockerfile;
-        String path = "/build?t=" + enc(tag) + "&dockerfile=" + enc(file) + "&rm=true";
-        String body = request("POST", path, context, "application/x-tar", LONG_OP_TIMEOUT_MS).body();
-        throwIfStreamError(body, "Docker image build for " + tag);
+    public String loadImage(Path imageTar) throws IOException {
+        String body = request("POST", "/images/load?quiet=false",
+            Files.readAllBytes(imageTar), "application/x-tar", LONG_OP_TIMEOUT_MS).body();
+        throwIfStreamError(body, "Docker image load from " + imageTar.getFileName());
+        return body;
+    }
+
+    /**
+     * @return the full {@code /images/{name}/json} inspection (Id, RepoTags, Config, ...)
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> inspectImage(String name) throws IOException {
+        return (Map<String, Object>) parseJson(get("/images/" + name + "/json").body());
+    }
+
+    /**
+     * The size of a container's WRITABLE LAYER, as the daemon accounts it.
+     *
+     * AIDEV-NOTE: {@code ?size=1} is not free -- the daemon walks the layer -- so this is
+     * a watchdog poll, never a status-path call. It is the only disk accounting available
+     * on an ordinary overlay2 host: the {@code --storage-opt size=} cgroup equivalent
+     * needs xfs prjquota, which hohenheim does not own.
+     *
+     * @return SizeRw in bytes, or -1 when the daemon did not report it
+     */
+    @SuppressWarnings("unchecked")
+    public long containerWritableBytes(String id) throws IOException {
+        Map<String, Object> inspect = (Map<String, Object>) parseJson(
+            get("/containers/" + id + "/json?size=1").body());
+        Object size = inspect.get("SizeRw");
+        return size instanceof Number number ? number.longValue() : -1;
     }
 
     /**
@@ -238,6 +268,20 @@ public class DockerClient {
 
     /** Conditional pull with optional private-registry credentials. */
     public void ensureImage(String image, String tag, RegistryAuth auth) throws IOException {
+        // A bare content-addressed id ("sha256:...") is a LOCAL artifact -- the shape a
+        // sandboxed build's output is pinned by. It is verified present and NEVER pulled:
+        // treating it as repo "sha256" with a tag would send the digest to a registry as
+        // a tag name and fail with an unreadable 404 on every deploy of a built site.
+        if (image.startsWith("sha256:")) {
+            for (Object entry : listImages()) {
+                if (entry instanceof Map<?, ?> local && image.equals(local.get("Id"))) {
+                    return;
+                }
+            }
+            throw new IOException("Image '" + image + "' is a content-addressed reference that"
+                + " this daemon does not have. A digest-pinned release cannot be satisfied by"
+                + " pulling (nothing publishes it); rebuild it.");
+        }
         // Digest-pinned reference (repo@sha256:...): present iff the digest is in
         // RepoDigests; pulls pass the digest via the tag parameter per the Engine API.
         int at = image.indexOf('@');
@@ -502,11 +546,23 @@ public class DockerClient {
      * @throws IllegalArgumentException when the spec carries a privilege escape
      *                                  (see {@link ContainerHardening#ESCAPE_KEYS})
      */
-    @SuppressWarnings("unchecked")
     public String createContainer(String name, Map<String, Object> spec,
                                   ContainerHardening.Profile profile) throws IOException {
+        return createContainer(name, spec, profile, null);
+    }
+
+    /**
+     * Create a hardened container with a TIGHTER process cap than the host default.
+     *
+     * @param tighterPidsLimit only ever lowers the cap (see
+     *                         {@link ContainerHardening#applyTo(Map, ContainerHardening.Profile, Integer)})
+     */
+    @SuppressWarnings("unchecked")
+    public String createContainer(String name, Map<String, Object> spec,
+                                  ContainerHardening.Profile profile,
+                                  Integer tighterPidsLimit) throws IOException {
         Map<String, Object> hardened = new LinkedHashMap<>(spec);
-        ContainerHardening.applyTo(hardened, profile);
+        ContainerHardening.applyTo(hardened, profile, tighterPidsLimit);
         String path = "/containers/create" + (name != null && !name.isBlank() ? "?name=" + enc(name) : "");
         Map<String, Object> result = (Map<String, Object>) parseJson(
             request("POST", path, toJson(hardened)).body());
