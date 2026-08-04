@@ -359,13 +359,38 @@ class DockerSiteHandlerTest {
             assertThat((String) docker.inspectContainer(containerName).get("Id"))
                 .as("step 2: unchanged checkout, unchanged container").isEqualTo(runningId);
 
-            // 3. A changed checkout builds a NEW image ID and rolls the release.
+            // 3. A changed checkout builds a NEW image ID and rolls the release THROUGH
+            //    THE HEALTH GATE (the release wave): the candidate deploys BESIDE the
+            //    serving release as its own instance, must answer HTTP on its published
+            //    port, and only then takes over; the superseded release is RETAINED as
+            //    the rollback target. The new CMD serves HTTP so the gate can pass.
+            // alpine's busybox ships no httpd applet; a forking nc responder is the
+            // minimal HTTP listener the probe can pass.
+            Files.writeString(context.resolve("answer.sh"),
+                "#!/bin/sh\nread line\nprintf 'HTTP/1.1 200 OK\\r\\n"
+                    + "Content-Length: 2\\r\\nConnection: close\\r\\n\\r\\nok'\n");
             Files.writeString(context.resolve("Dockerfile"),
-                "FROM alpine:latest\nENV RELEASE=2\nCMD [\"sleep\", \"3600\"]\n");
+                "FROM alpine:latest\nENV RELEASE=2\nCOPY answer.sh /answer.sh\n"
+                    + "RUN chmod +x /answer.sh\n"
+                    + "CMD [\"nc\", \"-lk\", \"-p\", \"8080\", \"-e\", \"/answer.sh\"]\n");
             DockerSiteRequestHandler rolled = new DockerSiteRequestHandler(siteId, settings);
             assertThat(rolled.getUpstream()).as("step 3: still serving").isNotNull();
+            Integer rolledId = rolled.getInstanceId();
+            assertThat(rolledId)
+                .as("step 3: the new release is a NEW owned instance, not an in-place roll")
+                .isNotEqualTo(instanceId);
+            Row retained = Models.get(InstanceModel.class).findById(instanceId);
+            assertThat((String) retained.get(InstanceModel.RUNTIME_ROLE))
+                .as("step 3: the superseded release is retained as the rollback target")
+                .isEqualTo(InstanceModel.ROLE_RETIRED);
             assertThat((String) docker.inspectContainer(containerName).get("Id"))
-                .as("step 3: a new build rolls the container").isNotEqualTo(runningId);
+                .as("step 3: the retained release keeps its container")
+                .isEqualTo(runningId);
+            Map<?, ?> rolledStored = (Map<?, ?>) Models.get(InstanceModel.class)
+                .findById(rolledId).get(InstanceModel.SETTINGS);
+            assertThat(String.valueOf(rolledStored.get("image")))
+                .as("step 3: the new release pins the NEW digest")
+                .startsWith("sha256:").isNotEqualTo(firstDigest);
         } finally {
             SiteInstances.destroyFor(siteId);
             try {
@@ -374,6 +399,7 @@ class DockerSiteHandlerTest {
                 // best effort cleanup
             }
             Files.deleteIfExists(context.resolve("Dockerfile"));
+            Files.deleteIfExists(context.resolve("answer.sh"));
             Files.deleteIfExists(context);
         }
     }

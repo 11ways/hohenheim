@@ -94,6 +94,8 @@ public final class HohenheimPanel extends Panel {
         // Build history serves the two tiers that produce images today (Docker sites
         // through the proxy role, container instances through the instances role).
         addIf(peers, new BuildOperationResource(), Role.PROXY, Role.INSTANCES);
+        // Release history: today only Docker sites release through the health gate.
+        addIf(peers, new ReleaseOperationResource(), Role.PROXY);
         addIf(peers, new StackResource(), Role.STACKS);
         addIf(peers, new StackServiceResource(), Role.STACKS);
         addIf(peers, new StackFileResource(), Role.STACKS);

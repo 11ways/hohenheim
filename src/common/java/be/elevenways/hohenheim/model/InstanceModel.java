@@ -228,6 +228,31 @@ public class InstanceModel extends Model {
     public static final DateTimeField GENERATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("generated_at").build());
 
+    /** {@link #RUNTIME_ROLE}: the release that answers for its owner's traffic. */
+    public static final String ROLE_SERVING = "serving";
+
+    /** {@link #RUNTIME_ROLE}: a release being deployed/probed; not yet trusted with traffic. */
+    public static final String ROLE_CANDIDATE = "candidate";
+
+    /** {@link #RUNTIME_ROLE}: a superseded release RETAINED as the rollback target. */
+    public static final String ROLE_RETIRED = "retired";
+
+    /**
+     * Which release of its owner this instance is (the health-gated release wave). A
+     * standalone instance is trivially its own serving release, which the default states;
+     * only site-attributed rows ever carry the other two values, written exclusively by
+     * SiteReleases inside the GeneratedRows system scope.
+     */
+    public static final EnumField RUNTIME_ROLE = SCHEMA.addField(EnumField.builder("runtime_role")
+        .value(ROLE_SERVING, v -> v.displayName("Serving").icon("circle-play")
+            .label(Microcopy.of("serving").withFilter("scope", "runtime_role")).color("green"))
+        .value(ROLE_CANDIDATE, v -> v.displayName("Candidate").icon("stethoscope")
+            .label(Microcopy.of("candidate").withFilter("scope", "runtime_role")).color("blue"))
+        .value(ROLE_RETIRED, v -> v.displayName("Retired").icon("box-archive")
+            .label(Microcopy.of("retired").withFilter("scope", "runtime_role")).color("gray"))
+        .defaultValue(ROLE_SERVING)
+        .build());
+
     /**
      * The controller fence of the last recorded runtime outcome. Every runtime-outcome
      * write is conditional on it ({@code claim_fence IS NULL OR claim_fence <= :myFence})

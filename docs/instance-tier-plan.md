@@ -2791,6 +2791,38 @@ network, quota, ownership, secret and durable-operation mechanisms.
   routing, drain old release, retain rollback target, then reclaim. Failed health
   never replaces the serving release. Rollback is one durable operation over a
   pinned artifact/spec, not a rebuild of mutable source.
+
+  LANDED FOR DOCKER SITES 2026-08-04 (re-verify, do not assume). Every attempt to
+  change which release serves is a durable `ReleaseOperationModel` row (the
+  BuildOperationModel shape: status walk pending/deploying/probing/switching/
+  draining, timestamped step log, M066) driven by `SiteReleases`; instances carry
+  `runtime_role` (serving/candidate/retired) so a site owns TWO releases during a
+  swap, each with its own container/port claim (the ledger arbitrates). The gate
+  is an HTTP probe against the candidate's published loopback port (`health_path`,
+  `releases.probe_*`) -- deliberately NOT the console `readiness_line` matcher,
+  which stays the template-workload gate; a refused candidate is verified-destroyed
+  and the prior release KEEPS SERVING (proven by continuous traffic through a real
+  ProxyServer: an answering-but-500 candidate never received one request).
+  ATOMICITY comes from the routing generation swap: the engine runs inside the
+  incoming generation's construction, only returns fully-probed upstreams, and
+  requests pinned to the outgoing generation finish against the old release, which
+  keeps running for `releases.drain_seconds` after the switch (counterfactually
+  proven: removing the drain window turns a swap into real 503s). RETENTION:
+  exactly one retired release per site (row + stopped container, which also pins
+  its image); reclaim runs at the end of the NEXT successful operation's drain.
+  Rollback redeploys the retained instance's digest-pinned settings -- image-
+  sourced sites are now digest-pinned too (`desiredSettings` resolves the tag once,
+  `image_ref` keeps the human name) -- proven with the tag moved AND deleted; a
+  succeeded-or-draining rollback whose `site_fingerprint` still matches PINS
+  convergence so a reload cannot silently undo it, and any source change dissolves
+  the pin. `source_fingerprint` (site settings + commit_sha, checkout paths
+  excluded) is the new convergence fast lane: an unchanged routing reload of a
+  git-sourced site no longer runs a sandbox build at all; commit-less contexts
+  never fast-lane. Boot recovery (`SiteReleases.recoverInterrupted`, ServerMain,
+  PROXY role) settles in-flight ops: pre-switch loses its candidate and stamps
+  interrupted, a half-flipped switch completes, a lost drain finishes. NOT here:
+  releases for stacks/databases/processes (their lowering waves), preview
+  deployments, per-project quotas.
 - Per-deployment build/runtime logs, environment/secret editing, persistent
   storage, managed database links, domains/TLS/DNS and notifications all use the
   existing generated/resource surfaces and shared authorization. Cross-tier

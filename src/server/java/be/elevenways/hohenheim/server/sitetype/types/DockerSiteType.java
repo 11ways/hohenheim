@@ -71,6 +71,12 @@ public class DockerSiteType implements SiteTypeHandler {
         StringMapField.builder("volumes").label(HohenheimFormCopy.label("volumes"))
             .help(HohenheimFormCopy.help("volumes")).build());
 
+    // Path the release health gate probes on the candidate's published port before it
+    // may take traffic (default "/"; any complete HTTP response below 500 passes).
+    public static final StringField HEALTH_PATH = SETTINGS_SCHEMA.addField(
+        StringField.builder().name("health_path").label(HohenheimFormCopy.label("health_path"))
+            .help(HohenheimFormCopy.help("health_path")).build());
+
     // Optional resource caps (blank = unlimited).
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("memory_limit_mb").label(HohenheimFormCopy.label("memory_limit"))

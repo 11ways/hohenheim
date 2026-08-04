@@ -19,6 +19,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -115,41 +116,60 @@ public final class SiteInstances {
                                                      @NonNull Map<String, Object> settings) {
         DockerClient docker = dockerFor(settings);
         int serverId = ServerModel.canonicalServerId(settings.get("server"));
-        Map<String, Object> desired = desiredSettings(docker, siteId, settings);
+        String siteFingerprint = SiteReleases.sourceFingerprint(siteId, settings);
 
         try {
             return inScope(siteId, () -> {
-                Row instance = ownedInstance(siteId);
-                boolean changed;
-                if (instance == null) {
-                    retireLegacyContainer(docker, siteId);
-                    instance = Models.get(InstanceModel.class).createEmptyRow();
-                    instance.set(InstanceModel.NAME,
-                        siteName != null && !siteName.isBlank() ? siteName : "site-" + siteId);
-                    instance.set(InstanceModel.KIND, SiteContainerKind.ID.toString());
-                    instance.set(InstanceModel.SETTINGS, desired);
-                    instance.set(InstanceModel.SERVER_ID, serverId);
-                    Models.get(InstanceModel.class).save(instance);
-                    changed = true;
-                } else {
-                    changed = !settingsEqual(desired, storedSettings(instance))
-                        || serverId != ServerModel.canonicalServerId(
-                            instance.get(InstanceModel.SERVER_ID));
-                    if (changed) {
-                        instance.set(InstanceModel.SETTINGS, desired);
-                        instance.set(InstanceModel.SERVER_ID, serverId);
-                        Models.get(InstanceModel.class).save(instance);
-                    }
-                }
-                int instanceId = instance.get(InstanceModel.ID);
-                if (!changed
-                        && InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS))) {
-                    InstanceStatus live = reusableStatus(docker, instanceId, desired);
+                Row serving = ownedServing(siteId);
+
+                // A build context WITHOUT a commit identity has no source fingerprint a
+                // reload can trust (the content can change under the same path), so it
+                // always resolves the spec; GitDeployment always supplies commit_sha.
+                boolean fingerprintable = str(settings.get("build_context")).isEmpty()
+                    || !str(settings.get("commit_sha")).isEmpty();
+
+                // Fast lane: unchanged source, running workload -- reuse without even
+                // resolving the spec (which for a git-sourced site means a sandbox
+                // build). The fingerprint IS the "would a release change anything" test.
+                if (fingerprintable && serving != null
+                        && InstanceModel.STATUS_RUNNING.equals(serving.get(InstanceModel.STATUS))
+                        && siteFingerprint.equals(
+                            storedSettings(serving).get("source_fingerprint"))
+                        && serverId == ServerModel.canonicalServerId(
+                            serving.get(InstanceModel.SERVER_ID))) {
+                    int servingId = serving.get(InstanceModel.ID);
+                    InstanceStatus live =
+                        reusableStatus(docker, servingId, storedSettings(serving));
                     if (live != null) {
-                        return new SiteRuntime(instanceId, live);
+                        return new SiteRuntime(servingId, live);
                     }
                 }
-                return new SiteRuntime(instanceId, new InstanceService().deploy(instanceId));
+
+                // Rollback pin: the operator rejected exactly this source, so converge
+                // on the ROLLED-BACK release instead of re-releasing the rejected spec.
+                if (serving != null && SiteReleases.pinnedByRollback(siteId, siteFingerprint)) {
+                    int servingId = serving.get(InstanceModel.ID);
+                    if (InstanceModel.STATUS_RUNNING.equals(serving.get(InstanceModel.STATUS))) {
+                        InstanceStatus live =
+                            reusableStatus(docker, servingId, storedSettings(serving));
+                        if (live != null) {
+                            return new SiteRuntime(servingId, live);
+                        }
+                    }
+                    return new SiteRuntime(servingId, new InstanceService().deploy(servingId));
+                }
+
+                if (serving == null) {
+                    retireLegacyContainer(docker, siteId);
+                    Map<String, Object> desired = desiredSettings(docker, siteId, settings);
+                    desired.put("source_fingerprint", siteFingerprint);
+                    return SiteReleases.initialRelease(siteId, siteName, serverId,
+                        desired, siteFingerprint);
+                }
+
+                // Changed source over an existing release: the health-gated lane.
+                return SiteReleases.release(docker, siteId, siteName, serverId, serving,
+                    settings, siteFingerprint);
             });
         } catch (Violations refused) {
             throw refused;
@@ -160,9 +180,9 @@ public final class SiteInstances {
         }
     }
 
-    /** Live status of the site's owned instance; DOWN-shaped when none exists. */
+    /** Live status of the site's SERVING release; DOWN-shaped when none exists. */
     public static @Nullable InstanceStatus liveStatus(int siteId) {
-        Row instance = ownedInstance(siteId);
+        Row instance = ownedServing(siteId);
         if (instance == null) {
             return null;
         }
@@ -170,18 +190,22 @@ public final class SiteInstances {
     }
 
     /**
-     * Stop the site's running release (route drop: disable, settings edit, soft delete).
-     * Never throws -- the handler teardown path must not; a failed stop leaves the
-     * claims parked by InstanceService.stop and the reconciler surfaces the rest.
+     * Stop the site's running releases (route drop: disable, settings edit, soft
+     * delete) -- the serving one plus any still-draining retired one; the retained
+     * rollback target is normally stopped already. Never throws -- the handler
+     * teardown path must not; a failed stop leaves the claims parked by
+     * InstanceService.stop and the reconciler surfaces the rest.
      */
     public static void stopFor(int siteId) {
-        Row instance = ownedInstance(siteId);
-        if (instance == null) {
-            return;
-        }
         try {
             inScope(siteId, () -> {
-                new InstanceService().stop(instance.get(InstanceModel.ID));
+                for (Row instance : ownedInstances(siteId)) {
+                    if (InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS))
+                            || InstanceModel.STATUS_STARTING.equals(
+                                instance.get(InstanceModel.STATUS))) {
+                        new InstanceService().stop(instance.get(InstanceModel.ID));
+                    }
+                }
                 return null;
             });
         } catch (Exception e) {
@@ -192,20 +216,23 @@ public final class SiteInstances {
     /**
      * Verified end of life, called explicitly by the site delete path (the
      * GameDomains.deleteForInstance shape: the instance soft-deletes, so nothing else
-     * would ever clean it up). Container removed or observed absent, claims released
-     * fully, instance row soft-deleted.
+     * would ever clean it up). EVERY release of the site dies here -- serving,
+     * retained rollback target and any in-flight candidate alike: container removed
+     * or observed absent, claims released fully, instance rows soft-deleted.
      *
-     * @throws Violations when the daemon cannot confirm the teardown -- the site delete
+     * @throws Violations when the daemon cannot confirm a teardown -- the site delete
      *         is refused rather than leaving a running container behind a dead record
      */
     public static void destroyFor(int siteId) {
-        Row instance = ownedInstance(siteId);
-        if (instance == null) {
+        List<Row> owned = ownedInstances(siteId);
+        if (owned.isEmpty()) {
             return;
         }
         try {
             inScope(siteId, () -> {
-                new InstanceService().destroy(instance.get(InstanceModel.ID));
+                for (Row instance : owned) {
+                    new InstanceService().destroy(instance.get(InstanceModel.ID));
+                }
                 return null;
             });
             // The workload is gone, so nothing holds the site's build artifacts any more.
@@ -240,17 +267,47 @@ public final class SiteInstances {
 
     // -- internals ------------------------------------------------------------
 
-    /** The live owned instance of one site, or null. */
-    static @Nullable Row ownedInstance(int siteId) {
+    /**
+     * The site's SERVING release, or null. Newest-first so a crash between the two
+     * role-flip writes of a switch (both rows briefly serving) resolves to the row the
+     * probe just passed; boot recovery completes the flip.
+     */
+    static @Nullable Row ownedServing(int siteId) {
+        return Models.get(InstanceModel.class).find()
+            .where(InstanceModel.GENERATED_FOR_MODEL.eq(SiteModel.MODEL_ID.toString()))
+            .where(InstanceModel.GENERATED_FOR_ID.eq(siteId))
+            .where(InstanceModel.RUNTIME_ROLE.eq(InstanceModel.ROLE_SERVING))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .orderBy(InstanceModel.ID, SortOrder.DESC)
+            .first();
+    }
+
+    /** Every live release of the site, whatever its role, newest first. */
+    static @NonNull List<Row> ownedInstances(int siteId) {
         return Models.get(InstanceModel.class).find()
             .where(InstanceModel.GENERATED_FOR_MODEL.eq(SiteModel.MODEL_ID.toString()))
             .where(InstanceModel.GENERATED_FOR_ID.eq(siteId))
             .where(InstanceModel.DELETED_AT.isNull())
-            .first();
+            .orderBy(InstanceModel.ID, SortOrder.DESC)
+            .all();
     }
 
     private interface ScopedWork<T> {
         T run() throws Exception;
+    }
+
+    /** {@link #inScope} for callers with no checked exceptions to surface. */
+    static void inScopeUnchecked(int siteId, @NonNull Runnable work) {
+        try {
+            inScope(siteId, () -> {
+                work.run();
+                return null;
+            });
+        } catch (RuntimeException | Error unchecked) {
+            throw unchecked;
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** Run {@code work} inside the site's GeneratedRows attribution scope. */
@@ -276,9 +333,9 @@ public final class SiteInstances {
      * convergence-discriminator job (an unchanged rebuild converges to the same digest
      * and rolls nothing), it is simply no longer the only place the digest appears.
      */
-    private static @NonNull Map<String, Object> desiredSettings(@NonNull DockerClient docker,
-                                                                int siteId,
-                                                                @NonNull Map<String, Object> settings) {
+    static @NonNull Map<String, Object> desiredSettings(@NonNull DockerClient docker,
+                                                        int siteId,
+                                                        @NonNull Map<String, Object> settings) {
         Map<String, Object> desired = new LinkedHashMap<>();
 
         String buildContext = str(settings.get("build_context"));
@@ -303,9 +360,20 @@ public final class SiteInstances {
         } else {
             String image = str(settings.get("image"));
             String tag = str(settings.get("tag"));
-            desired.put("image", image);
-            if (!tag.isEmpty()) {
-                desired.put("tag", tag);
+            String ref = tag.isEmpty() || image.contains(":") ? image : image + ":" + tag;
+            // Pin the mutable reference to the content-addressed digest it resolves to
+            // RIGHT NOW (pulling once when absent). The digest is what deploys, what a
+            // release records and what a rollback re-runs; a retag at the daemon or the
+            // registry surfaces as a CHANGED spec (a deliberate release), never as a
+            // silent difference between what the record says and what runs.
+            if (!ref.isEmpty() && !ref.startsWith("sha256:")) {
+                desired.put("image", resolveImageDigest(docker, ref));
+                desired.put("image_ref", ref);
+            } else {
+                desired.put("image", image);
+                if (!tag.isEmpty()) {
+                    desired.put("tag", tag);
+                }
             }
         }
 
@@ -316,6 +384,10 @@ public final class SiteInstances {
         Object port = settings.get("container_port");
         if (port instanceof Number number && number.intValue() > 0) {
             desired.put("container_port", number.intValue());
+        }
+        String healthPath = str(settings.get("health_path"));
+        if (!healthPath.isEmpty()) {
+            desired.put("health_path", healthPath);
         }
 
         // Injected database variables first, operator-authored ones override (the same
@@ -406,7 +478,7 @@ public final class SiteInstances {
         }
     }
 
-    private static @NonNull Map<String, Object> storedSettings(@NonNull Row instance) {
+    static @NonNull Map<String, Object> storedSettings(@NonNull Row instance) {
         Object stored = instance.get(InstanceModel.SETTINGS);
         if (stored instanceof Map<?, ?> map) {
             Map<String, Object> cast = new LinkedHashMap<>();
@@ -449,6 +521,29 @@ public final class SiteInstances {
             return true;
         }
         return Objects.equals(left, right);
+    }
+
+    /**
+     * The local content-addressed identity of a mutable image reference, pulling once
+     * when the daemon does not have it yet.
+     *
+     * @throws Violations naming the image when it cannot be resolved or pulled
+     */
+    private static @NonNull String resolveImageDigest(@NonNull DockerClient docker,
+                                                      @NonNull String ref) {
+        try {
+            try {
+                return String.valueOf(docker.inspectImage(ref).get("Id"));
+            } catch (IOException notLocal) {
+                docker.ensureImage(ref, null);
+                return String.valueOf(docker.inspectImage(ref).get("Id"));
+            }
+        } catch (IOException unavailable) {
+            throw Violations.ofField("settings.image", ref,
+                Microcopy.of("site_image_unresolvable").withFilter("scope", "violations")
+                    .withArg("reason", unavailable.getMessage() != null
+                        ? unavailable.getMessage() : "daemon unreachable"));
+        }
     }
 
     // Blank/absent server = the local daemon without an inventory lookup (works before

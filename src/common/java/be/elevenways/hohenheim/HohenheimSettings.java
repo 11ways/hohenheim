@@ -815,6 +815,48 @@ public class HohenheimSettings {
             .build();
     }
 
+    // --- Health-gated releases ---
+    public abstract class Releases {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("releases")
+            .label("Releases")
+            .describe("The health gate every Docker-site release passes before it may "
+                + "take traffic, and how long the superseded release drains before its stop")
+            .icon("rocket");
+
+        public static final SettingDefinition<Integer> PROBE_TIMEOUT_SECONDS = GROUP
+            .buildSetting("probe_timeout_seconds", Integer.class)
+            .defaultValue(60)
+            .suffix("s")
+            .description("How long a candidate release may take to answer its first "
+                + "healthy HTTP response. A candidate that never does is destroyed and "
+                + "the operation records failed; the prior release keeps serving")
+            .build();
+
+        public static final SettingDefinition<Integer> PROBE_INTERVAL_MS = GROUP
+            .buildSetting("probe_interval_ms", Integer.class)
+            .defaultValue(500)
+            .suffix("ms")
+            .description("Pause between health-probe attempts against the candidate's "
+                + "published loopback port")
+            .build();
+
+        public static final SettingDefinition<Integer> DRAIN_SECONDS = GROUP
+            .buildSetting("drain_seconds", Integer.class)
+            .defaultValue(15)
+            .suffix("s")
+            .description("How long the superseded release keeps running after traffic "
+                + "switched, so requests pinned to the outgoing routing generation "
+                + "finish against a live upstream before the workload stops")
+            .build();
+
+        public static final SettingDefinition<Integer> HISTORY_PER_SITE = GROUP
+            .buildSetting("history_per_site", Integer.class)
+            .defaultValue(50)
+            .description("Release operations kept per owning record; older rows are "
+                + "pruned when an operation completes")
+            .build();
+    }
+
     // --- Instance file manager ---
     public abstract class Files {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("files")

@@ -24,13 +24,13 @@ import java.util.Map;
  * Shared plumbing for proxy dispatch tests: runtime boot, fresh DB per test, site+domain
  * fixtures, and raw-socket HTTP exchanges against a port-0 {@link ProxyServer}.
  */
-final class ProxyTestSupport {
+public final class ProxyTestSupport {
 
     private ProxyTestSupport() {
     }
 
     /** One-time runtime boot for a test class; pair with a per-class initialized guard. */
-    static void bootRuntime() throws Exception {
+    public static void bootRuntime() throws Exception {
         SiteTypes.boot();
         HohenheimEndpoints.init();
         // resetDatabase() already points the runtime at a fresh database AND initializes
@@ -41,12 +41,12 @@ final class ProxyTestSupport {
     }
 
     /** Point the runtime at a fresh temp SQLite file and re-init. */
-    static void resetDatabase() throws Exception {
+    public static void resetDatabase() throws Exception {
         TestDatabases.freshDatabase();
     }
 
     /** Persist an enabled site of the given type with one domain. */
-    static void setupSiteWithDomain(String siteType, String hostname, String matchType,
+    public static void setupSiteWithDomain(String siteType, String hostname, String matchType,
                                     Map<String, Object> settings) {
         Row site = setupSite(siteType, "Test Site " + hostname,
             hostname.replaceAll("[^a-z0-9]+", "-"), settings);
@@ -54,7 +54,7 @@ final class ProxyTestSupport {
     }
 
     /** Persist an enabled site without domains; add them via {@link #addDomain}. */
-    static Row setupSite(String siteType, String siteName, String slug,
+    public static Row setupSite(String siteType, String siteName, String slug,
                          Map<String, Object> settings) {
         var siteModel = Models.get(SiteModel.class);
         Row site = siteModel.createEmptyRow();
@@ -69,7 +69,7 @@ final class ProxyTestSupport {
     }
 
     /** Attach a domain to a site, optionally with a path prefix. */
-    static void addDomain(Row site, String hostname, String matchType,
+    public static void addDomain(Row site, String hostname, String matchType,
                           String path, boolean stripPath) {
         var domainModel = Models.get(SiteDomainModel.class);
         Row domain = domainModel.createEmptyRow();
@@ -85,14 +85,14 @@ final class ProxyTestSupport {
     }
 
     /** Start a ProxyServer on an ephemeral HTTP port and return it. */
-    static ProxyServer startProxy() {
+    public static ProxyServer startProxy() {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         ProxyServer proxy = new ProxyServer();
         proxy.start();
         return proxy;
     }
 
-    static int httpPort(ProxyServer proxy) {
+    public static int httpPort(ProxyServer proxy) {
         return ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
     }
 
@@ -100,7 +100,7 @@ final class ProxyTestSupport {
      * Raw HTTP/1.1 exchange; returns the full response (headers + body).
      * @param extraHeaderLines additional request header lines, without CRLF
      */
-    static String rawRequest(int port, String host, String path, String... extraHeaderLines)
+    public static String rawRequest(int port, String host, String path, String... extraHeaderLines)
             throws Exception {
         try (Socket socket = new Socket("127.0.0.1", port)) {
             socket.setSoTimeout(5000);

@@ -27,7 +27,10 @@ class SettingsGroupCoverageTest {
         // were declared; this pin had simply drifted behind, which is the failure
         // mode the pin exists to make loud rather than a loader gap ("files"
         // drifted the same way when the file manager landed, caught 2026-08-04).
-        "instances", "backup", "files");
+        "instances", "backup", "files",
+        // "builds" (sandboxed builders) had drifted out of this pin the same way;
+        // caught 2026-08-04 when "releases" (health-gated releases) was added.
+        "builds", "releases");
 
     @Test
     void everyDeclaredSettingsGroupIsGuaranteedBeforeValuesLoad() {

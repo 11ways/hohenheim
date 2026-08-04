@@ -1407,6 +1407,10 @@
     {
       "text": "Terugrollen",
       "scope": "stack_deploy_reason"
+    },
+    {
+      "text": "Release terugdraaien",
+      "scope": "site"
     }
   ],
   "rollback_confirm": [
@@ -1417,6 +1421,10 @@
     {
       "text": "De laatste geslaagde deployment opnieuw deployen? Huidige wijzigingen blijven bewaard maar zijn niet gedeployed.",
       "scope": "stack"
+    },
+    {
+      "text": "De actieve release vervangen door de bewaarde vorige release? De huidige release wordt bewaard als nieuw terugdraaidoel.",
+      "scope": "site"
     }
   ],
   "secret": [
@@ -1985,6 +1993,10 @@
     {
       "text": "Builds",
       "scope": "build_operation"
+    },
+    {
+      "text": "Releases",
+      "scope": "release_operation"
     },
     {
       "text": "Reconciliatiebevindingen",
@@ -4173,10 +4185,16 @@
     "text": "Stop in wachtrij",
     "scope": "stack"
   },
-  "rollback_hint": {
-    "text": "Deploy de configuratie van de laatste geslaagde deployment opnieuw",
-    "scope": "stack"
-  },
+  "rollback_hint": [
+    {
+      "text": "Deploy de configuratie van de laatste geslaagde deployment opnieuw",
+      "scope": "stack"
+    },
+    {
+      "text": "Zet de bewaarde vorige release, vastgepind op image-digest, opnieuw in via dezelfde gezondheidscontrole",
+      "scope": "site"
+    }
+  ],
   "rollback_queued": {
     "text": "Rollback in wachtrij",
     "scope": "stack"
@@ -6050,6 +6068,52 @@
   },
   "site_image_build_failed": {
     "text": "Het bouwen van de site-image is mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "serving": {
+    "text": "Actief",
+    "scope": "runtime_role"
+  },
+  "candidate": {
+    "text": "Kandidaat",
+    "scope": "runtime_role"
+  },
+  "retired": {
+    "text": "Bewaard",
+    "scope": "runtime_role"
+  },
+  "health_path": [
+    {
+      "text": "Healthpad",
+      "scope": "field"
+    },
+    {
+      "text": "Pad dat de release-gezondheidscontrole bevraagt op de gepubliceerde poort voor een nieuwe release verkeer mag krijgen. Standaard /; elk volledig HTTP-antwoord onder 500 telt.",
+      "scope": "help"
+    }
+  ],
+  "rollback_done": {
+    "text": "Teruggedraaid naar de bewaarde release",
+    "scope": "site"
+  },
+  "release_probe_failed": {
+    "text": "De kandidaat-release gaf nooit een gezond HTTP-antwoord: {$reason}",
+    "scope": "violations"
+  },
+  "release_no_published_port": {
+    "text": "De kandidaat-release publiceerde geen poort en kan dus nooit verkeer bedienen",
+    "scope": "violations"
+  },
+  "release_no_rollback_target": {
+    "text": "Deze site heeft geen bewaarde release om naar terug te draaien",
+    "scope": "violations"
+  },
+  "release_no_serving_release": {
+    "text": "Deze site heeft geen draaiende release om verkeer van weg te schakelen",
+    "scope": "violations"
+  },
+  "site_image_unresolvable": {
+    "text": "De site-image kon niet naar een digest worden vertaald: {$reason}",
     "scope": "violations"
   }
 }
