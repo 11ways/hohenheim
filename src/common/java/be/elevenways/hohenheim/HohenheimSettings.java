@@ -749,6 +749,35 @@ public class HohenheimSettings {
                 + "privileges and no route to the control plane")
             .build();
 
+        // AIDEV-NOTE: the DETECTOR image is deliberately a plain base image, not a
+        // "nixpacks image": the pinned STATIC nixpacks binary is staged into it at phase
+        // start (NixpacksDistribution), so the image only has to provide a shell. The
+        // phase runs with NO network at all -- detection parses hostile tenant files and
+        // has no business fetching anything.
+        public static final SettingDefinition<String> DETECTOR_IMAGE = GROUP
+            .buildSetting("detector_image", String.class)
+            .defaultValue("alpine:3.21")
+            .description("Base image the nixpacks detection phase runs in. It only needs "
+                + "a POSIX shell; the pinned nixpacks binary is staged in by the sandbox "
+                + "and the phase runs without any network")
+            .build();
+
+        public static final SettingDefinition<String> NIXPACKS_VERSION = GROUP
+            .buildSetting("nixpacks_version", String.class)
+            .defaultValue("1.41.0")
+            .description("Pinned nixpacks release the buildpack lane detects with. Bump "
+                + "it together with nixpacks_sha256 -- a mismatched pair refuses every "
+                + "nixpacks build")
+            .build();
+
+        public static final SettingDefinition<String> NIXPACKS_SHA256 = GROUP
+            .buildSetting("nixpacks_sha256", String.class)
+            .defaultValue("0f55de7874507b9cf7502113120bd96f2ab6979f78d10eaf2eb2ade9207b3af6")
+            .description("sha256 of the pinned nixpacks x86_64-musl release archive. The "
+                + "download is verified against it before anything is extracted; a "
+                + "mismatch refuses the build")
+            .build();
+
         public static final SettingDefinition<Double> CPU_LIMIT = GROUP
             .buildSetting("cpu_limit", Double.class)
             .defaultValue(2.0)

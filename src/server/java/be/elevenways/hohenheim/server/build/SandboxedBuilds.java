@@ -68,11 +68,17 @@ public final class SandboxedBuilds {
         int buildId = start(request, quota);
         long startedAt = System.currentTimeMillis();
         Path artifact = null;
+        Builders builder = null;
         try {
             this.beforeSandbox.run();
-            Builders builder = Builders.forKind(request.builderKind());
-            BuildPlan plan = builder.plan(request, buildId, log);
-            BuildSandbox.Outcome outcome = new BuildSandbox(this.docker, this.policy)
+            builder = Builders.forKind(request.builderKind());
+            BuildSandbox sandbox = new BuildSandbox(this.docker, this.policy);
+            BuildPlan plan = builder.plan(request, buildId, log, sandbox);
+            recordDetection(buildId, builder);
+            // A builder pre-phase (detection) spends the build's OWN wall clock: the
+            // image build gets what remains, so the total stays quota-bound.
+            quota = quota.afterElapsed(System.currentTimeMillis() - startedAt);
+            BuildSandbox.Outcome outcome = sandbox
                 .run(buildId, plan, quota, request.contextDir(), log);
             artifact = outcome.artifact();
             if (!outcome.succeeded()) {
@@ -97,6 +103,9 @@ public final class SandboxedBuilds {
         } catch (IOException refused) {
             String reason = refused.getMessage() != null ? refused.getMessage() : refused.toString();
             log.line("[hohenheim] " + reason);
+            // A refused detection still records what the detector SAW -- "why was this
+            // refused" must never be log archaeology.
+            recordDetection(buildId, builder);
             return finish(buildId, request, BuildOperationModel.STATUS_REFUSED, null, -1,
                 reason, log, 0, 0, startedAt);
         } catch (RuntimeException unexpected) {
@@ -111,6 +120,20 @@ public final class SandboxedBuilds {
             // to prevent, and every failure path above runs through here.
             BuildCredentials.revokeAll(buildId);
             BuildSandbox.deleteQuietly(artifact);
+        }
+    }
+
+    /** Persist a builder kind's inspectable detection result onto the operation. */
+    private static void recordDetection(int buildId, @Nullable Builders builder) {
+        String detection = builder != null ? builder.detection() : null;
+        if (detection == null) {
+            return;
+        }
+        BuildOperationModel model = Models.get(BuildOperationModel.class);
+        Row row = model.findById(buildId);
+        if (row != null) {
+            row.set(BuildOperationModel.DETECTION, detection);
+            model.save(row);
         }
     }
 

@@ -58,6 +58,17 @@ public record BuildQuota(double cpus, int memoryMb, long diskBytes, long timeout
             Math.max(MIN_DISK_BYTES, (artifactMb != null ? artifactMb : 1024) * 1024L * 1024L));
     }
 
+    /**
+     * The same quota with the wall-clock budget REDUCED by time already consumed (a
+     * builder pre-phase); never below the floor, so a spent budget still times out
+     * through the sandbox's own recorded path instead of a zero-second race.
+     */
+    public @NonNull BuildQuota afterElapsed(long elapsedMs) {
+        return new BuildQuota(this.cpus, this.memoryMb, this.diskBytes,
+            Math.max(MIN_TIMEOUT_MS, this.timeoutMs - Math.max(0, elapsedMs)),
+            this.pidsLimit, this.logBytes, this.artifactBytes);
+    }
+
     /** The cgroup half, in the type the container spec already speaks. */
     public @NonNull ResourceLimits limits() {
         return ResourceLimits.of(this.memoryMb, this.cpus);

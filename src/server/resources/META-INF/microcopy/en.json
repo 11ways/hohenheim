@@ -443,6 +443,16 @@
       "scope": "help"
     }
   ],
+  "builder": [
+    {
+      "text": "Builder",
+      "scope": "field"
+    },
+    {
+      "text": "How a git checkout becomes an image. Nixpacks detects the language and needs no Dockerfile in the repository.",
+      "scope": "help"
+    }
+  ],
   "build_arguments": [
     {
       "text": "Build arguments",

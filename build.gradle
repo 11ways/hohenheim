@@ -310,6 +310,9 @@ task browserTest(type: Test) {
     }
     filter.failOnNoMatchingTests = false
     maxParallelForks = Math.min(Math.max(Runtime.runtime.availableProcessors().intdiv(2) - 1, 1), 4)
+    // Gradle's Test default is 512m; the build lane buffers an image tar through heap
+    // (bounded by builds.max_artifact_mb), so a realistic artifact needs real headroom.
+    maxHeapSize = '2g'
     timeout = java.time.Duration.ofMinutes(30)
 
     systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')
@@ -336,6 +339,8 @@ task browserTestIsolated(type: Test) {
     }
     filter.failOnNoMatchingTests = false
     maxParallelForks = Math.min(Math.max(Runtime.runtime.availableProcessors().intdiv(2) - 1, 1), 4)
+    // See browserTest: the buffered artifact read outgrows Gradle's 512m default.
+    maxHeapSize = '2g'
     forkEvery = 1
     timeout = java.time.Duration.ofMinutes(30)
 

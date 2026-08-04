@@ -342,7 +342,8 @@ public final class SiteInstances {
         if (!buildContext.isEmpty()) {
             String tag = "hohenheim-site-" + siteId + ":latest";
             SandboxedBuilds.Result build = new SandboxedBuilds(docker).run(new BuildRequest(
-                SiteModel.MODEL_ID, siteId, BuildOperationModel.KIND_DOCKERFILE,
+                SiteModel.MODEL_ID, siteId,
+                BuildOperationModel.kindOrDefault(settings.get("builder")),
                 Path.of(buildContext), str(settings.get("dockerfile")), tag,
                 // BUILD-time args only. The site's runtime environment_variables are
                 // deliberately NOT passed: a build has no business seeing the workload's

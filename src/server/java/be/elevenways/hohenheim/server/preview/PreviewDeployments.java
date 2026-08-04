@@ -172,7 +172,8 @@ public final class PreviewDeployments {
             // 2. Sandboxed, digest-pinned build of the preview's image.
             SandboxedBuilds.Result build = new SandboxedBuilds(new DockerClient())
                 .run(new BuildRequest(PreviewDeploymentModel.MODEL_ID, previewId,
-                    BuildOperationModel.KIND_DOCKERFILE, checkout.toPath(),
+                    BuildOperationModel.kindOrDefault(siteSettings.get("builder")),
+                    checkout.toPath(),
                     str(siteSettings.get("dockerfile")).isEmpty()
                         ? null : str(siteSettings.get("dockerfile")),
                     "hohenheim-preview-" + previewId + ":latest",

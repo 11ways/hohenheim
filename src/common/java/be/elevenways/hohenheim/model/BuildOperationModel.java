@@ -42,12 +42,23 @@ public class BuildOperationModel extends Model {
     public static final String KIND_DOCKERFILE = "dockerfile";
 
     /**
-     * A buildpack/Nixpacks-style build: DECLARED, not implemented. The named path is a
-     * plan phase that emits a Dockerfile into the context, after which the identical
-     * sandbox and the identical record run the identical Dockerfile build -- see
-     * {@code be.elevenways.hohenheim.server.build.Builders}.
+     * A buildpack/Nixpacks-style build: a sandboxed detection phase emits a Dockerfile
+     * into the context, after which the identical sandbox and the identical record run
+     * the identical Dockerfile build -- see
+     * {@code be.elevenways.hohenheim.server.build.NixpacksBuilder}. What was detected is
+     * recorded in {@link #DETECTION}.
      */
     public static final String KIND_NIXPACKS = "nixpacks";
+
+    /**
+     * The builder kind a site's stored {@code builder} setting names, defaulting to
+     * {@link #KIND_DOCKERFILE} for the blank/legacy value. An unknown kind passes
+     * through unmapped so {@code Builders.forKind} refuses it by name.
+     */
+    public static String kindOrDefault(Object value) {
+        String kind = value == null ? "" : String.valueOf(value).trim();
+        return kind.isEmpty() ? KIND_DOCKERFILE : kind;
+    }
 
     public static final String STATUS_RUNNING = "running";
     public static final String STATUS_SUCCEEDED = "succeeded";
@@ -103,6 +114,15 @@ public class BuildOperationModel extends Model {
 
     public static final TextField LOG = SCHEMA.addField(
         TextField.builder().name("log").build());
+
+    /**
+     * The INSPECTABLE detection record of a detecting builder kind (nixpacks): tool +
+     * pinned version, the providers it named, the full plan it derived and the Dockerfile
+     * it emitted, as JSON. Written even when the build was REFUSED, so "what did the
+     * detector see" is a column, never log archaeology. Null for the dockerfile kind.
+     */
+    public static final TextField DETECTION = SCHEMA.addField(
+        TextField.builder().name("detection").build());
 
     // -- the quota that was in force, recorded so a failure is explainable ------
 

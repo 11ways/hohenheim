@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.options.ServerOptions;
@@ -42,6 +43,17 @@ public class DockerSiteType implements SiteTypeHandler {
     public static final StringField DOCKERFILE = SETTINGS_SCHEMA.addField(
         PathField.builder().name("dockerfile").label(HohenheimFormCopy.label("dockerfile"))
             .help(HohenheimFormCopy.help("dockerfile")).build());
+
+    // Which builder kind a git-sourced checkout is built with. Nixpacks runs a sandboxed
+    // detection phase that emits a Dockerfile, then the same Dockerfile lane runs.
+    public static final EnumField BUILDER = SETTINGS_SCHEMA.addField(
+        EnumField.builder("builder")
+            .value(BuildOperationModel.KIND_DOCKERFILE, "Dockerfile")
+            .value(BuildOperationModel.KIND_NIXPACKS, "Nixpacks (buildpack)")
+            .defaultValue(BuildOperationModel.KIND_DOCKERFILE)
+            .label(HohenheimFormCopy.label("builder"))
+            .help(HohenheimFormCopy.help("builder"))
+            .build());
 
     // AIDEV-NOTE: BUILD-time arguments, and deliberately a SEPARATE field from
     // ENVIRONMENT_VARIABLES rather than a reuse of it. The runtime environment carries the

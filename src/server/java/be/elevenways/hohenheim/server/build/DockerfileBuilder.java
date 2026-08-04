@@ -41,7 +41,8 @@ public final class DockerfileBuilder implements Builders {
 
     @Override
     public @NonNull BuildPlan plan(@NonNull BuildRequest request, int buildId,
-                                   @NonNull BuildLog log) throws IOException {
+                                   @NonNull BuildLog log, @NonNull BuildSandbox sandbox)
+            throws IOException {
         String dockerfile = request.dockerfile() == null || request.dockerfile().isBlank()
             ? "Dockerfile" : request.dockerfile().trim();
         requireInsideContext(request.contextDir(), dockerfile);
