@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim;
 
+import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.zenit.client.ClientZenitRuntime;
 import be.elevenways.zenit.common.Zenit;
 
@@ -13,6 +14,8 @@ import be.elevenways.zenit.common.Zenit;
 public class ClientMain {
 
     public static void main(String[] args) throws Exception {
+        // The stats channel must be registered before the Stats tag opens a link.
+        HohenheimChannels.init();
         ClientZenitRuntime.main(null);
         Zenit.ROOT_STAGE.launch();
     }

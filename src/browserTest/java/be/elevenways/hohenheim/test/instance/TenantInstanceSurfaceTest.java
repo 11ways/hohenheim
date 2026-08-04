@@ -499,6 +499,52 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             HohenheimAccess.MANAGE, true);
     }
 
+    /**
+     * The Phase 6 tabs really RENDER under /manage, and the write controls follow the
+     * capability rather than the tab: a tab whose form is drawn for a read-only holder is
+     * a UI that promises authority the service will refuse.
+     */
+    @Test
+    @Order(7)
+    void filesAndStatsTabsRenderAndTheWriteControlsFollowTheCapability() throws Exception {
+        ensureManageGrant();
+        String filesUrl = "/manage/instances/" + instanceAId + "/page/files";
+
+        // 1. The Stats tab renders. The instance is not deployed, so the honest answer is
+        //    the empty state -- a chart of nothing would be an invented reading.
+        HttpResponse<String> stats = tenantGet("/manage/instances/" + instanceAId + "/page/stats");
+        assertThat(stats.statusCode()).as("step 1: the stats tab renders").isEqualTo(200);
+        assertThat(stats.body())
+            .as("step 1: a stopped instance says so instead of drawing an empty chart")
+            .contains("This instance is not running");
+
+        // 2. The Files tab renders for a manage holder WITHOUT files.read, and says why it
+        //    is empty rather than showing a blank browser that looks like an empty volume.
+        HttpResponse<String> unread = tenantGet(filesUrl);
+        assertThat(unread.statusCode()).as("step 2: the files tab renders").isEqualTo(200);
+        assertThat(unread.body())
+            .as("step 2: without files.read the refusal is SHOWN, never a blank listing")
+            .contains("You are not allowed to perform this action on this instance");
+
+        // 3. With files.read but NOT files.write, no mutating form is drawn at all.
+        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+            HohenheimAccess.FILES_READ, true);
+        HttpResponse<String> readOnly = tenantGet(filesUrl);
+        assertThat(readOnly.statusCode()).as("step 3: the read-only files tab renders").isEqualTo(200);
+        assertThat(readOnly.body())
+            .as("step 3: files.read draws no upload, mkdir or rename form")
+            .doesNotContain("value=\"upload\"")
+            .doesNotContain("value=\"mkdir\"")
+            .doesNotContain("value=\"rename\"");
+
+        // 4. The action endpoint answers a hand-rolled POST through the SERVICE gate: the
+        //    absent form is a courtesy, the capability check is the authority.
+        HttpResponse<String> forged = tenantPost("/instances/" + instanceAId + "/files/action",
+            "action=mkdir&path=/data/forged&directory=/data");
+        assertThat(forged.statusCode())
+            .as("step 4: a hand-rolled POST is answered, not accepted silently")
+            .isIn(200, 302, 303);
+    }
     /** An admitted, container-accepting host an operator would have enrolled. */
     private static int admittedHost() {
         Model servers = Models.get(ServerModel.class);

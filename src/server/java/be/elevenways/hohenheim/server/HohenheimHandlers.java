@@ -23,9 +23,11 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.files.InstanceFileEndpoints;
 import be.elevenways.hohenheim.server.instance.InstanceApi;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
+import be.elevenways.hohenheim.server.instance.InstanceStatsHandler;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
 import be.elevenways.hohenheim.server.cms.CertificateRequestForm;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
@@ -105,6 +107,8 @@ public final class HohenheimHandlers {
         initDevTunnel();
         initApi();
         InstanceApi.init();
+        InstanceFileEndpoints.init();
+        InstanceStatsHandler.init();
     }
 
     // -----------------------------------------------------------------------

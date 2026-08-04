@@ -1,0 +1,194 @@
+{#- Files tab on an instance: a browser over its OWN volumes, plus an inline editor.
+    Every write control is rendered behind canWrite, which is an AFFORDANCE only --
+    the action endpoint asks InstanceFiles for files.write no matter what was drawn. -#}
+{% declare title: String %}
+{% declare instanceName: String %}
+{% declare instanceId: Integer %}
+{% declare path: String = "" %}
+{% declare parentPath: String = "" %}
+{% declare volumes: List %}
+{% declare crumbs: List %}
+{% declare entries: List %}
+{% declare canWrite: Boolean = false %}
+{% declare maxFileBytes: Long = 0 %}
+{% declare error: String = "" %}
+{% declare editPath: String = "" %}
+{% declare editContent: String = "" %}
+{% declare actionUrl: String %}
+{% declare downloadBase: String %}
+{% declare browseBase: String %}
+{% declare returnUrl: String = "" %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ instanceName }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if error != "" %}
+        <pl-alert variant="destructive">{{ error }}</pl-alert>
+    {% /if %}
+
+    {% if volumes %}
+        <pl-breadcrumb>
+            {% each volumes as volumeIndex, volume %}
+            <pl-breadcrumb-item>
+                <pl-breadcrumb-link href={% browseBase + volume %}>{{ volume }}</pl-breadcrumb-link>
+            </pl-breadcrumb-item>
+            {% /each %}
+        </pl-breadcrumb>
+    {% /if %}
+
+    {% if crumbs %}
+        <pl-breadcrumb>
+            {% each crumbs as crumbIndex, crumb %}
+            <pl-breadcrumb-item>
+                <pl-breadcrumb-link href={% browseBase + crumb.get("path") %}>{{ crumb.get("label") }}</pl-breadcrumb-link>
+            </pl-breadcrumb-item>
+            {% /each %}
+        </pl-breadcrumb>
+    {% /if %}
+
+    {% if path != "" %}
+    <pl-card>
+        <pl-card-content>
+            {% if parentPath != "" %}
+                <pl-button variant="outline" href={% browseBase + parentPath %}>{{ t("up", scope: "instance_files") }}</pl-button>
+            {% /if %}
+
+            {% if entries %}
+            <pl-table striped={% true %}>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>{{ t("name", scope: "instance_files") }}</pl-table-head>
+                    <pl-table-head>{{ t("size", scope: "instance_files") }}</pl-table-head>
+                    <pl-table-head>{{ t("mode", scope: "instance_files") }}</pl-table-head>
+                    <pl-table-head>{{ t("actions", scope: "instance_files") }}</pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each entries as entryIndex, entry %}
+                    <pl-table-row>
+                        <pl-table-cell>
+                            {% if entry.get("directory") %}
+                                <a href={% browseBase + entry.get("path") %}><code>{{ entry.get("name") }}/</code></a>
+                            {% else %}
+                                <code>{{ entry.get("name") }}</code>
+                            {% /if %}
+                            {% if entry.get("symlink") %}
+                                <pl-badge variant="warning">{{ t("symlink", scope: "instance_files") }}</pl-badge>
+                            {% /if %}
+                            {% if entry.get("managed") %}
+                                <pl-badge variant="secondary">{{ t("managed", scope: "instance_files") }}</pl-badge>
+                            {% /if %}
+                        </pl-table-cell>
+                        <pl-table-cell>{{ entry.get("size") }}</pl-table-cell>
+                        <pl-table-cell><code>{{ entry.get("mode") }}</code></pl-table-cell>
+                        <pl-table-cell>
+                            {% if entry.get("editable") %}
+                                <pl-button size="sm" variant="ghost" href={% browseBase + path + "&edit=" + entry.get("path") %}>{{ t("edit", scope: "instance_files") }}</pl-button>
+                            {% /if %}
+                            {% if entry.get("kind") == "FILE" %}
+                                <pl-button size="sm" variant="ghost" href={% downloadBase + entry.get("path") %}>{{ t("download", scope: "instance_files") }}</pl-button>
+                            {% /if %}
+                            {% if canWrite %}
+                            <form method="POST" action={% actionUrl %} class="instance-files-inline">
+                                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="directory" value={% path %}>
+                                <input type="hidden" name="path" value={% entry.get("path") %}>
+                                <pl-button size="sm" variant="destructive" type={% "submit" %}>{{ t("delete", scope: "instance_files") }}</pl-button>
+                            </form>
+                            {% /if %}
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% else %}
+            <pl-empty-state icon="folder-open">
+                <pl-empty-state-title>{{ t("empty", scope: "instance_files") }}</pl-empty-state-title>
+            </pl-empty-state>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+    {% /if %}
+
+    {% if editPath != "" %}
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>{{ editPath }}</pl-card-title>
+        </pl-card-header>
+        <pl-card-content>
+            <form method="POST" action={% actionUrl %}>
+                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+                <input type="hidden" name="action" value="save">
+                <input type="hidden" name="directory" value={% path %}>
+                <input type="hidden" name="path" value={% editPath %}>
+                <pl-field>
+                    <pl-textarea name="content" value={% editContent %} disabled={% !canWrite %}></pl-textarea>
+                </pl-field>
+                {% if canWrite %}
+                    <pl-button variant="primary" type={% "submit" %}>{{ t("save", scope: "instance_files") }}</pl-button>
+                {% else %}
+                    <p>{{ t("read_only", scope: "instance_files") }}</p>
+                {% /if %}
+            </form>
+        </pl-card-content>
+    </pl-card>
+    {% /if %}
+
+    {% if canWrite %}
+    {% if path != "" %}
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>{{ t("add", scope: "instance_files") }}</pl-card-title>
+            <pl-card-description>{{ t("upload_limit", scope: "instance_files", bytes: maxFileBytes) }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <form method="POST" action={% actionUrl %} enctype="multipart/form-data">
+                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+                <input type="hidden" name="action" value="upload">
+                <input type="hidden" name="directory" value={% path %}>
+                <pl-field>
+                    <pl-label>{{ t("target_path", scope: "instance_files") }}</pl-label>
+                    <pl-input name="path" value={% path + "/" %}></pl-input>
+                </pl-field>
+                <pl-file-upload name="file"></pl-file-upload>
+                <pl-button variant="primary" type={% "submit" %}>{{ t("upload", scope: "instance_files") }}</pl-button>
+            </form>
+
+            <form method="POST" action={% actionUrl %}>
+                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+                <input type="hidden" name="action" value="mkdir">
+                <input type="hidden" name="directory" value={% path %}>
+                <pl-field>
+                    <pl-label>{{ t("new_directory", scope: "instance_files") }}</pl-label>
+                    <pl-input name="path" value={% path + "/" %}></pl-input>
+                </pl-field>
+                <pl-button variant="outline" type={% "submit" %}>{{ t("create", scope: "instance_files") }}</pl-button>
+            </form>
+
+            <form method="POST" action={% actionUrl %}>
+                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+                <input type="hidden" name="action" value="rename">
+                <input type="hidden" name="directory" value={% path %}>
+                <pl-field>
+                    <pl-label>{{ t("rename_from", scope: "instance_files") }}</pl-label>
+                    <pl-input name="path" value={% path + "/" %}></pl-input>
+                </pl-field>
+                <pl-field>
+                    <pl-label>{{ t("rename_to", scope: "instance_files") }}</pl-label>
+                    <pl-input name="target" value={% path + "/" %}></pl-input>
+                </pl-field>
+                <pl-button variant="outline" type={% "submit" %}>{{ t("rename", scope: "instance_files") }}</pl-button>
+            </form>
+        </pl-card-content>
+    </pl-card>
+    {% /if %}
+    {% /if %}
+</section>
+{% /block %}

@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -26,6 +28,9 @@ import java.util.Map;
  * VALUES NEVER RENDERED -- key and kind only) and config files.
  */
 public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
+
+    /** The admin config-file resource's slug; the panel is asked for it, never assumed. */
+    private static final String FILE_RESOURCE_SLUG = "instance-files";
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_provisioning"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("provisioning").withFilter("scope", "instance"); }
@@ -57,12 +62,22 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
             variables.add(entry);
         }
 
+        // AIDEV-NOTE: the config-file editor is an ADMIN peer, and this page renders under
+        // /manage too. Emitting its URLs unconditionally handed every tenant 404 links on
+        // their own Provisioning tab. The links are now derived from what the HOSTING PANEL
+        // actually offers -- ask the panel, never assume a slug exists -- so /manage renders
+        // the same rows read-only and a later decision to delegate the editor lights them up
+        // with no change here.
+        Panel panel = PanelRegistry.getBySlug(CmsSupport.panelSlug(conduit));
+        boolean editable = panel != null && panel.peerBySlug(FILE_RESOURCE_SLUG) != null;
+
         List<Map<String, Object>> files = new ArrayList<>();
         for (Row file : Models.get(InstanceFileModel.class).findByInstanceId(instanceId)) {
             Map<String, Object> entry = new HashMap<>();
             entry.put("path", file.get(InstanceFileModel.CONTAINER_PATH));
             entry.put("mode", file.get(InstanceFileModel.MODE));
-            entry.put("editUrl", basePath + "/instance-files/" + file.get(InstanceFileModel.ID));
+            entry.put("editUrl", editable
+                ? basePath + "/" + FILE_RESOURCE_SLUG + "/" + file.get(InstanceFileModel.ID) : "");
             files.add(entry);
         }
 
@@ -80,7 +95,8 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
         vars.put("installError", installError == null ? "" : installError);
         vars.put("variables", variables);
         vars.put("files", files);
-        vars.put("addFileUrl", basePath + "/instance-files/new?instance_id=" + instanceId);
+        vars.put("addFileUrl", editable
+            ? basePath + "/" + FILE_RESOURCE_SLUG + "/new?instance_id=" + instanceId : "");
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-provisioning"), vars);
     }

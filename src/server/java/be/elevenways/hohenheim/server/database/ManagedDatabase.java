@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -332,6 +333,16 @@ public class ManagedDatabase {
     }
 
     /**
+     * The heap guard on a binary dump fetch: the archive API buffers the whole response
+     * through controller memory, so an unbounded read here is an OOM waiting for a big
+     * enough database.
+     */
+    private static long maxDumpBytes() {
+        Integer megabytes = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.MAX_DUMP_MB);
+        return (megabytes == null || megabytes <= 0 ? 2048L : megabytes.longValue()) * 1024 * 1024;
+    }
+
+    /**
      * Back up any engine to a file: SQL text for Postgres/MySQL, the engine's native binary dump
      * for Redis (RDB snapshot) and Mongo (mongodump archive). Binary dumps are produced inside
      * the container, then fetched out via the archive API.
@@ -353,7 +364,7 @@ public class ManagedDatabase {
                 if (save.exitCode() != 0) {
                     throw new IOException("redis dump failed for '" + name + "': " + save.stderr().trim());
                 }
-                Files.write(target, docker.getArchiveFile(containerName, rdbPath));
+                Files.write(target, docker.getArchiveFile(containerName, rdbPath, maxDumpBytes()));
             }
             case MONGO -> {
                 String archivePath = "/tmp/hohenheim-dump.archive";
@@ -363,7 +374,7 @@ public class ManagedDatabase {
                 if (dump.exitCode() != 0) {
                     throw new IOException("mongodump failed for '" + name + "': " + dump.stderr().trim());
                 }
-                Files.write(target, docker.getArchiveFile(containerName, archivePath));
+                Files.write(target, docker.getArchiveFile(containerName, archivePath, maxDumpBytes()));
             }
         }
     }

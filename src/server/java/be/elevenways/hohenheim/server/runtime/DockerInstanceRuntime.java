@@ -4,7 +4,10 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 
+import be.elevenways.protoblast.common.Blast;
+
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -40,7 +43,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class DockerInstanceRuntime
         implements InstanceRuntime, VolumeSnapshotSupport, FileStagingSupport, InstallSupport,
-                   ConsoleStreamSupport, LinkNetworkSupport {
+                   ConsoleStreamSupport, LinkNetworkSupport, InstanceFileSupport,
+                   StatsStreamSupport {
 
     private final @NonNull DockerClient docker;
     private final @NonNull WorkloadNetworkPolicy policy;
@@ -281,15 +285,7 @@ public final class DockerInstanceRuntime
         // The materialize-on-change path pushes into a container that already exists,
         // so the container must be attributably OURS: a same-named foreign container
         // is a name collision, never a push target.
-        Map<String, Object> inspect = this.docker.inspectContainer(handle);
-        Object labels = inspect.get("Config") instanceof Map<?, ?> config
-            ? config.get("Labels") : null;
-        OwnerLabels.Owner expected = OwnerLabels.parse(ownerLabels);
-        OwnerLabels.Owner actual = OwnerLabels.parse(labels instanceof Map<?, ?> map ? map : null);
-        if (expected == null || actual == null || !expected.equals(actual)) {
-            throw new IOException("REFUSED to stage config files into '" + handle
-                + "': the container is not attributably ours (labels: " + labels + ")");
-        }
+        requireOurs(handle, ownerLabels, "stage config files into");
         // The StackDeployer staging shape: a temp tree pushed through the archive API,
         // so remote daemons work identically and no host bind mount ever exists.
         java.nio.file.Path staging = java.nio.file.Files.createTempDirectory("hohenheim-instance-files");
@@ -348,6 +344,237 @@ public final class DockerInstanceRuntime
         } catch (IOException ignored) {
             // best-effort temp cleanup
         }
+    }
+
+    // -- InstanceFileSupport --------------------------------------------------
+
+    /**
+     * The ONE shell script the file manager runs, per operation. Every one of them is a
+     * CONSTANT: the paths it works on arrive as ENVIRONMENT VARIABLES and are only ever
+     * referenced quoted, so no filename can become a command no matter what it contains.
+     * A path is never interpolated into these strings.
+     *
+     * AIDEV-NOTE: list/mkdir/rename/delete go through {@code docker exec} and NOT through
+     * the archive API, for two reasons that are both structural. (1) The archive API has
+     * no listing, rename or delete verb at all -- a directory GET is a fully RECURSIVE
+     * tar, so "list a 20 GiB world directory" would transfer 20 GiB. (2) An exec runs as
+     * the container's OWN configured user, so a directory it creates is owned by the
+     * workload; a tar extraction lands root-owned, which is exactly how a staged config
+     * file once bricked a non-root image. The cost is that these four verbs need a RUNNING
+     * workload with a POSIX shell, and that refusal is named and loud (never an empty
+     * listing). Read/write/stat deliberately stay on the archive API and work on a
+     * STOPPED container.
+     */
+    private static final String LIST_SCRIPT =
+        "find \"$HH_FM_PATH\" -maxdepth 1 -mindepth 1 -exec stat -c '%f %s %Y %n' {} \\;";
+    private static final String MKDIR_SCRIPT = "mkdir \"$HH_FM_PATH\"";
+    private static final String RENAME_SCRIPT = "mv -- \"$HH_FM_PATH\" \"$HH_FM_TARGET\"";
+    private static final String DELETE_SCRIPT = "rm -f -- \"$HH_FM_PATH\"";
+    private static final String DELETE_TREE_SCRIPT = "rm -rf -- \"$HH_FM_PATH\"";
+    /** uid:gid of a path, used to keep a rewritten file owned by whoever owned its directory. */
+    private static final String OWNER_SCRIPT = "stat -c '%u:%g' \"$HH_FM_PATH\"";
+    private static final String CHOWN_SCRIPT = "chown \"$HH_FM_OWNER\" \"$HH_FM_PATH\"";
+
+    @Override
+    public @NonNull List<Entry> listDirectory(@NonNull String handle, @NonNull String path,
+                                              int maxEntries) throws IOException {
+        String output = runFileScript(handle, LIST_SCRIPT, Map.of("HH_FM_PATH", path));
+        List<Entry> entries = new ArrayList<>();
+        String prefix = path.endsWith("/") ? path : path + "/";
+        for (String line : output.split("\n")) {
+            if (line.isEmpty()) {
+                continue;
+            }
+            Entry entry = parseListLine(line, prefix);
+            if (entry == null) {
+                // A filename carrying a newline splits into lines that do not parse. Skipping
+                // is safe because a listed name is never trusted for a later operation --
+                // every path is re-parsed and re-walked from scratch -- so the worst case is
+                // an unreachable file, never a wrong one.
+                continue;
+            }
+            if (entries.size() >= maxEntries) {
+                throw new IOException("Directory '" + path + "' holds more than " + maxEntries
+                    + " entries; refusing to return a truncated listing");
+            }
+            entries.add(entry);
+        }
+        return entries;
+    }
+
+    /** {@code <hex mode> <size> <mtime> <absolute path>}; null when the line is not that. */
+    private static Entry parseListLine(@NonNull String line, @NonNull String prefix) {
+        int first = line.indexOf(' ');
+        int second = first < 0 ? -1 : line.indexOf(' ', first + 1);
+        int third = second < 0 ? -1 : line.indexOf(' ', second + 1);
+        if (third < 0) {
+            return null;
+        }
+        String name = line.substring(third + 1);
+        if (!name.startsWith(prefix) || name.indexOf('/', prefix.length()) >= 0) {
+            return null;
+        }
+        long mode;
+        long size;
+        long modified;
+        try {
+            mode = Long.parseLong(line.substring(0, first), 16);
+            size = Long.parseLong(line.substring(first + 1, second));
+            modified = Long.parseLong(line.substring(second + 1, third));
+        } catch (NumberFormatException notAnEntry) {
+            return null;
+        }
+        return new Entry(name.substring(prefix.length()), kindOfStatMode(mode), size, modified,
+            octalPermissions(mode));
+    }
+
+    /** POSIX {@code st_mode} type nibble, as {@code stat -c %f} reports it. */
+    private static @NonNull Kind kindOfStatMode(long mode) {
+        return switch ((int) (mode & 0170000)) {
+            case 0040000 -> Kind.DIRECTORY;
+            case 0120000 -> Kind.SYMLINK;
+            case 0100000 -> Kind.FILE;
+            default -> Kind.OTHER;
+        };
+    }
+
+    private static @NonNull String octalPermissions(long mode) {
+        StringBuilder octal = new StringBuilder(Long.toOctalString(mode & 0777));
+        while (octal.length() < 4) {
+            octal.insert(0, '0');
+        }
+        return octal.toString();
+    }
+
+    @Override
+    public @NonNull Entry stat(@NonNull String handle, @NonNull String path) throws IOException {
+        DockerClient.PathStat stat = this.docker.statArchivePath(handle, path);
+        Kind kind = stat.isSymlink() ? Kind.SYMLINK
+            : stat.isDirectory() ? Kind.DIRECTORY
+            : stat.isRegularFile() ? Kind.FILE : Kind.OTHER;
+        int slash = path.lastIndexOf('/');
+        return new Entry(slash < 0 ? path : path.substring(slash + 1), kind, stat.size(), 0,
+            stat.permissions());
+    }
+
+    @Override
+    public byte @NonNull [] readFile(@NonNull String handle, @NonNull String path, long maxBytes)
+            throws IOException {
+        return this.docker.getArchiveFile(handle, path, maxBytes);
+    }
+
+    @Override
+    public void writeFile(@NonNull String handle, @NonNull String path, byte @NonNull [] content,
+                          @NonNull String mode, @NonNull Map<String, String> ownerLabels)
+            throws IOException {
+        requireOurs(handle, ownerLabels, "write a file into");
+        int slash = path.lastIndexOf('/');
+        String directory = slash <= 0 ? "/" : path.substring(0, slash);
+        String name = path.substring(slash + 1);
+
+        Path staging = Files.createTempDirectory("hohenheim-file-manager");
+        try {
+            Path target = staging.resolve(name);
+            Files.write(target, content);
+            applyMode(target, mode);
+            // File entries ONLY (never a directory entry): a tar carrying the target
+            // directory re-owns it to root at extraction.
+            this.docker.putArchiveFiles(handle, directory, staging, List.of(name));
+        } finally {
+            deleteRecursively(staging);
+        }
+        // The extraction landed the file root-owned. Hand it back to whoever owns the
+        // directory it lives in, so a non-root workload can still write its own file --
+        // the same lesson the directory-entry rule above encodes, one level down. A
+        // stopped container has no exec, so the ownership fix waits for the next start;
+        // that is stated rather than silently skipped.
+        try {
+            String owner = runFileScript(handle, OWNER_SCRIPT, Map.of("HH_FM_PATH", directory)).trim();
+            if (!owner.isEmpty()) {
+                runFileScript(handle, CHOWN_SCRIPT, Map.of("HH_FM_PATH", path, "HH_FM_OWNER", owner));
+            }
+        } catch (WorkloadNotBrowsableException stopped) {
+            Blast.log("FILES: wrote", path, "into stopped container", handle,
+                "- ownership stays root until the workload runs again");
+        }
+    }
+
+    @Override
+    public void makeDirectory(@NonNull String handle, @NonNull String path,
+                              @NonNull Map<String, String> ownerLabels) throws IOException {
+        requireOurs(handle, ownerLabels, "create a directory in");
+        runFileScript(handle, MKDIR_SCRIPT, Map.of("HH_FM_PATH", path));
+    }
+
+    @Override
+    public void rename(@NonNull String handle, @NonNull String from, @NonNull String to)
+            throws IOException {
+        runFileScript(handle, RENAME_SCRIPT, Map.of("HH_FM_PATH", from, "HH_FM_TARGET", to));
+    }
+
+    @Override
+    public void delete(@NonNull String handle, @NonNull String path, boolean recursive)
+            throws IOException {
+        runFileScript(handle, recursive ? DELETE_TREE_SCRIPT : DELETE_SCRIPT,
+            Map.of("HH_FM_PATH", path));
+    }
+
+    /** A workload that cannot be reached by exec right now (stopped, or shell-less). */
+    public static final class WorkloadNotBrowsableException extends IOException {
+        WorkloadNotBrowsableException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Run one of the CONSTANT scripts above with its paths supplied as environment
+     * variables, and turn a non-zero exit into a loud failure.
+     *
+     * @throws WorkloadNotBrowsableException when the container is not running or carries
+     *         no {@code /bin/sh} -- a named refusal, never an empty result
+     */
+    private @NonNull String runFileScript(@NonNull String handle, @NonNull String script,
+                                          @NonNull Map<String, String> paths) throws IOException {
+        List<String> env = new ArrayList<>();
+        paths.forEach((name, value) -> env.add(name + "=" + value));
+        DockerClient.ExecResult result;
+        try {
+            result = this.docker.exec(handle, List.of("/bin/sh", "-c", script), env);
+        } catch (DockerClient.ApiException e) {
+            // 409 = not running; 404 on the exec create = no such container.
+            throw new WorkloadNotBrowsableException("The workload '" + handle
+                + "' cannot be browsed right now: " + e.getMessage());
+        }
+        if (result.exitCode() == 126 || result.exitCode() == 127) {
+            throw new WorkloadNotBrowsableException("The workload '" + handle
+                + "' carries no POSIX shell or coreutils, so its files cannot be browsed");
+        }
+        if (result.exitCode() != 0) {
+            throw new IOException("File operation failed inside '" + handle + "' (exit "
+                + result.exitCode() + "): " + result.stderr().trim());
+        }
+        return result.stdout();
+    }
+
+    /** A same-named FOREIGN container is a name collision, never a write target. */
+    private void requireOurs(@NonNull String handle, @NonNull Map<String, String> ownerLabels,
+                             @NonNull String what) throws IOException {
+        Map<String, Object> inspect = this.docker.inspectContainer(handle);
+        Object labels = inspect.get("Config") instanceof Map<?, ?> config
+            ? config.get("Labels") : null;
+        OwnerLabels.Owner expected = OwnerLabels.parse(ownerLabels);
+        OwnerLabels.Owner actual = OwnerLabels.parse(labels instanceof Map<?, ?> map ? map : null);
+        if (expected == null || actual == null || !expected.equals(actual)) {
+            throw new IOException("REFUSED to " + what + " '" + handle
+                + "': the container is not attributably ours (labels: " + labels + ")");
+        }
+    }
+
+    // -- StatsStreamSupport ---------------------------------------------------
+
+    @Override
+    public @NonNull ConsoleStream openStats(@NonNull String handle) throws IOException {
+        return this.docker.followStats(handle);
     }
 
     // -- ConsoleStreamSupport -------------------------------------------------
