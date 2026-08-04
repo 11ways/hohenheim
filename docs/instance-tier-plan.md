@@ -2660,6 +2660,84 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
 
 ---
 
+## Phase 5b -- System-container app catalog (community-scripts adoption)
+
+ADDED 2026-08-04. NORMATIVE. HARD PREREQUISITE: the Phase 4 Incus driver. There
+is no system-container tier to install into until it exists, and this section
+must not be started before it. It is deliberately placed after Phase 5 because
+it is a TEMPLATE CATALOG, not a new mechanism: everything it needs (typed and
+secret variables, config-file materialization, resource limits, the operator
+approval gate) already shipped in Phase 5.
+
+`community-scripts/ProxmoxVE` (MIT, ~300 apps) is a catalog of app installers
+for Proxmox LXC containers. Adopting it gives the system-container tier a real
+app catalog on day one instead of an empty picker.
+
+RECON 2026-08-04, verified against the upstream repository at `main`:
+
+- The repo splits into `ct/` (Proxmox container creation), `install/` (the app
+  install itself), `vm/` (Proxmox VM creation), `misc/` (the shared shell
+  function libraries `build.func`, `install.func`, `core.func`) and `tools/`.
+- `install/<app>-install.sh` contains NO `pct`, `pvesm`, `pveam` or `qm` call.
+  Its first line is `source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"`: the host
+  injects a shell function library through ONE environment variable, and the
+  script then calls that vocabulary (`color`, `verb_ip6`, `catch_errors`,
+  `setting_up_container`, `network_check`, `update_os`, `msg_info`/`msg_ok`/
+  `msg_error`, `setup_deb822_repo`, the `$STD` quiet-runner, `motd_ssh`,
+  `customize`, `cleanup_lxc`).
+- `ct/<app>.sh` is essentially a declarative manifest -- `var_cpu`, `var_ram`,
+  `var_disk`, `var_os`, `var_version`, `var_unprivileged`, `var_tags`,
+  `var_gpu` -- plus an `update_script()` function, wrapped around a `source` of
+  `build.func`.
+
+DECIDED: **the shim target is `$FUNCTIONS_FILE_PATH`, NOT `pct`.** Shimming
+`pct` would mean reimplementing Proxmox's storage, template and idmap layers for
+no benefit. Provide our own function library implementing the install-side
+vocabulary and unmodified `install/` scripts run verbatim in a Debian/Ubuntu
+system container.
+
+DECIDED: **do not reimplement or source `build.func`.** Parse `ct/*.sh` for its
+`var_*` manifest and map it onto an instance template. Everything `build.func`
+does -- storage selection, template download, whiptail prompting, resource
+choice, network setup -- is what hohenheim already owns, and owns better:
+quotas, host admission, placement and per-instance networks have no Proxmox
+equivalent. A shimmed `build.func` would be a second authority over decisions
+the platform already makes.
+
+Binding constraints:
+
+- **Vendor and pin per template. Never source from `main` at deploy time.** The
+  helper vocabulary is an undocumented internal contract that upstream changes
+  freely, and a live fetch means an upstream edit silently changes what tenants
+  are running. Pinning is also what makes the approval gate meaningful.
+- **Host-coupled helpers must be real or must refuse by name.** `setup_hwaccel`
+  is the worked example: on Proxmox it means GPU passthrough, which edits the
+  container's config on the HOST. A stub that returns success while Plex reports
+  hardware transcoding as enabled is exactly the signature defect of this
+  codebase (a step does less than it claims and reports success). Either
+  implement the hohenheim-side counterpart or refuse by name with the path
+  written down, following the nixpacks and GitLab precedents.
+- Each script is third-party shell running as root inside the tenant's own
+  container. That is acceptable for the container; CURATION is the trust
+  decision, and it belongs to the existing operator approval gate, with the
+  pinned revision recorded per template.
+- `update_script()` is a CAPABILITY WORTH ADOPTING, not merely compatibility
+  surface: it is an in-place app update path executed inside the container, and
+  the Phase 5 template mechanism has no equivalent today. Decide deliberately
+  whether to adopt it as a template-declared update action (it maps onto the
+  record-schedule action vocabulary) or to declare it out of scope.
+
+Gate: two apps from the upstream catalog install unmodified from their pinned
+`install/` scripts into system containers, reachable and functional, with the
+`ct/` manifest driving the template's declared resources; a template whose
+script calls a host-coupled helper we have not implemented FAILS LOUDLY at
+approval or install time rather than installing a silently degraded app; an
+upstream edit to `main` provably does not change what an already-approved
+template installs; and a tenant with no approval authority cannot introduce a
+new script.
+
+---
+
 ## Phase 6 -- Files, live stats, polish
 
 - File manager over the driver seam (list/read/write/upload/download/rename/
