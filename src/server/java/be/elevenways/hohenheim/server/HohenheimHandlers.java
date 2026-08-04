@@ -355,6 +355,43 @@ public final class HohenheimHandlers {
                     + URLEncoder.encode(String.valueOf(e.getMessage()), StandardCharsets.UTF_8));
             }
         });
+
+        // --- Git provider browsing: repository/branch selection for admin pickers
+        //     and automation. Read-only against the provider, admin-gated, limited. ---
+        HohenheimEndpoints.GIT_PROVIDER_REPOSITORIES.setHandler(conduit -> {
+            Integer providerId = conduit.getParameter(HohenheimEndpoints.PROVIDER_ID);
+            try {
+                List<Map<String, Object>> repos = new ArrayList<>();
+                for (var repo : be.elevenways.hohenheim.server.source.GitProviders
+                        .clientFor(providerId).listRepositories()) {
+                    Map<String, Object> entry = new LinkedHashMap<>();
+                    entry.put("full_name", repo.fullName());
+                    entry.put("default_branch", repo.defaultBranch());
+                    repos.add(entry);
+                }
+                return new JsonResult<Object>(Map.of("repositories", repos));
+            } catch (Exception e) {
+                conduit.setResponseStatus(502);
+                return new JsonResult<Object>(Map.of("error", String.valueOf(e.getMessage())));
+            }
+        });
+
+        HohenheimEndpoints.GIT_PROVIDER_BRANCHES.setHandler(conduit -> {
+            Integer providerId = conduit.getParameter(HohenheimEndpoints.PROVIDER_ID);
+            String repository = conduit.getQueryParam("repository");
+            if (repository == null || repository.isBlank()) {
+                conduit.setResponseStatus(422);
+                return new JsonResult<Object>(Map.of("error", "repository required"));
+            }
+            try {
+                return new JsonResult<Object>(Map.of("branches",
+                    be.elevenways.hohenheim.server.source.GitProviders
+                        .clientFor(providerId).listBranches(repository)));
+            } catch (Exception e) {
+                conduit.setResponseStatus(502);
+                return new JsonResult<Object>(Map.of("error", String.valueOf(e.getMessage())));
+            }
+        });
     }
 
     // -----------------------------------------------------------------------

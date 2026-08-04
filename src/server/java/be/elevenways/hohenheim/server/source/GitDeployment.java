@@ -83,7 +83,9 @@ public class GitDeployment {
             String buildCommand = (String) sourceSettings.get("build_command");
             if (buildCommand != null && !buildCommand.isEmpty()) {
                 if (!runBuild(targetDir, buildCommand)) {
-                    return DeployResult.failure("Build command failed");
+                    // The checkout succeeded, so this failure has a commit identity --
+                    // provider status reporting attributes it to the right sha.
+                    return DeployResult.failure("Build command failed", commitSha);
                 }
             }
 
@@ -145,7 +147,8 @@ public class GitDeployment {
                 if (System.currentTimeMillis() > deadline) {
                     Blast.log("GIT: site", siteId, "new handler did not become healthy in 60s");
                     newHandler.destroy();
-                    return DeployResult.failure("New handler did not become healthy within 60 seconds");
+                    return DeployResult.failure(
+                        "New handler did not become healthy within 60 seconds", commitSha);
                 }
                 Thread.sleep(500);
             }
@@ -475,6 +478,10 @@ public class GitDeployment {
 
         static DeployResult failure(String error) {
             return new DeployResult(false, null, null, null, error);
+        }
+
+        static DeployResult failure(String error, String commitSha) {
+            return new DeployResult(false, null, commitSha, null, error);
         }
     }
 }

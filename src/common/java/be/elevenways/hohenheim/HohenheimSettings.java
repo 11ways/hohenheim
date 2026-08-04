@@ -857,6 +857,40 @@ public class HohenheimSettings {
             .build();
     }
 
+    // --- Preview deployments ---
+    public abstract class Previews {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("previews")
+            .label("Preview deployments")
+            .describe("Bounded-lifetime per-branch preview environments of git-sourced "
+                + "Docker sites, served on generated hostnames under one base domain")
+            .icon("flask");
+
+        public static final SettingDefinition<String> BASE_DOMAIN = GROUP
+            .buildSetting("base_domain", String.class)
+            .description("The domain generated preview hostnames live under "
+                + "(<site>--<ref>.<base_domain>). Previews REFUSE to deploy while this "
+                + "is unset. TLS rides a wildcard certificate over this domain; previews "
+                + "never request their own certificates")
+            .build();
+
+        public static final SettingDefinition<Integer> LIFETIME_MINUTES = GROUP
+            .buildSetting("lifetime_minutes", Integer.class)
+            .defaultValue(1440)
+            .suffix("min")
+            .description("How long a preview lives before the expiry sweep reclaims its "
+                + "instance, hostname and DNS rows. Redeploying the same ref extends the "
+                + "window; values below 1 fall back to the default")
+            .build();
+
+        public static final SettingDefinition<Integer> MAX_PER_OWNER = GROUP
+            .buildSetting("max_per_owner", Integer.class)
+            .defaultValue(3)
+            .description("Concurrent live previews one owner (a manage-grant subject "
+                + "set; a project is one owner) may hold, enforced through the atomic "
+                + "quota ledger. 0 or less means NO cap; usage is charged either way")
+            .build();
+    }
+
     // --- Instance file manager ---
     public abstract class Files {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("files")

@@ -2041,6 +2041,14 @@
     {
       "text": "Environment variables",
       "scope": "environment_variable"
+    },
+    {
+      "text": "Git providers",
+      "scope": "git_provider"
+    },
+    {
+      "text": "Preview deployments",
+      "scope": "preview_deployment"
     }
   ],
   "dashboard": {
@@ -2101,6 +2109,10 @@
     {
       "text": "Backup target test failed: {$reason}",
       "scope": "backup_target"
+    },
+    {
+      "text": "Provider test failed: {$reason}",
+      "scope": "git_provider"
     }
   ],
   "test_subject": {
@@ -2123,6 +2135,10 @@
     {
       "text": "Backup target {$name} is reachable and writable",
       "scope": "backup_target"
+    },
+    {
+      "text": "Provider answered; {$count} repositories visible",
+      "scope": "git_provider"
     }
   ],
   "host_status": {
@@ -5089,10 +5105,16 @@
     "text": "Backup restored to new instance #{$id}",
     "scope": "instance_backup"
   },
-  "test_connection": {
-    "text": "Test connection",
-    "scope": "backup_target"
-  },
+  "test_connection": [
+    {
+      "text": "Test connection",
+      "scope": "backup_target"
+    },
+    {
+      "text": "Test connection",
+      "scope": "git_provider"
+    }
+  ],
   "filesystem": {
     "text": "Filesystem directory",
     "scope": "backup_target_kind"
@@ -6209,5 +6231,191 @@
   "variable_one_owner": {
     "text": "A variable belongs to exactly one instance or one environment",
     "scope": "violations"
-  }
+  },
+  "git_provider_unknown": {
+    "text": "Unknown git provider",
+    "scope": "violations"
+  },
+  "git_provider_bad_base_url": {
+    "text": "Provider base URL is not acceptable: {$reason}",
+    "scope": "violations"
+  },
+  "git_provider_kind_unavailable": {
+    "text": "Git provider kind '{$kind}' is declared but not yet implemented",
+    "scope": "violations"
+  },
+  "preview_site_required": {
+    "text": "A preview needs an existing site",
+    "scope": "violations"
+  },
+  "preview_owner_unreadable": {
+    "text": "The site's owner could not be derived; refusing the preview",
+    "scope": "violations"
+  },
+  "preview_quota_reached": {
+    "text": "Preview quota reached: {$used} of {$limit} in use",
+    "scope": "violations"
+  },
+  "preview_unsupported_type": {
+    "text": "Previews are only supported for git-sourced Docker sites",
+    "scope": "violations"
+  },
+  "preview_no_base_domain": {
+    "text": "No preview base domain is configured (previews.base_domain)",
+    "scope": "violations"
+  },
+  "preview_no_repository": {
+    "text": "The site has no repository to build a preview from",
+    "scope": "violations"
+  },
+  "preview_checkout_failed": {
+    "text": "Preview checkout failed: {$reason}",
+    "scope": "violations"
+  },
+  "preview_build_failed": {
+    "text": "Preview build failed: {$reason}",
+    "scope": "violations"
+  },
+  "preview_no_published_port": {
+    "text": "The preview container published no port to serve",
+    "scope": "violations"
+  },
+  "domain_generated_readonly": {
+    "text": "This domain is owned by {$source} and cannot be edited or deleted here",
+    "scope": "violations"
+  },
+  "domain_generated_attribution": {
+    "text": "Domain ownership attribution is set by the system, never submitted",
+    "scope": "violations"
+  },
+  "provider_name": [
+    {
+      "text": "Name",
+      "scope": "field"
+    }
+  ],
+  "provider_kind": [
+    {
+      "text": "Kind",
+      "scope": "field"
+    },
+    {
+      "text": "The provider API dialect. GitLab is declared but not yet implemented.",
+      "scope": "help"
+    }
+  ],
+  "provider_base_url": [
+    {
+      "text": "Base URL",
+      "scope": "field"
+    },
+    {
+      "text": "Leave blank for the public host (github.com); set for self-hosted installations.",
+      "scope": "help"
+    }
+  ],
+  "provider_access_token": [
+    {
+      "text": "Access token",
+      "scope": "field"
+    },
+    {
+      "text": "Personal or deploy access token; the fallback when no App is configured. Stored encrypted.",
+      "scope": "help"
+    }
+  ],
+  "provider_app_id": [
+    {
+      "text": "App id",
+      "scope": "field"
+    },
+    {
+      "text": "GitHub App id. With the installation id and private key set, short-lived installation tokens are minted per operation.",
+      "scope": "help"
+    }
+  ],
+  "provider_app_installation_id": [
+    {
+      "text": "App installation id",
+      "scope": "field"
+    },
+    {
+      "text": "The installation of the App on the account whose repositories are used.",
+      "scope": "help"
+    }
+  ],
+  "provider_app_private_key": [
+    {
+      "text": "App private key",
+      "scope": "field"
+    },
+    {
+      "text": "The App's RSA private key (PEM). Stored encrypted.",
+      "scope": "help"
+    }
+  ],
+  "git_provider": [
+    {
+      "text": "Git provider",
+      "scope": "field"
+    },
+    {
+      "text": "When set, the clone URL and credentials come from this provider and Repository below.",
+      "scope": "help"
+    }
+  ],
+  "repository": [
+    {
+      "text": "Repository",
+      "scope": "field"
+    },
+    {
+      "text": "Repository at the provider, as owner/name.",
+      "scope": "help"
+    }
+  ],
+  "previews_enabled": [
+    {
+      "text": "Preview deployments",
+      "scope": "field"
+    },
+    {
+      "text": "Pull-request webhook events create, update and destroy bounded-lifetime preview environments.",
+      "scope": "help"
+    }
+  ],
+  "preview_environment_variables": [
+    {
+      "text": "Preview environment",
+      "scope": "field"
+    },
+    {
+      "text": "The ONLY runtime variables a preview receives; production variables, database credentials and volumes are never inherited.",
+      "scope": "help"
+    }
+  ],
+  "preview_ref": [
+    {
+      "text": "Ref",
+      "scope": "field"
+    }
+  ],
+  "destroy_now": [
+    {
+      "text": "Destroy now",
+      "scope": "preview_deployment"
+    }
+  ],
+  "destroyed": [
+    {
+      "text": "Preview {$hostname} destroyed",
+      "scope": "preview_deployment"
+    }
+  ],
+  "destroy_failed": [
+    {
+      "text": "Preview teardown failed: {$reason}",
+      "scope": "preview_deployment"
+    }
+  ]
 }

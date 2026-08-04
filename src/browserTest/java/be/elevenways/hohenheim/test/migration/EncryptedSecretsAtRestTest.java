@@ -51,6 +51,8 @@ class EncryptedSecretsAtRestTest {
     private static final String REPORT_TOKEN = "hh-report-token-G7";
     private static final String CONTROLLER = "hh-controller-key-H8";
     private static final String ENV_VALUE = "hh-env-secret-J9";
+    private static final String PROVIDER_TOKEN = "hh-provider-token-K10";
+    private static final String PROVIDER_APP_KEY = "-----BEGIN RSA PRIVATE KEY-----\nhh-app-key-L11\n-----END RSA PRIVATE KEY-----";
 
     @BeforeAll
     static void installTempKeyring() throws Exception {
@@ -140,6 +142,15 @@ class EncryptedSecretsAtRestTest {
             installation.set(SpamserviceInstallationModel.CONTROLLER_KEY, CONTROLLER);
             spamservice.save(installation);
 
+            Model providers = Models.get(be.elevenways.hohenheim.model.GitProviderModel.class);
+            Row provider = providers.createEmptyRow();
+            provider.set(be.elevenways.hohenheim.model.GitProviderModel.NAME, "at-rest provider");
+            provider.set(be.elevenways.hohenheim.model.GitProviderModel.KIND, "github");
+            provider.set(be.elevenways.hohenheim.model.GitProviderModel.ACCESS_TOKEN, PROVIDER_TOKEN);
+            provider.set(be.elevenways.hohenheim.model.GitProviderModel.APP_PRIVATE_KEY_PEM,
+                PROVIDER_APP_KEY);
+            providers.save(provider);
+
             Model stacks = Models.get(StackModel.class);
             Row stack = stacks.createEmptyRow();
             stack.set(StackModel.NAME, "at-rest-stack");
@@ -163,6 +174,8 @@ class EncryptedSecretsAtRestTest {
             assertCiphertext(datasource, "sites", "security_report_token", REPORT_TOKEN);
             assertCiphertext(datasource, "spamservice_installations", "controller_key", CONTROLLER);
             assertCiphertext(datasource, "stack_services", "environment", ENV_VALUE);
+            assertCiphertext(datasource, "git_providers", "access_token", PROVIDER_TOKEN);
+            assertCiphertext(datasource, "git_providers", "app_private_key_pem", "hh-app-key-L11");
 
             // 5. The model API still yields the real values (the secrets stay USABLE).
             assertThat((String) certs.findById(cert.get(CertificateModel.ID))
@@ -193,6 +206,14 @@ class EncryptedSecretsAtRestTest {
             assertThat(env)
                 .as("step 5: service environment round-trips")
                 .containsEntry("SECRET_TOKEN", ENV_VALUE);
+            Row providerBack = providers.findById(
+                provider.get(be.elevenways.hohenheim.model.GitProviderModel.ID));
+            assertThat((String) providerBack
+                .get(be.elevenways.hohenheim.model.GitProviderModel.ACCESS_TOKEN))
+                .as("step 5: provider token round-trips").isEqualTo(PROVIDER_TOKEN);
+            assertThat((String) providerBack
+                .get(be.elevenways.hohenheim.model.GitProviderModel.APP_PRIVATE_KEY_PEM))
+                .as("step 5: provider app key round-trips").isEqualTo(PROVIDER_APP_KEY);
         });
 
         // 6. The declaration contract for the two fields that were not even secret before.

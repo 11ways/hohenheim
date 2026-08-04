@@ -478,7 +478,7 @@ public final class SiteInstances {
         }
     }
 
-    static @NonNull Map<String, Object> storedSettings(@NonNull Row instance) {
+    public static @NonNull Map<String, Object> storedSettings(@NonNull Row instance) {
         Object stored = instance.get(InstanceModel.SETTINGS);
         if (stored instanceof Map<?, ?> map) {
             Map<String, Object> cast = new LinkedHashMap<>();

@@ -122,11 +122,18 @@ class SiteReleaseLiveTest {
                 .isEqualTo(digestA);
 
             // 2. Swap to release B under CONTINUOUS traffic.
-            hammer = new Hammer(port, "release.test", 3);
+            Hammer swapHammer = new Hammer(port, "release.test", 3);
+            hammer = swapHammer;
             site.set(SiteModel.SETTINGS, settingsFor(repoB));
             Models.get(SiteModel.class).save(site);
             proxy.reload();
-            Thread.sleep(400);
+            // Bounded wait instead of a fixed sleep: under parallel forks a starved
+            // lane can legitimately still be on release-one after 400ms, which is a
+            // scheduling artifact, not a routing regression. The zero-failed-requests
+            // and never-regress assertions below are untouched -- this only decides
+            // WHEN to stop hammering.
+            await("step 2: every lane observed the new release before the hammer stops",
+                30_000, () -> swapHammer.everyLaneEndsOn("release-two"));
             hammer.close();
 
             assertThat(hammer.failures)
@@ -684,6 +691,18 @@ class SiteReleaseLiveTest {
 
         List<List<String>> lanes() {
             return this.laneBodies;
+        }
+
+        /** Whether every lane has observed at least one response and currently ends on {@code marker}. */
+        boolean everyLaneEndsOn(String marker) {
+            for (List<String> lane : this.laneBodies) {
+                synchronized (lane) {
+                    if (lane.isEmpty() || !marker.equals(lane.get(lane.size() - 1))) {
+                        return false;
+                    }
+                }
+            }
+            return true;
         }
 
         @Override
