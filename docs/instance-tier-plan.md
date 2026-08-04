@@ -2424,6 +2424,10 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   memory-buffered under the `hohenheim.backup.max_archive_mb` cap (true
   streaming is the Phase 6 transport contract); remote-host capacity probes
   ride ssh `df`; consistency hooks beyond cold capture are not built.
+  SUPERSEDED (2026-08-04): the `record_schedules` gap is CLOSED -- the
+  mechanism landed in zenit core and M061 migrated the nightly-task flag onto
+  per-instance backup schedules (see the Phase 5 record-schedule STATUS);
+  the other gaps in this list stand unchanged.
 
 ---
 
@@ -2453,6 +2457,23 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   per-step capability requirements (send console command, power action, backup,
   etc.), rather than one action token per cron row. The simple one-action form
   remains the one-step specialization.
+
+  STATUS (2026-08-04): LANDED, mechanism in ZENIT CORE (`common/task/record` +
+  `server/task/record`: `zenit_record_schedules`/`_steps`/`_runs`, fenced chain
+  executor under per-schedule `Leases`, `RunRecordSchedulesTask` sweeper riding
+  the TaskService claim, run_as re-authorized per step via the new
+  `StoredPrincipalResolver` + `WebSocketAuthenticator.hasCapability` walk).
+  Hohenheim wires the vocabulary (`server/schedule`: console_command/power ->
+  manage, backup -> backups, snapshot -> snapshots), the admin surface
+  (Schedules tab, schedule/step/run resources) and M061 (backup_enabled ->
+  per-instance schedules; `BackupInstances` deleted). Proven by
+  `RecordSchedulesTest` (zenit, counterfactualed: revocation, ordering,
+  offsets, failure policy, rival fencing) and `InstanceScheduleLiveTest`
+  (real daemon: warn-then-restart chain, live grant revocation stops the
+  chain in HOST state, backup artifact, schedules die with destroy's
+  SOFT-delete). Console/power steps ride `manage` because no narrower
+  console/power capabilities exist yet -- when those land WITH their
+  enforcing surfaces, the action definitions narrow in one place.
 - Tenant database allocation uses the existing managed-database tier through a
   record-scoped quota and ownership link; it never exposes another tenant's host
   or credentials. Instance transfer between eligible hosts is a durable,
@@ -2816,6 +2837,8 @@ upgraded box. Prefer deleting such accommodations over carrying them.
    risk decision and a Phase 3 ENTRY blocker, not a later deployment toggle.
 9. `record_schedules` as a new table vs a facet of `SystemTaskModel` -- leaning
    new table; confirm at Phase 3, while preserving ordered task-chain semantics.
+   CONFIRMED (2026-08-04): new tables, in zenit core
+   (`zenit_record_schedules` + `_steps` + `_runs`); ordered chains shipped.
 10. Incus CLUSTERING is a stated deferral, not an omission: "runtime = data on
     the server record" bakes in a 1:1 runtime-to-host assumption that an Incus
     cluster breaks (placement, quorum, shared storage). Standalone daemons only
