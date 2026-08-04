@@ -9,6 +9,9 @@
 {% declare instanceName: String = "" %}
 {% declare serverId: String = "" %}
 {% declare servers: List %}
+{% declare chooseHost: Boolean = false %}
+{% declare formAction: String %}
+{% declare cancelUrl: String %}
 {% declare formError: String = "" %}
 {% declare variableForm: FormState %}
 {% declare flashMessage: Microcopy = null %}
@@ -26,7 +29,7 @@
     {% /if %}
     {% if formError != "" %}<pl-alert variant="destructive">{{ formError }}</pl-alert>{% /if %}
 
-    <form method="POST" action="/admin/instances-from-template">
+    <form method="POST" action={% formAction %}>
         {% csrf() %}
         <input type="hidden" name="template_id" value={% templateId %}>
         <pl-card><pl-card-content><zf-form-scope><div class="zf-entries">
@@ -34,6 +37,9 @@
                 <pl-label target="name">{{ t("instance_name", scope: "instance_from_template") }}</pl-label>
                 <pl-input inputId="name" type="text" name="name" value={% instanceName %}></pl-input>
             </pl-field>
+            {#- The host pick is operator-only: placement ignores a tenant-submitted
+                server_id, so the control is absent rather than inert. -#}
+            {% if chooseHost %}
             <pl-field>
                 <pl-label>{{ t("host", scope: "instance_from_template") }}</pl-label>
                 <pl-select name="server_id" value={% serverId %} submitEmpty={% true %}>
@@ -42,6 +48,7 @@
                     {% /each %}
                 </pl-select>
             </pl-field>
+            {% /if %}
             {% each variableForm.entries as entry %}
             {% render entry.templateId var:entry=entry %}
             {% /each %}
@@ -51,7 +58,7 @@
         {% /if %}
         <div class="cms-form-actions">
             <pl-button variant="primary" type="submit">{{ t("create", scope: "instance_from_template") }}</pl-button>
-            <a href="/admin/instance-templates">{{ t("cancel", scope: "instance_from_template") }}</a>
+            <a href={% cancelUrl %}>{{ t("cancel", scope: "instance_from_template") }}</a>
         </div>
     </form>
 </section>

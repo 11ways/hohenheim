@@ -32,7 +32,7 @@ import java.util.List;
  * the typed phrase (the purge_stack_volumes precedent) -- current volume contents
  * are REPLACED with the captured state.
  */
-public final class InstanceSnapshotResource extends RowResource {
+public class InstanceSnapshotResource extends RowResource {
 
     private final InstanceSnapshots snapshots = new InstanceSnapshots();
 

@@ -262,7 +262,12 @@ public class ServerMain {
                 Microcopy.of("hohenheim_admin_access").withFilter("scope", "permission")),
             KnownPermission.of(
                 "hohenheim.manage.access",
-                Microcopy.of("hohenheim_manage_access").withFilter("scope", "permission")));
+                Microcopy.of("hohenheim_manage_access").withFilter("scope", "permission")),
+            // Tenant self-service creation: eligibility only. It provisions a workload on
+            // an operator's iron, and the per-owner quota is what bounds how many.
+            KnownPermission.of(
+                HohenheimAccess.INSTANCES_CREATE.value(),
+                Microcopy.of("hohenheim_instances_create").withFilter("scope", "permission")));
         ProteusRealmSuggestions.register();
     }
 

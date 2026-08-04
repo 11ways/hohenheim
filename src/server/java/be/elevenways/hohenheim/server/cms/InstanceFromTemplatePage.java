@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -14,6 +16,7 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.http.RedirectResult;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.forms.server.render.FormStateTranslator;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -43,7 +46,15 @@ public final class InstanceFromTemplatePage extends PanelPage {
                                            @NonNull AccessContext accessContext) {
         Row template = templateFromQuery(conduit);
         if (template == null) {
-            return new be.elevenways.zenit.server.http.RedirectResult("/admin/instance-templates");
+            return new RedirectResult(CmsSupport.panelBase(conduit) + "/instance-templates");
+        }
+        // The approval gate, ASKED AT RENDER as well as at submit: a tenant following a
+        // guessed ?template= id must not be shown a form whose submit can only refuse.
+        // The submit half (InstanceTemplates.createFromTemplate) remains the gate.
+        try {
+            InstanceTemplates.requireSelectable(template, accessContext);
+        } catch (Violations unapproved) {
+            return new RedirectResult(CmsSupport.panelBase(conduit) + "/instance-templates");
         }
         return renderResult(conduit, accessContext, template, Map.of(), null);
     }
@@ -68,15 +79,27 @@ public final class InstanceFromTemplatePage extends PanelPage {
             }
         });
 
+        // The host pick is an OPERATOR control and is not rendered for anyone else.
+        // InstancePlacement ignores a submitted server_id for a non-admin anyway, so
+        // rendering a select whose value is discarded would be a control that lies about
+        // what it does -- and a tenant naming a host is the thing placement exists to
+        // prevent.
+        boolean chooseHost = HohenheimAccess.isAdmin(accessContext);
         List<Map<String, Object>> servers = new ArrayList<>();
-        for (Row server : Models.get(ServerModel.class).find().all()) {
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("id", server.get(ServerModel.ID));
-            entry.put("name", String.valueOf((Object) server.get(ServerModel.NAME)));
-            servers.add(entry);
+        if (chooseHost) {
+            for (Row server : Models.get(ServerModel.class).find().all()) {
+                Map<String, Object> entry = new HashMap<>();
+                entry.put("id", server.get(ServerModel.ID));
+                entry.put("name", String.valueOf((Object) server.get(ServerModel.NAME)));
+                servers.add(entry);
+            }
         }
 
+        String panelBase = CmsSupport.panelBase(conduit);
         Map<String, Object> vars = new HashMap<>();
+        vars.put("chooseHost", chooseHost);
+        vars.put("formAction", HohenheimEndpoints.INSTANCES_FROM_TEMPLATE.toUrl());
+        vars.put("cancelUrl", panelBase + "/instance-templates");
         vars.put("title", Microcopy.of("create_instance").withFilter("scope", "instance_template")
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
         vars.put("templateId", templateId);

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -41,13 +42,20 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The instance tier's admin surface (C7: admin panel only; the grant-scoped /manage
- * projection is its own later commit). Create persists the record; deploy, stop and
- * the verified destroy are row actions through {@link InstanceService}.
+ * The instance tier's admin surface, and the BASE of the grant-scoped /manage
+ * projection ({@link ManageInstanceResource}). Create persists the record; deploy,
+ * stop and the verified destroy are row actions through {@link InstanceService}.
+ *
+ * AIDEV-NOTE: every action below declares the record capability it needs in its own
+ * visibleFor, even though this panel is admin-gated. Two reasons, both structural:
+ * zenit-cms re-checks visibleFor on INVOKE (so the declaration is a gate, not a hint),
+ * and the /manage subclass inherits these builders verbatim -- a capability spelled
+ * only in the subclass would be a second policy over one action. For an admin the
+ * predicate is a no-op: the precedence walk's admin bypass answers first.
  */
-public final class InstanceResource extends RowResource {
+public class InstanceResource extends RowResource {
 
-    private final InstanceService instances = new InstanceService();
+    protected final InstanceService instances = new InstanceService();
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(InstanceModel.NAME)
@@ -206,11 +214,13 @@ public final class InstanceResource extends RowResource {
     }
 
     /** Cold capture: a running instance is stopped for the copy and redeployed after. */
-    private @NonNull RowAction<Row> snapshotAction() {
+    protected @NonNull RowAction<Row> snapshotAction() {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "snapshot_instance"))
             .label(Microcopy.of("snapshot").withFilter("scope", "instance"))
             .icon(Icon.of("camera"))
             .inlineInRow(false)
+            .visibleFor((row, ctx) -> HohenheimAccess.hasInstanceCapability(
+                ctx, row.get(InstanceModel.ID), HohenheimAccess.SNAPSHOTS))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("snapshot").withFilter("scope", "instance"))
                 .body(Microcopy.of("snapshot_confirm").withFilter("scope", "instance"))
@@ -226,11 +236,13 @@ public final class InstanceResource extends RowResource {
     }
 
     /** Export to the configured backup target (refuses, named, when none is set). */
-    private @NonNull RowAction<Row> backupAction() {
+    protected @NonNull RowAction<Row> backupAction() {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "backup_instance"))
             .label(Microcopy.of("backup_now").withFilter("scope", "instance"))
             .icon(Icon.of("box-archive"))
             .inlineInRow(false)
+            .visibleFor((row, ctx) -> HohenheimAccess.hasInstanceCapability(
+                ctx, row.get(InstanceModel.ID), HohenheimAccess.BACKUPS))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("backup_now").withFilter("scope", "instance"))
                 .body(Microcopy.of("backup_confirm").withFilter("scope", "instance"))
@@ -245,10 +257,12 @@ public final class InstanceResource extends RowResource {
             .build();
     }
 
-    private @NonNull RowAction<Row> deployAction() {
+    protected @NonNull RowAction<Row> deployAction() {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "deploy_instance"))
             .label(Microcopy.of("deploy").withFilter("scope", "instance"))
             .icon(Icon.of("play"))
+            .visibleFor((row, ctx) -> HohenheimAccess.hasInstanceCapability(
+                ctx, row.get(InstanceModel.ID), HohenheimAccess.MANAGE))
             .handler((row, ctx) -> {
                 this.instances.deploy(row.get(InstanceModel.ID));
                 return CmsActionResult.refreshWithToast(
@@ -258,13 +272,15 @@ public final class InstanceResource extends RowResource {
             .build();
     }
 
-    private @NonNull RowAction<Row> stopAction() {
+    protected @NonNull RowAction<Row> stopAction() {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "stop_instance"))
             .label(Microcopy.of("stop").withFilter("scope", "instance"))
             .icon(Icon.of("stop"))
             .style(ActionStyle.DESTRUCTIVE)
             .visibleFor((row, ctx) ->
-                InstanceModel.STATUS_RUNNING.equals(row.get(InstanceModel.STATUS)))
+                InstanceModel.STATUS_RUNNING.equals(row.get(InstanceModel.STATUS))
+                    && HohenheimAccess.hasInstanceCapability(
+                        ctx, row.get(InstanceModel.ID), HohenheimAccess.MANAGE))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("stop").withFilter("scope", "instance"))
                 .body(Microcopy.of("stop_confirm").withFilter("scope", "instance"))

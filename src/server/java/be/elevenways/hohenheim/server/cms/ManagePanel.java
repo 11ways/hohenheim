@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -13,6 +14,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordSource;
@@ -27,6 +29,7 @@ import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.security.PermissionChecker;
+import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -94,7 +97,15 @@ public final class ManagePanel extends Panel {
             // confirmed through the precedence walk (no recursion: the walk
             // consults this checker only for OTHER permissions -- the admin
             // bypass -- and for decide(), which passes through above).
-            return !HohenheimAccess.managedSiteIds(RecordSourceGate.accessContextOf(conduit)).isEmpty();
+            //
+            // AIDEV-NOTE: instances count too, and they had to the moment the panel
+            // grew an instance projection. Keying eligibility on SITES alone locked a
+            // pure instance tenant (a game-server renter who owns no website) out of
+            // the very panel built for them: 403 at /manage with a live manage grant
+            // in hand. Every model this panel projects belongs in this disjunction.
+            AccessContext ctx = RecordSourceGate.accessContextOf(conduit);
+            return !HohenheimAccess.managedSiteIds(ctx).isEmpty()
+                || !HohenheimAccess.instanceIdsWith(ctx, HohenheimAccess.MANAGE).isEmpty();
         }
 
         @Override
@@ -106,7 +117,15 @@ public final class ManagePanel extends Panel {
     @Override
     public @NonNull List<PanelPeer> buildPeers() {
         return List.of(new ManageSiteResource(), new ManageDomainResource(),
-            new ManageDnsRecordResource(), new ManageCertificateResource());
+            new ManageDnsRecordResource(), new ManageCertificateResource(),
+            // The instance tier's tenant projection. Every one of these is scoped by a
+            // walk-confirmed record capability, and the two schedule peers plus the
+            // from-template page are nav-hidden: they are reached THROUGH an instance
+            // (or a template) whose own scope already decided the principal may be here.
+            new ManageInstanceResource(), new ManageInstanceScheduleResource(),
+            new ManageInstanceScheduleStepResource(), new ManageInstanceSnapshotResource(),
+            new ManageInstanceBackupResource(), new ManageInstanceTemplateResource(),
+            new InstanceFromTemplatePage());
     }
 
     /**
@@ -179,6 +198,35 @@ public final class ManagePanel extends Panel {
             .baseCriteria(HohenheimSources::notTheAcmeAccountRow)
             .accessCriteria(ManagePanel::certificateScope)
             .build());
+
+        // Instances: the SAME two-panel shadowing hazard as sites and domains, now that
+        // ManageInstanceResource exposes the model beside the admin InstanceResource --
+        // which of the two derived defaults wins (admin-gated-unscoped versus
+        // manage-gated-scoped) would otherwise be decided by panel walk ORDER at boot.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceModel.class)
+            .search(InstanceModel.NAME)
+            .baseCriteria(() -> InstanceModel.DELETED_AT.isNull())
+            .accessCriteria(ctx -> HohenheimAccess.instanceScope(ctx, HohenheimAccess.MANAGE))
+            .build());
+
+        // Record schedules: same hazard (the admin InstanceScheduleResource and the
+        // delegated one both derive), and this source is the one a picker or a widget
+        // would reach, so it carries the SAME scope the delegated resource enforces --
+        // never the resource's scope in one place and an open source in another.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(RecordScheduleModel.class)
+            .search(RecordScheduleModel.NAME)
+            .accessCriteria(ManagePanel::recordScheduleScope)
+            .build());
+    }
+
+    /** @return null for admins, else the schedules of instances the principal manages */
+    static @Nullable Criteria recordScheduleScope(@NonNull AccessContext ctx) {
+        if (HohenheimAccess.isAdmin(ctx)) {
+            return null;
+        }
+        QueryPredicate predicate = ManageInstanceScheduleResource.decide(ctx).predicate();
+        return predicate != null ? predicate.criteria()
+            : Models.get(RecordScheduleModel.class).matchNone();
     }
 
     /**

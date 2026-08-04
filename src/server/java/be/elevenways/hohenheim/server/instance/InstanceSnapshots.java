@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -65,6 +67,7 @@ public final class InstanceSnapshots {
      * @throws Violations naming the refusal or failure
      */
     public int create(int instanceId, @Nullable String note) {
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.SNAPSHOTS);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         VolumeSnapshotSupport support = requireSupport(resolved);
@@ -78,7 +81,7 @@ public final class InstanceSnapshots {
 
         // Settle: the ordinary stop funnel releases the port claims verified.
         if (wasRunning) {
-            this.instances.stop(instanceId);
+            TenantWrites.inAuthorizedOperation(() -> this.instances.stop(instanceId));
         }
         long fence = this.instances.leases().requireFence(resolved.serverId());
         InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
@@ -128,7 +131,7 @@ public final class InstanceSnapshots {
         InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
             fence, InstanceModel.STATUS_STOPPED, resolved.row().get(InstanceModel.NAME));
         if (wasRunning) {
-            this.instances.deploy(instanceId);
+            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
         }
         Blast.log("SNAPSHOT: captured instance", instanceId, "into", directory.toString());
         return snapshot.get(InstanceSnapshotModel.ID);
@@ -151,6 +154,7 @@ public final class InstanceSnapshots {
                 .withArg("id", snapshotId));
         }
         int instanceId = snapshot.get(InstanceSnapshotModel.INSTANCE_ID);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.SNAPSHOTS);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         VolumeSnapshotSupport support = requireSupport(resolved);
@@ -202,7 +206,7 @@ public final class InstanceSnapshots {
 
         // -- the point of no return --------------------------------------------
         if (wasRunning) {
-            this.instances.stop(instanceId);
+            TenantWrites.inAuthorizedOperation(() -> this.instances.stop(instanceId));
         }
         long fence = this.instances.leases().requireFence(resolved.serverId());
         InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
@@ -221,7 +225,7 @@ public final class InstanceSnapshots {
         InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
             fence, InstanceModel.STATUS_STOPPED, resolved.row().get(InstanceModel.NAME));
         if (wasRunning) {
-            this.instances.deploy(instanceId);
+            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
         }
         Blast.log("SNAPSHOT: restored snapshot", snapshotId, "onto instance", instanceId);
     }
@@ -232,6 +236,8 @@ public final class InstanceSnapshots {
         if (snapshot == null) {
             return;
         }
+        HohenheimAccess.requireOperationCapability(
+            snapshot.get(InstanceSnapshotModel.INSTANCE_ID), HohenheimAccess.SNAPSHOTS);
         String directory = snapshot.get(InstanceSnapshotModel.DIRECTORY);
         if (directory != null && !directory.isBlank()) {
             deleteRecursively(Path.of(directory));
@@ -247,7 +253,7 @@ public final class InstanceSnapshots {
             return;
         }
         try {
-            this.instances.deploy(instanceId);
+            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
         } catch (RuntimeException redeployFailed) {
             Blast.log("SNAPSHOT: could not restart instance", instanceId,
                 "after a failed capture:", describe(redeployFailed));

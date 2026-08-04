@@ -2499,6 +2499,82 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
 - Define the tenant-facing instance API in the same phase as these actions. It
   uses the exact record-capability funnel and safe projection as /manage; HTML
   routes are not the automation API.
+
+  STATUS (2026-08-04): LANDED, both halves, plus the creation-authority decision
+  the plan left open.
+
+  THE `/manage` PROJECTION. `ManageInstanceResource` (grant-scoped list/detail,
+  name + crash policy only, no create, no delete, power/snapshot/backup row
+  actions), `ManageInstanceScheduleResource` + `...StepResource` (the admin
+  editors narrowed by a READ scope they never had -- the base step resource was
+  ALLOW_ALL, correct in an admin panel and a cross-tenant list in a delegated
+  one), `ManageInstanceSnapshotResource` / `ManageInstanceBackupResource` (scoped
+  by the capability their own actions demand, not by manage) and
+  `ManageInstanceTemplateResource` (APPROVED templates only, name/description/
+  version only -- the install script is the recipe and routinely carries pasted
+  credentials). Panel ELIGIBILITY now counts instance grants: keying it on sites
+  alone locked a pure instance tenant out of the panel built for them.
+  `RecordSourceRegistry.override` for `InstanceModel` and `RecordScheduleModel`
+  closes the same two-panel shadowing hazard sites/domains already documented.
+
+  THE FUNNEL. Authorization moved ONTO the services, not into the surfaces:
+  `HohenheimAccess.requireOperationCapability` gates
+  `InstanceService.deploy/stop/destroy` (manage), `InstanceSnapshots.create/
+  restore/delete` (snapshots) and `InstanceBackups.backupNow/delete` (backups)
+  for TENANT-ORIGINATED calls only, so the row action, the API and any later
+  caller answer to one policy. `TenantWrites.inAuthorizedOperation` is the
+  continuation scope a backup's internal stop/redeploy runs in (otherwise a
+  backups-only holder could back up a stopped instance and not a running one).
+  Refusals never name the missing capability -- that would be a capability
+  oracle -- and are the same text a caller gets for a record it cannot see.
+
+  THE API. `/api/v1/instances` (list, detail, power, command, backup, snapshot,
+  create), API-KEY ONLY (a session cookie is 403 -- which is what makes the
+  csrfExempt declarations safe), per-endpoint rate limits, JSON out and ordinary
+  form encoding in so the create feeds the SAME raw-values map the HTML form
+  does. `InstanceApi.projection` is a whitelist: settings/image/command,
+  variables, the quota bucket and the placement host are absent BY NAME.
+  Visibility, absence and refusal all produce the identical 404.
+  `restoreToNew` is refused for tenant-originated calls: it creates an instance
+  OUTSIDE the creation funnel (no authority, no placement, no creator grant,
+  image from the archive manifest), so it stays operator-only until it routes
+  through it.
+
+  CREATION AUTHORITY (the open item, now closed). `hohenheim.instances.create`
+  is a PERMISSION, not a capability -- there is no record to hold a capability
+  on -- and it is eligibility only; the real bounds are the transactional quota,
+  the image policy (approved templates only) and PLACEMENT. `InstancePlacement`:
+  a tenant NEVER names a host. A submitted `server_id` is honoured for an admin
+  and IGNORED outright for everyone else; the chooser takes admitted +
+  identity-verified + non-`trusted_only` hosts, treats `dedicated` as exclusive
+  to one owner (compared by charged quota bucket), and picks
+  fewest-live-instances / lowest id. No eligible host is a NAMED refusal, never
+  a fall back to the local daemon. One endpoint (`POST /instances/from-template`,
+  requiresLogin) now serves both panels, so the HTML and API creates cannot
+  drift; the host select is not rendered for a non-admin, because a control
+  whose value is discarded is a control that lies.
+
+  FIXED IN PASSING (a check that could not fail): `InstanceQuota` charged EVERY
+  create to the operator bucket, on the reasoning that grants land after the
+  record. True while creates were admin-only; the moment a tenant can create it
+  meant every tenant shared one bucket with the operator, so the per-owner cap
+  could not bind the thing it exists for. It now charges
+  `HohenheimAccess.creationOwnerSubjects`, the SAME derivation that plants the
+  creator's manage grant a moment later.
+
+  Proven by `TenantInstanceSurfaceTest` (6 journeys) and `TenantInstanceApiTest`
+  (4), both counterfactualed: dropping the list scope leaks the other tenant's
+  name into the body AND turns its 404 into a 200; dropping the power gate turns
+  the post-revocation refusal back into `host_not_admitted`; dropping the
+  snapshot gate lets a manage-only holder reach `snapshot_no_volumes`; honouring
+  the submitted host lands the instance on the tenant-named one; charging the
+  operator bucket produces `hohenheim:instances:` instead of
+  `hohenheim:instances:user:N`; answering 403 for an unowned id (instead of 404)
+  breaks the indistinguishability assertion; and replacing the API's violation
+  key with a generic code breaks the identity comparison against the panel's own
+  live refusal. STILL ADMIN-ONLY and stated as such: destroy, reinstall/install,
+  restore-to-new, template import/export/approval, host administration, and the
+  instance file editor (Phase 6 owns files).
 - Game wiring: Minecraft server template + Velocity template; a game-domains
   mapping (domain record -> backend instance) that MATERIALIZES as generated
   Velocity forced-hosts config (via the instance config-file mechanism) and DNS

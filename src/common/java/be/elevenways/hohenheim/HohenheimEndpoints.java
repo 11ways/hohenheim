@@ -96,6 +96,31 @@ public class HohenheimEndpoints {
             .keyBy(RateLimitPolicy.KeyBy.IP)
             .named("hh_dyndns");
 
+    // --- Tenant instance surface: a container start pulls images and burns host CPU,
+    //     a backup/snapshot moves gigabytes, and a create provisions a workload. Every
+    //     one of them is a resource-amplification lever in tenant hands, so each rides
+    //     its own budget keyed per principal (per IP for anonymous rejects). Reads are
+    //     generous enough for a polling dashboard and still bounded.
+    private static final RateLimitPolicy INSTANCE_READ_LIMIT =
+        RateLimitPolicy.of(120, Duration.ofMinutes(1))
+            .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
+            .named("hh_instance_read");
+
+    private static final RateLimitPolicy INSTANCE_POWER_LIMIT =
+        RateLimitPolicy.of(20, Duration.ofMinutes(1))
+            .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
+            .named("hh_instance_power");
+
+    private static final RateLimitPolicy INSTANCE_ARTIFACT_LIMIT =
+        RateLimitPolicy.of(5, Duration.ofMinutes(10))
+            .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
+            .named("hh_instance_artifact");
+
+    private static final RateLimitPolicy INSTANCE_CREATE_LIMIT =
+        RateLimitPolicy.of(10, Duration.ofMinutes(10))
+            .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
+            .named("hh_instance_create");
+
     // --- Let's Encrypt request (POST for the CMS certificate-request page) ---
     public static final Endpoint<Object> CERTIFICATES_REQUEST = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "certificates_request"))
@@ -121,11 +146,21 @@ public class HohenheimEndpoints {
         .requiresPermission(Permission.of("hohenheim.admin.access"))
         .build();
 
+    /**
+     * The create-from-template submit, for BOTH panels. Deliberately NOT gated on the
+     * admin permission and deliberately NOT under an {@code /admin} path: the authority
+     * to create is {@code hohenheim.instances.create} (plus the template's approval
+     * stamp, the quota and placement), all decided inside
+     * {@code InstanceTemplates.createFromTemplate} so the HTML surfaces and the
+     * automation API answer to ONE gate. requiresLogin keeps anonymous callers out
+     * before any of that runs.
+     */
     public static final Endpoint<Object> INSTANCES_FROM_TEMPLATE = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "instances_from_template"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("admin").addDelimiter().addStatic("instances-from-template").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+            .addStatic("instances").addDelimiter().addStatic("from-template").build())
+        .requiresLogin()
+        .rateLimit(INSTANCE_CREATE_LIMIT)
         .build();
 
     // --- DNS zone-file import (POST for the CMS zone-file tab) ---
@@ -233,6 +268,103 @@ public class HohenheimEndpoints {
         .requiresPermission(Permission.of("hohenheim.admin.access"))
         .csrfExempt()
         .rateLimit(DEPLOY_LIMIT)
+        .build();
+
+    // --- Tenant instance API v1 (znit_ bearer keys via zenit-auth) ---
+    //
+    // A SEPARATE, VERSIONED surface from the HTML routes, and NOT a wider door than
+    // them: authorization is the same record-capability walk the /manage panel rides,
+    // enforced inside InstanceService/InstanceSnapshots/InstanceBackups rather than in
+    // these handlers, and creation goes through the same
+    // InstanceTemplates.createFromTemplate funnel the create page posts to.
+    //
+    // No requiresPermission: a record capability is not a permission, and demanding a
+    // type-level one here would either lock tenants out or hand them everything. The
+    // handlers refuse any principal that is not an API key (a browser session belongs on
+    // the HTML surface), which is what makes csrfExempt safe. requiresLogin still
+    // rejects anonymous callers before a handler runs.
+    //
+    // JSON, not DRY: this is an external interchange edge for third-party automation
+    // (the protoblast doctrine's stated exception), and it matches the existing
+    // /api/sites and /api/dns surfaces. Request bodies are ordinary form encoding so the
+    // create call feeds the SAME raw-values map the HTML form does -- one coercion and
+    // validation pipeline, not a parallel one.
+
+    public static final Endpoint<Object> API_INSTANCES = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instances"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").build())
+        .requiresLogin()
+        .rateLimit(INSTANCE_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_INSTANCE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID).build())
+        .requiresLogin()
+        .rateLimit(INSTANCE_READ_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_POWER = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_power"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("power").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(INSTANCE_POWER_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_COMMAND = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_command"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("command").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(INSTANCE_POWER_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_BACKUP = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_backup"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("backup").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(INSTANCE_ARTIFACT_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_SNAPSHOT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_snapshot"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("snapshot").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(INSTANCE_ARTIFACT_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_CREATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_create"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(INSTANCE_CREATE_LIMIT)
         .build();
 
     // --- DNS records peer/automation API (znit_ bearer keys; the edit-forwarding
