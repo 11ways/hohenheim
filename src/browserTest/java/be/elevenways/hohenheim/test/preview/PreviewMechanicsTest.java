@@ -8,9 +8,12 @@ import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.preview.PreviewDomains;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.task.record.RecordSchedules;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -25,8 +28,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 /**
  * The daemon-less half of the preview contract: deterministic hostnames, the generated
  * -domain attribution guard (a hand-authored row is never adopted or deleted; the
- * attribution cannot be submitted), the atomic per-owner quota, and expiry as a STORED
- * deadline the sweep enforces.
+ * attribution cannot be submitted), the atomic per-owner quota, and expiry as a
+ * one-shot record schedule the framework sweeper enforces.
  */
 class PreviewMechanicsTest extends HohenheimTestBase {
 
@@ -174,12 +177,13 @@ class PreviewMechanicsTest extends HohenheimTestBase {
     }
 
     @Test
-    void theExpirySweepEnforcesTheStoredDeadline() throws Exception {
-        // 1. A preview whose lifetime ended while nothing was watching (the stored
-        //    deadline is the enforcement, not a timer).
+    void theOneShotExpiryScheduleEnforcesTheStoredDeadline() throws Exception {
+        // 1. A preview whose lifetime ended while nothing was watching: its deadline
+        //    is a ONE-SHOT record schedule in the database, not an in-memory timer.
         Row expired = newPreviewRow("stale-ref", "prev-mech--stale-ref.preview.test",
             Instant.now().minusSeconds(60));
         int previewId = expired.get(PreviewDeploymentModel.ID);
+        PreviewDeployments.armExpiry(previewId, Instant.now().minusSeconds(60));
         var domains = Models.get(SiteDomainModel.class);
         GeneratedRows.as(new GeneratedRows.Attribution(PreviewDomains.SOURCE,
             PreviewDeploymentModel.MODEL_ID.toString(), previewId), () -> {
@@ -190,25 +194,67 @@ class PreviewMechanicsTest extends HohenheimTestBase {
                 domains.save(generated);
             });
 
-        // 2. One healthy preview beside it, to prove the sweep is not a broom.
+        // 2. One healthy preview beside it (deadline far away), to prove the sweep is
+        //    not a broom.
         Row healthy = newPreviewRow("fresh-ref", "prev-mech--fresh-ref.preview.test",
             Instant.now().plusSeconds(3600));
+        int healthyId = healthy.get(PreviewDeploymentModel.ID);
+        PreviewDeployments.armExpiry(healthyId, Instant.now().plusSeconds(3600));
 
-        PreviewDeployments.sweepExpired();
+        // 3. The FRAMEWORK sweeper (the exact call RunRecordSchedulesTask makes every
+        //    minute) fires the due one-shot; the reached preview is fully reclaimed.
+        new RecordSchedules(Datasources.getDefault()).runDue(null);
 
-        // 3. The expired one is fully reclaimed and stamped, the healthy one untouched.
-        Row dead = Models.get(PreviewDeploymentModel.class).findById(previewId);
+        Row dead = awaitDestroyed(previewId);
         assertThat((String) dead.get(PreviewDeploymentModel.STATUS))
             .as("step 3: expiry is stamped as EXPIRED, visibly")
             .isEqualTo(PreviewDeploymentModel.STATUS_EXPIRED);
         assertThat((Object) dead.get(PreviewDeploymentModel.DELETED_AT)).isNotNull();
         assertThat(generatedDomainOf(previewId))
             .as("step 3: its generated hostname row is gone").isNull();
-        Row alive = Models.get(PreviewDeploymentModel.class)
-            .findById(healthy.get(PreviewDeploymentModel.ID));
+        assertThat(schedulesOf(previewId))
+            .as("step 3: the dead preview left no schedule rows behind").isEmpty();
+
+        // 4. The healthy preview survived, its one-shot still armed and unspent.
+        Row alive = Models.get(PreviewDeploymentModel.class).findById(healthyId);
         assertThat((Object) alive.get(PreviewDeploymentModel.DELETED_AT))
-            .as("step 3: the unexpired preview survived the sweep").isNull();
-        PreviewDeployments.destroy(healthy.get(PreviewDeploymentModel.ID), "operator");
+            .as("step 4: the unexpired preview survived the sweep").isNull();
+        List<Row> armed = schedulesOf(healthyId);
+        assertThat(armed).as("step 4: its one-shot schedule is still armed").hasSize(1);
+        assertThat((Object) armed.get(0).get(RecordScheduleModel.COMPLETED_AT))
+            .as("step 4: and is not spent").isNull();
+
+        // 5. A second sweep changes nothing: the healthy deadline is still ahead.
+        new RecordSchedules(Datasources.getDefault()).runDue(null);
+        alive = Models.get(PreviewDeploymentModel.class).findById(healthyId);
+        assertThat((Object) alive.get(PreviewDeploymentModel.DELETED_AT))
+            .as("step 5: still untouched after another sweep").isNull();
+
+        // 6. Operator teardown reclaims the schedule with the record: soft delete
+        //    fires no remove hooks, so destroy must (and does) delete it explicitly.
+        PreviewDeployments.destroy(healthyId, "operator");
+        assertThat(schedulesOf(healthyId))
+            .as("step 6: teardown removed the armed schedule").isEmpty();
+    }
+
+    /**
+     * The ambient minute sweeper can win the lease race for a due one-shot; whoever
+     * fires it, the destroyed STATE is what matters -- await it briefly.
+     */
+    private static Row awaitDestroyed(int previewId) throws InterruptedException {
+        for (int i = 0; i < 100; i++) {
+            Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
+            if (row != null && row.get(PreviewDeploymentModel.DELETED_AT) != null) {
+                return row;
+            }
+            Thread.sleep(100);
+        }
+        return Models.get(PreviewDeploymentModel.class).findById(previewId);
+    }
+
+    private static List<Row> schedulesOf(int previewId) {
+        return Models.get(RecordScheduleModel.class)
+            .findForRecord(PreviewDeploymentModel.MODEL_ID, previewId);
     }
 
     // -- helpers --------------------------------------------------------------

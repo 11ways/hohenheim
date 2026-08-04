@@ -29,9 +29,11 @@ import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.task.record.RecordSchedules;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -144,13 +146,17 @@ public final class PreviewDeployments {
             preview.set(PreviewDeploymentModel.SITE_ID, siteId);
             preview.set(PreviewDeploymentModel.REF, ref);
         }
+        Instant expiresAt = expiry();
         preview.set(PreviewDeploymentModel.PR_NUMBER, prNumber);
         preview.set(PreviewDeploymentModel.HOSTNAME, hostname);
         preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_DEPLOYING);
-        preview.set(PreviewDeploymentModel.EXPIRES_AT, expiry());
+        preview.set(PreviewDeploymentModel.EXPIRES_AT, expiresAt);
         preview.set(PreviewDeploymentModel.LAST_ERROR, null);
         model.save(preview);
         int previewId = preview.get(PreviewDeploymentModel.ID);
+        // Armed BEFORE the build: a preview that fails to build still gets reclaimed
+        // at its deadline, exactly like the old sweep's status-blind query did.
+        armExpiry(previewId, expiresAt);
 
         try {
             DeployStatuses.report(sourceSettings, sha, GitProviderClient.StatusState.PENDING,
@@ -287,6 +293,13 @@ public final class PreviewDeployments {
                                          : PreviewDeploymentModel.STATUS_DESTROYED);
             preview.set(PreviewDeploymentModel.DELETED_AT, Instant.now());
             model.save(preview);
+            // AIDEV-NOTE: soft delete fires no remove hooks, so the one-shot expiry
+            // schedule must die here explicitly (the InstanceService.destroy
+            // precedent). When THIS destroy was itself fired by that schedule, the
+            // chain's later run-row writes match zero deleted rows and slog
+            // run_write_fenced -- benign: the record and its history are gone.
+            new RecordSchedules(Datasources.getDefault())
+                .deleteForRecord(PreviewDeploymentModel.MODEL_ID, previewId);
             reloadProxy();
             Blast.log("PREVIEW:", preview.get(PreviewDeploymentModel.HOSTNAME),
                 "reclaimed (" + reason + ")");
@@ -301,23 +314,16 @@ public final class PreviewDeployments {
     }
 
     /**
-     * Reclaim every preview whose lifetime has ended. Runs from the minute sweep AND at
-     * boot, so a lost timer can delay an expiry but never void it -- the bounded
-     * lifetime is enforced by the stored {@code expires_at}, not by an in-memory timer.
+     * Arm (or EXTEND) the preview's bounded lifetime as a one-shot record schedule:
+     * the framework sweeper fires {@link PreviewExpireAction} once at the deadline --
+     * stored in the database, so a controller that was down past it still enforces it
+     * at its next sweep, delayed but never voided. The {@code expires_at} column is
+     * DISPLAY data only; this schedule is the enforcement.
      */
-    public static void sweepExpired() {
-        List<Row> due = Models.get(PreviewDeploymentModel.class).find()
-            .where(PreviewDeploymentModel.DELETED_AT.isNull())
-            .where(PreviewDeploymentModel.EXPIRES_AT.lte(Instant.now()))
-            .all();
-        for (Row preview : due) {
-            try {
-                destroy(preview.get(PreviewDeploymentModel.ID), "expired");
-            } catch (RuntimeException e) {
-                Blast.log("PREVIEW: expiry of preview",
-                    preview.get(PreviewDeploymentModel.ID), "failed -", e.getMessage());
-            }
-        }
+    public static void armExpiry(int previewId, @NonNull Instant expiresAt) {
+        new RecordSchedules(Datasources.getDefault()).armOnce(
+            PreviewDeploymentModel.MODEL_ID, previewId, "expire",
+            expiresAt, PreviewExpireAction.ID, null, null);
     }
 
     // -- routing support -------------------------------------------------------

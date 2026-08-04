@@ -5784,6 +5784,10 @@
     "text": "Consolecommando sturen",
     "scope": "schedule_action"
   },
+  "expire_preview": {
+    "text": "Preview laten vervallen",
+    "scope": "schedule_action"
+  },
   "power": {
     "text": "Stroomactie",
     "scope": "schedule_action"

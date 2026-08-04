@@ -19,8 +19,11 @@ import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.instance.InstanceIdOffsets;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.task.record.RecordScheduleModel;
+import be.elevenways.zenit.server.task.record.RecordSchedules;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -176,6 +179,17 @@ class PreviewDeploymentLiveTest {
         assertThat(hostname).as("step 1: the deterministic generated hostname")
             .isEqualTo("prev-live--feature-x.preview.test");
         assertThat(instanceId).as("step 1: the preview owns an instance").isNotNull();
+        List<Row> armed = Models.get(RecordScheduleModel.class)
+            .findForRecord(PreviewDeploymentModel.MODEL_ID, previewId);
+        assertThat(armed)
+            .as("step 1: deploy itself armed the one-shot expiry schedule").hasSize(1);
+        assertThat((String) armed.get(0).get(RecordScheduleModel.KIND))
+            .as("step 1: as a one-shot").isEqualTo(RecordScheduleModel.KIND_ONCE);
+        assertThat((Object) armed.get(0).get(RecordScheduleModel.RUN_AT)
+                .truncatedTo(java.time.temporal.ChronoUnit.MILLIS))
+            .as("step 1: at the stored deadline (storage keeps millis)")
+            .isEqualTo(preview.get(PreviewDeploymentModel.EXPIRES_AT)
+                .truncatedTo(java.time.temporal.ChronoUnit.MILLIS));
 
         // 2. The instance and domain rows carry the preview's ATTRIBUTION, and the
         //    daemon runs a digest-pinned artifact built from the ref.
@@ -226,13 +240,13 @@ class PreviewDeploymentLiveTest {
         assertThat(PreviewQuota.usedBy(bucket.substring("hohenheim:previews:".length())))
             .as("step 5: the owner's preview slot is spent").isEqualTo(1);
 
-        // 6. EXPIRY: the stored deadline passes; the sweep (the same one the minute
-        //    task and boot run) reclaims EVERYTHING.
-        preview.set(PreviewDeploymentModel.EXPIRES_AT, Instant.now().minusSeconds(1));
-        Models.get(PreviewDeploymentModel.class).save(preview);
-        PreviewDeployments.sweepExpired();
+        // 6. EXPIRY: re-arm the deploy-armed one-shot at a reached deadline (the
+        //    extend-the-window call, backwards); the framework sweeper reclaims
+        //    EVERYTHING.
+        PreviewDeployments.armExpiry(previewId, Instant.now().minusSeconds(1));
+        new RecordSchedules(Datasources.getDefault()).runDue(null);
 
-        Row dead = Models.get(PreviewDeploymentModel.class).findById(previewId);
+        Row dead = awaitDeleted(previewId);
         assertThat((String) dead.get(PreviewDeploymentModel.STATUS))
             .as("step 6: stamped EXPIRED").isEqualTo(PreviewDeploymentModel.STATUS_EXPIRED);
         assertThat((Object) dead.get(PreviewDeploymentModel.DELETED_AT)).isNotNull();
@@ -267,6 +281,21 @@ class PreviewDeploymentLiveTest {
     }
 
     // -- helpers --------------------------------------------------------------
+
+    /**
+     * The ambient minute sweeper can win the lease race for the due one-shot; whoever
+     * fires it, the reclaimed STATE is what the test asserts -- await it briefly.
+     */
+    private static Row awaitDeleted(int previewId) throws InterruptedException {
+        for (int i = 0; i < 100; i++) {
+            Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
+            if (row != null && row.get(PreviewDeploymentModel.DELETED_AT) != null) {
+                return row;
+            }
+            Thread.sleep(100);
+        }
+        return Models.get(PreviewDeploymentModel.class).findById(previewId);
+    }
 
     private static Row generatedDomainOf(int previewId) {
         List<Row> rows = Models.get(SiteDomainModel.class).find()
