@@ -434,6 +434,114 @@ class PortLedgerTest {
         });
     }
 
+    /**
+     * The pre-allocation strategy's ledger semantics: a stable reservation the stop path
+     * keeps and the failure path never parks, arbitrated on ROWS when two allocations
+     * race -- the unique claim key is the arbiter, never a log line.
+     */
+    @Test
+    void preallocatedClaimsAreStableReservationsAndTheLedgerArbitratesRaces()
+            throws Exception {
+        Db.run(datasource, () -> {
+            int localId = ServerModel.localServerId();
+            Row one = Models.get(InstanceModel.class).createEmptyRow();
+            one.set(InstanceModel.NAME, "prealloc-one");
+            one.set(InstanceModel.KIND, "hohenheim:docker_container");
+            Models.get(InstanceModel.class).save(one);
+            int oneId = one.get(InstanceModel.ID);
+
+            // 1. A UDP public pre-allocation writes a held, mode-stamped row.
+            PortLedger.claimPreallocated(localId, "", 8350, "udp",
+                InstanceModel.MODEL_ID, oneId, null);
+            Row claim = PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8350, "udp"));
+            assertThat(claim).as("step 1: the pre-allocated claim exists").isNotNull();
+            assertThat(PortLedger.isPreallocated(claim))
+                .as("step 1: the row carries the pre-allocation discriminator").isTrue();
+            assertThat(PortLedger.isReleasing(claim))
+                .as("step 1: and is held, not releasing").isFalse();
+
+            // 2. The STOP release keeps the reservation; the failure park skips it too.
+            PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, oneId);
+            Row afterStop = PortLedger.holderOf(
+                PortLedger.claimKeyOf(localId, "", 8350, "udp"));
+            assertThat(afterStop)
+                .as("step 2: a stop's observed release KEEPS the pre-allocated number")
+                .isNotNull();
+            PortLedger.releaseOwner(InstanceModel.MODEL_ID, oneId);
+            assertThat(PortLedger.isReleasing(PortLedger.holderOf(
+                    PortLedger.claimKeyOf(localId, "", 8350, "udp"))))
+                .as("step 2: a failure park never parks the reservation either")
+                .isFalse();
+
+            // 3. Only the end-of-life release frees it.
+            PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, oneId);
+            assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8350, "udp")))
+                .as("step 3: the verified destroy releases the reservation")
+                .isNull();
+            Models.get(InstanceModel.class).delete(oneId);
+        });
+
+        // 4. TWO CONCURRENT pre-allocations of one tuple: exactly one row wins, the
+        //    loser gets the NAMED conflict -- asserted on rows, not on a log line.
+        int[] ids = new int[2];
+        Db.run(datasource, () -> {
+            for (int i = 0; i < 2; i++) {
+                Row rival = Models.get(InstanceModel.class).createEmptyRow();
+                rival.set(InstanceModel.NAME, "prealloc-race-" + i);
+                rival.set(InstanceModel.KIND, "hohenheim:docker_container");
+                Models.get(InstanceModel.class).save(rival);
+                ids[i] = rival.get(InstanceModel.ID);
+            }
+        });
+        java.util.concurrent.CyclicBarrier barrier = new java.util.concurrent.CyclicBarrier(2);
+        java.util.List<Throwable> refusals =
+            java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        Thread[] racers = new Thread[2];
+        for (int i = 0; i < 2; i++) {
+            int ownerId = ids[i];
+            racers[i] = new Thread(() -> Db.run(datasource, () -> {
+                try {
+                    barrier.await();
+                    PortLedger.claimPreallocated(ServerModel.localServerId(), "", 8351,
+                        "udp", InstanceModel.MODEL_ID, ownerId, null);
+                } catch (PortLedger.PortConflict conflict) {
+                    refusals.add(conflict);
+                } catch (Exception unexpected) {
+                    refusals.add(unexpected);
+                }
+            }));
+            racers[i].start();
+        }
+        for (Thread racer : racers) {
+            racer.join();
+        }
+        Db.run(datasource, () -> {
+            List<Row> rows = Models.get(PortAllocationModel.class).find()
+                .where(PortAllocationModel.SERVER_ID.eq(ServerModel.localServerId()))
+                .and(PortAllocationModel.PORT.eq(8351))
+                .all();
+            assertThat(rows)
+                .as("step 4: exactly ONE ledger row exists for the contested tuple")
+                .hasSize(1);
+            assertThat(refusals)
+                .as("step 4: exactly one racer was refused, with the NAMED conflict")
+                .hasSize(1);
+            assertThat(refusals.get(0))
+                .as("step 4: the refusal is the ledger's PortConflict, naming the holder")
+                .isInstanceOf(PortLedger.PortConflict.class);
+            Integer winner = rows.get(0).get(PortAllocationModel.OWNER_ID);
+            String winnerName = Models.get(InstanceModel.class).findById(winner)
+                .get(InstanceModel.NAME);
+            assertThat(((PortLedger.PortConflict) refusals.get(0)).getHolder())
+                .as("step 4: the refusal names the WINNING instance")
+                .contains(winnerName);
+            PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, ids[0]);
+            PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, ids[1]);
+            Models.get(InstanceModel.class).delete(ids[0]);
+            Models.get(InstanceModel.class).delete(ids[1]);
+        });
+    }
+
     private static Row port(int container, int host, String protocol, String hostIp) {
         Row port = new Row();
         port.set(StackServiceModel.PORT_CONTAINER, container);

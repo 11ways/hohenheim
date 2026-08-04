@@ -693,6 +693,31 @@ public class HohenheimSettings {
             .build();
     }
 
+    // --- Instance networking (public game-port pre-allocation) ---
+    public abstract class Instances {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("instances")
+            .label("Instances")
+            .describe("Instance-tier runtime policy: the host-port window public/UDP "
+                + "publications pre-allocate from")
+            .icon("box");
+
+        public static final SettingDefinition<Integer> PUBLIC_PORT_FIRST = GROUP
+            .buildSetting("public_port_first", Integer.class)
+            .defaultValue(30000)
+            .description("First host port of the pre-allocation window for declared "
+                + "public/UDP instance publications. Keep the window clear of the kernel "
+                + "ephemeral range (32768-60999) and of hohenheim.proxy.first_port's "
+                + "managed-process window")
+            .build();
+
+        public static final SettingDefinition<Integer> PUBLIC_PORT_COUNT = GROUP
+            .buildSetting("public_port_count", Integer.class)
+            .defaultValue(2000)
+            .description("Size of the pre-allocation window; allocation refuses loudly "
+                + "when every port in it is claimed or observed bound")
+            .build();
+    }
+
     // --- Instance snapshots and backups ---
     public abstract class Backup {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("backup")

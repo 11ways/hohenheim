@@ -4482,7 +4482,7 @@
     "scope": "help"
   },
   "instance_container_port": {
-    "text": "Container-TCP-poort gepubliceerd op 127.0.0.1 met een tijdelijke hostpoort; laat leeg voor geen (UDP wordt nog niet ondersteund)",
+    "text": "Containerpoort waarop de workload luistert; protocol en blootstelling hieronder bepalen hoe hij gepubliceerd wordt",
     "scope": "help"
   },
   "instance_volumes": {
@@ -5697,5 +5697,85 @@
   "schedule_action_capability_denied": {
     "text": "Je mist het recht dat deze actie vereist op de instantie",
     "scope": "violations"
+  },
+  "port_protocol": [
+    {
+      "text": "Poortprotocol",
+      "scope": "field"
+    },
+    {
+      "text": "TCP of UDP; een UDP-poort krijgt altijd vooraf een vaste hostpoort toegewezen voor de workload start",
+      "scope": "help"
+    }
+  ],
+  "port_exposure": [
+    {
+      "text": "Poortblootstelling",
+      "scope": "field"
+    },
+    {
+      "text": "Loopback houdt de poort enkel bereikbaar vanaf deze host (de veilige standaard); publiek bindt hem op elke interface voor spelers, op een stabiele vooraf toegewezen hostpoort",
+      "scope": "help"
+    }
+  ],
+  "instance_host_port": {
+    "text": "Optionele vaste hostpoort; laat leeg om er automatisch een uit het geconfigureerde venster te kiezen. Een opgegeven poort wordt altijd vooraf geclaimd",
+    "scope": "help"
+  },
+  "public_ipv4": [
+    {
+      "text": "Publiek IPv4-adres",
+      "scope": "field"
+    },
+    {
+      "text": "Het opgegeven publieke IPv4 van deze host; gegenereerde DNS A-records voor gamedomeinen nemen het letterlijk over. Laat leeg om geen A-records te genereren",
+      "scope": "help"
+    }
+  ],
+  "public_ipv6": [
+    {
+      "text": "Publiek IPv6-adres",
+      "scope": "field"
+    },
+    {
+      "text": "Het opgegeven publieke IPv6 van deze host; gegenereerde DNS AAAA-records nemen het letterlijk over. Laat leeg om geen AAAA-records te genereren",
+      "scope": "help"
+    }
+  ],
+  "server_address_invalid": {
+    "text": "'{$address}' is geen geldig IP-adres; geef het adres zelf op, nooit een hostnaam",
+    "scope": "violations"
+  },
+  "port_window_exhausted": {
+    "text": "Geen vrije hostpoort in het pre-allocatievenster ({$first}, {$count} poorten); maak claims vrij of vergroot hohenheim.instances",
+    "scope": "violations"
+  },
+  "port_bound_on_host": {
+    "text": "Hostpoort {$port} is al gebonden op deze host door iets buiten het grootboek",
+    "scope": "violations"
+  },
+  "port_conflict": {
+    "text": "Hostpoort {$port} is al geclaimd door {$holder}",
+    "scope": "violations"
+  },
+  "port_shape_without_port": {
+    "text": "Poortprotocol, blootstelling of hostpoort is opgegeven maar geen containerpoort zegt welke poort gepubliceerd wordt",
+    "scope": "violations"
+  },
+  "tcp": {
+    "text": "TCP",
+    "scope": "port_protocol"
+  },
+  "udp": {
+    "text": "UDP",
+    "scope": "port_protocol"
+  },
+  "loopback": {
+    "text": "Enkel loopback",
+    "scope": "port_exposure"
+  },
+  "public": {
+    "text": "Publiek",
+    "scope": "port_exposure"
   }
 }

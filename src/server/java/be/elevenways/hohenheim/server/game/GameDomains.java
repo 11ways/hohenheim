@@ -37,6 +37,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -117,6 +118,64 @@ public final class GameDomains {
                 }
             }
         });
+        // A changed host address re-reconciles every mapping whose proxy runs on that
+        // host: a stale A record pointing at an address the host no longer owns is a
+        // dangling pointer (the class the release-quarantine ledger exists to prevent).
+        // Before/after pairing because only beforeWrite can still see the STORED values;
+        // reconciling on every save would bump zone serials on each host probe.
+        ServerModel.SCHEMA.addBeforeWriteHook(context -> {
+            Row row = context.getRow();
+            if (row == null) {
+                return;
+            }
+            Object id = row.get(ServerModel.ID.getName());
+            Row stored = id instanceof Integer serverId
+                ? Models.get(ServerModel.class).findById(serverId) : null;
+            boolean changed = addressDiffers(row, stored, ServerModel.PUBLIC_IPV4.getName())
+                || addressDiffers(row, stored, ServerModel.PUBLIC_IPV6.getName());
+            if (changed) {
+                context.setAttribute(SERVER_ADDRESS_CHANGED, Boolean.TRUE);
+            }
+        });
+        ServerModel.SCHEMA.addAfterSaveHook(context -> {
+            if (!Boolean.TRUE.equals(context.getAttribute(SERVER_ADDRESS_CHANGED))) {
+                return;
+            }
+            Row row = context.getRow();
+            Object id = row != null ? row.get(ServerModel.ID.getName()) : null;
+            if (id instanceof Integer serverId) {
+                afterServerAddressChange(serverId);
+            }
+        });
+    }
+
+    /** Context key the address-change before/after pairing hands its verdict over. */
+    private static final String SERVER_ADDRESS_CHANGED = "hohenheim.game.server-address-changed";
+
+    private static boolean addressDiffers(@NonNull Row row, @Nullable Row stored,
+                                          @NonNull String field) {
+        if (!row.has(field)) {
+            return false;
+        }
+        return !Objects.equals(row.get(field), stored != null ? stored.get(field) : null);
+    }
+
+    /**
+     * Re-reconcile the generated DNS of every mapping whose PROXY runs on this host --
+     * the A/AAAA values are the host's declared addresses, so they move (or come down)
+     * with the declaration.
+     */
+    public static void afterServerAddressChange(int serverId) {
+        for (Row mapping : Models.get(GameDomainModel.class).find().all()) {
+            Integer proxyId = mapping.get(GameDomainModel.PROXY_INSTANCE_ID);
+            if (proxyId == null) {
+                continue;
+            }
+            Row server = proxyServer(proxyId);
+            if (server != null && Objects.equals(server.get(ServerModel.ID), serverId)) {
+                reconcileDns(mapping);
+            }
+        }
     }
 
     // -- the authorized write funnel ------------------------------------------
@@ -443,10 +502,24 @@ public final class GameDomains {
         pushFiles(backendId, true);
     }
 
+    /** One desired generated row: type + owner name + the type-specific payload. */
+    private record DesiredRecord(@NonNull String type, @NonNull String owner,
+                                 @NonNull String value, @Nullable Integer port) {
+    }
+
     /**
-     * Reconcile the mapping's generated DNS output: one SRV row aimed at the mapped
-     * hostname on the proxy's published port. Updates or removes ONLY rows carrying this
-     * mapping's exact attribution; a foreign or hand-authored row is never touched.
+     * Reconcile the mapping's generated DNS output: an SRV row aimed at the mapped
+     * hostname on the proxy's PUBLIC pre-allocated port, plus an A (and AAAA) row at
+     * that hostname carrying the host's DECLARED public address, so the SRV target
+     * resolves off our own zone. Updates or removes ONLY rows carrying this mapping's
+     * exact attribution; a foreign or hand-authored row is never touched.
+     *
+     * AIDEV-NOTE: DNS materializes ONLY off a PUBLIC publication. A loopback-published
+     * proxy is unreachable from outside by design, so an SRV/A pair pointing at it would
+     * be exactly the dangling-pointer shape this wave exists to kill -- the rows come
+     * down (or never appear) instead. A rows additionally need the server-address
+     * authority (servers.public_ipv4/6); a public port on a host with no declared
+     * address generates the SRV only, for operators whose A records live elsewhere.
      */
     static void reconcileDns(@NonNull Row mapping) {
         Integer mappingId = mapping.get(GameDomainModel.ID);
@@ -457,75 +530,90 @@ public final class GameDomains {
         List<Row> owned = ownedDnsRows(mappingId);
 
         Row desiredZone = null;
-        String desiredOwner = null;
-        Integer desiredPort = null;
+        List<DesiredRecord> desired = new ArrayList<>();
         Row domain = mappingDomain(mapping);
         if (Boolean.TRUE.equals(mapping.get(GameDomainModel.ENABLED)) && domain != null) {
             String hostname = domain.get(SiteDomainModel.HOSTNAME);
             if (hostname != null && !hostname.isBlank()) {
                 desiredZone = zoneFor(hostname);
-                if (desiredZone != null) {
+                Integer publicPort = publicProxyPort(
+                    mapping.get(GameDomainModel.PROXY_INSTANCE_ID));
+                if (desiredZone != null && publicPort != null) {
                     String origin = desiredZone.get(DnsZoneModel.ORIGIN);
                     String relative = DnsNames.relative(origin, hostname);
-                    desiredOwner = DnsNames.APEX.equals(relative)
+                    String srvOwner = DnsNames.APEX.equals(relative)
                         ? SRV_PREFIX : SRV_PREFIX + "." + relative;
-                    desiredPort = publishedProxyPort(
-                        mapping.get(GameDomainModel.PROXY_INSTANCE_ID));
+                    desired.add(new DesiredRecord(DnsRecordModel.TYPE_SRV, srvOwner,
+                        hostname, publicPort));
+                    Row server = proxyServer(mapping.get(GameDomainModel.PROXY_INSTANCE_ID));
+                    String v4 = server != null ? server.get(ServerModel.PUBLIC_IPV4) : null;
+                    String v6 = server != null ? server.get(ServerModel.PUBLIC_IPV6) : null;
+                    if (v4 != null && !v4.isBlank()) {
+                        desired.add(new DesiredRecord(DnsRecordModel.TYPE_A, relative,
+                            v4, null));
+                    }
+                    if (v6 != null && !v6.isBlank()) {
+                        desired.add(new DesiredRecord(DnsRecordModel.TYPE_AAAA, relative,
+                            v6, null));
+                    }
                 }
             }
         }
 
         Set<Integer> touchedZones = new LinkedHashSet<>();
+        for (Row row : owned) {
+            touchedZones.add(row.get(DnsRecordModel.ZONE_ID));
+        }
         try {
-            if (desiredZone == null || desiredPort == null) {
-                // Nothing to serve (disabled, no covering zone, proxy not deployed):
-                // generated rows come down rather than dangle.
+            if (desiredZone == null || desired.isEmpty()) {
+                // Nothing to serve (disabled, no covering zone, proxy not publicly
+                // published): generated rows come down rather than dangle.
                 GeneratedRows.sweeping(SOURCE, () -> {
                     for (Row row : owned) {
                         records.delete(row);
                     }
                 });
-                for (Row row : owned) {
-                    touchedZones.add(row.get(DnsRecordModel.ZONE_ID));
-                }
             } else {
                 int zoneId = desiredZone.get(DnsZoneModel.ID);
-                String hostname = domain.get(SiteDomainModel.HOSTNAME);
-                Row keep = null;
+                // Pair each desired type with the owned row of that type; leftovers die.
+                Map<String, Row> reusable = new LinkedHashMap<>();
                 List<Row> extra = new ArrayList<>();
                 for (Row row : owned) {
-                    if (keep == null && DnsRecordModel.TYPE_SRV.equals(
-                            row.get(DnsRecordModel.TYPE))) {
-                        keep = row;
-                    } else {
-                        extra.add(row);
+                    String type = row.get(DnsRecordModel.TYPE);
+                    if (type != null && reusable.putIfAbsent(type, row) == null) {
+                        continue;
                     }
+                    extra.add(row);
                 }
-                Row target = keep != null
-                    ? keep : Models.get(DnsRecordModel.class).createEmptyRow();
-                Integer oldZone = keep != null ? keep.get(DnsRecordModel.ZONE_ID) : null;
-                target.set(DnsRecordModel.ZONE_ID, zoneId);
-                target.set(DnsRecordModel.NAME, desiredOwner);
-                target.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_SRV);
-                target.set(DnsRecordModel.PRIORITY, 0);
-                target.set(DnsRecordModel.WEIGHT, 5);
-                target.set(DnsRecordModel.PORT, desiredPort);
-                target.set(DnsRecordModel.VALUE, hostname);
-                target.set(DnsRecordModel.ENABLED, true);
+                List<Row> writes = new ArrayList<>();
+                for (DesiredRecord want : desired) {
+                    Row target = reusable.remove(want.type());
+                    if (target == null) {
+                        target = records.createEmptyRow();
+                    }
+                    target.set(DnsRecordModel.ZONE_ID, zoneId);
+                    target.set(DnsRecordModel.NAME, want.owner());
+                    target.set(DnsRecordModel.TYPE, want.type());
+                    target.set(DnsRecordModel.PRIORITY,
+                        DnsRecordModel.TYPE_SRV.equals(want.type()) ? 0 : null);
+                    target.set(DnsRecordModel.WEIGHT,
+                        DnsRecordModel.TYPE_SRV.equals(want.type()) ? 5 : null);
+                    target.set(DnsRecordModel.PORT, want.port());
+                    target.set(DnsRecordModel.VALUE, want.value());
+                    target.set(DnsRecordModel.ENABLED, true);
+                    writes.add(target);
+                }
+                extra.addAll(reusable.values());
                 GeneratedRows.as(new GeneratedRows.Attribution(SOURCE,
                     GameDomainModel.MODEL_ID.toString(), mappingId), () -> {
-                        records.save(target);
+                        for (Row target : writes) {
+                            records.save(target);
+                        }
                         for (Row row : extra) {
                             records.delete(row);
                         }
                     });
                 touchedZones.add(zoneId);
-                if (oldZone != null) {
-                    touchedZones.add(oldZone);
-                }
-                for (Row row : extra) {
-                    touchedZones.add(row.get(DnsRecordModel.ZONE_ID));
-                }
             }
         } catch (Violations refused) {
             throw refused;
@@ -746,6 +834,35 @@ public final class GameDomains {
             }
         }
         return null;
+    }
+
+    /**
+     * The proxy's PUBLIC host port -- a held whole-host claim -- or null. THE gate DNS
+     * generation rides: a loopback claim never produces DNS rows, because nothing
+     * outside this host could connect to what they would point at.
+     */
+    static @Nullable Integer publicProxyPort(int proxyId) {
+        for (Row claim : PortLedger.claimsOf(InstanceModel.MODEL_ID, proxyId)) {
+            if (!PortLedger.isReleasing(claim)
+                    && "".equals(claim.get(PortAllocationModel.HOST_IP))) {
+                return claim.get(PortAllocationModel.PORT);
+            }
+        }
+        return null;
+    }
+
+    /** The servers row of the proxy's host, or null when it cannot be resolved. */
+    private static @Nullable Row proxyServer(int proxyId) {
+        Row proxy = Models.get(InstanceModel.class).findById(proxyId);
+        if (proxy == null) {
+            return null;
+        }
+        try {
+            int serverId = ServerModel.canonicalServerId(proxy.get(InstanceModel.SERVER_ID));
+            return Models.get(ServerModel.class).findById(serverId);
+        } catch (IllegalArgumentException unknown) {
+            return null;
+        }
     }
 
     private static int proxyBindPort(int proxyId) {

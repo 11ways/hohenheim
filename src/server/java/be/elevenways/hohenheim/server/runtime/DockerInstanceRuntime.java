@@ -18,7 +18,18 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * The Docker driver of the instance tier: WRAPS {@link DockerClient} (it is not the
  * seam -- Incus is a different transport shape entirely). One container per instance on
  * its OWN private network, owner labels stamped at create on the container, the network
- * AND every named volume, an optional loopback-published TCP port read back after start.
+ * AND every named volume, and at most one declared port publication: loopback/tcp rides
+ * an ephemeral host port read back after start (record-after), everything else
+ * materializes the ledger's pre-allocated claim (see {@link PortPublication}).
+ *
+ * AIDEV-NOTE: a PUBLIC bind does not weaken the tenant network policy. The
+ * WorkloadNetworkPolicy denies are saddr-scoped to the workload's own subnet, inbound
+ * player traffic from outside falls through to the chain's accept policy, and a
+ * cross-tenant packet aimed at a public port is DNAT'ed (prerouting, before the forward
+ * hook) onto the target's PRIVATE subnet address -- where the existing RFC1918 denies
+ * drop it. Loopback stays the default and the deliberate posture for everything that
+ * does not declare otherwise: the reverse proxy reaches those ports over 127.0.0.1 and
+ * the world cannot.
  *
  * AIDEV-NOTE: the instance tier is the tenant-authored tier, and it REFUSES to deploy on a
  * host that cannot enforce the network policy (see {@link WorkloadNetworkPolicy}). That
@@ -30,9 +41,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public final class DockerInstanceRuntime
         implements InstanceRuntime, VolumeSnapshotSupport, FileStagingSupport, InstallSupport,
                    ConsoleStreamSupport, LinkNetworkSupport {
-
-    /** Published ports bind loopback only: the reverse proxy / operator reaches them, the world does not. */
-    private static final String HOST_BIND_ADDRESS = "127.0.0.1";
 
     private final @NonNull DockerClient docker;
     private final @NonNull WorkloadNetworkPolicy policy;
@@ -169,7 +177,9 @@ public final class DockerInstanceRuntime
         if (!running) {
             return new InstanceStatus(ContainerState.STOPPED, null);
         }
-        return new InstanceStatus(ContainerState.RUNNING, firstPublishedPort(inspect));
+        Object[] binding = firstPublishedBinding(inspect);
+        return new InstanceStatus(ContainerState.RUNNING,
+            (Integer) binding[0], (String) binding[1]);
     }
 
     // -- VolumeSnapshotSupport ------------------------------------------------
@@ -489,25 +499,32 @@ public final class DockerInstanceRuntime
         return slash <= 0 ? "/" : normalized.substring(0, slash);
     }
 
-    /** The one published host port of the inspect payload, or null (our specs publish at most one). */
-    private static @Nullable Integer firstPublishedPort(Map<String, Object> inspect) {
+    /**
+     * The one published (host port, bind address) of the inspect payload, or {null, null}
+     * (our specs publish at most one port). The bind address is the DAEMON'S report
+     * ({@code HostIp}), which is what the exposure verification asserts against.
+     */
+    private static Object[] firstPublishedBinding(Map<String, Object> inspect) {
         Object ports = inspect.get("NetworkSettings") instanceof Map<?, ?> ns
             ? ns.get("Ports") : null;
         if (!(ports instanceof Map<?, ?> portMap)) {
-            return null;
+            return new Object[] {null, null};
         }
         for (Object bindings : portMap.values()) {
             if (bindings instanceof List<?> list && !list.isEmpty()
                     && list.get(0) instanceof Map<?, ?> binding
                     && binding.get("HostPort") != null) {
                 try {
-                    return Integer.parseInt(binding.get("HostPort").toString());
+                    return new Object[] {
+                        Integer.parseInt(binding.get("HostPort").toString()),
+                        binding.get("HostIp") != null
+                            ? binding.get("HostIp").toString() : null};
                 } catch (NumberFormatException ignored) {
-                    return null;
+                    return new Object[] {null, null};
                 }
             }
         }
-        return null;
+        return new Object[] {null, null};
     }
 
     private static Map<String, Object> buildSpec(InstanceSpec spec, String network) {
@@ -537,11 +554,27 @@ public final class DockerInstanceRuntime
 
         Map<String, Object> hostConfig = new LinkedHashMap<>();
         hostConfig.put("NetworkMode", network);
-        if (spec.publishPort() != null) {
-            String portKey = spec.publishPort() + "/tcp";
+        PortPublication publication = spec.publication();
+        if (publication != null) {
+            // AIDEV-NOTE: a pre-allocation-shaped publication without a claimed port is a
+            // HARD refusal, never a silent fall-back to an ephemeral bind -- an ephemeral
+            // public port moves under the DNS rows pointing at it, and an ephemeral UDP
+            // port could never be read back (publishedPort is tcp-only). The claim must
+            // already exist in the ledger; this driver only materializes it.
+            if (publication.requiresPreallocation() && publication.preallocatedPort() == null) {
+                throw new IllegalStateException("Publication of '" + spec.handle()
+                    + "' (" + publication.protocol()
+                    + (publication.publicExposure() ? ", public" : ", loopback")
+                    + ") requires a pre-allocated host port and none was claimed;"
+                    + " refusing to create the container");
+            }
+            String portKey = publication.containerPort() + "/" + publication.protocol();
+            String hostPort = publication.preallocatedPort() != null
+                ? String.valueOf(publication.preallocatedPort()) : "";
             containerSpec.put("ExposedPorts", Map.of(portKey, Map.of()));
             hostConfig.put("PortBindings", Map.of(portKey,
-                List.of(Map.of("HostIp", HOST_BIND_ADDRESS, "HostPort", ""))));
+                List.of(Map.of("HostIp", publication.hostBindAddress(),
+                    "HostPort", hostPort))));
         }
 
         // Named volumes carry the owner labels via VolumeOptions at BIRTH -- Docker never

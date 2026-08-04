@@ -47,7 +47,8 @@ import java.util.regex.Pattern;
 
 /**
  * Multi-server Docker host inventory. The implicit {@code local} host always
- * exists and cannot be edited or removed; remote hosts are reached over SSH.
+ * exists and cannot be renamed or removed (only its declared public addresses
+ * are editable); remote hosts are reached over SSH.
  * The LIST reads stored host state (health columns + last preflight); the only
  * live daemon contacts are the detail page's overview and the explicit
  * preflight action, both of which persist their outcome.
@@ -92,6 +93,8 @@ public final class ServerResource extends RowResource {
         .add(ServerModel.NAME)
         .add(ServerModel.SSH_TARGET)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.POSTURE))
+        .add(ServerModel.PUBLIC_IPV4)
+        .add(ServerModel.PUBLIC_IPV6)
         .add(Computed.of(TRUST_NOTICE, values -> hostCopy(Microcopy.of("trust_notice_body")))
             .dependsOn("name")
             .build())
@@ -158,6 +161,19 @@ public final class ServerResource extends RowResource {
         }
         if (coerced.get("mode") instanceof String mode) {
             row.set(ServerModel.MODE, mode);
+        }
+        applyAddressValues(row, coerced);
+    }
+
+    /** The declared public addresses; blank folds to null (the model hook validates). */
+    private static void applyAddressValues(@NonNull Row row, @NonNull Map<String, Object> coerced) {
+        if (coerced.containsKey("public_ipv4")) {
+            Object value = coerced.get("public_ipv4");
+            row.set(ServerModel.PUBLIC_IPV4, value != null ? String.valueOf(value) : null);
+        }
+        if (coerced.containsKey("public_ipv6")) {
+            Object value = coerced.get("public_ipv6");
+            row.set(ServerModel.PUBLIC_IPV6, value != null ? String.valueOf(value) : null);
         }
     }
 
@@ -543,6 +559,15 @@ public final class ServerResource extends RowResource {
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
+        // The implicit local host keeps its identity IMMUTABLE (name, target, mode), but
+        // its declared public addresses are legitimately operator-set -- without this
+        // lane the one host every dev install runs on could never carry an A record.
+        if (ServerService.LOCAL.equals(existing.get(ServerModel.NAME))) {
+            applyAddressValues(existing, coerced);
+            Models.get(ServerModel.class).save(existing);
+            ServerOptions.refresh();
+            return;
+        }
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, existing);
         values.put("mode", ServerService.MODE_SSH);

@@ -10,16 +10,20 @@ import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
+import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DoubleField;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -72,11 +76,49 @@ public final class DockerContainerKind implements InstanceKindHandler {
         StringField.builder().name("command").label(HohenheimFormCopy.label("container_command"))
             .help(HohenheimFormCopy.help("container_command")).build());
 
-    // TCP only, published on 127.0.0.1 with an ephemeral host port recorded AFTER start
-    // (record-after); a UDP/game port needs the declared pre-allocation mode (not built).
+    // The port requirement lives HERE, in the kind settings (and therefore in every
+    // template's settings baseline): container_port names the port, the two enums below
+    // declare its protocol and exposure, host_port optionally fixes the host-side number.
     public static final IntegerField CONTAINER_PORT = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("container_port").label(HohenheimFormCopy.label("container_port"))
             .help(HohenheimFormCopy.help("instance_container_port")).build());
+
+    /** {@link #PORT_EXPOSURE}: published on 127.0.0.1 only (the default, the safe posture). */
+    public static final String EXPOSURE_LOOPBACK = "loopback";
+
+    /** {@link #PORT_EXPOSURE}: published on 0.0.0.0 -- a DELIBERATE, declared decision. */
+    public static final String EXPOSURE_PUBLIC = "public";
+
+    // Loopback/tcp/no-fixed-port = record-after ephemeral (unchanged behaviour); any
+    // other combination derives the PRE-ALLOCATION strategy (claim before create).
+    public static final EnumField PORT_PROTOCOL = SETTINGS_SCHEMA.addField(
+        EnumField.builder("port_protocol")
+            .value("tcp", v -> v.displayName("TCP").icon("right-left")
+                .label(Microcopy.of("tcp").withFilter("scope", "port_protocol")))
+            .value("udp", v -> v.displayName("UDP").icon("paper-plane")
+                .label(Microcopy.of("udp").withFilter("scope", "port_protocol")))
+            .defaultValue("tcp")
+            .label(HohenheimFormCopy.label("port_protocol"))
+            .help(HohenheimFormCopy.help("port_protocol"))
+            .build());
+
+    public static final EnumField PORT_EXPOSURE = SETTINGS_SCHEMA.addField(
+        EnumField.builder("port_exposure")
+            .value(EXPOSURE_LOOPBACK, v -> v.displayName("Loopback only").icon("house-lock")
+                .label(Microcopy.of("loopback").withFilter("scope", "port_exposure"))
+                .color("teal"))
+            .value(EXPOSURE_PUBLIC, v -> v.displayName("Public").icon("globe")
+                .label(Microcopy.of("public").withFilter("scope", "port_exposure"))
+                .color("orange"))
+            .defaultValue(EXPOSURE_LOOPBACK)
+            .label(HohenheimFormCopy.label("port_exposure"))
+            .help(HohenheimFormCopy.help("port_exposure"))
+            .build());
+
+    // Optional fixed host port; declaring one always pre-allocates it in the ledger.
+    public static final IntegerField HOST_PORT = SETTINGS_SCHEMA.addField(
+        IntegerField.builder().name("host_port").label(HohenheimFormCopy.label("host_port"))
+            .help(HohenheimFormCopy.help("host_port")).build());
 
     // secret(): redacted on derived surfaces, masked in forms, kept on blank submit.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
@@ -146,14 +188,41 @@ public final class DockerContainerKind implements InstanceKindHandler {
             }
         });
 
-        Object port = settings.get("container_port");
-        Integer publishPort = port instanceof Number number && number.intValue() > 0
-            ? number.intValue() : null;
-
         return new InstanceSpec(handle, imageRef, cmd,
-            EnvVars.toMap(settings.get("environment_variables")), volumes, publishPort,
+            EnvVars.toMap(settings.get("environment_variables")), volumes,
+            publicationOf(settings),
             ResourceLimits.fromSettings(settings), HARDENING,
             OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+    }
+
+    /**
+     * Derive the declared publication from the kind settings.
+     *
+     * @throws Violations when protocol/exposure/host_port are declared without a
+     *         container port -- half a declaration silently publishing nothing is the
+     *         reports-success shape this codebase hunts by name
+     */
+    static @Nullable PortPublication publicationOf(@NonNull Map<String, Object> settings) {
+        Object port = settings.get("container_port");
+        Integer containerPort = port instanceof Number number && number.intValue() > 0
+            ? number.intValue() : null;
+        String protocol = str(settings.get("port_protocol"));
+        String exposure = str(settings.get("port_exposure"));
+        Object host = settings.get("host_port");
+        Integer hostPort = host instanceof Number number && number.intValue() > 0
+            ? number.intValue() : null;
+        if (containerPort == null) {
+            boolean declaresShape = "udp".equals(protocol)
+                || EXPOSURE_PUBLIC.equals(exposure) || hostPort != null;
+            if (declaresShape) {
+                throw Violations.ofField("settings.container_port", null,
+                    Microcopy.of("port_shape_without_port").withFilter("scope", "violations"));
+            }
+            return null;
+        }
+        return new PortPublication(containerPort,
+            "udp".equals(protocol) ? PortPublication.UDP : PortPublication.TCP,
+            EXPOSURE_PUBLIC.equals(exposure), hostPort, null);
     }
 
     private static String str(Object value) {

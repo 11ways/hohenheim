@@ -2263,6 +2263,23 @@ Driver and infrastructure:
   the foreign-name refusal. Still owed from this section: quotas, create
   authority, hardening, per-tenant networks, console/exec, /manage projection,
   `instance_variables`, UDP pre-allocation mode.
+  SUPERSEDED (2026-08-04): the UDP pre-allocation debt is CLOSED. M063 added the
+  ledger's declared discriminator (`port_allocations.allocation_mode`,
+  `preallocated`); the kind settings grew the FULL port requirement
+  (`port_protocol`, `port_exposure`, optional `host_port` beside
+  `container_port`), and any non-(loopback/tcp/ephemeral) shape claims its host
+  port in the ledger BEFORE container create (`PortPublications.ensureClaimed`),
+  window `hohenheim.instances.public_port_first/count` (30000+2000 default),
+  ledger-then-OS-probe order, LOCAL-only probe (a remote probe answers about the
+  controller). The daemon's binding is read back after start and VERIFIED against
+  the declaration (`verifyPublished`: wrong bind address or wrong number stops
+  the workload and refuses the deploy). Pre-allocated claims survive STOP (the
+  stable number is the point), are never parked by failure paths, and die only
+  with `releaseOwnerFully` on verified destroy. Loopback stays the default and
+  the only record-after lane; proven by `PublicPortLiveTest` (real daemon:
+  loopback negative connect, public reach from a non-loopback address, UDP
+  round trip, fixed-port ledger refusal with NO container created) and the
+  PortLedgerTest race (two concurrent pre-allocations, rows as arbiter).
 
   REGRESSION CAUGHT AND FIXED 2026-08-03, second pass over the LANDED claim
   above: `roles.instances` defaults to enabled (like every role), and
@@ -2501,7 +2518,19 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   ownership-verified staging path, plus one generated SRV row per mapping
   (`_minecraft._tcp.<host>`, target = host, port = the proxy's observed
   published port; A rows are NOT generated -- no server-address authority
-  exists yet). Velocity reaches its backend over a per-PAIR link network
+  exists yet). SUPERSEDED (2026-08-04): the server-address authority now
+  exists (`servers.public_ipv4`/`public_ipv6`, M063, declared never probed,
+  IP-literal-validated on every write path, editable on the host form incl.
+  the otherwise-immutable local host) and DNS generation was reshaped: rows
+  materialize ONLY off a PUBLIC pre-allocated proxy port (a loopback proxy
+  generates NOTHING -- it would be a dangling pointer), the SRV rides that
+  stable public port, and an A (and AAAA) row at the mapped hostname carries
+  the host's declared address under the SAME mapping attribution, so the SRV
+  target resolves off our own zone. An address change re-reconciles every
+  mapping on that host (ServerModel before/after save pairing installed by
+  GameDomains.install); hand-authored rows at the same name are never adopted
+  or deleted (attribution-scoped, counterfactualed in
+  GameDomainAuthorityTest). Velocity reaches its backend over a per-PAIR link network
   (`hohenheim-gamelink-{proxy}-{backend}-net`) carrying the same
   WorkloadNetworkPolicy chains; only the authorized pair is joined, re-attached
   at every deploy between create and start. TRAP recorded: connecting or

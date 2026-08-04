@@ -89,7 +89,11 @@ public final class InstanceService {
             // A previous run's console session (if any) watches a container this
             // deploy is about to replace; end it before the daemon work starts.
             InstanceConsoles.closeSession(instanceId);
-            String handle = resolved.runtime().create(resolved.spec());
+            // Pre-allocation honesty: a UDP/public/fixed-port publication claims its host
+            // port in the ledger BEFORE the container exists (and before the image pull
+            // that sits inside the create window); record-after specs pass unchanged.
+            InstanceSpec spec = PortPublications.ensureClaimed(resolved, instanceId);
+            String handle = resolved.runtime().create(spec);
             stageConfigFiles(resolved, instanceId);
             // Deploy recreates the container, dropping every non-primary network: the
             // game-domain link networks re-attach here, BEFORE start, with their policy
@@ -100,6 +104,11 @@ public final class InstanceService {
             watch = InstanceConsoles.prepare(resolved, instanceId, this.leases);
             resolved.runtime().start(handle);
             InstanceStatus status = resolved.runtime().status(handle);
+            // Assert the DAEMON's binding against the declaration BEFORE any outcome
+            // write: a mismatch (wrong bind address, wrong pre-allocated number) stops
+            // the workload and refuses the deploy -- never a success report over a bind
+            // nothing declared.
+            PortPublications.verifyPublished(resolved, spec, status);
             this.beforeOutcomeWrite.run();
             // The fence gate comes BEFORE any ledger write: a stale controller that
             // reached the ledger first would delete the winner's fresh port claim.
@@ -107,7 +116,12 @@ public final class InstanceService {
             // fenced write flips it to RUNNING when the line is observed.
             stampGuarded(resolved, fence, watch != null
                 ? watch.initialStatus() : InstanceModel.STATUS_RUNNING);
-            if (status.publishedPort() != null) {
+            boolean recordAfter = spec.publication() != null
+                && !spec.publication().requiresPreallocation();
+            if (recordAfter && status.publishedPort() != null) {
+                // Record-after ONLY: a pre-allocated claim already exists (written
+                // before create); re-recording it here would rewrite the row without
+                // its mode and turn the stable reservation back into an ephemeral one.
                 PortLedger.recordObserved(resolved.serverId(), BIND_ADDRESS,
                     status.publishedPort(), "tcp", InstanceModel.MODEL_ID, instanceId, null);
             }
@@ -136,8 +150,10 @@ public final class InstanceService {
 
     /**
      * Stop the workload. A confirmed stop IS an observation that the published port is
-     * free (a stopped container binds nothing at the kernel), so the claims are released
-     * verified; a restart publishes -- and records -- a fresh ephemeral port.
+     * free (a stopped container binds nothing at the kernel), so the OBSERVED claims are
+     * released verified and a restart records a fresh ephemeral port. Pre-allocated
+     * claims deliberately SURVIVE a stop: the kernel port is free but the NUMBER stays
+     * reserved, which is what keeps the DNS rows pointing at it honest across restarts.
      *
      * @throws Violations naming the failure; the claims are parked, the status untouched
      */
@@ -200,7 +216,9 @@ public final class InstanceService {
         }
         this.beforeOutcomeWrite.run();
         stampGuarded(resolved, fence, InstanceModel.STATUS_STOPPED);
-        PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
+        // End of life: pre-allocated reservations die WITH the instance -- unlike stop,
+        // which keeps them (the stable number is what DNS points at across restarts).
+        PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, instanceId);
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
             return;
