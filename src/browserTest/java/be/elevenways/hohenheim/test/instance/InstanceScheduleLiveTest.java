@@ -342,6 +342,12 @@ class InstanceScheduleLiveTest {
                 } catch (RuntimeException ignored) {
                     // Already destroyed in step 6; leave no container behind either way.
                 }
+                // Destroy KEEPS volumes by design (orphan doctrine); the test tidies its own.
+                try {
+                    docker.removeVolume(handle + "-vol-data", true);
+                } catch (IOException ignored) {
+                    // never created
+                }
             }
         });
     }
