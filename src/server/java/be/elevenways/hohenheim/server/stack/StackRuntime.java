@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerReclaim;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.notification.Alerts;
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -313,7 +314,8 @@ public class StackRuntime {
             if (turnedBad) {
                 // The states that TRIGGERED the transition, not a fresh Docker round-trip
                 // that may already show something else.
-                Alerts.send("stack_health", "Stack '" + spec.name() + "' is " + next,
+                Alerts.send(NotificationEvents.STACK_HEALTH,
+                    "Stack '" + spec.name() + "' is " + next,
                     "Service states: " + states);
             }
         }

@@ -28,4 +28,15 @@ public interface InstanceKindHandler extends InstanceKindInfo {
      * and the owner labels the driver MUST stamp at create.
      */
     @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings);
+
+    /**
+     * Whether records of this kind carry tenant-authored workloads. Tenant-authored
+     * kinds place only on an ADMITTED host (HostAdmission.requireInstancePlacement);
+     * an operator-authored kind (SiteContainerKind, writable only through the site
+     * tier's system scope) predates host admission and deliberately skips that gate --
+     * the same declared difference as its SHARED_BRIDGE network posture.
+     */
+    default boolean tenantAuthored() {
+        return true;
+    }
 }

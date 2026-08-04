@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -7,9 +8,13 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerSiteRequestHandler;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
+import be.elevenways.hohenheim.server.docker.SiteContainerKind;
+import be.elevenways.hohenheim.server.docker.SiteInstances;
+import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -25,18 +30,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Integration test for {@link DockerSiteRequestHandler} against a real Docker daemon.
- * Skipped when the daemon socket or the test image is absent.
+ * The Docker-site tier against a real daemon, THROUGH the canonical runtime-resource
+ * contract: the handler owns no container -- its running release is a site-owned
+ * {@code site_container} instance deployed by InstanceService, and every assertion here
+ * pins that (owner labels name the INSTANCE, the ledger claim names the INSTANCE, the
+ * attribution columns name the SITE). Skipped when the daemon socket or the test image
+ * is absent.
  */
 class DockerSiteHandlerTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String TEST_IMAGE = "alpine:latest";
-    private static final int TEST_SITE_ID = 999_001;
-    private static final String CONTAINER_NAME = "hohenheim-site-" + TEST_SITE_ID;
 
-    // The handler records its published port in the port ledger, so every start here
-    // needs a datasource -- a claim that cannot be written is a failure, not a shrug.
+    // The contract writes instance rows and ledger claims, so every start here needs
+    // the booted runtime -- a claim that cannot be written is a failure, not a shrug.
     @BeforeAll
     static void bootRuntime() {
         HohenheimTestRuntime.ensureBooted();
@@ -49,75 +56,122 @@ class DockerSiteHandlerTest {
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
 
+        int siteId = 999_001;
         // A long-lived command keeps the container running; the port need not be
         // listened on for Docker to publish the host->container binding. The volume
         // exercises birth-labelling of the one unrecoverable resource kind.
-        String volumeName = "hohenheim-site-" + TEST_SITE_ID + "-vol-data";
-        DockerSiteRequestHandler handler = new DockerSiteRequestHandler(TEST_SITE_ID, Map.of(
+        Map<String, Object> settings = Map.of(
             "image", "alpine",
             "tag", "latest",
             "container_port", 8080,
             "command", "sleep 3600",
-            "volumes", Map.of("data", "/data")
-        ));
+            "volumes", Map.of("data", "/data"));
+        DockerSiteRequestHandler handler =
+            new DockerSiteRequestHandler(siteId, "contract site", settings);
 
+        Integer instanceId = handler.getInstanceId();
+        String containerName = "hohenheim-instance-" + instanceId;
+        String volumeName = containerName + "-vol-data";
         try {
-            assertThat(handler.getHealth()).isEqualTo(SiteHealth.UP);
+            // 1. The site's running release IS an owned instance: the row exists, is
+            //    attributed to the site, and carries the site_container kind.
+            assertThat(instanceId).as("step 1: the handler ensured an owned instance").isNotNull();
+            Row instance = Models.get(InstanceModel.class).findById(instanceId);
+            assertThat((String) instance.get(InstanceModel.GENERATED_BY))
+                .as("step 1: attribution source").isEqualTo("site");
+            assertThat((String) instance.get(InstanceModel.GENERATED_FOR_MODEL))
+                .as("step 1: attribution model").isEqualTo(SiteModel.MODEL_ID.toString());
+            assertThat((Integer) instance.get(InstanceModel.GENERATED_FOR_ID))
+                .as("step 1: attribution record").isEqualTo(siteId);
+            assertThat((String) instance.get(InstanceModel.KIND))
+                .isEqualTo(SiteContainerKind.ID.toString());
+            assertThat((String) instance.get(InstanceModel.STATUS))
+                .as("step 1: the fenced outcome stamp landed")
+                .isEqualTo(InstanceModel.STATUS_RUNNING);
 
+            // 2. The product behaviour is unchanged: healthy, proxied over loopback.
+            assertThat(handler.getHealth()).as("step 2").isEqualTo(SiteHealth.UP);
             URI upstream = handler.getUpstream();
             assertThat(upstream).isNotNull();
             assertThat(upstream.getScheme()).isEqualTo("http");
             assertThat(upstream.getHost()).isEqualTo("127.0.0.1");
             assertThat(upstream.getPort()).isGreaterThan(0);
 
-            Map<String, Object> info = docker.inspectContainer(CONTAINER_NAME);
+            // 3. HOST state: the container runs under the INSTANCE identity -- labels on
+            //    the container and on the volume (born labelled, never relabelled).
+            Map<String, Object> info = docker.inspectContainer(containerName);
             Map<String, Object> state = (Map<String, Object>) info.get("State");
-            assertThat(state.get("Running")).isEqualTo(Boolean.TRUE);
-
-            // The container was born carrying its owner claim...
+            assertThat(state.get("Running")).as("step 3").isEqualTo(Boolean.TRUE);
             Map<String, Object> config = (Map<String, Object>) info.get("Config");
             OwnerLabels.Owner containerOwner =
                 OwnerLabels.parse((Map<?, ?>) config.get("Labels"));
-            assertThat(containerOwner).as("container carries owner labels").isNotNull();
-            assertThat(containerOwner.model()).isEqualTo(SiteModel.MODEL_ID);
-            assertThat(containerOwner.id()).isEqualTo(String.valueOf(TEST_SITE_ID));
-
-            // ...and so was the volume, the resource that never gets relabelled.
+            assertThat(containerOwner).as("step 3: container owner labels").isNotNull();
+            assertThat(containerOwner.model()).isEqualTo(InstanceModel.MODEL_ID);
+            assertThat(containerOwner.id()).isEqualTo(String.valueOf(instanceId));
             Map<String, Object> volume = docker.inspectVolume(volumeName);
             OwnerLabels.Owner volumeOwner =
                 OwnerLabels.parse((Map<?, ?>) volume.get("Labels"));
-            assertThat(volumeOwner).as("volume carries owner labels from birth").isNotNull();
-            assertThat(volumeOwner.model()).isEqualTo(SiteModel.MODEL_ID);
-            assertThat(volumeOwner.id()).isEqualTo(String.valueOf(TEST_SITE_ID));
+            assertThat(volumeOwner).as("step 3: volume owner labels from birth").isNotNull();
+            assertThat(volumeOwner.model()).isEqualTo(InstanceModel.MODEL_ID);
+            assertThat(volumeOwner.id()).isEqualTo(String.valueOf(instanceId));
 
-            // Record-after: the port the KERNEL picked is in the ledger, owned by the
-            // site record and therefore visible to every other port authority.
+            // 4. Record-after: the port the KERNEL picked is in the ledger, owned by the
+            //    INSTANCE record -- one authority, visible to every other one.
             String key = PortLedger.claimKeyOf(ServerModel.localServerId(),
                 "127.0.0.1", upstream.getPort(), "tcp");
             Row claim = PortLedger.holderOf(key);
-            assertThat(claim).as("the published port is claimed in the ledger").isNotNull();
-            assertThat(PortLedger.isOwnedBy(claim, SiteModel.MODEL_ID, TEST_SITE_ID))
-                .as("the claim names the site record as owner").isTrue();
+            assertThat(claim).as("step 4: the published port is claimed").isNotNull();
+            assertThat(PortLedger.isOwnedBy(claim, InstanceModel.MODEL_ID, instanceId))
+                .as("step 4: the claim names the owned instance").isTrue();
             assertThatThrownBy(() -> PortLedger.claim(ServerModel.localServerId(), "0.0.0.0",
                     upstream.getPort(), "tcp", null, null, "a rival authority"))
-                .as("another authority cannot double-book the same host port")
+                .as("step 4: another authority cannot double-book the port")
                 .isInstanceOf(PortLedger.PortConflict.class);
-        } finally {
+
+            // 5. CONVERGENCE: an unchanged handler generation (any routing reload) reuses
+            //    the running release instead of restarting it -- same container id -- and
+            //    the reuse lane verified ownership, not just the name.
+            String runningId = (String) info.get("Id");
+            DockerSiteRequestHandler reloaded =
+                new DockerSiteRequestHandler(siteId, "contract site", settings);
+            assertThat(reloaded.getUpstream()).as("step 5: still up").isNotNull();
+            assertThat(reloaded.getUpstream().getPort()).isEqualTo(upstream.getPort());
+            assertThat((String) docker.inspectContainer(containerName).get("Id"))
+                .as("step 5: the container was reused, not replaced").isEqualTo(runningId);
+
+            // 6. The SUPERSEDED generation's destroy must not stop the workload the
+            //    replacing generation answers for (dispatcher order: create new, then
+            //    destroy old).
             handler.destroy();
+            Map<String, Object> afterOld = docker.inspectContainer(containerName);
+            assertThat(((Map<String, Object>) afterOld.get("State")).get("Running"))
+                .as("step 6: a superseded generation cannot stop the release")
+                .isEqualTo(Boolean.TRUE);
+
+            // 7. The RESPONSIBLE generation's destroy is a route drop: verified STOP,
+            //    observed claim release -- the container stays (a disabled site restarts
+            //    fast; removal is the site DELETE's verified teardown, step 8).
+            reloaded.destroy();
+            Map<String, Object> afterStop = docker.inspectContainer(containerName);
+            assertThat(((Map<String, Object>) afterStop.get("State")).get("Running"))
+                .as("step 7: route drop stops the workload").isEqualTo(Boolean.FALSE);
+            assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId))
+                .as("step 7: the stop released the claim as observed").isEmpty();
+        } finally {
+            // 8. End of life (the site-delete path): container removed or observed
+            //    absent, instance soft-deleted, claims fully released.
+            SiteInstances.destroyFor(siteId);
             try {
                 docker.removeVolume(volumeName, true);
             } catch (IOException ignored) {
                 // best effort
             }
         }
-
-        assertThat(handler.getHealth()).isEqualTo(SiteHealth.DOWN);
-        // The teardown gave the port back: no claim survives the container.
-        assertThat(PortLedger.claimsOf(SiteModel.MODEL_ID, TEST_SITE_ID))
-            .as("destroying the handler released the site's port claim").isEmpty();
-        // After destroy the container is gone: inspect must fail.
+        Row gone = Models.get(InstanceModel.class).findById(instanceId);
+        assertThat((Object) gone.get(InstanceModel.DELETED_AT))
+            .as("step 8: the owned instance died with the site").isNotNull();
         try {
-            docker.inspectContainer(CONTAINER_NAME);
+            docker.inspectContainer(containerName);
             throw new AssertionError("expected inspect of removed container to fail");
         } catch (IOException expected) {
             // 404 from the daemon -> IOException, as intended
@@ -132,7 +186,6 @@ class DockerSiteHandlerTest {
         assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
 
         int siteId = 999_003;
-        String volumeName = "hohenheim-site-" + siteId + "-vol-data";
         DockerSiteRequestHandler handler = new DockerSiteRequestHandler(siteId, Map.of(
             "image", "alpine",
             "tag", "latest",
@@ -142,9 +195,10 @@ class DockerSiteHandlerTest {
             "memory_limit_mb", 128,
             "cpu_limit", 0.5
         ));
-
+        String containerName = "hohenheim-instance-" + handler.getInstanceId();
+        String volumeName = containerName + "-vol-data";
         try {
-            Map<String, Object> info = docker.inspectContainer("hohenheim-site-" + siteId);
+            Map<String, Object> info = docker.inspectContainer(containerName);
             Map<String, Object> hostConfig = (Map<String, Object>) info.get("HostConfig");
             assertThat(((Number) hostConfig.get("Memory")).longValue()).isEqualTo(128L * 1024 * 1024);
             assertThat(((Number) hostConfig.get("NanoCpus")).longValue()).isEqualTo(500_000_000L);
@@ -156,7 +210,7 @@ class DockerSiteHandlerTest {
                     && "/data".equals(m.get("Destination")));
             assertThat(mounted).as("named volume mounted at /data").isTrue();
         } finally {
-            handler.destroy();
+            SiteInstances.destroyFor(siteId);
             try {
                 docker.removeVolume(volumeName, true);
             } catch (IOException ignored) {
@@ -166,44 +220,72 @@ class DockerSiteHandlerTest {
     }
 
     /**
-     * A same-named container the daemon cannot attribute to this site is never
-     * force-removed: the site stays DOWN (a loud, visible refusal) and the foreign
-     * container survives on the host.
+     * The instance tier's collision refusal now guards the site tier: a same-named
+     * container the daemon cannot attribute to the site's OWN instance is never
+     * force-removed and never reused -- the site goes DOWN (a loud, visible refusal)
+     * and the foreign container survives on the host.
      */
     @Test
-    void refusesToReplaceAForeignSameNamedContainer() throws IOException {
+    void refusesToReplaceOrReuseAForeignSameNamedContainer() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
 
         int siteId = 999_004;
-        String containerName = "hohenheim-site-" + siteId;
-        // 1. Plant an UNLABELLED squatter on the site's container name.
-        docker.createContainer(containerName, Map.of(
-            "Image", "alpine:latest", "Cmd", List.of("sleep", "300")), ContainerHardening.STRICT);
+        Map<String, Object> settings = Map.of(
+            "image", "alpine",
+            "tag", "latest",
+            "container_port", 8080,
+            "command", "sleep 3600");
+        // 1. A first life establishes the owned instance (and its handle), then stops.
+        DockerSiteRequestHandler first = new DockerSiteRequestHandler(siteId, settings);
+        Integer instanceId = first.getInstanceId();
+        assertThat(instanceId).as("step 1").isNotNull();
+        String containerName = "hohenheim-instance-" + instanceId;
+        first.destroy();
         try {
-            // 2. The handler refuses the replace and stays down instead of destroying it.
-            DockerSiteRequestHandler handler = new DockerSiteRequestHandler(siteId, Map.of(
-                "image", "alpine",
-                "tag", "latest",
-                "container_port", 8080,
-                "command", "sleep 3600"
-            ));
+            // 2. Remove our stopped container and plant an UNLABELLED squatter on the
+            //    instance's handle.
+            docker.removeContainer(containerName, true);
+            docker.createContainer(containerName, Map.of(
+                "Image", "alpine:latest", "Cmd", List.of("sleep", "300")),
+                ContainerHardening.STRICT);
+            docker.startContainer(containerName);
+
+            // 3. The next generation neither reuses nor replaces it: DOWN, loudly.
+            DockerSiteRequestHandler handler =
+                new DockerSiteRequestHandler(siteId, settings);
             assertThat(handler.getHealth())
-                .as("step 2: the site stays DOWN rather than stealing the name")
+                .as("step 3: the site stays DOWN rather than stealing the name")
                 .isEqualTo(SiteHealth.DOWN);
             assertThat(handler.getUpstream())
-                .as("step 2: no upstream was resolved").isNull();
-            // 3. HOST state: the foreign container survives, unlabelled and unharmed.
-            assertThat(docker.inspectContainer(containerName))
-                .as("step 3: the foreign container still exists").isNotNull();
+                .as("step 3: no upstream was resolved").isNull();
+
+            // 4. HOST state: the foreign container survives, unlabelled and unharmed.
+            Map<String, Object> info = docker.inspectContainer(containerName);
+            assertThat(info).as("step 4: the foreign container still exists").isNotNull();
         } finally {
-            docker.removeContainer(containerName, true);
+            try {
+                docker.removeContainer(containerName, true);
+            } catch (IOException ignored) {
+                // best effort
+            }
+            // The instance row remains (its container was squatted, not destroyed);
+            // retire it without daemon verification. The hard delete needs the system
+            // scope -- outside it the attribution guard refuses ANY write to an owned
+            // row, this cleanup included (that refusal is its own test, one class over).
+            GeneratedRows.sweeping("site",
+                () -> Models.get(InstanceModel.class).delete(instanceId));
         }
     }
 
+    /**
+     * A git-provisioned site builds from its checkout and the owned instance is pinned
+     * to the built IMAGE ID: an unchanged rebuild converges (same container), a changed
+     * checkout is a visible settings change that rolls the release.
+     */
     @Test
-    void buildsImageFromContextAndRuns() throws IOException {
+    void buildsImageFromContextPinsTheIdAndRollsOnChange() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " (build base) not present");
@@ -211,24 +293,44 @@ class DockerSiteHandlerTest {
         int siteId = 999_002;
         String builtImage = "hohenheim-site-" + siteId + ":latest";
         Path context = Files.createTempDirectory("hohenheim-docker-build");
+        Integer instanceId = null;
         try {
-            // A git-provisioned docker site builds from its checkout's Dockerfile; here
-            // build_context stands in for the checkout dir GitDeployment would inject.
             Files.writeString(context.resolve("Dockerfile"),
                 "FROM alpine:latest\nCMD [\"sleep\", \"3600\"]\n");
-
-            DockerSiteRequestHandler handler = new DockerSiteRequestHandler(siteId, Map.of(
+            Map<String, Object> settings = Map.of(
                 "build_context", context.toString(),
-                "container_port", 8080
-            ));
-            try {
-                assertThat(handler.getUpstream()).isNotNull();
-                assertThat(handler.getHealth()).isEqualTo(SiteHealth.UP);
-                assertThat(imagePresent(docker, builtImage)).isTrue();
-            } finally {
-                handler.destroy();
-            }
+                "container_port", 8080);
+
+            // 1. Build-and-run through the contract, pinned by image ID.
+            DockerSiteRequestHandler handler = new DockerSiteRequestHandler(siteId, settings);
+            instanceId = handler.getInstanceId();
+            assertThat(handler.getUpstream()).as("step 1").isNotNull();
+            assertThat(handler.getHealth()).isEqualTo(SiteHealth.UP);
+            assertThat(imagePresent(docker, builtImage)).isTrue();
+            Row instance = Models.get(InstanceModel.class).findById(instanceId);
+            Map<?, ?> stored = (Map<?, ?>) instance.get(InstanceModel.SETTINGS);
+            assertThat(String.valueOf(stored.get("image")))
+                .as("step 1: the release runs the site's build tag").isEqualTo(builtImage);
+            assertThat(String.valueOf(stored.get("built_image_id")))
+                .as("step 1: the release is pinned to the built image ID")
+                .startsWith("sha256:");
+
+            // 2. An unchanged rebuild converges: same container, no restart.
+            String containerName = "hohenheim-instance-" + instanceId;
+            String runningId = (String) docker.inspectContainer(containerName).get("Id");
+            new DockerSiteRequestHandler(siteId, settings);
+            assertThat((String) docker.inspectContainer(containerName).get("Id"))
+                .as("step 2: unchanged checkout, unchanged container").isEqualTo(runningId);
+
+            // 3. A changed checkout builds a NEW image ID and rolls the release.
+            Files.writeString(context.resolve("Dockerfile"),
+                "FROM alpine:latest\nENV RELEASE=2\nCMD [\"sleep\", \"3600\"]\n");
+            DockerSiteRequestHandler rolled = new DockerSiteRequestHandler(siteId, settings);
+            assertThat(rolled.getUpstream()).as("step 3: still serving").isNotNull();
+            assertThat((String) docker.inspectContainer(containerName).get("Id"))
+                .as("step 3: a new build rolls the container").isNotEqualTo(runningId);
         } finally {
+            SiteInstances.destroyFor(siteId);
             try {
                 docker.removeImage(builtImage, true);
             } catch (IOException ignored) {

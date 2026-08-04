@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.cms.SiteTerminalCsp;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
+import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.GeneratedInstanceFiles;
@@ -71,5 +72,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // soft-delete transition hands the slot back (the remove hooks never fire on
         // the destroy path -- it soft-deletes through save()).
         InstanceQuota.install();
+        // A site-owned instance (a Docker site's lowered running release) carries derived
+        // attribution, is read-only outside the site tier's system scope, and the
+        // site_container kind cannot be authored standalone at all.
+        SiteInstances.install();
     }
 }

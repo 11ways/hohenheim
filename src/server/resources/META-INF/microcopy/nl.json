@@ -6017,5 +6017,25 @@
   "files_failed": {
     "text": "De bestandsbewerking is mislukt: {$reason}",
     "scope": "violations"
+  },
+  "site_container": {
+    "text": "Sitecontainer",
+    "scope": "instance_kind"
+  },
+  "site_container_site_managed": {
+    "text": "Dit type is de draaiende release van een site; beheer het via de site zelf",
+    "scope": "violations"
+  },
+  "instance_generated_readonly": {
+    "text": "Deze instance is eigendom van {$source} en kan hier niet bewerkt of verwijderd worden",
+    "scope": "violations"
+  },
+  "instance_generated_attribution": {
+    "text": "De eigendomsattributie van een instance wordt door het systeem gezet, nooit ingediend",
+    "scope": "violations"
+  },
+  "site_image_build_failed": {
+    "text": "Het bouwen van de site-image is mislukt: {$reason}",
+    "scope": "violations"
   }
 }

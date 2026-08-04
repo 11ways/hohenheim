@@ -6021,5 +6021,25 @@
   "files_failed": {
     "text": "The file operation failed: {$reason}",
     "scope": "violations"
+  },
+  "site_container": {
+    "text": "Site container",
+    "scope": "instance_kind"
+  },
+  "site_container_site_managed": {
+    "text": "This kind is a site's running release; manage it through the site itself",
+    "scope": "violations"
+  },
+  "instance_generated_readonly": {
+    "text": "This instance is owned by {$source} and cannot be edited or deleted here",
+    "scope": "violations"
+  },
+  "instance_generated_attribution": {
+    "text": "Instance ownership attribution is set by the system, never submitted",
+    "scope": "violations"
+  },
+  "site_image_build_failed": {
+    "text": "Building the site image failed: {$reason}",
+    "scope": "violations"
   }
 }

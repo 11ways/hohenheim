@@ -2699,6 +2699,45 @@ network, quota, ownership, secret and durable-operation mechanisms.
   onto one owned runtime-resource contract. Migrate/adapt existing Docker sites,
   git deploys, managed databases and stacks without creating a second UI over
   the same records.
+
+  DECIDED AND FIRST TIER LANDED 2026-08-04 (re-verify, do not assume). The
+  canonical relation: the INSTANCE TIER IS the runtime-resource contract --
+  `InstanceModel` row = the owned runtime resource, `InstanceService` = the one
+  orchestration funnel (fenced outcome writes, verified destroy, ledger,
+  admission), `InstanceKindHandler`/`InstanceRuntime` = the driver seam. Product
+  records (Site, Database, Stack service) stay product tiers and OWN instances
+  through the GeneratedRows attribution discipline (`instances.generated_by/
+  _for_model/_for_id/_at`, M064): written only inside the owning tier's system
+  scope, refused read-only everywhere else (`SiteInstances.install` guards),
+  excluded from the standalone instance UI/API -- ownership stays grant-derived,
+  the attribution is a structural parent link, never an owner column. NO
+  narrower fifth abstraction: an interface all four tiers "implement" would
+  leave four copies of the fence/destroy/ledger discipline. `SiteTypeRegistry`
+  STAYS -- site types answer "how are requests served" (8 of 11 run no
+  container); instance kinds answer "how does the workload run"; a
+  container-running site type keeps its request half and delegates its runtime
+  half. LOWERED: Docker sites (`SiteContainerKind` `hohenheim:site_container` +
+  `SiteInstances`; `DockerSiteRequestHandler` owns no container, converges an
+  owned instance and proxies its published loopback port; two DECLARED kind
+  differences: `tenantAuthored()=false` skips host admission, and
+  `NetworkPosture.SHARED_BRIDGE` skips the private network -- both
+  kind-declared, neither settings-reachable; git builds pin `built_image_id`
+  so a new build redeploys and an unchanged reload converges instead of
+  restarting every site; site delete = verified `destroyFor`, refused on an
+  unconfirmable daemon). NOT YET LOWERED, named paths: managed DATABASES (an
+  owned `database_container` kind; obstacles: engine readiness probe must
+  become a kind/driver concern, containers are name-keyed not id-keyed,
+  `DatabaseEnvInjection` reads live ports at spawn, restore paths exec inside
+  the container); STACK SERVICES (one owned instance per service; obstacles:
+  per-stack network + DNS aliases vs per-workload networks, `depends_on`
+  ordering and health gating are stack-spec semantics with no kind home yet,
+  adoption/rollback snapshots re-deploy verbatim -- open decision 5 said
+  revisit after real use, unchanged); MANAGED PROCESSES / git deploys of
+  process site types (not containers; either a `process` instance kind or
+  deliberately outside the contract -- decide with the builders wave, which
+  produces images and will make docker-the-runtime the default anyway).
+  Projects/environments (open decision 7) meet this at the attribution
+  columns: a project tier would OWN instances the same way, no schema change.
 - Sandboxed builders run outside the control-plane trust domain with their own
   CPU/memory/disk/time/PID quotas, restricted network, short-lived source and
   registry credentials, no tenant runtime secrets, and immutable artifact

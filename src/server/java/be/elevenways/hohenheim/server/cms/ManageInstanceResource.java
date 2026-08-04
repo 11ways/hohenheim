@@ -82,13 +82,16 @@ public final class ManageInstanceResource extends InstanceResource {
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
         return ctx -> {
-            Criteria notDeleted = InstanceModel.DELETED_AT.isNull();
+            // Generated (product-tier-owned) instances stay off the delegated surface
+            // too: their one UI is the owning record's own page.
+            Criteria base = new CompositeCriteria(CompositeOperator.AND,
+                InstanceModel.DELETED_AT.isNull(), InstanceModel.GENERATED_BY.isNull());
             Criteria scope = HohenheimAccess.instanceScope(ctx, HohenheimAccess.MANAGE);
             if (scope == null) {
-                return AccessDecision.allow(QueryPredicate.of(notDeleted));
+                return AccessDecision.allow(QueryPredicate.of(base));
             }
             return AccessDecision.allow(QueryPredicate.of(
-                new CompositeCriteria(CompositeOperator.AND, notDeleted, scope)));
+                new CompositeCriteria(CompositeOperator.AND, base, scope)));
         };
     }
 

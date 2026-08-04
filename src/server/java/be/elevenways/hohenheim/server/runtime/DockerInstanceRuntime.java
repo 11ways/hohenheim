@@ -48,11 +48,24 @@ public final class DockerInstanceRuntime
 
     private final @NonNull DockerClient docker;
     private final @NonNull WorkloadNetworkPolicy policy;
+    private final @NonNull NetworkPosture posture;
 
     public DockerInstanceRuntime(@NonNull DockerClient docker,
                                  @NonNull WorkloadNetworkPolicy policy) {
+        this(docker, policy, NetworkPosture.PRIVATE);
+    }
+
+    /**
+     * @param posture the KIND-declared posture; {@link NetworkPosture#SHARED_BRIDGE} skips
+     *        the per-workload network and nft verification entirely (the operator-tier
+     *        Docker-site posture), it never degrades a failed PRIVATE materialization
+     */
+    public DockerInstanceRuntime(@NonNull DockerClient docker,
+                                 @NonNull WorkloadNetworkPolicy policy,
+                                 @NonNull NetworkPosture posture) {
         this.docker = docker;
         this.policy = policy;
+        this.posture = posture;
     }
 
     @Override
@@ -65,9 +78,11 @@ public final class DockerInstanceRuntime
                 + " labels; an unattributable instance container is forbidden by design");
         }
         // Network AND verified kernel policy first: an unenforceable host must not reach
-        // the point where an image is pulled, let alone a container created.
-        String network = InstanceNetworks.ensure(this.docker, this.policy, spec.handle(),
-            spec.ownerLabels());
+        // the point where an image is pulled, let alone a container created. A
+        // SHARED_BRIDGE kind declared no such network, so there is nothing to verify.
+        String network = this.posture == NetworkPosture.PRIVATE
+            ? InstanceNetworks.ensure(this.docker, this.policy, spec.handle(), spec.ownerLabels())
+            : null;
         this.docker.ensureImage(spec.image(), null);
         OwnerLabels.removeIfOwnedBy(this.docker, spec.handle(), owner.model(), owner.id());
         this.docker.createContainer(spec.handle(), buildSpec(spec, network), spec.hardening());
@@ -78,7 +93,9 @@ public final class DockerInstanceRuntime
     public void start(@NonNull String handle) throws IOException {
         // Docker networks survive a host reboot; nftables rules do not. Re-verifying here
         // is what stops a reboot from turning every stopped instance into an unisolated one.
-        InstanceNetworks.ensureForStart(this.docker, this.policy, handle);
+        if (this.posture == NetworkPosture.PRIVATE) {
+            InstanceNetworks.ensureForStart(this.docker, this.policy, handle);
+        }
         this.docker.startContainer(handle);
     }
 
@@ -104,7 +121,9 @@ public final class DockerInstanceRuntime
         }
         // The network and its kernel chains are OURS and nothing else uses them, so they
         // die with the workload -- unlike a named volume, there is nothing in them to lose.
-        InstanceNetworks.teardown(this.docker, this.policy, handle);
+        if (this.posture == NetworkPosture.PRIVATE) {
+            InstanceNetworks.teardown(this.docker, this.policy, handle);
+        }
     }
 
     // -- LinkNetworkSupport ---------------------------------------------------
@@ -767,9 +786,12 @@ public final class DockerInstanceRuntime
         // A post-hoc connect leaves the container on the DEFAULT BRIDGE for the interval in
         // between -- a real window of unisolated tenant runtime, next to every other
         // tenant's container. Post-hoc connect is only acceptable for adding a SECOND
-        // network to an already-isolated container.
-        containerSpec.put("NetworkingConfig",
-            Map.of("EndpointsConfig", Map.of(network, Map.of())));
+        // network to an already-isolated container. A null network is the SHARED_BRIDGE
+        // posture: the default bridge IS the declaration, so nothing is attached here.
+        if (network != null) {
+            containerSpec.put("NetworkingConfig",
+                Map.of("EndpointsConfig", Map.of(network, Map.of())));
+        }
         if (spec.command() != null && !spec.command().isEmpty()) {
             containerSpec.put("Cmd", spec.command());
         }
@@ -780,7 +802,9 @@ public final class DockerInstanceRuntime
         }
 
         Map<String, Object> hostConfig = new LinkedHashMap<>();
-        hostConfig.put("NetworkMode", network);
+        if (network != null) {
+            hostConfig.put("NetworkMode", network);
+        }
         PortPublication publication = spec.publication();
         if (publication != null) {
             // AIDEV-NOTE: a pre-allocation-shaped publication without a claimed port is a

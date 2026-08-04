@@ -142,8 +142,14 @@ public final class InstanceQuota {
                 // with the grant that follows (HohenheimAccess.creationOwnerSubjects), so
                 // the charged bucket and the record's real owner are one answer.
                 if (willBeLive) {
+                    // System work (GeneratedRows scope: a site tier converging its owned
+                    // instance) charges the operator bucket even when a tenant's request
+                    // thread triggered the convergence -- the tenant authored the SITE
+                    // write, the instance write is its system consequence. Tenant- and
+                    // admin-originated creates are unchanged.
                     reserveInto(row, HohenheimAccess.packSubjects(
-                        HohenheimAccess.creationOwnerSubjects(TenantWrites.acting())));
+                        HohenheimAccess.creationOwnerSubjects(
+                            TenantWrites.isTenantOriginated() ? TenantWrites.acting() : null)));
                 }
             } else if (storedLive && !willBeLive) {
                 // The soft-delete transition: hand the CHARGED bucket back.

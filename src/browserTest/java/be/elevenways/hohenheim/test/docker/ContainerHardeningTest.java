@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerSiteRequestHandler;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -109,14 +110,19 @@ class ContainerHardeningTest {
         }
 
         // 2. DOCKER SITE -- declares SERVICE (web-server images chown and drop privileges).
+        //    Lowered onto the instance contract: the running release is a site_container
+        //    instance, so the kernel state is asserted on the INSTANCE handle and the
+        //    teardown is the verified destroyFor (handler.destroy is only a stop now).
         int siteId = 999_102;
-        String siteContainer = "hohenheim-site-" + siteId;
         DockerSiteRequestHandler site = new DockerSiteRequestHandler(siteId, Map.of(
             "image", "alpine", "tag", "latest", "container_port", 8080, "command", "sleep 600"));
         try {
-            assertKernelState(docker, siteContainer, "step 2: docker site", SERVICE_CAPS, pids);
+            assertThat(site.getInstanceId())
+                .as("step 2: the site runtime went through the contract").isNotNull();
+            assertKernelState(docker, "hohenheim-instance-" + site.getInstanceId(),
+                "step 2: docker site", SERVICE_CAPS, pids);
         } finally {
-            site.destroy();
+            SiteInstances.destroyFor(siteId);
         }
 
         // 3. MANAGED DATABASE -- declares SERVICE per engine; redis is the fast one to

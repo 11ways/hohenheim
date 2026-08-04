@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.process.SiteApiKeys;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.hohenheim.server.proxy.RouteClaims.ClaimConflict;
@@ -326,21 +327,26 @@ public class SiteResource extends RowResource {
     }
 
     /**
-     * Soft delete: stamp deleted_at, remove a git checkout, keep the row.
+     * Soft delete: verified runtime teardown first, then stamp deleted_at, remove a git
+     * checkout, keep the row.
      *
-     * AIDEV-NOTE: deliberately does NOT touch the site's docker volumes
-     * (hohenheim-site-{id}-vol-*) or its port claims. A soft-deleted site is restorable,
-     * so its data must survive; the volumes are accounted for by the reconciler, which
-     * classifies them ORPHANED (soft-deleted = not live) and surfaces them on the
-     * dashboard for an explicit operator decision -- report-only is C2's contract, and
-     * removal stays a human act because a volume is unrecoverable. There is NO hard
-     * delete path for sites, so the record can never die while its volumes survive
-     * unaccounted for. The port claim side is DockerSiteRequestHandler.destroy (C6):
-     * verified teardown releases, anything else parks the claim in "releasing".
+     * AIDEV-NOTE: deliberately does NOT touch the site's docker volumes. A soft-deleted
+     * site is restorable, so its data must survive; the volumes are accounted for by the
+     * reconciler, which classifies them ORPHANED (soft-deleted = not live) and surfaces
+     * them on the dashboard for an explicit operator decision -- report-only is C2's
+     * contract, and removal stays a human act because a volume is unrecoverable. There
+     * is NO hard delete path for sites, so the record can never die while its volumes
+     * survive unaccounted for. The runtime half is SiteInstances.destroyFor: the site's
+     * owned instance dies WITH the site (InstanceService.destroy soft-deletes, so no
+     * remove hook would ever do this -- the GameDomains.deleteForInstance precedent),
+     * with the C6 discipline inherited from the instance tier: an unconfirmable
+     * teardown REFUSES this delete rather than leaving a running container behind a
+     * dead record (the ManagedDatabase.destroy lesson).
      */
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
         Integer siteId = existing.get(SiteModel.ID);
+        SiteInstances.destroyFor(siteId);
         existing.set(SiteModel.DELETED_AT, Instant.now());
         ActivityLog.withAction(ActivityLog.ACTION_DELETE, "soft-delete",
             () -> this.model().save(existing));
