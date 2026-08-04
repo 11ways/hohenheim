@@ -51,7 +51,29 @@ public class UnixSocketDockerTransport implements DockerTransport, DockerStreamT
             () -> closeQuietly(channel), timeoutMs, TimeUnit.MILLISECONDS);
         try {
             channel.connect(address);
-            writeFully(channel, ByteBuffer.wrap(request));
+            try {
+                writeFully(channel, ByteBuffer.wrap(request));
+            } catch (ClosedChannelException timedOut) {
+                throw timedOut;   // the watchdog fired: the outer catch names it a timeout
+            } catch (IOException writeFailed) {
+                // AIDEV-NOTE: the daemon ANSWERS AND CLOSES before it has read the whole
+                // request body whenever it refuses one (an archive PUT into a container it
+                // will not extract into is the common case here). Our write then dies with
+                // EPIPE while the daemon's actual reason is already sitting in the receive
+                // buffer -- reporting "Broken pipe" throws that reason away and names
+                // nothing. Read the answer first; only a truly mute close is the write's
+                // own failure.
+                byte[] answered;
+                try {
+                    answered = readToEnd(channel, maxResponseBytes);
+                } catch (IOException nothingToRead) {
+                    throw writeFailed;
+                }
+                if (answered.length == 0) {
+                    throw writeFailed;
+                }
+                return answered;
+            }
             return readToEnd(channel, maxResponseBytes);
         } catch (ClosedChannelException e) {
             throw new IOException("Docker request timed out after " + timeoutMs + "ms");

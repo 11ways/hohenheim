@@ -21,8 +21,8 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.hohenheim.test.instance.InstanceIdOffsets;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -98,7 +98,7 @@ class GameDomainLiveTest {
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
         // Unique per-class instance ids => unique daemon handles (no cross-class 409s).
-        InstanceIdOffsets.apply(datasource);
+        LiveIdOffsets.apply(datasource);
         HohenheimAccess.declareGrantableModels();
         HohenheimTestRuntime.ensureBooted();
         workRoot = Files.createTempDirectory("hohenheim-game-live-test");

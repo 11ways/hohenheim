@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.schedule.InstanceConsoleCommandAction;
 import be.elevenways.hohenheim.server.schedule.InstancePowerAction;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -70,7 +71,7 @@ class InstanceScheduleLiveTest {
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
         // Unique per-class instance ids => unique daemon handles (no cross-class 409s).
-        InstanceIdOffsets.apply(datasource);
+        LiveIdOffsets.apply(datasource);
         HohenheimAccess.declareGrantableModels();
         HohenheimTestRuntime.ensureBooted();
 

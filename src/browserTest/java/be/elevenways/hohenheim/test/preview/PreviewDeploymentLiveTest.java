@@ -16,9 +16,9 @@ import be.elevenways.hohenheim.server.preview.PreviewDomains;
 import be.elevenways.hohenheim.server.preview.PreviewQuota;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.hohenheim.test.instance.InstanceIdOffsets;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -67,7 +67,7 @@ class PreviewDeploymentLiveTest {
         if (!booted) {
             booted = true;
             ProxyTestSupport.bootRuntime();
-            InstanceIdOffsets.apply(HohenheimDatabase.datasource());
+            LiveIdOffsets.apply(HohenheimDatabase.datasource());
         }
         HohenheimSettings.VALUES.setValue(
             HohenheimSettings.Previews.BASE_DOMAIN, "preview.test");

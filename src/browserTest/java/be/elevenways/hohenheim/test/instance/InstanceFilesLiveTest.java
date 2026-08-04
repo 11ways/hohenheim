@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceFileSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -72,7 +73,7 @@ class InstanceFilesLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        InstanceIdOffsets.apply(datasource);
+        LiveIdOffsets.apply(datasource);
         // BEFORE the boot: the capability matrix below grants files.read/files.write, and
         // zenit-auth refuses a grant on an undeclared model -- while declaring one AFTER the
         // CMS contributions drained is itself a hard failure. Same order ServerMain uses.
