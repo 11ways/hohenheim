@@ -4,8 +4,10 @@ import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostLeases;
+import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.FileStagingSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -89,6 +91,10 @@ public final class InstanceService {
             InstanceConsoles.closeSession(instanceId);
             String handle = resolved.runtime().create(resolved.spec());
             stageConfigFiles(resolved, instanceId);
+            // Deploy recreates the container, dropping every non-primary network: the
+            // game-domain link networks re-attach here, BEFORE start, with their policy
+            // enforced -- a backend must never serve a window without its links.
+            GameDomains.attachLinksBeforeStart(resolved, instanceId);
             // The console attaches BETWEEN create and start (docker run's own order),
             // so a readiness line printed in the first instant cannot be missed.
             watch = InstanceConsoles.prepare(resolved, instanceId, this.leases);
@@ -108,6 +114,9 @@ public final class InstanceService {
             if (watch != null) {
                 InstanceConsoles.arm(watch, instanceId);
             }
+            // The published port is fresh (loopback publications are ephemeral), so any
+            // generated SRV rows riding this proxy re-reconcile now.
+            GameDomains.afterInstanceDeploy(instanceId);
             return status;
         } catch (IOException e) {
             InstanceConsoles.closeSession(instanceId);
@@ -204,6 +213,10 @@ public final class InstanceService {
         if (scheduleStore != null) {
             new RecordSchedules(scheduleStore).deleteForRecord(InstanceModel.MODEL_ID, instanceId);
         }
+        // Game-domain mappings die with either of their instances, the same explicit-
+        // cleanup shape as schedules: generated DNS rows and forced-hosts entries come
+        // down rather than dangle at a dead backend.
+        GameDomains.deleteForInstance(instanceId);
         Blast.log("INSTANCE: destroyed", resolved.spec().handle(),
             "- container removed, volumes kept, record soft-deleted");
     }
@@ -260,14 +273,38 @@ public final class InstanceService {
                 InstanceVariables.substitute(content == null ? "" : content, resolved.variables()),
                 mode == null || mode.isBlank() ? "0644" : mode));
         }
-        staging.stageFiles(resolved.spec().handle(), staged);
+        staging.stageFiles(resolved.spec().handle(), staged, resolved.spec().ownerLabels());
+    }
+
+    /**
+     * Re-render and push the instance's config files into its PRESENT container (the
+     * game-domains materialize-on-change path). ABSENT is a deliberate no-op -- deploy
+     * stages unconditionally -- and every other failure is loud.
+     *
+     * @throws IOException when the container is there but the push fails
+     */
+    public void restageConfigFiles(int instanceId) throws IOException {
+        Resolved resolved = resolve(instanceId);
+        ContainerState state = resolved.runtime().status(resolved.spec().handle()).state();
+        if (state == ContainerState.ABSENT) {
+            return;
+        }
+        if (state == ContainerState.UNREACHABLE) {
+            // The rows are the source of truth and deploy re-stages unconditionally;
+            // an unreachable daemon DEFERS convergence, loudly, instead of bricking
+            // the control-plane write.
+            Blast.log("INSTANCE: daemon unreachable; config files of", instanceId,
+                "will be staged at the next deploy");
+            return;
+        }
+        stageConfigFiles(resolved, instanceId);
     }
 
     // -- resolution -----------------------------------------------------------
 
-    record Resolved(@NonNull Row row, @NonNull InstanceRuntime runtime,
-                    @NonNull InstanceSpec spec, int serverId,
-                    @NonNull Map<String, String> variables) {}
+    public record Resolved(@NonNull Row row, @NonNull InstanceRuntime runtime,
+                           @NonNull InstanceSpec spec, int serverId,
+                           @NonNull Map<String, String> variables) {}
 
     /**
      * Load the record and resolve its kind handler, host, variables and spec (variables
@@ -275,7 +312,7 @@ public final class InstanceService {
      *
      * @throws Violations for a missing/trashed record, an unknown kind or a blank image
      */
-    Resolved resolve(int instanceId) {
+    public Resolved resolve(int instanceId) {
         Row row = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())

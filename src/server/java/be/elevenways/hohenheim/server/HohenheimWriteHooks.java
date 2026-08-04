@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.cms.SiteTerminalCsp;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
+import be.elevenways.hohenheim.server.game.GameDomains;
+import be.elevenways.hohenheim.server.instance.GeneratedInstanceFiles;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.process.ReservedEnv;
@@ -49,6 +51,12 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // A DNS record a system authored carries derived attribution, and no caller can
         // hand-write that attribution onto a row of its own.
         GeneratedDnsRecords.install();
+        // The same derived-attribution discipline for instance config files a system
+        // authored (the game-domains Velocity forced-hosts materialization).
+        GeneratedInstanceFiles.install();
+        // A game-domains mapping dies with its domain row, and its generated output
+        // (forced-hosts config, DNS rows) dies with it.
+        GameDomains.install();
         // A delegated tenant may set only the delegated domain columns, and may author only
         // the allow-listed DNS record types -- on every writer, not just the /manage forms.
         TenantWrites.install();

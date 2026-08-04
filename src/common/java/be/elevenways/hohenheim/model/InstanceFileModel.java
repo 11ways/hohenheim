@@ -47,6 +47,25 @@ public class InstanceFileModel extends Model {
         .help(HohenheimFormCopy.help("file_mode"))
         .build());
 
+    /**
+     * Attribution for files a system authored (the game-domains Velocity config): DERIVED
+     * in the write pipeline by GeneratedInstanceFiles, refused when a caller supplies it --
+     * the same four-column discipline as DnsRecordModel's generated rows.
+     */
+    public static final StringField GENERATED_BY = SCHEMA.addField(
+        StringField.builder().name("generated_by").filterable(false).build());
+
+    /** Model id of the record that authorized this row. */
+    public static final StringField GENERATED_FOR_MODEL = SCHEMA.addField(
+        StringField.builder().name("generated_for_model").filterable(false).build());
+
+    /** Primary key of the declaring record inside {@link #GENERATED_FOR_MODEL}. */
+    public static final IntegerField GENERATED_FOR_ID = SCHEMA.addField(
+        IntegerField.builder().name("generated_for_id").build());
+
+    public static final DateTimeField GENERATED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("generated_at").build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

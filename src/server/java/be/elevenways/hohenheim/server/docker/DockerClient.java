@@ -711,6 +711,21 @@ public class DockerClient {
     }
 
     /**
+     * Like {@link #putArchiveFromDirectory}, but the tar names ONLY the given files: no
+     * directory entries, so extraction never re-owns or re-modes an EXISTING container
+     * directory (chowning a non-root image's writable volume root to root:root is how a
+     * staged config file used to brick the workload). Missing parents are still created
+     * by the daemon (root-owned 0755).
+     */
+    public void putArchiveFiles(String containerId, String targetDir, Path hostDir,
+                                List<String> relativeFiles) throws IOException {
+        String path = "/containers/" + containerId + "/archive?path=" + enc(targetDir);
+        List<String> command = new ArrayList<>(List.of("tar", "-C", hostDir.toString(), "-cf", "-"));
+        command.addAll(relativeFiles);
+        request("PUT", path, tarWith(command, hostDir), "application/x-tar", LONG_OP_TIMEOUT_MS);
+    }
+
+    /**
      * Download a directory from a container ({@code GET /containers/{id}/archive}) as a raw
      * tar, written to {@code outFile}. Works on stopped containers -- the volume-snapshot
      * mechanism's read primitive. The tar's entries are rooted at the directory's basename
@@ -866,7 +881,11 @@ public class DockerClient {
     // Tar the build context via the system `tar` (handles file modes, symlinks, and
     // nesting robustly); the daemon's /build endpoint wants the context as a tar body.
     private static byte[] tarDirectory(Path dir) throws IOException {
-        Process process = new ProcessBuilder("tar", "-C", dir.toString(), "-cf", "-", ".").start();
+        return tarWith(List.of("tar", "-C", dir.toString(), "-cf", "-", "."), dir);
+    }
+
+    private static byte[] tarWith(List<String> command, Path dir) throws IOException {
+        Process process = new ProcessBuilder(command).start();
         byte[] tar;
         try (var stdout = process.getInputStream()) {
             tar = stdout.readAllBytes();

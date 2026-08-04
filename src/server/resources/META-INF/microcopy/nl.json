@@ -1849,6 +1849,10 @@
   },
   "plural": [
     {
+      "text": "Gamedomeinen",
+      "scope": "game_domain"
+    },
+    {
       "text": "Toegangslijsten",
       "scope": "access_list"
     },
@@ -2700,6 +2704,126 @@
   "dns_generated_attribution": {
     "text": "Attributie van gegenereerde records wordt door het systeem gezet, nooit ingestuurd",
     "scope": "violations"
+  },
+  "file_generated_readonly": {
+    "text": "Dit bestand is gegenereerd door {$source} en kan hier niet bewerkt of verwijderd worden",
+    "scope": "violations"
+  },
+  "file_generated_attribution": {
+    "text": "Attributie van gegenereerde bestanden wordt door het systeem gezet, nooit ingestuurd",
+    "scope": "violations"
+  },
+  "game_domain_authority_domain": {
+    "text": "Je hebt beheerrechten nodig over de site van dat domein",
+    "scope": "violations"
+  },
+  "game_domain_authority_instance": {
+    "text": "Je hebt beheerrechten nodig over die instantie",
+    "scope": "violations"
+  },
+  "game_domain_authority_none": {
+    "text": "Je hebt rechten nodig over het domein of een van de instanties om deze koppeling te verwijderen",
+    "scope": "violations"
+  },
+  "game_domain_same_instance": {
+    "text": "De backend en de proxy moeten verschillende instanties zijn",
+    "scope": "violations"
+  },
+  "game_domain_cross_host": {
+    "text": "De backend en de proxy moeten op dezelfde server draaien",
+    "scope": "violations"
+  },
+  "game_domain_duplicate": {
+    "text": "Dat domein is al gekoppeld via deze proxy",
+    "scope": "violations"
+  },
+  "game_domain_missing": {
+    "text": "Dat domeinrecord bestaat niet",
+    "scope": "violations"
+  },
+  "game_domain_match_type": {
+    "text": "Gamedomeinen moeten exacte hostnamen zijn",
+    "scope": "violations"
+  },
+  "game_instance_missing": {
+    "text": "Die instantie bestaat niet",
+    "scope": "violations"
+  },
+  "game_domain_field_required": {
+    "text": "Domein, backend en proxy zijn allemaal verplicht",
+    "scope": "violations"
+  },
+  "game_file_conflict": {
+    "text": "Een handgeschreven configuratiebestand bezet al {$path} op de proxy",
+    "scope": "violations"
+  },
+  "game_materialize_failed": {
+    "text": "Materialiseren van de koppeling is mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "game_push_failed": {
+    "text": "Kon de gegenereerde configuratie niet naar de container sturen: {$reason}",
+    "scope": "violations"
+  },
+  "game_link_failed": {
+    "text": "Kon het koppelnetwerk tussen proxy en backend niet afdwingen: {$reason}",
+    "scope": "violations"
+  },
+  "game_link_unsupported": {
+    "text": "Instantie '{$name}' draait op een driver zonder koppelnetwerken",
+    "scope": "violations"
+  },
+  "game_domain": [
+    {
+      "text": "Domein",
+      "scope": "field"
+    },
+    {
+      "text": "Het exacte-hostnaam domeinrecord waar spelers mee verbinden.",
+      "scope": "help"
+    }
+  ],
+  "game_backend": [
+    {
+      "text": "Backend-instantie",
+      "scope": "field"
+    },
+    {
+      "text": "De gameserver waarnaar de proxy dit domein doorstuurt.",
+      "scope": "help"
+    }
+  ],
+  "game_proxy": [
+    {
+      "text": "Velocity-proxy",
+      "scope": "field"
+    },
+    {
+      "text": "De proxy-instantie waarvan de forced-hosts-configuratie uit deze koppeling gegenereerd wordt.",
+      "scope": "help"
+    }
+  ],
+  "game_backend_port": [
+    {
+      "text": "Backend-poort",
+      "scope": "field"
+    },
+    {
+      "text": "Gamepoort binnen de backend-container (Minecraft-standaard 25565).",
+      "scope": "help"
+    }
+  ],
+  "processes_title": {
+    "text": "{$name} - Processen",
+    "scope": "site"
+  },
+  "deployments_title": {
+    "text": "{$name} - Deployments",
+    "scope": "site"
+  },
+  "domains_title": {
+    "text": "{$name} - Domeinen",
+    "scope": "site"
   },
   "dns_generated_readonly": {
     "text": "Dit record is gegenereerd door {$source} en kan hier niet bewerkt of verwijderd worden",
