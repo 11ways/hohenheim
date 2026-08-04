@@ -84,6 +84,9 @@ public final class BuildSandbox {
     /** How often the disk watchdog asks the daemon for the writable-layer size. */
     private static final long DISK_POLL_MS = 2000;
 
+    /** Consecutive blind disk probes before an unobservable build is killed. */
+    private static final int MAX_DISK_PROBE_FAILURES = 10;
+
     /** Why a build ended. */
     public enum Ending {
         /** The builder exited on its own (its exit code decides success). */
@@ -191,9 +194,31 @@ public final class BuildSandbox {
     private @NonNull Outcome watch(int buildId, @NonNull String handle, @NonNull BuildPlan plan,
                                    @NonNull BuildQuota quota, @NonNull BuildLog log)
             throws IOException {
+        Supervision watched = supervise(buildId, handle, quota, log);
+        if (watched.ending() != Ending.EXITED) {
+            return new Outcome(watched.ending(), -1, watched.peakDiskBytes(), null, 0);
+        }
+        if (watched.exitCode() != 0) {
+            log.line("[hohenheim] build exited " + watched.exitCode());
+            return new Outcome(Ending.EXITED, watched.exitCode(), watched.peakDiskBytes(), null, 0);
+        }
+        return collectArtifact(handle, plan, quota, log, watched.peakDiskBytes());
+    }
+
+    /** How one supervised container ended; the ending decides what the caller may read. */
+    private record Supervision(@NonNull Ending ending, int exitCode, long peakDiskBytes) {}
+
+    /**
+     * Supervise one container to its end: liveness polling, the wall-clock deadline and
+     * the disk watchdog, shared by the image build and every builder pre-phase.
+     */
+    private @NonNull Supervision supervise(int buildId, @NonNull String handle,
+                                           @NonNull BuildQuota quota, @NonNull BuildLog log)
+            throws IOException {
         long deadline = System.currentTimeMillis() + quota.timeoutMs();
         long nextDiskPoll = System.currentTimeMillis();
         long peakDisk = 0;
+        int diskProbeFailures = 0;
 
         while (true) {
             Map<String, Object> inspect = this.docker.inspectContainer(handle);
@@ -202,11 +227,7 @@ public final class BuildSandbox {
             if (!running) {
                 int exitCode = state instanceof Map<?, ?> s && s.get("ExitCode") instanceof Number code
                     ? code.intValue() : -1;
-                if (exitCode != 0) {
-                    log.line("[hohenheim] build exited " + exitCode);
-                    return new Outcome(Ending.EXITED, exitCode, peakDisk, null, 0);
-                }
-                return collectArtifact(handle, plan, quota, log, peakDisk);
+                return new Supervision(Ending.EXITED, exitCode, peakDisk);
             }
 
             long now = System.currentTimeMillis();
@@ -214,11 +235,27 @@ public final class BuildSandbox {
                 log.line("[hohenheim] build exceeded its " + quota.timeoutSeconds()
                     + "s wall-clock quota and was killed");
                 kill(handle);
-                return new Outcome(Ending.TIMED_OUT, -1, peakDisk, null, 0);
+                return new Supervision(Ending.TIMED_OUT, -1, peakDisk);
             }
             if (now >= nextDiskPoll) {
                 nextDiskPoll = now + DISK_POLL_MS;
-                long written = this.docker.containerWritableBytes(handle);
+                long written;
+                try {
+                    written = this.docker.containerWritableBytes(handle);
+                    diskProbeFailures = 0;
+                } catch (IOException flaky) {
+                    // The snapshotter races its own usage walk against a busy build
+                    // (files vanish mid-scan and it answers 500). ONE blind observation
+                    // is not a quota decision -- but a watchdog that stays blind would be
+                    // an unmetered build, so persistent blindness kills it by name.
+                    if (++diskProbeFailures >= MAX_DISK_PROBE_FAILURES) {
+                        kill(handle);
+                        throw new IOException("The disk watchdog could not observe build "
+                            + buildId + " " + diskProbeFailures + " times in a row ("
+                            + flaky.getMessage() + "); refusing to run unmetered");
+                    }
+                    continue;
+                }
                 if (written > peakDisk) {
                     peakDisk = written;
                 }
@@ -226,7 +263,7 @@ public final class BuildSandbox {
                     log.line("[hohenheim] build wrote " + written + " bytes, over its "
                         + quota.diskLimitMb() + " MiB disk quota, and was killed");
                     kill(handle);
-                    return new Outcome(Ending.DISK_EXCEEDED, -1, peakDisk, null, 0);
+                    return new Supervision(Ending.DISK_EXCEEDED, -1, peakDisk);
                 }
             }
             try {
@@ -235,6 +272,133 @@ public final class BuildSandbox {
                 Thread.currentThread().interrupt();
                 kill(handle);
                 throw new IOException("Build " + buildId + " was interrupted and killed");
+            }
+        }
+    }
+
+    /**
+     * A builder kind's sandboxed pre-phase (detection): what to run, what to stage in,
+     * and what to read back out.
+     *
+     * @param image          the phase's tool image; pulled by the sandbox, never the phase
+     * @param command        argv inside that image
+     * @param env            phase-facing environment (build args a detector may honor)
+     * @param contextPath    directory inside the container the build context is pushed into
+     * @param stagedBinaries files staged in BEFORE start (real host files, so binaries
+     *                       survive -- unlike {@link BuildPlan#stagedFiles} text content)
+     * @param collectFiles   container paths read back after the phase ends, whatever its
+     *                       exit (absent = omitted)
+     * @param collectDir     container directory read back as a raw tar, or null
+     */
+    public record Phase(@NonNull String image, @NonNull List<String> command,
+                        @NonNull Map<String, String> env,
+                        @NonNull String contextPath,
+                        @NonNull List<StagedBinary> stagedBinaries,
+                        @NonNull List<String> collectFiles,
+                        @Nullable String collectDir) {
+
+        /** Files copied from {@code hostDir} into {@code targetDir} inside the phase. */
+        public record StagedBinary(@NonNull String targetDir, @NonNull Path hostDir,
+                                   @NonNull List<String> files) {}
+    }
+
+    /**
+     * @param collectedDirTar raw tar of {@link Phase#collectDir} (docker's envelope:
+     *                        entries rooted at the directory's basename), or null; the
+     *                        CALLER owns deleting it
+     */
+    public record PhaseOutcome(@NonNull Ending ending, int exitCode,
+                               @NonNull Map<String, byte[]> files,
+                               @Nullable Path collectedDirTar) {
+
+        public boolean succeeded() {
+            return this.ending == Ending.EXITED && this.exitCode == 0;
+        }
+    }
+
+    /**
+     * Run one builder pre-phase under the SAME hardening, quota enforcement and log
+     * stream as the build itself, but with NO network at all ({@code NetworkMode: none}):
+     * a detection phase parses hostile tenant files and has no business fetching
+     * anything, so it gets a strictly TIGHTER posture than the build.
+     *
+     * @throws IOException when the phase cannot be established -- it never started
+     */
+    public @NonNull PhaseOutcome runPhase(int buildId, @NonNull String phaseName,
+                                          @NonNull Phase phase, @NonNull BuildQuota quota,
+                                          @NonNull Path contextDir, @NonNull BuildLog log)
+            throws IOException {
+        String handle = handleOf(buildId) + "-" + phaseName;
+        Map<String, String> ownerLabels = OwnerLabels.of(BuildOperationModel.MODEL_ID, buildId);
+
+        long contextBytes = directorySize(contextDir);
+        if (contextBytes > quota.diskBytes()) {
+            throw new IOException("REFUSED to build: the build context is " + contextBytes
+                + " bytes, over the " + quota.diskBytes() + " byte disk quota");
+        }
+
+        this.docker.ensureImage(phase.image(), null);
+        OwnerLabels.removeIfOwnedBy(this.docker, handle, BuildOperationModel.MODEL_ID, buildId);
+
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("Image", phase.image());
+        spec.put("Labels", ownerLabels);
+        spec.put("Cmd", phase.command());
+        List<String> env = new ArrayList<>();
+        phase.env().forEach((name, value) -> env.add(name + "=" + value));
+        if (!env.isEmpty()) {
+            spec.put("Env", env);
+        }
+        Map<String, Object> hostConfig = new LinkedHashMap<>();
+        hostConfig.put("NetworkMode", "none");
+        quota.limits().applyTo(hostConfig);
+        spec.put("HostConfig", hostConfig);
+
+        this.docker.createContainer(handle, spec, HARDENING, quota.effectivePidsLimit());
+        try {
+            // putArchiveCreating, not putArchiveFromDirectory: a phase image is a plain
+            // base image with no /workspace (or tool dir) baked in, and Docker's archive
+            // PUT refuses a target directory that does not exist.
+            this.docker.putArchiveCreating(handle, phase.contextPath(), contextDir, null);
+            for (Phase.StagedBinary staged : phase.stagedBinaries()) {
+                this.docker.putArchiveCreating(handle, staged.targetDir(), staged.hostDir(),
+                    staged.files());
+            }
+            ConsoleStream stream = this.docker.attach(handle);
+            Thread reader = drainInto(stream, log, handle);
+            this.docker.startContainer(handle);
+            Supervision watched = supervise(buildId, handle, quota, log);
+            stream.close();
+            joinQuietly(reader);
+            // Outputs are collected EVEN from a failed phase: the builder kind judges the
+            // outcome, and what a detector observed before its tool exited nonzero is
+            // exactly what turns a mute failure into a named refusal.
+            Map<String, byte[]> files = new LinkedHashMap<>();
+            for (String path : phase.collectFiles()) {
+                try {
+                    files.put(path, this.docker.getArchiveFile(handle, path, quota.artifactBytes()));
+                } catch (IOException absent) {
+                    // An absent output is the PHASE's result to judge, not the sandbox's:
+                    // the builder kind decides whether a missing file is a refusal.
+                }
+            }
+            Path dirTar = null;
+            if (phase.collectDir() != null) {
+                dirTar = Files.createTempFile("hohenheim-build-phase", ".tar");
+                try {
+                    this.docker.getArchiveTar(handle, phase.collectDir(), dirTar,
+                        quota.artifactBytes());
+                } catch (IOException absent) {
+                    deleteQuietly(dirTar);
+                    dirTar = null;
+                }
+            }
+            return new PhaseOutcome(watched.ending(), watched.exitCode(), files, dirTar);
+        } finally {
+            try {
+                this.docker.removeContainer(handle, true);
+            } catch (IOException ignored) {
+                // re-removed by the next build's removeIfOwnedBy
             }
         }
     }

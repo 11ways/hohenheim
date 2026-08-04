@@ -783,6 +783,31 @@ public class DockerClient {
     }
 
     /**
+     * Like {@link #putArchiveFromDirectory}/{@link #putArchiveFiles}, but for a
+     * {@code targetDir} that need NOT exist in the image: the tar is extracted at
+     * {@code /} with every entry prefixed by the target path, so the daemon creates the
+     * directory itself. Symlink targets are deliberately NOT rewritten (a relative link
+     * inside the pushed tree must keep resolving inside it).
+     *
+     * @param files the entries to include relative to {@code hostDir}, or null for the
+     *              whole directory
+     */
+    public void putArchiveCreating(String containerId, String targetDir, Path hostDir,
+                                   List<String> files) throws IOException {
+        String prefix = targetDir.startsWith("/") ? targetDir.substring(1) : targetDir;
+        List<String> command = new ArrayList<>(List.of("tar", "-C", hostDir.toString(),
+            "--transform", "s,^\\./,,S", "--transform", "s,^," + prefix + "/,S",
+            "-cf", "-"));
+        if (files == null) {
+            command.add(".");
+        } else {
+            command.addAll(files);
+        }
+        String path = "/containers/" + containerId + "/archive?path=" + enc("/");
+        request("PUT", path, tarWith(command, hostDir), "application/x-tar", LONG_OP_TIMEOUT_MS);
+    }
+
+    /**
      * Download a directory from a container ({@code GET /containers/{id}/archive}) as a raw
      * tar, written to {@code outFile}. Works on stopped containers -- the volume-snapshot
      * mechanism's read primitive. The tar's entries are rooted at the directory's basename
