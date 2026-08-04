@@ -726,6 +726,95 @@ public class HohenheimSettings {
             .build();
     }
 
+    // --- Sandboxed builders ---
+    public abstract class Builds {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("builds")
+            .label("Builders")
+            .describe("The sandbox every tenant build runs in: builder image, and the "
+                + "CPU/memory/disk/time/PID quota one build may consume")
+            .icon("hammer");
+
+        // AIDEV-NOTE: a DAEMONLESS builder is the whole point and this setting must never
+        // be pointed at one that needs the Docker socket. Kaniko builds a Dockerfile from
+        // inside an ordinary container -- no daemon, no privileged mode, no userns -- and
+        // was MEASURED to work under the full ContainerHardening baseline (drop-ALL plus
+        // the SERVICE set, no-new-privileges, the pids cap). "docker:dind" or anything
+        // else that wants /var/run/docker.sock cannot be made to work here: the socket is
+        // a host bind mount and createContainer refuses those structurally.
+        public static final SettingDefinition<String> BUILDER_IMAGE = GROUP
+            .buildSetting("builder_image", String.class)
+            .defaultValue("gcr.io/kaniko-project/executor:v1.23.2")
+            .description("Daemonless image-builder used for Dockerfile builds. It must be "
+                + "able to build without the Docker daemon: the sandbox has no socket, no "
+                + "privileges and no route to the control plane")
+            .build();
+
+        public static final SettingDefinition<Double> CPU_LIMIT = GROUP
+            .buildSetting("cpu_limit", Double.class)
+            .defaultValue(2.0)
+            .description("CPUs one build may use (1.5 = one and a half cores)")
+            .build();
+
+        public static final SettingDefinition<Integer> MEMORY_LIMIT_MB = GROUP
+            .buildSetting("memory_limit_mb", Integer.class)
+            .defaultValue(2048)
+            .suffix("MiB")
+            .description("Memory ceiling of one build container; the kernel OOM-kills the "
+                + "build rather than the host")
+            .build();
+
+        public static final SettingDefinition<Integer> DISK_LIMIT_MB = GROUP
+            .buildSetting("disk_limit_mb", Integer.class)
+            .defaultValue(4096)
+            .suffix("MiB")
+            .description("Ceiling on the build container's writable layer, on the build "
+                + "context pushed in and on the artifact read back out. A watchdog polls "
+                + "the daemon's own size accounting and kills a build that crosses it -- "
+                + "an unbounded build is a one-line host-filling denial of service")
+            .build();
+
+        public static final SettingDefinition<Integer> TIMEOUT_SECONDS = GROUP
+            .buildSetting("timeout_seconds", Integer.class)
+            .defaultValue(900)
+            .suffix("s")
+            .description("Wall-clock ceiling on one build; the sandbox kills and removes "
+                + "the container when it is crossed and the operation records timed_out")
+            .build();
+
+        public static final SettingDefinition<Integer> PIDS_LIMIT = GROUP
+            .buildSetting("pids_limit", Integer.class)
+            .defaultValue(256)
+            .description("Process ceiling inside one build container. This can only ever "
+                + "TIGHTEN hohenheim.security.container_pids_limit, never raise it")
+            .build();
+
+        public static final SettingDefinition<Integer> MAX_ARTIFACT_MB = GROUP
+            .buildSetting("max_artifact_mb", Integer.class)
+            .defaultValue(1024)
+            .suffix("MiB")
+            .description("Upper bound in MiB for the image tar read back out of a build "
+                + "sandbox. The read is buffered through controller memory (the same "
+                + "limitation snapshot capture has), so this cap is the heap guard: a "
+                + "larger artifact FAILS the build instead of taking the controller down")
+            .build();
+
+        public static final SettingDefinition<Integer> LOG_LIMIT_KB = GROUP
+            .buildSetting("log_limit_kb", Integer.class)
+            .defaultValue(512)
+            .suffix("KiB")
+            .description("Captured build log kept on the build operation. Output past the "
+                + "cap is dropped with a marker line -- a build that prints forever must "
+                + "not fill the control-plane database")
+            .build();
+
+        public static final SettingDefinition<Integer> HISTORY_PER_OWNER = GROUP
+            .buildSetting("history_per_owner", Integer.class)
+            .defaultValue(50)
+            .description("Build operations kept per owning record; older rows are pruned "
+                + "when a build completes")
+            .build();
+    }
+
     // --- Instance file manager ---
     public abstract class Files {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("files")

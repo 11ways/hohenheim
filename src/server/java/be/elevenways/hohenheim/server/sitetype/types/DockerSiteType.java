@@ -43,6 +43,16 @@ public class DockerSiteType implements SiteTypeHandler {
         PathField.builder().name("dockerfile").label(HohenheimFormCopy.label("dockerfile"))
             .help(HohenheimFormCopy.help("dockerfile")).build());
 
+    // AIDEV-NOTE: BUILD-time arguments, and deliberately a SEPARATE field from
+    // ENVIRONMENT_VARIABLES rather than a reuse of it. The runtime environment carries the
+    // workload's secrets (database credentials, API keys) and a sandboxed build never sees
+    // it -- the separation is what makes "my build log leaked my database password"
+    // structurally impossible. Values here DO reach the build, and a Dockerfile ARG ends up
+    // in the image's history, so this field is not a secret channel either.
+    public static final StringMapField BUILD_ARGUMENTS = SETTINGS_SCHEMA.addField(
+        StringMapField.builder("build_arguments").label(HohenheimFormCopy.label("build_arguments"))
+            .help(HohenheimFormCopy.help("build_arguments")).build());
+
     // Target server (servers.name); blank/local runs on the local daemon, else a remote host over SSH.
     public static final EnumField SERVER = SETTINGS_SCHEMA.addField(
         RegistryEnumField.builder("server").registry(ServerOptions.REGISTRY)

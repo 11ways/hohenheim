@@ -11,10 +11,13 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.SiteContainerKind;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -42,11 +45,32 @@ class DockerSiteHandlerTest {
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String TEST_IMAGE = "alpine:latest";
 
+    private static PrivateNetns netns;
+
     // The contract writes instance rows and ledger claims, so every start here needs
     // the booted runtime -- a claim that cannot be written is a failure, not a shrug.
+    //
+    // AIDEV-NOTE: the netns fixture is here for the BUILD half only. A Docker site's
+    // running release is operator-authored and keeps the SHARED_BRIDGE posture, but its
+    // BUILD executes the tenant's own Dockerfile, so the sandbox puts that on a private
+    // network with a verified kernel policy and REFUSES when the host cannot enforce one.
+    // Without this fixture the build-from-context test would find the site simply down.
     @BeforeAll
-    static void bootRuntime() {
+    static void bootRuntime() throws Exception {
         HohenheimTestRuntime.ensureBooted();
+        if (PrivateNetns.available()) {
+            netns = new PrivateNetns();
+            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
+        }
+    }
+
+    @AfterAll
+    static void tearDown() {
+        WorkloadNetworkPolicy.overrideForTest(null);
+        if (netns != null) {
+            netns.close();
+            netns = null;
+        }
     }
 
     @Test
@@ -280,15 +304,17 @@ class DockerSiteHandlerTest {
     }
 
     /**
-     * A git-provisioned site builds from its checkout and the owned instance is pinned
-     * to the built IMAGE ID: an unchanged rebuild converges (same container), a changed
-     * checkout is a visible settings change that rolls the release.
+     * A git-provisioned site builds in the SANDBOX from its checkout and the owned
+     * instance is pinned to the artifact's DIGEST: an unchanged rebuild converges to the
+     * same digest (same container), a changed checkout produces a new digest that rolls
+     * the release.
      */
     @Test
     void buildsImageFromContextPinsTheIdAndRollsOnChange() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " (build base) not present");
+        assumeTrue(netns != null, "no private netns: the build sandbox refuses to run unprotected");
 
         int siteId = 999_002;
         String builtImage = "hohenheim-site-" + siteId + ":latest";
@@ -310,15 +336,26 @@ class DockerSiteHandlerTest {
             Row instance = Models.get(InstanceModel.class).findById(instanceId);
             Map<?, ?> stored = (Map<?, ?>) instance.get(InstanceModel.SETTINGS);
             assertThat(String.valueOf(stored.get("image")))
-                .as("step 1: the release runs the site's build tag").isEqualTo(builtImage);
+                .as("step 1: the release is pinned to the artifact DIGEST, never the tag")
+                .startsWith("sha256:")
+                .isNotEqualTo(builtImage);
             assertThat(String.valueOf(stored.get("built_image_id")))
-                .as("step 1: the release is pinned to the built image ID")
-                .startsWith("sha256:");
+                .as("step 1: and the convergence discriminator is the same digest")
+                .isEqualTo(String.valueOf(stored.get("image")));
 
-            // 2. An unchanged rebuild converges: same container, no restart.
+            // 2. An unchanged rebuild converges: the REPRODUCIBLE builder returns the
+            //    same digest for the same context, so the settings do not change and the
+            //    container is not restarted. Without reproducibility every routing reload
+            //    would roll every git-sourced site.
             String containerName = "hohenheim-instance-" + instanceId;
             String runningId = (String) docker.inspectContainer(containerName).get("Id");
+            String firstDigest = String.valueOf(stored.get("image"));
             new DockerSiteRequestHandler(siteId, settings);
+            Map<?, ?> rebuilt = (Map<?, ?>) Models.get(InstanceModel.class)
+                .findById(instanceId).get(InstanceModel.SETTINGS);
+            assertThat(String.valueOf(rebuilt.get("image")))
+                .as("step 2: an identical context builds an identical digest")
+                .isEqualTo(firstDigest);
             assertThat((String) docker.inspectContainer(containerName).get("Id"))
                 .as("step 2: unchanged checkout, unchanged container").isEqualTo(runningId);
 

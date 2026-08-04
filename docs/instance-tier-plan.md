@@ -2743,6 +2743,42 @@ network, quota, ownership, secret and durable-operation mechanisms.
   registry credentials, no tenant runtime secrets, and immutable artifact
   output pinned by digest. Dockerfile and buildpack/Nixpacks-style builds share
   one build-operation record and log stream.
+
+  FIRST BUILDER KIND LANDED 2026-08-05 (re-verify, do not assume). The daemon's
+  own `/build` endpoint is GONE (`DockerClient.buildImage` deleted): it executed
+  the tenant's Dockerfile inside the daemon, as root on the host, with no quota
+  of any kind -- it IS the control-plane trust domain, and there was no sandbox
+  to add to it. Builds now run as a hardened one-shot container of a DAEMONLESS
+  builder (`builds.builder_image`, kaniko by default), on its OWN private
+  network with the throwing, read-back-verified `WorkloadNetworkPolicy` applied
+  BEFORE the container exists -- so a host that cannot enforce it REFUSES the
+  build rather than building unprotected. The context goes IN and the artifact
+  comes OUT through the archive API; nothing is bind-mounted, and
+  `ContainerHardening` refuses host binds structurally, which is what makes the
+  socket unreachable rather than merely unmounted. Five quotas, five enforcement
+  points: CPU+memory are cgroup caps, PIDs is a TIGHTENING-ONLY parameter on the
+  hardening funnel (`applyTo(spec, profile, tighterPidsLimit)`, min of the two --
+  it can never widen), TIME is a controller deadline that kills and removes, and
+  DISK is a watchdog over the daemon's own `SizeRw` accounting plus hard caps on
+  the context pushed in and the artifact read out (there is no disk cgroup
+  without xfs prjquota, and a spec-level `--storage-opt` would have been a
+  setting that silently does nothing). Artifacts are pinned by DIGEST -- the
+  site's `image` setting is now `sha256:...`, never the tag -- and the builder
+  runs `--reproducible` because without it the same context yields a new digest
+  every time and every routing reload would roll every git-sourced site.
+  Credentials go through `BuildCredentials`: per-build, TTL-bounded, revoked in
+  a finally block, redacted out of the captured log, never stored in any table.
+  Runtime secrets have NO PATH into a build -- `BuildRequest` has no member that
+  could carry them, and `build_arguments` is a separate DockerSiteType field
+  from `environment_variables`. `BuildOperationModel` is the one record for both
+  kinds; NIXPACKS is DECLARED (`Builders.forKind` refuses it by name) with the
+  path stated: a detection phase in this same sandbox emitting a Dockerfile into
+  the context, after which the dockerfile builder runs unchanged. HONEST GAPS:
+  the lease shortens HOHENHEIM's lease, not an upstream provider's credential
+  (provider-minted tokens arrive with the git-provider wave and plug into
+  `issue` unchanged); egress is RESTRICTIVE, not closed (a per-build allowlist
+  is unbuilt); the artifact read is buffered through controller memory
+  (`builds.max_artifact_mb`), the same limitation snapshot capture has.
 - Projects and environments group applications, databases, domains, variables
   and quotas. This is the point to adopt the hierarchical tenant/project model
   if open decision 7 selects it; do not bolt projects onto URLs while ownership
