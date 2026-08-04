@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.preview.PreviewDomains;
 import be.elevenways.hohenheim.server.preview.PreviewQuota;
@@ -139,6 +140,23 @@ class PreviewDeploymentLiveTest {
 
     @AfterAll
     static void tearDown() {
+        // Reclaim everything this class put on the daemon, THROUGH the product
+        // funnels, even when a test failed mid-journey: live previews first (a failed
+        // run otherwise leaves its preview container RUNNING forever), then the
+        // fixture site's production release (otherwise every run leaves an exited
+        // container plus the hohenheim-site image behind).
+        if (siteId != null) {
+            try {
+                PreviewDeployments.destroyForSite(siteId);
+            } catch (RuntimeException e) {
+                System.err.println("teardown: preview reclaim failed - " + e.getMessage());
+            }
+            try {
+                SiteInstances.destroyFor(siteId);
+            } catch (RuntimeException e) {
+                System.err.println("teardown: site release reclaim failed - " + e.getMessage());
+            }
+        }
         ServerMain.adoptProxyServer(null);
         if (proxy != null) {
             proxy.stop();
