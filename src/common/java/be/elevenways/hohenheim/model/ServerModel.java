@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.net.IpLiterals;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -182,6 +184,25 @@ public class ServerModel extends Model {
     public static final StringField CONTROLLER_VERSION = SCHEMA.addField(
         StringField.builder().name("controller_version").nullable(true).build());
 
+    /**
+     * The host's DECLARED public IPv4 literal -- THE server-address authority DNS A
+     * generation reads (game-domain mappings). Null means the host declares no public
+     * IPv4 and no A record is ever generated for workloads on it. Declared, never
+     * probed: only the operator knows which of a host's addresses is the public one.
+     */
+    public static final StringField PUBLIC_IPV4 = SCHEMA.addField(
+        StringField.builder().name("public_ipv4").nullable(true)
+            .label(HohenheimFormCopy.label("public_ipv4"))
+            .help(HohenheimFormCopy.help("public_ipv4"))
+            .build());
+
+    /** The host's declared public IPv6 literal (AAAA generation); null = none declared. */
+    public static final StringField PUBLIC_IPV6 = SCHEMA.addField(
+        StringField.builder().name("public_ipv6").nullable(true)
+            .label(HohenheimFormCopy.label("public_ipv6"))
+            .help(HohenheimFormCopy.help("public_ipv6"))
+            .build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
@@ -203,6 +224,39 @@ public class ServerModel extends Model {
         SCHEMA.addBeforeRemoveHook(ServerModel::refuseRemovalWhileOwned);
         SCHEMA.addBeforeRemoveHook(PortLedger::captureDoomedOwners);
         SCHEMA.addAfterRemoveHook(PortLedger::markDoomedServersReleasing);
+        // A declared server address must be an IP LITERAL: DNS generation serves the
+        // stored string verbatim as an A/AAAA value, so a hostname or garbage here would
+        // materialize as a record nothing can resolve -- refused on EVERY write path.
+        SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row == null) {
+                return;
+            }
+            String v4 = normalizeAddress(row, PUBLIC_IPV4);
+            if (v4 != null && !IpLiterals.isIpv4(v4)) {
+                throw Violations.ofField(PUBLIC_IPV4.getName(), v4,
+                    Microcopy.of("server_address_invalid").withFilter("scope", "violations")
+                        .withArg("address", v4));
+            }
+            String v6 = normalizeAddress(row, PUBLIC_IPV6);
+            if (v6 != null && !IpLiterals.isIpv6(v6)) {
+                throw Violations.ofField(PUBLIC_IPV6.getName(), v6,
+                    Microcopy.of("server_address_invalid").withFilter("scope", "violations")
+                        .withArg("address", v6));
+            }
+        });
+    }
+
+    /** Trim a staged address; a blank submit folds to null (the "none declared" state). */
+    private static @Nullable String normalizeAddress(@NonNull Row row,
+                                                     @NonNull StringField field) {
+        if (!row.has(field.getName())) {
+            return null;
+        }
+        Object staged = row.get(field.getName());
+        String value = staged != null ? String.valueOf(staged).trim() : "";
+        row.set(field, value.isEmpty() ? null : value);
+        return value.isEmpty() ? null : value;
     }
 
     /**

@@ -4486,7 +4486,7 @@
     "scope": "help"
   },
   "instance_container_port": {
-    "text": "Container TCP port published on 127.0.0.1 with an ephemeral host port; leave blank for none (UDP is not supported yet)",
+    "text": "Container port the workload listens on; protocol and exposure below decide how it is published",
     "scope": "help"
   },
   "instance_volumes": {
@@ -5701,5 +5701,85 @@
   "schedule_action_capability_denied": {
     "text": "You lack the capability this action requires on the instance",
     "scope": "violations"
+  },
+  "port_protocol": [
+    {
+      "text": "Port protocol",
+      "scope": "field"
+    },
+    {
+      "text": "TCP or UDP; a UDP port always pre-allocates a fixed host port before the workload starts",
+      "scope": "help"
+    }
+  ],
+  "port_exposure": [
+    {
+      "text": "Port exposure",
+      "scope": "field"
+    },
+    {
+      "text": "Loopback keeps the port reachable from this host only (the safe default); public binds it on every interface for players to reach, on a stable pre-allocated host port",
+      "scope": "help"
+    }
+  ],
+  "instance_host_port": {
+    "text": "Optional fixed host port; leave blank to auto-allocate one from the configured window. Declaring one always pre-allocates it",
+    "scope": "help"
+  },
+  "public_ipv4": [
+    {
+      "text": "Public IPv4 address",
+      "scope": "field"
+    },
+    {
+      "text": "The declared public IPv4 of this host; generated DNS A records for game domains carry it verbatim. Leave blank to generate no A records",
+      "scope": "help"
+    }
+  ],
+  "public_ipv6": [
+    {
+      "text": "Public IPv6 address",
+      "scope": "field"
+    },
+    {
+      "text": "The declared public IPv6 of this host; generated DNS AAAA records carry it verbatim. Leave blank to generate no AAAA records",
+      "scope": "help"
+    }
+  ],
+  "server_address_invalid": {
+    "text": "'{$address}' is not a valid IP literal; declare the address itself, never a hostname",
+    "scope": "violations"
+  },
+  "port_window_exhausted": {
+    "text": "No free host port in the pre-allocation window ({$first}, {$count} ports); free claims or widen hohenheim.instances",
+    "scope": "violations"
+  },
+  "port_bound_on_host": {
+    "text": "Host port {$port} is already bound on this host by something outside the ledger",
+    "scope": "violations"
+  },
+  "port_conflict": {
+    "text": "Host port {$port} is already claimed by {$holder}",
+    "scope": "violations"
+  },
+  "port_shape_without_port": {
+    "text": "Port protocol, exposure or host port is declared but no container port names which port to publish",
+    "scope": "violations"
+  },
+  "tcp": {
+    "text": "TCP",
+    "scope": "port_protocol"
+  },
+  "udp": {
+    "text": "UDP",
+    "scope": "port_protocol"
+  },
+  "loopback": {
+    "text": "Loopback only",
+    "scope": "port_exposure"
+  },
+  "public": {
+    "text": "Public",
+    "scope": "port_exposure"
   }
 }

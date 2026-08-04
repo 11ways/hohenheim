@@ -21,11 +21,11 @@ import java.util.List;
  * (InstanceImagePolicy).
  *
  * AIDEV-NOTE: there is deliberately NO separate port_requirements structure. The kind
- * settings' own {@code container_port} IS the port requirement, because the runtime can
- * honor exactly one loopback TCP publication today -- a declared UDP/multi-port list
- * would be a column that reads like capability while the pre-allocation mode it needs
- * (Phase 3 leftover) does not exist. When that mode lands, the requirement grows WITH
- * the enforcement, in the kind settings schema.
+ * settings' own {@code container_port} + {@code port_protocol} + {@code port_exposure}
+ * + {@code host_port} ARE the port requirement (they grew WITH the pre-allocation
+ * enforcement, as this note always demanded). A multi-port LIST still does not exist
+ * because the runtime honors exactly one publication per instance; grow the list only
+ * together with the runtime that enforces it.
  *
  * AIDEV-NOTE: {@code readiness_line} and {@code stop_command} are DECLARED matcher data
  * for the Phase 6 console wave (log-stream readiness detection, graceful stop via

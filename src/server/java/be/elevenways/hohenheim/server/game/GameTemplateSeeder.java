@@ -48,6 +48,9 @@ public final class GameTemplateSeeder implements Seeder {
                 "image", "dockcenter/velocity",
                 "tag", "latest",
                 "container_port", 25577,
+                // The proxy IS the public entry: players connect to its pre-allocated
+                // public port (the SRV rides it). The backend template stays unpublished.
+                "port_exposure", "public",
                 "environment_variables", Map.of("JAVA_MEMORY", "512M"),
                 "volumes", Map.of("data", "/data"),
                 "memory_limit_mb", 768),

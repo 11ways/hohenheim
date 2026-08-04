@@ -72,6 +72,23 @@ public class PortAllocationModel extends Model {
         StringField.builder().name("status").build());
 
     /**
+     * {@link #ALLOCATION_MODE} value: the port number was chosen and claimed BEFORE the
+     * workload existed (the declared pre-allocation mode -- UDP, public game ports,
+     * operator-fixed host ports). A pre-allocated claim is the owner's stable reservation:
+     * it survives a stop (the kernel port is free, the NUMBER stays reserved) and only a
+     * verified destroy releases it.
+     */
+    public static final String MODE_PREALLOCATED = "preallocated";
+
+    /**
+     * The claim's declared acquisition strategy (the instance-tier plan's fork 2
+     * discriminator): null = record-after / observed (the default), or
+     * {@link #MODE_PREALLOCATED}. One ledger, one claim primitive, two strategies.
+     */
+    public static final StringField ALLOCATION_MODE = SCHEMA.addField(
+        StringField.builder().name("allocation_mode").build());
+
+    /**
      * Which controller GENERATION wrote a record-less managed-process claim: the host
      * lease's fence at allocation time (HostLeases). The boot sweep only judges rows
      * from a LOWER generation than its own held fence, so a claim can never be freed by

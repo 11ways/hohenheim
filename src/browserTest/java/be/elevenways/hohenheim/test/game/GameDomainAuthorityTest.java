@@ -128,8 +128,10 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         secret.set(InstanceVariableModel.SECRET_VALUE, PROXY_SECRET);
         variables.save(secret);
 
-        // An observed published port for the proxy (what deploy records after start).
-        PortLedger.recordObserved(ServerModel.canonicalServerId(null), "127.0.0.1", 25599,
+        // The proxy's PUBLIC pre-allocated port (what a public-exposure deploy claims
+        // BEFORE create). DNS generation deliberately rides ONLY a public claim: a
+        // loopback port would make every generated row a dangling pointer.
+        PortLedger.claimPreallocated(ServerModel.canonicalServerId(null), "", 25599,
             "tcp", InstanceModel.MODEL_ID, proxyId, "game-domain-test");
     }
 
@@ -177,9 +179,14 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
     }
 
     private static Row generatedSrvRow() {
+        return generatedRow(DnsRecordModel.TYPE_SRV);
+    }
+
+    private static Row generatedRow(String type) {
         return Models.get(DnsRecordModel.class).find()
             .where(DnsRecordModel.GENERATED_BY.eq(GameDomains.SOURCE))
             .and(DnsRecordModel.GENERATED_FOR_MODEL.eq(GameDomainModel.MODEL_ID.toString()))
+            .and(DnsRecordModel.TYPE.eq(type))
             .first();
     }
 
@@ -245,14 +252,14 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
             .contains("backend-" + backendId + " = \"hohenheim-instance-" + backendId + ":25565\"");
 
         // 2. The generated SRV row exists, attributed to the MAPPING, with the proxy's
-        //    observed published port and the hostname as target.
+        //    PUBLIC pre-allocated port and the hostname as target.
         Row srv = generatedSrvRow();
         assertThat(srv).as("step 2: the generated SRV row exists").isNotNull();
         assertThat((String) srv.get(DnsRecordModel.NAME))
             .as("step 2: the owner name is the minecraft SRV of the mapped host")
             .isEqualTo("_minecraft._tcp.play");
         assertThat((Integer) srv.get(DnsRecordModel.PORT))
-            .as("step 2: the SRV port is the proxy's OBSERVED published port")
+            .as("step 2: the SRV port is the proxy's PUBLIC pre-allocated port")
             .isEqualTo(25599);
         assertThat((String) srv.get(DnsRecordModel.VALUE)).isEqualTo(HOST);
         assertThat((Integer) srv.get(DnsRecordModel.GENERATED_FOR_ID)).isEqualTo(mappingId);
@@ -314,9 +321,110 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
             .isEqualTo(1);
     }
 
-    /** The admin surface renders: list page and create form answer 200 for the admin. */
     @Test
     @Order(3)
+    void aRecordsRideTheServerAddressAuthorityAndOnlyIt() {
+        var records = Models.get(DnsRecordModel.class);
+        var servers = Models.get(ServerModel.class);
+        int serverId = ServerModel.canonicalServerId(null);
+
+        // 1. No address declared: the SRV exists (public port), NO A/AAAA is generated
+        //    -- an A record pointing at an address nothing declared would be the
+        //    reports-success shape by name.
+        assertThat(generatedRow(DnsRecordModel.TYPE_A))
+            .as("step 1: no A row without a declared server address")
+            .isNull();
+
+        // 2. A hand-authored A row at the SAME owner name, BEFORE any generation: the
+        //    reconciler must never adopt or delete it.
+        Row handAuthored = records.createEmptyRow();
+        handAuthored.set(DnsRecordModel.ZONE_ID, zoneId);
+        handAuthored.set(DnsRecordModel.NAME, "play");
+        handAuthored.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_A);
+        handAuthored.set(DnsRecordModel.VALUE, "192.0.2.200");
+        handAuthored.set(DnsRecordModel.ENABLED, true);
+        records.save(handAuthored);
+        int handAuthoredId = handAuthored.get(DnsRecordModel.ID);
+
+        // 3. An invalid declared address is REFUSED on the model funnel itself.
+        Row server = servers.findById(serverId);
+        server.set(ServerModel.PUBLIC_IPV4, "not-an-address");
+        Throwable invalid = catchThrowable(() -> servers.save(server));
+        assertThat(invalid)
+            .as("step 3: a non-literal server address is refused")
+            .isInstanceOf(Violations.class);
+
+        // 4. Declaring real addresses generates the A and AAAA rows: attributed to the
+        //    mapping, owner name = the mapped host, values = the DECLARED addresses.
+        Row declare = servers.findById(serverId);
+        declare.set(ServerModel.PUBLIC_IPV4, "192.0.2.10");
+        declare.set(ServerModel.PUBLIC_IPV6, "2001:db8::10");
+        servers.save(declare);
+        Row a = generatedRow(DnsRecordModel.TYPE_A);
+        assertThat(a).as("step 4: the generated A row exists").isNotNull();
+        assertThat((String) a.get(DnsRecordModel.NAME)).isEqualTo("play");
+        assertThat((String) a.get(DnsRecordModel.VALUE))
+            .as("step 4: the A value is the DECLARED public IPv4")
+            .isEqualTo("192.0.2.10");
+        assertThat((Integer) a.get(DnsRecordModel.GENERATED_FOR_ID)).isEqualTo(mappingId);
+        Row aaaa = generatedRow(DnsRecordModel.TYPE_AAAA);
+        assertThat(aaaa).as("step 4: the generated AAAA row exists").isNotNull();
+        assertThat((String) aaaa.get(DnsRecordModel.VALUE)).isEqualTo("2001:db8::10");
+
+        // 5. The host's address CHANGES: the generated value moves with the declaration
+        //    (a stale A record is a dangling pointer); the hand-authored row is
+        //    untouched either way.
+        Row move = servers.findById(serverId);
+        move.set(ServerModel.PUBLIC_IPV4, "192.0.2.20");
+        servers.save(move);
+        assertThat((String) generatedRow(DnsRecordModel.TYPE_A).get(DnsRecordModel.VALUE))
+            .as("step 5: the generated A row moved with the host address")
+            .isEqualTo("192.0.2.20");
+        assertThat((String) records.findById(handAuthoredId).get(DnsRecordModel.VALUE))
+            .as("step 5: the hand-authored A row at the same name was never adopted")
+            .isEqualTo("192.0.2.200");
+
+        // 6. The DNS gate is the PUBLIC claim: swap the proxy's public claim for a
+        //    loopback one and every generated DNS row comes down -- SRV included --
+        //    because nothing outside this host could reach what they point at.
+        PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, proxyId);
+        PortLedger.recordObserved(serverId, "127.0.0.1", 25599, "tcp",
+            InstanceModel.MODEL_ID, proxyId, "game-domain-test");
+        GameDomains.afterServerAddressChange(serverId);
+        assertThat(generatedSrvRow())
+            .as("step 6: a loopback-published proxy generates NO SRV row")
+            .isNull();
+        assertThat(generatedRow(DnsRecordModel.TYPE_A))
+            .as("step 6: a loopback-published proxy generates NO A row")
+            .isNull();
+        assertThat(records.findById(handAuthoredId))
+            .as("step 6: the hand-authored row survives the takedown")
+            .isNotNull();
+
+        // 7. Restore the public claim, clear the declared addresses: the SRV returns,
+        //    the A/AAAA stay down (no address authority), the hand row still stands.
+        PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, proxyId);
+        PortLedger.claimPreallocated(serverId, "", 25599, "tcp",
+            InstanceModel.MODEL_ID, proxyId, "game-domain-test");
+        Row clear = servers.findById(serverId);
+        clear.set(ServerModel.PUBLIC_IPV4, null);
+        clear.set(ServerModel.PUBLIC_IPV6, null);
+        servers.save(clear);
+        assertThat(generatedSrvRow())
+            .as("step 7: the SRV row returns with the public claim")
+            .isNotNull();
+        assertThat(generatedRow(DnsRecordModel.TYPE_A))
+            .as("step 7: clearing the declared address takes the A row down")
+            .isNull();
+        assertThat(generatedRow(DnsRecordModel.TYPE_AAAA))
+            .as("step 7: clearing the declared address takes the AAAA row down")
+            .isNull();
+        records.delete(handAuthoredId);
+    }
+
+    /** The admin surface renders: list page and create form answer 200 for the admin. */
+    @Test
+    @Order(4)
     void adminResourceRenders() throws Exception {
         java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         for (String path : new String[] {"/admin/game-domains", "/admin/game-domains/new"}) {
@@ -334,7 +442,7 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(4)
+    @Order(5)
     void cleanupRemovesOnlyItsOwnOutput() {
         // 1. A hand-authored SRV row beside the generated one (same zone, own name).
         var records = Models.get(DnsRecordModel.class);

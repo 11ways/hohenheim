@@ -18,10 +18,10 @@ import java.util.Map;
  * @param command       command override, or null to keep the image's default
  * @param env           environment variables (name to value, ordered)
  * @param volumes       persistent named volumes: volume name to container path
- * @param publishPort   container TCP port to publish on a loopback ephemeral host port,
- *                      or null for none. TCP only: record-after readback looks up
- *                      {@code {port}/tcp}, so UDP needs the declared pre-allocation
- *                      mode, which does not exist yet -- do not pretend otherwise.
+ * @param publication   the declared port publication, or null for none. Loopback/tcp
+ *                      publishes an ephemeral host port recorded AFTER start
+ *                      (record-after); UDP, public exposure and fixed host ports ride
+ *                      the pre-allocation strategy (see {@link PortPublication}).
  * @param limits        cgroup resource caps
  * @param hardening     the kind's DECLARED capability profile; a required component so a
  *                      new kind cannot inherit isolation by accident (see
@@ -33,7 +33,19 @@ public record InstanceSpec(@NonNull String handle,
                            @Nullable List<String> command,
                            @NonNull Map<String, String> env,
                            @NonNull Map<String, String> volumes,
-                           @Nullable Integer publishPort,
+                           @Nullable PortPublication publication,
                            @NonNull ResourceLimits limits,
                            ContainerHardening.@NonNull Profile hardening,
-                           @NonNull Map<String, String> ownerLabels) {}
+                           @NonNull Map<String, String> ownerLabels) {
+
+    /** A copy whose publication carries the host port the pre-allocation step claimed. */
+    public @NonNull InstanceSpec withPreallocatedPort(int hostPort) {
+        if (this.publication == null) {
+            throw new IllegalStateException(
+                "Spec '" + this.handle + "' declares no publication to pre-allocate for");
+        }
+        return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
+            this.publication.withPreallocatedPort(hostPort), this.limits, this.hardening,
+            this.ownerLabels);
+    }
+}

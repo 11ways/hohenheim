@@ -202,6 +202,30 @@ public final class PortLedger {
                                    @Nullable Object protocol, @Nullable Identifier ownerModel,
                                    @Nullable Integer ownerId, @Nullable String note,
                                    @Nullable Long controllerFence) {
+        claimCore(serverId, hostIp, port, protocol, ownerModel, ownerId, note,
+            controllerFence, null);
+    }
+
+    /**
+     * The DECLARED pre-allocation strategy of the same claim primitive: identical
+     * refusal semantics, but the row is stamped {@code preallocated} -- the owner's
+     * stable reservation, written BEFORE the workload exists and released only by a
+     * verified destroy (a stop keeps it: the kernel port is free, the NUMBER is not).
+     *
+     * @throws PortConflict when another owner already holds (or is still releasing) the tuple
+     */
+    public static void claimPreallocated(int serverId, @Nullable Object hostIp, int port,
+                                         @Nullable Object protocol,
+                                         @NonNull Identifier ownerModel, int ownerId,
+                                         @Nullable String note) {
+        claimCore(serverId, hostIp, port, protocol, ownerModel, ownerId, note, null,
+            PortAllocationModel.MODE_PREALLOCATED);
+    }
+
+    private static void claimCore(int serverId, @Nullable Object hostIp, int port,
+                                  @Nullable Object protocol, @Nullable Identifier ownerModel,
+                                  @Nullable Integer ownerId, @Nullable String note,
+                                  @Nullable Long controllerFence, @Nullable String mode) {
         String key = claimKeyOf(serverId, hostIp, port, protocol);
         Row overlapping = conflictingHolder(serverId, hostIp, port, protocol);
         if (overlapping != null) {
@@ -223,6 +247,7 @@ public final class PortLedger {
         row.set(PortAllocationModel.NOTE, note);
         row.set(PortAllocationModel.CONTROLLER_FENCE, controllerFence);
         row.set(PortAllocationModel.STATUS, PortAllocationModel.STATUS_HELD);
+        row.set(PortAllocationModel.ALLOCATION_MODE, mode);
         try {
             ledger.save(row);
         } catch (DuplicateKeyException conflict) {
@@ -238,19 +263,77 @@ public final class PortLedger {
      * actually free and deletes them.
      */
     public static void releaseOwner(@NonNull Identifier ownerModel, int ownerId) {
-        markReleasing(claimsOf(ownerModel, ownerId));
+        // Pre-allocated claims are deliberately NOT parked by a failed operation: the
+        // reservation of the NUMBER is the point of the mode, a retry re-uses it, and a
+        // parked row would be reaped by the reconciler the moment the (stopped) port
+        // probes free -- losing the stable number DNS points at.
+        List<Row> parking = new ArrayList<>();
+        for (Row claim : claimsOf(ownerModel, ownerId)) {
+            if (!isPreallocated(claim)) {
+                parking.add(claim);
+            }
+        }
+        markReleasing(parking);
     }
 
     /**
-     * The VERIFIED release: delete every claim of one owner because the caller OBSERVED
-     * the teardown succeed (the daemon confirmed container removal, or answered 404).
-     * Never call this from a path that swallowed the teardown's failure.
+     * The VERIFIED release: delete every OBSERVED (record-after) claim of one owner
+     * because the caller OBSERVED the teardown succeed (the daemon confirmed container
+     * removal, or answered 404). Never call this from a path that swallowed the
+     * teardown's failure. Pre-allocated claims survive -- a stop frees the kernel port
+     * but never the reservation; {@link #releaseOwnerFully} is the destroy-path release.
      */
     public static void releaseOwnerObserved(@NonNull Identifier ownerModel, int ownerId) {
+        Model ledger = Models.get(PortAllocationModel.class);
+        for (Row claim : claimsOf(ownerModel, ownerId)) {
+            if (!isPreallocated(claim)) {
+                ledger.delete(claim.get(PortAllocationModel.ID));
+            }
+        }
+    }
+
+    /**
+     * The verified END-OF-LIFE release: delete every claim of one owner, pre-allocated
+     * reservations included. Only a path that OBSERVED the owner's workload gone for
+     * good (a verified destroy) may call this.
+     */
+    public static void releaseOwnerFully(@NonNull Identifier ownerModel, int ownerId) {
         Models.get(PortAllocationModel.class).find()
             .where(PortAllocationModel.OWNER_MODEL.eq(ownerModel.toString()))
             .and(PortAllocationModel.OWNER_ID.eq(ownerId))
             .delete();
+    }
+
+    /** Whether a claim row was written by the declared pre-allocation strategy. */
+    public static boolean isPreallocated(@NonNull Row claim) {
+        return PortAllocationModel.MODE_PREALLOCATED.equals(
+            claim.get(PortAllocationModel.ALLOCATION_MODE));
+    }
+
+    /** Every pre-allocated claim of one owner, held or releasing. */
+    public static @NonNull List<Row> preallocatedClaimsOf(@NonNull Identifier ownerModel,
+                                                          int ownerId) {
+        List<Row> result = new ArrayList<>();
+        for (Row claim : claimsOf(ownerModel, ownerId)) {
+            if (isPreallocated(claim)) {
+                result.add(claim);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Park an owner's pre-allocated claims in {@code releasing}: the owner's declaration
+     * no longer wants them (the publication changed shape), so the reservation ends the
+     * observed way -- the reconciler deletes each row once it has seen the port free.
+     */
+    public static void parkPreallocatedClaims(@NonNull Identifier ownerModel, int ownerId) {
+        markReleasing(preallocatedClaimsOf(ownerModel, ownerId));
+    }
+
+    /** Park one claim row in {@code releasing} (the selective form of the owner parks). */
+    public static void parkClaim(@NonNull Row claim) {
+        markReleasing(List.of(claim));
     }
 
     /** Delete one claim row after its port was observed free (the reconciler's authority). */
