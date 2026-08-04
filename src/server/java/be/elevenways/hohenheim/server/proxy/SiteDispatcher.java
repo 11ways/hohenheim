@@ -488,7 +488,21 @@ public class SiteDispatcher implements HttpHandler {
                 String matchType = domain.get(SiteDomainModel.MATCH_TYPE);
                 if (hostname == null || hostname.isEmpty()) continue;
 
-                RouteEntry entry = new RouteEntry(requestHandler, siteName, domain, accessList,
+                // A preview's GENERATED hostname routes to the preview's own instance,
+                // never to the site's production handler; access list and auth gate are
+                // inherited (protection follows the site, traffic does not).
+                SiteRequestHandler domainHandler = requestHandler;
+                if (be.elevenways.hohenheim.server.preview.PreviewDomains.SOURCE.equals(
+                        domain.get(SiteDomainModel.GENERATED_BY))
+                        && domain.get(SiteDomainModel.GENERATED_FOR_ID) != null) {
+                    var previewHandler =
+                        new be.elevenways.hohenheim.server.preview.PreviewRequestHandler(
+                            siteId, domain.get(SiteDomainModel.GENERATED_FOR_ID));
+                    ownedHandlers.add(previewHandler);
+                    domainHandler = previewHandler;
+                }
+
+                RouteEntry entry = new RouteEntry(domainHandler, siteName, domain, accessList,
                     settings, authGate, authProviderName);
 
                 // HostnamePatterns.effectiveKind is THE tier decision, shared with the
@@ -625,7 +639,7 @@ public class SiteDispatcher implements HttpHandler {
 
         // --- Git webhook intercept (before hostname routing) ---
         if (GitWebhookHandler.matches(exchange)) {
-            GitWebhookHandler.handle(exchange);
+            GitWebhookHandler.handle(exchange, earlyIp);
             return;
         }
 

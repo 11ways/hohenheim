@@ -30,7 +30,9 @@ class SettingsGroupCoverageTest {
         "instances", "backup", "files",
         // "builds" (sandboxed builders) had drifted out of this pin the same way;
         // caught 2026-08-04 when "releases" (health-gated releases) was added.
-        "builds", "releases");
+        "builds", "releases",
+        // Preview deployments (git-provider wave).
+        "previews");
 
     @Test
     void everyDeclaredSettingsGroupIsGuaranteedBeforeValuesLoad() {

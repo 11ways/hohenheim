@@ -101,6 +101,8 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new BuildOperationResource(), Role.PROXY, Role.INSTANCES);
         // Release history: today only Docker sites release through the health gate.
         addIf(peers, new ReleaseOperationResource(), Role.PROXY);
+        addIf(peers, new GitProviderResource(), Role.PROXY);
+        addIf(peers, new PreviewDeploymentResource(), Role.PROXY);
         addIf(peers, new StackResource(), Role.STACKS);
         addIf(peers, new StackServiceResource(), Role.STACKS);
         addIf(peers, new StackFileResource(), Role.STACKS);

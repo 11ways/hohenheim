@@ -31,6 +31,14 @@ public class GitRepository {
     private final SystemUsers.@Nullable RunAsUser runAs;
     private final long timeoutMillis;
 
+    /**
+     * Per-operation credential environment (evaluated fresh so a minted short-lived
+     * token is current), or null for credential-less operation. Values go into the git
+     * process ENVIRONMENT only -- never onto the command line, never into the URL.
+     */
+    private volatile java.util.function.@Nullable Supplier<@Nullable Map<String, String>>
+        credentialEnv;
+
     public GitRepository(String repositoryUrl, String branch, boolean shallow,
                           boolean submodules, SystemUsers.@Nullable RunAsUser runAs) {
         this(repositoryUrl, branch, shallow, submodules, runAs, DEFAULT_TIMEOUT_MILLIS);
@@ -46,6 +54,12 @@ public class GitRepository {
         this.submodules = submodules;
         this.runAs = runAs;
         this.timeoutMillis = timeoutMillis;
+    }
+
+    /** Install the credential-environment supplier (provider-bound sites). */
+    public void setCredentialEnv(
+            java.util.function.@Nullable Supplier<@Nullable Map<String, String>> supplier) {
+        this.credentialEnv = supplier;
     }
 
     /**
@@ -67,14 +81,15 @@ public class GitRepository {
         cmd.add(repositoryUrl);
         cmd.add(directory.getAbsolutePath());
 
-        return execute(cmd, directory.getParentFile(), null);
+        return execute(cmd, directory.getParentFile(), remoteEnv());
     }
 
     /**
      * Fetch and reset the repo to match the remote branch.
      */
     public GitResult fetchAndReset(File directory) throws InterruptedException {
-        GitResult fetch = execute(List.of("git", "fetch", "origin", branch), directory, null);
+        GitResult fetch = execute(List.of("git", "fetch", "origin", branch),
+            directory, remoteEnv());
         if (!fetch.success()) return fetch;
 
         return execute(
@@ -106,7 +121,7 @@ public class GitRepository {
         try {
             GitResult lsRemote = execute(
                 List.of("git", "ls-remote", "origin", branch),
-                directory, null
+                directory, remoteEnv()
             );
             if (!lsRemote.success()) return false;
 
@@ -140,6 +155,12 @@ public class GitRepository {
             Thread.currentThread().interrupt();
             return false;
         }
+    }
+
+    /** The credential environment for remote-touching commands; null when unbound. */
+    private @Nullable Map<String, String> remoteEnv() {
+        var supplier = this.credentialEnv;
+        return supplier != null ? supplier.get() : null;
     }
 
     GitResult execute(List<String> command, File workDir,

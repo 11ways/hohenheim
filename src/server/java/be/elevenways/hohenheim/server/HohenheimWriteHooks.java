@@ -81,5 +81,12 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // attribution, is read-only outside the site tier's system scope, and the
         // site_container kind cannot be authored standalone at all.
         SiteInstances.install();
+        // A generated preview hostname row carries derived attribution: read-only outside
+        // the preview system scope, swept by exact attribution, and a hand-authored row
+        // with the same hostname is never adopted or deleted.
+        be.elevenways.hohenheim.server.preview.PreviewDomains.install();
+        // Concurrent preview creates cannot both spend an owner's last preview slot, and
+        // the soft-delete transition (destroy/expiry) hands the slot back.
+        be.elevenways.hohenheim.server.preview.PreviewQuota.install();
     }
 }

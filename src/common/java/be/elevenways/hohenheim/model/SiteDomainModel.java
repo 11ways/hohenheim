@@ -119,6 +119,24 @@ public class SiteDomainModel extends Model {
     public static final StringField LIVE_ROUTE_KEY = SCHEMA.addField(
         StringField.builder().name("live_route_key").filterable(false).build());
 
+    /**
+     * GeneratedRows attribution (the DnsRecordModel discipline): DERIVED inside the
+     * system scope, refused when a caller supplies them, and the reclaim anchor -- a
+     * preview's generated hostname row is removed by exact attribution only, so a
+     * hand-authored row with the same hostname is never adopted or deleted.
+     */
+    public static final StringField GENERATED_BY = SCHEMA.addField(
+        StringField.builder().name("generated_by").filterable(false).build());
+
+    public static final StringField GENERATED_FOR_MODEL = SCHEMA.addField(
+        StringField.builder().name("generated_for_model").filterable(false).build());
+
+    public static final IntegerField GENERATED_FOR_ID = SCHEMA.addField(
+        IntegerField.builder().name("generated_for_id").build());
+
+    public static final DateTimeField GENERATED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("generated_at").build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

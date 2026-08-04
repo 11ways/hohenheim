@@ -2822,6 +2822,57 @@ network, quota, ownership, secret and durable-operation mechanisms.
   signed webhooks and deployment status reporting. Preview deployments have
   bounded lifetime/quota, isolated variables and deterministic generated-domain
   ownership/cleanup.
+
+  LANDED 2026-08-04 (re-verify, do not assume), GITHUB END TO END; GitLab is a
+  DECLARED kind `GitProviders.clientFor` refuses by name (the NIXPACKS shape),
+  its path stated in that refusal's docblock. Providers are `git_providers`
+  rows (M068) with `.secret().encrypted()` credentials -- a PAT, or GitHub App
+  columns whose presence makes every clone/API operation ride a MINTED
+  installation token (RS256 App JWT, ~1h upstream validity, cached to 5 min
+  before expiry): the genuinely short-lived upstream credential the builder
+  wave deferred, and it reaches git as an `http.<origin>.extraHeader`
+  Authorization value through the process ENVIRONMENT only -- never the URL
+  (GitRepository still refuses embedded user-info), never the command line.
+  Repository/branch selection: `provider_id`+`repository` in GitSourceSchema,
+  admin-gated rate-limited listing endpoints (`/admin/git-providers/{id}/
+  repositories|branches`); a picker UI over them is unbuilt. Webhooks
+  (proxy-port, conduit-less, so core RateLimiter drives the per-IP limit
+  directly): ONE 404 for everything short of a verified signature (unknown
+  slug, non-git site, missing secret, wrong signature -- byte-identical, no
+  existence leak); the delivery id is CLAIMED insert-first against the unique
+  `webhook_deliveries` (site, key) index before anything acts (replays fold,
+  proven under mutation); a payload that names a repository must name the
+  bound one (422 otherwise); only the bound branch deploys; PR events drive
+  previews only where `previews_enabled` opted in. Status reporting posts
+  pending/success/failure onto the exact sha the deploy checked out
+  (sha-less failures deliberately stay local). PREVIEWS: a
+  `preview_deployments` row owns -- via GeneratedRows attribution, columns
+  added to `site_domains` by M068 with the guard installed -- its
+  site_container instance, its generated `<site>--<ref>.<previews.
+  base_domain>` hostname row (which passes the NORMAL domain write pipeline:
+  conflict scan, live_route_key claim, released-claim quarantine, so an
+  expired preview's hostname is same-owner-retakeable and stranger-quarantined
+  for free) and its A/AAAA rows in a hosted zone; the sweep removes rows by
+  EXACT attribution and a hand-authored row is never adopted or deleted
+  (mutation-proven). Lifetime is the STORED `expires_at` enforced by the
+  minute `PreviewExpirySweep` task AND a boot sweep -- RecordSchedules was
+  deliberately NOT used: it has no one-shot lane (a spent cron stores
+  next_fire_at NULL, which findDue reads as due-forever), a framework gap
+  noted rather than worked around. Quota = `hohenheim:previews:` buckets over
+  the site-owner pack (a project is one owner) through the atomic core
+  ledger, cap `previews.max_per_owner`. Variables are isolated STRUCTURALLY:
+  the preview spec is built from scratch and only
+  `preview_environment_variables` enters it -- production env, database
+  injection and volumes have no code path in; resource limits are inherited
+  (they cap, never leak). Deploys use the DIRECT lane on purpose (nothing
+  production-facing is replaced; the release engine's probe, sandbox build,
+  digest pin and InstanceService discipline are reused, its gate is not);
+  teardown is verified destroy + attribution sweep + artifact prune, wired
+  into PR-close, expiry, the operator row action and site delete. NOT here:
+  the GitLab client, a picker UI, per-preview TLS issuance (a wildcard cert
+  over the base domain is THE model; generated rows are LE-excluded), remote-
+  server previews (loopback probe/serve assumes the local daemon), preview
+  webhooks for process/static site types.
 - Health-gated zero-downtime release: create candidate, probe, atomically switch
   routing, drain old release, retain rollback target, then reclaim. Failed health
   never replaces the serving release. Rollback is one durable operation over a

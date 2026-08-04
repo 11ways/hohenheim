@@ -812,7 +812,8 @@ public final class GameDomains {
     }
 
     /** The deepest enabled zone containing the hostname, or null when none is hosted. */
-    static @Nullable Row zoneFor(@NonNull String hostname) {
+    /** The most specific enabled hosted zone containing {@code hostname}, or null. */
+    public static @Nullable Row zoneFor(@NonNull String hostname) {
         Row best = null;
         int bestLength = -1;
         for (Row zone : Models.get(DnsZoneModel.class).findEnabled()) {

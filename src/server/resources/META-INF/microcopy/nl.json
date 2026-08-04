@@ -2037,6 +2037,14 @@
     {
       "text": "Omgevingsvariabelen",
       "scope": "environment_variable"
+    },
+    {
+      "text": "Git-providers",
+      "scope": "git_provider"
+    },
+    {
+      "text": "Preview-deployments",
+      "scope": "preview_deployment"
     }
   ],
   "dashboard": {
@@ -2097,6 +2105,10 @@
     {
       "text": "Test van back-updoel mislukt: {$reason}",
       "scope": "backup_target"
+    },
+    {
+      "text": "Providertest mislukt: {$reason}",
+      "scope": "git_provider"
     }
   ],
   "test_subject": {
@@ -2119,6 +2131,10 @@
     {
       "text": "Back-updoel {$name} is bereikbaar en beschrijfbaar",
       "scope": "backup_target"
+    },
+    {
+      "text": "Provider antwoordde; {$count} repositories zichtbaar",
+      "scope": "git_provider"
     }
   ],
   "host_status": {
@@ -5085,10 +5101,16 @@
     "text": "Back-up hersteld naar nieuwe instantie #{$id}",
     "scope": "instance_backup"
   },
-  "test_connection": {
-    "text": "Verbinding testen",
-    "scope": "backup_target"
-  },
+  "test_connection": [
+    {
+      "text": "Verbinding testen",
+      "scope": "backup_target"
+    },
+    {
+      "text": "Verbinding testen",
+      "scope": "git_provider"
+    }
+  ],
   "filesystem": {
     "text": "Map op schijf",
     "scope": "backup_target_kind"
@@ -6205,5 +6227,191 @@
   "variable_one_owner": {
     "text": "Een variabele hoort bij precies een instantie of een omgeving",
     "scope": "violations"
-  }
+  },
+  "git_provider_unknown": {
+    "text": "Onbekende git-provider",
+    "scope": "violations"
+  },
+  "git_provider_bad_base_url": {
+    "text": "Basis-URL van de provider is niet aanvaardbaar: {$reason}",
+    "scope": "violations"
+  },
+  "git_provider_kind_unavailable": {
+    "text": "Git-providersoort '{$kind}' is gedeclareerd maar nog niet geimplementeerd",
+    "scope": "violations"
+  },
+  "preview_site_required": {
+    "text": "Een preview vereist een bestaande site",
+    "scope": "violations"
+  },
+  "preview_owner_unreadable": {
+    "text": "De eigenaar van de site kon niet worden afgeleid; preview geweigerd",
+    "scope": "violations"
+  },
+  "preview_quota_reached": {
+    "text": "Previewquotum bereikt: {$used} van {$limit} in gebruik",
+    "scope": "violations"
+  },
+  "preview_unsupported_type": {
+    "text": "Previews bestaan enkel voor git-gebaseerde Docker-sites",
+    "scope": "violations"
+  },
+  "preview_no_base_domain": {
+    "text": "Geen preview-basisdomein ingesteld (previews.base_domain)",
+    "scope": "violations"
+  },
+  "preview_no_repository": {
+    "text": "De site heeft geen repository om een preview van te bouwen",
+    "scope": "violations"
+  },
+  "preview_checkout_failed": {
+    "text": "Preview-checkout mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "preview_build_failed": {
+    "text": "Preview-build mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "preview_no_published_port": {
+    "text": "De previewcontainer publiceerde geen poort om te serveren",
+    "scope": "violations"
+  },
+  "domain_generated_readonly": {
+    "text": "Dit domein is eigendom van {$source} en kan hier niet worden bewerkt of verwijderd",
+    "scope": "violations"
+  },
+  "domain_generated_attribution": {
+    "text": "Domeineigendomsattributie wordt door het systeem gezet, nooit ingediend",
+    "scope": "violations"
+  },
+  "provider_name": [
+    {
+      "text": "Naam",
+      "scope": "field"
+    }
+  ],
+  "provider_kind": [
+    {
+      "text": "Soort",
+      "scope": "field"
+    },
+    {
+      "text": "Het API-dialect van de provider. GitLab is gedeclareerd maar nog niet geimplementeerd.",
+      "scope": "help"
+    }
+  ],
+  "provider_base_url": [
+    {
+      "text": "Basis-URL",
+      "scope": "field"
+    },
+    {
+      "text": "Leeg voor de publieke host (github.com); instellen voor zelfgehoste installaties.",
+      "scope": "help"
+    }
+  ],
+  "provider_access_token": [
+    {
+      "text": "Toegangstoken",
+      "scope": "field"
+    },
+    {
+      "text": "Persoonlijk of deploy-toegangstoken; de terugval wanneer geen App is geconfigureerd. Versleuteld opgeslagen.",
+      "scope": "help"
+    }
+  ],
+  "provider_app_id": [
+    {
+      "text": "App-id",
+      "scope": "field"
+    },
+    {
+      "text": "GitHub App-id. Met installatie-id en privesleutel worden kortlevende installatietokens per operatie gemunt.",
+      "scope": "help"
+    }
+  ],
+  "provider_app_installation_id": [
+    {
+      "text": "App-installatie-id",
+      "scope": "field"
+    },
+    {
+      "text": "De installatie van de App op het account waarvan de repositories gebruikt worden.",
+      "scope": "help"
+    }
+  ],
+  "provider_app_private_key": [
+    {
+      "text": "App-privesleutel",
+      "scope": "field"
+    },
+    {
+      "text": "De RSA-privesleutel van de App (PEM). Versleuteld opgeslagen.",
+      "scope": "help"
+    }
+  ],
+  "git_provider": [
+    {
+      "text": "Git-provider",
+      "scope": "field"
+    },
+    {
+      "text": "Indien ingesteld komen de clone-URL en de credentials van deze provider en Repository hieronder.",
+      "scope": "help"
+    }
+  ],
+  "repository": [
+    {
+      "text": "Repository",
+      "scope": "field"
+    },
+    {
+      "text": "Repository bij de provider, als eigenaar/naam.",
+      "scope": "help"
+    }
+  ],
+  "previews_enabled": [
+    {
+      "text": "Preview-deployments",
+      "scope": "field"
+    },
+    {
+      "text": "Pull-request-webhookgebeurtenissen maken, verversen en verwijderen previewomgevingen met beperkte levensduur.",
+      "scope": "help"
+    }
+  ],
+  "preview_environment_variables": [
+    {
+      "text": "Preview-omgeving",
+      "scope": "field"
+    },
+    {
+      "text": "De ENIGE runtimevariabelen die een preview krijgt; productievariabelen, databasecredentials en volumes worden nooit geerfd.",
+      "scope": "help"
+    }
+  ],
+  "preview_ref": [
+    {
+      "text": "Ref",
+      "scope": "field"
+    }
+  ],
+  "destroy_now": [
+    {
+      "text": "Nu verwijderen",
+      "scope": "preview_deployment"
+    }
+  ],
+  "destroyed": [
+    {
+      "text": "Preview {$hostname} verwijderd",
+      "scope": "preview_deployment"
+    }
+  ],
+  "destroy_failed": [
+    {
+      "text": "Preview-afbraak mislukt: {$reason}",
+      "scope": "preview_deployment"
+    }
+  ]
 }

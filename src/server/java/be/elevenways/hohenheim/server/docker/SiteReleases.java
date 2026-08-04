@@ -587,7 +587,7 @@ public final class SiteReleases {
      * round-trip against the port that will serve production traffic. Two mechanisms,
      * two declared homes, one job each.
      */
-    private static void probe(int port, @NonNull String path) {
+    public static void probe(int port, @NonNull String path) {
         Integer timeout = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS);
         Integer interval = HohenheimSettings.VALUES.getValue(

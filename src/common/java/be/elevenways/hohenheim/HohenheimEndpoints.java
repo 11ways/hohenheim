@@ -64,6 +64,11 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
+    public static final ParameterDefinition<Integer> PROVIDER_ID = ParameterDefinition.builder(Integer.class)
+        .name("providerId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
     // --- Rate limits: expensive or upstream-quota-bound operations. ---
     // The LE request burns Let's Encrypt quota; db dump/restore stream whole
     // databases; deploys spawn builds. Keyed per principal (per IP for
@@ -176,6 +181,30 @@ public class HohenheimEndpoints {
             .addStatic("instances").addDelimiter().addStatic("from-template").build())
         .requiresLogin()
         .rateLimit(INSTANCE_CREATE_LIMIT)
+        .build();
+
+    // --- Git provider repository/branch selection (admin pickers + automation) ---
+    private static final RateLimitPolicy PROVIDER_BROWSE_LIMIT =
+        RateLimitPolicy.of(30, Duration.ofMinutes(1))
+            .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
+            .named("hh_provider_browse");
+
+    public static final Endpoint<Object> GIT_PROVIDER_REPOSITORIES = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "git_provider_repositories"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("admin").addDelimiter().addStatic("git-providers").addDelimiter()
+            .addParameter(PROVIDER_ID).addDelimiter().addStatic("repositories").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .rateLimit(PROVIDER_BROWSE_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> GIT_PROVIDER_BRANCHES = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "git_provider_branches"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("admin").addDelimiter().addStatic("git-providers").addDelimiter()
+            .addParameter(PROVIDER_ID).addDelimiter().addStatic("branches").build())
+        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .rateLimit(PROVIDER_BROWSE_LIMIT)
         .build();
 
     // --- DNS zone-file import (POST for the CMS zone-file tab) ---

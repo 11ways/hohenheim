@@ -19,6 +19,20 @@ public class GitSourceSchema {
             .label(HohenheimFormCopy.label("repository_url"))
             .help(HohenheimFormCopy.help("repository_url")).build());
 
+    // Provider binding: when set, the clone URL derives from the provider + repository
+    // and per-operation credentials are minted by GitProviders (never embedded in the
+    // URL, which GitRepository refuses). repository_url stays the provider-less lane.
+    public static final IntegerField PROVIDER_ID = SCHEMA.addField(
+        IntegerField.builder().name("provider_id")
+            .label(HohenheimFormCopy.label("git_provider"))
+            .help(HohenheimFormCopy.help("git_provider")).build());
+
+    /** Repository path at the provider, e.g. {@code owner/name}. */
+    public static final StringField REPOSITORY = SCHEMA.addField(
+        StringField.builder().name("repository")
+            .label(HohenheimFormCopy.label("repository"))
+            .help(HohenheimFormCopy.help("repository")).build());
+
     public static final StringField BRANCH = SCHEMA.addField(
         StringField.builder().name("branch").label(HohenheimFormCopy.label("branch"))
             .help(HohenheimFormCopy.help("branch")).build());
@@ -61,4 +75,19 @@ public class GitSourceSchema {
         StringMapField.builder("build_environment_variables")
             .label(HohenheimFormCopy.label("build_environment_variables"))
             .help(HohenheimFormCopy.help("build_environment_variables")).secret().build());
+
+    /** Opt-in: pull-request webhook events create/update/destroy preview deployments. */
+    public static final BooleanField PREVIEWS_ENABLED = SCHEMA.addField(
+        BooleanField.builder("previews_enabled").defaultValue(false)
+            .label(HohenheimFormCopy.label("previews_enabled"))
+            .help(HohenheimFormCopy.help("previews_enabled")).build());
+
+    // The ONLY runtime environment a preview receives. Previews deliberately inherit
+    // NOTHING from the production runtime: not environment_variables, not injected
+    // database credentials, not volumes -- a preview builds arbitrary branch code and
+    // must never see production secrets or data by default.
+    public static final StringMapField PREVIEW_ENVIRONMENT_VARIABLES = SCHEMA.addField(
+        StringMapField.builder("preview_environment_variables")
+            .label(HohenheimFormCopy.label("preview_environment_variables"))
+            .help(HohenheimFormCopy.help("preview_environment_variables")).secret().build());
 }

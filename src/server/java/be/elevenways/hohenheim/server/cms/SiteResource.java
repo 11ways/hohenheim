@@ -349,6 +349,9 @@ public class SiteResource extends RowResource {
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
         Integer siteId = existing.get(SiteModel.ID);
+        // Previews die WITH the site (explicit for the same reason destroyFor is:
+        // the soft delete fires no remove hook that could ever do this).
+        be.elevenways.hohenheim.server.preview.PreviewDeployments.destroyForSite(siteId);
         SiteInstances.destroyFor(siteId);
         existing.set(SiteModel.DELETED_AT, Instant.now());
         ActivityLog.withAction(ActivityLog.ACTION_DELETE, "soft-delete",

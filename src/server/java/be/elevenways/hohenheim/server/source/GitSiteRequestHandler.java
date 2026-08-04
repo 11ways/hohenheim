@@ -50,7 +50,17 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
         this.sourceSettings = sourceSettings;
         this.siteDir = siteDir;
 
-        String repoUrl = (String) sourceSettings.getOrDefault("repository_url", "");
+        // Provider-bound sites derive their clone URL from the provider + repository;
+        // the credential rides the git ENVIRONMENT per operation (short-lived when the
+        // provider mints tokens), never the URL.
+        String boundUrl = null;
+        try {
+            boundUrl = GitProviders.boundCloneUrl(sourceSettings);
+        } catch (RuntimeException e) {
+            Blast.log("GIT: site", siteId, "provider binding unusable -", e.getMessage());
+        }
+        String repoUrl = boundUrl != null
+            ? boundUrl : (String) sourceSettings.getOrDefault("repository_url", "");
         String branch = (String) sourceSettings.getOrDefault("branch", "main");
         boolean shallow = Boolean.TRUE.equals(sourceSettings.get("shallow_clone"));
         boolean submodules = Boolean.TRUE.equals(sourceSettings.get("submodules"));
@@ -71,6 +81,19 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
                 "Configure a system user for this site to drop privileges.");
         }
         this.gitRepo = new GitRepository(repoUrl, branch, shallow, submodules, runAs);
+        if (boundUrl != null) {
+            this.gitRepo.setCredentialEnv(() -> {
+                try {
+                    return GitProviders.credentialEnv(sourceSettings);
+                } catch (Exception e) {
+                    // The clone then runs unauthenticated and fails with the provider's
+                    // own refusal in the deploy log -- never a silent success.
+                    Blast.log("GIT: site", siteId, "could not obtain provider credential -",
+                        e.getMessage());
+                    return null;
+                }
+            });
+        }
 
         // Create the deploy queue with deploy action
         this.queue = new GitDeploymentQueue(siteId, this::executeDeploy);
@@ -203,6 +226,17 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
         }
 
         DeploymentRecords.finished(recordId, result, deployment.getLog());
+
+        // Provider-bound sites report the outcome onto the commit. A failed deploy may
+        // have no commit identity (clone failed before checkout); reporting it onto an
+        // unrelated sha would mislabel that commit, so sha-less outcomes stay local.
+        DeployStatuses.report(sourceSettings, result.commitSha(),
+            result.success() ? GitProviderClient.StatusState.SUCCESS
+                             : GitProviderClient.StatusState.FAILURE,
+            DeployStatuses.CONTEXT_DEPLOY,
+            result.success() ? "Deployed (" + reason + ")"
+                             : "Deploy failed: " + result.error(),
+            null);
 
         if (!result.success()) {
             // The queue's contract is throw-means-failure: without this it
