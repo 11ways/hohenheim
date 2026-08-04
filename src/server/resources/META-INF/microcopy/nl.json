@@ -1097,6 +1097,14 @@
     {
       "text": "Nog geen deployments",
       "scope": "stack_deployments"
+    },
+    {
+      "text": "Nog geen planningen",
+      "scope": "instance_schedule"
+    },
+    {
+      "text": "Nog geen stappen",
+      "scope": "schedule_step"
     }
   ],
   "empty_description": [
@@ -1119,6 +1127,14 @@
     {
       "text": "Gebruik de actie Deployen voor de eerste deployment.",
       "scope": "stack_deployments"
+    },
+    {
+      "text": "Plan consolecommando's, stroomacties, back-ups of snapshots voor deze instantie.",
+      "scope": "instance_schedule"
+    },
+    {
+      "text": "Voeg geordende stappen toe: elke stap heeft een actie, wachttijd en faalbeleid.",
+      "scope": "schedule_step"
     }
   ],
   "engine": [
@@ -1417,6 +1433,10 @@
     {
       "text": "Gestart",
       "scope": "stack_deployments"
+    },
+    {
+      "text": "Gestart",
+      "scope": "instance_schedule"
     }
   ],
   "starting": [
@@ -1655,6 +1675,10 @@
     {
       "text": "Naam",
       "scope": "spamservice_key"
+    },
+    {
+      "text": "Naam",
+      "scope": "instance_schedule"
     }
   ],
   "name_placeholder": {
@@ -1943,6 +1967,14 @@
     {
       "text": "Instantiebestanden",
       "scope": "instance_file"
+    },
+    {
+      "text": "Planningen",
+      "scope": "instance_schedule"
+    },
+    {
+      "text": "Stappen",
+      "scope": "schedule_step"
     }
   ],
   "dashboard": {
@@ -1961,10 +1993,16 @@
     "text": "Aanvragen via Let's Encrypt",
     "scope": "certificate"
   },
-  "backup": {
-    "text": "Back-up downloaden",
-    "scope": "database"
-  },
+  "backup": [
+    {
+      "text": "Back-up downloaden",
+      "scope": "database"
+    },
+    {
+      "text": "Back-up",
+      "scope": "schedule_action"
+    }
+  ],
   "infra": {
     "text": "Infrastructuur",
     "scope": "nav"
@@ -2127,6 +2165,10 @@
     {
       "text": "Ingeschakeld",
       "scope": "spamservice_client"
+    },
+    {
+      "text": "Actief",
+      "scope": "instance_schedule"
     }
   ],
   "settings": {
@@ -3981,10 +4023,16 @@
     "text": "Service",
     "scope": "stack_services"
   },
-  "state": {
-    "text": "Toestand",
-    "scope": "stack_services"
-  },
+  "state": [
+    {
+      "text": "Toestand",
+      "scope": "stack_services"
+    },
+    {
+      "text": "Status",
+      "scope": "instance_schedule"
+    }
+  ],
   "add_file": [
     {
       "text": "Bestand toevoegen",
@@ -4045,10 +4093,16 @@
       "scope": "template_contents"
     }
   ],
-  "disabled": {
-    "text": "Uitgeschakeld",
-    "scope": "stack_services"
-  },
+  "disabled": [
+    {
+      "text": "Uitgeschakeld",
+      "scope": "stack_services"
+    },
+    {
+      "text": "Uitgeschakeld",
+      "scope": "instance_schedule"
+    }
+  ],
   "deploy_log": {
     "text": "Deploylog",
     "scope": "stack_deployments"
@@ -4751,10 +4805,16 @@
     "text": "Capaciteit op host {$server} kan niet geverifieerd worden: {$reason}",
     "scope": "violations"
   },
-  "snapshot": {
-    "text": "Snapshot",
-    "scope": "instance"
-  },
+  "snapshot": [
+    {
+      "text": "Snapshot",
+      "scope": "instance"
+    },
+    {
+      "text": "Snapshot",
+      "scope": "schedule_action"
+    }
+  ],
   "snapshot_confirm": {
     "text": "Snapshot nemen? Een draaiende instantie wordt kort gestopt terwijl de volumes gekopieerd worden, en daarna weer gestart.",
     "scope": "instance"
@@ -4837,10 +4897,6 @@
     "text": "Back-ups",
     "scope": "capability"
   },
-  "backup_enabled": {
-    "text": "Nachtelijke back-up",
-    "scope": "field"
-  },
   "backup_target": {
     "text": "Back-updoel",
     "scope": "field"
@@ -4864,10 +4920,6 @@
   "host_key": {
     "text": "Hostsleutel",
     "scope": "field"
-  },
-  "instance_backup_enabled": {
-    "text": "Neem deze instantie mee in de nachtelijke back-uptaak (vereist een back-updoel)",
-    "scope": "help"
   },
   "backup_target_kind": {
     "text": "Waar back-upexports terechtkomen; of dat een ander faaldomein is, is een deploymentfeit dat jij beheert",
@@ -5411,5 +5463,115 @@
   "not_running_description": {
     "text": "Rol de instantie uit om aan de console te koppelen.",
     "scope": "instance_console"
+  },
+  "runs": {
+    "text": "Uitvoeringen",
+    "scope": "instance_schedule"
+  },
+  "add": [
+    {
+      "text": "Planning toevoegen",
+      "scope": "instance_schedule"
+    },
+    {
+      "text": "Stap toevoegen",
+      "scope": "schedule_step"
+    }
+  ],
+  "run_now": {
+    "text": "Nu uitvoeren",
+    "scope": "instance_schedule"
+  },
+  "run_finished": {
+    "text": "Uitvoering klaar: {$status}",
+    "scope": "instance_schedule"
+  },
+  "cron": {
+    "text": "Cron",
+    "scope": "instance_schedule"
+  },
+  "timezone": {
+    "text": "Tijdzone",
+    "scope": "instance_schedule"
+  },
+  "steps": {
+    "text": "Stappen",
+    "scope": "instance_schedule"
+  },
+  "recent_runs": {
+    "text": "Recente uitvoeringen",
+    "scope": "instance_schedule"
+  },
+  "no_runs": {
+    "text": "Deze planning is nog niet uitgevoerd.",
+    "scope": "instance_schedule"
+  },
+  "order": {
+    "text": "Volgorde",
+    "scope": "schedule_step"
+  },
+  "action": {
+    "text": "Actie",
+    "scope": "schedule_step"
+  },
+  "offset": {
+    "text": "Wachttijd",
+    "scope": "schedule_step"
+  },
+  "on_failure": {
+    "text": "Bij falen",
+    "scope": "schedule_step"
+  },
+  "console_command": {
+    "text": "Consolecommando sturen",
+    "scope": "schedule_action"
+  },
+  "power": {
+    "text": "Stroomactie",
+    "scope": "schedule_action"
+  },
+  "console_line": {
+    "text": "Consolecommando",
+    "scope": "field"
+  },
+  "power_operation": {
+    "text": "Actie",
+    "scope": "field"
+  },
+  "snapshot_note": {
+    "text": "Snapshotnotitie",
+    "scope": "field"
+  },
+  "unknown_instance": {
+    "text": "Onbekende instantie",
+    "scope": "violations"
+  },
+  "unknown_schedule": {
+    "text": "Onbekende planning",
+    "scope": "violations"
+  },
+  "invalid_cron": {
+    "text": "Ongeldige cron-expressie",
+    "scope": "violations"
+  },
+  "invalid_timezone": {
+    "text": "Onbekende tijdzone",
+    "scope": "violations"
+  },
+  "schedule_not_allowed": {
+    "text": "Je mag de planningen van deze instantie niet beheren",
+    "scope": "violations"
+  },
+  "schedule_action_unknown_action": {
+    "text": "Onbekende planningsactie",
+    "scope": "violations"
+  },
+  "schedule_action_action_model_mismatch": {
+    "text": "Deze actie is niet van toepassing op instanties",
+    "scope": "violations"
+  },
+  "schedule_action_capability_denied": {
+    "text": "Je mist het recht dat deze actie vereist op de instantie",
+    "scope": "violations"
   }
 }

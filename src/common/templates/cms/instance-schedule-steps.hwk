@@ -1,0 +1,74 @@
+{#- Steps tab on a schedule: the ordered chain plus its recent runs with per-step
+    verdicts, linking into the (nav-hidden) step resource forms. -#}
+{% declare title: String %}
+{% declare scheduleId: Integer %}
+{% declare scheduleName: String %}
+{% declare steps: List %}
+{% declare runs: List %}
+{% declare basePath: String = "/admin" %}
+{% declare canEdit: Boolean = true %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ scheduleName }}</h1>
+        {% if canEdit %}<pl-button variant="primary" href={% basePath + "/instance-schedule-steps/new?schedule_id=" + scheduleId %} id="add-step-link">{{ t("add", scope: "schedule_step") }}</pl-button>{% /if %}
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if steps %}
+    <pl-table>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("order", scope: "schedule_step") }}</pl-table-head>
+            <pl-table-head>{{ t("action", scope: "schedule_step") }}</pl-table-head>
+            <pl-table-head>{{ t("offset", scope: "schedule_step") }}</pl-table-head>
+            <pl-table-head>{{ t("on_failure", scope: "schedule_step") }}</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each steps as index, step %}
+            <pl-table-row>
+                <pl-table-cell>{{ step.get("position") }}</pl-table-cell>
+                <pl-table-cell>{% if canEdit %}<a href={% step.get("editUrl") %}>{{ step.get("action") }}</a>{% else %}{{ step.get("action") }}{% /if %}</pl-table-cell>
+                <pl-table-cell>{{ step.get("offsetSeconds") }}s</pl-table-cell>
+                <pl-table-cell><pl-badge variant={% "secondary" %}>{{ step.get("failurePolicy") }}</pl-badge></pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="list-ol">
+        <pl-empty-state-title>{{ t("empty", scope: "schedule_step") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("empty_description", scope: "schedule_step") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+
+    <h2>{{ t("recent_runs", scope: "instance_schedule") }}</h2>
+    {% if runs %}
+    <pl-table>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("started", scope: "instance_schedule") }}</pl-table-head>
+            <pl-table-head>{{ t("state", scope: "instance_schedule") }}</pl-table-head>
+            <pl-table-head>{{ t("steps", scope: "instance_schedule") }}</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each runs as index, run %}
+            <pl-table-row>
+                <pl-table-cell>{{ run.get("startedAt") }}</pl-table-cell>
+                <pl-table-cell>
+                    <pl-badge variant={% run.get("status") == "completed" ? "success" : "destructive" %}>{{ run.get("status") }}</pl-badge>
+                    {% if run.get("error") %} {{ run.get("error") }}{% /if %}
+                </pl-table-cell>
+                <pl-table-cell>{{ run.get("summary") }}</pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <p>{{ t("no_runs", scope: "instance_schedule") }}</p>
+    {% /if %}
+</section>
+{% /block %}

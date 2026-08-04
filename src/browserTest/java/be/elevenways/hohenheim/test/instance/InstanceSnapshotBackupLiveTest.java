@@ -264,7 +264,6 @@ class InstanceSnapshotBackupLiveTest {
 
             int id = instanceRecord("backup-source", alpineSettings());
             Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
-                .assign(InstanceModel.BACKUP_ENABLED, true)
                 .assign(InstanceModel.BACKUP_TARGET_ID,
                     (Integer) targetRow.get(BackupTargetModel.ID))
                 .updateAll();
