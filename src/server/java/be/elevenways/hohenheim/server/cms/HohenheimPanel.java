@@ -89,6 +89,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new InstanceScheduleResource(), Role.INSTANCES);
         addIf(peers, new InstanceScheduleStepResource(), Role.INSTANCES);
         addIf(peers, new InstanceScheduleRunResource(), Role.INSTANCES);
+        addIf(peers, new GameDomainResource(), Role.INSTANCES);
         addIf(peers, new BackupTargetResource(), Role.INSTANCES);
         addIf(peers, new StackResource(), Role.STACKS);
         addIf(peers, new StackServiceResource(), Role.STACKS);

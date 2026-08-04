@@ -29,7 +29,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class DockerInstanceRuntime
         implements InstanceRuntime, VolumeSnapshotSupport, FileStagingSupport, InstallSupport,
-                   ConsoleStreamSupport {
+                   ConsoleStreamSupport, LinkNetworkSupport {
 
     /** Published ports bind loopback only: the reverse proxy / operator reaches them, the world does not. */
     private static final String HOST_BIND_ADDRESS = "127.0.0.1";
@@ -93,6 +93,64 @@ public final class DockerInstanceRuntime
         // The network and its kernel chains are OURS and nothing else uses them, so they
         // die with the workload -- unlike a named volume, there is nothing in them to lose.
         InstanceNetworks.teardown(this.docker, this.policy, handle);
+    }
+
+    // -- LinkNetworkSupport ---------------------------------------------------
+
+    @Override
+    public @NonNull String ensureLinkNetwork(@NonNull String linkHandle,
+                                             @NonNull Map<String, String> ownerLabels)
+            throws IOException {
+        // The SAME create-verify-or-refuse path as a per-instance network: a link network
+        // whose kernel policy cannot land never exists to be attached to.
+        return InstanceNetworks.ensure(this.docker, this.policy, linkHandle, ownerLabels);
+    }
+
+    @Override
+    public void connectToLinkNetwork(@NonNull String linkHandle, @NonNull String containerHandle)
+            throws IOException {
+        String network = InstanceNetworks.networkName(linkHandle);
+        for (String member : linkMembers(network)) {
+            if (member.equals(containerHandle)) {
+                return;
+            }
+        }
+        this.docker.connectContainerToNetwork(network, containerHandle, null);
+    }
+
+    @Override
+    public void removeLinkNetwork(@NonNull String linkHandle) throws IOException {
+        String network = InstanceNetworks.networkName(linkHandle);
+        Map<String, Object> existing = this.docker.findNetworkByName(network);
+        if (existing != null) {
+            for (String member : linkMembers(network)) {
+                this.docker.disconnectContainerFromNetwork(network, member, true);
+            }
+        }
+        InstanceNetworks.teardown(this.docker, this.policy, linkHandle);
+    }
+
+    /** Container NAMES currently attached to a network; empty when the network is absent. */
+    private @NonNull List<String> linkMembers(@NonNull String network) throws IOException {
+        Map<String, Object> inspect;
+        try {
+            inspect = this.docker.inspectNetwork(network);
+        } catch (DockerClient.ApiException e) {
+            if (e.isNotFound()) {
+                return List.of();
+            }
+            throw e;
+        }
+        List<String> names = new ArrayList<>();
+        if (inspect.get("Containers") instanceof Map<?, ?> members) {
+            for (Object value : members.values()) {
+                if (value instanceof Map<?, ?> member
+                        && member.get("Name") instanceof String name && !name.isEmpty()) {
+                    names.add(name);
+                }
+            }
+        }
+        return names;
     }
 
     @Override
@@ -205,14 +263,28 @@ public final class DockerInstanceRuntime
 
     @Override
     public void stageFiles(@NonNull String handle,
-                           @NonNull List<FileStagingSupport.StagedFile> files) throws IOException {
+                           @NonNull List<FileStagingSupport.StagedFile> files,
+                           @NonNull Map<String, String> ownerLabels) throws IOException {
         if (files.isEmpty()) {
             return;
+        }
+        // The materialize-on-change path pushes into a container that already exists,
+        // so the container must be attributably OURS: a same-named foreign container
+        // is a name collision, never a push target.
+        Map<String, Object> inspect = this.docker.inspectContainer(handle);
+        Object labels = inspect.get("Config") instanceof Map<?, ?> config
+            ? config.get("Labels") : null;
+        OwnerLabels.Owner expected = OwnerLabels.parse(ownerLabels);
+        OwnerLabels.Owner actual = OwnerLabels.parse(labels instanceof Map<?, ?> map ? map : null);
+        if (expected == null || actual == null || !expected.equals(actual)) {
+            throw new IOException("REFUSED to stage config files into '" + handle
+                + "': the container is not attributably ours (labels: " + labels + ")");
         }
         // The StackDeployer staging shape: a temp tree pushed through the archive API,
         // so remote daemons work identically and no host bind mount ever exists.
         java.nio.file.Path staging = java.nio.file.Files.createTempDirectory("hohenheim-instance-files");
         try {
+            List<String> relativeFiles = new ArrayList<>();
             for (FileStagingSupport.StagedFile file : files) {
                 String relative = file.containerPath().startsWith("/")
                     ? file.containerPath().substring(1) : file.containerPath();
@@ -226,8 +298,12 @@ public final class DockerInstanceRuntime
                 java.nio.file.Files.createDirectories(target.getParent());
                 java.nio.file.Files.writeString(target, file.content());
                 applyMode(target, file.mode());
+                relativeFiles.add(relative);
             }
-            this.docker.putArchiveFromDirectory(handle, "/", staging);
+            // File entries ONLY: a tar that carries the intermediate directories re-owns
+            // an EXISTING container directory to root at extraction, which bricks any
+            // non-root image whose config lives in its own writable volume (Velocity).
+            this.docker.putArchiveFiles(handle, "/", staging, relativeFiles);
         } finally {
             deleteRecursively(staging);
         }

@@ -2489,11 +2489,56 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   mapping requires authority over BOTH records; generated config/DNS rows carry
   owner+source metadata and reconcile/delete only their own output. Minecraft
   traffic flows through Velocity; no in-house MC protocol.
+
+  STATUS (2026-08-04): LANDED. `GameDomainModel` (M062: `game_domains` +
+  attribution columns on `instance_files`) + `GameDomains`, THE write funnel:
+  authority = manage on the domain's parent site AND manage on BOTH instances
+  (mapping references a SiteDomainModel row, exact match only, same host only).
+  Materialization: velocity.toml is generated WHOLLY as an attributed
+  `instance_files` row (the shared `GeneratedRows` scope now backs both
+  GeneratedDnsRecords and GeneratedInstanceFiles; a hand-authored row on the
+  path is refused, never adopted), pushed into a PRESENT container through the
+  ownership-verified staging path, plus one generated SRV row per mapping
+  (`_minecraft._tcp.<host>`, target = host, port = the proxy's observed
+  published port; A rows are NOT generated -- no server-address authority
+  exists yet). Velocity reaches its backend over a per-PAIR link network
+  (`hohenheim-gamelink-{proxy}-{backend}-net`) carrying the same
+  WorkloadNetworkPolicy chains; only the authorized pair is joined, re-attached
+  at every deploy between create and start. TRAP recorded: connecting or
+  disconnecting a RUNNING container to a second network makes Docker
+  re-allocate its ephemeral published host port (same PID, new HostPort) --
+  GameDomains re-observes the port and re-reconciles SRV rows after every link
+  change. Forwarding secret: minted on the Velocity template's secret variable,
+  handed to the backend as an encrypted `VELOCITY_FORWARDING_SECRET` variable,
+  rendered into BOTH configs at stage time. `InstanceService.destroy` cleans
+  mappings explicitly (soft delete fires no remove hooks); a SiteDomain delete
+  cascades via beforeRemove. Starter templates seed via `GameTemplateSeeder`
+  (`once`-ledgered, land UNAPPROVED). Proven by `GameDomainAuthorityTest`
+  (counterfactualed: authority both ways with mapping-not-created asserted,
+  reconciler scope, plaintext hand-off) and `GameDomainLiveTest` (real daemon,
+  REAL Velocity: readiness from console, forced-hosts read from INSIDE the
+  running container, on-change re-render, link-network reachability, no
+  published backend port, cross-tenant unreach, console-command graceful stop,
+  destroy leaves nothing -- backend workload is an nginx stand-in rendering the
+  Minecraft template's real files; a real Paper boot is NOT exercised).
+  Fixed in passing: staged-file tars no longer carry directory entries
+  (extraction used to re-own an existing volume root to root:root, bricking
+  non-root images), and `stageFiles` now REFUSES a same-named foreign
+  container (owner labels verified before any push).
 - Localization: game audiences are the LEAST English-safe, and today's /manage
   subpages hardcode English titles by concatenation (`SiteProcessesPage.java:53`,
   `SiteDeploymentsPage.java:53`, `SiteDomainsPage.java:58`). Fix these to
   microcopy in this phase (they are the exact subpages a delegated player-admin
   sees).
+
+  STATUS (2026-08-04): the three named pages now resolve their titles through
+  microcopy (`processes_title`/`deployments_title`/`domains_title`, scope
+  `site`, `{$name}` arg, en+nl). The SAME concatenation defect remains in
+  `SiteDevSessionsPage`, `SiteDatabasesPage`, `DnsZoneFilePage`,
+  `DnsZoneRecordsPage`, `DnsZoneSecondariesPage`, `DatabaseRestorePage`,
+  `InstanceSchedulesPage`, `InstanceScheduleStepsPage`,
+  `SpamserviceSampleAnalysisPage` -- admin-only pages, deliberately out of this
+  wave's scope; sweep them when their surfaces are next touched.
 - Velocity's player-info forwarding secret rides the Phase 3 secret-variable
   mechanism (an encrypted instance variable materialized into both configs),
   never a plaintext config literal.
