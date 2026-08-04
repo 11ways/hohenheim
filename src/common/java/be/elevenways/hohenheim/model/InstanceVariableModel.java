@@ -13,12 +13,15 @@ import be.elevenways.zenit.common.validation.Violations;
 import java.util.List;
 
 /**
- * One variable VALUE of one instance. Table-backed rows, never a free settings map,
- * because zenit refuses {@code .encrypted()} inside JSON sub-schemas by design: a
- * secret value lives ONLY in the statically declared encrypted {@code secret_value}
- * column, a plain value ONLY in {@code plain_value}, and the write funnel enforces
- * exactly one carrier per {@code kind} -- a runtime flag never pretends to change a
- * field declaration.
+ * One variable VALUE of one instance OR one environment (exactly one owner, enforced
+ * below -- environments group variables through the SAME mechanism, never a second
+ * table). Table-backed rows, never a free settings map, because zenit refuses
+ * {@code .encrypted()} inside JSON sub-schemas by design: a secret value lives ONLY
+ * in the statically declared encrypted {@code secret_value} column, a plain value
+ * ONLY in {@code plain_value}, and the write funnel enforces exactly one carrier per
+ * {@code kind} -- a runtime flag never pretends to change a field declaration.
+ * Environment values are the deploy-time BASELINE; the instance's own row for the
+ * same key wins (InstanceVariables.valuesFor).
  */
 public class InstanceVariableModel extends Model {
 
@@ -35,6 +38,12 @@ public class InstanceVariableModel extends Model {
 
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
         IntegerField.builder().name("instance_id").build());
+
+    /** The owning environment (environments.id) when this is an environment-scoped value. */
+    public static final IntegerField ENVIRONMENT_ID = SCHEMA.addField(
+        IntegerField.builder().name("environment_id")
+            .label(HohenheimFormCopy.label("environment"))
+            .build());
 
     public static final StringField KEY = SCHEMA.addField(StringField.builder().name("key")
         .required()
@@ -84,6 +93,28 @@ public class InstanceVariableModel extends Model {
                         .withArg("kind", secret ? KIND_SECRET : KIND_PLAIN));
             }
         });
+        // Exactly ONE owner per row, on every writer: a value belongs to an instance
+        // or to an environment, never both (which key wins?) and never neither
+        // (an orphan value no consumer ever reads).
+        SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row == null) {
+                return;
+            }
+            boolean carriesEither = row.has(INSTANCE_ID.getName())
+                || row.has(ENVIRONMENT_ID.getName());
+            if (!carriesEither) {
+                // A partial update that touches neither owner column leaves the
+                // stored (already-validated) owner untouched.
+                return;
+            }
+            Object instance = effective(row, INSTANCE_ID.getName());
+            Object environment = effective(row, ENVIRONMENT_ID.getName());
+            if ((instance == null) == (environment == null)) {
+                throw Violations.ofField(ENVIRONMENT_ID.getName(), environment,
+                    Microcopy.of("variable_one_owner").withFilter("scope", "violations"));
+            }
+        });
     }
 
     /** The staged value when carried, else the stored one (partial updates carry only changes). */
@@ -103,6 +134,11 @@ public class InstanceVariableModel extends Model {
     /** All variables of one instance, stable key order. */
     public List<Row> findByInstanceId(int instanceId) {
         return find().where(INSTANCE_ID.eq(instanceId)).orderBy(KEY, SortOrder.ASC).all();
+    }
+
+    /** All variables of one environment, stable key order. */
+    public List<Row> findByEnvironmentId(int environmentId) {
+        return find().where(ENVIRONMENT_ID.eq(environmentId)).orderBy(KEY, SortOrder.ASC).all();
     }
 
     @Override

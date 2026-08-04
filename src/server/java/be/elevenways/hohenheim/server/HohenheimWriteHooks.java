@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.instance.GeneratedInstanceFiles;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.process.ReservedEnv;
+import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.hohenheim.server.process.SiteApiKeys;
 import be.elevenways.zenit.common.ZenitModule;
 
@@ -72,6 +73,10 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // soft-delete transition hands the slot back (the remove hooks never fire on
         // the destroy path -- it soft-deletes through save()).
         InstanceQuota.install();
+        // A project's auth group exists from its first write and dies with it; a
+        // non-empty project cannot be deleted; an environment can only group records
+        // its project OWNS (grouping never disagrees with the grants).
+        ProjectGuards.install();
         // A site-owned instance (a Docker site's lowered running release) carries derived
         // attribution, is read-only outside the site tier's system scope, and the
         // site_container kind cannot be authored standalone at all.

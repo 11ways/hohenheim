@@ -2025,6 +2025,18 @@
     {
       "text": "Stappen",
       "scope": "schedule_step"
+    },
+    {
+      "text": "Projecten",
+      "scope": "project"
+    },
+    {
+      "text": "Omgevingen",
+      "scope": "environment"
+    },
+    {
+      "text": "Omgevingsvariabelen",
+      "scope": "environment_variable"
     }
   ],
   "dashboard": {
@@ -3181,6 +3193,10 @@
     {
       "text": "Deze stack verwijderen? De containers en het netwerk worden vernietigd; volumes blijven behouden.",
       "scope": "stack"
+    },
+    {
+      "text": "Dit project verwijderen? De ledengroep en toegangsrechten verdwijnen mee. Een project dat nog records of omgevingen bezit wordt geweigerd.",
+      "scope": "project"
     }
   ],
   "priority": {
@@ -6114,6 +6130,80 @@
   },
   "site_image_unresolvable": {
     "text": "De site-image kon niet naar een digest worden vertaald: {$reason}",
+    "scope": "violations"
+  },
+  "members": {
+    "text": "Leden",
+    "scope": "project"
+  },
+  "owned_sites": {
+    "text": "Sites",
+    "scope": "project"
+  },
+  "owned_instances": {
+    "text": "Instanties",
+    "scope": "project"
+  },
+  "instance_quota": {
+    "text": "Instantiequota",
+    "scope": "project"
+  },
+  "project_name": {
+    "text": "Projectnaam",
+    "scope": "field"
+  },
+  "project_description": {
+    "text": "Beschrijving",
+    "scope": "field"
+  },
+  "environment_name": {
+    "text": "Omgevingsnaam",
+    "scope": "field"
+  },
+  "project": [
+    {
+      "text": "Project",
+      "scope": "field"
+    },
+    {
+      "text": "Project",
+      "scope": "instance_from_template"
+    }
+  ],
+  "environment": {
+    "text": "Omgeving",
+    "scope": "field"
+  },
+  "project_member_required": {
+    "text": "Je bent geen lid van dat project",
+    "scope": "violations"
+  },
+  "project_unknown": {
+    "text": "Dat project bestaat niet",
+    "scope": "violations"
+  },
+  "project_not_empty": {
+    "text": "Dit project bezit nog records of omgevingen; verplaats of verwijder die eerst",
+    "scope": "violations"
+  },
+  "project_group_immutable": {
+    "text": "De ledengroep van een project kan niet gewijzigd worden",
+    "scope": "violations"
+  },
+  "environment_unknown": {
+    "text": "Die omgeving bestaat niet",
+    "scope": "violations"
+  },
+  "environment_project_mismatch": {
+    "text": "Die omgeving hoort bij een project dat dit record niet bezit",
+    "scope": "violations"
+  },
+  "environment_in_use": {
+    "text": "Deze omgeving wordt nog gebruikt door instanties of variabelen",
+    "scope": "violations"
+  },
+  "variable_one_owner": {
+    "text": "Een variabele hoort bij precies een instantie of een omgeving",
     "scope": "violations"
   }
 }

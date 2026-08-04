@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -66,6 +67,10 @@ public class InstanceResource extends RowResource {
         .add(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID).build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.CRASH_POLICY))
         .add(RelationPick.of(InstanceModel.BACKUP_TARGET_ID, BackupTargetModel.MODEL_ID)
+            .clearable(true).build())
+        // Grouping, never authority: ProjectGuards refuses an environment whose
+        // project does not OWN this instance, on every writer.
+        .add(RelationPick.of(InstanceModel.ENVIRONMENT_ID, EnvironmentModel.MODEL_ID)
             .clearable(true).build())
         .build();
 

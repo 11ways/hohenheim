@@ -475,14 +475,47 @@ public final class HohenheimAccess {
     }
 
     /**
-     * THE owner identity a NEW record created by this context will answer to: the acting
-     * user's own subject, or the empty (operator) set for admins and system work. One
-     * derivation, because the quota bucket charged at create and the manage grant planted
-     * right after MUST name the same owner -- two spellings is how a tenant's instance
-     * ends up charged to the operator's bucket.
+     * The explicit creation-owner override (a PROJECT create): set by the one funnel
+     * that validated the actor's membership, read by every consumer of
+     * {@link #creationOwnerSubjects} -- so the quota charge, the placement decision
+     * and the planted grant follow the override as ONE derivation, never three.
+     */
+    private static final ThreadLocal<@Nullable Set<String>> CREATION_OWNER =
+        new ThreadLocal<>();
+
+    /**
+     * Run {@code body} with the creation-owner derivation pinned to {@code subjects}
+     * (a validated project subject). Nesting is refused: two pending owners on one
+     * thread means two funnels interleaved, which is a bug, not a use case.
+     *
+     * @throws IllegalStateException when a creation owner is already pinned
+     */
+    public static void withCreationOwner(@NonNull Set<String> subjects, @NonNull Runnable body) {
+        if (CREATION_OWNER.get() != null) {
+            throw new IllegalStateException("A creation owner is already pinned on this thread");
+        }
+        CREATION_OWNER.set(Set.copyOf(subjects));
+        try {
+            body.run();
+        } finally {
+            CREATION_OWNER.remove();
+        }
+    }
+
+    /**
+     * THE owner identity a NEW record created by this context will answer to: an
+     * explicitly pinned owner (a validated project create) when one is active, else the
+     * acting user's own subject, or the empty (operator) set for admins and system work.
+     * One derivation, because the quota bucket charged at create, the placement decision
+     * and the manage grant planted right after MUST name the same owner -- two spellings
+     * is how a tenant's instance ends up charged to the operator's bucket.
      */
     @NonNull
     public static Set<String> creationOwnerSubjects(@Nullable AccessContext ctx) {
+        Set<String> pinned = CREATION_OWNER.get();
+        if (pinned != null) {
+            return pinned;
+        }
         if (ctx == null || isAdmin(ctx) || ctx.isAnonymous()) {
             return Set.of();
         }

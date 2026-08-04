@@ -193,6 +193,17 @@ public class InstanceModel extends Model {
             .build());
 
     /**
+     * The environment (environments.id) grouping this instance, or null. GROUPING
+     * only, never authority: ownership stays grant-derived, and the ProjectGuards
+     * write hook refuses an environment whose project does not OWN this instance --
+     * so the grouping can never disagree with the grants.
+     */
+    public static final IntegerField ENVIRONMENT_ID = SCHEMA.addField(
+        IntegerField.builder().name("environment_id")
+            .label(HohenheimFormCopy.label("environment"))
+            .build());
+
+    /**
      * The quota bucket this record's reservation was CHARGED to (stamped by the
      * reserve hook, read back by the release on the soft-delete transition).
      *
