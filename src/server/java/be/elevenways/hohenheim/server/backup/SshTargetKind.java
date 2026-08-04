@@ -13,8 +13,8 @@ import java.util.Map;
 
 /**
  * SSH backup-target kind: a directory on ANOTHER host, reached over ssh with strict
- * host-key checking (pin the key in the settings, or pre-trust the host in the
- * controller user's known_hosts -- accept-new does not exist here by decision).
+ * host-key checking against a REQUIRED pin recorded in the settings -- accept-new and
+ * ambient known_hosts do not exist here by decision.
  */
 public final class SshTargetKind implements BackupTargetKindHandler {
 
@@ -33,10 +33,12 @@ public final class SshTargetKind implements BackupTargetKindHandler {
             .help(HohenheimFormCopy.help("backup_ssh_path"))
             .build());
 
+    /** Required: an unpinned ssh target would be trust-on-first-use with no pin to show. */
     public static final StringField HOST_KEY = SETTINGS_SCHEMA.addField(
         StringField.builder().name("host_key")
             .label(HohenheimFormCopy.label("host_key"))
             .help(HohenheimFormCopy.help("backup_ssh_host_key"))
+            .required()
             .build());
 
     @Override
@@ -75,8 +77,7 @@ public final class SshTargetKind implements BackupTargetKindHandler {
         if (path.isEmpty() || !path.startsWith("/")) {
             throw new IOException("SSH backup target needs an absolute remote directory path");
         }
-        String hostKey = text(settings.get("host_key"));
-        return new SshBackupTarget(target, path, hostKey.isEmpty() ? null : hostKey);
+        return new SshBackupTarget(target, path, text(settings.get("host_key")));
     }
 
     private static String text(Object value) {

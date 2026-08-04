@@ -26,10 +26,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * THE ssh trust and credential seam for remote hosts: every {@code ssh} argv the
- * product ever builds comes from {@link #sshArgv}, verified against a known_hosts
- * file Hohenheim MATERIALISES from the database on each use, with a per-host client
- * identity and {@code IdentitiesOnly=yes}.
+ * THE ssh trust and credential seam: every {@code ssh} argv the product ever builds
+ * comes from here, verified against a known_hosts file Hohenheim MATERIALISES from
+ * stored configuration on each use. {@link #sshArgv} is the inventoried-host lane
+ * (host record, per-host client identity, {@code IdentitiesOnly=yes});
+ * {@link #pinnedArgv} is the same trust half for a free-form target an operator typed,
+ * which is what the backup lane addresses.
  *
  * AIDEV-NOTE: the trust store is the DATABASE, the file is a rendering of it. It is
  * rewritten before every connection precisely so an out-of-band edit of the file
@@ -116,26 +118,51 @@ public final class HostKeys {
                 "Host '" + name + "' has no Hohenheim client key; rotate the SSH key and"
                     + " install the public half on the host");
         }
-        Target target = parseTarget(server.get(ServerModel.SSH_TARGET));
-        Path knownHosts = writeKnownHosts(server, pinned);
         Path identity = writeIdentity(server, privateKey);
 
+        List<String> argv = pinnedArgv(alias(server), pinned,
+            server.get(ServerModel.SSH_TARGET), List.of(
+                "-o", "IdentitiesOnly=yes",
+                "-i", identity.toString(),
+                "-o", "ConnectTimeout=10"));
+        argv.addAll(remoteCommand);
+        return argv;
+    }
+
+    /**
+     * THE pinned ssh argv for a target that is NOT an inventoried host record -- the
+     * backup lane's destination is a free-form {@code [user@]host[:port]} an operator
+     * typed, not a {@link ServerModel} row -- ending in the {@code --} terminator and
+     * the destination, so a caller appends its remote command and nothing else.
+     *
+     * The pin is MANDATORY here for the same reason it is on a host record: the
+     * alternative is the OS user's ambient {@code known_hosts}, which is silent
+     * trust-on-first-use that nothing in the product can display or defend.
+     *
+     * @param alias the {@code HostKeyAlias} both lookup and verification key on
+     * @param pinnedKeyLine a known_hosts key line ({@code <type> <base64>})
+     * @param rawTarget {@code [user@]host[:port]}
+     * @param extraOptions caller options (identity, timeouts) placed before the terminator
+     */
+    public static @NonNull List<String> pinnedArgv(@NonNull String alias,
+                                                   @NonNull String pinnedKeyLine,
+                                                   @Nullable String rawTarget,
+                                                   @NonNull List<String> extraOptions) {
+        Target target = parseTarget(rawTarget);
+        Path knownHosts = writeKnownHosts(alias, pinnedKeyLine);
         List<String> argv = new ArrayList<>(List.of("ssh",
             "-o", "BatchMode=yes",
             "-o", "StrictHostKeyChecking=yes",
             "-o", "UserKnownHostsFile=" + knownHosts,
             "-o", "GlobalKnownHostsFile=/dev/null",
-            "-o", "HostKeyAlias=" + alias(server),
-            "-o", "IdentitiesOnly=yes",
-            "-i", identity.toString(),
-            "-o", "ConnectTimeout=10"));
+            "-o", "HostKeyAlias=" + alias));
+        argv.addAll(extraOptions);
         if (target.port() > 0) {
             argv.add("-p");
             argv.add(String.valueOf(target.port()));
         }
         argv.add("--");
         argv.add(target.destination());
-        argv.addAll(remoteCommand);
         return argv;
     }
 
@@ -278,16 +305,7 @@ public final class HostKeys {
 
     /** The digest {@code ssh-keygen -lf} prints for a public key line. */
     public static @NonNull String fingerprintOf(@NonNull String keyLine) {
-        String blob = null;
-        for (String token : keyLine.trim().split("\\s+")) {
-            if (token.length() > 32 && token.startsWith("AAAA")) {
-                blob = token;
-                break;
-            }
-        }
-        if (blob == null) {
-            throw new IllegalArgumentException("Not a public key line: " + keyLine);
-        }
+        String blob = keyLineOf(keyLine).split(" ")[1];
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
                 .digest(Base64.getDecoder().decode(blob));
@@ -412,9 +430,28 @@ public final class HostKeys {
         return directory;
     }
 
-    private static Path writeKnownHosts(Row server, String pinnedKey) {
-        Path file = storeDirectory().resolve("known_hosts-" + server.get(ServerModel.ID));
-        return writeFile(file, alias(server) + " " + pinnedKey.trim() + "\n", "rw-------");
+    /**
+     * Reduce any public-key spelling to the {@code <type> <base64>} pair a known_hosts
+     * line takes after its host field. Operators paste whole {@code ssh-keyscan} lines
+     * (which carry a hostname) and whole {@code .pub} files (which carry a comment);
+     * both must land on the same two tokens, or the alias we prepend would produce a
+     * three-field line ssh silently never matches.
+     *
+     * @throws IllegalArgumentException when the text holds no key blob
+     */
+    public static @NonNull String keyLineOf(@NonNull String text) {
+        String[] tokens = text.trim().split("\\s+");
+        for (int index = 1; index < tokens.length; index++) {
+            if (tokens[index].length() > 32 && tokens[index].startsWith("AAAA")) {
+                return tokens[index - 1] + " " + tokens[index];
+            }
+        }
+        throw new IllegalArgumentException("Not a public key line: " + text);
+    }
+
+    private static Path writeKnownHosts(String alias, String pinnedKey) {
+        Path file = storeDirectory().resolve("known_hosts-" + alias);
+        return writeFile(file, alias + " " + keyLineOf(pinnedKey) + "\n", "rw-------");
     }
 
     private static Path writeIdentity(Row server, String privateKey) {
