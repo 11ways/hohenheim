@@ -66,9 +66,27 @@ public final class NixpacksBuilder implements Builders {
      * timestamped build logs under /nix/var/log/nix. Dropping the nix db means `nix`
      * itself stops working INSIDE the built image, which no nixpacks-launched workload
      * does at runtime; the /nix/store payload and the profile symlinks all remain.
+     *
+     * AIDEV-NOTE: /nix/var/nix/userpool is the entry that made this lane's digest
+     * genuinely UNSTABLE until 2026-08-05, and it is why the digest test was a
+     * coin-flip rather than a proof. Nix allocates a build-user lock file there
+     * (/nix/var/nix/userpool/&lt;uid&gt;) only when it BUILDS a derivation locally instead
+     * of substituting it from the binary cache -- so whether the directory exists at
+     * all depends on cache weather, not on the repository. Measured by diffing two
+     * builds of one context: exactly ONE layer differed (the {@code nix-env} layer)
+     * and it differed by exactly these two entries; with them excluded both builds
+     * land on one digest. Siblings gcroots/temproots were present and EMPTY in both
+     * and are deliberately not excluded -- this list stays measured, never guessed.
+     *
+     * AIDEV-NOTE: do NOT try to guard this list by looking for these paths in the built
+     * image -- {@code --ignore-path} only suppresses NEWLY SNAPSHOTTED changes, and the
+     * nixpacks base image already ships /nix/var/nix/{db,userpool}. Measured: an image
+     * built WITH the exclude still lists userpool at runtime. The only honest guard is
+     * the digest comparison, and it only bites when two builds actually disagree.
      */
     private static final List<String> UNSTABLE_PATHS = List.of(
-        "/root/.cache", "/root/.npm/_logs", "/nix/var/nix/db", "/nix/var/log/nix");
+        "/root/.cache", "/root/.npm/_logs", "/nix/var/nix/db", "/nix/var/log/nix",
+        "/nix/var/nix/userpool");
 
     private @Nullable String detection;
 
@@ -151,12 +169,23 @@ public final class NixpacksBuilder implements Builders {
             // The emit's helper script embeds a random UUID and would enter the image
             // through COPY, breaking digest stability; it is docker-cli-only anyway.
             Files.deleteIfExists(request.contextDir().resolve(EMIT_DIR + "/build.sh"));
-            // AIDEV-NOTE: kaniko --reproducible does NOT normalize mtimes in COPY layers
-            // (measured: touching one context file changes the config digest). Tenant
-            // files keep stable mtimes because checkout slots are reused, but .nixpacks
-            // is re-emitted with fresh timestamps on EVERY build -- so the entries THIS
-            // builder injects are pinned to the epoch, or an unchanged repository would
-            // build to a new digest every time and every reload would roll the site.
+            // AIDEV-NOTE: .nixpacks is re-emitted with fresh timestamps on EVERY build,
+            // while tenant files keep stable mtimes because checkout slots are reused.
+            // This epoch pin is DEFENCE IN DEPTH and nothing more. Two earlier notes
+            // here were wrong in opposite directions; both are settled by measurement
+            // on the shipped default executor (kaniko v1.23.2), 2026-08-05:
+            //   * --reproducible DOES normalize COPY-layer mtimes. Two byte-identical
+            //     contexts whose mtimes differ by 1.79e9 seconds -- files AND
+            //     directories -- export byte-identical tars and one config digest. In
+            //     a real nixpacks build the three `COPY . /app/.` layers came out
+            //     bit-identical across runs. So the pin is NOT what stabilizes COPY.
+            //   * --reproducible is still load-bearing: two builds of ONE context
+            //     WITHOUT it export different tars (wall-clock in the config).
+            // What actually broke stability was neither: a nondeterministic RUN-layer
+            // path, /nix/var/nix/userpool, now excluded in UNSTABLE_PATHS. The pin
+            // stays because builds.builder_image is operator-configurable and mtime
+            // handling is a builder implementation detail we do not get to assume.
+            // Guarded live by NixpacksBuildLiveTest's digest-stability step.
             normalizeTimestamps(request.contextDir().resolve(EMIT_DIR));
 
             String dockerfileText = Files.readString(dockerfile, StandardCharsets.UTF_8);
