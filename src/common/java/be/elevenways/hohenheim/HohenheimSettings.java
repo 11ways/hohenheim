@@ -460,6 +460,14 @@ public class HohenheimSettings {
             .defaultValue(7)
             .description("Number of dumps to keep per managed database")
             .build();
+
+        public static final SettingDefinition<Integer> MAX_DUMP_MB = GROUP.buildSetting("max_dump_mb", Integer.class)
+            .defaultValue(2048)
+            .description("Upper bound in MiB for one binary managed-database dump (Redis RDB, "
+                + "mongodump archive) fetched out of a container. The fetch is buffered "
+                + "through controller memory, so this cap is what protects the heap -- a "
+                + "larger dump refuses instead of taking the controller down")
+            .build();
     }
 
     // --- Security ---
@@ -715,6 +723,31 @@ public class HohenheimSettings {
             .defaultValue(2000)
             .description("Size of the pre-allocation window; allocation refuses loudly "
                 + "when every port in it is claimed or observed bound")
+            .build();
+    }
+
+    // --- Instance file manager ---
+    public abstract class Files {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("files")
+            .label("Instance files")
+            .describe("Bounds on the per-instance file manager (browse, edit, upload, download)")
+            .icon("folder-tree");
+
+        public static final SettingDefinition<Integer> MAX_FILE_KB = GROUP
+            .buildSetting("max_file_kb", Integer.class)
+            .defaultValue(8192)
+            .description("Upper bound in KiB for one file read or written through the file "
+                + "manager. Enforced DURING the transfer in both directions: an oversized "
+                + "download aborts mid-read and an oversized upload is refused before a "
+                + "single byte reaches the workload, so a partial file never lands")
+            .build();
+
+        public static final SettingDefinition<Integer> MAX_ENTRIES = GROUP
+            .buildSetting("max_entries", Integer.class)
+            .defaultValue(2000)
+            .description("Upper bound on the entries one directory listing returns. A "
+                + "directory with more refuses to list rather than returning a truncated "
+                + "listing that reads like a complete one")
             .build();
     }
 

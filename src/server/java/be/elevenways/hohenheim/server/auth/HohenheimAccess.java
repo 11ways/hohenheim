@@ -78,6 +78,21 @@ public final class HohenheimAccess {
     public static final String BACKUPS = "backups";
 
     /**
+     * Browse, read and download the files inside an instance's own volumes. An ORDINARY
+     * tenant capability per the plan's sensitivity classes -- it reads the tenant's own
+     * data and nothing else -- and deliberately NOT implied by {@link #FILES_WRITE}: the
+     * two are asked for separately on every path in InstanceFiles.
+     */
+    public static final String FILES_READ = "files.read";
+
+    /**
+     * Write, upload, rename, delete and mkdir inside an instance's own volumes. ELEVATED:
+     * editing a start script or a jar is editing what runs, which is why it is a separate
+     * capability from {@link #FILES_READ} rather than a mode of it.
+     */
+    public static final String FILES_WRITE = "files.write";
+
+    /**
      * Run an ARBITRARY, non-template image on an instance. Exec-equivalent by the
      * threat model (an attacker-chosen image is attacker-chosen code), so admin/
      * type-level: elevated and deliberately NOT delegable -- a manage holder must not
@@ -202,7 +217,23 @@ public final class HohenheimAccess {
             // that manage/snapshots/backups already surface.
             KnownCapability.of(IMAGE_ANY)
                 .label(Microcopy.of("image_any").withFilter("scope", "capability"))
-                .elevated());
+                .elevated(),
+            // Phase 6: the file manager exists (InstanceFiles behind the Files tab and the
+            // /api/v1 file lane), so its two capabilities register WITH their enforcement
+            // per the no-unwired rule. They ride the SAME grant matrix manage/snapshots/
+            // backups already surface, so declaring them adds two columns to a page that is
+            // already reachable and designed -- not a new unreachable surface.
+            //
+            // AIDEV-NOTE: read is the only ORDINARY capability on this model. It is NOT
+            // owner-implied and NOT implied by write: InstanceFiles asks for exactly one of
+            // the two on every call, so an operator can hand out a read-only file browser.
+            KnownCapability.of(FILES_READ)
+                .label(Microcopy.of("files_read").withFilter("scope", "capability"))
+                .asDelegable(),
+            KnownCapability.of(FILES_WRITE)
+                .label(Microcopy.of("files_write").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable());
         RecordGrantCapabilityChecker.declareRules(InstanceModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)

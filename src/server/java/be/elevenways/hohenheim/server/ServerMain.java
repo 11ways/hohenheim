@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
@@ -126,6 +127,7 @@ public class ServerMain {
         }
 
         HohenheimEndpoints.init();
+        HohenheimChannels.init();
         // Force-load the zenit-cms panel routes (all /{panel}/... endpoints).
         Object cmsRoutes = ResourcePageEndpoints.LIST;
         // AIDEV-NOTE: BEFORE the migrations, not with the rest of the auth wiring. The

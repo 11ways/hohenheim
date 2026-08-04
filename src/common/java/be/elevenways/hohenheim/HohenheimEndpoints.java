@@ -121,6 +121,21 @@ public class HohenheimEndpoints {
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_instance_create");
 
+    // File operations AMPLIFY: one listing is an exec in a container, one download moves a
+    // capped-but-real payload off a volume, and both are cheap to issue in a loop. Browsing
+    // is interactive so its budget is generous; writes move bytes INTO a workload and are
+    // tighter. Keyed per principal (per IP for anonymous rejects), like every other tenant
+    // budget here.
+    private static final RateLimitPolicy INSTANCE_FILES_READ_LIMIT =
+        RateLimitPolicy.of(120, Duration.ofMinutes(1))
+            .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
+            .named("hh_instance_files_read");
+
+    private static final RateLimitPolicy INSTANCE_FILES_WRITE_LIMIT =
+        RateLimitPolicy.of(30, Duration.ofMinutes(1))
+            .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
+            .named("hh_instance_files_write");
+
     // --- Let's Encrypt request (POST for the CMS certificate-request page) ---
     public static final Endpoint<Object> CERTIFICATES_REQUEST = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "certificates_request"))
@@ -365,6 +380,81 @@ public class HohenheimEndpoints {
         .requiresLogin()
         .csrfExempt()
         .rateLimit(INSTANCE_CREATE_LIMIT)
+        .build();
+
+    // --- Tenant instance FILE API v1 ---
+    //
+    // The same rule as every other endpoint here: no authorization decision lives in a
+    // handler. The read lane asks InstanceFiles for files.read and the write lane for
+    // files.write, both inside the service, so this surface and the Files tab can never
+    // hold different policies. The path always travels as the `path` QUERY PARAMETER and
+    // never as a route segment: a route segment would be split on '/' and reassembled,
+    // which is a second decode, and a second decode is how a normalized traversal slips in.
+
+    public static final Endpoint<Object> API_INSTANCE_FILES = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_files"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("files").build())
+        .requiresLogin()
+        .rateLimit(INSTANCE_FILES_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_INSTANCE_FILE_CONTENT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_file_content"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("files").addDelimiter().addStatic("content").build())
+        .requiresLogin()
+        .rateLimit(INSTANCE_FILES_READ_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_FILE_WRITE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_file_write"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("files").addDelimiter().addStatic("content").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(INSTANCE_FILES_WRITE_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_FILE_ACTION = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_file_action"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("files").addDelimiter().addStatic("action").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(INSTANCE_FILES_WRITE_LIMIT)
+        .build();
+
+    // --- Instance file manager, HTML lane (the Files tab posts here) ---
+
+    /** Download one file from an instance volume; bounded by hohenheim.files.max_file_kb. */
+    public static final Endpoint<Object> INSTANCE_FILE_DOWNLOAD = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "instance_file_download"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("files").addDelimiter().addStatic("download").build())
+        .requiresLogin()
+        .rateLimit(INSTANCE_FILES_READ_LIMIT)
+        .build();
+
+    /** Every mutating file action of the Files tab (save, upload, mkdir, rename, delete). */
+    public static final Endpoint<Object> INSTANCE_FILE_ACTION = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "instance_file_action"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("files").addDelimiter().addStatic("action").build())
+        .requiresLogin()
+        .rateLimit(INSTANCE_FILES_WRITE_LIMIT)
         .build();
 
     // --- DNS records peer/automation API (znit_ bearer keys; the edit-forwarding

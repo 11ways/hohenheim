@@ -993,10 +993,16 @@
     "text": "Webhook-URL kopiëren",
     "scope": "site_deployments"
   },
-  "cpu": {
-    "text": "CPU",
-    "scope": "site_processes"
-  },
+  "cpu": [
+    {
+      "text": "CPU",
+      "scope": "site_processes"
+    },
+    {
+      "text": "CPU",
+      "scope": "instance_stats"
+    }
+  ],
   "current_commit": {
     "text": "Serveert momenteel commit {$commit}.",
     "scope": "site_deployments"
@@ -1105,6 +1111,10 @@
     {
       "text": "Nog geen stappen",
       "scope": "schedule_step"
+    },
+    {
+      "text": "Deze map is leeg",
+      "scope": "instance_files"
     }
   ],
   "empty_description": [
@@ -1247,10 +1257,16 @@
       "scope": "help"
     }
   ],
-  "memory": {
-    "text": "Geheugen",
-    "scope": "site_processes"
-  },
+  "memory": [
+    {
+      "text": "Geheugen",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Geheugen",
+      "scope": "instance_stats"
+    }
+  ],
   "no_logs": {
     "text": "Nog geen opgeslagen logs.",
     "scope": "site_processes"
@@ -1679,6 +1695,10 @@
     {
       "text": "Naam",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "Naam",
+      "scope": "instance_files"
     }
   ],
   "name_placeholder": {
@@ -1985,10 +2005,16 @@
     "text": "Dashboard",
     "scope": "admin"
   },
-  "download": {
-    "text": "Downloaden",
-    "scope": "certificate"
-  },
+  "download": [
+    {
+      "text": "Downloaden",
+      "scope": "certificate"
+    },
+    {
+      "text": "Downloaden",
+      "scope": "instance_files"
+    }
+  ],
   "renewal_status": {
     "text": "Vernieuwingsstatus",
     "scope": "certificate"
@@ -3333,10 +3359,16 @@
     "text": "Bekijken",
     "scope": "capability"
   },
-  "edit": {
-    "text": "Bewerken",
-    "scope": "capability"
-  },
+  "edit": [
+    {
+      "text": "Bewerken",
+      "scope": "capability"
+    },
+    {
+      "text": "Bewerken",
+      "scope": "instance_files"
+    }
+  ],
   "dyndns": {
     "text": "Dynamische DNS-token",
     "scope": "capability"
@@ -4215,6 +4247,10 @@
     {
       "text": "Configuratiebestanden",
       "scope": "template_contents"
+    },
+    {
+      "text": "Bestanden",
+      "scope": "instance"
     }
   ],
   "disabled": [
@@ -5462,10 +5498,16 @@
     "text": "Pad",
     "scope": "template_contents"
   },
-  "mode": {
-    "text": "Modus",
-    "scope": "template_contents"
-  },
+  "mode": [
+    {
+      "text": "Modus",
+      "scope": "template_contents"
+    },
+    {
+      "text": "Rechten",
+      "scope": "instance_files"
+    }
+  ],
   "no_variables": {
     "text": "Geen variabelen",
     "scope": "template_contents"
@@ -5514,10 +5556,16 @@
     "text": "Dit sjabloon voert na aanmaak een installatiestap uit; de instantie kan starten zodra die voltooid is.",
     "scope": "instance_from_template"
   },
-  "create": {
-    "text": "Instantie aanmaken",
-    "scope": "instance_from_template"
-  },
+  "create": [
+    {
+      "text": "Instantie aanmaken",
+      "scope": "instance_from_template"
+    },
+    {
+      "text": "Aanmaken",
+      "scope": "instance_files"
+    }
+  ],
   "approval_note": {
     "text": "Een geimporteerd sjabloon is altijd niet-goedgekeurd: een operator moet het goedkeuren voordat het selecteerbaar wordt.",
     "scope": "template_import"
@@ -5580,14 +5628,26 @@
     "text": "Versturen",
     "scope": "instance_console"
   },
-  "not_running": {
-    "text": "Draait niet",
-    "scope": "instance_console"
-  },
-  "not_running_description": {
-    "text": "Rol de instantie uit om aan de console te koppelen.",
-    "scope": "instance_console"
-  },
+  "not_running": [
+    {
+      "text": "Draait niet",
+      "scope": "instance_console"
+    },
+    {
+      "text": "Deze instance draait niet",
+      "scope": "instance_stats"
+    }
+  ],
+  "not_running_description": [
+    {
+      "text": "Rol de instantie uit om aan de console te koppelen.",
+      "scope": "instance_console"
+    },
+    {
+      "text": "Live statistieken verschijnen zodra de workload start",
+      "scope": "instance_stats"
+    }
+  ],
   "runs": {
     "text": "Uitvoeringen",
     "scope": "instance_schedule"
@@ -5600,6 +5660,10 @@
     {
       "text": "Stap toevoegen",
       "scope": "schedule_step"
+    },
+    {
+      "text": "Toevoegen aan deze map",
+      "scope": "instance_files"
     }
   ],
   "run_now": {
@@ -5809,5 +5873,149 @@
   "hohenheim_instances_create": {
     "text": "Instanties aanmaken op basis van goedgekeurde sjablonen",
     "scope": "permission"
+  },
+  "files_read": {
+    "text": "Bestanden lezen",
+    "scope": "capability"
+  },
+  "files_write": {
+    "text": "Bestanden schrijven",
+    "scope": "capability"
+  },
+  "stats": {
+    "text": "Statistieken",
+    "scope": "instance"
+  },
+  "size": {
+    "text": "Grootte",
+    "scope": "instance_files"
+  },
+  "actions": {
+    "text": "Acties",
+    "scope": "instance_files"
+  },
+  "up": {
+    "text": "Een niveau omhoog",
+    "scope": "instance_files"
+  },
+  "delete": {
+    "text": "Verwijderen",
+    "scope": "instance_files"
+  },
+  "save": {
+    "text": "Opslaan",
+    "scope": "instance_files"
+  },
+  "upload": {
+    "text": "Uploaden",
+    "scope": "instance_files"
+  },
+  "rename": {
+    "text": "Hernoemen",
+    "scope": "instance_files"
+  },
+  "rename_from": {
+    "text": "Bestaand pad",
+    "scope": "instance_files"
+  },
+  "rename_to": {
+    "text": "Nieuw pad",
+    "scope": "instance_files"
+  },
+  "new_directory": {
+    "text": "Pad van de nieuwe map",
+    "scope": "instance_files"
+  },
+  "target_path": {
+    "text": "Doelpad",
+    "scope": "instance_files"
+  },
+  "symlink": {
+    "text": "Symlink",
+    "scope": "instance_files"
+  },
+  "managed": {
+    "text": "Beheerde configuratie",
+    "scope": "instance_files"
+  },
+  "read_only": {
+    "text": "Je mag deze bestanden lezen maar niet wijzigen",
+    "scope": "instance_files"
+  },
+  "upload_limit": {
+    "text": "Bestanden tot {$bytes} bytes",
+    "scope": "instance_files"
+  },
+  "cpu_description": {
+    "text": "Percentage van een core, live",
+    "scope": "instance_stats"
+  },
+  "memory_description": {
+    "text": "Werkgeheugen in MiB, live",
+    "scope": "instance_stats"
+  },
+  "network": {
+    "text": "Netwerk",
+    "scope": "instance_stats"
+  },
+  "network_description": {
+    "text": "Cumulatieve KiB sinds de start van de workload",
+    "scope": "instance_stats"
+  },
+  "received": {
+    "text": "Ontvangen",
+    "scope": "instance_stats"
+  },
+  "transmitted": {
+    "text": "Verzonden",
+    "scope": "instance_stats"
+  },
+  "files_path_refused": {
+    "text": "Dat pad ligt niet binnen deze instance",
+    "scope": "violations"
+  },
+  "files_not_found": {
+    "text": "Er staat niets op dat pad",
+    "scope": "violations"
+  },
+  "files_not_a_directory": {
+    "text": "Dat pad is geen map",
+    "scope": "violations"
+  },
+  "files_not_a_file": {
+    "text": "Dat pad is geen gewoon bestand",
+    "scope": "violations"
+  },
+  "files_exists": {
+    "text": "Er bestaat al iets op dat pad",
+    "scope": "violations"
+  },
+  "files_volume_root": {
+    "text": "Een volume-hoofdmap kan niet hernoemd of verwijderd worden",
+    "scope": "violations"
+  },
+  "files_no_volumes": {
+    "text": "Deze instance heeft geen volumes om te doorbladeren",
+    "scope": "violations"
+  },
+  "files_workload_not_browsable": {
+    "text": "De workload moet draaien om bestanden te bekijken, aan te maken, te hernoemen of te verwijderen",
+    "scope": "violations"
+  },
+  "files_managed_config": {
+    "text": "Dat bestand is beheerde configuratie; bewerk het op het tabblad Provisioning",
+    "scope": "violations"
+  },
+  "files_too_large": {
+    "text": "Bestanden groter dan {$bytes} bytes kunnen hier niet gelezen of geschreven worden",
+    "scope": "violations"
+  },
+  "files_unknown_action": {
+    "text": "Onbekende bestandsactie",
+    "scope": "violations"
+  },
+  "files_failed": {
+    "text": "De bestandsbewerking is mislukt: {$reason}",
+    "scope": "violations"
   }
 }

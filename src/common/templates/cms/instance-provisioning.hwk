@@ -17,7 +17,9 @@
 <section class="cms-resource-list-page">
     <header class="cms-resource-list-header">
         <h1>{{ instanceName }}</h1>
+        {% if addFileUrl != "" %}
         <pl-button variant="secondary" href={% addFileUrl %} id="add-file-link">{{ t("add_file", scope: "template_contents") }}</pl-button>
+        {% /if %}
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
@@ -71,7 +73,13 @@
         <pl-table-body>
             {% each files as index, file %}
             <pl-table-row>
-                <pl-table-cell><a href={% file.get("editUrl") %}><code>{{ file.get("path") }}</code></a></pl-table-cell>
+                <pl-table-cell>
+                    {% if file.get("editUrl") != "" %}
+                    <a href={% file.get("editUrl") %}><code>{{ file.get("path") }}</code></a>
+                    {% else %}
+                    <code>{{ file.get("path") }}</code>
+                    {% /if %}
+                </pl-table-cell>
                 <pl-table-cell><code>{{ file.get("mode") }}</code></pl-table-cell>
             </pl-table-row>
             {% /each %}

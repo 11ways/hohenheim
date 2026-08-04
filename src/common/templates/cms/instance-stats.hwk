@@ -1,0 +1,68 @@
+{#- Stats tab on an instance: live CPU / memory / network, seeded server-side from the
+    hub's ring and kept live by the instance-stats channel. No script tag anywhere --
+    InstanceStats.series returns a ref and template reactivity redraws the sparklines. -#}
+{% declare title: String %}
+{% declare instanceName: String %}
+{% declare instanceId: Integer %}
+{% declare running: Boolean = false %}
+{% declare cpuSeed: List %}
+{% declare memorySeed: List %}
+{% declare rxSeed: List %}
+{% declare txSeed: List %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ instanceName }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if running %}
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>{{ t("cpu", scope: "instance_stats") }}</pl-card-title>
+            <pl-card-description>{{ t("cpu_description", scope: "instance_stats") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <pl-sparkline area={% true %}
+                          label={% t("cpu", scope: "instance_stats") %}
+                          points={% InstanceStats.series(instanceId, "cpu", cpuSeed) %}></pl-sparkline>
+        </pl-card-content>
+    </pl-card>
+
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>{{ t("memory", scope: "instance_stats") }}</pl-card-title>
+            <pl-card-description>{{ t("memory_description", scope: "instance_stats") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <pl-sparkline area={% true %}
+                          label={% t("memory", scope: "instance_stats") %}
+                          points={% InstanceStats.series(instanceId, "memory", memorySeed) %}></pl-sparkline>
+        </pl-card-content>
+    </pl-card>
+
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>{{ t("network", scope: "instance_stats") }}</pl-card-title>
+            <pl-card-description>{{ t("network_description", scope: "instance_stats") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <pl-sparkline label={% t("received", scope: "instance_stats") %}
+                          points={% InstanceStats.series(instanceId, "rx", rxSeed) %}></pl-sparkline>
+            <pl-sparkline label={% t("transmitted", scope: "instance_stats") %}
+                          points={% InstanceStats.series(instanceId, "tx", txSeed) %}></pl-sparkline>
+        </pl-card-content>
+    </pl-card>
+    {% else %}
+    <pl-empty-state icon="chart-line">
+        <pl-empty-state-title>{{ t("not_running", scope: "instance_stats") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("not_running_description", scope: "instance_stats") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+</section>
+{% /block %}

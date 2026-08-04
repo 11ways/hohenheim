@@ -993,10 +993,16 @@
     "text": "Copy webhook URL",
     "scope": "site_deployments"
   },
-  "cpu": {
-    "text": "CPU",
-    "scope": "site_processes"
-  },
+  "cpu": [
+    {
+      "text": "CPU",
+      "scope": "site_processes"
+    },
+    {
+      "text": "CPU",
+      "scope": "instance_stats"
+    }
+  ],
   "current_commit": {
     "text": "Currently serving commit {$commit}.",
     "scope": "site_deployments"
@@ -1105,6 +1111,10 @@
     {
       "text": "No steps yet",
       "scope": "schedule_step"
+    },
+    {
+      "text": "This directory is empty",
+      "scope": "instance_files"
     }
   ],
   "empty_description": [
@@ -1247,10 +1257,16 @@
       "scope": "help"
     }
   ],
-  "memory": {
-    "text": "Memory",
-    "scope": "site_processes"
-  },
+  "memory": [
+    {
+      "text": "Memory",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Memory",
+      "scope": "instance_stats"
+    }
+  ],
   "no_logs": {
     "text": "No stored logs yet.",
     "scope": "site_processes"
@@ -1683,6 +1699,10 @@
     {
       "text": "Name",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "Name",
+      "scope": "instance_files"
     }
   ],
   "name_placeholder": {
@@ -1989,10 +2009,16 @@
     "text": "Dashboard",
     "scope": "admin"
   },
-  "download": {
-    "text": "Download",
-    "scope": "certificate"
-  },
+  "download": [
+    {
+      "text": "Download",
+      "scope": "certificate"
+    },
+    {
+      "text": "Download",
+      "scope": "instance_files"
+    }
+  ],
   "renewal_status": {
     "text": "Renewal status",
     "scope": "certificate"
@@ -3337,10 +3363,16 @@
     "text": "View",
     "scope": "capability"
   },
-  "edit": {
-    "text": "Edit",
-    "scope": "capability"
-  },
+  "edit": [
+    {
+      "text": "Edit",
+      "scope": "capability"
+    },
+    {
+      "text": "Edit",
+      "scope": "instance_files"
+    }
+  ],
   "dyndns": {
     "text": "Dynamic DNS token",
     "scope": "capability"
@@ -4219,6 +4251,10 @@
     {
       "text": "Config files",
       "scope": "template_contents"
+    },
+    {
+      "text": "Files",
+      "scope": "instance"
     }
   ],
   "disabled": [
@@ -5466,10 +5502,16 @@
     "text": "Path",
     "scope": "template_contents"
   },
-  "mode": {
-    "text": "Mode",
-    "scope": "template_contents"
-  },
+  "mode": [
+    {
+      "text": "Mode",
+      "scope": "template_contents"
+    },
+    {
+      "text": "Mode",
+      "scope": "instance_files"
+    }
+  ],
   "no_variables": {
     "text": "No variables",
     "scope": "template_contents"
@@ -5518,10 +5560,16 @@
     "text": "This template runs an install step after creation; the instance can start once it completes.",
     "scope": "instance_from_template"
   },
-  "create": {
-    "text": "Create instance",
-    "scope": "instance_from_template"
-  },
+  "create": [
+    {
+      "text": "Create instance",
+      "scope": "instance_from_template"
+    },
+    {
+      "text": "Create",
+      "scope": "instance_files"
+    }
+  ],
   "approval_note": {
     "text": "An imported template always lands unapproved: an operator must approve it before it becomes selectable.",
     "scope": "template_import"
@@ -5584,14 +5632,26 @@
     "text": "Send",
     "scope": "instance_console"
   },
-  "not_running": {
-    "text": "Not running",
-    "scope": "instance_console"
-  },
-  "not_running_description": {
-    "text": "Deploy the instance to attach to its console.",
-    "scope": "instance_console"
-  },
+  "not_running": [
+    {
+      "text": "Not running",
+      "scope": "instance_console"
+    },
+    {
+      "text": "This instance is not running",
+      "scope": "instance_stats"
+    }
+  ],
+  "not_running_description": [
+    {
+      "text": "Deploy the instance to attach to its console.",
+      "scope": "instance_console"
+    },
+    {
+      "text": "Live statistics appear once the workload starts",
+      "scope": "instance_stats"
+    }
+  ],
   "runs": {
     "text": "Schedule runs",
     "scope": "instance_schedule"
@@ -5604,6 +5664,10 @@
     {
       "text": "Add step",
       "scope": "schedule_step"
+    },
+    {
+      "text": "Add to this directory",
+      "scope": "instance_files"
     }
   ],
   "run_now": {
@@ -5813,5 +5877,149 @@
   "hohenheim_instances_create": {
     "text": "Create instances from approved templates",
     "scope": "permission"
+  },
+  "files_read": {
+    "text": "Read files",
+    "scope": "capability"
+  },
+  "files_write": {
+    "text": "Write files",
+    "scope": "capability"
+  },
+  "stats": {
+    "text": "Stats",
+    "scope": "instance"
+  },
+  "size": {
+    "text": "Size",
+    "scope": "instance_files"
+  },
+  "actions": {
+    "text": "Actions",
+    "scope": "instance_files"
+  },
+  "up": {
+    "text": "Up one level",
+    "scope": "instance_files"
+  },
+  "delete": {
+    "text": "Delete",
+    "scope": "instance_files"
+  },
+  "save": {
+    "text": "Save",
+    "scope": "instance_files"
+  },
+  "upload": {
+    "text": "Upload",
+    "scope": "instance_files"
+  },
+  "rename": {
+    "text": "Rename",
+    "scope": "instance_files"
+  },
+  "rename_from": {
+    "text": "Existing path",
+    "scope": "instance_files"
+  },
+  "rename_to": {
+    "text": "New path",
+    "scope": "instance_files"
+  },
+  "new_directory": {
+    "text": "New directory path",
+    "scope": "instance_files"
+  },
+  "target_path": {
+    "text": "Target path",
+    "scope": "instance_files"
+  },
+  "symlink": {
+    "text": "Symlink",
+    "scope": "instance_files"
+  },
+  "managed": {
+    "text": "Managed config",
+    "scope": "instance_files"
+  },
+  "read_only": {
+    "text": "You may read these files but not change them",
+    "scope": "instance_files"
+  },
+  "upload_limit": {
+    "text": "Files up to {$bytes} bytes",
+    "scope": "instance_files"
+  },
+  "cpu_description": {
+    "text": "Percent of one core, live",
+    "scope": "instance_stats"
+  },
+  "memory_description": {
+    "text": "Working set in MiB, live",
+    "scope": "instance_stats"
+  },
+  "network": {
+    "text": "Network",
+    "scope": "instance_stats"
+  },
+  "network_description": {
+    "text": "Cumulative KiB since the workload started",
+    "scope": "instance_stats"
+  },
+  "received": {
+    "text": "Received",
+    "scope": "instance_stats"
+  },
+  "transmitted": {
+    "text": "Transmitted",
+    "scope": "instance_stats"
+  },
+  "files_path_refused": {
+    "text": "That path is not inside this instance",
+    "scope": "violations"
+  },
+  "files_not_found": {
+    "text": "There is nothing at that path",
+    "scope": "violations"
+  },
+  "files_not_a_directory": {
+    "text": "That path is not a directory",
+    "scope": "violations"
+  },
+  "files_not_a_file": {
+    "text": "That path is not a regular file",
+    "scope": "violations"
+  },
+  "files_exists": {
+    "text": "Something already exists at that path",
+    "scope": "violations"
+  },
+  "files_volume_root": {
+    "text": "A volume root cannot be renamed or deleted",
+    "scope": "violations"
+  },
+  "files_no_volumes": {
+    "text": "This instance declares no volumes to browse",
+    "scope": "violations"
+  },
+  "files_workload_not_browsable": {
+    "text": "The workload must be running to browse, create, rename or delete files",
+    "scope": "violations"
+  },
+  "files_managed_config": {
+    "text": "That file is managed configuration; edit it on the Provisioning tab",
+    "scope": "violations"
+  },
+  "files_too_large": {
+    "text": "Files above {$bytes} bytes cannot be read or written here",
+    "scope": "violations"
+  },
+  "files_unknown_action": {
+    "text": "Unknown file action",
+    "scope": "violations"
+  },
+  "files_failed": {
+    "text": "The file operation failed: {$reason}",
+    "scope": "violations"
   }
 }

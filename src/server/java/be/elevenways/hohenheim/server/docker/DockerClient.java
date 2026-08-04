@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.dry.Dry;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -765,11 +766,103 @@ public class DockerClient {
      * Download a single file from a container ({@code GET /containers/{id}/archive}) and return
      * its raw bytes, unwrapping Docker's tar envelope. Binary-safe (used for RDB / mongodump
      * archives). {@code path} must point at a single file, not a directory.
+     *
+     * @param maxBytes cap on the TRANSFER, enforced during the read: over-size throws and
+     *                 yields nothing, so a truncated read can never pass for the file. The
+     *                 parameter is required deliberately -- an unbounded archive read against
+     *                 a data-dependent endpoint is an OOM waiting for the right file.
      */
-    public byte[] getArchiveFile(String containerId, String path) throws IOException {
-        byte[] tar = exchange("GET", "/containers/" + containerId + "/archive?path=" + enc(path),
-            null, null, LONG_OP_TIMEOUT_MS).body();
+    public byte[] getArchiveFile(String containerId, String path, long maxBytes) throws IOException {
+        byte[] tar = exchangeBounded("GET",
+            "/containers/" + containerId + "/archive?path=" + enc(path), maxBytes).body();
         return extractSingleFile(tar);
+    }
+
+    /**
+     * lstat one container path ({@code HEAD /containers/{id}/archive}), decoded from the
+     * daemon's {@code X-Docker-Container-Path-Stat} header. LSTAT, not stat: a symlink is
+     * reported AS a symlink with its target, which is what the file manager's containment
+     * walk needs to see BEFORE the daemon resolves through it.
+     *
+     * AIDEV-NOTE: the daemon resolves the path inside the CONTAINER's rootfs scope, so an
+     * absolute link target names a container path, never a host one -- but it does NOT
+     * confine to any volume, and it reports the RESULT of resolving an intermediate
+     * symlink as an ordinary file. Containment above this call is not optional.
+     *
+     * @throws FileNotFoundException when the path does not exist
+     */
+    public PathStat statArchivePath(String containerId, String path) throws IOException {
+        RawResponse response;
+        try {
+            response = parseHttpRaw(transport.roundTrip(buildRequest("HEAD",
+                "/containers/" + containerId + "/archive?path=" + enc(path), null, null, null),
+                timeoutMillis));
+        } catch (ApiException e) {
+            if (e.status() == 404) {
+                throw new FileNotFoundException(
+                    "No such path in container " + containerId + ": " + path);
+            }
+            throw e;
+        }
+        String encoded = response.header("X-Docker-Container-Path-Stat");
+        if (encoded == null || encoded.isEmpty()) {
+            throw new IOException("Docker returned no path stat for " + path);
+        }
+        Object parsed = parseJson(new String(
+            Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8));
+        if (!(parsed instanceof Map<?, ?> stat)) {
+            throw new IOException("Docker returned an unreadable path stat for " + path);
+        }
+        long mode = stat.get("mode") instanceof Number number ? number.longValue() : 0;
+        long size = stat.get("size") instanceof Number number ? number.longValue() : 0;
+        String linkTarget = stat.get("linkTarget") instanceof String target ? target : "";
+        return new PathStat(String.valueOf(stat.get("name")), mode, size, linkTarget,
+            String.valueOf(stat.get("mtime")));
+    }
+
+    /**
+     * One lstat as Docker reports it. {@code mode} carries GO's {@code os.FileMode} bits,
+     * not POSIX ones: the type lives in the HIGH bits (bit 31 directory, bit 27 symlink)
+     * and only the low 9 bits are permissions.
+     */
+    public record PathStat(String name, long mode, long size, String linkTarget, String mtime) {
+
+        private static final long GO_MODE_DIR = 1L << 31;
+        private static final long GO_MODE_SYMLINK = 1L << 27;
+        /** Every non-permission bit Go sets; anything left is "some other kind of node". */
+        private static final long GO_MODE_TYPE_MASK = 0xFFFFFE00L;
+
+        public boolean isDirectory() {
+            return (this.mode & GO_MODE_DIR) != 0;
+        }
+
+        public boolean isSymlink() {
+            return (this.mode & GO_MODE_SYMLINK) != 0;
+        }
+
+        /** A plain file: no type bit at all is set. */
+        public boolean isRegularFile() {
+            return (this.mode & GO_MODE_TYPE_MASK) == 0;
+        }
+
+        /** The permission bits as a 4-digit octal string, e.g. {@code 0644}. */
+        public String permissions() {
+            StringBuilder octal = new StringBuilder(Long.toOctalString(this.mode & 0777));
+            while (octal.length() < 4) {
+                octal.insert(0, '0');
+            }
+            return octal.toString();
+        }
+    }
+
+    /**
+     * Follow a container's resource stats: one JSON sample per interval, chunked by the
+     * daemon, ending when the container stops (or the consumer closes). The
+     * {@link #followLogs} sibling on the streaming transport.
+     */
+    public ContainerStream followStats(String id) throws IOException {
+        byte[] request = buildStreamRequest("GET", "/containers/" + id + "/stats?stream=1");
+        return ContainerStream.open(streamTransport(), request, timeoutMillis, false);
     }
 
     // Extract the one file from a tar via the system `tar` (symmetry with tarDirectory).
@@ -821,7 +914,16 @@ public class DockerClient {
 
     private record Response(int status, String body) {}
 
-    private record RawResponse(int status, byte[] body) {}
+    private record RawResponse(int status, byte[] body, Map<String, String> headers) {
+        RawResponse(int status, byte[] body) {
+            this(status, body, Map.of());
+        }
+
+        /** Header lookup is case-insensitive on the wire; keys are stored lower-cased. */
+        String header(String name) {
+            return this.headers.get(name.toLowerCase(Locale.ROOT));
+        }
+    }
 
     private Response get(String path) throws IOException {
         return request("GET", path, null, null, timeoutMillis);
@@ -919,10 +1021,15 @@ public class DockerClient {
         int status = parseStatus(headLines[0]);
 
         boolean chunked = false;
+        Map<String, String> headers = new LinkedHashMap<>();
         for (int i = 1; i < headLines.length; i++) {
             String line = headLines[i].toLowerCase(Locale.ROOT);
             if (line.startsWith("transfer-encoding:") && line.contains("chunked")) {
                 chunked = true;
+            }
+            int colon = headLines[i].indexOf(':');
+            if (colon > 0) {
+                headers.put(line.substring(0, colon), headLines[i].substring(colon + 1).trim());
             }
         }
 
@@ -940,7 +1047,7 @@ public class DockerClient {
             throw new ApiException(status, "Docker API returned HTTP " + status + ": "
                 + new String(bodyBytes, StandardCharsets.UTF_8).trim());
         }
-        return new RawResponse(status, bodyBytes);
+        return new RawResponse(status, bodyBytes, headers);
     }
 
     private static int parseStatus(String statusLine) throws IOException {
