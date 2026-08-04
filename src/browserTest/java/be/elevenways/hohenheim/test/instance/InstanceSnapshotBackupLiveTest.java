@@ -56,8 +56,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  *
  * WHAT IS REAL vs SIMULATED: the daemon, containers, volumes, archives, encryption
  * and target filesystem semantics are real; the OFF-HOST failure domain is
- * simulated -- the filesystem target lives on this same machine, which the target
- * kind's own help text calls out as NOT off-host.
+ * simulated here -- the filesystem target lives on this same machine. The off-host
+ * clause is met by LiveOffHostBackupTest, which exports to and restores from a
+ * genuinely different machine.
  */
 class InstanceSnapshotBackupLiveTest {
 
