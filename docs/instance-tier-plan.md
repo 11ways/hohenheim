@@ -2783,6 +2783,41 @@ network, quota, ownership, secret and durable-operation mechanisms.
   and quotas. This is the point to adopt the hierarchical tenant/project model
   if open decision 7 selects it; do not bolt projects onto URLs while ownership
   remains per-user underneath.
+
+  LANDED 2026-08-04 (re-verify, do not assume), and open decision 7 is CLOSED
+  by ratifying the grant derivation: a PROJECT IS AN OWNER, never a foreign
+  key. Its identity is a zenit-auth permission GROUP (`ProjectModel.group_id`,
+  created/torn down by `ProjectGuards` write hooks); a record belongs to the
+  project when its `manage` grant is held by subject `group:<id>` and nothing
+  else, membership is a positive `group.<slug>` grant (the resolver's one
+  membership walk), so `manageSubjectsOf`/`sameOwner`, the quota bucket
+  packing, dedicated-host placement and the released-claim quarantine all kept
+  answering from the ONE derivation with zero changes -- mutation-proven: gut
+  `manageSubjectsOf` and sameOwner, adoption, the environment guard and the
+  project cap all fail together. Creates INTO a project pin the creation owner
+  (`HohenheimAccess.withCreationOwner`, set only by the one create funnel
+  after a membership check), so the charged bucket, tenant placement and the
+  planted group grant cannot diverge. Per-project quota = the existing
+  `instance_quotas` row keyed by the project's packed subject (one cap
+  authority; `ProjectResource` only reads it); projectless records keep their
+  per-user/operator buckets. ENVIRONMENTS (`environments`, M067) are grouping
+  WITHIN one owner: `instances.environment_id` is refused unless the
+  environment's project OWNS the instance (grouping can never disagree with
+  the grants), and environment variables are the SAME `instance_variables`
+  mechanism (exactly-one-owner rule; environment values = deploy baseline,
+  instance row wins). Migration is the ledgered `ProjectAdoptionSeeder`
+  (`hohenheim.project-adoption`): one project per distinct non-empty owner
+  set over live sites+instances, members = exactly those subjects (reach
+  preserved by construction, walk-verified in ProjectAdoptionTest), direct
+  grants revoked, quota override rows + charged buckets + released-claim
+  former-owner packs rewritten in the same pass; operator-owned (empty-set)
+  records deliberately untouched -- wrapping the operator in a project would
+  break the empty-set equality the admin wildcard/carve-out routing rests on.
+  The one live install carries ZERO record grants, so the heal is a no-op
+  there today. NOT here: per-project quotas for builds/releases, a tenant
+  self-service project surface (admin resources + the from-template project
+  pick only), sites/databases environment attribution (instances only),
+  preview deployments.
 - GitHub/GitLab-compatible provider installation, repository/branch selection,
   signed webhooks and deployment status reporting. Preview deployments have
   bounded lifetime/quota, isolated variables and deterministic generated-domain
@@ -3088,6 +3123,11 @@ upgraded box. Prefer deleting such accommodations over carrying them.
    makes the create-gate + reservation-backed per-owner cap non-negotiable; the
    PaaS project/environment model makes the aggregate shape likely. Decide
    before Phase 3 fixes ownership keys into every new table.
+
+   CLOSED 2026-08-04: the hierarchical model, implemented by RATIFYING the
+   grant derivation -- a project is an OWNER whose identity is its auth
+   permission group, never a column or a URL prefix. See the Phase 7
+   projects/environments bullet for the landed shape and its limits.
 8. Shared-host untrusted multi-tenancy posture: do we ever offer container-only
    isolation to hostile tenants with a per-host operator acknowledgement, or is
    the answer always VM-per-tenant / dedicated host (Phase 8)? This is a product

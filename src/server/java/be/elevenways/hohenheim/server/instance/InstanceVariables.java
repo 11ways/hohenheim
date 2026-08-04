@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.instance.variable.SecretVariableType;
@@ -71,11 +72,33 @@ public final class InstanceVariables {
 
     /**
      * Every variable value of one instance, secrets decrypted (the ORM read path owns
-     * that): what env injection and file rendering consume. Null values are omitted.
+     * that): what env injection and file rendering consume. The instance's ENVIRONMENT
+     * contributes its values as the baseline and the instance's own row for the same
+     * key wins. Null values are omitted.
      */
     public @NonNull Map<String, String> valuesFor(int instanceId) {
         Map<String, String> values = new LinkedHashMap<>();
-        for (Row row : Models.get(InstanceVariableModel.class).findByInstanceId(instanceId)) {
+        Row instance = Models.get(InstanceModel.class).findById(instanceId);
+        Integer environmentId = instance == null ? null
+            : instance.get(InstanceModel.ENVIRONMENT_ID);
+        if (environmentId != null) {
+            collect(values, Models.get(InstanceVariableModel.class)
+                .findByEnvironmentId(environmentId));
+        }
+        collect(values, Models.get(InstanceVariableModel.class).findByInstanceId(instanceId));
+        return values;
+    }
+
+    /** The values of one environment alone (admin surfaces, tests). */
+    public @NonNull Map<String, String> valuesForEnvironment(int environmentId) {
+        Map<String, String> values = new LinkedHashMap<>();
+        collect(values, Models.get(InstanceVariableModel.class)
+            .findByEnvironmentId(environmentId));
+        return values;
+    }
+
+    private static void collect(@NonNull Map<String, String> into, @NonNull Iterable<Row> rows) {
+        for (Row row : rows) {
             String key = row.get(InstanceVariableModel.KEY);
             boolean secret = InstanceVariableModel.KIND_SECRET
                 .equals(row.get(InstanceVariableModel.KIND));
@@ -83,10 +106,9 @@ public final class InstanceVariables {
                 ? row.get(InstanceVariableModel.SECRET_VALUE)
                 : row.get(InstanceVariableModel.PLAIN_VALUE);
             if (key != null && value != null) {
-                values.put(key, value);
+                into.put(key, value);
             }
         }
-        return values;
     }
 
     /**

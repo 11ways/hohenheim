@@ -2,9 +2,11 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
+import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
@@ -95,9 +97,23 @@ public final class InstanceFromTemplatePage extends PanelPage {
             }
         }
 
+        // The project pick: every project for an admin, the actor's member projects
+        // otherwise. Empty list = control absent (a select with nothing to say).
+        List<Map<String, Object>> projects = new ArrayList<>();
+        for (Row project : selectableProjects(accessContext)) {
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("id", project.get(ProjectModel.ID));
+            entry.put("name", String.valueOf((Object) project.get(ProjectModel.NAME)));
+            projects.add(entry);
+        }
+
         String panelBase = CmsSupport.panelBase(conduit);
         Map<String, Object> vars = new HashMap<>();
         vars.put("chooseHost", chooseHost);
+        vars.put("projects", projects);
+        vars.put("chooseProject", !projects.isEmpty());
+        vars.put("projectId", rawValues.get("project_id") != null
+            ? String.valueOf(rawValues.get("project_id")) : "");
         vars.put("formAction", HohenheimEndpoints.INSTANCES_FROM_TEMPLATE.toUrl());
         vars.put("cancelUrl", panelBase + "/instance-templates");
         vars.put("title", Microcopy.of("create_instance").withFilter("scope", "instance_template")
@@ -117,6 +133,18 @@ public final class InstanceFromTemplatePage extends PanelPage {
             templates.variableFormSpec(templateId), Map.of(), EditView.CREATE, accessContext,
             values, violations != null ? violations.all() : List.of(), null));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-from-template"), vars);
+    }
+
+    /** The projects the actor may create into: all for admins, memberships otherwise. */
+    private static @NonNull List<Row> selectableProjects(@NonNull AccessContext ctx) {
+        if (HohenheimAccess.isAdmin(ctx)) {
+            return Models.get(ProjectModel.class).find().all();
+        }
+        Long principalId = ctx.principalId();
+        if (principalId == null || ctx.isAnonymous()) {
+            return List.of();
+        }
+        return Projects.projectsOf(principalId.intValue());
     }
 
     /** The ?template= row, or null when absent/malformed/missing. */

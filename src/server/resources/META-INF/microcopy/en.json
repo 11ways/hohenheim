@@ -2029,6 +2029,18 @@
     {
       "text": "Steps",
       "scope": "schedule_step"
+    },
+    {
+      "text": "Projects",
+      "scope": "project"
+    },
+    {
+      "text": "Environments",
+      "scope": "environment"
+    },
+    {
+      "text": "Environment variables",
+      "scope": "environment_variable"
     }
   ],
   "dashboard": {
@@ -3185,6 +3197,10 @@
     {
       "text": "Delete this stack? Its containers and network are destroyed; volumes are kept.",
       "scope": "stack"
+    },
+    {
+      "text": "Delete this project? Its membership group and access grants are removed with it. A project still owning records or environments is refused.",
+      "scope": "project"
     }
   ],
   "priority": {
@@ -6118,6 +6134,80 @@
   },
   "site_image_unresolvable": {
     "text": "The site image could not be resolved to a digest: {$reason}",
+    "scope": "violations"
+  },
+  "members": {
+    "text": "Members",
+    "scope": "project"
+  },
+  "owned_sites": {
+    "text": "Sites",
+    "scope": "project"
+  },
+  "owned_instances": {
+    "text": "Instances",
+    "scope": "project"
+  },
+  "instance_quota": {
+    "text": "Instance quota",
+    "scope": "project"
+  },
+  "project_name": {
+    "text": "Project name",
+    "scope": "field"
+  },
+  "project_description": {
+    "text": "Description",
+    "scope": "field"
+  },
+  "environment_name": {
+    "text": "Environment name",
+    "scope": "field"
+  },
+  "project": [
+    {
+      "text": "Project",
+      "scope": "field"
+    },
+    {
+      "text": "Project",
+      "scope": "instance_from_template"
+    }
+  ],
+  "environment": {
+    "text": "Environment",
+    "scope": "field"
+  },
+  "project_member_required": {
+    "text": "You are not a member of that project",
+    "scope": "violations"
+  },
+  "project_unknown": {
+    "text": "That project does not exist",
+    "scope": "violations"
+  },
+  "project_not_empty": {
+    "text": "This project still owns records or environments; move or delete them first",
+    "scope": "violations"
+  },
+  "project_group_immutable": {
+    "text": "A project's membership group cannot be changed",
+    "scope": "violations"
+  },
+  "environment_unknown": {
+    "text": "That environment does not exist",
+    "scope": "violations"
+  },
+  "environment_project_mismatch": {
+    "text": "That environment belongs to a project that does not own this record",
+    "scope": "violations"
+  },
+  "environment_in_use": {
+    "text": "This environment is still referenced by instances or variables",
+    "scope": "violations"
+  },
+  "variable_one_owner": {
+    "text": "A variable belongs to exactly one instance or one environment",
     "scope": "violations"
   }
 }

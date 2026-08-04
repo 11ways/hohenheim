@@ -10,6 +10,9 @@
 {% declare serverId: String = "" %}
 {% declare servers: List %}
 {% declare chooseHost: Boolean = false %}
+{% declare projects: List %}
+{% declare chooseProject: Boolean = false %}
+{% declare projectId: String = "" %}
 {% declare formAction: String %}
 {% declare cancelUrl: String %}
 {% declare formError: String = "" %}
@@ -37,6 +40,19 @@
                 <pl-label target="name">{{ t("instance_name", scope: "instance_from_template") }}</pl-label>
                 <pl-input inputId="name" type="text" name="name" value={% instanceName %}></pl-input>
             </pl-field>
+            {#- The project pick: the new instance's OWNER becomes the chosen project
+                (quota bucket, placement and the manage grant follow); empty = personal.
+                Absent when the actor has no project to offer. -#}
+            {% if chooseProject %}
+            <pl-field>
+                <pl-label>{{ t("project", scope: "instance_from_template") }}</pl-label>
+                <pl-select name="project_id" value={% projectId %} submitEmpty={% true %} clearable={% true %}>
+                    {% each projects as index, project %}
+                    <pl-select-item value={% project.get("id") %}>{{ project.get("name") }}</pl-select-item>
+                    {% /each %}
+                </pl-select>
+            </pl-field>
+            {% /if %}
             {#- The host pick is operator-only: placement ignores a tenant-submitted
                 server_id, so the control is absent rather than inert. -#}
             {% if chooseHost %}
