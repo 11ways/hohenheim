@@ -5788,6 +5788,10 @@
     "text": "Send console command",
     "scope": "schedule_action"
   },
+  "expire_preview": {
+    "text": "Expire preview",
+    "scope": "schedule_action"
+  },
   "power": {
     "text": "Power action",
     "scope": "schedule_action"

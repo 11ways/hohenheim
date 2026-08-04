@@ -188,10 +188,8 @@ public class ServerMain {
             // finished. Virtual thread for the same reason as the stack sweep: it
             // does live daemon work and must never hold the listeners off the wire.
             JobRunner.startVirtualThread(SiteReleases::recoverInterrupted);
-            // Preview lifetimes are stored deadlines: a controller that was down past
-            // one enforces it at boot, not a minute later than it has to.
-            JobRunner.startVirtualThread(
-                be.elevenways.hohenheim.server.preview.PreviewDeployments::sweepExpired);
+            // Preview lifetimes are one-shot record schedules: a deadline missed
+            // while down fires at the framework sweeper's next pass, no boot sweep.
         } else {
             roleSkip(HohenheimRoles.Role.PROXY,
                 "release recovery skipped, no sites are served here");
