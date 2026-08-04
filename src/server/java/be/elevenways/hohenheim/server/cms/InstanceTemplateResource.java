@@ -37,7 +37,7 @@ import java.util.List;
  * form field: it is the one act that makes a template tenant-selectable, so it stamps
  * who and when and rides the activity log.
  */
-public final class InstanceTemplateResource extends RowResource {
+public class InstanceTemplateResource extends RowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(InstanceTemplateModel.NAME)

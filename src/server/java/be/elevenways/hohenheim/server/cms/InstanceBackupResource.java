@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * restored TO A NEW INSTANCE and deleted here. Restore-to-new is creative, not
  * destructive (the source keeps running), so it confirms without the typed phrase.
  */
-public final class InstanceBackupResource extends RowResource {
+public class InstanceBackupResource extends RowResource {
 
     private final InstanceBackups backups = new InstanceBackups();
 

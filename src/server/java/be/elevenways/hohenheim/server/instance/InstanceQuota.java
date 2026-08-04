@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -127,11 +128,22 @@ public final class InstanceQuota {
 
             if (stored == null) {
                 // CREATE (no stored row; covers the explicit-PK insert fallback too). No
-                // record id exists yet, so no manage grant can exist yet either: every
-                // create charges the CREATION-time owner, which today is always the
-                // operator bucket (grants are applied AFTER the record exists).
+                // record id exists yet, so no manage grant can exist yet either: the
+                // charge goes to the owner the create is ABOUT TO HAVE, derived from the
+                // acting principal.
+                //
+                // AIDEV-NOTE: this used to charge the operator bucket unconditionally,
+                // with a comment saying that was "always" the owner because grants land
+                // after the record. That held only while creates were admin-only. The
+                // moment a tenant can create (InstanceTemplates.createFromTemplate, which
+                // plants the creator's manage grant right after), charging the operator
+                // meant every tenant shared ONE bucket with the operator: a per-owner cap
+                // that could not bind the thing it exists for. The derivation is shared
+                // with the grant that follows (HohenheimAccess.creationOwnerSubjects), so
+                // the charged bucket and the record's real owner are one answer.
                 if (willBeLive) {
-                    reserveInto(row, HohenheimAccess.packSubjects(Set.of()));
+                    reserveInto(row, HohenheimAccess.packSubjects(
+                        HohenheimAccess.creationOwnerSubjects(TenantWrites.acting())));
                 }
             } else if (storedLive && !willBeLive) {
                 // The soft-delete transition: hand the CHARGED bucket back.

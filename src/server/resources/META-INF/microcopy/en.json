@@ -5781,5 +5781,37 @@
   "public": {
     "text": "Public",
     "scope": "port_exposure"
+  },
+  "instance_not_permitted": {
+    "text": "You are not allowed to perform this action on this instance",
+    "scope": "violations"
+  },
+  "no_placement_available": {
+    "text": "No admitted host currently accepts this workload",
+    "scope": "violations"
+  },
+  "instance_create_not_permitted": {
+    "text": "You are not allowed to create instances",
+    "scope": "violations"
+  },
+  "backup_restore_operator_only": {
+    "text": "Restoring a backup into a new instance is an operator action",
+    "scope": "violations"
+  },
+  "unknown_power_action": {
+    "text": "Unknown power action",
+    "scope": "violations"
+  },
+  "console_command_required": {
+    "text": "A console command is required",
+    "scope": "violations"
+  },
+  "unknown_template": {
+    "text": "That template does not exist",
+    "scope": "violations"
+  },
+  "hohenheim_instances_create": {
+    "text": "Create instances from approved templates",
+    "scope": "permission"
   }
 }

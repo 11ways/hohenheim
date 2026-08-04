@@ -115,11 +115,41 @@ public final class TenantWrites {
      * that is what puts /nic/update under the DNS type allow-list instead of outside it.
      */
     public static boolean isTenantOriginated() {
-        if (GeneratedDnsRecords.inSystemScope()) {
+        if (GeneratedDnsRecords.inSystemScope() || AUTHORIZED_OPERATION.get() > 0) {
             return false;
         }
         AccessContext ctx = acting();
         return ctx != null && !HohenheimAccess.isAdmin(ctx);
+    }
+
+    /** Nesting depth of {@link #inAuthorizedOperation} on this thread. */
+    private static final ThreadLocal<Integer> AUTHORIZED_OPERATION = ThreadLocal.withInitial(() -> 0);
+
+    /**
+     * Run the CONTINUATION of an operation whose authority was already decided at its
+     * entry, so its internal steps are not re-asked as if the tenant had requested them
+     * separately. A backup stops and redeploys the workload as part of capturing it: the
+     * caller was checked for {@code backups} once, and making the internal stop demand
+     * {@code manage} as well would mean a backups-only holder could back up a stopped
+     * instance and not a running one -- an operation that does less than it claims.
+     *
+     * AIDEV-NOTE: this is a BYPASS primitive and the ONLY legitimate use is a nested step
+     * of an operation that already ran its own capability gate on the SAME record. It is
+     * deliberately a depth counter and deliberately restores in a finally: an unbalanced
+     * scope would leave the whole thread authorized. Never wrap a request handler in it.
+     */
+    public static void inAuthorizedOperation(@NonNull Runnable body) {
+        AUTHORIZED_OPERATION.set(AUTHORIZED_OPERATION.get() + 1);
+        try {
+            body.run();
+        } finally {
+            int depth = AUTHORIZED_OPERATION.get() - 1;
+            if (depth <= 0) {
+                AUTHORIZED_OPERATION.remove();
+            } else {
+                AUTHORIZED_OPERATION.set(depth);
+            }
+        }
     }
 
     /** Install the tenant-write invariants; idempotent, called at the MODULES boot stage. */

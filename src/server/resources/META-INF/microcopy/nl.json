@@ -5777,5 +5777,37 @@
   "public": {
     "text": "Publiek",
     "scope": "port_exposure"
+  },
+  "instance_not_permitted": {
+    "text": "Je mag deze actie niet uitvoeren op deze instantie",
+    "scope": "violations"
+  },
+  "no_placement_available": {
+    "text": "Geen enkele toegelaten host aanvaardt deze workload op dit moment",
+    "scope": "violations"
+  },
+  "instance_create_not_permitted": {
+    "text": "Je mag geen instanties aanmaken",
+    "scope": "violations"
+  },
+  "backup_restore_operator_only": {
+    "text": "Een back-up terugzetten naar een nieuwe instantie is een beheerdersactie",
+    "scope": "violations"
+  },
+  "unknown_power_action": {
+    "text": "Onbekende actie",
+    "scope": "violations"
+  },
+  "console_command_required": {
+    "text": "Een consolecommando is verplicht",
+    "scope": "violations"
+  },
+  "unknown_template": {
+    "text": "Dat sjabloon bestaat niet",
+    "scope": "violations"
+  },
+  "hohenheim_instances_create": {
+    "text": "Instanties aanmaken op basis van goedgekeurde sjablonen",
+    "scope": "permission"
   }
 }

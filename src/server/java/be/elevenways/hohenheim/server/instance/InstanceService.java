@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostLeases;
@@ -76,6 +77,11 @@ public final class InstanceService {
      * @throws Violations naming the failure; the record is stamped {@code error}
      */
     public @NonNull InstanceStatus deploy(int instanceId) {
+        // The ONE power gate, on the service every surface funnels through: the CMS row
+        // action, the automation API and anything later. A tenant-originated call must
+        // hold manage; operator and system work (crash restarts, schedule chains, installs)
+        // runs outside a request and passes untouched.
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.MANAGE);
         Resolved resolved = resolve(instanceId);
         // Settle-then-refuse: a start under a live capture/restore corrupts the very
         // data those operations exist to protect; a start before the template's install
@@ -158,6 +164,7 @@ public final class InstanceService {
      * @throws Violations naming the failure; the claims are parked, the status untouched
      */
     public void stop(int instanceId) {
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.MANAGE);
         Resolved resolved = resolve(instanceId);
         // An operator stop mid-capture/mid-restore would stamp STOPPED over the
         // protected status and un-protect the operation; destroy stays ungated.
@@ -202,6 +209,7 @@ public final class InstanceService {
      *         (status {@code error}), the claims are parked, and the operator retries
      */
     public void destroy(int instanceId) {
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.MANAGE);
         Resolved resolved = resolve(instanceId);
         long fence = this.leases.requireFence(resolved.serverId());
         try {

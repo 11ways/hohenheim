@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.InstanceFromTemplatePage;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -69,30 +70,21 @@ public final class InstanceTemplateHandlers {
 
         HohenheimEndpoints.INSTANCES_FROM_TEMPLATE.setHandler(conduit -> {
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
-            Object templateIdRaw = form.get("template_id");
-            Row template = null;
-            try {
-                template = templateIdRaw != null ? Models.get(InstanceTemplateModel.class)
-                    .findById(Integer.parseInt(submittedString(form, "template_id"))) : null;
-            } catch (NumberFormatException malformed) {
-                // falls through to the redirect below
-            }
-            if (template == null) {
-                return redirect("/admin/instance-templates");
-            }
-
-            String name = submittedString(form, "name");
-            Integer serverId = null;
-            try {
-                String raw = submittedString(form, "server_id");
-                if (!raw.isEmpty()) {
-                    serverId = Integer.parseInt(raw);
-                }
-            } catch (NumberFormatException malformed) {
-                serverId = null;
-            }
-
             AccessContext ctx = RecordSourceGate.accessContextOf(conduit);
+            // Panel-relative, because this ONE endpoint now serves /admin and /manage:
+            // a tenant refused (or redirected) into /admin would only meet a 403.
+            String panelBase = HohenheimAccess.isAdmin(ctx) ? "/admin" : "/manage";
+            Row template = InstanceTemplates.templateFrom(form);
+            if (template == null) {
+                return redirect(panelBase + "/instance-templates");
+            }
+
+            String name = InstanceTemplates.submittedString(form, "name");
+            // The submitted host is passed on unchanged and INTENTIONALLY unvalidated
+            // here: InstancePlacement honours it for an admin and ignores it for
+            // everyone else, so this handler has no host decision to make.
+            Integer serverId = InstanceTemplates.submittedInteger(form, "server_id");
+
             try {
                 int instanceId = new InstanceTemplates()
                     .createFromTemplate(template, name, serverId, form, ctx);
@@ -109,7 +101,7 @@ public final class InstanceTemplateHandlers {
                         }
                     });
                 }
-                return redirect("/admin/instances/" + instanceId);
+                return redirect(panelBase + "/instances/" + instanceId);
             } catch (Violations violations) {
                 // Typed refusal: re-render the form with the operator's raw values and
                 // the per-field violations -- the standard form contract, not a toast.

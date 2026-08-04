@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
 import be.elevenways.hohenheim.server.backup.BackupManifest;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
@@ -81,6 +82,7 @@ public final class InstanceBackups {
 
     /** Explicit-target variant (tests, future re-target flows). */
     public int backupNow(int instanceId, @Nullable Integer targetId, @NonNull BackupTarget target) {
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.BACKUPS);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         VolumeSnapshotSupport support = InstanceSnapshots.requireSupport(resolved);
@@ -103,7 +105,7 @@ public final class InstanceBackups {
 
         // -- capture phase (cold) ----------------------------------------------
         if (wasRunning) {
-            this.instances.stop(instanceId);
+            TenantWrites.inAuthorizedOperation(() -> this.instances.stop(instanceId));
         }
         long fence = this.instances.leases().requireFence(resolved.serverId());
         InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
@@ -125,7 +127,7 @@ public final class InstanceBackups {
         InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
             fence, InstanceModel.STATUS_STOPPED, resolved.row().get(InstanceModel.NAME));
         if (wasRunning) {
-            this.instances.deploy(instanceId);
+            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
         }
 
         // -- archive + upload phase (workload already back up) ------------------
@@ -207,6 +209,15 @@ public final class InstanceBackups {
     /** Explicit-target variant (tests, future re-target flows). */
     public int restoreToNew(@NonNull Row backup, @NonNull BackupTarget target,
                             @Nullable String newName, @Nullable Object serverSpelling) {
+        // Restore-to-new CREATES an instance, and it does so outside the creation funnel
+        // (InstanceTemplates.createFromTemplate): no create authority, no placement
+        // decision, no creator grant, and an image taken from the archive's manifest
+        // rather than an approved template. Every one of those is a tenant-facing gate,
+        // so this path is OPERATOR-ONLY until it routes through the funnel -- refused
+        // loudly rather than quietly producing a record its creator cannot even see.
+        if (TenantWrites.isTenantOriginated()) {
+            throw Violations.ofForm(violationText("backup_restore_operator_only"));
+        }
         if (!InstanceBackupModel.STATUS_COMPLETE.equals(
                 backup.get(InstanceBackupModel.STATUS))) {
             throw Violations.ofForm(violationText("backup_not_restorable")
@@ -278,7 +289,7 @@ public final class InstanceBackups {
             }
             InstanceOperationGuard.stamp(this.instances.leases(), newId, resolved.serverId(),
                 fence, InstanceModel.STATUS_STOPPED, record.get(InstanceModel.NAME));
-            this.instances.deploy(newId);
+            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(newId));
             Blast.log("BACKUP: restored backup", backup.get(InstanceBackupModel.ID),
                 "to NEW instance", newId);
             return newId;
@@ -300,6 +311,8 @@ public final class InstanceBackups {
         if (backup == null) {
             return;
         }
+        HohenheimAccess.requireOperationCapability(
+            backup.get(InstanceBackupModel.INSTANCE_ID), HohenheimAccess.BACKUPS);
         String key = backup.get(InstanceBackupModel.REMOTE_KEY);
         if (key != null && !key.isBlank()) {
             try {
@@ -374,7 +387,7 @@ public final class InstanceBackups {
             return;
         }
         try {
-            this.instances.deploy(instanceId);
+            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
         } catch (RuntimeException redeployFailed) {
             Blast.log("BACKUP: could not restart instance", instanceId,
                 "after a failed capture:", InstanceSnapshots.describe(redeployFailed));

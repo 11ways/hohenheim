@@ -23,8 +23,10 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.instance.InstanceApi;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
+import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
 import be.elevenways.hohenheim.server.cms.CertificateRequestForm;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -89,7 +91,7 @@ public final class HohenheimHandlers {
         FilesystemBrowserRegistry.INSTANCE.register(FilesystemBrowserSource.of(
             HohenheimPaths.SERVER_FILES, HohenheimPanel.ACCESS, Path.of("/")));
         initHealth();
-        be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers.init();
+        InstanceTemplateHandlers.init();
         initCertificates();
         initDnsZones();
         initDnsRecordApi();
@@ -102,6 +104,7 @@ public final class HohenheimHandlers {
         initInstanceConsole();
         initDevTunnel();
         initApi();
+        InstanceApi.init();
     }
 
     // -----------------------------------------------------------------------

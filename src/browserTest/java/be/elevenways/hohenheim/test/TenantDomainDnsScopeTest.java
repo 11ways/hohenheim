@@ -769,10 +769,14 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
         finds.set(0);
         assertThat(tenantGet("/manage/domains").statusCode()).isEqualTo(200);
+        // AIDEV-NOTE: the cap moved 6 -> 12 when /manage grew the instance projection
+        // (2026-08-04): the panel asks about six distinct capability sets per render
+        // now, not three. Each is still enumerated ONCE per request; the number this
+        // pins against is the un-memoized one, which is per CALLER and far outside it.
         assertThat(finds.get())
             .as("record-grant finds during one scoped /manage/domains render "
-                + "(3 distinct capability sets + walk confirmations)")
-            .isBetween(1, 6);
+                + "(6 distinct capability sets + walk confirmations)")
+            .isBetween(1, 12);
     }
 
     /**

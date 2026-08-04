@@ -22,7 +22,11 @@ class SettingsGroupCoverageTest {
      */
     private static final Set<String> DECLARED_GROUPS = Set.of(
         "proxy", "roles", "ssl", "dns", "logging", "node", "storage", "stacks",
-        "database", "security", "process", "auth_proteus", "proxy_auth", "quota");
+        "database", "security", "process", "auth_proteus", "proxy_auth", "quota",
+        // The instance tier's own two groups. The loader has forced them since they
+        // were declared; this pin had simply drifted behind, which is the failure
+        // mode the pin exists to make loud rather than a loader gap.
+        "instances", "backup");
 
     @Test
     void everyDeclaredSettingsGroupIsGuaranteedBeforeValuesLoad() {

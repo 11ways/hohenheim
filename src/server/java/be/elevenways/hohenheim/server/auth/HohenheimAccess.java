@@ -17,13 +17,16 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.KnownCapability;
+import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.RecordCapabilityRules;
 import be.elevenways.zenit.common.security.WebSocketAuthenticator;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -82,7 +85,21 @@ public final class HohenheimAccess {
      */
     public static final String IMAGE_ANY = "image_any";
 
+    /**
+     * Type-level authority to CREATE an instance. Deliberately a PERMISSION and not a
+     * record capability: no record exists yet, so there is nothing to hold a capability
+     * on. It is an eligibility gate only -- the real bounds on a tenant create are the
+     * transactional quota (headroom), the image policy (approved templates only) and
+     * {@link be.elevenways.hohenheim.server.instance.InstancePlacement} (which host).
+     */
+    public static final Permission INSTANCES_CREATE = Permission.of("hohenheim.instances.create");
+
     private HohenheimAccess() {
+    }
+
+    /** Whether the context may create instances at all (admins always may). */
+    public static boolean canCreateInstances(@NonNull AccessContext ctx) {
+        return isAdmin(ctx) || ctx.hasPermission(INSTANCES_CREATE);
     }
 
     /**
@@ -371,6 +388,75 @@ public final class HohenheimAccess {
     public static boolean canManageInstance(@NonNull Principal principal, int instanceId) {
         return Zenit.getWebSocketAuthenticator()
             .hasCapability(principal, InstanceModel.MODEL_ID, instanceId, MANAGE);
+    }
+
+    /**
+     * Whether the context holds {@code capability} on the instance -- the SAME precedence
+     * walk {@link #canManageInstance} rides, over the wider instance vocabulary.
+     */
+    public static boolean hasInstanceCapability(@NonNull AccessContext ctx, int instanceId,
+                                                @NonNull String capability) {
+        return ctx.hasCapability(InstanceModel.MODEL_ID, instanceId, capability);
+    }
+
+    /**
+     * THE operation-funnel gate for a capability-sensitive instance act (power, snapshot,
+     * backup): a TENANT-ORIGINATED call must hold the capability, while operator and
+     * system work (background tasks, schedule chains re-authorized per step, seeds) passes
+     * untouched. It sits on the SERVICE, not on a resource or a handler, for the reason
+     * {@link TenantWrites} spells out: the HTML row action, the automation API and any
+     * future caller all reach the service, and a second copy per surface is how the API
+     * ends up a wider door than the UI.
+     *
+     * AIDEV-NOTE: the refusal is the SAME text for every capability and never says which
+     * one is missing -- naming it would turn a refusal into a capability oracle. It is
+     * also the same refusal a caller gets for an instance they cannot see at all, which
+     * is what the API's uniform 404 is built on.
+     *
+     * @throws Violations {@code instance_not_permitted}
+     */
+    public static void requireOperationCapability(int instanceId, @NonNull String capability) {
+        if (!TenantWrites.isTenantOriginated()) {
+            return;
+        }
+        AccessContext ctx = TenantWrites.acting();
+        if (ctx == null || !hasInstanceCapability(ctx, instanceId, capability)) {
+            throw Violations.ofForm(Microcopy.of("instance_not_permitted")
+                .withFilter("scope", "violations"));
+        }
+    }
+
+    /**
+     * @return null for admins (no extra constraint), else {@code ID IN (the instance ids
+     *         the context holds {@code capability} on)}, matching NOTHING when there are none
+     */
+    public static @Nullable Criteria instanceScope(@NonNull AccessContext ctx,
+                                                   @NonNull String capability) {
+        return grantScope(ctx, Models.get(InstanceModel.class), InstanceModel.MODEL_ID,
+            capability, InstanceModel.ID::in);
+    }
+
+    /** Every instance id the context holds {@code capability} on (walk-confirmed). */
+    @NonNull
+    public static Set<Integer> instanceIdsWith(@NonNull AccessContext ctx,
+                                               @NonNull String capability) {
+        return grantedRecordIds(ctx, InstanceModel.MODEL_ID, capability);
+    }
+
+    /**
+     * THE owner identity a NEW record created by this context will answer to: the acting
+     * user's own subject, or the empty (operator) set for admins and system work. One
+     * derivation, because the quota bucket charged at create and the manage grant planted
+     * right after MUST name the same owner -- two spellings is how a tenant's instance
+     * ends up charged to the operator's bucket.
+     */
+    @NonNull
+    public static Set<String> creationOwnerSubjects(@Nullable AccessContext ctx) {
+        if (ctx == null || isAdmin(ctx) || ctx.isAnonymous()) {
+            return Set.of();
+        }
+        Long principalId = ctx.principalId();
+        return principalId == null ? Set.of() : Set.of("user:" + principalId);
     }
 
     /**

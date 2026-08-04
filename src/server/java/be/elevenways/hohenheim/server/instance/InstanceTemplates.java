@@ -5,10 +5,10 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypeHandler;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.submit.FormValidator;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
@@ -46,6 +46,41 @@ public final class InstanceTemplates {
         if (template.get(InstanceTemplateModel.APPROVED_AT) == null) {
             throw Violations.ofForm(violationText("template_not_approved")
                 .withArg("name", String.valueOf((Object) template.get(InstanceTemplateModel.NAME))));
+        }
+    }
+
+    /**
+     * The template a raw submit names, or null when the field is absent, malformed or
+     * points at nothing. Shared by the HTML page handler and the API create handler so
+     * both resolve the same field the same way.
+     */
+    public static @Nullable Row templateFrom(@NonNull Map<String, Object> form) {
+        Integer templateId = submittedInteger(form, "template_id");
+        return templateId == null ? null
+            : Models.get(InstanceTemplateModel.class).findById(templateId);
+    }
+
+    /** One raw submit value as a trimmed string ("" when absent); lists take their first. */
+    public static @NonNull String submittedString(@NonNull Map<String, Object> form,
+                                                  @NonNull String name) {
+        Object value = form.get(name);
+        if (value instanceof List<?> list) {
+            value = list.isEmpty() ? null : list.get(0);
+        }
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    /** One raw submit value as an Integer, or null when absent or unparseable. */
+    public static @Nullable Integer submittedInteger(@NonNull Map<String, Object> form,
+                                                     @NonNull String name) {
+        String raw = submittedString(form, name);
+        if (raw.isEmpty()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException malformed) {
+            return null;
         }
     }
 
@@ -90,23 +125,35 @@ public final class InstanceTemplates {
     }
 
     /**
-     * Create an instance FROM a template: coerce+validate the raw variable submit
-     * through the typed form, persist the record (settings deep-copied from the
-     * template -- the write funnel's image policy and quota hooks fire like on any
-     * other create), then the variable rows and the template's config files.
+     * THE instance-creation funnel, for every surface: the admin page, the /manage page
+     * and the automation API all land here, so "what the UI refuses" and "what the API
+     * refuses" are one set of refusals by construction rather than by review.
      *
+     * The order is load-bearing. Authority first (may this actor create at all), then the
+     * template approval gate, then PLACEMENT (a non-admin's requested host is ignored --
+     * see {@link InstancePlacement}), then the typed variable coercion/validation, and
+     * only then the write, where the image policy and the quota reservation fire as
+     * beforeValidate/beforeWrite hooks. A tenant create finally plants the creator's
+     * {@code manage} grant, because a record its creator cannot see is not a create.
+     *
+     * @param serverId the caller-supplied host; honoured for admins, ignored for tenants
      * @param rawVariableValues the RAW form submit values (coercion happens here)
      * @return the created instance id
-     * @throws Violations typed refusals from coercion/validation, or the approval gate
+     * @throws Violations typed refusals: create authority, approval, placement, coercion,
+     *         image policy, quota
      */
     public int createFromTemplate(@NonNull Row template, @NonNull String name,
                                   @Nullable Integer serverId,
                                   @NonNull Map<String, Object> rawVariableValues,
                                   @Nullable AccessContext ctx) {
+        if (ctx != null && !HohenheimAccess.canCreateInstances(ctx)) {
+            throw Violations.ofForm(violationText("instance_create_not_permitted"));
+        }
         requireSelectable(template, ctx);
         if (name.isBlank()) {
             throw Violations.ofField("name", name, violationText("name_required"));
         }
+        int placement = InstancePlacement.forActor(ctx, serverId);
         int templateId = template.get(InstanceTemplateModel.ID);
 
         FormSpec spec = variableFormSpec(templateId);
@@ -119,8 +166,7 @@ public final class InstanceTemplates {
         instance.set(InstanceModel.KIND, template.get(InstanceTemplateModel.KIND));
         instance.set(InstanceModel.SETTINGS, copiedSettings(template));
         instance.set(InstanceModel.TEMPLATE_ID, templateId);
-        instance.set(InstanceModel.SERVER_ID,
-            serverId != null ? serverId : ServerModel.localServerId());
+        instance.set(InstanceModel.SERVER_ID, placement);
         instance.set(InstanceModel.INSTALL_STATE, hasInstallStep(template)
             ? InstanceModel.INSTALL_PENDING : InstanceModel.INSTALL_NONE);
         // The plan's default for game templates: clean-exit-as-crash. Template-created
@@ -131,7 +177,26 @@ public final class InstanceTemplates {
 
         this.variables.writeForInstance(instanceId, declaredVariables(templateId), coerced);
         copyFiles(templateId, instanceId);
+        grantCreatorManage(instanceId, ctx);
         return instanceId;
+    }
+
+    /**
+     * Hand a tenant creator {@code manage} on what it just created. Operator creates
+     * plant nothing: an empty subject set IS operator ownership, and a grant there would
+     * make one admin's instance look tenant-held to sameOwner.
+     *
+     * AIDEV-NOTE: this MUST name the same subject the quota charged
+     * ({@link HohenheimAccess#creationOwnerSubjects}) -- InstanceQuota reserves against
+     * that set at create, and this is what makes the reservation honest afterwards.
+     */
+    private static void grantCreatorManage(int instanceId, @Nullable AccessContext ctx) {
+        for (String subject : HohenheimAccess.creationOwnerSubjects(ctx)) {
+            int separator = subject.indexOf(':');
+            RecordGrants.grant(subject.substring(0, separator),
+                Integer.parseInt(subject.substring(separator + 1)),
+                InstanceModel.MODEL_ID, instanceId, HohenheimAccess.MANAGE, true);
+        }
     }
 
     /** Copy the template's config files onto the instance (placeholders intact). */

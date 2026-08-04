@@ -552,10 +552,20 @@ class ManagePanelTest extends HohenheimTestBase {
             // Memoized: each distinct set's enumeration (1 candidate fetch + 1
             // walk confirmation) runs ONCE per request. Without the memo every
             // caller pays it again and this cap breaks loudly.
+            //
+            // AIDEV-NOTE: the cap moved 6 -> 12 when /manage grew the instance
+            // projection (2026-08-04). The panel now asks about six distinct
+            // capability sets per render, not three -- site#manage, dns_record#view,
+            // certificate#view plus instance#manage (panel eligibility AND the
+            // instance list's nav probe, one memo entry between them),
+            // instance#snapshots and instance#backups for the artifact peers' nav
+            // probes. Each is still enumerated ONCE; the number this test exists to
+            // catch is the un-memoized one, which is per CALLER (a dozen-plus
+            // enumerations for the same set) and stays far outside this range.
             assertThat(perRequest)
                 .as("record-grant finds during one /manage/sites request "
-                    + "(3 distinct capability sets + walk confirmations)")
-                .isBetween(1, 6);
+                    + "(6 distinct capability sets + walk confirmations)")
+                .isBetween(1, 12);
         } finally {
             RecordGrants.revoke("user", tenantId, SiteModel.MODEL_ID, siteAId,
                 HohenheimAccess.MANAGE);
