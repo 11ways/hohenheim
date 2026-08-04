@@ -89,7 +89,9 @@ public final class InstanceService {
         InstanceOperationGuard.requireOperable(resolved.row());
         InstanceOperationGuard.requireInstalled(resolved.row());
         long fence = this.leases.requireFence(resolved.serverId());
-        HostAdmission.requireInstancePlacement(resolved.serverId());
+        if (resolved.handler().tenantAuthored()) {
+            HostAdmission.requireInstancePlacement(resolved.serverId());
+        }
         InstanceConsoles.Watch watch = null;
         try {
             // A previous run's console session (if any) watches a container this
@@ -328,7 +330,8 @@ public final class InstanceService {
 
     // -- resolution -----------------------------------------------------------
 
-    public record Resolved(@NonNull Row row, @NonNull InstanceRuntime runtime,
+    public record Resolved(@NonNull Row row, @NonNull InstanceKindHandler handler,
+                           @NonNull InstanceRuntime runtime,
                            @NonNull InstanceSpec spec, int serverId,
                            @NonNull Map<String, String> variables) {}
 
@@ -366,7 +369,8 @@ public final class InstanceService {
         // was already normalized onto servers.id by the model's beforeValidate hook.
         int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
         String serverName = ServerModel.nameOf(serverId);
-        return new Resolved(row, handler.runtimeFor(serverName), spec, serverId, variables);
+        return new Resolved(row, handler, handler.runtimeFor(serverName), spec, serverId,
+            variables);
     }
 
     @SuppressWarnings("unchecked")

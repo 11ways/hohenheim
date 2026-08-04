@@ -21,10 +21,10 @@ import java.util.List;
  *
  * AIDEV-NOTE: deliberately NO owner_principal_id column -- ownership is grant-derived
  * (HohenheimAccess.sameOwner/manageSubjectsOf over the manage-grant subject set), and a
- * column would be a second authority that drifts the first time a grant changes. Also
- * deliberately NO fence/generation/operation-id columns: no node identity or lease
- * exists yet, and a column that reads like enforcement while enforcing nothing is the
- * exact defect shape the instance-tier plan bans.
+ * column would be a second authority that drifts the first time a grant changes. The
+ * "no fence columns" stance this note originally recorded was superseded when HostLeases
+ * landed: CLAIM_FENCE below IS enforced (every outcome write is guarded on it), so it is
+ * not the reads-like-enforcement-but-enforces-nothing shape the plan bans.
  */
 public class InstanceModel extends Model {
 
@@ -204,6 +204,29 @@ public class InstanceModel extends Model {
      */
     public static final StringField QUOTA_BUCKET = SCHEMA.addField(
         StringField.builder().name("quota_bucket").filterable(false).build());
+
+    /**
+     * Attribution of an instance a PRODUCT TIER authored (the GeneratedRows discipline
+     * shared with generated DNS records and instance config files): {@code generated_by}
+     * is the source token ({@code "site"}), {@code generated_for_model}/{@code _for_id}
+     * name the OWNING product record. Attributed instances are the lowered runtime
+     * resources of that record -- managed exclusively through its own surface, refused
+     * read-only everywhere else by the installGuards write funnel, and excluded from the
+     * standalone instance UI/API so no second UI exists over the same records.
+     */
+    public static final StringField GENERATED_BY = SCHEMA.addField(
+        StringField.builder().name("generated_by").filterable(false).build());
+
+    /** Model id of the owning product record ({@code hohenheim:site}). */
+    public static final StringField GENERATED_FOR_MODEL = SCHEMA.addField(
+        StringField.builder().name("generated_for_model").filterable(false).build());
+
+    /** Primary key of the owning record inside {@link #GENERATED_FOR_MODEL}. */
+    public static final IntegerField GENERATED_FOR_ID = SCHEMA.addField(
+        IntegerField.builder().name("generated_for_id").build());
+
+    public static final DateTimeField GENERATED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("generated_at").build());
 
     /**
      * The controller fence of the last recorded runtime outcome. Every runtime-outcome

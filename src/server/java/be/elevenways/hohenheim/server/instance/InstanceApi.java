@@ -218,8 +218,11 @@ public final class InstanceApi {
      * asked through the same helper -- never a second query shape.
      */
     private static @NonNull List<Row> visibleInstances(@NonNull AccessContext ctx) {
+        // Generated (product-tier-owned) instances are managed through their owning
+        // record's surface; the automation API never lists or drives them.
         var query = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.DELETED_AT.isNull());
+            .where(InstanceModel.DELETED_AT.isNull())
+            .where(InstanceModel.GENERATED_BY.isNull());
         Criteria scope = HohenheimAccess.instanceScope(ctx, HohenheimAccess.MANAGE);
         if (scope != null) {
             query.where(scope);
@@ -243,6 +246,7 @@ public final class InstanceApi {
         Row row = instanceId == null ? null : Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
+            .where(InstanceModel.GENERATED_BY.isNull())
             .first();
         if (row == null || !HohenheimAccess.hasInstanceCapability(ctx, instanceId,
                 HohenheimAccess.MANAGE)) {

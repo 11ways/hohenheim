@@ -33,6 +33,8 @@ import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
+import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -91,10 +93,18 @@ public class InstanceResource extends RowResource {
         return Map.copyOf(values);
     }
 
-    /** Soft-deleted instances are invisible everywhere. */
+    /**
+     * Soft-deleted instances are invisible everywhere, and so are GENERATED ones: an
+     * instance a product tier owns (a Docker site's running release) is managed through
+     * that record's own surface -- listing it here would be a second UI over the same
+     * records, and the GeneratedRows write guard would refuse every action anyway.
+     */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> AccessDecision.allow(QueryPredicate.of(InstanceModel.DELETED_AT.isNull()));
+        return ctx -> AccessDecision.allow(QueryPredicate.of(new CompositeCriteria(
+            CompositeOperator.AND,
+            InstanceModel.DELETED_AT.isNull(),
+            InstanceModel.GENERATED_BY.isNull())));
     }
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance"); }

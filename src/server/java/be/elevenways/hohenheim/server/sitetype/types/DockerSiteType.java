@@ -55,7 +55,8 @@ public class DockerSiteType implements SiteTypeHandler {
             .help(HohenheimFormCopy.help("environment_variables")).secret().build());
 
     // Persistent named volumes: logical name -> container path. Each entry mounts the
-    // named volume hohenheim-site-{id}-vol-{name}, which survives redeploys.
+    // owned instance's named volume (hohenheim-instance-{id}-vol-{name}), which
+    // survives redeploys.
     public static final StringMapField VOLUMES = SETTINGS_SCHEMA.addField(
         StringMapField.builder("volumes").label(HohenheimFormCopy.label("volumes"))
             .help(HohenheimFormCopy.help("volumes")).build());
@@ -94,6 +95,7 @@ public class DockerSiteType implements SiteTypeHandler {
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
         Map<String, Object> resolved = new java.util.LinkedHashMap<>(settings);
         resolved.put("server", ServerOptions.nameFromKey(settings.get("server")));
-        return new DockerSiteRequestHandler(site.get(SiteModel.ID), resolved);
+        return new DockerSiteRequestHandler(site.get(SiteModel.ID),
+            site.get(SiteModel.NAME), resolved);
     }
 }
