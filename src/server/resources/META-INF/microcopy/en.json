@@ -1097,6 +1097,14 @@
     {
       "text": "No deployments yet",
       "scope": "stack_deployments"
+    },
+    {
+      "text": "No schedules yet",
+      "scope": "instance_schedule"
+    },
+    {
+      "text": "No steps yet",
+      "scope": "schedule_step"
     }
   ],
   "empty_description": [
@@ -1119,6 +1127,14 @@
     {
       "text": "Use the Deploy action to run the first deployment.",
       "scope": "stack_deployments"
+    },
+    {
+      "text": "Schedule console commands, power actions, backups or snapshots for this instance.",
+      "scope": "instance_schedule"
+    },
+    {
+      "text": "Add ordered steps: each carries an action, an offset and a failure policy.",
+      "scope": "schedule_step"
     }
   ],
   "engine": [
@@ -1417,6 +1433,10 @@
     {
       "text": "Started",
       "scope": "stack_deployments"
+    },
+    {
+      "text": "Started",
+      "scope": "instance_schedule"
     }
   ],
   "starting": [
@@ -1659,6 +1679,10 @@
     {
       "text": "Name",
       "scope": "spamservice_key"
+    },
+    {
+      "text": "Name",
+      "scope": "instance_schedule"
     }
   ],
   "name_placeholder": {
@@ -1947,6 +1971,14 @@
     {
       "text": "Instance files",
       "scope": "instance_file"
+    },
+    {
+      "text": "Schedules",
+      "scope": "instance_schedule"
+    },
+    {
+      "text": "Steps",
+      "scope": "schedule_step"
     }
   ],
   "dashboard": {
@@ -1965,10 +1997,16 @@
     "text": "Request via Let's Encrypt",
     "scope": "certificate"
   },
-  "backup": {
-    "text": "Download backup",
-    "scope": "database"
-  },
+  "backup": [
+    {
+      "text": "Download backup",
+      "scope": "database"
+    },
+    {
+      "text": "Backup",
+      "scope": "schedule_action"
+    }
+  ],
   "infra": {
     "text": "Infrastructure",
     "scope": "nav"
@@ -2131,6 +2169,10 @@
     {
       "text": "Enabled",
       "scope": "spamservice_client"
+    },
+    {
+      "text": "Enabled",
+      "scope": "instance_schedule"
     }
   ],
   "settings": {
@@ -3985,10 +4027,16 @@
     "text": "Service",
     "scope": "stack_services"
   },
-  "state": {
-    "text": "State",
-    "scope": "stack_services"
-  },
+  "state": [
+    {
+      "text": "State",
+      "scope": "stack_services"
+    },
+    {
+      "text": "State",
+      "scope": "instance_schedule"
+    }
+  ],
   "add_file": [
     {
       "text": "Add file",
@@ -4049,10 +4097,16 @@
       "scope": "template_contents"
     }
   ],
-  "disabled": {
-    "text": "Disabled",
-    "scope": "stack_services"
-  },
+  "disabled": [
+    {
+      "text": "Disabled",
+      "scope": "stack_services"
+    },
+    {
+      "text": "Disabled",
+      "scope": "instance_schedule"
+    }
+  ],
   "deploy_log": {
     "text": "Deploy log",
     "scope": "stack_deployments"
@@ -4755,10 +4809,16 @@
     "text": "Capacity on host {$server} cannot be verified: {$reason}",
     "scope": "violations"
   },
-  "snapshot": {
-    "text": "Snapshot",
-    "scope": "instance"
-  },
+  "snapshot": [
+    {
+      "text": "Snapshot",
+      "scope": "instance"
+    },
+    {
+      "text": "Snapshot",
+      "scope": "schedule_action"
+    }
+  ],
   "snapshot_confirm": {
     "text": "Take a snapshot? A running instance is stopped briefly while its volumes are copied, then started again.",
     "scope": "instance"
@@ -4841,10 +4901,6 @@
     "text": "Backups",
     "scope": "capability"
   },
-  "backup_enabled": {
-    "text": "Nightly backup",
-    "scope": "field"
-  },
   "backup_target": {
     "text": "Backup target",
     "scope": "field"
@@ -4868,10 +4924,6 @@
   "host_key": {
     "text": "Host key",
     "scope": "field"
-  },
-  "instance_backup_enabled": {
-    "text": "Include this instance in the nightly backup task (needs a backup target)",
-    "scope": "help"
   },
   "backup_target_kind": {
     "text": "Where backup exports are written; whether it is a different failure domain is a deployment fact you own",
@@ -5415,5 +5467,115 @@
   "not_running_description": {
     "text": "Deploy the instance to attach to its console.",
     "scope": "instance_console"
+  },
+  "runs": {
+    "text": "Schedule runs",
+    "scope": "instance_schedule"
+  },
+  "add": [
+    {
+      "text": "Add schedule",
+      "scope": "instance_schedule"
+    },
+    {
+      "text": "Add step",
+      "scope": "schedule_step"
+    }
+  ],
+  "run_now": {
+    "text": "Run now",
+    "scope": "instance_schedule"
+  },
+  "run_finished": {
+    "text": "Run finished: {$status}",
+    "scope": "instance_schedule"
+  },
+  "cron": {
+    "text": "Cron",
+    "scope": "instance_schedule"
+  },
+  "timezone": {
+    "text": "Timezone",
+    "scope": "instance_schedule"
+  },
+  "steps": {
+    "text": "Steps",
+    "scope": "instance_schedule"
+  },
+  "recent_runs": {
+    "text": "Recent runs",
+    "scope": "instance_schedule"
+  },
+  "no_runs": {
+    "text": "This schedule has not run yet.",
+    "scope": "instance_schedule"
+  },
+  "order": {
+    "text": "Order",
+    "scope": "schedule_step"
+  },
+  "action": {
+    "text": "Action",
+    "scope": "schedule_step"
+  },
+  "offset": {
+    "text": "Offset",
+    "scope": "schedule_step"
+  },
+  "on_failure": {
+    "text": "On failure",
+    "scope": "schedule_step"
+  },
+  "console_command": {
+    "text": "Send console command",
+    "scope": "schedule_action"
+  },
+  "power": {
+    "text": "Power action",
+    "scope": "schedule_action"
+  },
+  "console_line": {
+    "text": "Console command",
+    "scope": "field"
+  },
+  "power_operation": {
+    "text": "Operation",
+    "scope": "field"
+  },
+  "snapshot_note": {
+    "text": "Snapshot note",
+    "scope": "field"
+  },
+  "unknown_instance": {
+    "text": "Unknown instance",
+    "scope": "violations"
+  },
+  "unknown_schedule": {
+    "text": "Unknown schedule",
+    "scope": "violations"
+  },
+  "invalid_cron": {
+    "text": "Invalid cron expression",
+    "scope": "violations"
+  },
+  "invalid_timezone": {
+    "text": "Unknown timezone",
+    "scope": "violations"
+  },
+  "schedule_not_allowed": {
+    "text": "You may not manage schedules of this instance",
+    "scope": "violations"
+  },
+  "schedule_action_unknown_action": {
+    "text": "Unknown schedule action",
+    "scope": "violations"
+  },
+  "schedule_action_action_model_mismatch": {
+    "text": "This action does not apply to instances",
+    "scope": "violations"
+  },
+  "schedule_action_capability_denied": {
+    "text": "You lack the capability this action requires on the instance",
+    "scope": "violations"
   }
 }

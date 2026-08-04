@@ -186,14 +186,6 @@ public class InstanceModel extends Model {
     public static final TextField INSTALL_ERROR = SCHEMA.addField(
         TextField.builder().name("install_error").filterable(false).build());
 
-    /** Whether the nightly instance-backup task includes this instance. */
-    public static final BooleanField BACKUP_ENABLED = SCHEMA.addField(
-        BooleanField.builder("backup_enabled")
-            .defaultValue(false)
-            .label(HohenheimFormCopy.label("backup_enabled"))
-            .help(HohenheimFormCopy.help("instance_backup_enabled"))
-            .build());
-
     /** The backup target (backup_targets.id) exports of this instance are written to. */
     public static final IntegerField BACKUP_TARGET_ID = SCHEMA.addField(
         IntegerField.builder().name("backup_target_id")

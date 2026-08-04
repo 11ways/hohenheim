@@ -12,8 +12,12 @@ import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -194,6 +198,12 @@ public final class InstanceService {
         }
         row.set(InstanceModel.DELETED_AT, Instant.now());
         Models.get(InstanceModel.class).save(row);
+        // Schedules must die with their record, and destroy SOFT-deletes (remove hooks
+        // never fire here), so the cleanup is explicit -- nothing else will do it.
+        Datasource scheduleStore = Db.current() != null ? Db.current() : Datasources.getDefault();
+        if (scheduleStore != null) {
+            new RecordSchedules(scheduleStore).deleteForRecord(InstanceModel.MODEL_ID, instanceId);
+        }
         Blast.log("INSTANCE: destroyed", resolved.spec().handle(),
             "- container removed, volumes kept, record soft-deleted");
     }
