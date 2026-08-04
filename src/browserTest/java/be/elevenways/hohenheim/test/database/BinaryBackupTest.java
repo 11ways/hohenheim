@@ -30,6 +30,9 @@ class BinaryBackupTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String REDIS_IMAGE = "redis:7-alpine";
+
+    /** The password the redis fixtures provision with; the container demands it. */
+    private static final String REDIS_PASSWORD = "unused";
     private static final String MONGO_IMAGE = "mongo:7";
 
     @Test
@@ -44,9 +47,7 @@ class BinaryBackupTest {
         try {
             service.create(name, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
                 "unused", "unused", "unused", true);   // ephemeral: tmpfs
-            DockerClient.ExecResult set = docker.exec("hohenheim-db-" + name,
-                List.of("redis-cli", "SET", "foo", "bar"));
-            assertThat(set.exitCode()).withFailMessage("redis SET failed: %s", set.stderr()).isZero();
+            redis(docker, "hohenheim-db-" + name, "SET", "foo", "bar");
 
             Path dump = service.backupToFile(name, dir, "snap");
             assertThat(dump.getFileName().toString()).endsWith(".rdb");
@@ -117,7 +118,7 @@ class BinaryBackupTest {
             redis(docker, container, "SET", "foo", "clobbered");   // diverge from the dump
             service.restoreFromFile(name, dump);
 
-            DockerClient.ExecResult get = docker.exec(container, List.of("redis-cli", "GET", "foo"));
+            DockerClient.ExecResult get = docker.exec(container, redisCli("GET", "foo"));
             assertThat(get.exitCode()).withFailMessage("redis GET failed: %s", get.stderr()).isZero();
             assertThat(get.stdout().trim()).isEqualTo("bar");   // value survived the round-trip
         } finally {
@@ -165,11 +166,27 @@ class BinaryBackupTest {
         }
     }
 
+    /**
+     * A redis-cli that AUTHENTICATES. Managed redis containers run
+     * {@code redis-server --requirepass <password>} (ManagedDatabase.containerCommand), so
+     * an unauthenticated client gets "NOAUTH Authentication required" -- ON STDOUT, with
+     * EXIT CODE 0. Every exitCode-only assertion around a redis-cli call therefore passed
+     * while the command did nothing at all; only the round trip, which asserts a VALUE,
+     * could see it. The password is the one the fixtures pass to create().
+     */
     private static void redis(DockerClient docker, String container, String... command) throws IOException {
-        List<String> full = new ArrayList<>(List.of("redis-cli"));
-        full.addAll(List.of(command));
-        DockerClient.ExecResult result = docker.exec(container, full);
+        DockerClient.ExecResult result = docker.exec(container, redisCli(command));
         assertThat(result.exitCode()).withFailMessage("redis-cli failed: %s", result.stderr()).isZero();
+        assertThat(result.stdout()).withFailMessage("redis-cli refused: %s", result.stdout())
+            .doesNotContain("NOAUTH");
+    }
+
+    /** {@code redis-cli -a <password>} plus the command; --no-auth-warning keeps stderr clean. */
+    private static List<String> redisCli(String... command) {
+        List<String> full = new ArrayList<>(List.of(
+            "redis-cli", "-a", REDIS_PASSWORD, "--no-auth-warning"));
+        full.addAll(List.of(command));
+        return full;
     }
 
     private static void mongo(DockerClient docker, String container, String eval) throws IOException {
