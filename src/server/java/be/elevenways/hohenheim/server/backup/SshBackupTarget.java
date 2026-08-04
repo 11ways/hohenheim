@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.backup;
 
+import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -12,7 +14,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -24,11 +25,13 @@ import java.util.regex.Pattern;
  * remote {@code mv}, and verification asks the REMOTE host for the committed file's
  * sha256 -- the artifact the restore would read, not the bytes we sent.
  *
- * Trust: {@code BatchMode=yes} + {@code StrictHostKeyChecking=yes} always. With a
- * pinned host key in the target settings, verification runs against ONLY that pin
- * (a temp known_hosts file); without one, the OS user's own known_hosts must already
- * trust the host. There is deliberately no accept-new anywhere -- silent TOFU is the
- * exact hole the host-key-pinning wave closed.
+ * Trust rides {@link HostKeys#pinnedArgv}, the same seam the daemon lane uses: strict
+ * checking against a known_hosts holding EXACTLY the configured pin, an alias so no
+ * {@code [host]:port} spelling subtlety can turn a mismatch into a miss, and no
+ * accept-new anywhere. The pin is REQUIRED -- the old "or else the OS user's ambient
+ * known_hosts" fallback was silent trust-on-first-use nothing in the product could
+ * display or defend, i.e. the exact hole the host-key-pinning wave closed everywhere
+ * else.
  */
 public final class SshBackupTarget implements BackupTarget {
 
@@ -41,20 +44,27 @@ public final class SshBackupTarget implements BackupTarget {
 
     private final @NonNull String target;
     private final @NonNull String basePath;
-    private final @Nullable String pinnedHostKey;
+    private final @NonNull String pinnedHostKey;
+    private final @NonNull String alias;
 
     /**
-     * @param target        {@code user@host} (optionally {@code host} alone)
+     * @param target        {@code [user@]host[:port]}
      * @param basePath      absolute remote directory backups live under
-     * @param pinnedHostKey a full known_hosts line to pin, or null to use the OS
-     *                      user's known_hosts (which must already trust the host)
+     * @param pinnedHostKey the host key line to pin; there is no unpinned mode
+     * @throws IOException when no pin was configured
      */
     public SshBackupTarget(@NonNull String target, @NonNull String basePath,
-                           @Nullable String pinnedHostKey) {
+                           @Nullable String pinnedHostKey) throws IOException {
+        if (pinnedHostKey == null || pinnedHostKey.isBlank()) {
+            throw new IOException("SSH backup target '" + target + "' has no pinned host"
+                + " key; scan the host and record its key line before backing up to it");
+        }
         this.target = target;
         this.basePath = basePath;
-        this.pinnedHostKey = pinnedHostKey == null || pinnedHostKey.isBlank()
-            ? null : pinnedHostKey.trim();
+        this.pinnedHostKey = pinnedHostKey.trim();
+        // Stable per destination, and a legal HostKeyAlias token whatever the operator
+        // typed as a target (user@, IPv6 literal, :port).
+        this.alias = "hohenheim-backup-" + SecureTokens.sha256Hex(target).substring(0, 16);
     }
 
     @Override
@@ -113,14 +123,22 @@ public final class SshBackupTarget implements BackupTarget {
             StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
+    /**
+     * AIDEV-NOTE: the remote command answers YES/NO and exits 0 either way, so the only
+     * IOException left is a transport failure and it PROPAGATES. The old shape ran
+     * {@code test -f} and mapped every IOException to false, which reported "the
+     * artifact is not there" for an unreachable host -- a definite negative nobody
+     * observed, on the exact question a retention sweep acts on.
+     */
     @Override
     public boolean exists(@NonNull String key) throws IOException {
-        try {
-            run("test -f " + quoted(remotePath(key)) + " && echo YES", null, null);
-            return true;
-        } catch (IOException e) {
-            return false;
+        String answer = new String(
+            run("test -f " + quoted(remotePath(key)) + " && echo YES || echo NO", null, null),
+            StandardCharsets.UTF_8).trim();
+        if (!"YES".equals(answer) && !"NO".equals(answer)) {
+            throw new IOException("Remote existence probe answered unexpectedly: " + answer);
         }
+        return "YES".equals(answer);
     }
 
     @Override
@@ -154,29 +172,10 @@ public final class SshBackupTarget implements BackupTarget {
     private byte @NonNull [] runStreaming(@NonNull String remoteCommand,
                                           @Nullable InputStream stdin,
                                           @Nullable OutputStream stdout) throws IOException {
-        Path knownHosts = null;
-        try {
-            List<String> argv = new ArrayList<>(List.of("ssh", "-o", "BatchMode=yes",
-                "-o", "StrictHostKeyChecking=yes"));
-            if (this.pinnedHostKey != null) {
-                knownHosts = Files.createTempFile("hohenheim-target-hostkey", ".tmp");
-                Files.writeString(knownHosts, this.pinnedHostKey + "\n");
-                argv.add("-o");
-                argv.add("UserKnownHostsFile=" + knownHosts);
-            }
-            argv.add(this.target);
-            argv.add("--");
-            argv.add(remoteCommand);
-            return exchange(argv, stdin, stdout, remoteCommand);
-        } finally {
-            if (knownHosts != null) {
-                try {
-                    Files.deleteIfExists(knownHosts);
-                } catch (IOException ignored) {
-                    // temp cleanup
-                }
-            }
-        }
+        List<String> argv = HostKeys.pinnedArgv(this.alias, this.pinnedHostKey, this.target,
+            List.of("-o", "ConnectTimeout=10"));
+        argv.add(remoteCommand);
+        return exchange(argv, stdin, stdout, remoteCommand);
     }
 
     private static byte @NonNull [] exchange(@NonNull List<String> argv,

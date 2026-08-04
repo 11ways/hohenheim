@@ -5172,7 +5172,7 @@
     "scope": "help"
   },
   "backup_ssh_host_key": {
-    "text": "known_hosts line to pin the host key; without it the controller user's own known_hosts must already trust the host",
+    "text": "Required: the known_hosts line to pin the host key (ssh-keyscan prints it). There is no unpinned mode",
     "scope": "help"
   },
   "variable_wrong_carrier": {

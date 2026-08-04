@@ -5168,7 +5168,7 @@
     "scope": "help"
   },
   "backup_ssh_host_key": {
-    "text": "known_hosts-regel om de hostsleutel te pinnen; zonder pin moet de known_hosts van de controllergebruiker de host al vertrouwen",
+    "text": "Verplicht: de known_hosts-regel die de hostsleutel pint (ssh-keyscan drukt ze af). Er is geen modus zonder pin",
     "scope": "help"
   },
   "variable_wrong_carrier": {
