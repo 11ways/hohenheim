@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.InstanceNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -52,7 +53,7 @@ class InstanceConsoleLiveTest {
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
         // Unique per-class instance ids => unique daemon handles (no cross-class 409s).
-        InstanceIdOffsets.apply(datasource);
+        LiveIdOffsets.apply(datasource);
         HohenheimTestRuntime.ensureBooted();
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();

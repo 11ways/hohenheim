@@ -13,8 +13,8 @@ import be.elevenways.hohenheim.server.docker.SiteReleases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
-import be.elevenways.hohenheim.test.instance.InstanceIdOffsets;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -63,7 +63,7 @@ class SiteReleaseLiveTest {
         if (!booted) {
             booted = true;
             ProxyTestSupport.bootRuntime();
-            InstanceIdOffsets.apply(HohenheimDatabase.datasource());
+            LiveIdOffsets.apply(HohenheimDatabase.datasource());
         }
         savedProbeTimeout = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS);
