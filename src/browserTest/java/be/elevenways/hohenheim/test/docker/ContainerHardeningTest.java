@@ -10,9 +10,11 @@ import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
+import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.stack.StackDeployer;
 import be.elevenways.hohenheim.server.stack.StackSpec;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -74,6 +76,8 @@ class ContainerHardeningTest {
     @BeforeAll
     static void bootRuntime() {
         HohenheimTestRuntime.ensureBooted();
+        // Unique per-class instance ids => unique daemon handles across parallel forks.
+        LiveIdOffsets.apply(HohenheimDatabase.datasource());
     }
 
     /**

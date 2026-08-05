@@ -10,10 +10,12 @@ import be.elevenways.hohenheim.server.docker.DockerSiteRequestHandler;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.SiteContainerKind;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
+import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -58,6 +60,8 @@ class DockerSiteHandlerTest {
     @BeforeAll
     static void bootRuntime() throws Exception {
         HohenheimTestRuntime.ensureBooted();
+        // Unique per-class instance ids => unique daemon handles across parallel forks.
+        LiveIdOffsets.apply(HohenheimDatabase.datasource());
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
             WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
