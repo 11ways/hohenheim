@@ -179,10 +179,27 @@ class IncusNetworkIsolationLiveTest {
     /** One address of an instance, read from the host's CLI; family picked by v6 flag. */
     private static String addressOf(String handle, boolean v6) {
         String family = v6 ? "inet6" : "inet";
-        // Global-scope address of eth0, one per family on a stock alpine image.
-        String out = remoteExec(handle, "ip -o -f " + (v6 ? "inet6" : "inet")
-            + " addr show eth0 | awk '{print $4}' | cut -d/ -f1"
-            + (v6 ? " | grep -v '^fe80'" : "") + " | head -1");
+        // AIDEV-NOTE: the global IPv6 arrives via SLAAC AFTER boot (measured ~2s on
+        // daystrom; blank at 1s), while deploy() returns as soon as the instance runs.
+        // A single immediate read raced that window and failed on a warm host, so poll
+        // bounded instead -- the assertion still fails loudly when no address ever comes.
+        String out = "";
+        long deadline = System.nanoTime() + 30_000_000_000L;
+        while (true) {
+            // Global-scope address of eth0, one per family on a stock alpine image.
+            out = remoteExec(handle, "ip -o -f " + (v6 ? "inet6" : "inet")
+                + " addr show eth0 | awk '{print $4}' | cut -d/ -f1"
+                + (v6 ? " | grep -v '^fe80'" : "") + " | head -1");
+            if (!out.isBlank() || System.nanoTime() >= deadline) {
+                break;
+            }
+            try {
+                Thread.sleep(500L);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
         assertThat(out).as(family + " address of " + handle).isNotBlank();
         return out.trim();
     }
