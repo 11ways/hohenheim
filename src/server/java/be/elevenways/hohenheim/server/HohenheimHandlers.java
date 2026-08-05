@@ -55,7 +55,12 @@ import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import be.elevenways.zenit.common.data.DataItem;
+import be.elevenways.zenit.common.data.DataPage;
 import be.elevenways.zenit.common.result.ActionResult;
+import be.elevenways.zenit.common.result.DryResult;
 import be.elevenways.zenit.common.result.JsonResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violation;
@@ -357,22 +362,28 @@ public final class HohenheimHandlers {
         });
 
         // --- Git provider browsing: repository/branch selection for admin pickers
-        //     and automation. Read-only against the provider, admin-gated, limited. ---
+        //     and automation. Read-only against the provider, admin-gated, limited;
+        //     answers are typed DataPages so pl-select's DataProviders consume them
+        //     through Endpoint.call unchanged. ---
         HohenheimEndpoints.GIT_PROVIDER_REPOSITORIES.setHandler(conduit -> {
             Integer providerId = conduit.getParameter(HohenheimEndpoints.PROVIDER_ID);
+            String text = trimmedQuery(conduit.getQueryParam("text"));
             try {
-                List<Map<String, Object>> repos = new ArrayList<>();
+                List<DataItem> items = new ArrayList<>();
                 for (var repo : be.elevenways.hohenheim.server.source.GitProviders
                         .clientFor(providerId).listRepositories()) {
-                    Map<String, Object> entry = new LinkedHashMap<>();
-                    entry.put("full_name", repo.fullName());
-                    entry.put("default_branch", repo.defaultBranch());
-                    repos.add(entry);
+                    if (!text.isEmpty()
+                            && !BlastString.lower(repo.fullName()).contains(text)) {
+                        continue;
+                    }
+                    items.add(new DataItem(repo.fullName(), repo.fullName(),
+                        repo.defaultBranch(), null, null, null, null, Map.of()));
                 }
-                return new JsonResult<Object>(Map.of("repositories", repos));
+                return new DryResult<>(new DataPage(items, 1, 1, items.size()));
             } catch (Exception e) {
                 conduit.setResponseStatus(502);
-                return new JsonResult<Object>(Map.of("error", String.valueOf(e.getMessage())));
+                conduit.endWithContentType("text/plain", String.valueOf(e.getMessage()));
+                return null;
             }
         });
 
@@ -380,18 +391,30 @@ public final class HohenheimHandlers {
             Integer providerId = conduit.getParameter(HohenheimEndpoints.PROVIDER_ID);
             String repository = conduit.getQueryParam("repository");
             if (repository == null || repository.isBlank()) {
-                conduit.setResponseStatus(422);
-                return new JsonResult<Object>(Map.of("error", "repository required"));
+                conduit.badRequest("repository required");
+                return null;
             }
+            String text = trimmedQuery(conduit.getQueryParam("text"));
             try {
-                return new JsonResult<Object>(Map.of("branches",
-                    be.elevenways.hohenheim.server.source.GitProviders
-                        .clientFor(providerId).listBranches(repository)));
+                List<DataItem> items = new ArrayList<>();
+                for (String branch : be.elevenways.hohenheim.server.source.GitProviders
+                        .clientFor(providerId).listBranches(repository)) {
+                    if (!text.isEmpty() && !BlastString.lower(branch).contains(text)) {
+                        continue;
+                    }
+                    items.add(new DataItem(branch, branch, null, null, null, null, null, Map.of()));
+                }
+                return new DryResult<>(new DataPage(items, 1, 1, items.size()));
             } catch (Exception e) {
                 conduit.setResponseStatus(502);
-                return new JsonResult<Object>(Map.of("error", String.valueOf(e.getMessage())));
+                conduit.endWithContentType("text/plain", String.valueOf(e.getMessage()));
+                return null;
             }
         });
+    }
+
+    private static @NonNull String trimmedQuery(@Nullable String value) {
+        return value == null ? "" : BlastString.lower(value.trim());
     }
 
     // -----------------------------------------------------------------------

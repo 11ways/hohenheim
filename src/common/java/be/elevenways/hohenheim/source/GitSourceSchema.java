@@ -22,19 +22,22 @@ public class GitSourceSchema {
     // Provider binding: when set, the clone URL derives from the provider + repository
     // and per-operation credentials are minted by GitProviders (never embedded in the
     // URL, which GitRepository refuses). repository_url stays the provider-less lane.
+    // The marker field classes derive the admin picker entries (GitPickerFormEntries):
+    // provider select, then a repository picker following it, then a branch picker
+    // following both.
     public static final IntegerField PROVIDER_ID = SCHEMA.addField(
-        IntegerField.builder().name("provider_id")
+        GitProviderRefField.builder("provider_id")
             .label(HohenheimFormCopy.label("git_provider"))
             .help(HohenheimFormCopy.help("git_provider")).build());
 
     /** Repository path at the provider, e.g. {@code owner/name}. */
     public static final StringField REPOSITORY = SCHEMA.addField(
-        StringField.builder().name("repository")
+        GitRepositoryField.builder("repository")
             .label(HohenheimFormCopy.label("repository"))
             .help(HohenheimFormCopy.help("repository")).build());
 
     public static final StringField BRANCH = SCHEMA.addField(
-        StringField.builder().name("branch").label(HohenheimFormCopy.label("branch"))
+        GitBranchField.builder("branch").label(HohenheimFormCopy.label("branch"))
             .help(HohenheimFormCopy.help("branch")).build());
 
     public static final StringField BUILD_COMMAND = SCHEMA.addField(
