@@ -217,6 +217,15 @@ public class InstanceModel extends Model {
         StringField.builder().name("quota_bucket").filterable(false).build());
 
     /**
+     * The RESOLVED image identity the workload actually runs (incus: the image
+     * fingerprint behind {@code volatile.base_image}), recorded at deploy. A mutable
+     * alias is not a deployment identity: recreating an absent workload uses this pin,
+     * and the pin is cleared when the DECLARED image changes (HohenheimWriteHooks).
+     */
+    public static final StringField IMAGE_FINGERPRINT = SCHEMA.addField(
+        StringField.builder().name("image_fingerprint").filterable(false).build());
+
+    /**
      * Attribution of an instance a PRODUCT TIER authored (the GeneratedRows discipline
      * shared with generated DNS records and instance config files): {@code generated_by}
      * is the source token ({@code "site"}), {@code generated_for_model}/{@code _for_id}

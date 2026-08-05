@@ -1,0 +1,520 @@
+package be.elevenways.hohenheim.test.instance;
+
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.InstanceDeviceModel;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.docker.OwnerLabels;
+import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.incus.IncusClient;
+import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
+import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
+import be.elevenways.hohenheim.server.instance.InstanceDevices;
+import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceTemplates;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
+import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.LiveIdOffsets;
+import be.elevenways.hohenheim.test.host.LiveIncusHost;
+import be.elevenways.zenit.common.orm.datasource.Db;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.quota.Quotas;
+import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.orm.SqliteDatasource;
+import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.io.File;
+import java.io.IOException;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Supplier;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+/**
+ * Phase 8 slice 1 against the REAL remote Incus daemon: a Linux VM provisioned from
+ * CLOUD-INIT through the template mechanism (typed variables, secret lane), deployed
+ * through the SAME driver seam as containers, network policy enforced and proven by a
+ * FAILING cross-workload probe beside a succeeding anchor, disk and NIC attached and
+ * resized UNDER QUOTA, and destroyed with reclaim verified AT THE DAEMON.
+ *
+ * 512 MiB VM + 128 MiB peer container: the host's 3.9 GiB is the binding limit.
+ */
+class IncusVmLiveTest {
+
+    private static final String HOST = "live-incus";
+
+    /** Small cloud-variant VM image (cloud-init + incus agent); RAM rules out fatter ones. */
+    private static final String VM_IMAGE = "alpine/3.22/cloud";
+
+    /** The isolation peer: a plain system container on the same daemon. */
+    private static final String PEER_IMAGE = "alpine/3.22";
+
+    private static SqliteDatasource datasource;
+    private static LiveIncusHost remote;
+    private static String enrolledFingerprint;
+
+    @BeforeAll
+    static void setUp() throws Exception {
+        remote = LiveIncusHost.configured();
+        assumeTrue(remote != null, "no live incus host enrolled at " + LiveIncusHost.CONFIG);
+
+        File db = File.createTempFile("hohenheim-incus-vm-live", ".db");
+        db.delete();
+        db.deleteOnExit();
+        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
+        new MigrationRunner(datasource).migrate().requireSuccess();
+        // Unique per-class instance ids => unique daemon handles across parallel forks.
+        LiveIdOffsets.apply(datasource);
+        HohenheimTestRuntime.ensureBooted();
+
+        Db.run(datasource, () -> enrolledFingerprint =
+            remote.enrollThroughProduct(HOST, "hohenheim-live-vm"));
+    }
+
+    @AfterAll
+    static void tearDown() {
+        if (remote != null && enrolledFingerprint != null) {
+            try {
+                remote.removeTrustEntry(enrolledFingerprint);
+            } catch (IOException ignored) {
+                // nothing enrolled, nothing to remove
+            }
+        }
+    }
+
+    @Test
+    void cloudInitVmJourneyWithQuotedDevicesAndVerifiedReclaim() {
+        Db.run(datasource, () -> {
+            Row host = Models.get(ServerModel.class).findByName(HOST);
+            int hostId = host.get(ServerModel.ID);
+            IncusClient incus = new ServerService().incusClientFor(HOST);
+            InstanceService service = new InstanceService();
+            InstanceDevices devices = new InstanceDevices(service);
+
+            String diskBucket = InstanceDeviceQuota.diskBucketOf("");
+            String nicBucket = InstanceDeviceQuota.nicBucketOf("");
+            long diskUsedBefore = Quotas.usedOf(diskBucket);
+            long nicUsedBefore = Quotas.usedOf(nicBucket);
+            Integer previousDiskCap = HohenheimSettings.VALUES.getValue(
+                HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER);
+            Integer previousNicCap = HohenheimSettings.VALUES.getValue(
+                HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER);
+
+            // 1. The TEMPLATE is the provisioning vocabulary: cloud-init user-data with
+            //    a plain {{MARK}} and a generated secret {{VM_TOKEN}} placeholder, an
+            //    approved operator catalog entry -- no second provisioning mechanism.
+            int templateId = vmTemplate();
+            Row template = Models.get(InstanceTemplateModel.class).findById(templateId);
+            int id = new InstanceTemplates().createFromTemplate(template, "vm-journey",
+                hostId, Map.of("MARK", "vm-live-proof"), null);
+            String handle = "hohenheim-instance-" + id;
+            String volumeName = handle + "-data";
+
+            int peerId = peerRecord(hostId);
+            String peerHandle = "hohenheim-instance-" + peerId;
+
+            try {
+                Map<String, String> variables = new InstanceVariables().valuesFor(id);
+                String token = variables.get("VM_TOKEN");
+                assertThat(token)
+                    .as("step 1: the blank secret variable was generated").isNotBlank();
+
+                // 2. Deploy through the product funnel: same seam, kind=vm.
+                assertThat(service.deploy(id).state())
+                    .as("step 2: deploy reports RUNNING").isEqualTo(ContainerState.RUNNING);
+                Map<String, Object> definition = instanceOf(incus, handle);
+                assertThat(String.valueOf(definition.get("type")))
+                    .as("step 2: the daemon holds a VIRTUAL MACHINE, not a container")
+                    .isEqualTo("virtual-machine");
+                Map<?, ?> config = (Map<?, ?>) definition.get("config");
+                assertThat(config.get("security.secureboot"))
+                    .as("step 2: secure boot is declared off (unsigned images)")
+                    .isEqualTo("false");
+                assertThat(String.valueOf(config.get("cloud-init.user-data")))
+                    .as("step 2: cloud-init user-data landed with {{MARK}} SUBSTITUTED")
+                    .contains("vm-live-proof").doesNotContain("{{MARK}}");
+                assertThat(String.valueOf(config.get("cloud-init.user-data")))
+                    .as("step 2: and the secret variable substituted too")
+                    .contains(token);
+                assertThat(config.get("limits.memory"))
+                    .as("step 2: the memory cap landed").isEqualTo("512MiB");
+                OwnerLabels.of(InstanceModel.MODEL_ID, id).forEach((key, value) ->
+                    assertThat(config.get("user." + key))
+                        .as("step 2: owner label %s stamped at create", key)
+                        .isEqualTo(value));
+                assertThat(infoOf(handle))
+                    .as("step 2: the host's own CLI sees it RUNNING").contains("RUNNING");
+
+                // 3. Image identity: the record pins the RESOLVED fingerprint (the
+                //    daemon's volatile.base_image), never the mutable alias.
+                String daemonFingerprint = String.valueOf(config.get("volatile.base_image"));
+                String pinned = Models.get(InstanceModel.class).findById(id)
+                    .get(InstanceModel.IMAGE_FINGERPRINT);
+                assertThat(pinned)
+                    .as("step 3: the record pins the daemon's resolved fingerprint")
+                    .isEqualTo(daemonFingerprint)
+                    .matches("[0-9a-f]{64}");
+
+                // 4. Network policy AT THE DAEMON: the NIC references the shared ACL,
+                //    the ACL carries every tenant-range reject, and the kernel ruleset
+                //    (nftables, incus's own table) materializes the metadata-range
+                //    reject -- three independent layers of the same fact.
+                Map<?, ?> nic = (Map<?, ?>) ((Map<?, ?>) definition.get("devices")).get("eth0");
+                assertThat(nic.get("security.acls"))
+                    .as("step 4: the VM's NIC carries the isolation ACL")
+                    .isEqualTo(IncusNetworkPolicy.ACL_NAME);
+                String acl = query("/1.0/network-acls/" + IncusNetworkPolicy.ACL_NAME);
+                assertThat(acl)
+                    .as("step 4: the daemon's ACL rejects the private+metadata ranges")
+                    .contains("10.0.0.0/8").contains("169.254.0.0/16")
+                    .contains("192.168.0.0/16").contains("fc00::/7");
+                assertThat(hostCommand("nft", "list", "ruleset"))
+                    .as("step 4: the kernel ruleset carries the metadata-range reject")
+                    .contains("169.254.0.0/16");
+
+                // 5. Cloud-init actually RAN inside the guest (agent exec, bounded wait
+                //    for the agent + first boot; blank-at-t0 is the documented trap).
+                // TRAP: cloud-init status exits 2 for done-with-warnings (this image
+                // warns about unavailable ssh host key types), and the ssh helper
+                // throws on any nonzero exit -- without the `|| true` the probe reads
+                // "" forever while the daemon happily answers "status: done".
+                awaitTrue("VM agent up and cloud-init finished", 600_000, () ->
+                    execQuietly(handle, "cloud-init status || true").contains("done"));
+                assertThat(exec(handle, "cat /root/hohenheim-mark"))
+                    .as("step 5: write_files wrote the substituted plain variable")
+                    .isEqualTo("vm-live-proof");
+                assertThat(exec(handle, "cat /root/hohenheim-secret"))
+                    .as("step 5: the generated secret landed via the secret lane")
+                    .isEqualTo(token);
+                assertThat(exec(handle, "ls /root/"))
+                    .as("step 5: runcmd ran").contains("runcmd-ran");
+
+                // 6. IPv4 egress proven with an ADDRESS LITERAL (never a hostname:
+                //    Docker blackholes forwarded IPv4 while IPv6 works, so a hostname
+                //    probe can lie).
+                assertThat(exec(handle,
+                    "wget -q -O- --timeout=8 http://1.1.1.1/ >/dev/null 2>&1"
+                        + " && echo IPV4-OK || echo IPV4-DEAD"))
+                    .as("step 6: the VM reaches the v4 internet by address literal")
+                    .isEqualTo("IPV4-OK");
+
+                // 7. ISOLATION, with the failing probe AND its positive anchor: deploy
+                //    a peer container, wait for its v4 address, prove the HOST can ping
+                //    it (the peer is really up) while the SAME probe from the VM FAILS
+                //    (the ACL rejects the private ranges).
+                assertThat(service.deploy(peerId).state())
+                    .as("step 7: the peer container runs")
+                    .isEqualTo(ContainerState.RUNNING);
+                String[] peerIp = new String[1];
+                awaitTrue("peer container IPv4 present", 60_000, () -> {
+                    peerIp[0] = ipv4Of(incus, peerHandle);
+                    return peerIp[0] != null;
+                });
+                assertThat(hostCommand("ping", "-c", "1", "-W", "2", peerIp[0]))
+                    .as("step 7 anchor: the HOST reaches the peer at %s", peerIp[0])
+                    .contains("1 received");
+                assertThat(exec(handle, "ping -c 1 -W 2 " + peerIp[0]
+                        + " >/dev/null 2>&1 && echo REACHED || echo ISOLATED"))
+                    .as("step 7: the SAME probe from the VM is refused by the ACL")
+                    .isEqualTo("ISOLATED");
+
+                // 8. DISK under quota: exactly 2 GB of operator headroom.
+                HohenheimSettings.VALUES.setValue(
+                    HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
+                    (int) diskUsedBefore + 2);
+                HohenheimSettings.VALUES.setValue(
+                    HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER,
+                    (int) nicUsedBefore + 1);
+
+                devices.attachDisk(id, "data", 1);
+                assertThat(Quotas.usedOf(diskBucket))
+                    .as("step 8: the attach charged 1 GB").isEqualTo(diskUsedBefore + 1);
+                String volume = query("/1.0/storage-pools/default/volumes/custom/" + volumeName);
+                assertThat(volume)
+                    .as("step 8: the daemon holds the 1GiB block volume")
+                    .contains("\"1GiB\"").contains("block");
+                assertThat(instanceOf(incus, handle).get("devices").toString())
+                    .as("step 8: the disk device is attached").contains("data");
+                awaitTrue("guest sees the hotplugged disk", 30_000, () ->
+                    execQuietly(handle, "ls /sys/block").contains("sdb"));
+
+                // 9. Resize while RUNNING is the daemon's own refusal, surfaced by
+                //    name, ledger and daemon both untouched.
+                Throwable running = catchThrowable(() -> devices.resizeDisk(id, "data", 2));
+                assertThat(running).isInstanceOfSatisfying(Violations.class, refused ->
+                    assertThat(refused.all()).anySatisfy(violation -> {
+                        assertThat(violation.message().key()).isEqualTo("device_resize_failed");
+                        assertThat(String.valueOf(violation.message().args().get("reason")))
+                            .as("step 9: and the reason is the daemon's own 'in use'")
+                            .containsIgnoringCase("in use");
+                    }));
+                assertThat(Quotas.usedOf(diskBucket))
+                    .as("step 9: the refused resize spent nothing")
+                    .isEqualTo(diskUsedBefore + 1);
+                assertThat(query("/1.0/storage-pools/default/volumes/custom/" + volumeName))
+                    .as("step 9: the daemon volume is still 1GiB").contains("\"1GiB\"");
+
+                // 10. Stopped, the resize lands: daemon size 2GiB, ledger 2 GB, and
+                //     the next GB is the NAMED quota refusal.
+                service.stop(id);
+                devices.resizeDisk(id, "data", 2);
+                assertThat(query("/1.0/storage-pools/default/volumes/custom/" + volumeName))
+                    .as("step 10: the daemon really resized to 2GiB").contains("\"2GiB\"");
+                assertThat(Quotas.usedOf(diskBucket))
+                    .as("step 10: the ledger counts 2 GB").isEqualTo(diskUsedBefore + 2);
+                Throwable overCap = catchThrowable(() -> devices.resizeDisk(id, "data", 3));
+                assertThat(violationKeyOf(overCap))
+                    .as("step 10: growing past the cap is the named quota refusal")
+                    .isEqualTo("disk_quota_reached");
+                Throwable secondDisk = catchThrowable(() -> devices.attachDisk(id, "more", 1));
+                assertThat(violationKeyOf(secondDisk))
+                    .as("step 10: a second disk past the cap is refused too")
+                    .isEqualTo("disk_quota_reached");
+
+                // 11. NIC under quota: the extra NIC lands on the managed secondary
+                //     bridge WITH the ACL (read back), the second one is refused.
+                devices.attachNic(id, "extra");
+                Map<?, ?> extraNic = (Map<?, ?>) ((Map<?, ?>) instanceOf(incus, handle)
+                    .get("devices")).get("extra");
+                assertThat(extraNic)
+                    .as("step 11: the extra NIC device exists at the daemon").isNotNull();
+                assertThat(extraNic.get("security.acls"))
+                    .as("step 11: and it carries the isolation ACL -- no hole")
+                    .isEqualTo(IncusNetworkPolicy.ACL_NAME);
+                assertThat(extraNic.get("network"))
+                    .as("step 11: on the managed secondary bridge")
+                    .isEqualTo(IncusNetworkPolicy.EXTRA_NETWORK);
+                assertThat(Quotas.usedOf(nicBucket))
+                    .as("step 11: the NIC slot is counted").isEqualTo(nicUsedBefore + 1);
+                Throwable secondNic = catchThrowable(() -> devices.attachNic(id, "extrb"));
+                assertThat(violationKeyOf(secondNic))
+                    .as("step 11: a second NIC past the cap is the named refusal")
+                    .isEqualTo("nic_quota_reached");
+
+                // 12. Redeploy CONVERGES: the rootfs, the devices and the pin survive,
+                //     and the guest sees both NICs.
+                assertThat(service.deploy(id).state())
+                    .as("step 12: redeploy runs").isEqualTo(ContainerState.RUNNING);
+                Map<String, Object> converged = instanceOf(incus, handle);
+                assertThat(((Map<?, ?>) converged.get("devices")).keySet().toString())
+                    .as("step 12: disk and NIC survived the converge")
+                    .contains("data").contains("extra");
+                assertThat((String) Models.get(InstanceModel.class).findById(id)
+                        .get(InstanceModel.IMAGE_FINGERPRINT))
+                    .as("step 12: the pin is unchanged").isEqualTo(pinned);
+                awaitTrue("guest sees the second NIC", 600_000, () ->
+                    execQuietly(handle, "ls /sys/class/net").contains("eth1"));
+
+                // 13. DESTROY with verified reclaim AT THE DAEMON: instance absent,
+                //     volume absent, device rows gone, every reservation released,
+                //     record soft-deleted.
+                service.destroy(id);
+                assertThat(catchThrowable(() -> incus.instance(handle)))
+                    .as("step 13: the VM is ABSENT at the daemon")
+                    .isInstanceOfSatisfying(IncusClient.ApiException.class,
+                        e -> assertThat(e.isNotFound()).isTrue());
+                assertThat(query("/1.0/storage-pools/default/volumes/custom"))
+                    .as("step 13: the data volume is gone from the pool")
+                    .doesNotContain(volumeName);
+                assertThat(Models.get(InstanceDeviceModel.class).find()
+                        .where(InstanceDeviceModel.INSTANCE_ID.eq(id)).all())
+                    .as("step 13: the device rows died with the record").isEmpty();
+                assertThat(Quotas.usedOf(diskBucket))
+                    .as("step 13: the disk reservation came back").isEqualTo(diskUsedBefore);
+                assertThat(Quotas.usedOf(nicBucket))
+                    .as("step 13: the NIC reservation came back").isEqualTo(nicUsedBefore);
+                assertThat((Object) Models.get(InstanceModel.class).findById(id)
+                        .get(InstanceModel.DELETED_AT))
+                    .as("step 13: the record is soft-deleted, not erased").isNotNull();
+                service.destroy(peerId);
+                assertThat(catchThrowable(() -> incus.instance(peerHandle)))
+                    .as("step 13: the peer is gone too")
+                    .isInstanceOfSatisfying(IncusClient.ApiException.class,
+                        e -> assertThat(e.isNotFound()).isTrue());
+            } finally {
+                HohenheimSettings.VALUES.setValue(
+                    HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
+                    previousDiskCap == null ? 0 : previousDiskCap);
+                HohenheimSettings.VALUES.setValue(
+                    HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER,
+                    previousNicCap == null ? 0 : previousNicCap);
+                remote.forceDelete(handle);
+                remote.forceDelete(peerHandle);
+                cleanupDaemonLeftovers(incus, volumeName);
+            }
+        });
+    }
+
+    // -- fixtures -------------------------------------------------------------
+
+    private static int vmTemplate() {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("image", VM_IMAGE);
+        settings.put("memory_limit_mb", 512);
+        settings.put("cloud_init", """
+            #cloud-config
+            write_files:
+              - path: /root/hohenheim-mark
+                content: "{{MARK}}"
+              - path: /root/hohenheim-secret
+                content: "{{VM_TOKEN}}"
+                permissions: "0600"
+            runcmd:
+              - touch /root/runcmd-ran
+            """);
+
+        Row template = Models.get(InstanceTemplateModel.class).createEmptyRow();
+        template.set(InstanceTemplateModel.NAME, "vm-live-fixture");
+        template.set(InstanceTemplateModel.KIND, "hohenheim:incus_vm");
+        template.set(InstanceTemplateModel.SETTINGS, settings);
+        template.set(InstanceTemplateModel.REINSTALL_POLICY,
+            InstanceTemplateModel.REINSTALL_PRESERVE);
+        template.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+        Models.get(InstanceTemplateModel.class).save(template);
+        int templateId = template.get(InstanceTemplateModel.ID);
+
+        Row mark = Models.get(InstanceTemplateVariableModel.class).createEmptyRow();
+        mark.set(InstanceTemplateVariableModel.TEMPLATE_ID, templateId);
+        mark.set(InstanceTemplateVariableModel.KEY, "MARK");
+        mark.set(InstanceTemplateVariableModel.TYPE, "hohenheim:string");
+        mark.set(InstanceTemplateVariableModel.REQUIRED, true);
+        mark.set(InstanceTemplateVariableModel.SETTINGS, Map.of());
+        Models.get(InstanceTemplateVariableModel.class).save(mark);
+
+        Row token = Models.get(InstanceTemplateVariableModel.class).createEmptyRow();
+        token.set(InstanceTemplateVariableModel.TEMPLATE_ID, templateId);
+        token.set(InstanceTemplateVariableModel.KEY, "VM_TOKEN");
+        token.set(InstanceTemplateVariableModel.TYPE, "hohenheim:secret");
+        token.set(InstanceTemplateVariableModel.SETTINGS,
+            Map.of("generate", true, "generate_bytes", 18));
+        Models.get(InstanceTemplateVariableModel.class).save(token);
+        return templateId;
+    }
+
+    private static int peerRecord(int hostId) {
+        Row row = Models.get(InstanceModel.class).createEmptyRow();
+        row.set(InstanceModel.NAME, "vm-isolation-peer");
+        row.set(InstanceModel.KIND, "hohenheim:incus_container");
+        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
+            Map.of("image", PEER_IMAGE, "memory_limit_mb", 128)));
+        row.set(InstanceModel.SERVER_ID, hostId);
+        Models.get(InstanceModel.class).save(row);
+        return row.get(InstanceModel.ID);
+    }
+
+    // -- plumbing -------------------------------------------------------------
+
+    private static String violationKeyOf(Throwable thrown) {
+        assertThat(thrown).isInstanceOf(Violations.class);
+        return ((Violations) thrown).all().get(0).message().key();
+    }
+
+    /** Bounded poll: never assert a fresh workload's state with zero retry. */
+    private static void awaitTrue(String what, long timeoutMs, Supplier<Boolean> probe) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            if (Boolean.TRUE.equals(probe.get())) {
+                return;
+            }
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        throw new AssertionError("timed out after " + timeoutMs + "ms waiting for: " + what);
+    }
+
+    private static String exec(String handle, String command) {
+        try {
+            return remote.exec(handle, command);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** Exec that answers "" instead of throwing (poll probes while the agent is down). */
+    private static String execQuietly(String handle, String command) {
+        try {
+            return remote.exec(handle, command);
+        } catch (IOException notReady) {
+            return "";
+        }
+    }
+
+    private static String hostCommand(String... command) {
+        try {
+            return remote.hostCommand(command);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static String query(String path) {
+        try {
+            return remote.query(path);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static String infoOf(String handle) {
+        try {
+            return remote.instanceInfoOrError(handle);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static Map<String, Object> instanceOf(IncusClient incus, String handle) {
+        try {
+            return incus.instance(handle);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** The workload's global IPv4 on eth0, or null while DHCP has not answered yet. */
+    private static String ipv4Of(IncusClient incus, String handle) {
+        try {
+            Map<String, Object> state = incus.instanceState(handle);
+            if (state.get("network") instanceof Map<?, ?> network
+                    && network.get("eth0") instanceof Map<?, ?> eth0
+                    && eth0.get("addresses") instanceof List<?> addresses) {
+                for (Object entry : addresses) {
+                    if (entry instanceof Map<?, ?> address
+                            && "inet".equals(address.get("family"))
+                            && "global".equals(address.get("scope"))
+                            && address.get("address") instanceof String ip) {
+                        return ip;
+                    }
+                }
+            }
+            return null;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** Best-effort daemon cleanup so the class leaves the daemon EMPTY of its resources. */
+    private static void cleanupDaemonLeftovers(IncusClient incus, String volumeName) {
+        try {
+            incus.deleteCustomVolume("default", volumeName);
+        } catch (IOException ignored) {
+            // already gone (the journey's own destroy is the verified path)
+        }
+    }
+}

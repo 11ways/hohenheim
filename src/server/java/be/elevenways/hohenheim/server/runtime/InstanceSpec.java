@@ -27,6 +27,12 @@ import java.util.Map;
  *                      new kind cannot inherit isolation by accident (see
  *                      {@link ContainerHardening})
  * @param ownerLabels   the OwnerLabels pair of the owning record
+ * @param cloudInitUserData the rendered cloud-init user-data (variables already
+ *                      substituted), or null when the kind declares none; a driver that
+ *                      cannot deliver it refuses by name, never a silent drop
+ * @param imageFingerprint the record's pinned resolved image identity, or null when none
+ *                      is recorded yet; a fingerprint-resolving driver recreates an
+ *                      ABSENT workload from this pin instead of the mutable alias
  */
 public record InstanceSpec(@NonNull String handle,
                            @NonNull String image,
@@ -36,7 +42,23 @@ public record InstanceSpec(@NonNull String handle,
                            @Nullable PortPublication publication,
                            @NonNull ResourceLimits limits,
                            ContainerHardening.@NonNull Profile hardening,
-                           @NonNull Map<String, String> ownerLabels) {
+                           @NonNull Map<String, String> ownerLabels,
+                           @Nullable String cloudInitUserData,
+                           @Nullable String imageFingerprint) {
+
+    /** The pre-VM shape: no cloud-init, no pinned fingerprint. */
+    public InstanceSpec(@NonNull String handle,
+                        @NonNull String image,
+                        @Nullable List<String> command,
+                        @NonNull Map<String, String> env,
+                        @NonNull Map<String, String> volumes,
+                        @Nullable PortPublication publication,
+                        @NonNull ResourceLimits limits,
+                        ContainerHardening.@NonNull Profile hardening,
+                        @NonNull Map<String, String> ownerLabels) {
+        this(handle, image, command, env, volumes, publication, limits, hardening,
+            ownerLabels, null, null);
+    }
 
     /** A copy whose publication carries the host port the pre-allocation step claimed. */
     public @NonNull InstanceSpec withPreallocatedPort(int hostPort) {
@@ -46,6 +68,13 @@ public record InstanceSpec(@NonNull String handle,
         }
         return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
             this.publication.withPreallocatedPort(hostPort), this.limits, this.hardening,
-            this.ownerLabels);
+            this.ownerLabels, this.cloudInitUserData, this.imageFingerprint);
+    }
+
+    /** A copy carrying the record's pinned resolved image identity. */
+    public @NonNull InstanceSpec withImageFingerprint(@Nullable String fingerprint) {
+        return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
+            this.publication, this.limits, this.hardening, this.ownerLabels,
+            this.cloudInitUserData, fingerprint);
     }
 }

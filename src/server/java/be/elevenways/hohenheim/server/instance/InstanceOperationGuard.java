@@ -89,6 +89,33 @@ final class InstanceOperationGuard {
     }
 
     /**
+     * The fenced image-identity write ({@link #stamp}'s guard, assigning only the
+     * pinned fingerprint). Zero rows is the same hard fenced-out failure.
+     *
+     * @throws Violations {@code instance_fenced_out}
+     */
+    static void stampFingerprint(@NonNull HostLeases leases, int instanceId, int serverId,
+                                 long fence, @NonNull String fingerprint,
+                                 @NonNull Object instanceName) {
+        int matched = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(instanceId))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .where(Criteria.or(
+                InstanceModel.CLAIM_FENCE.isNull(),
+                InstanceModel.CLAIM_FENCE.lte(fence)))
+            .assign(InstanceModel.IMAGE_FINGERPRINT, fingerprint)
+            .assign(InstanceModel.CLAIM_FENCE, fence)
+            .updateAll();
+        if (matched == 0) {
+            leases.fencedOut(serverId);
+            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
+                .withFilter("scope", "violations")
+                .withArg("name", String.valueOf(instanceName))
+                .withArg("server", ServerModel.nameOf(serverId)));
+        }
+    }
+
+    /**
      * THE fenced outcome write: one guarded statement that both records the status and
      * stamps the fence -- {@code WHERE id = ? AND deleted_at IS NULL AND (claim_fence
      * IS NULL OR claim_fence <= :myFence)}. Zero matched rows is a HARD FAILURE, never

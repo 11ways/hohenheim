@@ -9,6 +9,8 @@ import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.GeneratedInstanceFiles;
+import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
+import be.elevenways.hohenheim.server.instance.InstanceImagePin;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.process.ReservedEnv;
@@ -73,6 +75,13 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // soft-delete transition hands the slot back (the remove hooks never fire on
         // the destroy path -- it soft-deletes through save()).
         InstanceQuota.install();
+        // Disk-GB and extra-NIC reservations charge adjacent to the device-row write;
+        // hard deletes (detach, destroy cleanup) release through the remove pairing.
+        InstanceDeviceQuota.install();
+        // A change to the DECLARED image invalidates the pinned resolved fingerprint,
+        // so a recreate after an image change resolves fresh instead of silently
+        // reviving the old pin.
+        InstanceImagePin.installInvalidation();
         // A project's auth group exists from its first write and dies with it; a
         // non-empty project cannot be deleted; an environment can only group records
         // its project OWNS (grouping never disagrees with the grants).
