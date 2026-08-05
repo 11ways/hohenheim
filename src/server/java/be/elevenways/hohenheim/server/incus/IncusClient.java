@@ -54,6 +54,14 @@ public class IncusClient {
         public boolean isNotFound() {
             return this.status == 404;
         }
+
+        /**
+         * The daemon refused a CREATE because the resource is already there -- the
+         * lost half of a create/create race, not a failure of intent.
+         */
+        public boolean isAlreadyExists() {
+            return this.status == 400 && String.valueOf(getMessage()).contains("already exists");
+        }
     }
 
     private final @NonNull IncusTransport transport;
