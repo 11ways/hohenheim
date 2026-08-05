@@ -223,33 +223,57 @@ public final class LiveIncusHost {
         return reported;
     }
 
-    /** The operator act: put one public key in the remote account's authorized_keys. */
+    /**
+     * The operator act: put one public key in the remote account's authorized_keys.
+     *
+     * AIDEV-NOTE: every line carrying the same COMMENT is swept first. The product mints a
+     * fresh key per enrollment, so a run that dies between installing one and removing it
+     * leaves a WORKING root credential behind, and the next run adds another -- observed
+     * 2026-08-05, two stale {@code hohenheim-live-incus-kernel} keys on daystrom from
+     * runs killed mid-journey. Sweeping by comment makes the install self-healing instead
+     * of accumulating root access on a real machine.
+     */
     public void authorizeKey(String publicKey) throws IOException {
         String line = publicKey.trim().replace("'", "");
+        deauthorizeComment(commentOf(line));
         ssh(List.of("sh", "-c", "'mkdir -p ~/.ssh && chmod 700 ~/.ssh &&"
             + " touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys &&"
-            + " grep -qxF \"" + line + "\" ~/.ssh/authorized_keys ||"
             + " echo \"" + line + "\" >> ~/.ssh/authorized_keys'"));
     }
 
     /**
-     * Remove one public key from the remote account's authorized_keys.
+     * Remove every authorized_keys line this fixture installed under one comment.
      *
      * @return what the remote reports afterwards: "removed", "STILL PRESENT", or the failure
      */
     public String deauthorizeKey(String publicKey) {
-        String line = publicKey.trim().replace("'", "");
+        return deauthorizeComment(commentOf(publicKey.trim().replace("'", "")));
+    }
+
+    /** @return "removed", "STILL PRESENT (n copies)", or the failure text */
+    public String deauthorizeComment(String comment) {
+        if (comment.isBlank()) {
+            return "no comment to sweep";
+        }
         try {
-            ssh(List.of("sh", "-c", "'grep -vxF \"" + line + "\" ~/.ssh/authorized_keys"
-                + " > ~/.ssh/authorized_keys.tmp && mv ~/.ssh/authorized_keys.tmp"
+            // No && between the two: grep exits 1 when it filters everything out, and a
+            // cleanup that silently skips its own mv is how the stale keys accumulated.
+            ssh(List.of("sh", "-c", "'grep -v \" " + comment + "$\" ~/.ssh/authorized_keys"
+                + " > ~/.ssh/authorized_keys.tmp; mv ~/.ssh/authorized_keys.tmp"
                 + " ~/.ssh/authorized_keys'"));
-            String remaining = ssh(List.of("sh", "-c", "'grep -cxF \"" + line
-                + "\" ~/.ssh/authorized_keys || true'")).trim();
+            String remaining = ssh(List.of("sh", "-c", "'grep -c \" " + comment
+                + "$\" ~/.ssh/authorized_keys || true'")).trim();
             return "0".equals(remaining) ? "removed"
                 : "STILL PRESENT (" + remaining + " copies)";
         } catch (IOException failed) {
             return "NOT removed: " + failed.getMessage();
         }
+    }
+
+    /** The trailing comment of a public key line ({@code ssh-ed25519 AAAA... comment}). */
+    private static String commentOf(String publicKeyLine) {
+        String[] fields = publicKeyLine.trim().split("\\s+");
+        return fields.length >= 3 ? fields[fields.length - 1] : "";
     }
 
     /** What the host reports as its OWN ssh host key digest, read on the host itself. */
