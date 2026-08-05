@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -15,6 +17,9 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
+import be.elevenways.hohenheim.test.network.PrivateNetns;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -35,6 +40,21 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * SQLite + the live Docker daemon (skipped without either).
  */
 class DatabaseServiceTest {
+
+    private static PrivateNetns netns;
+
+    @BeforeAll
+    static void enforcePolicy() throws IOException {
+        netns = PrivateNetns.installEnforcing();
+        assumeTrue(netns != null,
+            "no private netns: record-backed provisioning refuses without an enforceable policy");
+    }
+
+    @AfterAll
+    static void restorePolicy() {
+        PrivateNetns.uninstall(netns);
+        netns = null;
+    }
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String PG_IMAGE = "postgres:17-alpine";
@@ -243,11 +263,11 @@ class DatabaseServiceTest {
                 .as("step 3: HOST state -- the container is genuinely still running").isTrue();
 
             // 4. Absent vs unreachable are DISTINCT identities.
-            assertThat(new ManagedDatabase(unreachable)
+            assertThat(new ManagedDatabase(unreachable, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE)
                     .status(name, ManagedDatabase.Engine.POSTGRES).state())
                 .as("step 4: an unaskable daemon is UNREACHABLE, not 'gone'")
                 .isEqualTo(ContainerState.UNREACHABLE);
-            assertThat(new ManagedDatabase(docker)
+            assertThat(new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE)
                     .status(name, ManagedDatabase.Engine.POSTGRES).state())
                 .as("step 4: the reachable daemon reports the container RUNNING")
                 .isEqualTo(ContainerState.RUNNING);
@@ -273,7 +293,7 @@ class DatabaseServiceTest {
                 assertThat(e.isNotFound())
                     .as("step 5: HOST state -- the daemon reports the container absent").isTrue();
             }
-            assertThat(new ManagedDatabase(docker)
+            assertThat(new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE)
                     .status(name, ManagedDatabase.Engine.POSTGRES).state())
                 .as("step 5: a genuinely gone database reads ABSENT")
                 .isEqualTo(ContainerState.ABSENT);

@@ -8,6 +8,9 @@ import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
+import be.elevenways.hohenheim.test.network.PrivateNetns;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -28,6 +31,21 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * Docker daemon (skipped without either).
  */
 class BackupDatabasesTaskTest {
+
+    private static PrivateNetns netns;
+
+    @BeforeAll
+    static void enforcePolicy() throws IOException {
+        netns = PrivateNetns.installEnforcing();
+        assumeTrue(netns != null,
+            "no private netns: record-backed provisioning refuses without an enforceable policy");
+    }
+
+    @AfterAll
+    static void restorePolicy() {
+        PrivateNetns.uninstall(netns);
+        netns = null;
+    }
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String PG_IMAGE = "postgres:17-alpine";

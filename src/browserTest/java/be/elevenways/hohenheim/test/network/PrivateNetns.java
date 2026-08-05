@@ -30,6 +30,28 @@ public final class PrivateNetns implements AutoCloseable {
     private final List<Process> holders = new ArrayList<>();
     private final long hostPid;
 
+    /**
+     * Build a fixture and install its ENFORCING policy as the process-wide override, or
+     * return null when this machine cannot build one -- callers assume on the result so
+     * the skip is visible instead of a policy-less pass.
+     */
+    public static PrivateNetns installEnforcing() throws IOException {
+        if (!available()) {
+            return null;
+        }
+        PrivateNetns netns = new PrivateNetns();
+        WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
+        return netns;
+    }
+
+    /** Undo {@link #installEnforcing}; a null fixture is a no-op. */
+    public static void uninstall(PrivateNetns netns) {
+        WorkloadNetworkPolicy.overrideForTest(null);
+        if (netns != null) {
+            netns.close();
+        }
+    }
+
     /** @return whether this machine can build the fixture at all */
     public static boolean available() {
         return run(List.of("unshare", "-rn", "true"), null).ok()

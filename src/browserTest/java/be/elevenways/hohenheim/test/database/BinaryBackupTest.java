@@ -1,11 +1,17 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.runtime.NetworkPosture;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
+import be.elevenways.hohenheim.test.network.PrivateNetns;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -27,6 +33,21 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * their native dump fetched out via the container archive API. Isolated SQLite + live Docker.
  */
 class BinaryBackupTest {
+
+    private static PrivateNetns netns;
+
+    @BeforeAll
+    static void enforcePolicy() throws IOException {
+        netns = PrivateNetns.installEnforcing();
+        assumeTrue(netns != null,
+            "no private netns: record-backed provisioning refuses without an enforceable policy");
+    }
+
+    @AfterAll
+    static void restorePolicy() {
+        PrivateNetns.uninstall(netns);
+        netns = null;
+    }
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String REDIS_IMAGE = "redis:7-alpine";
@@ -153,7 +174,7 @@ class BinaryBackupTest {
     @Test
     void redisRestoreRejectsNonRdbInput() throws IOException {
         // The RDB magic check runs before any Docker interaction, so no daemon is needed.
-        ManagedDatabase databases = new ManagedDatabase(new DockerClient());
+        ManagedDatabase databases = new ManagedDatabase(new DockerClient(), WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         Path dummy = Files.createTempFile("hohenheim-redis-restore", ".rdb");
         try {
             Files.writeString(dummy, "not an rdb file", StandardCharsets.UTF_8);

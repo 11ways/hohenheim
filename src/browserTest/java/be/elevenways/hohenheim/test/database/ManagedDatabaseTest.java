@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.runtime.NetworkPosture;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
@@ -36,7 +39,7 @@ class ManagedDatabaseTest {
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
 
-        ManagedDatabase databases = new ManagedDatabase(docker);
+        ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         String name = "test" + System.nanoTime();
         String containerName = "hohenheim-db-" + name;
         try {
@@ -89,7 +92,7 @@ class ManagedDatabaseTest {
         assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
         assumeTrue(imagePresent(docker, "alpine:latest"), "alpine:latest not present locally");
 
-        ManagedDatabase databases = new ManagedDatabase(docker);
+        ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         String name = "foreign" + System.nanoTime();
         String containerName = "hohenheim-db-" + name;
         // 1. Plant an UNLABELLED container squatting on the name (what the legacy path
@@ -121,7 +124,7 @@ class ManagedDatabaseTest {
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
 
-        ManagedDatabase databases = new ManagedDatabase(docker);
+        ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         String name = "buptest" + System.nanoTime();
         String containerName = "hohenheim-db-" + name;
         try {
@@ -149,7 +152,7 @@ class ManagedDatabaseTest {
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
 
-        ManagedDatabase databases = new ManagedDatabase(docker);
+        ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         String name = "rttest" + System.nanoTime();
         String containerName = "hohenheim-db-" + name;
         List<String> env = List.of("PGPASSWORD=secret123");
@@ -189,7 +192,7 @@ class ManagedDatabaseTest {
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, MYSQL_IMAGE), MYSQL_IMAGE + " not present locally");
 
-        ManagedDatabase databases = new ManagedDatabase(docker);
+        ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         String name = "mytest" + System.nanoTime();
         String containerName = "hohenheim-db-" + name;
         List<String> env = List.of("MYSQL_PWD=secret123");
