@@ -22,8 +22,11 @@ import java.util.List;
  */
 public final class PrivateNetns implements AutoCloseable {
 
-    /** Seconds the namespace holders stay alive; longer than any test here takes. */
-    private static final int HOLD_SECONDS = 300;
+    /** Seconds the namespace holders stay alive; the fixture is installed CLASS-wide in
+     * several live suites (SiteReleaseLiveTest runs four full release journeys on one
+     * fixture), so this must outlive a whole class, not one test. Holders are killed in
+     * {@link #close()} either way. */
+    private static final int HOLD_SECONDS = 1800;
 
     private static final long COMMAND_TIMEOUT_SECONDS = 20;
 

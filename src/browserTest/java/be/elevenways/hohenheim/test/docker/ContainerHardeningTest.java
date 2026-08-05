@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.stack.StackSpec;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -76,11 +77,31 @@ class ContainerHardeningTest {
     /** Key {@link #kernelStatusOf} files the pids cgroup cap under. */
     private static final String PIDS_MAX = "PidsMax";
 
+    // AIDEV-NOTE: the class-wide netns override is for the paths that resolve their
+    // applier through WorkloadNetworkPolicy.forServer (the site tier's deploy AND its
+    // destroyFor teardown) -- without it every PRIVATE-posture step refuses on a
+    // developer machine. Methods that build a runtime by hand keep their own local
+    // PrivateNetns; the two coexist (the local one never touches the override).
+    private static PrivateNetns classNetns;
+
     @BeforeAll
-    static void bootRuntime() {
+    static void bootRuntime() throws IOException {
         HohenheimTestRuntime.ensureBooted();
         // Unique per-class instance ids => unique daemon handles across parallel forks.
         LiveIdOffsets.apply(HohenheimDatabase.datasource());
+        if (PrivateNetns.available()) {
+            classNetns = new PrivateNetns();
+            WorkloadNetworkPolicy.overrideForTest(classNetns.enforcingPolicy());
+        }
+    }
+
+    @AfterAll
+    static void tearDown() {
+        WorkloadNetworkPolicy.overrideForTest(null);
+        if (classNetns != null) {
+            classNetns.close();
+            classNetns = null;
+        }
     }
 
     /**

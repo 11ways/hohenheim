@@ -13,8 +13,10 @@ import be.elevenways.hohenheim.server.docker.SiteReleases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
+import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -58,12 +60,24 @@ class SiteReleaseLiveTest {
     private static Integer savedProbeInterval;
     private static Integer savedDrain;
 
+    // AIDEV-NOTE: the netns fixture is what lets the release engine deploy at all on a
+    // developer machine. Since the isolation wave every site release container is
+    // NetworkPosture.PRIVATE and its deploy/destroy REFUSES where the network policy
+    // cannot be enforced; that refusal is correct product behaviour and stays -- the
+    // fixture points the PRODUCTION applier at a real nftables in a private namespace
+    // instead of weakening anything (same pattern as DockerSiteHandlerTest).
+    private static PrivateNetns netns;
+
     @BeforeAll
     static void boot() throws Exception {
         if (!booted) {
             booted = true;
             ProxyTestSupport.bootRuntime();
             LiveIdOffsets.apply(HohenheimDatabase.datasource());
+        }
+        if (PrivateNetns.available()) {
+            netns = new PrivateNetns();
+            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
         }
         savedProbeTimeout = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS);
@@ -77,6 +91,11 @@ class SiteReleaseLiveTest {
 
     @AfterAll
     static void restoreSettings() {
+        WorkloadNetworkPolicy.overrideForTest(null);
+        if (netns != null) {
+            netns.close();
+            netns = null;
+        }
         HohenheimSettings.VALUES.setValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS, savedProbeTimeout);
         HohenheimSettings.VALUES.setValue(
