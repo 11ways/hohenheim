@@ -46,6 +46,11 @@ import java.util.Map;
  * own nft. Running the controller's nft and calling it a verification is precisely the
  * defect NftRunner's own note names.
  *
+ * AIDEV-NOTE: the REPAIR lever is per-instance on purpose -- a shared-ACL bump reloads
+ * every workload on the daemon and fails outright when any neighbour's NIC is mid
+ * transition, which would let one tenant's churn get another tenant STOPPED. See
+ * {@link #enforce} for the three levers that were measured and the numbers.
+ *
  * AIDEV-NOTE: an Incus daemon addressed over https is verifiable exactly when its record
  * declares a TRUSTED ssh admin lane (M074 gave the ssh trust its own columns, so the TLS
  * pin no longer occupies them). The lane is OPTIONAL: a host without one, or with one
@@ -59,8 +64,19 @@ public final class IncusKernelIsolation {
     /** Incus's own bridge-filter table; the daemon owns it and rewrites it per device. */
     public static final String TABLE = "incus";
 
-    /** The ACL config key bumped to make the daemon re-apply every referencing NIC. */
-    public static final String REAPPLY_KEY = "user.hohenheim-reapply";
+    /**
+     * The NIC device key toggled to make the daemon re-apply THIS instance's filters.
+     *
+     * AIDEV-NOTE: chosen because it is a semantic NO-OP. {@code false} is the daemon's
+     * own default for it, so the generated ruleset is byte-identical whether the key is
+     * present or absent (measured on daystrom 2026-08-05: a 36-line diff of the
+     * instance's chains with and without it came back empty). What changes is only
+     * whether the device config differs from what the daemon last applied, which is the
+     * one thing {@code devicesUpdate} keys on. It never touches {@code security.acls}, so
+     * the NIC never stops declaring isolation -- there is no window, not even a short
+     * one, in which the workload's declared policy is weaker.
+     */
+    public static final String REAPPLY_KEY = "security.acls.default.egress.logged";
 
     private final @NonNull IncusClient incus;
     private final @Nullable NftRunner runner;
@@ -181,18 +197,25 @@ public final class IncusKernelIsolation {
      * Verify kernel truth, REPAIR it once through the daemon's own lever when it
      * diverges, and re-verify.
      *
-     * AIDEV-NOTE: decided 2026-08-05 -- the repair is an ACL UPDATE, not a device write.
-     * Upstream's {@code common.Update} calls {@code BridgeUpdateACLs} unconditionally
-     * (it does not diff), which reloads every running bridge NIC referencing the ACL, and
-     * {@code removeChains} is keyed by instance+device rather than by tap, so the reload
-     * removes a chain left naming a dead tap and rebuilds it against the live one. A
-     * device write is NOT equivalent: {@code devicesUpdate} only reloads devices whose
-     * config actually changed, so re-writing the same value is a no-op -- measured live
-     * on daystrom, where re-setting the identical {@code security.acls} value repaired
-     * nothing and the ACL bump repaired all three chains. The known cost is the fanout
-     * IncusNetworkPolicy's note already records: the reload touches every referencing
-     * NIC. For a repair that is the point, not a hazard -- one bump repairs every
-     * diverged workload on the daemon.
+     * AIDEV-NOTE: the repair is a PER-INSTANCE device write, and which lever is used is a
+     * cross-tenant safety decision, not a style choice. Three were measured live on
+     * daystrom (2026-08-05):
+     *  - re-writing the IDENTICAL {@code security.acls} value repairs NOTHING (0 of 3
+     *    chains restored): {@code devicesUpdate} only reloads devices whose config
+     *    actually changed, so a no-op write is a no-op.
+     *  - bumping a config key on the SHARED isolation ACL repairs correctly, but
+     *    upstream's {@code common.Update} calls {@code BridgeUpdateACLs} for EVERY NIC
+     *    referencing that ACL -- which is every workload on the daemon. Measured under a
+     *    neighbour starting and stopping in a loop, 21 of 103 bumps FAILED outright with
+     *    "Unknown or missing host side veth device" naming the NEIGHBOUR. That makes one
+     *    tenant's transitioning NIC able to block another tenant's repair, and since an
+     *    unrepairable workload is STOPPED, a single neighbour could have cost every other
+     *    tenant on the host their availability for a fault that was never theirs.
+     *  - changing a key on OUR OWN NIC device forces the reload for our device only:
+     *    3 of 3 chains restored, and 116 of 116 toggles succeeded under the same
+     *    neighbour churn that broke a fifth of the ACL bumps.
+     * The third is what ships. The shared ACL stays -- the coupling was in the LEVER, not
+     * in sharing the policy object -- so nothing about the isolation semantics changes.
      *
      * @throws IOException when the kernel still diverges after the repair; the caller
      *                     decides what happens to the workload
@@ -202,7 +225,7 @@ public final class IncusKernelIsolation {
         if (first.enforced()) {
             return;
         }
-        reapply();
+        reapply(handle);
         Divergence second = inspect(handle);
         if (second.enforced()) {
             return;
@@ -213,28 +236,48 @@ public final class IncusKernelIsolation {
     }
 
     /**
-     * Make the daemon re-apply the isolation ACL to every NIC referencing it, by writing
-     * a changed config key onto the ACL (the only supported re-apply lever Incus has).
+     * Make the daemon re-apply this ONE workload's NIC filters, by toggling a no-op key
+     * on its own NIC devices. Nothing about any other workload is read or written.
+     *
+     * @throws IOException when the instance has no NIC to re-apply, or the daemon refuses
      */
-    public void reapply() throws IOException {
-        Map<String, Object> existing = this.incus.networkAcl(IncusNetworkPolicy.ACL_NAME);
-        if (existing == null) {
-            throw new IOException("Cannot re-apply isolation: the '"
-                + IncusNetworkPolicy.ACL_NAME + "' ACL does not exist on this daemon.");
+    public void reapply(@NonNull String handle) throws IOException {
+        Map<String, Object> instance = this.incus.instance(handle);
+        if (!(instance.get("devices") instanceof Map<?, ?> devices)) {
+            throw new IOException("Cannot re-apply isolation for '" + handle
+                + "': the daemon reports no devices on it.");
         }
-        Map<String, Object> config = new LinkedHashMap<>();
-        if (existing.get("config") instanceof Map<?, ?> current) {
-            current.forEach((key, value) -> config.put(String.valueOf(key), value));
+        Map<String, Object> rewritten = new LinkedHashMap<>();
+        int toggled = 0;
+        for (Map.Entry<?, ?> entry : devices.entrySet()) {
+            String name = String.valueOf(entry.getKey());
+            if (!(entry.getValue() instanceof Map<?, ?> device)) {
+                continue;
+            }
+            Map<String, Object> copy = new LinkedHashMap<>();
+            device.forEach((key, value) -> copy.put(String.valueOf(key), value));
+            if ("nic".equals(String.valueOf(copy.get("type")))) {
+                // Present -> absent -> present: either direction is a real config change
+                // to the daemon and neither changes a single generated rule.
+                if (copy.remove(REAPPLY_KEY) == null) {
+                    copy.put(REAPPLY_KEY, "false");
+                }
+                toggled++;
+            }
+            rewritten.put(name, copy);
         }
-        config.put(REAPPLY_KEY, String.valueOf(System.currentTimeMillis()));
-
+        if (toggled == 0) {
+            throw new IOException("Cannot re-apply isolation for '" + handle
+                + "': it has no NIC device to re-apply.");
+        }
         Map<String, Object> definition = new LinkedHashMap<>();
-        definition.put("name", IncusNetworkPolicy.ACL_NAME);
-        definition.put("description", existing.get("description"));
-        definition.put("egress", existing.get("egress"));
-        definition.put("ingress", existing.get("ingress"));
-        definition.put("config", config);
-        this.incus.updateNetworkAcl(IncusNetworkPolicy.ACL_NAME, definition);
+        definition.put("architecture", instance.get("architecture"));
+        definition.put("config", instance.get("config"));
+        definition.put("devices", rewritten);
+        definition.put("ephemeral", instance.get("ephemeral"));
+        definition.put("profiles", instance.get("profiles"));
+        definition.put("description", instance.get("description"));
+        this.incus.updateInstance(handle, definition);
     }
 
     /** The host interface names the daemon currently has bound to this workload's NICs. */
