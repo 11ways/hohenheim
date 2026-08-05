@@ -30,8 +30,11 @@ import org.junit.jupiter.api.TestMethodOrder;
 import java.io.File;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -55,6 +58,15 @@ class IncusCommunityAppLiveTest {
     private static SqliteDatasource datasource;
     private static LiveIncusHost remote;
     private static String enrolledFingerprint;
+
+    /** Every daemon handle this class created, for the scoped final sweep. */
+    private static final Set<String> created =
+        Collections.synchronizedSet(new LinkedHashSet<>());
+
+    private static String track(String handle) {
+        created.add(handle);
+        return handle;
+    }
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -100,7 +112,7 @@ class IncusCommunityAppLiveTest {
 
             int id = new InstanceTemplates().createFromTemplate(template,
                 "community-gotify", null, Map.of(), null);
-            String handle = "hohenheim-instance-" + id;
+            String handle = track("hohenheim-instance-" + id);
             InstanceService service = new InstanceService();
             IncusClient incus = new ServerService().incusClientFor(HOST);
 
@@ -197,7 +209,7 @@ class IncusCommunityAppLiveTest {
 
             int id = new InstanceTemplates().createFromTemplate(template,
                 "community-adguard", null, Map.of(), null);
-            String handle = "hohenheim-instance-" + id;
+            String handle = track("hohenheim-instance-" + id);
             InstanceService service = new InstanceService();
             IncusClient incus = new ServerService().incusClientFor(HOST);
 
@@ -263,7 +275,7 @@ class IncusCommunityAppLiveTest {
 
             int id = new InstanceTemplates().createFromTemplate(template,
                 "community-unknown-helper", null, Map.of(), null);
-            String handle = "hohenheim-instance-" + id;
+            String handle = track("hohenheim-instance-" + id);
 
             try {
                 Throwable failed = catchThrowable(() -> new InstanceInstalls().install(id));
@@ -291,17 +303,29 @@ class IncusCommunityAppLiveTest {
         });
     }
 
-    /** After everything: no hohenheim-instance-* residue remains AT THE DAEMON. */
+    /**
+     * After everything: no instance THIS CLASS created remains at the daemon.
+     *
+     * AIDEV-NOTE: scoped to the tracked handles, NOT "no hohenheim-instance-* at all".
+     * The live host is shared and browser test classes run in parallel forks, so a
+     * daemon-global emptiness sweep fails on another class's mid-test instance
+     * (observed 2026-08-05: IncusSnapshotBackupLiveTest's source container, alive and
+     * legitimate, tripped it). The tracked set is the honest spelling of the method
+     * name; the non-empty anchor below keeps it from going vacuously green.
+     */
     @Test
     @Order(4)
     void theDaemonIsEmptyOfEverythingThisSuiteCreated() {
+        assertThat(created)
+            .as("positive anchor: this class really created instances to sweep for")
+            .isNotEmpty();
         Db.run(datasource, () -> {
             IncusClient incus = new ServerService().incusClientFor(HOST);
             try {
                 assertThat(incus.instances())
                     .as("no instance created by this suite survives at the daemon")
-                    .noneMatch(instance -> String.valueOf(instance.get("name"))
-                        .startsWith("hohenheim-instance-"));
+                    .noneMatch(instance -> created.contains(
+                        String.valueOf(instance.get("name"))));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

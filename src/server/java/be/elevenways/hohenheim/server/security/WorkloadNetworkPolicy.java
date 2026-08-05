@@ -110,6 +110,17 @@ public final class WorkloadNetworkPolicy {
      * The refusal that distinguishes this applier from {@link NftService}: a tenant
      * workload does not start unprotected.
      *
+     * AIDEV-NOTE: decided 2026-08-05 -- there is deliberately NO host-level
+     * "operator-only install, enforcement off" escape from this refusal. The declared
+     * posture mechanism already exists one level up ({@code NetworkPosture}, chosen
+     * per KIND where the kind builds its driver, never tenant-reachable): a workload
+     * that legitimately needs no per-workload policy declares SHARED_BRIDGE there and
+     * never reaches this class. Any host-level off-switch would be a second, wider
+     * spelling of the same thing that also disarms the kinds that DID declare
+     * PRIVATE, which is exactly the silent fallback the isolation wave exists to
+     * forbid. Tests run the production applier against a real nftables in a private
+     * namespace instead ({@code PrivateNetns} in browserTest).
+     *
      * @param workload named in the refusal so the operator knows what did not deploy
      * @throws IOException when kernel enforcement is switched off on this host
      */

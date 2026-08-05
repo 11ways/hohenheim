@@ -181,13 +181,23 @@ public final class IncusInstanceRuntime
                                    @NonNull Map<String, Object> existing,
                                    @NonNull Map<String, Object> config,
                                    @NonNull Map<String, Object> nic) throws IOException {
+        putDefinition(handle, existing, config, nic);
+    }
+
+    /** @param nic the isolating NIC override, or null to leave the devices untouched */
+    private void putDefinition(@NonNull String handle,
+                               @NonNull Map<String, Object> existing,
+                               @NonNull Map<String, Object> config,
+                               @Nullable Map<String, Object> nic) throws IOException {
         Map<String, Object> devices = new LinkedHashMap<>();
         if (existing.get("devices") instanceof Map<?, ?> current) {
             current.forEach((key, value) -> devices.put(String.valueOf(key), value));
         }
         // The isolating NIC override is (re)written every converge: a reboot or an
         // operator edit that dropped it is repaired here, not silently tolerated.
-        devices.put(IncusNetworkPolicy.NIC, nic);
+        if (nic != null) {
+            devices.put(IncusNetworkPolicy.NIC, nic);
+        }
 
         Map<String, Object> definition = new LinkedHashMap<>();
         definition.put("architecture", existing.get("architecture"));
@@ -496,26 +506,37 @@ public final class IncusInstanceRuntime
     public void importBackup(@NonNull InstanceSpec spec, @NonNull Path archive)
             throws IOException {
         this.incus.importInstance(archive, spec.handle());
-        // Re-identification is part of the import contract, in ONE definition write:
-        // the tarball carries the SOURCE instance's user.* labels (until they are
-        // replaced the import is attributed to the wrong record -- a crash inside the
-        // window leaves an instance the NEW record's next deploy refuses as foreign,
-        // visible operator cleanup, never silent adoption) AND the source's volatile
-        // NIC MACs, which the daemon refuses to start beside the still-running source
-        // ("MAC address already defined on another NIC"). Dropping the hwaddr keys
-        // makes the daemon mint fresh ones at start.
+        // Re-identification is part of the import contract: the tarball carries the
+        // SOURCE instance's user.* labels (until they are replaced the import is
+        // attributed to the wrong record -- a crash inside the window leaves an
+        // instance the NEW record's next deploy refuses as foreign, visible operator
+        // cleanup, never silent adoption) AND the source's volatile NIC MACs, which
+        // the daemon refuses beside the still-running source ("MAC address already
+        // defined on another NIC"). Dropping the hwaddr keys makes the daemon mint
+        // fresh ones at start.
         Map<String, Object> existing = this.incus.instance(spec.handle());
         Map<String, Object> config = new LinkedHashMap<>();
+        boolean carriedMacs = false;
         if (existing.get("config") instanceof Map<?, ?> current) {
-            current.forEach((key, value) -> {
-                String name = String.valueOf(key);
+            for (Map.Entry<?, ?> entry : current.entrySet()) {
+                String name = String.valueOf(entry.getKey());
                 if (name.startsWith("volatile.") && name.endsWith(".hwaddr")) {
-                    return;
+                    carriedMacs = true;
+                    continue;
                 }
-                config.put(name, value);
-            });
+                config.put(name, entry.getValue());
+            }
         }
         spec.ownerLabels().forEach((key, value) -> config.put(USER_PREFIX + key, value));
+        // AIDEV-NOTE: the MAC strip is its OWN write, BEFORE ensureIsolationAcl, and the
+        // order is load-bearing. Between import and the strip the clone and its source
+        // share a MAC at the daemon, and ANY ACL write in that window makes the daemon
+        // re-trigger every referencing NIC and fail 409 on the duplicate (observed live
+        // on the source instance, not the clone). This write touches only the clone's
+        // own definition -- devices unchanged -- so it cannot trip over other instances.
+        if (carriedMacs) {
+            putDefinition(spec.handle(), existing, config, null);
+        }
         // An imported instance re-joins the fleet's isolation exactly like a fresh one:
         // its NIC gets the verified ACL override, so a backup made before isolation
         // existed cannot land an unisolated container.

@@ -71,9 +71,17 @@ public final class IncusNetworkPolicy {
         definition.put("ingress", List.of());
         definition.put("config", Map.of());
 
+        // AIDEV-NOTE: the write is CONDITIONAL, and that is load-bearing, not an
+        // optimization. An ACL update makes the daemon re-trigger a device update on
+        // EVERY NIC referencing the ACL, so an unconditional PUT couples one workload's
+        // deploy to the health of every other instance on the daemon (observed live:
+        // a freshly imported clone still carrying its source's duplicate MAC made the
+        // retrigger fail 409 on an UNRELATED instance). When the daemon already carries
+        // exactly what we want, nothing is written; the read-back verification below
+        // still runs either way.
         if (existing == null) {
             this.incus.createNetworkAcl(definition);
-        } else {
+        } else if (!carriesExactly(existing, wantEgress)) {
             this.incus.updateNetworkAcl(ACL_NAME, definition);
         }
 
@@ -178,6 +186,21 @@ public final class IncusNetworkPolicy {
         return rule;
     }
 
+    /** @return whether an existing ACL already carries exactly the wanted egress rejects and no ingress rules */
+    static boolean carriesExactly(@NonNull Map<String, Object> existing,
+                                  @NonNull List<Map<String, Object>> wantEgress) {
+        List<String> want = new ArrayList<>();
+        for (Map<String, Object> rule : wantEgress) {
+            want.add(String.valueOf(rule.get("destination")));
+        }
+        List<String> got = destinationsOf(existing.get("egress"));
+        int egressCount = existing.get("egress") instanceof List<?> rules ? rules.size() : 0;
+        boolean noIngress = !(existing.get("ingress") instanceof List<?> ingress)
+            || ingress.isEmpty();
+        return noIngress && egressCount == want.size() && got.size() == want.size()
+            && got.containsAll(want);
+    }
+
     private static void requirePresent(List<String> present, String range) throws IOException {
         if (!present.contains(range)) {
             throw new IOException("REFUSED to isolate on this Incus host: the '" + ACL_NAME
@@ -190,7 +213,9 @@ public final class IncusNetworkPolicy {
         List<String> destinations = new ArrayList<>();
         if (egress instanceof List<?> rules) {
             for (Object entry : rules) {
+                // A "disabled" rule reads back but enforces NOTHING, so it does not count.
                 if (entry instanceof Map<?, ?> rule && "reject".equals(rule.get("action"))
+                        && !"disabled".equals(rule.get("state"))
                         && rule.get("destination") instanceof String destination) {
                     destinations.add(destination);
                 }
