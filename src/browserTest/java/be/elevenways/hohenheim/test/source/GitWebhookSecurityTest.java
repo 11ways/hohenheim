@@ -208,6 +208,41 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
             .startsWith("HTTP/1.1 200").contains("previews disabled");
     }
 
+    @Test
+    @org.junit.jupiter.api.Order(6)
+    void gitlabSharedTokenLaneDeploysAndItsWrongTokenRefusesIdentically() throws Exception {
+        int before = deploymentsOf(siteBId, "webhook").size();
+        String eventUuid = UUID.randomUUID().toString();
+        // GitLab push shape: project.path_with_namespace names the repository.
+        String body = "{\"ref\":\"refs/heads/main\",\"after\":\"cafe6666\","
+            + "\"project\":{\"path_with_namespace\":\"acme/repo-b\"}}";
+
+        // 1. Counterfactual FIRST: the right header with the WRONG token is the same
+        //    404 as an unsigned delivery, and nothing was claimed or deployed.
+        String wrongToken = post("/api/webhooks/git/hook-b", body,
+            "X-Gitlab-Event: Push Hook",
+            "X-Gitlab-Event-UUID: " + UUID.randomUUID(),
+            "X-Gitlab-Token: " + SECRET_A);
+        assertThat(wrongToken).as("step 1: a wrong X-Gitlab-Token is refused")
+            .startsWith("HTTP/1.1 404");
+        Thread.sleep(300);
+        assertThat(deploymentsOf(siteBId, "webhook"))
+            .as("step 1: the wrong token deployed nothing").hasSize(before);
+
+        // 2. Positive anchor: the same delivery with the RIGHT shared token deploys.
+        String accepted = post("/api/webhooks/git/hook-b", body,
+            "X-Gitlab-Event: Push Hook",
+            "X-Gitlab-Event-UUID: " + eventUuid,
+            "X-Gitlab-Token: " + SECRET_B);
+        assertThat(accepted).as("step 2: the GitLab shared-token delivery is accepted")
+            .startsWith("HTTP/1.1 200").contains("queued");
+        await("step 2: the GitLab-triggered deploy is recorded",
+            () -> deploymentsOf(siteBId, "webhook").size() == before + 1);
+        assertThat(deliveryRowsOf(siteBId, "gl:" + eventUuid))
+            .as("step 2: the delivery was claimed under its GitLab event uuid")
+            .hasSize(1);
+    }
+
     // -- fixtures -------------------------------------------------------------
 
     private static Integer makeGitSite(String name, String slug, String secret,

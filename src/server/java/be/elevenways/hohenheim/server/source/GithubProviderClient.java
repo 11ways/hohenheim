@@ -7,7 +7,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -32,13 +31,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * token (RS256 App JWT exchanged at {@code /app/installations/{id}/access_tokens},
  * upstream validity about one hour) -- the genuinely short-lived upstream credential the
  * builder wave deferred to this one; the stored access token is only the fallback.
- *
- * AIDEV-NOTE: HTTP redirects are deliberately NOT followed -- a redirecting "provider"
- * must never walk an Authorization header onto another host.
  */
-public class GithubProviderClient implements GitProviderClient {
+public class GithubProviderClient extends ApiProviderClient {
 
-    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(20);
 
     /** Re-mint margin: a cached installation token is reused until 5 min before expiry. */
@@ -56,7 +51,6 @@ public class GithubProviderClient implements GitProviderClient {
     private final @Nullable String appId;
     private final @Nullable String appInstallationId;
     private final @Nullable String appPrivateKeyPem;
-    private final HttpClient http;
 
     GithubProviderClient(int providerId, @Nullable String baseUrl, @Nullable String accessToken,
                          @Nullable String appId, @Nullable String appInstallationId,
@@ -71,10 +65,11 @@ public class GithubProviderClient implements GitProviderClient {
         this.appId = blankToNull(appId);
         this.appInstallationId = blankToNull(appInstallationId);
         this.appPrivateKeyPem = blankToNull(appPrivateKeyPem);
-        this.http = HttpClient.newBuilder()
-            .connectTimeout(CONNECT_TIMEOUT)
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
+    }
+
+    @Override
+    protected void decorate(HttpRequest.@NonNull Builder request) {
+        request.header("Accept", "application/vnd.github+json");
     }
 
     private boolean appConfigured() {
@@ -87,7 +82,7 @@ public class GithubProviderClient implements GitProviderClient {
         List<RepoRef> repos = new ArrayList<>();
         if (appConfigured()) {
             // The installation endpoint wraps the list in {"repositories": [...]}.
-            Object parsed = getJson("/installation/repositories?per_page=100",
+            Object parsed = getJson(this.apiBase + "/installation/repositories?per_page=100",
                 mintedToken().token());
             if (parsed instanceof Map<?, ?> map
                     && map.get("repositories") instanceof List<?> list) {
@@ -95,7 +90,7 @@ public class GithubProviderClient implements GitProviderClient {
             }
             return repos;
         }
-        Object parsed = getJson("/user/repos?per_page=100&sort=updated", requireToken());
+        Object parsed = getJson(this.apiBase + "/user/repos?per_page=100&sort=updated", requireToken());
         if (parsed instanceof List<?> list) {
             collectRepos(list, repos);
         }
@@ -115,7 +110,7 @@ public class GithubProviderClient implements GitProviderClient {
 
     @Override
     public @NonNull List<String> listBranches(@NonNull String repository) throws IOException {
-        Object parsed = getJson("/repos/" + repoPath(repository) + "/branches?per_page=100",
+        Object parsed = getJson(this.apiBase + "/repos/" + repoPath(repository) + "/branches?per_page=100",
             anyToken());
         List<String> branches = new ArrayList<>();
         if (parsed instanceof List<?> list) {
@@ -158,7 +153,7 @@ public class GithubProviderClient implements GitProviderClient {
         if (targetUrl != null && !targetUrl.isBlank()) {
             body.put("target_url", targetUrl);
         }
-        postJson("/repos/" + repoPath(repository) + "/statuses/" + commitSha,
+        postJson(this.apiBase + "/repos/" + repoPath(repository) + "/statuses/" + commitSha,
             anyToken(), Json.stringify(body));
     }
 
@@ -282,71 +277,13 @@ public class GithubProviderClient implements GitProviderClient {
         return appConfigured() ? mintedToken().token() : requireToken();
     }
 
-    private @Nullable Object getJson(@NonNull String path, @NonNull String token)
-            throws IOException {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(this.apiBase + path))
-            .timeout(REQUEST_TIMEOUT)
-            .header("Authorization", "Bearer " + token)
-            .header("Accept", "application/vnd.github+json")
-            .GET()
-            .build();
-        HttpResponse<String> response = send(request);
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IOException("Provider refused " + path + ": HTTP "
-                + response.statusCode());
-        }
-        return new Dry().parse(response.body());
-    }
-
-    private void postJson(@NonNull String path, @NonNull String token, @NonNull String body)
-            throws IOException {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(this.apiBase + path))
-            .timeout(REQUEST_TIMEOUT)
-            .header("Authorization", "Bearer " + token)
-            .header("Accept", "application/vnd.github+json")
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-            .build();
-        HttpResponse<String> response = send(request);
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IOException("Provider refused " + path + ": HTTP "
-                + response.statusCode());
-        }
-    }
-
-    private @NonNull HttpResponse<String> send(@NonNull HttpRequest request)
-            throws IOException {
-        try {
-            return this.http.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Provider request interrupted");
-        }
-    }
-
     /** Refuses path tricks: a repository is exactly {@code owner/name}. */
     private static @NonNull String repoPath(@NonNull String repository) {
-        String trimmed = repository.trim();
-        if (!trimmed.matches("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")) {
-            throw new IllegalArgumentException("Not an owner/name repository: " + repository);
-        }
-        return trimmed;
+        return validRepoPath(repository, false);
     }
 
     private static @NonNull String base64Url(byte[] bytes) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
-
-    private static @NonNull String trimSlash(@NonNull String url) {
-        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
-    }
-
-    private static @Nullable String blankToNull(@Nullable String value) {
-        return value == null || value.isBlank() ? null : value;
-    }
-
-    private static @NonNull String truncate(@NonNull String value, int max) {
-        return value.length() <= max ? value : value.substring(0, max - 3) + "...";
     }
 
     /** Test/diagnostic hook: forget this provider's minted token. */
