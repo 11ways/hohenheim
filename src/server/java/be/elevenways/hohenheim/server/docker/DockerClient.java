@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.dry.Dry;
 
@@ -1034,31 +1035,11 @@ public class DockerClient {
             buildRequest(method, path, body, contentType, extraHeaders), timeoutMs));
     }
 
+    // The wire framing lives in the shared Http11 codec; only the Docker-specific
+    // status POLICY (304-is-success, ApiException) stays here.
     private static byte[] buildRequest(String method, String path, byte[] body, String contentType,
                                        Map<String, String> extraHeaders) {
-        StringBuilder head = new StringBuilder();
-        head.append(method).append(' ').append(path).append(" HTTP/1.1\r\n");
-        head.append("Host: docker\r\n");
-        head.append("Accept: application/json\r\n");
-        if (extraHeaders != null) {
-            for (Map.Entry<String, String> header : extraHeaders.entrySet()) {
-                head.append(header.getKey()).append(": ").append(header.getValue()).append("\r\n");
-            }
-        }
-        if (body != null) {
-            head.append("Content-Type: ").append(contentType).append("\r\n");
-            head.append("Content-Length: ").append(body.length).append("\r\n");
-        }
-        head.append("Connection: close\r\n\r\n");
-
-        byte[] headBytes = head.toString().getBytes(StandardCharsets.ISO_8859_1);
-        if (body == null || body.length == 0) {
-            return headBytes;
-        }
-        byte[] request = new byte[headBytes.length + body.length];
-        System.arraycopy(headBytes, 0, request, 0, headBytes.length);
-        System.arraycopy(body, 0, request, headBytes.length, body.length);
-        return request;
+        return Http11.request(method, path, "docker", body, contentType, extraHeaders);
     }
 
     // Tar the build context via the system `tar` (handles file modes, symlinks, and
@@ -1088,94 +1069,17 @@ public class DockerClient {
         return tar;
     }
 
-    // AIDEV-NOTE: We decode raw bytes as ISO-8859-1 (1 char == 1 byte) so header
-    // splitting and chunk-size offsets stay byte-accurate, then re-decode the
-    // assembled body as UTF-8. Don't "simplify" this to a single UTF-8 decode.
+    // Framing is the shared Http11 codec; this applies Docker's status policy: 2xx is
+    // success, and 304 ("not modified") is the daemon's idempotent answer for
+    // start/stop when the container is already in the requested state.
     private static RawResponse parseHttpRaw(byte[] raw) throws IOException {
-        String text = new String(raw, StandardCharsets.ISO_8859_1);
-        int sep = text.indexOf("\r\n\r\n");
-        if (sep < 0) {
-            throw new IOException("Malformed HTTP response from Docker daemon");
-        }
-
-        String[] headLines = text.substring(0, sep).split("\r\n");
-        int status = parseStatus(headLines[0]);
-
-        boolean chunked = false;
-        Map<String, String> headers = new LinkedHashMap<>();
-        for (int i = 1; i < headLines.length; i++) {
-            String line = headLines[i].toLowerCase(Locale.ROOT);
-            if (line.startsWith("transfer-encoding:") && line.contains("chunked")) {
-                chunked = true;
-            }
-            int colon = headLines[i].indexOf(':');
-            if (colon > 0) {
-                headers.put(line.substring(0, colon), headLines[i].substring(colon + 1).trim());
-            }
-        }
-
-        String body = text.substring(sep + 4);
-        if (chunked) {
-            body = dechunk(body);
-        }
-        // ISO-8859-1 round-trips each char back to its exact source byte, preserving binary
-        // bodies (log/exec frames); JSON callers re-decode these bytes as UTF-8 in request().
-        byte[] bodyBytes = body.getBytes(StandardCharsets.ISO_8859_1);
-
-        // 2xx is success; 304 ("not modified") is the daemon's idempotent answer for
-        // start/stop when the container is already in the requested state.
+        Http11.Raw parsed = Http11.parse(raw, "Docker daemon");
+        int status = parsed.status();
         if ((status < 200 || status >= 300) && status != 304) {
             throw new ApiException(status, "Docker API returned HTTP " + status + ": "
-                + new String(bodyBytes, StandardCharsets.UTF_8).trim());
+                + new String(parsed.body(), StandardCharsets.UTF_8).trim());
         }
-        return new RawResponse(status, bodyBytes, headers);
-    }
-
-    private static int parseStatus(String statusLine) throws IOException {
-        String[] parts = statusLine.split(" ", 3);
-        if (parts.length < 2) {
-            throw new IOException("Bad status line from Docker daemon: " + statusLine);
-        }
-        try {
-            return Integer.parseInt(parts[1]);
-        } catch (NumberFormatException e) {
-            throw new IOException("Bad status code from Docker daemon: " + statusLine);
-        }
-    }
-
-    // Decodes HTTP/1.1 chunked transfer encoding. Throws on malformed framing
-    // rather than returning a silently-truncated body (matches parseHttp's strictness).
-    private static String dechunk(String body) throws IOException {
-        StringBuilder out = new StringBuilder();
-        int pos = 0;
-        while (true) {
-            int crlf = body.indexOf("\r\n", pos);
-            if (crlf < 0) {
-                throw new IOException("Malformed chunked body from Docker daemon: missing chunk header");
-            }
-            String sizeToken = body.substring(pos, crlf).trim();
-            int semicolon = sizeToken.indexOf(';');           // strip any chunk extension
-            if (semicolon >= 0) {
-                sizeToken = sizeToken.substring(0, semicolon);
-            }
-            int size;
-            try {
-                size = Integer.parseInt(sizeToken, 16);
-            } catch (NumberFormatException e) {
-                throw new IOException("Malformed chunked body from Docker daemon: bad chunk size '" + sizeToken + "'");
-            }
-            if (size == 0) {
-                break;                                          // terminating chunk
-            }
-            int start = crlf + 2;
-            int end = start + size;
-            if (end > body.length()) {
-                throw new IOException("Malformed chunked body from Docker daemon: chunk exceeds available data");
-            }
-            out.append(body, start, end);
-            pos = end + 2;                                       // skip the chunk's trailing CRLF
-        }
-        return out.toString();
+        return new RawResponse(status, parsed.body(), parsed.headers());
     }
 
     private interface FrameConsumer {
