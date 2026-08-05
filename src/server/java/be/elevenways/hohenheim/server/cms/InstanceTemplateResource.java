@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.server.instance.CommunityScripts;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.http.Uri;
@@ -47,6 +48,7 @@ public class InstanceTemplateResource extends RowResource {
         .add(InstanceTemplateModel.VERSION)
         .add(InstanceTemplateModel.INSTALL_IMAGE)
         .add(InstanceTemplateModel.INSTALL_SCRIPT)
+        .add(InstanceTemplateModel.UPDATE_SCRIPT)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceTemplateModel.REINSTALL_POLICY))
         .add(InstanceTemplateModel.READINESS_LINE)
         .add(InstanceTemplateModel.STOP_COMMAND)
@@ -140,6 +142,13 @@ public class InstanceTemplateResource extends RowResource {
                 .confirmLabel(Microcopy.of("approve").withFilter("scope", "instance_template"))
                 .build())
             .handler((row, ctx) -> {
+                // The approval-time lane of the vocabulary gate: a function-library
+                // script calling helpers the shim lacks must not become tenant-
+                // selectable -- refused BY NAME here, before the stamp.
+                CommunityScripts.requireVocabularyImplemented(
+                    row.get(InstanceTemplateModel.INSTALL_SCRIPT), "install script");
+                CommunityScripts.requireVocabularyImplemented(
+                    row.get(InstanceTemplateModel.UPDATE_SCRIPT), "update script");
                 row.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
                 row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, ctx.access().principal().id());
                 this.model().save(row);

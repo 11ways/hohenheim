@@ -67,8 +67,14 @@ public final class InstanceConsoles {
         flapWindowMs = flapMs != null ? flapMs : FLAP_WINDOW_MS;
     }
 
-    /** What deploy must know after preparing the watch. */
-    record Watch(@NonNull InstanceConsoleSession session, @Nullable String readinessLine,
+    /**
+     * What deploy must know after preparing the watch. {@code session} is null for a
+     * DEFERRED attach (the driver refuses a console on a stopped workload): {@link #arm}
+     * opens it after start and seeds the matcher from the driver's console backlog.
+     */
+    record Watch(@Nullable InstanceConsoleSession session, @Nullable String readinessLine,
+                 @Nullable String stopCommand, @NonNull ConsoleStreamSupport support,
+                 InstanceService.@NonNull Resolved resolved,
                  int serverId, @NonNull HostLeases leases, @Nullable Datasource datasource,
                  @NonNull Object instanceName) {
 
@@ -84,7 +90,8 @@ public final class InstanceConsoles {
      * startup output can be missed. Returns null when nothing needs a console (no
      * matcher data, crash policy none) -- attaching to every instance would be pure
      * overhead. A driver without {@link ConsoleStreamSupport} is a NAMED refusal when
-     * the template demands console behaviour.
+     * the template demands console behaviour; a driver whose console only exists on a
+     * RUNNING workload gets a deferred watch instead of a refusal.
      *
      * @throws Violations {@code console_unsupported}
      */
@@ -104,25 +111,58 @@ public final class InstanceConsoles {
                 .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME))));
         }
         closeSession(instanceId);
+        if (support.attachRequiresRunning()) {
+            // Incus shape: the attach happens in arm(), AFTER start; the gap between
+            // start and attach is closed by seeding the driver's console backlog.
+            return new Watch(null, readiness, stopCommand, support, resolved,
+                resolved.serverId(), leases, Db.current(), row.get(InstanceModel.NAME));
+        }
         // A fresh deploy is a fresh episode only insofar as the flap window has aged
         // out; rapid deploy-crash cycles stay throttled by design.
         InstanceConsoleSession session = open(support, resolved, instanceId, stopCommand,
             leases, Db.current());
-        return new Watch(session, readiness, resolved.serverId(), leases, Db.current(),
-            row.get(InstanceModel.NAME));
+        return new Watch(session, readiness, stopCommand, support, resolved,
+            resolved.serverId(), leases, Db.current(), row.get(InstanceModel.NAME));
     }
 
     /**
      * Arm the prepared watch AFTER deploy stamped {@link Watch#initialStatus()}: the
      * readiness match flips starting -> Running through the fence, and a timeout
      * stamps error -- an instance whose line never appears must NOT reach Running.
+     * A deferred watch attaches HERE (the workload is running now); an attach failure
+     * stamps error and refuses the deploy, because a console-dependent contract
+     * (readiness, graceful stop, crash detection) cannot be honoured blind.
+     *
+     * @throws Violations {@code console_open_failed} for a failed deferred attach
      */
     static void arm(@NonNull Watch watch, int instanceId) {
+        InstanceConsoleSession session = watch.session();
+        if (session == null) {
+            try {
+                session = open(watch.support(), watch.resolved(), instanceId,
+                    watch.stopCommand(), watch.leases(), watch.datasource());
+            } catch (Violations refused) {
+                stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(),
+                    instanceId, watch.initialStatus(), InstanceModel.STATUS_ERROR,
+                    "deferred console attach failed");
+                throw refused;
+            }
+            // Close the start-to-attach gap: what the daemon buffered before the
+            // attach seeds the ring, so armReadiness's backlog scan sees it.
+            try {
+                session.seedBacklog(watch.support()
+                    .consoleTail(watch.resolved().spec().handle(), 200));
+            } catch (IOException unreadable) {
+                Blast.log("CONSOLE: could not seed the console backlog of instance",
+                    instanceId, "-", unreadable.getMessage());
+            }
+        }
         String readiness = watch.readinessLine();
         if (readiness == null) {
             return;
         }
-        watch.session().armReadiness(readiness, () -> withScope(watch.datasource(), () ->
+        final InstanceConsoleSession armed = session;
+        armed.armReadiness(readiness, () -> withScope(watch.datasource(), () ->
             stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(), instanceId,
                 InstanceModel.STATUS_STARTING, InstanceModel.STATUS_RUNNING,
                 "readiness line observed on the console")));
@@ -134,7 +174,7 @@ public final class InstanceConsoles {
                 Thread.currentThread().interrupt();
                 return;
             }
-            if (watch.session().readinessMatched()) {
+            if (armed.readinessMatched()) {
                 return;
             }
             withScope(watch.datasource(), () ->

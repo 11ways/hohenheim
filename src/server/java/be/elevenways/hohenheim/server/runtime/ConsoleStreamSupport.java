@@ -24,9 +24,19 @@ public interface ConsoleStreamSupport {
     /**
      * Attach to the workload's console (live stdout/stderr, stdin where delivered).
      * Legal on a CREATED-but-not-started workload, so a caller can attach BEFORE
-     * start and miss no output.
+     * start and miss no output -- unless {@link #attachRequiresRunning()} declares
+     * otherwise.
      */
     @NonNull Console openConsole(@NonNull String handle) throws IOException;
+
+    /**
+     * Whether {@link #openConsole} only works on a RUNNING workload (Incus refuses a
+     * console on a stopped instance). The console hub then attaches AFTER start and
+     * seeds the matcher from {@link #consoleTail} to close the start-to-attach gap.
+     */
+    default boolean attachRequiresRunning() {
+        return false;
+    }
 
     /** Single-shot console history: the last {@code lines} lines. */
     @NonNull String consoleTail(@NonNull String handle, int lines) throws IOException;

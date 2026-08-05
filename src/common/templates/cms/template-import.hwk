@@ -3,6 +3,8 @@
 {% declare title: String %}
 {% declare error: String = "" %}
 {% declare flashMessage: Microcopy = null %}
+{% declare catalogApps: List<String> = null %}
+{% declare catalogRevision: String = "" %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
 
 {% block "main" %}
@@ -11,6 +13,22 @@
 
     {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
     <pl-alert variant="warning">{{ t("approval_note", scope: "template_import") }}</pl-alert>
+
+    <pl-card><pl-card-content>
+        <h2>{{ t("catalog_title", scope: "template_import") }}</h2>
+        <p>{{ t("catalog_help", scope: "template_import") }} <code>{{ catalogRevision }}</code></p>
+        <ul class="cms-catalog-apps">
+            {% each catalogApps as appKey %}
+                <li>
+                    <form method="POST" action="/admin/instance-templates-import">
+                        {% csrf() %}
+                        <input type="hidden" name="catalog_app" value={% appKey %}>
+                        <pl-button variant="secondary" size="sm" type="submit">{{ t("catalog_import_action", scope: "template_import", app: appKey) }}</pl-button>
+                    </form>
+                </li>
+            {% /each %}
+        </ul>
+    </pl-card-content></pl-card>
 
     <form method="POST" action="/admin/instance-templates-import">
         {% csrf() %}

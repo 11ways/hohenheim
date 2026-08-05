@@ -96,6 +96,17 @@ public class InstanceTemplateModel extends Model {
             .help(HohenheimFormCopy.help("install_script"))
             .build());
 
+    /**
+     * In-place app update script (the community-scripts {@code update_script()}
+     * capability): runs INSIDE the running instance through the same function-library
+     * lane as the install script; empty = the template declares no update path.
+     */
+    public static final TextField UPDATE_SCRIPT = SCHEMA.addField(
+        TextField.builder().name("update_script")
+            .label(HohenheimFormCopy.label("update_script"))
+            .help(HohenheimFormCopy.help("update_script"))
+            .build());
+
     /** The EXPLICIT reinstall data policy (the plan's requirement: never an implicit wipe). */
     public static final EnumField REINSTALL_POLICY = SCHEMA.addField(EnumField.builder("reinstall_policy")
         .value(REINSTALL_PRESERVE, v -> v.displayName("Preserve data").icon("shield")

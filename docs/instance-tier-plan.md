@@ -2843,6 +2843,39 @@ upstream edit to `main` provably does not change what an already-approved
 template installs; and a tenant with no approval authority cannot introduce a
 new script.
 
+STATUS (2026-08-05): LANDED, gate passed on daystrom. The shim library
+(`resources/community-scripts/hohenheim-functions.sh`) implements the
+install-side vocabulary and DECLARES it on one `HOHENHEIM_FUNCS_VOCABULARY`
+line; the static gate (`CommunityScripts`) refuses -- BY NAME, at import,
+approval AND install -- any script calling a helper of the pinned upstream
+namespace (`upstream-vocabulary.txt` at 27f66a80) the shim lacks, with the
+shim's `command_not_found_handle` as the runtime backstop (`setup_hwaccel`
+sits in BOTH: statically refused, and a defense-in-depth shell refusal).
+Vendored + pinned: gotify and adguard (`catalog/`, byte-identical to
+upstream; import copies content into rows, checksummed -- re-import can only
+mint a NEW unapproved row). The shim deliberately diverges where upstream
+live-fetches main (`update_os` tools fetch, `customize`'s /usr/bin/update)
+and where interactivity would block (`network_check`: IP-LITERAL probes,
+loud exit). Install on Incus runs INSIDE the instance's own rootfs
+(`InstallSupport` on the driver; separate install images refused by name;
+clear-reinstall = destroy the rootfs, no volume vocabulary). `update_script()`
+ADOPTED: `instance_templates.update_script` (M072), `InstanceAppUpdates`
+(manage-funneled), row action on /admin AND /manage, `app_update` schedule
+action. The Phase 4 readiness flag is CLOSED: `attachRequiresRunning()` on
+the console seam defers the attach to after start, backlog-seeded from the
+daemon's console log, so system-container readiness lines work (the console
+speaks for the SYSTEM; getty banner is the honest line). TRAPS recorded: an
+exec whose process exits 127 comes back as a FAILED operation ("Command not
+found") that still carries `return` + output files, and exec output paths
+must be used verbatim (`logs/exec-output/...`). Introduction gate is
+LAYERED and both layers are counterfactualed: zenit-auth's `/admin` baseline
+(`auth.admin.access`) plus the endpoint's own `hohenheim.admin.access`.
+Proven by `CommunityScriptCatalogTest`, the strengthened
+`TenantInstanceSurfaceTest` journey, and `IncusCommunityAppLiveTest` (real
+host: both apps install/answer inside AND from the host, readiness flip +
+never-appearing-line ERROR, in-place update runs, unknown helper fails
+loudly, daemon left empty).
+
 ---
 
 ## Phase 6 -- Files, live stats, polish
