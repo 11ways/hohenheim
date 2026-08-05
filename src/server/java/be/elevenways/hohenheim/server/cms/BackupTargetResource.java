@@ -16,6 +16,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
@@ -60,7 +61,10 @@ public final class BackupTargetResource extends RowResource {
             .handler((row, ctx) -> {
                 try {
                     BackupTargetKinds.targetOf(row).healthCheck();
-                } catch (IOException unhealthy) {
+                } catch (IOException | Violations unhealthy) {
+                    // Violations too: a destination host that is unconfirmed or
+                    // quarantined is exactly what this button exists to surface, and an
+                    // escaping refusal would render as a generic failure instead.
                     return CmsActionResult.errorToast(
                         Microcopy.of("test_failed").withFilter("scope", "backup_target")
                             .withArg("reason", unhealthy.getMessage() != null

@@ -4965,6 +4965,18 @@
     "text": "Host '{$name}' has no confirmed SSH host key fingerprint; scan the host key and confirm it first",
     "scope": "violations"
   },
+  "host_quarantined": {
+    "text": "Host '{$name}' offered an SSH host key that disagrees with its pin and is quarantined; re-pin it deliberately before using it again",
+    "scope": "violations"
+  },
+  "host_not_ssh": {
+    "text": "Host '{$name}' is not reached over SSH, so it cannot hold backups; use a filesystem target for the controller's own disk",
+    "scope": "violations"
+  },
+  "backup_target_host_missing": {
+    "text": "The backup target points at host {$id}, which no longer exists",
+    "scope": "violations"
+  },
   "instance_busy": {
     "text": "Instance {$name} is busy ({$status}); wait for the running snapshot or restore to finish",
     "scope": "violations"
@@ -5187,16 +5199,12 @@
     "text": "Directory for backup archives. A local directory on this host is NOT off-host; point it at replicated or mounted remote storage",
     "scope": "help"
   },
-  "backup_ssh_target": {
-    "text": "user@host of the backup host",
+  "backup_ssh_server": {
+    "text": "The enrolled host the backups land on; its confirmed host key is the only pin, and a quarantined host is refused",
     "scope": "help"
   },
   "backup_ssh_path": {
     "text": "Absolute directory on the backup host",
-    "scope": "help"
-  },
-  "backup_ssh_host_key": {
-    "text": "Required: the known_hosts line to pin the host key (ssh-keyscan prints it). There is no unpinned mode",
     "scope": "help"
   },
   "variable_wrong_carrier": {

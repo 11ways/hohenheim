@@ -28,10 +28,10 @@ import java.util.Map;
 /**
  * THE ssh trust and credential seam: every {@code ssh} argv the product ever builds
  * comes from here, verified against a known_hosts file Hohenheim MATERIALISES from
- * stored configuration on each use. {@link #sshArgv} is the inventoried-host lane
- * (host record, per-host client identity, {@code IdentitiesOnly=yes});
- * {@link #pinnedArgv} is the same trust half for a free-form target an operator typed,
- * which is what the backup lane addresses.
+ * stored configuration on each use. {@link #sshArgv} is THE lane every caller takes --
+ * host record, pin, per-host client identity, {@code IdentitiesOnly=yes} -- including
+ * the backup lane, whose destination is a host record like any other. {@link
+ * #pinnedArgv} is the trust half alone, and nothing in production calls it directly.
  *
  * AIDEV-NOTE: the trust store is the DATABASE, the file is a rendering of it. It is
  * rewritten before every connection precisely so an out-of-band edit of the file
@@ -130,14 +130,17 @@ public final class HostKeys {
     }
 
     /**
-     * THE pinned ssh argv for a target that is NOT an inventoried host record -- the
-     * backup lane's destination is a free-form {@code [user@]host[:port]} an operator
-     * typed, not a {@link ServerModel} row -- ending in the {@code --} terminator and
-     * the destination, so a caller appends its remote command and nothing else.
+     * The pinned-verification half of {@link #sshArgv}, ending in the {@code --}
+     * terminator and the destination so a caller appends its remote command and nothing
+     * else. It carries NO client identity, which is why {@link #sshArgv} is the lane
+     * every production caller takes; the only direct callers are live tests that need
+     * an ssh exchange independent of the code under test.
      *
-     * The pin is MANDATORY here for the same reason it is on a host record: the
-     * alternative is the OS user's ambient {@code known_hosts}, which is silent
-     * trust-on-first-use that nothing in the product can display or defend.
+     * AIDEV-NOTE: the pin is a REQUIRED parameter and there is no unpinned overload, on
+     * purpose. The backup lane once hand-rolled its own argv and fell back to the OS
+     * user's ambient {@code known_hosts} -- silent trust-on-first-use in a lane a whole
+     * wave had declared closed. Keeping the pin in the signature is what makes that
+     * shape unexpressible rather than merely discouraged.
      *
      * @param alias the {@code HostKeyAlias} both lookup and verification key on
      * @param pinnedKeyLine a known_hosts key line ({@code <type> <base64>})

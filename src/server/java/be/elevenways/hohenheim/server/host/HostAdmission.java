@@ -49,7 +49,7 @@ public final class HostAdmission {
      * decision, the pin is the thing that decides whether the machine we would be
      * talking to is the machine that decision was about.
      *
-     * @throws Violations {@code host_key_unverified}
+     * @throws Violations {@code host_key_unverified} or {@code host_quarantined}
      */
     public static void requireVerifiedIdentity(@NonNull Row server) {
         // Remote transports only: docker-over-ssh AND incus-over-https both pin; the two
@@ -63,6 +63,50 @@ public final class HostAdmission {
             throw Violations.ofForm(violation("host_key_unverified")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
+        // A confirmed pin the machine has since CONTRADICTED is not a verified identity.
+        // The ssh client would refuse the connection anyway; refusing here means the
+        // refusal is ours, named, and arrives before any work is spent on it.
+        if (HostPins.isQuarantined(server)) {
+            throw Violations.ofForm(violation("host_quarantined")
+                .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
+        }
+    }
+
+    /**
+     * The gate a BACKUP DESTINATION passes: a host whose identity is pinned, confirmed
+     * out of band and not quarantined -- and nothing else.
+     *
+     * AIDEV-NOTE: THE storage-host-versus-compute-host decision, and it needs no new
+     * vocabulary because the host record already carries two INDEPENDENT axes. TRUST
+     * (pin + operator confirmation + quarantine) answers "is this the machine we think
+     * it is"; ADMISSION (preflight verdict + admit/cordon + posture) answers "may
+     * tenant workloads land here". A backup destination is a question of trust only, so
+     * a storage-only host never needs a container runtime, a passing compute preflight
+     * or an admit -- it stays {@code blocked} forever and placement keeps skipping it
+     * for exactly that reason. Adding a third {@code purpose}/role column would create a
+     * SECOND authority over "may workloads land here" next to admission, which is the
+     * very duplication this whole seam was rewritten to remove.
+     *
+     * AIDEV-NOTE: an SSH host specifically, because {@code host_key} is OVERLOADED by
+     * runtime -- it holds an ssh key line for a docker/ssh host and an Incus server
+     * certificate PEM for an incus/https one. Handing the latter to the ssh known_hosts
+     * writer would materialise a line ssh can never match, i.e. a pin that silently
+     * verifies nothing, so the mode check is load-bearing and not a formality. That
+     * overloading is a pre-existing smell worth splitting into two columns one day.
+     *
+     * @throws Violations {@code host_not_ssh}, {@code host_key_unverified} or
+     *         {@code host_quarantined}
+     */
+    public static void requireBackupDestination(@NonNull Row server) {
+        if (!ServerModel.MODE_SSH.equals(server.get(ServerModel.MODE))
+                || ServerModel.isIncus(server)) {
+            // The local daemon has no wire identity to pin at all: a directory on the
+            // controller is the FILESYSTEM kind, which says out loud that it shares the
+            // controller's failure domain instead of pretending to be off-host.
+            throw Violations.ofForm(violation("host_not_ssh")
+                .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
+        }
+        requireVerifiedIdentity(server);
     }
 
     /**

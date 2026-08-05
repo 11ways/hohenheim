@@ -4961,6 +4961,18 @@
     "text": "Host '{$name}' heeft geen bevestigde SSH-vingerafdruk; scan de hostsleutel en bevestig ze eerst",
     "scope": "violations"
   },
+  "host_quarantined": {
+    "text": "Host '{$name}' bood een SSH-hostsleutel aan die niet met zijn pin overeenkomt en staat in quarantaine; pin hem bewust opnieuw voor je hem weer gebruikt",
+    "scope": "violations"
+  },
+  "host_not_ssh": {
+    "text": "Host '{$name}' wordt niet via SSH bereikt en kan dus geen back-ups bewaren; gebruik een bestandssysteemdoel voor de schijf van de controller",
+    "scope": "violations"
+  },
+  "backup_target_host_missing": {
+    "text": "Het back-updoel verwijst naar host {$id}, die niet meer bestaat",
+    "scope": "violations"
+  },
   "instance_busy": {
     "text": "Instantie {$name} is bezig ({$status}); wacht tot de lopende snapshot of restore klaar is",
     "scope": "violations"
@@ -5183,16 +5195,12 @@
     "text": "Map voor back-uparchieven. Een lokale map op deze host is NIET off-host; wijs naar gerepliceerde of gemounte externe opslag",
     "scope": "help"
   },
-  "backup_ssh_target": {
-    "text": "user@host van de back-uphost",
+  "backup_ssh_server": {
+    "text": "De ingeschreven host waar de back-ups terechtkomen; zijn bevestigde hostsleutel is de enige pin, en een host in quarantaine wordt geweigerd",
     "scope": "help"
   },
   "backup_ssh_path": {
     "text": "Absolute map op de back-uphost",
-    "scope": "help"
-  },
-  "backup_ssh_host_key": {
-    "text": "Verplicht: de known_hosts-regel die de hostsleutel pint (ssh-keyscan drukt ze af). Er is geen modus zonder pin",
     "scope": "help"
   },
   "variable_wrong_carrier": {

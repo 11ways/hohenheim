@@ -200,18 +200,28 @@ public final class InstanceBackups {
             backup.set(InstanceBackupModel.SIZE_BYTES, size);
             backup.set(InstanceBackupModel.SUMMARY, manifest.toSummary());
             Models.get(InstanceBackupModel.class).save(backup);
-        } catch (IOException error) {
+        } catch (IOException | RuntimeException error) {
             // Cleanup must leave NOTHING a later restore would accept: remove the
             // artifact (and its staging debris) and leave the row FAILED.
+            //
+            // AIDEV-NOTE: RuntimeException is in the net because the target's own
+            // refusals are Violations (the destination host quarantined mid-upload, say).
+            // Catching only IOException left the row stuck in UPLOADING forever -- a
+            // status that claims an upload is still running when nothing is. Nothing is
+            // swallowed: a named refusal is rethrown UNCHANGED so its identity survives,
+            // anything else becomes the instance_backup_failed refusal naming it.
             try {
                 target.delete(key);
-            } catch (IOException cleanupFailed) {
+            } catch (IOException | RuntimeException cleanupFailed) {
                 Blast.log("BACKUP: could not remove partial artifact", key, ":",
                     InstanceSnapshots.describe(cleanupFailed));
             }
             backup.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_FAILED);
             backup.set(InstanceBackupModel.ERROR, InstanceSnapshots.describe(error));
             Models.get(InstanceBackupModel.class).save(backup);
+            if (error instanceof Violations refused) {
+                throw refused;
+            }
             throw refusal("instance_backup_failed", resolved.row(), error);
         } finally {
             InstanceSnapshots.deleteRecursively(staging);
@@ -480,7 +490,7 @@ public final class InstanceBackups {
         return (Map<String, Object>) map;
     }
 
-    private static Violations refusal(String key, Row row, IOException cause) {
+    private static Violations refusal(String key, Row row, Exception cause) {
         return Violations.ofForm(violationText(key)
             .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)))
             .withArg("reason", InstanceSnapshots.describe(cause)));

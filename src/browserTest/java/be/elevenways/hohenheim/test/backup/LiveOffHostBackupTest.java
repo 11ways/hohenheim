@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -20,6 +21,7 @@ import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
@@ -68,6 +70,10 @@ class LiveOffHostBackupTest {
     private static String remoteBase;
     private static String pinnedKeyLine;
     private static String identityPath;
+    private static int remoteServerId;
+
+    /** The host record the backup target points at. */
+    private static final String REMOTE_HOST_NAME = "offhost-backup-host";
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -107,6 +113,19 @@ class LiveOffHostBackupTest {
             properties.load(in);
         }
         identityPath = properties.getProperty("identity").trim();
+        // The destination is an ENROLLED HOST, walked through the real ceremony: enrol,
+        // scan, and confirm the digest the operator recorded out of band. Nothing here
+        // pastes a key line into a backup target -- there is nowhere left to paste one.
+        Db.run(datasource, () -> {
+            Row host = remote.enrol(REMOTE_HOST_NAME);
+            HostKeys.ScanResult scan = HostKeys.scanAndPin(host);
+            assertThat(scan.fingerprint())
+                .as("setup: the scanned key is the one the operator read on the host itself")
+                .isEqualTo(remote.fingerprint());
+            HostKeys.confirm(Models.get(ServerModel.class).findByName(REMOTE_HOST_NAME));
+            remoteServerId = Models.get(ServerModel.class)
+                .findByName(REMOTE_HOST_NAME).get(ServerModel.ID);
+        });
 
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
@@ -149,15 +168,20 @@ class LiveOffHostBackupTest {
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
 
-            // 1. A configured SSH target pointing at the OTHER machine, pinned to the
-            //    key whose digest an operator confirmed out of band.
+            // 1. A configured SSH target pointing at the ENROLLED host record for the
+            //    OTHER machine, whose pin an operator confirmed out of band in setUp.
             Row targetRow = Models.get(BackupTargetModel.class).createEmptyRow();
             targetRow.set(BackupTargetModel.NAME, "offhost");
             targetRow.set(BackupTargetModel.KIND, "hohenheim:ssh");
             targetRow.set(BackupTargetModel.SETTINGS, Map.of(
-                "target", remote.target(), "path", remoteBase,
-                "host_key", pinnedKeyLine));
+                "server", ServerModel.registryKeyOf(remoteServerId),
+                "path", remoteBase));
             Models.get(BackupTargetModel.class).save(targetRow);
+            assertThat((String) Models.get(ServerModel.class).findById(remoteServerId)
+                    .get(ServerModel.ADMISSION))
+                .as("step 1: the destination is a STORAGE host -- never admitted for"
+                    + " placement, and it does not need to be")
+                .isEqualTo(ServerModel.ADMISSION_BLOCKED);
             BackupTarget target = BackupTargetKinds.targetOf(targetRow);
             run(() -> {
                 target.healthCheck();
@@ -239,23 +263,36 @@ class LiveOffHostBackupTest {
                     .as("step 6: with the volume data that crossed the wire twice")
                     .isEqualTo("off-host-precious");
 
-                // 7. A target whose pin does NOT match the real host reaches nothing, and
-                //    exists() says so by RAISING. Answering "absent" for a host it never
-                //    reached is the retention sweep deleting a row whose artifact is
-                //    fine, and the corruption gate accepting a backup nobody looked at.
-                Row decoyRow = Models.get(BackupTargetModel.class).createEmptyRow();
-                decoyRow.set(BackupTargetModel.NAME, "offhost-decoy");
-                decoyRow.set(BackupTargetModel.KIND, "hohenheim:ssh");
-                decoyRow.set(BackupTargetModel.SETTINGS, Map.of(
-                    "target", remote.target(), "path", remoteBase,
-                    "host_key", run(LiveOffHostBackupTest::foreignHostKeyLine)));
-                Models.get(BackupTargetModel.class).save(decoyRow);
-                BackupTarget decoy = BackupTargetKinds.targetOf(decoyRow);
-                assertThat(catchThrowable(() -> decoy.exists(key)))
-                    .as("step 7: an unreachable target RAISES instead of answering absent")
+                // 7. The destination host's pin no longer matches what the real machine
+                //    offers -- a substituted host, as far as anything here can tell. The
+                //    exchange must die at verification, and exists() must say so by
+                //    RAISING. Answering "absent" for a host it never reached is the
+                //    retention sweep deleting a row whose artifact is fine.
+                ServerModel serverModel = Models.get(ServerModel.class);
+                Row destination = serverModel.findById(remoteServerId);
+                String realPin = destination.get(ServerModel.HOST_KEY);
+                destination.set(ServerModel.HOST_KEY, run(
+                    LiveOffHostBackupTest::foreignHostKeyLine));
+                serverModel.save(destination);
+                assertThat(catchThrowable(() -> target.exists(key)))
+                    .as("step 7: a pin the real host contradicts RAISES, never 'absent'")
                     .isInstanceOfSatisfying(IOException.class, failure ->
                         assertThat(failure.getMessage())
                             .contains("Host key verification failed"));
+
+                // 7b. QUARANTINE, against the real machine: with the true pin back in
+                //     place but an offered key on record, the destination is refused by
+                //     NAME before a single byte is exchanged.
+                destination.set(ServerModel.HOST_KEY, realPin);
+                destination.set(ServerModel.HOST_KEY_OFFERED, "ssh-ed25519 AAAAsomethingelse");
+                serverModel.save(destination);
+                assertThat(catchThrowable(() -> target.exists(key)))
+                    .as("step 7b: a quarantined destination host is refused by name")
+                    .isInstanceOfSatisfying(Violations.class, violations ->
+                        assertThat(violations.all()).anySatisfy(violation ->
+                            assertThat(violation.message().key()).isEqualTo("host_quarantined")));
+                destination.set(ServerModel.HOST_KEY_OFFERED, null);
+                serverModel.save(destination);
 
                 // 8. exists() answers about the REMOTE, and delete really removes it
                 //    there -- a retention sweep acts on this answer.
