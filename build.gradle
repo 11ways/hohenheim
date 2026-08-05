@@ -54,7 +54,10 @@ sourceSets {
     browserTest {
         java { srcDirs = ['src/browserTest/java'] }
         resources { srcDirs = ['src/browserTest/resources'] }
-        compileClasspath += sourceSets.common.output + sourceSets.client.output + sourceSets.server.output
+        // Server fold: server.output carries the server fold of every common class.
+        // build/classes/java/common is the CHIMERA fold (common compiles against
+        // protoblast-client, so IS_TEAVM folds to the BROWSER value) -- never stack it.
+        compileClasspath += sourceSets.server.output + sourceSets.client.output
         runtimeClasspath += sourceSets.server.output
     }
 }
