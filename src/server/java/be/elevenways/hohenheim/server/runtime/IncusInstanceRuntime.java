@@ -1,11 +1,15 @@
 package be.elevenways.hohenheim.server.runtime;
 
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.incus.IncusClient;
+import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusWebSocket;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -59,6 +63,7 @@ public final class IncusInstanceRuntime
     private final @NonNull IncusNetworkPolicy policy;
     private final @NonNull Egress egress;
     private final @NonNull IncusWorkloadType type;
+    private final @Nullable String serverName;
 
     public IncusInstanceRuntime(@NonNull IncusClient incus) {
         this(incus, Egress.OPEN);
@@ -72,10 +77,22 @@ public final class IncusInstanceRuntime
     /** @param type the KIND-declared workload flavour (system container or KVM VM) */
     public IncusInstanceRuntime(@NonNull IncusClient incus, @NonNull Egress egress,
                                 @NonNull IncusWorkloadType type) {
+        this(incus, egress, type, null);
+    }
+
+    /**
+     * @param serverName the host record this daemon belongs to, so the driver can reach
+     *                   ITS kernel; null leaves the kernel-truth check out entirely (a
+     *                   record-less caller has no host to read nftables on)
+     */
+    public IncusInstanceRuntime(@NonNull IncusClient incus, @NonNull Egress egress,
+                                @NonNull IncusWorkloadType type,
+                                @Nullable String serverName) {
         this.incus = incus;
         this.policy = new IncusNetworkPolicy(incus);
         this.egress = egress;
         this.type = type;
+        this.serverName = serverName;
     }
 
     @Override
@@ -278,6 +295,43 @@ public final class IncusInstanceRuntime
             if (status(handle).state() != ContainerState.RUNNING) {
                 throw refused;
             }
+        }
+        requireKernelIsolation(handle);
+    }
+
+    /**
+     * The KERNEL half of the isolation contract, checked at the one moment the driver
+     * makes a workload reachable.
+     *
+     * AIDEV-NOTE: the daemon's config read-back ({@link IncusNetworkPolicy}) and the
+     * daemon host's nftables are independent facts, and they were observed to disagree
+     * (see {@link IncusKernelIsolation}). This check is NOT the mechanism that closes
+     * that window -- the divergence is created later, by incusd's own restart of a VM a
+     * tenant reset -- {@code VerifyIncusIsolation} is. What it does close is the case
+     * where the hole is ALREADY open when we start a workload into it. A workload whose
+     * isolation cannot be restored is stopped again before this method returns: it does
+     * not stay reachable while an operator reads a log line.
+     */
+    private void requireKernelIsolation(@NonNull String handle) throws IOException {
+        String name = this.serverName;
+        if (name == null) {
+            return;
+        }
+        Row server = Models.get(ServerModel.class).findByName(name);
+        if (server == null) {
+            return;
+        }
+        IncusKernelIsolation kernel = IncusKernelIsolation.forServer(server);
+        if (!kernel.available()) {
+            // Refusing to answer is not evidence of a leak; the sweep reports the host as
+            // unverifiable every run rather than manufacturing a verdict here.
+            return;
+        }
+        try {
+            kernel.enforce(handle);
+        } catch (IOException unisolated) {
+            stop(handle, 10);
+            throw unisolated;
         }
     }
 
