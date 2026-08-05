@@ -190,7 +190,7 @@ public final class InstanceVariables {
      * The deploy-facing view of an instance's settings with its variables applied:
      * variables merge into {@code environment_variables} (variable wins over the
      * baseline) and {@code {{KEY}}} tokens substitute inside {@code command} and
-     * nowhere else.
+     * {@code cloud_init}, nowhere else.
      *
      * AIDEV-NOTE: substitution deliberately does NOT touch {@code image}/{@code tag}.
      * InstanceImagePolicy compares those columns verbatim against the approved
@@ -218,6 +218,12 @@ public final class InstanceVariables {
 
         if (settings.get("command") instanceof String command && !command.isEmpty()) {
             applied.put("command", substitute(command, variables));
+        }
+        // Cloud-init user-data is CONTENT like a config file, so it takes the same
+        // {{KEY}} substitution (secret variables included) -- never image/tag, which
+        // the image policy compares verbatim.
+        if (settings.get("cloud_init") instanceof String cloudInit && !cloudInit.isEmpty()) {
+            applied.put("cloud_init", substitute(cloudInit, variables));
         }
         return applied;
     }

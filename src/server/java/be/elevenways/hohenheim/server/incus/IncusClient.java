@@ -406,6 +406,94 @@ public class IncusClient {
         syncPayload("DELETE", "/1.0/network-acls/" + name, null, DEFAULT_TIMEOUT_MS);
     }
 
+    // -- networks (managed) ---------------------------------------------------
+
+    /**
+     * One managed network's definition, or null when it does not exist.
+     *
+     * @throws IOException on any daemon error other than 404
+     */
+    public @Nullable Map<String, Object> network(@NonNull String name) throws IOException {
+        try {
+            return syncMetadata("GET", "/1.0/networks/" + name, null, DEFAULT_TIMEOUT_MS);
+        } catch (ApiException e) {
+            if (e.isNotFound()) {
+                return null;
+            }
+            throw e;
+        }
+    }
+
+    /** Create a managed network ({@code POST /1.0/networks}; empty config = auto subnets). */
+    public void createNetwork(@NonNull Map<String, Object> definition) throws IOException {
+        syncPayload("POST", "/1.0/networks", Json.stringify(definition), DEFAULT_TIMEOUT_MS);
+    }
+
+    /** Delete a managed network; 404 surfaces as {@link ApiException#isNotFound}. */
+    public void deleteNetwork(@NonNull String name) throws IOException {
+        syncPayload("DELETE", "/1.0/networks/" + name, null, DEFAULT_TIMEOUT_MS);
+    }
+
+    // -- custom storage volumes -----------------------------------------------
+
+    /**
+     * One custom volume's definition, or null when it does not exist.
+     *
+     * @throws IOException on any daemon error other than 404
+     */
+    public @Nullable Map<String, Object> customVolume(@NonNull String pool,
+                                                      @NonNull String name)
+            throws IOException {
+        try {
+            return syncMetadata("GET",
+                "/1.0/storage-pools/" + pool + "/volumes/custom/" + name, null,
+                DEFAULT_TIMEOUT_MS);
+        } catch (ApiException e) {
+            if (e.isNotFound()) {
+                return null;
+            }
+            throw e;
+        }
+    }
+
+    /** Create a custom volume (block or filesystem; possibly async per pool driver). */
+    public void createCustomVolume(@NonNull String pool,
+                                   @NonNull Map<String, Object> definition)
+            throws IOException {
+        settleMaybeAsync("POST", "/1.0/storage-pools/" + pool + "/volumes/custom",
+            Json.stringify(definition));
+    }
+
+    /** Replace a custom volume's config (the resize lane; PUT, possibly async). */
+    public void updateCustomVolume(@NonNull String pool, @NonNull String name,
+                                   @NonNull Map<String, Object> definition)
+            throws IOException {
+        settleMaybeAsync("PUT", "/1.0/storage-pools/" + pool + "/volumes/custom/" + name,
+            Json.stringify(definition));
+    }
+
+    /** Delete a custom volume; 404 surfaces as {@link ApiException#isNotFound}. */
+    public void deleteCustomVolume(@NonNull String pool, @NonNull String name)
+            throws IOException {
+        settleMaybeAsync("DELETE", "/1.0/storage-pools/" + pool + "/volumes/custom/" + name,
+            null);
+    }
+
+    /**
+     * One call whose envelope may be sync (settled) or async (an operation to wait on)
+     * -- pool drivers differ on volume operations, so both shapes are legal.
+     */
+    private void settleMaybeAsync(@NonNull String method, @NonNull String path,
+                                  @Nullable String body) throws IOException {
+        Map<String, Object> envelope = envelopeOf(
+            this.transport.exchange(method, path, body, DEFAULT_TIMEOUT_MS));
+        if ("async".equals(envelope.get("type"))
+                && envelope.get("operation") instanceof String operation
+                && !operation.isEmpty()) {
+            waitOperation(operation, LONG_OP_TIMEOUT_MS);
+        }
+    }
+
     // -- storage --------------------------------------------------------------
 
     /** One profile's definition ({@code GET /1.0/profiles/{name}}). */

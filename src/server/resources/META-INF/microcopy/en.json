@@ -6617,5 +6617,101 @@
   "catalog_import_action": {
     "text": "Import {$app}",
     "scope": "template_import"
+  },
+  "incus_vm": {
+    "text": "Virtual machine",
+    "scope": "instance_kind"
+  },
+  "vm_image": [
+    {
+      "text": "Image alias",
+      "scope": "field"
+    },
+    {
+      "text": "A VM image alias on images.linuxcontainers.org (simplestreams). Use a /cloud variant so cloud-init runs, e.g. alpine/3.22/cloud or debian/13/cloud.",
+      "scope": "help"
+    }
+  ],
+  "cloud_init": [
+    {
+      "text": "Cloud-init user-data",
+      "scope": "field"
+    },
+    {
+      "text": "First-boot provisioning (#cloud-config). {{KEY}} placeholders resolve against the instance's variables, secret variables included.",
+      "scope": "help"
+    }
+  ],
+  "device_size_gb": {
+    "text": "Size (GB)",
+    "scope": "field"
+  },
+  "max_disk_gb": [
+    {
+      "text": "Max disk (GB)",
+      "scope": "field"
+    },
+    {
+      "text": "Cap on this owner's total attached-disk size; 0 refuses every disk, empty falls back to the global default",
+      "scope": "help"
+    }
+  ],
+  "max_nics": [
+    {
+      "text": "Max extra NICs",
+      "scope": "field"
+    },
+    {
+      "text": "Cap on this owner's extra NICs; 0 refuses every NIC, empty falls back to the global default",
+      "scope": "help"
+    }
+  ],
+  "disk": {
+    "text": "Disk",
+    "scope": "instance_device"
+  },
+  "nic": {
+    "text": "NIC",
+    "scope": "instance_device"
+  },
+  "disk_quota_reached": {
+    "text": "Disk quota reached: {$used} of {$limit} GB in use",
+    "scope": "violations"
+  },
+  "nic_quota_reached": {
+    "text": "Extra-NIC quota reached: {$used} of {$limit} in use",
+    "scope": "violations"
+  },
+  "device_name_invalid": {
+    "text": "'{$name}' is not a valid device name (lowercase letters, digits and dashes; root and eth0 are reserved)",
+    "scope": "violations"
+  },
+  "device_size_invalid": {
+    "text": "A disk needs a size of at least 1 GB",
+    "scope": "violations"
+  },
+  "device_exists": {
+    "text": "Device '{$device}' already exists on this instance",
+    "scope": "violations"
+  },
+  "device_not_found": {
+    "text": "Device '{$device}' does not exist on this instance",
+    "scope": "violations"
+  },
+  "devices_unsupported": {
+    "text": "The runtime of {$name} does not support attachable devices",
+    "scope": "violations"
+  },
+  "device_attach_failed": {
+    "text": "Attaching '{$device}' to {$name} failed: {$reason}",
+    "scope": "violations"
+  },
+  "device_resize_failed": {
+    "text": "Resizing '{$device}' of {$name} failed: {$reason}",
+    "scope": "violations"
+  },
+  "device_detach_failed": {
+    "text": "Detaching '{$device}' from {$name} failed: {$reason}",
+    "scope": "violations"
   }
 }

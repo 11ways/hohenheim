@@ -76,6 +76,13 @@ public final class DockerInstanceRuntime
 
     @Override
     public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
+        if (spec.cloudInitUserData() != null && !spec.cloudInitUserData().isBlank()) {
+            // The honest refusal, never a silent drop: Docker has no cloud-init lane,
+            // and a spec carrying provisioning that would not run must not start.
+            throw new IOException("The docker driver cannot deliver cloud-init user-data"
+                + " declared for '" + spec.handle() + "'; cloud-init provisioning is an"
+                + " incus capability");
+        }
         // Replace only a leftover container the daemon attributes to THIS record; a
         // same-named foreign container is a loud refusal, never a force-remove.
         OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());

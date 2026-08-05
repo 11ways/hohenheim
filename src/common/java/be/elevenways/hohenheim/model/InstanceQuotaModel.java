@@ -45,6 +45,20 @@ public class InstanceQuotaModel extends Model {
             .help(HohenheimFormCopy.help("max_instances"))
             .build());
 
+    /** Attached-disk cap in GB (sum over the owner's device rows); same 0/null semantics. */
+    public static final IntegerField MAX_DISK_GB = SCHEMA.addField(
+        IntegerField.builder().name("max_disk_gb")
+            .label(HohenheimFormCopy.label("max_disk_gb"))
+            .help(HohenheimFormCopy.help("max_disk_gb"))
+            .build());
+
+    /** Extra-NIC cap (count over the owner's device rows); same 0/null semantics. */
+    public static final IntegerField MAX_NICS = SCHEMA.addField(
+        IntegerField.builder().name("max_nics")
+            .label(HohenheimFormCopy.label("max_nics"))
+            .help(HohenheimFormCopy.help("max_nics"))
+            .build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
@@ -54,13 +68,18 @@ public class InstanceQuotaModel extends Model {
         // unambiguous instead of another silent non-positive-means-unlimited lane.
         SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
-            if (row == null || !row.has(MAX_INSTANCES.getName())) {
+            if (row == null) {
                 return;
             }
-            Object value = row.get(MAX_INSTANCES.getName());
-            if (value instanceof Integer max && max < 0) {
-                throw Violations.ofField("max_instances", max,
-                    Microcopy.of("quota_negative").withFilter("scope", "violations"));
+            for (IntegerField cap : new IntegerField[] {MAX_INSTANCES, MAX_DISK_GB, MAX_NICS}) {
+                if (!row.has(cap.getName())) {
+                    continue;
+                }
+                Object value = row.get(cap.getName());
+                if (value instanceof Integer max && max < 0) {
+                    throw Violations.ofField(cap.getName(), max,
+                        Microcopy.of("quota_negative").withFilter("scope", "violations"));
+                }
             }
         });
     }

@@ -13,6 +13,8 @@ import be.elevenways.hohenheim.server.runtime.FileStagingSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
+import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
+import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -102,6 +104,13 @@ public final class InstanceService {
             // that sits inside the create window); record-after specs pass unchanged.
             InstanceSpec spec = PortPublications.ensureClaimed(resolved, instanceId);
             String handle = resolved.runtime().create(spec);
+            // Pin honesty, recorded from DAEMON truth right after create: the resolved
+            // image identity behind the mutable alias is what the record answers with,
+            // and what an absent-workload recreate resolves from.
+            pinResolvedImage(resolved, spec, fence);
+            // Desired devices reconcile BEFORE start: a recreated workload comes back
+            // with its disks and NICs, never silently without them.
+            new InstanceDevices(this).reconcile(resolved, instanceId);
             stageConfigFiles(resolved, instanceId);
             // Deploy recreates the container, dropping every non-primary network: the
             // game-domain link networks re-attach here, BEFORE start, with their policy
@@ -219,6 +228,10 @@ public final class InstanceService {
             InstanceConsoles.markStopExpected(instanceId);
             InstanceConsoles.closeSession(instanceId);
             resolved.runtime().destroy(resolved.spec().handle());
+            // Device rows and their daemon-side volumes die WITH the workload,
+            // verified -- destroy soft-deletes the record, so nothing else would ever
+            // release those reservations or reclaim those volumes.
+            new InstanceDevices(this).destroyCleanup(resolved, instanceId);
         } catch (IOException e) {
             stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
@@ -275,6 +288,28 @@ public final class InstanceService {
     /** The lease set this service mutates hosts under (shared with snapshot/backup ops). */
     @NonNull HostLeases leases() {
         return this.leases;
+    }
+
+    /**
+     * Record the daemon's RESOLVED image identity on the record (fenced write), read
+     * right after create so "what is actually running" is answerable from the row.
+     * Drivers without an identity-reporting capability leave the column untouched.
+     */
+    private void pinResolvedImage(@NonNull Resolved resolved, @NonNull InstanceSpec spec,
+                                  long fence) throws IOException {
+        String observed = null;
+        if (resolved.runtime() instanceof NativeSnapshotSupport support) {
+            observed = support.imageIdentity(spec).id();
+        } else if (resolved.runtime() instanceof VolumeSnapshotSupport support) {
+            observed = support.imageIdentity(spec).id();
+        }
+        if (observed == null || observed.isBlank()
+                || observed.equals(resolved.row().get(InstanceModel.IMAGE_FINGERPRINT))) {
+            return;
+        }
+        InstanceOperationGuard.stampFingerprint(this.leases,
+            resolved.row().get(InstanceModel.ID), resolved.serverId(), fence, observed,
+            String.valueOf((Object) resolved.row().get(InstanceModel.NAME)));
     }
 
     /**
@@ -364,6 +399,13 @@ public final class InstanceService {
         InstanceSpec spec = handler.specFor(instanceId, settings);
         if (spec.image().isEmpty()) {
             throw Violations.ofField("settings.image", "", violationText("instance_image_required"));
+        }
+        // The record's pinned resolved image identity rides the spec: a driver that
+        // resolves by fingerprint recreates an ABSENT workload from the pin, never by
+        // re-resolving the mutable alias (cleared on image change by the write hook).
+        String pinned = row.get(InstanceModel.IMAGE_FINGERPRINT);
+        if (pinned != null && !pinned.isBlank()) {
+            spec = spec.withImageFingerprint(pinned);
         }
         // THE canonical host key -- null folds to the local daemon, any other spelling
         // was already normalized onto servers.id by the model's beforeValidate hook.

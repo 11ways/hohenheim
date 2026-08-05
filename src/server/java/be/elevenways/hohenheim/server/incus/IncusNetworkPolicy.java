@@ -47,6 +47,15 @@ public final class IncusNetworkPolicy {
     /** The NIC every managed system container attaches (the default profile's device). */
     public static final String NIC = "eth0";
 
+    /**
+     * The managed bridge EXTRA NICs attach to. The daemon refuses a second NIC on the
+     * instance's primary network ("Instance DNS name conflict", observed live), so
+     * additional NICs land on this hohenheim-owned bridge -- created once with the
+     * daemon's own auto-assigned subnets and NAT, and every NIC on it carries the same
+     * isolation ACL as the primary. 15 chars exactly: the kernel ifname limit.
+     */
+    public static final String EXTRA_NETWORK = "hohenheim-extra";
+
     private final @NonNull IncusClient incus;
 
     public IncusNetworkPolicy(@NonNull IncusClient incus) {
@@ -152,6 +161,76 @@ public final class IncusNetworkPolicy {
             throw new IOException("REFUSED to run '" + handle + "': its declared egress ("
                 + egress + " => " + wantAction + ") is not what the daemon carries ("
                 + gotAction + ").");
+        }
+    }
+
+    /**
+     * Ensure the shared extra-NIC bridge exists and reads back as a managed network
+     * with an address to hand out -- the same write-then-verify contract as the ACL.
+     *
+     * @throws IOException when the daemon refuses or the network reads back unusable
+     */
+    public void ensureExtraNetwork() throws IOException {
+        Map<String, Object> existing = this.incus.network(EXTRA_NETWORK);
+        if (existing == null) {
+            Map<String, Object> definition = new LinkedHashMap<>();
+            definition.put("name", EXTRA_NETWORK);
+            definition.put("type", "bridge");
+            definition.put("description",
+                "hohenheim extra-NIC bridge (isolation ACL rides every NIC)");
+            // Empty config on purpose: the daemon auto-assigns free v4/v6 subnets and
+            // enables NAT, exactly what `incus network create` does.
+            definition.put("config", Map.of());
+            this.incus.createNetwork(definition);
+        }
+        Map<String, Object> readBack = this.incus.network(EXTRA_NETWORK);
+        boolean managed = readBack != null && Boolean.TRUE.equals(readBack.get("managed"));
+        String ipv4 = readBack != null && readBack.get("config") instanceof Map<?, ?> config
+            && config.get("ipv4.address") instanceof String address ? address : null;
+        if (!managed || ipv4 == null || ipv4.isBlank() || "none".equals(ipv4)) {
+            throw new IOException("REFUSED to attach an extra NIC on this Incus host: the '"
+                + EXTRA_NETWORK + "' bridge does not read back as a managed network with an"
+                + " IPv4 subnet (managed=" + managed + ", ipv4.address=" + ipv4 + ").");
+        }
+    }
+
+    /** The device map of one EXTRA NIC on the shared secondary bridge, ACL attached. */
+    public @NonNull Map<String, Object> extraNicDevice(@NonNull Egress egress) {
+        return nicDevice(EXTRA_NETWORK, egress);
+    }
+
+    /**
+     * Read back EVERY nic-type device of the instance and require each to carry the
+     * isolation ACL and the declared egress action -- an extra NIC must never be a
+     * hole in the boundary the primary one enforces.
+     *
+     * @throws IOException naming the first NIC that is not isolated
+     */
+    public void verifyAllNics(@NonNull String handle, @NonNull Map<String, Object> instance,
+                              @NonNull Egress egress) throws IOException {
+        verifyInstance(handle, instance, egress);
+        if (!(instance.get("devices") instanceof Map<?, ?> devices)) {
+            return;
+        }
+        for (Map.Entry<?, ?> entry : devices.entrySet()) {
+            String name = String.valueOf(entry.getKey());
+            if (NIC.equals(name) || !(entry.getValue() instanceof Map<?, ?> device)
+                    || !"nic".equals(String.valueOf(device.get("type")))) {
+                continue;
+            }
+            if (!ACL_NAME.equals(String.valueOf(device.get("security.acls")))) {
+                throw new IOException("REFUSED to run '" + handle + "': its extra NIC '"
+                    + name + "' does not reference the '" + ACL_NAME + "' ACL"
+                    + " (security.acls=" + device.get("security.acls") + "). An extra NIC"
+                    + " without the isolation ACL is a hole in the tenant boundary.");
+            }
+            String wantAction = egress == Egress.NONE ? "drop" : "allow";
+            String gotAction = String.valueOf(device.get("security.acls.default.egress.action"));
+            if (!wantAction.equals(gotAction)) {
+                throw new IOException("REFUSED to run '" + handle + "': extra NIC '" + name
+                    + "' declares egress " + wantAction + " but the daemon carries "
+                    + gotAction + ".");
+            }
         }
     }
 

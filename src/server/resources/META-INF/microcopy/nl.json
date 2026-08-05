@@ -6613,5 +6613,101 @@
   "catalog_import_action": {
     "text": "Importeer {$app}",
     "scope": "template_import"
+  },
+  "incus_vm": {
+    "text": "Virtuele machine",
+    "scope": "instance_kind"
+  },
+  "vm_image": [
+    {
+      "text": "Image-alias",
+      "scope": "field"
+    },
+    {
+      "text": "Een VM-image-alias op images.linuxcontainers.org (simplestreams). Gebruik een /cloud-variant zodat cloud-init draait, bv. alpine/3.22/cloud of debian/13/cloud.",
+      "scope": "help"
+    }
+  ],
+  "cloud_init": [
+    {
+      "text": "Cloud-init user-data",
+      "scope": "field"
+    },
+    {
+      "text": "Provisionering bij eerste opstart (#cloud-config). {{KEY}}-plaatshouders worden ingevuld met de variabelen van de instantie, geheime variabelen inbegrepen.",
+      "scope": "help"
+    }
+  ],
+  "device_size_gb": {
+    "text": "Grootte (GB)",
+    "scope": "field"
+  },
+  "max_disk_gb": [
+    {
+      "text": "Max schijf (GB)",
+      "scope": "field"
+    },
+    {
+      "text": "Limiet op de totale aangekoppelde schijfgrootte van deze eigenaar; 0 weigert elke schijf, leeg valt terug op het globale standaardmaximum",
+      "scope": "help"
+    }
+  ],
+  "max_nics": [
+    {
+      "text": "Max extra NIC's",
+      "scope": "field"
+    },
+    {
+      "text": "Limiet op de extra NIC's van deze eigenaar; 0 weigert elke NIC, leeg valt terug op het globale standaardmaximum",
+      "scope": "help"
+    }
+  ],
+  "disk": {
+    "text": "Schijf",
+    "scope": "instance_device"
+  },
+  "nic": {
+    "text": "NIC",
+    "scope": "instance_device"
+  },
+  "disk_quota_reached": {
+    "text": "Schijfquotum bereikt: {$used} van {$limit} GB in gebruik",
+    "scope": "violations"
+  },
+  "nic_quota_reached": {
+    "text": "Extra-NIC-quotum bereikt: {$used} van {$limit} in gebruik",
+    "scope": "violations"
+  },
+  "device_name_invalid": {
+    "text": "'{$name}' is geen geldige apparaatnaam (kleine letters, cijfers en streepjes; root en eth0 zijn voorbehouden)",
+    "scope": "violations"
+  },
+  "device_size_invalid": {
+    "text": "Een schijf heeft een grootte van minstens 1 GB nodig",
+    "scope": "violations"
+  },
+  "device_exists": {
+    "text": "Apparaat '{$device}' bestaat al op deze instantie",
+    "scope": "violations"
+  },
+  "device_not_found": {
+    "text": "Apparaat '{$device}' bestaat niet op deze instantie",
+    "scope": "violations"
+  },
+  "devices_unsupported": {
+    "text": "De runtime van {$name} ondersteunt geen aankoppelbare apparaten",
+    "scope": "violations"
+  },
+  "device_attach_failed": {
+    "text": "Aankoppelen van '{$device}' aan {$name} is mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "device_resize_failed": {
+    "text": "Herschalen van '{$device}' van {$name} is mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "device_detach_failed": {
+    "text": "Afkoppelen van '{$device}' van {$name} is mislukt: {$reason}",
+    "scope": "violations"
   }
 }

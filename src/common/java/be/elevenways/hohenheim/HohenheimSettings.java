@@ -699,6 +699,24 @@ public class HohenheimSettings {
                 + "usage is counted either way, so enabling a cap later takes effect "
                 + "immediately")
             .build();
+
+        public static final SettingDefinition<Integer> MAX_DISK_GB_PER_OWNER = GROUP
+            .buildSetting("max_disk_gb_per_owner", Integer.class)
+            .defaultValue(0)
+            .description("Default cap on the total attached-disk size (GB, summed over "
+                + "instance device rows) one owner may hold. A per-owner Instance Quota "
+                + "record overrides this. 0 or less means NO cap; usage is counted "
+                + "either way")
+            .build();
+
+        public static final SettingDefinition<Integer> MAX_EXTRA_NICS_PER_OWNER = GROUP
+            .buildSetting("max_extra_nics_per_owner", Integer.class)
+            .defaultValue(0)
+            .description("Default cap on the number of extra NICs (beyond the driver's "
+                + "primary one) one owner may attach across instances. A per-owner "
+                + "Instance Quota record overrides this. 0 or less means NO cap; usage "
+                + "is counted either way")
+            .build();
     }
 
     // --- Instance networking (public game-port pre-allocation) ---

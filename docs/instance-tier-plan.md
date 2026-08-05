@@ -3228,6 +3228,62 @@ shared hosting actually safe -- it is deferred in ORDER, not in importance.
   the primary mechanism and no lowest-common-denominator driver API hides
   runtime-specific capabilities.
 
+STATUS (2026-08-05): slice 1 LANDED and proven live on daystrom
+(IncusVmLiveTest, 13-step journey). The recorded decisions:
+- kind=vm is `hohenheim:incus_vm` (IncusVmKind) through the SAME
+  IncusInstanceRuntime; the flavour is a declared `IncusWorkloadType`
+  (api type, `security.secureboot=false` as a MANAGED key, a longer
+  exec-ready window for the agent -- ~4 min observed to agent-up on a small
+  host's first boot). A converge onto a same-named workload of the WRONG
+  flavour refuses.
+- Cloud-init shape: the template mechanism IS the provisioning vocabulary.
+  `cloud_init` is a settings field on the VM kind; `{{KEY}}` placeholders
+  resolve against instance variables (secret lane included) in
+  InstanceVariables.applyToSettings; the spec carries the rendered text and
+  the driver writes `cloud-init.user-data`; the Docker driver refuses a
+  cloud-init-bearing spec by name. VM kind has no env vars (nothing injects
+  into a guest's init) and no privileged flag.
+- Image identity: `instances.image_fingerprint` pins the daemon's resolved
+  `volatile.base_image` at deploy (fenced write); an ABSENT workload is
+  recreated from the pin, never the alias; a declared-image change clears
+  the pin (InstanceImagePin hook). TRAP: cloud-init status exits 2 on
+  done-with-warnings -- never gate on its exit code.
+- Devices: `instance_devices` desired-state rows (M073) reconciled at deploy
+  and cleaned at destroy (volumes deleted VERIFIED; destroy soft-deletes, so
+  the cleanup is the explicit GameDomains-shape call). DeviceAttachSupport is
+  the capability; disks are owner-labelled block custom volumes (resize is
+  stopped-only at the daemon: "In use" while running), extra NICs land on the
+  managed `hohenheim-extra` bridge because the daemon REFUSES a second NIC on
+  the primary network (instance DNS name conflict, verified live), each NIC
+  read-back-verified to carry the shared ACL (verifyAllNics).
+- Quota: disk-GB and extra-NIC dimensions over the core reservation ledger
+  (InstanceDeviceQuota; buckets hohenheim:disk_gb:/hohenheim:nics:), charged
+  adjacent to the row write, per-owner overrides on instance_quotas
+  (max_disk_gb/max_nics), settings defaults in HohenheimSettings.Quota. The
+  VM root disk stays the image default (a root-size knob is the later
+  disk/NIC/device-editing inventory item). Counterfactuals run: reservation
+  disabled -> the racing-attach test fails (2 rows landed); extra-NIC ACL
+  dropped -> the applier's read-back refuses the attach.
+- FINDING (2026-08-05, daystrom, incus qemu lane): an UNEXPECTED guest reset
+  (nested-KVM panic ~30s into first boot, ~3/5 runs on daystrom; a hostile
+  tenant can force the same with sysrq) makes incus restart QEMU in place, and
+  in one observed run the eth0 teardown failed ("Failed to detach interface
+  ... invalid argument", stale DOWN tap left on the bridge) and the restarted
+  VM's live tap carried NO ACL reject rules -- the VM pinged its peer while
+  the daemon CONFIG still read back fully isolated. Clean `reboot` and even
+  sysrq-b re-applied rules correctly when retried deliberately; the leak needs
+  the failed-detach race. This is daemon-internal (below our REST seam): our
+  read-back verifies daemon CONFIG, and kernel-truth verification needs host
+  access the driver does not have. Track as a named risk in the Phase 8
+  bridge/VLAN/firewall inventory item; candidate mitigations: incus upstream
+  fix, host-agent kernel readback, or refusing VM kinds on hosts whose incus
+  version carries the race.
+  NOT in slice 1 (later slices): framebuffer console + plumage viewer,
+  Windows prepared templates, host drain / cold migration, the closed
+  Proxmox-use inventory, and any admin/tenant UI for device editing (the
+  mechanism's wired consumers are deploy-reconcile + destroy-cleanup + the
+  service lane).
+
 Phase gate: provision Linux from cloud-init and Windows from a prepared template;
 attach/resize a disk and NIC under quota; enforce the network policy; snapshot;
 export an off-host backup; restore to a new host; use the framebuffer rescue
