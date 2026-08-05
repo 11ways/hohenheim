@@ -1,13 +1,12 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
  * Per-zone DNSSEC signing key material and toggle (online-signing CSK).
  */
-public class M037_AddDnssec extends Migration {
+public class M037_AddDnssec extends HohenheimMigration {
 
     public M037_AddDnssec() {
         super("2026_07_17_000037", "Add per-zone DNSSEC key material");

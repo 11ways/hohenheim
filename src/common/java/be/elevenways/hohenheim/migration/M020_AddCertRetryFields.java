@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M020_AddCertRetryFields extends Migration {
+public class M020_AddCertRetryFields extends HohenheimMigration {
 
     public M020_AddCertRetryFields() {
         super("2026_06_10_000020", "Add retry backoff fields to certificates");

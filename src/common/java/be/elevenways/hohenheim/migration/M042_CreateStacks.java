@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
 import be.elevenways.zenit.common.orm.migration.ForeignKeyAction;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -11,7 +10,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * The three table-stored SchemaField child tables are spelled out literally rather than
  * derived from StackServiceModel: a shipped migration must mean the same thing forever.
  */
-public class M042_CreateStacks extends Migration {
+public class M042_CreateStacks extends HohenheimMigration {
 
     // AIDEV-NOTE: This migration used to call `new StackServiceModel()` +
     // createSchemaTableFor(...), which derives its DDL from the model AS IT IS TODAY. Editing a

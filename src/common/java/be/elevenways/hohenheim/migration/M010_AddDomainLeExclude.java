@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M010_AddDomainLeExclude extends Migration {
+public class M010_AddDomainLeExclude extends HohenheimMigration {
 
     public M010_AddDomainLeExclude() {
         super("2026_04_02_000010", "Add exclude_from_letsencrypt to site_domains");

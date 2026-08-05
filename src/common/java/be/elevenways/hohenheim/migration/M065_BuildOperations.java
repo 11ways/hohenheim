@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -10,7 +9,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * the daemon's own /build inline from the site convergence), so there is nothing to
  * migrate forward.
  */
-public class M065_BuildOperations extends Migration {
+public class M065_BuildOperations extends HohenheimMigration {
 
     public M065_BuildOperations() {
         super("2026_08_05_100000", "Sandboxed build operations");

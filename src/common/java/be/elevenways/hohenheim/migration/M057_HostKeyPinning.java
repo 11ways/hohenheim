@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -17,7 +16,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * -- declaring encryption over an already-populated column would make every read
  * throw from inside row hydration.
  */
-public class M057_HostKeyPinning extends Migration {
+public class M057_HostKeyPinning extends HohenheimMigration {
 
     public M057_HostKeyPinning() {
         super("2026_08_03_160000", "SSH host-key pin and per-host client identity");

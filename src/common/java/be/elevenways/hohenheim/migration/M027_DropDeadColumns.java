@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -9,7 +8,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * port/http2/certificate_type (routing never consulted them) and the certificate
  * DNS-01/custom-ACME/meta placeholders (features never built).
  */
-public class M027_DropDeadColumns extends Migration {
+public class M027_DropDeadColumns extends HohenheimMigration {
 
     public M027_DropDeadColumns() {
         super("2026_07_07_000027", "Drop dead site_domain and certificate columns");

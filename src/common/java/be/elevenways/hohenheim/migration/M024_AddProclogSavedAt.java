@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M024_AddProclogSavedAt extends Migration {
+public class M024_AddProclogSavedAt extends HohenheimMigration {
 
     public M024_AddProclogSavedAt() {
         super("2026_06_10_000024", "Add periodic-flush timestamp and listing index to proclogs");

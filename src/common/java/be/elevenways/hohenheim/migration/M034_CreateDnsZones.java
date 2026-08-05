@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M034_CreateDnsZones extends Migration {
+public class M034_CreateDnsZones extends HohenheimMigration {
 
     public M034_CreateDnsZones() {
         super("2026_07_17_000034", "Create the authoritative DNS zone and record tables");

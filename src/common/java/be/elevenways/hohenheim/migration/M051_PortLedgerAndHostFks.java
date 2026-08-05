@@ -12,7 +12,6 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.SchemaField;
 import be.elevenways.zenit.common.orm.field.StringField;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -37,7 +36,7 @@ import java.util.Map;
  * backfill keeps the lowest service id per contested tuple (the M045 stance -- losers were
  * already colliding at deploy time and their next edit gets the real conflict message).
  */
-public class M051_PortLedgerAndHostFks extends Migration {
+public class M051_PortLedgerAndHostFks extends HohenheimMigration {
 
     public M051_PortLedgerAndHostFks() {
         super("2026_08_03_000051", "Port allocation ledger and canonical server FKs");

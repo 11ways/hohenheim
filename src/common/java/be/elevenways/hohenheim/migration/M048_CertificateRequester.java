@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -10,7 +9,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  *
  * @author Jelle De Loecker
  */
-public class M048_CertificateRequester extends Migration {
+public class M048_CertificateRequester extends HohenheimMigration {
 
     public M048_CertificateRequester() {
         super("2026_08_03_000048", "Record the subject a certificate was ordered for");

@@ -2,11 +2,10 @@ package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
 import be.elevenways.zenit.common.orm.migration.ForeignKeyAction;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /** Creates the fixed-row singleton backing table for Hohenheim's local Spamservice runtime. */
-public class M041_CreateSpamserviceInstallation extends Migration {
+public class M041_CreateSpamserviceInstallation extends HohenheimMigration {
 
     public M041_CreateSpamserviceInstallation() {
         super("2026_07_23_000041", "Create the Spamservice installation table");

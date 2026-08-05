@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M003_CreateSites extends Migration {
+public class M003_CreateSites extends HohenheimMigration {
 
     public M003_CreateSites() {
         super("2026_03_31_000003", "Create sites table");

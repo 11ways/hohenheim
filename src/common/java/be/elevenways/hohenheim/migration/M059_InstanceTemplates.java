@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -10,7 +9,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * provenance), per-instance variable VALUES (encrypted secret carrier) and per-instance
  * config files, plus the instance columns the durable install lifecycle needs.
  */
-public class M059_InstanceTemplates extends Migration {
+public class M059_InstanceTemplates extends HohenheimMigration {
 
     public M059_InstanceTemplates() {
         super("2026_08_03_180000", "Instance templates, typed variables and config files");

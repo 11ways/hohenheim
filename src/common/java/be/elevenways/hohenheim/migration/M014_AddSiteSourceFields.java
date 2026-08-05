@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M014_AddSiteSourceFields extends Migration {
+public class M014_AddSiteSourceFields extends HohenheimMigration {
 
     public M014_AddSiteSourceFields() {
         super("2026_04_10_000014", "Add source and source_settings to sites");

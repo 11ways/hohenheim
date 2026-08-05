@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -12,7 +11,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * records into projects) is the ledgered ProjectAdoptionSeeder, because it
  * writes zenit-auth tables that a hohenheim migration must not reach into.
  */
-public class M067_ProjectsAndEnvironments extends Migration {
+public class M067_ProjectsAndEnvironments extends HohenheimMigration {
 
     public M067_ProjectsAndEnvironments() {
         super("2026_08_06_100000", "Projects and environments");

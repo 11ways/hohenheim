@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -13,7 +12,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * @throws UnsupportedOperationException from {@link #down} — the copied rows
  *         blend into zenit_activity and cannot be carved back out.
  */
-public class M026_MigrateAuditLogToActivity extends Migration {
+public class M026_MigrateAuditLogToActivity extends HohenheimMigration {
 
     public M026_MigrateAuditLogToActivity() {
         super("2026_07_07_000026", "Move audit_log into the framework activity log");

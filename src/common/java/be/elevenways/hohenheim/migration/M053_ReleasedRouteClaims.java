@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -14,7 +13,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * once over its life. There is no backfill: a claim released BEFORE this migration left no
  * evidence anywhere, so inventing ledger rows would be inventing owners.
  */
-public class M053_ReleasedRouteClaims extends Migration {
+public class M053_ReleasedRouteClaims extends HohenheimMigration {
 
     public M053_ReleasedRouteClaims() {
         super("2026_08_03_000153", "Released route claim quarantine ledger");

@@ -1,11 +1,10 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /** Stores how an ACME certificate can be renewed. */
-public class M033_AddCertificateChallenge extends Migration {
+public class M033_AddCertificateChallenge extends HohenheimMigration {
 
     public M033_AddCertificateChallenge() {
         super("2026_07_16_000033", "Add ACME challenge and DNS publisher to certificates");

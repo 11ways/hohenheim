@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.migration;
 
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
+import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 import java.util.List;
@@ -36,7 +36,7 @@ import java.util.List;
  *
  * @author Jelle De Loecker
  */
-public class M045_SiteDomainRouteClaims extends Migration {
+public class M045_SiteDomainRouteClaims extends HohenheimMigration {
 
     /** ONE name for the unique index, so up() and down() can never drift apart. */
     private static final String LIVE_ROUTE_KEY_INDEX = "site_domains_live_route_key_unique";

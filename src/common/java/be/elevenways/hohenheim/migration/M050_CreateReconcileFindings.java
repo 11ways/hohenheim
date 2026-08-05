@@ -1,14 +1,13 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
  * Persisted Docker-reconciler findings, replaced per server on every sweep so the
  * dashboard reads stored attribution instead of probing daemons per render.
  */
-public class M050_CreateReconcileFindings extends Migration {
+public class M050_CreateReconcileFindings extends HohenheimMigration {
 
     public M050_CreateReconcileFindings() {
         super("2026_08_03_000050", "Create reconcile findings");

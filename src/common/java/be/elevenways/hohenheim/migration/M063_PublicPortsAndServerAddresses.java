@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -9,7 +8,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * (record-after rows keep a null mode; pre-allocated rows are stamped) and the
  * server-address authority DNS A/AAAA generation reads.
  */
-public class M063_PublicPortsAndServerAddresses extends Migration {
+public class M063_PublicPortsAndServerAddresses extends HohenheimMigration {
 
     public M063_PublicPortsAndServerAddresses() {
         super("2026_08_04_130000", "Public ports and server addresses");

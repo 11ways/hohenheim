@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M032_CreateSiteDatabases extends Migration {
+public class M032_CreateSiteDatabases extends HohenheimMigration {
 
     public M032_CreateSiteDatabases() {
         super("2026_07_16_000032", "Create the site-database attachment table");

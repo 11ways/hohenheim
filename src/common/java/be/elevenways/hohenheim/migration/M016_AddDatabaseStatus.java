@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M016_AddDatabaseStatus extends Migration {
+public class M016_AddDatabaseStatus extends HohenheimMigration {
 
     public M016_AddDatabaseStatus() {
         super("2026_05_25_000016", "Add provisioning status to managed_databases");

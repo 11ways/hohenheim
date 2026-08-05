@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M028_CreateDeployments extends Migration {
+public class M028_CreateDeployments extends HohenheimMigration {
 
     public M028_CreateDeployments() {
         super("2026_07_08_000028", "Create the deployments history table");

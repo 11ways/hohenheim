@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M008_AddCertificateLifecycleFields extends Migration {
+public class M008_AddCertificateLifecycleFields extends HohenheimMigration {
 
     public M008_AddCertificateLifecycleFields() {
         super("2026_04_02_000008", "Add lifecycle fields to certificates");
