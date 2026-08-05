@@ -102,8 +102,10 @@ public final class IncusVmKind implements InstanceKindHandler {
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
         // Tenant tier, OPEN egress like the container kind: the workload fetches its
         // own updates; the tenant-range denies still apply on every NIC.
+        // The server NAME travels so the driver can read the DAEMON HOST's kernel, not
+        // the controller's -- kernel truth and daemon config are independent facts here.
         return new IncusInstanceRuntime(new ServerService().incusClientFor(serverName),
-            Egress.OPEN, IncusWorkloadType.VIRTUAL_MACHINE);
+            Egress.OPEN, IncusWorkloadType.VIRTUAL_MACHINE, serverName);
     }
 
     @Override

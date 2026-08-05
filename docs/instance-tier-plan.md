@@ -3278,6 +3278,85 @@ STATUS (2026-08-05): slice 1 LANDED and proven live on daystrom
   bridge/VLAN/firewall inventory item; candidate mitigations: incus upstream
   fix, host-agent kernel readback, or refusing VM kinds on hosts whose incus
   version carries the race.
+  SUPERSEDED 2026-08-05 by the kernel-truth wave below: the mitigation shipped,
+  and the upstream half of that FINDING is now answered (no upstream fix
+  exists, so this is permanent, not version-gated).
+
+STATUS (2026-08-05, kernel-truth wave): the isolation leak above is CLOSED at
+the layer we can close it. What was established, in order:
+
+- REPRODUCED, but not the trigger. The security divergence itself is
+  reproducible on demand on daystrom and was captured verbatim: with the
+  instance's `bridge incus` chains removed while it runs, `incus config show`
+  still reports `security.acls: hohenheim-isolation`, `incus network acl show`
+  still carries all six tenant rejects, `nft list ruleset` shows
+  `table bridge incus { }`, the tap is `master incusbr0 state forwarding`, and
+  the VM pings its peer AND the host gateway at 0% loss. What could NOT be
+  forced on demand is incus's own EINVAL detach: five injections were tried
+  (tap `nomaster` raced to the millisecond against QEMU exit, tap moved to
+  another bridge then `incus restart`, SIGKILL of QEMU, guest `sysrq-b` x5,
+  guest clean `reboot`, plus an ACL-churn race against the first-boot
+  auto-restart) and none of them made incusd log the failed detach. Two
+  incidental facts worth keeping: a guest reset (sysrq-b or `reboot`) is
+  absorbed by QEMU and does NOT change the tap or the rules, and a fresh
+  Alpine VM on daystrom reliably takes an incus-driven full restart ~28s into
+  its first boot (new tap every time). So the RACE is reproduced only in its
+  end state; the fix does not depend on the trigger, only on config truth and
+  kernel truth being independent.
+- UPSTREAM VERDICT: not a known defect, not fixed, not version-gated. incus
+  v7.3.0 (2026-07-31) is the newest release and is what daystrom runs;
+  `nic_bridged.go`, `drivers_nftables.go`, `drivers_nftables_templates.go` and
+  `qmp/monitor.go` are byte-identical on `main` as of 2026-08-05, and nothing
+  in the lxc/incus or canonical/lxd trackers describes this (bridge-NIC
+  `security.acls` is Incus-only since 2024-09, so LXD has no shared ancestry).
+  Upgrading fixes nothing. The mechanics: `nicBridged.postStop` detaches the
+  tap BEFORE it calls `removeFilters` and RETURNS on the detach error, so a
+  failed detach skips the firewall teardown entirely; every generated rule is
+  scoped `iifname "tapXXXX"` while the chains are named after instance+device
+  and carry `policy accept`. A surviving chain therefore names a DEAD tap, the
+  restarted workload's new tap matches nothing, and accept wins. Counting
+  chains or rules would report that state as isolated -- which is why the
+  verifier keys on the CURRENT tap name.
+- MECHANISM: `IncusKernelIsolation` (server/incus) reads `nft list table
+  bridge incus` on the daemon's own host through the EXISTING `NftRunner`
+  lane, resolves each NIC's live `volatile.<dev>.host_name`, and requires a
+  drop/reject naming that tap for every `TenantNetworkRanges` entry in both
+  families. It NEVER falls back to the controller's nft.
+- SHAPE, and why it closes rather than narrows: verification at start cannot
+  see a hole that does not exist yet (the divergence is created inside incusd
+  afterwards, on a reset a tenant can force at will), and there is no event to
+  hang a re-check on that is not itself racing the daemon's own stop/start.
+  Nothing outside incusd can PREVENT the window; a five-minute
+  `VerifyIncusIsolation` sweep (boot+cron, INSTANCES role) makes it BOUNDED and
+  self-closing -- no state exists in which a diverged workload stays reachable
+  indefinitely or invisibly. Deploy-time verification rides the driver's
+  `start` as well, for the case where the hole is already open.
+- REPAIR LEVER: an ACL config-key bump (`PUT /1.0/network-acls/<name>`).
+  Upstream's `common.Update` calls `BridgeUpdateACLs` UNCONDITIONALLY and
+  `removeChains` is keyed by instance+device rather than by tap, so the reload
+  removes a chain left naming a dead tap and rebuilds it against the live one.
+  A device write is NOT equivalent and this was measured live: re-setting the
+  identical `security.acls` value repaired nothing (`devicesUpdate` only
+  reloads devices whose config actually changed), while the ACL bump restored
+  all three chains and the peer went back to 100% loss.
+- DECISION on a running workload found diverged: repair first, then STOP. A
+  transient daemon race therefore costs no availability at all; only a workload
+  the daemon REFUSES to re-isolate is stopped. What is at stake in the other
+  direction is not that workload's data but every other tenant's, on the only
+  strong boundary shared iron has. A stopped workload is a visible, recoverable
+  failure; an unisolated running one is invisible and unrecoverable. A host
+  whose kernel cannot be READ is a different case and is never stopped -- it is
+  reported unverifiable every sweep, because refusing to answer is not evidence
+  of a leak.
+- OPEN, stated as open: an Incus daemon addressed over https has NO product
+  shell lane on its host record (its ssh columns carry the daemon's TLS
+  material), so kernel truth is unavailable for a remote Incus host today and
+  those hosts' isolation is UNCONFIRMED rather than verified. A local
+  unix-socket daemon is fully covered. Giving the Incus host record its own
+  pinned ssh admin lane is the follow-up that closes it; until then the live
+  test injects the lane through the documented test seam, which is why the
+  mechanism is proven against a real kernel but the remote production path is
+  not yet.
   NOT in slice 1 (later slices): framebuffer console + plumage viewer,
   Windows prepared templates, host drain / cold migration, the closed
   Proxmox-use inventory, and any admin/tenant UI for device editing (the
