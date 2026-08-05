@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -106,7 +107,10 @@ public final class IncusContainerKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
-        return new IncusInstanceRuntime(new ServerService().incusClientFor(serverName));
+        // Incus system containers are the tenant tier: OPEN egress (the workload fetches
+        // its own updates and dependencies), the tenant-range denies still apply.
+        return new IncusInstanceRuntime(new ServerService().incusClientFor(serverName),
+            Egress.OPEN);
     }
 
     @Override

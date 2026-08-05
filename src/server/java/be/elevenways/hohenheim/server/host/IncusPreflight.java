@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.incus.IncusClient;
+import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusClients;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -61,6 +62,7 @@ public final class IncusPreflight {
             checkDriver(facts, checks);
             checkStorage(client, checks, facts);
             checkNetwork(client, checks, facts);
+            checkAclSupport(client, checks);
         }
 
         boolean passed = server != null;
@@ -175,6 +177,42 @@ public final class IncusPreflight {
         } catch (IOException error) {
             checks.add(new HostPreflight.Check("managed_network", HostPreflight.STATUS_FAIL,
                 true, "could not list networks: " + error.getMessage()));
+        }
+    }
+
+    /**
+     * The isolation prerequisite, proven by DOING it: create a probe network ACL, read
+     * it back, delete it. Tenant isolation on this tier RIDES the daemon's ACL support
+     * (see {@link IncusNetworkPolicy}); a daemon that cannot carry an ACL cannot isolate
+     * a tenant, and that must surface here rather than on a tenant deploy.
+     */
+    private static void checkAclSupport(IncusClient client, List<HostPreflight.Check> checks) {
+        String name = "hohenheim-preflight-acl-" + Long.toHexString(System.nanoTime());
+        try {
+            client.createNetworkAcl(Map.of(
+                "name", name,
+                "description", "hohenheim preflight probe",
+                "egress", List.of(Map.of("action", "reject",
+                    "destination", "169.254.0.0/16", "state", "enabled")),
+                "ingress", List.of(),
+                "config", Map.of()));
+            Map<String, Object> readBack = client.networkAcl(name);
+            boolean visible = readBack != null
+                && readBack.get("egress") instanceof List<?> egress && !egress.isEmpty();
+            try {
+                client.deleteNetworkAcl(name);
+            } catch (IOException cleanup) {
+                // a stuck probe ACL is the reconciler's, not this verdict's, problem
+            }
+            checks.add(new HostPreflight.Check("network_acl",
+                visible ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, true,
+                visible ? "network ACL created and read back -- tenant isolation is enforceable"
+                    : "the daemon accepted an ACL but it did not read back with its rule;"
+                        + " tenant isolation cannot be enforced on this host"));
+        } catch (Exception error) {
+            checks.add(new HostPreflight.Check("network_acl", HostPreflight.STATUS_FAIL, true,
+                "could not create a probe network ACL, so tenant isolation is not"
+                    + " enforceable: " + error.getMessage()));
         }
     }
 

@@ -371,6 +371,41 @@ public class IncusClient {
             Json.stringify(definition), DEFAULT_TIMEOUT_MS), LONG_OP_TIMEOUT_MS);
     }
 
+    // -- network ACLs ---------------------------------------------------------
+
+    /**
+     * One network ACL's definition, or null when it does not exist.
+     *
+     * @throws IOException on any daemon error other than 404
+     */
+    public @Nullable Map<String, Object> networkAcl(@NonNull String name) throws IOException {
+        try {
+            return syncMetadata("GET", "/1.0/network-acls/" + name, null, DEFAULT_TIMEOUT_MS);
+        } catch (ApiException e) {
+            if (e.isNotFound()) {
+                return null;
+            }
+            throw e;
+        }
+    }
+
+    /** Create a network ACL (sync; {@code POST /1.0/network-acls}). */
+    public void createNetworkAcl(@NonNull Map<String, Object> definition) throws IOException {
+        syncPayload("POST", "/1.0/network-acls", Json.stringify(definition), DEFAULT_TIMEOUT_MS);
+    }
+
+    /** Replace a network ACL's rules and config (sync PUT). */
+    public void updateNetworkAcl(@NonNull String name, @NonNull Map<String, Object> definition)
+            throws IOException {
+        syncPayload("PUT", "/1.0/network-acls/" + name, Json.stringify(definition),
+            DEFAULT_TIMEOUT_MS);
+    }
+
+    /** Delete a network ACL; 404 surfaces as {@link ApiException#isNotFound}. */
+    public void deleteNetworkAcl(@NonNull String name) throws IOException {
+        syncPayload("DELETE", "/1.0/network-acls/" + name, null, DEFAULT_TIMEOUT_MS);
+    }
+
     // -- storage --------------------------------------------------------------
 
     /** One profile's definition ({@code GET /1.0/profiles/{name}}). */
