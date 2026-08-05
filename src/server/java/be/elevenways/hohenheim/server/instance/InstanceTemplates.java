@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypeHandler;
@@ -218,7 +219,12 @@ public final class InstanceTemplates {
         if (name.isBlank()) {
             throw Violations.ofField("name", name, violationText("name_required"));
         }
-        int placement = InstancePlacement.forActor(ctx, serverId);
+        // Placement is runtime-aware: the template's kind names the daemon flavour it
+        // needs, and only hosts declaring that runtime qualify.
+        InstanceKindHandler kindHandler = InstanceKinds.getHandler(
+            template.get(InstanceTemplateModel.KIND));
+        int placement = InstancePlacement.forActor(ctx, serverId,
+            kindHandler != null ? kindHandler.requiredRuntime() : ServerModel.RUNTIME_DOCKER);
         int templateId = template.get(InstanceTemplateModel.ID);
 
         FormSpec spec = variableFormSpec(templateId);

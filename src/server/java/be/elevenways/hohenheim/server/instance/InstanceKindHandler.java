@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.protoblast.common.annotation.BlastDiscoverable;
@@ -38,5 +39,14 @@ public interface InstanceKindHandler extends InstanceKindInfo {
      */
     default boolean tenantAuthored() {
         return true;
+    }
+
+    /**
+     * The host runtime ({@code ServerModel.RUNTIME_*}) records of this kind run on.
+     * Placement only offers matching hosts, and a mismatched deploy refuses at client
+     * construction -- a Docker kind can never land on an Incus daemon or vice versa.
+     */
+    default @NonNull String requiredRuntime() {
+        return ServerModel.RUNTIME_DOCKER;
     }
 }

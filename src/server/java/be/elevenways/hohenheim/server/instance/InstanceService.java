@@ -369,6 +369,18 @@ public final class InstanceService {
         // was already normalized onto servers.id by the model's beforeValidate hook.
         int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
         String serverName = ServerModel.nameOf(serverId);
+        // The kind's declared runtime must MATCH the host's declared runtime before any
+        // client is built: a docker kind resolved against an incus host (or vice versa)
+        // is a named refusal, never a client aimed at the wrong daemon.
+        Row server = Models.get(ServerModel.class).findById(serverId);
+        String hostRuntime = server != null ? ServerModel.runtimeOf(server)
+            : ServerModel.RUNTIME_DOCKER;
+        if (!hostRuntime.equals(handler.requiredRuntime())) {
+            throw Violations.ofForm(violationText("host_runtime_mismatch")
+                .withArg("name", serverName)
+                .withArg("runtime", hostRuntime)
+                .withArg("required", handler.requiredRuntime()));
+        }
         return new Resolved(row, handler, handler.runtimeFor(serverName), spec, serverId,
             variables);
     }

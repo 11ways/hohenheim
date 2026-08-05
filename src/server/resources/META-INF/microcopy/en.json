@@ -2159,10 +2159,6 @@
     "text": "unreachable",
     "scope": "server"
   },
-  "host_docker_unavailable": {
-    "text": "Docker unavailable",
-    "scope": "server"
-  },
   "host_unknown_platform": {
     "text": "unknown platform",
     "scope": "server"
@@ -3597,10 +3593,16 @@
     "text": "Spamservice is not connected. Configure and start the local installation to use remote administration.",
     "scope": "spamservice"
   },
-  "runtime": {
-    "text": "Managed runtime",
-    "scope": "spamservice"
-  },
+  "runtime": [
+    {
+      "text": "Managed runtime",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Runtime",
+      "scope": "field"
+    }
+  ],
   "configured": {
     "text": "Configured",
     "scope": "spamservice"
@@ -6430,6 +6432,82 @@
     {
       "text": "Preview teardown failed: {$reason}",
       "scope": "preview_deployment"
+    }
+  ],
+  "docker": {
+    "text": "Docker",
+    "scope": "host_runtime"
+  },
+  "incus": {
+    "text": "Incus",
+    "scope": "host_runtime"
+  },
+  "incus_url": [
+    {
+      "text": "Incus URL",
+      "scope": "field"
+    },
+    {
+      "text": "https://host:8443 for a remote daemon (TLS client certificate + pinned server certificate), or unix:// for the local socket.",
+      "scope": "help"
+    }
+  ],
+  "incus_trust_token": [
+    {
+      "text": "Incus trust token",
+      "scope": "field"
+    },
+    {
+      "text": "One-use token minted with 'incus config trust add' on the host. Pasting it enrolls Hohenheim's client certificate on the daemon; the token itself is never stored. Alternatively install the shown client certificate there with 'incus config trust add-certificate'.",
+      "scope": "help"
+    }
+  ],
+  "trust_notice_body_incus": {
+    "text": "Enrolling a host gives Hohenheim control of its Incus daemon, which is equivalent to root on that machine: it can start any container or VM and read anything they mount. Only enroll machines you own. After saving, scan the server certificate, confirm its fingerprint against incus info on the host itself, and enroll the client certificate (trust token or incus config trust).",
+    "scope": "server"
+  },
+  "host_daemon_unavailable": {
+    "text": "{$daemon} unavailable",
+    "scope": "server"
+  },
+  "incus_url_format": {
+    "text": "The Incus URL must be https://host[:port] or unix://[path].",
+    "scope": "violations"
+  },
+  "incus_enroll_failed": {
+    "text": "Enrolling on {$name} failed: {$detail}",
+    "scope": "violations"
+  },
+  "incus_token_needs_https": {
+    "text": "A trust token only applies to an Incus host reached over https.",
+    "scope": "violations"
+  },
+  "host_runtime_mismatch": {
+    "text": "Instance kind needs a {$required} host, but '{$name}' declares the {$runtime} runtime.",
+    "scope": "violations"
+  },
+  "incus_container": {
+    "text": "Incus container",
+    "scope": "instance_kind"
+  },
+  "incus_image": [
+    {
+      "text": "Image alias",
+      "scope": "field"
+    },
+    {
+      "text": "An alias on images.linuxcontainers.org (simplestreams), e.g. debian/13 or alpine/3.22.",
+      "scope": "help"
+    }
+  ],
+  "incus_privileged": [
+    {
+      "text": "Privileged container",
+      "scope": "field"
+    },
+    {
+      "text": "DANGER: a privileged container's root user maps onto the HOST's root user. A system container is not a security boundary against a determined root user even unprivileged; privileged mode removes most of what remains. Leave off unless the workload genuinely cannot run without it.",
+      "scope": "help"
     }
   ]
 }

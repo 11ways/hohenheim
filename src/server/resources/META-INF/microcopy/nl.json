@@ -2155,10 +2155,6 @@
     "text": "onbereikbaar",
     "scope": "server"
   },
-  "host_docker_unavailable": {
-    "text": "Docker niet beschikbaar",
-    "scope": "server"
-  },
   "host_unknown_platform": {
     "text": "onbekend platform",
     "scope": "server"
@@ -3593,10 +3589,16 @@
     "text": "Spamservice is niet verbonden. Configureer en start de lokale installatie om beheer te gebruiken.",
     "scope": "spamservice"
   },
-  "runtime": {
-    "text": "Beheerde runtime",
-    "scope": "spamservice"
-  },
+  "runtime": [
+    {
+      "text": "Beheerde runtime",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Runtime",
+      "scope": "field"
+    }
+  ],
   "configured": {
     "text": "Geconfigureerd",
     "scope": "spamservice"
@@ -6426,6 +6428,82 @@
     {
       "text": "Preview-afbraak mislukt: {$reason}",
       "scope": "preview_deployment"
+    }
+  ],
+  "docker": {
+    "text": "Docker",
+    "scope": "host_runtime"
+  },
+  "incus": {
+    "text": "Incus",
+    "scope": "host_runtime"
+  },
+  "incus_url": [
+    {
+      "text": "Incus-URL",
+      "scope": "field"
+    },
+    {
+      "text": "https://host:8443 voor een externe daemon (TLS-clientcertificaat + vastgepind servercertificaat), of unix:// voor de lokale socket.",
+      "scope": "help"
+    }
+  ],
+  "incus_trust_token": [
+    {
+      "text": "Incus-vertrouwenstoken",
+      "scope": "field"
+    },
+    {
+      "text": "Eenmalig token uit 'incus config trust add' op de host. Plakken schrijft het clientcertificaat van Hohenheim in op de daemon; het token zelf wordt nooit opgeslagen. Je kunt het getoonde clientcertificaat daar ook installeren met 'incus config trust add-certificate'.",
+      "scope": "help"
+    }
+  ],
+  "trust_notice_body_incus": {
+    "text": "Een host toevoegen geeft Hohenheim controle over zijn Incus-daemon, wat gelijkstaat aan root op die machine: het kan elke container of VM starten en alles lezen wat ze koppelen. Voeg alleen machines toe die van jou zijn. Scan na het opslaan het servercertificaat, bevestig de vingerafdruk tegen incus info op de host zelf, en schrijf het clientcertificaat in (vertrouwenstoken of incus config trust).",
+    "scope": "server"
+  },
+  "host_daemon_unavailable": {
+    "text": "{$daemon} niet beschikbaar",
+    "scope": "server"
+  },
+  "incus_url_format": {
+    "text": "De Incus-URL moet https://host[:poort] of unix://[pad] zijn.",
+    "scope": "violations"
+  },
+  "incus_enroll_failed": {
+    "text": "Inschrijven op {$name} mislukt: {$detail}",
+    "scope": "violations"
+  },
+  "incus_token_needs_https": {
+    "text": "Een vertrouwenstoken geldt alleen voor een Incus-host die via https bereikt wordt.",
+    "scope": "violations"
+  },
+  "host_runtime_mismatch": {
+    "text": "Dit instantietype heeft een {$required}-host nodig, maar '{$name}' declareert de {$runtime}-runtime.",
+    "scope": "violations"
+  },
+  "incus_container": {
+    "text": "Incus-container",
+    "scope": "instance_kind"
+  },
+  "incus_image": [
+    {
+      "text": "Image-alias",
+      "scope": "field"
+    },
+    {
+      "text": "Een alias op images.linuxcontainers.org (simplestreams), bijv. debian/13 of alpine/3.22.",
+      "scope": "help"
+    }
+  ],
+  "incus_privileged": [
+    {
+      "text": "Geprivilegieerde container",
+      "scope": "field"
+    },
+    {
+      "text": "GEVAAR: de root-gebruiker van een geprivilegieerde container valt samen met root op de HOST. Een systeemcontainer is zelfs ongeprivilegieerd geen veiligheidsgrens tegen een vastberaden root-gebruiker; geprivilegieerde modus haalt het meeste van wat overblijft weg. Laat uit tenzij de werklast er echt niet zonder kan.",
+      "scope": "help"
     }
   ]
 }

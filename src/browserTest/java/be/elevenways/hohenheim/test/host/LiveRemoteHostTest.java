@@ -146,7 +146,7 @@ class LiveRemoteHostTest {
                     .isTrue();
                 assertThat(reached.osType()).as("step 5: it is a Linux daemon")
                     .isEqualTo("linux");
-                assertThat(reached.dockerVersion())
+                assertThat(reached.daemonVersion())
                     .as("step 5: with a real version string").isNotBlank();
                 assertThat(reached.memoryBytes())
                     .as("step 5: and real host memory, not a zeroed unreachable guess")
