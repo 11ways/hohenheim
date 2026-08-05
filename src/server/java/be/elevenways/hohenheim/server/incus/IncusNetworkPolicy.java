@@ -1,0 +1,201 @@
+package be.elevenways.hohenheim.server.incus;
+
+import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.hohenheim.server.security.TenantNetworkRanges;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * THE per-instance isolation applier for the Incus tier: the daemon-side counterpart of
+ * {@code WorkloadNetworkPolicy}, expressed in Incus's OWN firewall vocabulary (a network
+ * ACL and a per-NIC device override) rather than in raw nftables, and with the SAME
+ * throwing, read-back-verifying contract.
+ *
+ * AIDEV-NOTE: this is deliberately NOT nftables. Incus manages the bridge's kernel
+ * ruleset itself ({@code table inet incus}) and rewrites it on every network reload, so a
+ * hohenheim-owned nft table beside it would be flushed out from under us -- exactly the
+ * "another tool flushes the table" hazard {@code WorkloadNetworkPolicy}'s read-back
+ * guards against, except here it is the daemon we share the host with. The daemon's own
+ * ACL mechanism survives its reloads because the daemon writes it; so isolation for Incus
+ * rides the daemon, and this class VERIFIES the daemon actually carries what we asked for
+ * (an ACL that exists but whose rules read back empty, or a NIC whose config never took,
+ * are both refusals -- "the API returned 200" and "the rule is in the daemon" are
+ * independent facts here too).
+ *
+ * AIDEV-NOTE: the isolation ACL is ONE shared object, not one per instance. Its egress
+ * REJECT rules name the static tenant ranges ({@link TenantNetworkRanges}) -- the same
+ * vocabulary the Docker applier denies -- so they are identical for every instance and
+ * every bridge subnet (a managed incusbr0 always sits inside 10/8, 172.16/12 or
+ * 192.168/16, and its ULA v6 subnet inside fc00::/7). Rejecting those ranges is what
+ * makes a peer, the host and the metadata address unreachable in one static rule set;
+ * Incus's implicit DNS/DHCP-to-host allows sit ABOVE the ACL rejects in the generated
+ * chain, so name resolution keeps working (verified on a real host). Egress to the public
+ * internet is untouched unless the workload DECLARES {@link Egress#NONE}, which flips the
+ * NIC's default egress action to drop.
+ */
+public final class IncusNetworkPolicy {
+
+    /** The one shared isolation ACL every tenant instance's NIC references. */
+    public static final String ACL_NAME = "hohenheim-isolation";
+
+    /** The NIC every managed system container attaches (the default profile's device). */
+    public static final String NIC = "eth0";
+
+    private final @NonNull IncusClient incus;
+
+    public IncusNetworkPolicy(@NonNull IncusClient incus) {
+        this.incus = incus;
+    }
+
+    /**
+     * Ensure the shared isolation ACL exists with exactly the tenant-range egress
+     * rejects, VERIFIED by reading it back.
+     *
+     * @throws IOException when the daemon refuses, or the ACL reads back without a rule
+     *                     we just wrote (its ACL support is not doing what it claims)
+     */
+    public void ensureIsolationAcl() throws IOException {
+        List<Map<String, Object>> wantEgress = isolationEgressRules();
+        Map<String, Object> existing = this.incus.networkAcl(ACL_NAME);
+        Map<String, Object> definition = new LinkedHashMap<>();
+        definition.put("name", ACL_NAME);
+        definition.put("description", "hohenheim tenant isolation: deny host, metadata and"
+            + " every private range; the internet and DNS stay reachable");
+        definition.put("egress", wantEgress);
+        definition.put("ingress", List.of());
+        definition.put("config", Map.of());
+
+        if (existing == null) {
+            this.incus.createNetworkAcl(definition);
+        } else {
+            this.incus.updateNetworkAcl(ACL_NAME, definition);
+        }
+
+        Map<String, Object> readBack = this.incus.networkAcl(ACL_NAME);
+        if (readBack == null) {
+            throw new IOException("REFUSED to isolate on this Incus host: the daemon accepted"
+                + " the '" + ACL_NAME + "' ACL but it does not read back. Its network-ACL"
+                + " support is not enforcing what it reports.");
+        }
+        List<String> present = destinationsOf(readBack.get("egress"));
+        for (String range : TenantNetworkRanges.DENIED_V4) {
+            requirePresent(present, range);
+        }
+        for (String range : TenantNetworkRanges.DENIED_V6) {
+            requirePresent(present, range);
+        }
+    }
+
+    /**
+     * The device override that attaches the isolation ACL (and the declared egress
+     * posture) to one instance's NIC, merged onto the network the default profile's NIC
+     * inherits.
+     *
+     * @param inheritedNetwork the managed network the profile's NIC sits on (incusbr0)
+     * @return the {@code devices.eth0} map to place in the instance definition
+     */
+    public @NonNull Map<String, Object> nicDevice(@NonNull String inheritedNetwork,
+                                                  @NonNull Egress egress) {
+        Map<String, Object> device = new LinkedHashMap<>();
+        device.put("type", "nic");
+        device.put("network", inheritedNetwork);
+        device.put("security.acls", ACL_NAME);
+        // The DEFAULT actions decide what a packet not named by a rule does. Ingress stays
+        // allow (an inbound connection's reply leg is handled by the reject rules being
+        // egress-only). Egress is allow for OPEN (the internet), drop for NONE.
+        device.put("security.acls.default.ingress.action", "allow");
+        device.put("security.acls.default.egress.action",
+            egress == Egress.NONE ? "drop" : "allow");
+        return device;
+    }
+
+    /**
+     * Read back one instance's NIC and require it to carry the isolation ACL and the
+     * declared egress action -- the "the API returned 200 but the config never took"
+     * guard.
+     *
+     * @throws IOException when the instance has no isolating NIC, or its egress action
+     *                     disagrees with what was declared
+     */
+    public void verifyInstance(@NonNull String handle, @NonNull Map<String, Object> instance,
+                               @NonNull Egress egress) throws IOException {
+        Object devices = instance.get("devices");
+        Map<?, ?> nic = devices instanceof Map<?, ?> map && map.get(NIC) instanceof Map<?, ?> eth
+            ? eth : null;
+        if (nic == null) {
+            throw new IOException("REFUSED to run '" + handle + "': its '" + NIC + "' device"
+                + " carries no isolation config, so the container would share the bridge with"
+                + " every other tenant. The daemon did not apply the device override.");
+        }
+        if (!ACL_NAME.equals(String.valueOf(nic.get("security.acls")))) {
+            throw new IOException("REFUSED to run '" + handle + "': its '" + NIC + "' device"
+                + " does not reference the '" + ACL_NAME + "' ACL (security.acls="
+                + nic.get("security.acls") + "). The isolation the deploy verified is gone.");
+        }
+        String wantAction = egress == Egress.NONE ? "drop" : "allow";
+        String gotAction = String.valueOf(nic.get("security.acls.default.egress.action"));
+        if (!wantAction.equals(gotAction)) {
+            throw new IOException("REFUSED to run '" + handle + "': its declared egress ("
+                + egress + " => " + wantAction + ") is not what the daemon carries ("
+                + gotAction + ").");
+        }
+    }
+
+    /** Remove the shared ACL; only safe once no instance references it (teardown/tests). */
+    public void removeIsolationAcl() throws IOException {
+        try {
+            this.incus.deleteNetworkAcl(ACL_NAME);
+        } catch (IncusClient.ApiException e) {
+            if (!e.isNotFound()) {
+                throw e;
+            }
+        }
+    }
+
+    /** The egress reject rules: one per tenant range, both address families. */
+    static @NonNull List<Map<String, Object>> isolationEgressRules() {
+        List<Map<String, Object>> rules = new ArrayList<>();
+        for (String range : TenantNetworkRanges.DENIED_V4) {
+            rules.add(rejectTo(range));
+        }
+        for (String range : TenantNetworkRanges.DENIED_V6) {
+            rules.add(rejectTo(range));
+        }
+        return rules;
+    }
+
+    private static Map<String, Object> rejectTo(String destination) {
+        Map<String, Object> rule = new LinkedHashMap<>();
+        rule.put("action", "reject");
+        rule.put("destination", destination);
+        rule.put("state", "enabled");
+        return rule;
+    }
+
+    private static void requirePresent(List<String> present, String range) throws IOException {
+        if (!present.contains(range)) {
+            throw new IOException("REFUSED to isolate on this Incus host: the '" + ACL_NAME
+                + "' ACL read back without the egress reject to '" + range + "'. Something"
+                + " on this host rewrote it. Present destinations: " + present);
+        }
+    }
+
+    private static @NonNull List<String> destinationsOf(@Nullable Object egress) {
+        List<String> destinations = new ArrayList<>();
+        if (egress instanceof List<?> rules) {
+            for (Object entry : rules) {
+                if (entry instanceof Map<?, ?> rule && "reject".equals(rule.get("action"))
+                        && rule.get("destination") instanceof String destination) {
+                    destinations.add(destination);
+                }
+            }
+        }
+        return destinations;
+    }
+}

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.runtime;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.incus.IncusClient;
+import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusWebSocket;
 import be.elevenways.protoblast.common.Blast;
 
@@ -31,14 +32,15 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * into the system it will run on, which is the whole point of a system container.
  * File staging still refuses by name (files_unsupported), never a silent no-op.
  *
- * AIDEV-NOTE: threat model. Containers land on the daemon's managed bridge -- there is
- * NO per-instance network with a verified kernel policy here yet (the Docker tier's
- * WorkloadNetworkPolicy has no Incus counterpart in this wave), so tenant containers on
- * one Incus host can reach each other and the host address. That is the declared
- * shared_container posture the placement gate requires the OPERATOR to accept, plus
+ * AIDEV-NOTE: threat model. Per-instance isolation is now ENFORCED through
+ * {@link IncusNetworkPolicy}: every tenant instance's NIC carries the shared isolation
+ * ACL that rejects egress to the host, the metadata range and every private range
+ * (peers included), applied and read-back-VERIFIED before the container runs. A host
+ * whose ACL support does not really enforce refuses at deploy. The internet and DNS stay
+ * reachable; a closed-egress kind loses even those. What remains a declared limit is
  * boundary 1 of the plan's threat model: a system container is NOT a security boundary
- * against a determined root user; privileged mode widens that further and is why it
- * carries a stated escape warning on the kind settings.
+ * against a determined root user, and privileged mode widens that further -- the network
+ * ACL isolates the WIRE, not the kernel, and privileged still carries its escape warning.
  */
 public final class IncusInstanceRuntime
         implements InstanceRuntime, ConsoleStreamSupport, NativeSnapshotSupport,
@@ -54,9 +56,18 @@ public final class IncusInstanceRuntime
     private static final String USER_PREFIX = "user.";
 
     private final @NonNull IncusClient incus;
+    private final @NonNull IncusNetworkPolicy policy;
+    private final @NonNull Egress egress;
 
     public IncusInstanceRuntime(@NonNull IncusClient incus) {
+        this(incus, Egress.OPEN);
+    }
+
+    /** @param egress the KIND-declared egress posture materialized into the NIC's ACL default */
+    public IncusInstanceRuntime(@NonNull IncusClient incus, @NonNull Egress egress) {
         this.incus = incus;
+        this.policy = new IncusNetworkPolicy(incus);
+        this.egress = egress;
     }
 
     @Override
@@ -66,6 +77,12 @@ public final class IncusInstanceRuntime
             throw new IOException("InstanceSpec '" + spec.handle() + "' carries no valid owner"
                 + " labels; an unattributable instance container is forbidden by design");
         }
+        // The shared isolation ACL, VERIFIED in the daemon, BEFORE any instance is created
+        // on it -- an Incus host whose ACL support does not really enforce refuses here,
+        // never at the point where a tenant container is already running unisolated.
+        this.policy.ensureIsolationAcl();
+        Map<String, Object> nic = this.policy.nicDevice(managedNetworkName(), this.egress);
+
         // AIDEV-NOTE: converge, never replace. A system container's persistent state
         // IS its rootfs, so the Docker driver's replace-on-create semantic would be
         // silent data loss on every redeploy (and would destroy a freshly restored or
@@ -75,7 +92,8 @@ public final class IncusInstanceRuntime
         // (reinstall is the explicit wipe path, Phase 5's template policy).
         Map<String, Object> existing = ownedExisting(spec.handle(), owner);
         if (existing != null) {
-            converge(spec, existing);
+            converge(spec, existing, nic);
+            verifyIsolated(spec.handle());
             return spec.handle();
         }
 
@@ -91,9 +109,34 @@ public final class IncusInstanceRuntime
             "server", IMAGE_SERVER,
             "alias", spec.image()));
         definition.put("config", config);
+        // The isolating NIC override is in the CREATE body: there is no instant at which
+        // an instance of ours exists on the bridge without it.
+        definition.put("devices", Map.of(IncusNetworkPolicy.NIC, nic));
         definition.put("profiles", List.of("default"));
         this.incus.createInstance(definition);
+        verifyIsolated(spec.handle());
         return spec.handle();
+    }
+
+    /** Read one instance back and require the isolating NIC the deploy just wrote. */
+    private void verifyIsolated(@NonNull String handle) throws IOException {
+        this.policy.verifyInstance(handle, this.incus.instance(handle), this.egress);
+    }
+
+    /**
+     * The managed network the default profile's NIC inherits (incusbr0). The device
+     * override must name it, or Incus refuses a NIC with an ACL but no network.
+     */
+    private @NonNull String managedNetworkName() throws IOException {
+        Object devices = this.incus.profile("default").get("devices");
+        if (devices instanceof Map<?, ?> map && map.get(IncusNetworkPolicy.NIC) instanceof Map<?, ?> nic
+                && nic.get("network") instanceof String network && !network.isBlank()) {
+            return network;
+        }
+        throw new IOException("REFUSED to isolate an Incus instance: the default profile has no"
+            + " '" + IncusNetworkPolicy.NIC + "' NIC on a managed network to inherit, so there"
+            + " is nothing to attach the isolation ACL to. This host is not admissible for"
+            + " tenant workloads until its default profile carries a managed bridge NIC.");
     }
 
     /** The config keys this driver OWNS on a converge (everything else is preserved). */
@@ -115,8 +158,8 @@ public final class IncusInstanceRuntime
     }
 
     /** Rewrite the managed config of an existing OWNED instance; the rootfs is untouched. */
-    private void converge(@NonNull InstanceSpec spec, @NonNull Map<String, Object> existing)
-            throws IOException {
+    private void converge(@NonNull InstanceSpec spec, @NonNull Map<String, Object> existing,
+                          @NonNull Map<String, Object> nic) throws IOException {
         Map<String, Object> config = new LinkedHashMap<>();
         if (existing.get("config") instanceof Map<?, ?> current) {
             current.forEach((key, value) -> {
@@ -130,18 +173,26 @@ public final class IncusInstanceRuntime
             });
         }
         applyManagedConfig(spec, config);
-        replaceDefinition(spec.handle(), existing, config);
+        replaceDefinition(spec.handle(), existing, config, nic);
     }
 
-    /** PUT the instance's mutable definition with a rewritten config map. */
+    /** PUT the instance's mutable definition with a rewritten config map and NIC override. */
     private void replaceDefinition(@NonNull String handle,
                                    @NonNull Map<String, Object> existing,
-                                   @NonNull Map<String, Object> config) throws IOException {
+                                   @NonNull Map<String, Object> config,
+                                   @NonNull Map<String, Object> nic) throws IOException {
+        Map<String, Object> devices = new LinkedHashMap<>();
+        if (existing.get("devices") instanceof Map<?, ?> current) {
+            current.forEach((key, value) -> devices.put(String.valueOf(key), value));
+        }
+        // The isolating NIC override is (re)written every converge: a reboot or an
+        // operator edit that dropped it is repaired here, not silently tolerated.
+        devices.put(IncusNetworkPolicy.NIC, nic);
+
         Map<String, Object> definition = new LinkedHashMap<>();
         definition.put("architecture", existing.get("architecture"));
         definition.put("config", config);
-        definition.put("devices", existing.get("devices") instanceof Map<?, ?> devices
-            ? devices : Map.of());
+        definition.put("devices", devices);
         definition.put("ephemeral", Boolean.TRUE.equals(existing.get("ephemeral")));
         definition.put("profiles", existing.get("profiles") instanceof List<?> profiles
             ? profiles : List.of("default"));
@@ -465,7 +516,13 @@ public final class IncusInstanceRuntime
             });
         }
         spec.ownerLabels().forEach((key, value) -> config.put(USER_PREFIX + key, value));
-        replaceDefinition(spec.handle(), existing, config);
+        // An imported instance re-joins the fleet's isolation exactly like a fresh one:
+        // its NIC gets the verified ACL override, so a backup made before isolation
+        // existed cannot land an unisolated container.
+        this.policy.ensureIsolationAcl();
+        replaceDefinition(spec.handle(), existing, config,
+            this.policy.nicDevice(managedNetworkName(), this.egress));
+        verifyIsolated(spec.handle());
     }
 
     @Override

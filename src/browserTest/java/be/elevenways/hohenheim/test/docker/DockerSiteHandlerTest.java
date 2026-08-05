@@ -52,11 +52,11 @@ class DockerSiteHandlerTest {
     // The contract writes instance rows and ledger claims, so every start here needs
     // the booted runtime -- a claim that cannot be written is a failure, not a shrug.
     //
-    // AIDEV-NOTE: the netns fixture is here for the BUILD half only. A Docker site's
-    // running release is operator-authored and keeps the SHARED_BRIDGE posture, but its
-    // BUILD executes the tenant's own Dockerfile, so the sandbox puts that on a private
-    // network with a verified kernel policy and REFUSES when the host cannot enforce one.
-    // Without this fixture the build-from-context test would find the site simply down.
+    // AIDEV-NOTE: the netns fixture enforces the policy for BOTH halves now. Since the
+    // isolation wave a Docker site's running release is PRIVATE (its own policied
+    // network) like every other tier, and its BUILD (the tenant's own Dockerfile) runs
+    // in the sandbox on a private network too -- both REFUSE when the host cannot enforce
+    // a policy. Without this fixture the site would simply be down.
     @BeforeAll
     static void bootRuntime() throws Exception {
         HohenheimTestRuntime.ensureBooted();
