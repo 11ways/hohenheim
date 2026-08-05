@@ -86,7 +86,7 @@ public final class HostKeys {
         /** {@link HostProbe.FailureKind} this refusal classifies as. */
         public final transient HostProbe.FailureKind kind;
 
-        HostTrustException(HostProbe.FailureKind kind, String message) {
+        public HostTrustException(HostProbe.FailureKind kind, String message) {
             super(message);
             this.kind = kind;
         }
@@ -219,40 +219,9 @@ public final class HostKeys {
      */
     public static @NonNull ScanResult scanAndPin(@NonNull Row server) {
         Offer offer = scan(server);
-        ServerModel model = Models.get(ServerModel.class);
-        String pinned = server.get(ServerModel.HOST_KEY);
-        String name = String.valueOf((Object) server.get(ServerModel.NAME));
-
-        if (pinned == null || pinned.isBlank()) {
-            ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "host_key_pinned", () -> {
-                server.set(ServerModel.HOST_KEY, offer.keyLine());
-                server.set(ServerModel.HOST_KEY_FINGERPRINT, offer.fingerprint());
-                server.set(ServerModel.HOST_KEY_PINNED_AT, Instant.now());
-                server.set(ServerModel.HOST_KEY_VERIFIED, false);
-                server.set(ServerModel.HOST_KEY_OFFERED, null);
-                model.save(server);
-            });
-            Blast.slog("hohenheim.host.key_pinned", Map.of(
-                "server", name, "fingerprint", offer.fingerprint()));
-            return new ScanResult(ScanOutcome.PINNED, offer.fingerprint(), null);
-        }
-
-        if (pinned.trim().equals(offer.keyLine())) {
-            if (server.get(ServerModel.HOST_KEY_OFFERED) != null) {
-                server.set(ServerModel.HOST_KEY_OFFERED, null);
-                model.save(server);
-            }
-            return new ScanResult(ScanOutcome.UNCHANGED, offer.fingerprint(), null);
-        }
-
-        String previous = server.get(ServerModel.HOST_KEY_FINGERPRINT);
-        server.set(ServerModel.HOST_KEY_OFFERED, offer.keyLine());
-        model.save(server);
-        // The SAME funnel a failed connection uses: typed kind, quarantine, no re-pin.
-        HostProbe.recordFailure(name, HostProbe.Outcome.failure(
-            HostProbe.FailureKind.HOST_KEY_CHANGED,
-            "Host key changed: pinned " + previous + ", offered " + offer.fingerprint()));
-        return new ScanResult(ScanOutcome.MISMATCH, offer.fingerprint(), previous);
+        // The pin state machine is SHARED with the Incus certificate ceremony (HostPins);
+        // only the scan itself is ssh-specific.
+        return HostPins.apply(server, offer.keyLine(), offer.fingerprint());
     }
 
     /**
@@ -281,26 +250,7 @@ public final class HostKeys {
      * admitted; recovery is never a side effect of reconnecting.
      */
     public static void repin(@NonNull Row server) {
-        String offered = server.get(ServerModel.HOST_KEY_OFFERED);
-        if (offered == null || offered.isBlank()) {
-            throw Violations.ofForm(violation("host_key_no_offer"));
-        }
-        String previous = server.get(ServerModel.HOST_KEY_FINGERPRINT);
-        String fingerprint = fingerprintOf(offered);
-        ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "host_key_repinned", () -> {
-            server.set(ServerModel.HOST_KEY, offered);
-            server.set(ServerModel.HOST_KEY_FINGERPRINT, fingerprint);
-            server.set(ServerModel.HOST_KEY_PINNED_AT, Instant.now());
-            server.set(ServerModel.HOST_KEY_VERIFIED, false);
-            server.set(ServerModel.HOST_KEY_OFFERED, null);
-            server.set(ServerModel.PREFLIGHT_OK, false);
-            server.set(ServerModel.LAST_ERROR_KIND, null);
-            server.set(ServerModel.LAST_ERROR, null);
-            Models.get(ServerModel.class).save(server);
-        });
-        Blast.slog("hohenheim.host.key_repinned", Map.of(
-            "server", String.valueOf((Object) server.get(ServerModel.NAME)),
-            "previous", String.valueOf(previous), "fingerprint", fingerprint));
+        HostPins.repin(server, HostKeys::fingerprintOf);
     }
 
     /** The digest {@code ssh-keygen -lf} prints for a public key line. */
@@ -495,7 +445,7 @@ public final class HostKeys {
         }
     }
 
-    private static Microcopy violation(String key) {
+    static Microcopy violation(String key) {
         return Microcopy.of(key).withFilter("scope", "violations");
     }
 }
