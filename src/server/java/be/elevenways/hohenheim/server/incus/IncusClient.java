@@ -8,6 +8,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -186,6 +188,118 @@ public class IncusClient {
         }
         envelopeOf(raw);   // throws the typed refusal
         throw new IOException("unreachable");
+    }
+
+    // -- snapshots (daemon-side, pool-resident: NOT backups) ------------------
+
+    /** Create one named snapshot (running or stopped instance; crash-consistent). */
+    public void createSnapshot(@NonNull String name, @NonNull String snapshot)
+            throws IOException {
+        waitOperation(asyncOperation("POST", "/1.0/instances/" + name + "/snapshots",
+            Json.stringify(Map.of("name", snapshot, "stateful", false)),
+            DEFAULT_TIMEOUT_MS), LONG_OP_TIMEOUT_MS);
+    }
+
+    /** The snapshot object; 404 surfaces as {@link ApiException#isNotFound}. */
+    public @NonNull Map<String, Object> snapshot(@NonNull String name,
+                                                 @NonNull String snapshot) throws IOException {
+        return syncMetadata("GET", "/1.0/instances/" + name + "/snapshots/" + snapshot,
+            null, DEFAULT_TIMEOUT_MS);
+    }
+
+    /** Roll the instance back to the named snapshot (same PUT endpoint as update). */
+    public void restoreSnapshot(@NonNull String name, @NonNull String snapshot)
+            throws IOException {
+        waitOperation(asyncOperation("PUT", "/1.0/instances/" + name,
+            Json.stringify(Map.of("restore", snapshot)), DEFAULT_TIMEOUT_MS),
+            LONG_OP_TIMEOUT_MS);
+    }
+
+    /** Delete one snapshot; 404 surfaces as {@link ApiException#isNotFound}. */
+    public void deleteSnapshot(@NonNull String name, @NonNull String snapshot)
+            throws IOException {
+        waitOperation(asyncOperation("DELETE",
+            "/1.0/instances/" + name + "/snapshots/" + snapshot, null,
+            DEFAULT_TIMEOUT_MS), LONG_OP_TIMEOUT_MS);
+    }
+
+    // -- backups (portable whole-instance exports) ----------------------------
+
+    /**
+     * Create one daemon-side backup object. {@code optimized_storage=false} on
+     * purpose: the export must restore onto ANY pool driver, not only the one that
+     * wrote it.
+     */
+    public void createBackup(@NonNull String name, @NonNull String backup)
+            throws IOException {
+        waitOperation(asyncOperation("POST", "/1.0/instances/" + name + "/backups",
+            Json.stringify(Map.of("name", backup, "instance_only", true,
+                "optimized_storage", false)), DEFAULT_TIMEOUT_MS), LONG_OP_TIMEOUT_MS);
+    }
+
+    /**
+     * Stream one backup's export tarball to {@code destination}.
+     *
+     * @param maxBytes hard cap enforced during the download
+     * @return the exported size in bytes
+     */
+    public long exportBackup(@NonNull String name, @NonNull String backup,
+                             @NonNull Path destination, long maxBytes)
+            throws IOException {
+        Http11.Raw raw = this.transport.exchangeDownload("GET",
+            "/1.0/instances/" + name + "/backups/" + backup + "/export", destination,
+            maxBytes, LONG_OP_TIMEOUT_MS);
+        if (raw.body().length > 0 || raw.status() < 200 || raw.status() >= 300) {
+            envelopeOf(raw);   // an error envelope throws the typed refusal
+            throw new IOException("Incus backup export of '" + name
+                + "' answered HTTP " + raw.status() + " without a payload");
+        }
+        return Files.size(destination);
+    }
+
+    /** Delete one backup object; 404 surfaces as {@link ApiException#isNotFound}. */
+    public void deleteBackup(@NonNull String name, @NonNull String backup)
+            throws IOException {
+        waitOperation(asyncOperation("DELETE",
+            "/1.0/instances/" + name + "/backups/" + backup, null,
+            DEFAULT_TIMEOUT_MS), LONG_OP_TIMEOUT_MS);
+    }
+
+    /** Import an exported tarball as a NEW instance named {@code newName}. */
+    public void importInstance(@NonNull Path archive, @NonNull String newName)
+            throws IOException {
+        Http11.Raw raw = this.transport.exchangeUpload("POST", "/1.0/instances", archive,
+            "application/octet-stream", Map.of("X-Incus-Name", newName),
+            LONG_OP_TIMEOUT_MS);
+        Map<String, Object> envelope = envelopeOf(raw);
+        Object operation = envelope.get("operation");
+        if (!(operation instanceof String operationPath) || operationPath.isEmpty()) {
+            throw new IOException("Incus backup import answered no operation to wait on");
+        }
+        waitOperation(operationPath, LONG_OP_TIMEOUT_MS);
+    }
+
+    // -- instance definition updates ------------------------------------------
+
+    /** Replace the instance's mutable definition (full PUT; async). */
+    public void updateInstance(@NonNull String name, @NonNull Map<String, Object> definition)
+            throws IOException {
+        waitOperation(asyncOperation("PUT", "/1.0/instances/" + name,
+            Json.stringify(definition), DEFAULT_TIMEOUT_MS), LONG_OP_TIMEOUT_MS);
+    }
+
+    // -- storage --------------------------------------------------------------
+
+    /** One profile's definition ({@code GET /1.0/profiles/{name}}). */
+    public @NonNull Map<String, Object> profile(@NonNull String name) throws IOException {
+        return syncMetadata("GET", "/1.0/profiles/" + name, null, DEFAULT_TIMEOUT_MS);
+    }
+
+    /** One pool's usage ({@code GET /1.0/storage-pools/{pool}/resources}). */
+    public @NonNull Map<String, Object> storagePoolResources(@NonNull String pool)
+            throws IOException {
+        return syncMetadata("GET", "/1.0/storage-pools/" + pool + "/resources", null,
+            DEFAULT_TIMEOUT_MS);
     }
 
     // -- operations -----------------------------------------------------------

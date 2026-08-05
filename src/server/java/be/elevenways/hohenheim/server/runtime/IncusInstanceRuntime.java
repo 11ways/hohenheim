@@ -4,8 +4,10 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusWebSocket;
+import be.elevenways.protoblast.common.Blast;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,11 +22,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * the console is Incus's own websocket lane.
  *
  * AIDEV-NOTE: capability honesty. This driver implements {@link ConsoleStreamSupport}
- * ONLY: an Incus system container's persistent state is its ROOTFS, not named volumes,
- * so {@code VolumeSnapshotSupport}'s tar-per-volume contract does not fit -- native
- * Incus snapshots/backups are the coming mechanism, and until they land, snapshot and
- * backup requests refuse by name through the existing missing-capability funnels
- * (snapshots_unsupported, files_unsupported, ...), never a silent no-op.
+ * and {@link NativeSnapshotSupport}: an Incus system container's persistent state is
+ * its ROOTFS, not named volumes, so {@code VolumeSnapshotSupport}'s tar-per-volume
+ * contract does not fit -- snapshots are the daemon's own pool-resident snapshots and
+ * a backup is its whole-instance export tarball. File staging and install still
+ * refuse by name through the existing missing-capability funnels
+ * (files_unsupported, install_unsupported), never a silent no-op.
  *
  * AIDEV-NOTE: threat model. Containers land on the daemon's managed bridge -- there is
  * NO per-instance network with a verified kernel policy here yet (the Docker tier's
@@ -35,7 +38,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * against a determined root user; privileged mode widens that further and is why it
  * carries a stated escape warning on the kind settings.
  */
-public final class IncusInstanceRuntime implements InstanceRuntime, ConsoleStreamSupport {
+public final class IncusInstanceRuntime
+        implements InstanceRuntime, ConsoleStreamSupport, NativeSnapshotSupport {
 
     /** The public image server system-container aliases resolve against. */
     public static final String IMAGE_SERVER = "https://images.linuxcontainers.org";
@@ -59,19 +63,21 @@ public final class IncusInstanceRuntime implements InstanceRuntime, ConsoleStrea
             throw new IOException("InstanceSpec '" + spec.handle() + "' carries no valid owner"
                 + " labels; an unattributable instance container is forbidden by design");
         }
-        // Replace only a leftover instance the daemon attributes to THIS record; a
-        // same-named foreign instance is a loud refusal, never a force-remove.
-        removeIfOwnedBy(spec.handle(), owner);
+        // AIDEV-NOTE: converge, never replace. A system container's persistent state
+        // IS its rootfs, so the Docker driver's replace-on-create semantic would be
+        // silent data loss on every redeploy (and would destroy a freshly restored or
+        // imported instance). An existing OWNED instance keeps its rootfs and gets the
+        // driver-managed config keys rewritten; a same-named FOREIGN instance stays a
+        // loud refusal; a changed settings image only applies at absent-then-create
+        // (reinstall is the explicit wipe path, Phase 5's template policy).
+        Map<String, Object> existing = ownedExisting(spec.handle(), owner);
+        if (existing != null) {
+            converge(spec, existing);
+            return spec.handle();
+        }
 
         Map<String, Object> config = new LinkedHashMap<>();
-        spec.ownerLabels().forEach((key, value) -> config.put(USER_PREFIX + key, value));
-        spec.env().forEach((name, value) -> config.put("environment." + name, value));
-        applyLimits(spec.limits(), config);
-        // Unprivileged is the DEFAULT and the deliberate posture; only the explicitly
-        // declared privileged profile flips it (threat model boundary 1).
-        if (PROFILE_PRIVILEGED.equals(spec.hardening().name())) {
-            config.put("security.privileged", "true");
-        }
+        applyManagedConfig(spec, config);
 
         Map<String, Object> definition = new LinkedHashMap<>();
         definition.put("name", spec.handle());
@@ -85,6 +91,60 @@ public final class IncusInstanceRuntime implements InstanceRuntime, ConsoleStrea
         definition.put("profiles", List.of("default"));
         this.incus.createInstance(definition);
         return spec.handle();
+    }
+
+    /** The config keys this driver OWNS on a converge (everything else is preserved). */
+    private static void applyManagedConfig(@NonNull InstanceSpec spec,
+                                           @NonNull Map<String, Object> config) {
+        spec.ownerLabels().forEach((key, value) -> config.put(USER_PREFIX + key, value));
+        spec.env().forEach((name, value) -> config.put("environment." + name, value));
+        applyLimits(spec.limits(), config);
+        // Unprivileged is the DEFAULT and the deliberate posture; only the explicitly
+        // declared privileged profile flips it (threat model boundary 1).
+        if (PROFILE_PRIVILEGED.equals(spec.hardening().name())) {
+            config.put("security.privileged", "true");
+        }
+    }
+
+    private static boolean isManagedKey(@NonNull String key) {
+        return key.startsWith(USER_PREFIX) || key.startsWith("environment.")
+            || key.startsWith("limits.") || key.equals("security.privileged");
+    }
+
+    /** Rewrite the managed config of an existing OWNED instance; the rootfs is untouched. */
+    private void converge(@NonNull InstanceSpec spec, @NonNull Map<String, Object> existing)
+            throws IOException {
+        Map<String, Object> config = new LinkedHashMap<>();
+        if (existing.get("config") instanceof Map<?, ?> current) {
+            current.forEach((key, value) -> {
+                String name = String.valueOf(key);
+                // volatile.* and image.* keys ride along unchanged (read-modify-write,
+                // the CLI's own shape); only the managed keys are recomputed, so a
+                // value REMOVED from the settings really disappears.
+                if (!isManagedKey(name)) {
+                    config.put(name, value);
+                }
+            });
+        }
+        applyManagedConfig(spec, config);
+        replaceDefinition(spec.handle(), existing, config);
+    }
+
+    /** PUT the instance's mutable definition with a rewritten config map. */
+    private void replaceDefinition(@NonNull String handle,
+                                   @NonNull Map<String, Object> existing,
+                                   @NonNull Map<String, Object> config) throws IOException {
+        Map<String, Object> definition = new LinkedHashMap<>();
+        definition.put("architecture", existing.get("architecture"));
+        definition.put("config", config);
+        definition.put("devices", existing.get("devices") instanceof Map<?, ?> devices
+            ? devices : Map.of());
+        definition.put("ephemeral", Boolean.TRUE.equals(existing.get("ephemeral")));
+        definition.put("profiles", existing.get("profiles") instanceof List<?> profiles
+            ? profiles : List.of("default"));
+        definition.put("description", existing.get("description") instanceof String text
+            ? text : "");
+        this.incus.updateInstance(handle, definition);
     }
 
     /** Map the operator's cgroup caps onto Incus's limits vocabulary. */
@@ -107,7 +167,15 @@ public final class IncusInstanceRuntime implements InstanceRuntime, ConsoleStrea
 
     @Override
     public void start(@NonNull String handle) throws IOException {
-        this.incus.changeState(handle, "start", -1, false);
+        try {
+            this.incus.changeState(handle, "start", -1, false);
+        } catch (IncusClient.ApiException refused) {
+            // "already running" is idempotent success (the converge path deploys over
+            // a running instance); every other refusal stays a refusal.
+            if (status(handle).state() != ContainerState.RUNNING) {
+                throw refused;
+            }
+        }
     }
 
     @Override
@@ -207,18 +275,116 @@ public final class IncusInstanceRuntime implements InstanceRuntime, ConsoleStrea
             + "'; the exit outcome cannot be observed on this driver");
     }
 
+    // -- NativeSnapshotSupport ------------------------------------------------
+
+    @Override
+    public void createSnapshot(@NonNull InstanceSpec spec, @NonNull String snapshotName)
+            throws IOException {
+        this.incus.createSnapshot(spec.handle(), snapshotName);
+    }
+
+    @Override
+    public boolean snapshotExists(@NonNull InstanceSpec spec, @NonNull String snapshotName)
+            throws IOException {
+        try {
+            this.incus.snapshot(spec.handle(), snapshotName);
+            return true;
+        } catch (IncusClient.ApiException e) {
+            if (e.isNotFound()) {
+                return false;
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public void restoreSnapshot(@NonNull InstanceSpec spec, @NonNull String snapshotName)
+            throws IOException {
+        this.incus.restoreSnapshot(spec.handle(), snapshotName);
+    }
+
+    @Override
+    public void deleteSnapshot(@NonNull InstanceSpec spec, @NonNull String snapshotName)
+            throws IOException {
+        try {
+            this.incus.deleteSnapshot(spec.handle(), snapshotName);
+        } catch (IncusClient.ApiException e) {
+            if (!e.isNotFound()) {
+                throw e;   // refused: NOT gone
+            }
+            // 404 = observed absent, which is what delete exists to establish.
+        }
+    }
+
+    @Override
+    public long exportBackup(@NonNull InstanceSpec spec, @NonNull Path destination,
+                             long maxBytes) throws IOException {
+        // The daemon-side backup object is a TEMPORARY: the export tarball is the
+        // artifact, and leaving the object behind would silently fill the pool.
+        String backupName = "hib-" + System.currentTimeMillis();
+        this.incus.createBackup(spec.handle(), backupName);
+        try {
+            return this.incus.exportBackup(spec.handle(), backupName, destination, maxBytes);
+        } finally {
+            try {
+                this.incus.deleteBackup(spec.handle(), backupName);
+            } catch (IOException cleanupFailed) {
+                Blast.log("INCUS: could not remove temporary backup object", backupName,
+                    "of", spec.handle(), ":", cleanupFailed.getMessage());
+            }
+        }
+    }
+
+    @Override
+    public void importBackup(@NonNull InstanceSpec spec, @NonNull Path archive)
+            throws IOException {
+        this.incus.importInstance(archive, spec.handle());
+        // Re-identification is part of the import contract, in ONE definition write:
+        // the tarball carries the SOURCE instance's user.* labels (until they are
+        // replaced the import is attributed to the wrong record -- a crash inside the
+        // window leaves an instance the NEW record's next deploy refuses as foreign,
+        // visible operator cleanup, never silent adoption) AND the source's volatile
+        // NIC MACs, which the daemon refuses to start beside the still-running source
+        // ("MAC address already defined on another NIC"). Dropping the hwaddr keys
+        // makes the daemon mint fresh ones at start.
+        Map<String, Object> existing = this.incus.instance(spec.handle());
+        Map<String, Object> config = new LinkedHashMap<>();
+        if (existing.get("config") instanceof Map<?, ?> current) {
+            current.forEach((key, value) -> {
+                String name = String.valueOf(key);
+                if (name.startsWith("volatile.") && name.endsWith(".hwaddr")) {
+                    return;
+                }
+                config.put(name, value);
+            });
+        }
+        spec.ownerLabels().forEach((key, value) -> config.put(USER_PREFIX + key, value));
+        replaceDefinition(spec.handle(), existing, config);
+    }
+
+    @Override
+    public @NonNull ImageIdentity imageIdentity(@NonNull InstanceSpec spec)
+            throws IOException {
+        Map<String, Object> instance = this.incus.instance(spec.handle());
+        String id = instance.get("config") instanceof Map<?, ?> config
+            && config.get("volatile.base_image") instanceof String fingerprint
+            ? fingerprint : null;
+        return new ImageIdentity(spec.image(), id);
+    }
+
     /**
-     * Remove a same-named instance ONLY when its {@code user.*} config attributes it to
-     * this record; absent is a verified no-op, foreign is a refusal.
+     * The existing same-named instance when the daemon attributes it to this record;
+     * null when absent, a refusal when foreign.
      */
-    private void removeIfOwnedBy(@NonNull String handle, OwnerLabels.@NonNull Owner owner)
+    private @Nullable Map<String, Object> ownedExisting(@NonNull String handle,
+                                                        OwnerLabels.@NonNull Owner owner)
             throws IOException {
         Map<String, Object> existing;
         try {
             existing = this.incus.instance(handle);
         } catch (IncusClient.ApiException e) {
             if (e.isNotFound()) {
-                return;
+                return null;
             }
             throw e;
         }
@@ -232,7 +398,7 @@ public final class IncusInstanceRuntime implements InstanceRuntime, ConsoleStrea
                     : "no hohenheim owner labels")
                 + "). A same-named foreign instance is a name collision, not a leftover.");
         }
-        destroy(handle);
+        return existing;
     }
 
     /** The owner claim of an instance object's {@code user.*} config, or null. */

@@ -5030,7 +5030,19 @@
     "scope": "violations"
   },
   "snapshots_unsupported": {
-    "text": "De {$kind}-driver kan geen volumesnapshots maken",
+    "text": "De {$kind}-driver heeft geen snapshotondersteuning",
+    "scope": "violations"
+  },
+  "snapshot_missing": {
+    "text": "De daemon heeft snapshot {$snapshot} van {$name} niet meer; herstel geweigerd",
+    "scope": "violations"
+  },
+  "snapshot_delete_failed": {
+    "text": "Kon snapshot {$snapshot} niet verwijderen bij de daemon: {$reason}",
+    "scope": "violations"
+  },
+  "backup_payload_mismatch": {
+    "text": "De {$payload}-payload van deze back-up kan niet hersteld worden door de {$kind}-driver",
     "scope": "violations"
   },
   "restore_capacity": {
@@ -5052,7 +5064,7 @@
     }
   ],
   "snapshot_confirm": {
-    "text": "Snapshot nemen? Een draaiende instantie wordt kort gestopt terwijl de volumes gekopieerd worden, en daarna weer gestart.",
+    "text": "Snapshot nemen? Drivers die volumes kopi\u00ebren stoppen een draaiende instantie kort en starten ze daarna weer; drivers met eigen snapshots leggen ze live vast.",
     "scope": "instance"
   },
   "snapshot_taken": {

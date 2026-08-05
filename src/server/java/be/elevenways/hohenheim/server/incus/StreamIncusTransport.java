@@ -10,6 +10,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.Map;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -72,6 +76,93 @@ abstract class StreamIncusTransport implements IncusTransport {
             if (watchdog.isDone()) {
                 throw new IOException("Incus request to " + describe() + " timed out after "
                     + timeoutMs + "ms");
+            }
+            throw e;
+        } finally {
+            watchdog.cancel(false);
+            closeQuietly(channel);
+        }
+    }
+
+    @Override
+    public Http11.@NonNull Raw exchangeUpload(@NonNull String method,
+                                              @NonNull String pathAndQuery,
+                                              @NonNull Path bodyFile,
+                                              @NonNull String contentType,
+                                              @Nullable Map<String, String> extraHeaders,
+                                              long timeoutMs) throws IOException {
+        long length = Files.size(bodyFile);
+        StringBuilder head = new StringBuilder();
+        head.append(method).append(' ').append(pathAndQuery).append(" HTTP/1.1\r\n");
+        head.append("Host: ").append(hostHeader()).append("\r\n");
+        head.append("Accept: application/json\r\n");
+        if (extraHeaders != null) {
+            for (Map.Entry<String, String> header : extraHeaders.entrySet()) {
+                head.append(header.getKey()).append(": ").append(header.getValue())
+                    .append("\r\n");
+            }
+        }
+        head.append("Content-Type: ").append(contentType).append("\r\n");
+        head.append("Content-Length: ").append(length).append("\r\n");
+        head.append("Connection: close\r\n\r\n");
+
+        Channel channel = open(timeoutMs);
+        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
+            () -> closeQuietly(channel), timeoutMs, TimeUnit.MILLISECONDS);
+        try {
+            OutputStream out = channel.out();
+            out.write(head.toString().getBytes(StandardCharsets.ISO_8859_1));
+            Files.copy(bodyFile, out);
+            out.flush();
+            ByteArrayOutputStream response = new ByteArrayOutputStream();
+            channel.in().transferTo(response);
+            return Http11.parse(response.toByteArray(), describe());
+        } catch (IOException e) {
+            if (watchdog.isDone()) {
+                throw new IOException("Incus upload to " + describe() + " timed out after "
+                    + timeoutMs + "ms");
+            }
+            throw e;
+        } finally {
+            watchdog.cancel(false);
+            closeQuietly(channel);
+        }
+    }
+
+    @Override
+    public Http11.@NonNull Raw exchangeDownload(@NonNull String method,
+                                                @NonNull String pathAndQuery,
+                                                @NonNull Path destination,
+                                                long maxBytes, long timeoutMs)
+            throws IOException {
+        byte[] request = Http11.request(method, pathAndQuery, hostHeader(), null, null, null);
+        Channel channel = open(timeoutMs);
+        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
+            () -> closeQuietly(channel), timeoutMs, TimeUnit.MILLISECONDS);
+        try {
+            OutputStream out = channel.out();
+            out.write(request);
+            out.flush();
+            InputStream in = channel.in();
+            Http11.Head head = Http11.readHead(in, describe());
+            String contentType = head.header("content-type");
+            boolean json = contentType != null && contentType.contains("application/json");
+            if (head.status() >= 200 && head.status() < 300 && !json) {
+                try (OutputStream file = Files.newOutputStream(destination,
+                        StandardOpenOption.CREATE,
+                        StandardOpenOption.TRUNCATE_EXISTING)) {
+                    Http11.copyBody(in, head, file, maxBytes, describe());
+                }
+                return new Http11.Raw(head.status(), head.headers(), new byte[0]);
+            }
+            // An envelope (error or refusal): small by contract, hand it back inline.
+            ByteArrayOutputStream body = new ByteArrayOutputStream();
+            Http11.copyBody(in, head, body, 1024 * 1024, describe());
+            return new Http11.Raw(head.status(), head.headers(), body.toByteArray());
+        } catch (IOException e) {
+            if (watchdog.isDone()) {
+                throw new IOException("Incus download from " + describe()
+                    + " timed out after " + timeoutMs + "ms");
             }
             throw e;
         } finally {

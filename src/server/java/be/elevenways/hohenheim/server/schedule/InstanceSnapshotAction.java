@@ -13,8 +13,9 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * Scheduled cold snapshot of one instance (same-host capture; a snapshot is NOT a
- * backup and dies with the host/pool).
+ * Scheduled snapshot of one instance (cold volume copy or live native snapshot, per
+ * the driver's lane; same-host capture -- a snapshot is NOT a backup and dies with
+ * the host/pool).
  */
 public class InstanceSnapshotAction extends InstanceScheduleAction {
 

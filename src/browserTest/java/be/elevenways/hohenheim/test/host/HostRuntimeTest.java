@@ -136,10 +136,12 @@ class HostRuntimeTest {
                         assertThat(violation.message().key())
                             .isEqualTo("host_runtime_mismatch")));
 
-            // 6. A capability the incus driver LACKS is a named refusal, never a silent
-            //    no-op: snapshots ride VolumeSnapshotSupport, which driver #2 does not
-            //    implement (its state is a rootfs, not named volumes), so the funnel
-            //    refuses by name before any daemon is asked.
+            // 6. The incus kind now CARRIES the snapshot capability (the native lane),
+            //    so the refusal moved past the capability gate to the next honest one:
+            //    this unix:// daemon does not exist, and the distinct violation key is
+            //    the evidence the native lane was entered rather than refused by name.
+            //    The snapshots_unsupported funnel itself stays for a driver with
+            //    NEITHER seam and keeps its named-refusal contract.
             Row incusInstance = Models.get(InstanceModel.class).createEmptyRow();
             incusInstance.set(InstanceModel.NAME, "snapshotless");
             incusInstance.set(InstanceModel.KIND, "hohenheim:incus_container");
@@ -148,11 +150,11 @@ class HostRuntimeTest {
             Models.get(InstanceModel.class).save(incusInstance);
             assertThat(catchThrowable(() -> new InstanceSnapshots()
                     .create(incusInstance.get(InstanceModel.ID), null)))
-                .as("step 6: the missing snapshot capability refuses BY NAME")
+                .as("step 6: the native lane is entered and refuses at the daemon gate")
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->
                         assertThat(violation.message().key())
-                            .isEqualTo("snapshots_unsupported")));
+                            .isEqualTo("instance_unreachable")));
         });
     }
 

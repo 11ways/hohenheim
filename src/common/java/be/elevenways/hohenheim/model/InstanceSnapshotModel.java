@@ -45,9 +45,17 @@ public class InstanceSnapshotModel extends Model {
         .label(HohenheimFormCopy.label("note"))
         .build());
 
-    /** Host directory holding this snapshot's payload files. */
+    /** Host directory holding this snapshot's payload files (volume-tar lane only). */
     public static final StringField DIRECTORY = SCHEMA.addField(
         StringField.builder().name("directory").filterable(false).build());
+
+    /**
+     * DAEMON-side snapshot name (native lane only, e.g. Incus): the payload lives in
+     * the instance's own storage pool, not on the controller, and dies with the
+     * host/pool -- which is exactly why a snapshot is not a backup.
+     */
+    public static final StringField NATIVE_NAME = SCHEMA.addField(
+        StringField.builder().name("native_name").filterable(false).build());
 
     /**
      * Per-volume payload inventory: list of maps {name, path, file, sha256, size}.

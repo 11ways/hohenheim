@@ -5,12 +5,11 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
+import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
@@ -70,6 +69,9 @@ public final class InstanceSnapshots {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.SNAPSHOTS);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
+        if (resolved.runtime() instanceof NativeSnapshotSupport nativeSupport) {
+            return createNative(instanceId, resolved, nativeSupport, note);
+        }
         VolumeSnapshotSupport support = requireSupport(resolved);
         Map<String, String> volumes = logicalVolumes(resolved);
         if (volumes.isEmpty()) {
@@ -138,6 +140,46 @@ public final class InstanceSnapshots {
     }
 
     /**
+     * The NATIVE lane's capture: LIVE and crash-consistent (the storage driver's
+     * atomic snapshot stands in for the stop -- {@link NativeSnapshotSupport}'s
+     * declared consistency model), so the workload keeps running; the CAPTURING stamp
+     * still gates rival power actions for the operation's duration.
+     */
+    private int createNative(int instanceId, @NonNull Resolved resolved,
+                             @NonNull NativeSnapshotSupport support, @Nullable String note) {
+        InstanceStatus live = resolved.runtime().status(resolved.spec().handle());
+        requirePresent(live, resolved);
+        String prior = live.running() ? InstanceModel.STATUS_RUNNING
+            : InstanceModel.STATUS_STOPPED;
+        long fence = this.instances.leases().requireFence(resolved.serverId());
+        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
+            fence, InstanceModel.STATUS_CAPTURING, resolved.row().get(InstanceModel.NAME));
+
+        String nativeName = "hib-" + STAMP.format(Instant.now());
+        Row snapshot = Models.get(InstanceSnapshotModel.class).createEmptyRow();
+        snapshot.set(InstanceSnapshotModel.INSTANCE_ID, instanceId);
+        snapshot.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED);
+        snapshot.set(InstanceSnapshotModel.NOTE, note);
+        snapshot.set(InstanceSnapshotModel.NATIVE_NAME, nativeName);
+        Models.get(InstanceSnapshotModel.class).save(snapshot);
+        try {
+            support.createSnapshot(resolved.spec(), nativeName);
+            snapshot.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE);
+            Models.get(InstanceSnapshotModel.class).save(snapshot);
+        } catch (IOException error) {
+            snapshot.set(InstanceSnapshotModel.ERROR, describe(error));
+            Models.get(InstanceSnapshotModel.class).save(snapshot);
+            InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
+                resolved.serverId(), fence, prior, resolved.row().get(InstanceModel.NAME));
+            throw refusal("instance_snapshot_failed", resolved.row(), error);
+        }
+        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
+            fence, prior, resolved.row().get(InstanceModel.NAME));
+        Blast.log("SNAPSHOT: captured native snapshot", nativeName, "of instance", instanceId);
+        return snapshot.get(InstanceSnapshotModel.ID);
+    }
+
+    /**
      * Restore a snapshot IN PLACE: verify everything first (checksums, inventory
      * mapping, capacity), then replace the instance's volumes with the captured
      * contents -- a REPLACE, never a merge, so files created after the snapshot are
@@ -157,6 +199,11 @@ public final class InstanceSnapshots {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.SNAPSHOTS);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
+        String nativeName = snapshot.get(InstanceSnapshotModel.NATIVE_NAME);
+        if (nativeName != null && !nativeName.isBlank()) {
+            restoreNative(instanceId, resolved, snapshot, nativeName);
+            return;
+        }
         VolumeSnapshotSupport support = requireSupport(resolved);
         Map<String, String> volumes = logicalVolumes(resolved);
 
@@ -197,8 +244,7 @@ public final class InstanceSnapshots {
             tars.put(entry.getKey(), file);
             total += actualSize;
         }
-        RestoreCapacity.require(resolved.serverId(),
-            new ServerService().clientFor(ServerModel.nameOf(resolved.serverId())), total);
+        RestoreCapacity.require(resolved.serverId(), total);
 
         InstanceStatus live = resolved.runtime().status(resolved.spec().handle());
         requirePresent(live, resolved);
@@ -230,21 +276,103 @@ public final class InstanceSnapshots {
         Blast.log("SNAPSHOT: restored snapshot", snapshotId, "onto instance", instanceId);
     }
 
-    /** Remove a snapshot's payload files and its row. */
+    /**
+     * The NATIVE lane's in-place restore: verify the daemon still HOLDS the snapshot
+     * before any live state changes, settle the workload, roll back, redeploy.
+     *
+     * AIDEV-NOTE: no capacity check here on purpose -- a pool-resident rollback moves
+     * no bytes onto the host (the snapshot already lives in the instance's own pool),
+     * and the daemon's own operation is the authority that fails loudly if the pool
+     * cannot complete it.
+     */
+    private void restoreNative(int instanceId, @NonNull Resolved resolved,
+                               @NonNull Row snapshot, @NonNull String nativeName) {
+        if (!(resolved.runtime() instanceof NativeSnapshotSupport support)) {
+            throw Violations.ofForm(violationText("snapshots_unsupported")
+                .withArg("kind", String.valueOf((Object) resolved.row().get(InstanceModel.KIND))));
+        }
+        // -- verification, BEFORE any live state changes -----------------------
+        InstanceStatus live = resolved.runtime().status(resolved.spec().handle());
+        requirePresent(live, resolved);
+        try {
+            if (!support.snapshotExists(resolved.spec(), nativeName)) {
+                throw Violations.ofForm(violationText("snapshot_missing")
+                    .withArg("snapshot", nativeName)
+                    .withArg("name", resolved.row().get(InstanceModel.NAME)));
+            }
+        } catch (IOException unanswerable) {
+            throw refusal("instance_restore_failed", resolved.row(), unanswerable);
+        }
+        boolean wasRunning = live.running();
+
+        // -- the point of no return --------------------------------------------
+        if (wasRunning) {
+            TenantWrites.inAuthorizedOperation(() -> this.instances.stop(instanceId));
+        }
+        long fence = this.instances.leases().requireFence(resolved.serverId());
+        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
+            fence, InstanceModel.STATUS_RESTORING, resolved.row().get(InstanceModel.NAME));
+        try {
+            support.restoreSnapshot(resolved.spec(), nativeName);
+        } catch (IOException error) {
+            InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
+                resolved.serverId(), fence, InstanceModel.STATUS_ERROR,
+                resolved.row().get(InstanceModel.NAME));
+            throw refusal("instance_restore_failed", resolved.row(), error);
+        }
+        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
+            fence, InstanceModel.STATUS_STOPPED, resolved.row().get(InstanceModel.NAME));
+        if (wasRunning) {
+            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
+        }
+        Blast.log("SNAPSHOT: restored native snapshot", nativeName, "onto instance", instanceId);
+    }
+
+    /** Remove a snapshot's payload (controller files or the daemon-side snapshot) and its row. */
     public void delete(int snapshotId) {
         Row snapshot = Models.get(InstanceSnapshotModel.class).findById(snapshotId);
         if (snapshot == null) {
             return;
         }
-        HohenheimAccess.requireOperationCapability(
-            snapshot.get(InstanceSnapshotModel.INSTANCE_ID), HohenheimAccess.SNAPSHOTS);
+        int instanceId = snapshot.get(InstanceSnapshotModel.INSTANCE_ID);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.SNAPSHOTS);
         String directory = snapshot.get(InstanceSnapshotModel.DIRECTORY);
         if (directory != null && !directory.isBlank()) {
             deleteRecursively(Path.of(directory));
         }
+        String nativeName = snapshot.get(InstanceSnapshotModel.NATIVE_NAME);
+        if (nativeName != null && !nativeName.isBlank()) {
+            deleteNativePayload(instanceId, nativeName);
+        }
         Models.get(InstanceSnapshotModel.class).find()
             .where(InstanceSnapshotModel.ID.eq(snapshotId))
             .delete();
+    }
+
+    /**
+     * Remove the daemon-side snapshot behind a native row. Observed-absent is success;
+     * an unreachable or refusing daemon KEEPS the row -- deleting the record while the
+     * pool still holds the payload would be a step that does less than it claims. A
+     * destroyed instance took its pool snapshots with it, so an unresolvable record is
+     * a verified no-op.
+     */
+    private void deleteNativePayload(int instanceId, @NonNull String nativeName) {
+        Resolved resolved;
+        try {
+            resolved = this.instances.resolve(instanceId);
+        } catch (Violations instanceGone) {
+            return;
+        }
+        if (!(resolved.runtime() instanceof NativeSnapshotSupport support)) {
+            return;
+        }
+        try {
+            support.deleteSnapshot(resolved.spec(), nativeName);
+        } catch (IOException error) {
+            throw Violations.ofForm(violationText("snapshot_delete_failed")
+                .withArg("snapshot", nativeName)
+                .withArg("reason", describe(error)));
+        }
     }
 
     /** Restart after a failed capture: best effort, the original failure stays primary. */
