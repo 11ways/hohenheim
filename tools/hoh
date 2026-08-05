@@ -1,0 +1,362 @@
+#!/usr/bin/env node
+'use strict';
+// hoh - Hohenheim PaaS CLI. A THIN client of the /api/v1 automation surface:
+// every operation is one documented HTTP call, authenticated with a znit_ API
+// key. There is deliberately NO logic here beyond transport, table rendering
+// and the human confirmation interlock -- authority, validation and refusal
+// text all live server-side, so this tool can never become a second policy.
+//
+// Single-file node (>= 20) script, stdlib only. Configuration:
+//   env HOH_HOST / HOH_TOKEN override everything;
+//   else ~/.config/hoh/config.json:
+//     { "current": "default",
+//       "contexts": { "default": { "host": "https://panel.example", "token": "znit_..." } } }
+//
+// AIDEV-NOTE: rollback prompts for the site SLUG before acting (--yes skips).
+// The server demands no phrase -- the product's ConfirmationSpec is a client
+// interlock by design -- so this prompt is the CLI's half of that contract,
+// exactly as the admin dialog is the browser's half.
+
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const readline = require('node:readline');
+
+const CONFIG_PATH = path.join(os.homedir(), '.config', 'hoh', 'config.json');
+
+function loadConfig() {
+    try {
+        return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    } catch {
+        return {};
+    }
+}
+
+function activeContext() {
+    if (process.env.HOH_HOST) {
+        return { host: process.env.HOH_HOST, token: process.env.HOH_TOKEN || '' };
+    }
+    const config = loadConfig();
+    const name = process.env.HOH_CONTEXT || config.current || 'default';
+    const ctx = (config.contexts || {})[name];
+    if (!ctx || !ctx.host) {
+        die(`No context configured. Run: hoh login <host>  (or set HOH_HOST/HOH_TOKEN)`);
+    }
+    return { host: ctx.host, token: process.env.HOH_TOKEN || ctx.token || '' };
+}
+
+function die(message) {
+    process.stderr.write(message + '\n');
+    process.exit(1);
+}
+
+// -- transport ----------------------------------------------------------------
+
+async function api(method, apiPath, form) {
+    const ctx = activeContext();
+    if (!ctx.token) die('No API key configured for this context (hoh login, or HOH_TOKEN).');
+    const headers = { 'X-Api-Key': ctx.token };
+    let body;
+    if (form) {
+        headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        body = new URLSearchParams(form).toString();
+    }
+    let response;
+    try {
+        response = await fetch(ctx.host.replace(/\/$/, '') + apiPath, { method, headers, body });
+    } catch (e) {
+        die(`Cannot reach ${ctx.host}: ${e.cause ? e.cause.message : e.message}`);
+    }
+    const text = await response.text();
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch {
+        data = null;
+    }
+    if (!response.ok) {
+        if (data && data.error) {
+            const code = data.error.code || data.error;
+            const message = data.error.message || '';
+            die(`Refused (${response.status}) ${code}${message ? ': ' + message : ''}`);
+        }
+        if (response.status === 404) die('Not found (or not yours).');
+        if (response.status === 403) die('Refused (403): this credential is not an API key.');
+        die(`Request failed (${response.status})${text ? ': ' + text.slice(0, 300) : ''}`);
+    }
+    return data;
+}
+
+const get = (p) => api('GET', p);
+const post = (p, form) => api('POST', p, form || {});
+
+// -- rendering ----------------------------------------------------------------
+
+function table(rows, columns) {
+    if (!rows.length) {
+        console.log('(none)');
+        return;
+    }
+    const widths = columns.map(c => Math.max(c.length,
+        ...rows.map(r => String(r[c] ?? '').length)));
+    const line = (cells) => cells.map((cell, i) => String(cell ?? '').padEnd(widths[i]))
+        .join('  ').trimEnd();
+    console.log(line(columns));
+    console.log(line(widths.map(w => '-'.repeat(w))));
+    for (const row of rows) console.log(line(columns.map(c => row[c])));
+}
+
+function emit(data, rowsKey, columns) {
+    if (flags.json) {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+    }
+    if (rowsKey) table(data[rowsKey] || [], columns);
+    else console.log(JSON.stringify(data, null, 2));
+}
+
+// -- prompts ------------------------------------------------------------------
+
+function ask(question, { hidden = false } = {}) {
+    if (!process.stdin.isTTY) {
+        return Promise.resolve(null);
+    }
+    return new Promise(resolve => {
+        const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+        if (hidden) {
+            const write = rl._writeToOutput.bind(rl);
+            rl._writeToOutput = s => { if (s.includes(question)) write(s); };
+        }
+        rl.question(question, answer => {
+            rl.close();
+            if (hidden) process.stderr.write('\n');
+            resolve(answer);
+        });
+    });
+}
+
+// -- commands -----------------------------------------------------------------
+
+const commands = {
+
+    async login([host]) {
+        if (!host) die('Usage: hoh login <host-url>');
+        const token = process.env.HOH_TOKEN
+            || await ask('API key (znit_...): ', { hidden: true });
+        if (!token) die('An API key is required (mint one under /account/api-keys).');
+        // Verify before storing: one harmless read proves host + key together.
+        process.env.HOH_HOST = host;
+        process.env.HOH_TOKEN = token;
+        await get('/api/v1/projects');
+        delete process.env.HOH_HOST;
+        delete process.env.HOH_TOKEN;
+        const config = loadConfig();
+        config.contexts = config.contexts || {};
+        const name = process.env.HOH_CONTEXT || 'default';
+        config.contexts[name] = { host, token };
+        config.current = config.current || name;
+        fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+        fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+        fs.chmodSync(CONFIG_PATH, 0o600);
+        console.log(`Context "${name}" saved to ${CONFIG_PATH}`);
+    },
+
+    async projects([id]) {
+        if (id) {
+            emit(await get(`/api/v1/projects/${id}`));
+            return;
+        }
+        const data = await get('/api/v1/projects');
+        if (flags.json) return emit(data);
+        table((data.projects || []).map(p => ({
+            id: p.id, name: p.name,
+            environments: (p.environments || []).map(e => `${e.id}:${e.name}`).join(', '),
+        })), ['id', 'name', 'environments']);
+    },
+
+    async sites() {
+        const data = await get('/api/v1/sites');
+        if (flags.json) return emit(data);
+        table((data.sites || []).map(s => ({
+            id: s.id, slug: s.slug, type: s.type, source: s.source,
+            enabled: s.enabled, health: s.health,
+            project: s.project ? s.project.name : '',
+        })), ['id', 'slug', 'type', 'source', 'enabled', 'health', 'project']);
+    },
+
+    async site([id]) {
+        if (!id) die('Usage: hoh site <site-id>');
+        emit(await get(`/api/v1/sites/${id}`));
+    },
+
+    async deploy([id]) {
+        if (!id) die('Usage: hoh deploy <site-id>');
+        const result = await post(`/api/v1/sites/${id}/deploy`);
+        console.log(`Deploy ${result.status} for site ${result.id}.`);
+    },
+
+    async rollback([id]) {
+        if (!id) die('Usage: hoh rollback <site-id> [--yes]');
+        const site = await get(`/api/v1/sites/${id}`);
+        if (!flags.yes) {
+            const typed = await ask(
+                `Roll back "${site.slug}" to its retained release. Type the site slug to confirm: `);
+            if (typed === null) {
+                die('Refusing to roll back without confirmation (pass --yes in scripts).');
+            }
+            if (typed.trim() !== site.slug) {
+                die('Slug mismatch; nothing was done.');
+            }
+        }
+        const result = await post(`/api/v1/sites/${id}/rollback`);
+        console.log(`Rollback ${result.status} for site ${result.id}.`);
+    },
+
+    async releases([id]) {
+        if (!id) die('Usage: hoh releases <site-id>');
+        emit(await get(`/api/v1/sites/${id}/releases`), 'releases',
+            ['id', 'kind', 'status', 'image', 'failure_reason', 'finished_at']);
+    },
+
+    async release([siteId, opId]) {
+        if (!siteId || !opId) die('Usage: hoh release <site-id> <release-id>');
+        const data = await get(`/api/v1/sites/${siteId}/releases/${opId}`);
+        if (flags.json) return emit(data);
+        const { step_log, ...rest } = data;
+        console.log(JSON.stringify(rest, null, 2));
+        if (step_log) console.log('\n' + step_log);
+    },
+
+    async builds([id]) {
+        if (!id) die('Usage: hoh builds <site-id>');
+        emit(await get(`/api/v1/sites/${id}/builds`), 'builds',
+            ['id', 'builder_kind', 'status', 'image', 'failure_reason', 'finished_at']);
+    },
+
+    async 'build-log'([siteId, buildId]) {
+        if (!siteId || !buildId) die('Usage: hoh build-log <site-id> <build-id>');
+        const data = await get(`/api/v1/sites/${siteId}/builds/${buildId}/log`);
+        process.stdout.write((data.log || '') + '\n');
+    },
+
+    async deployments([id]) {
+        if (!id) die('Usage: hoh deployments <site-id>');
+        emit(await get(`/api/v1/sites/${id}/deployments`), 'deployments',
+            ['id', 'status', 'reason', 'commit_sha', 'finished_at']);
+    },
+
+    async 'deploy-log'([siteId, deployId]) {
+        if (!siteId || !deployId) die('Usage: hoh deploy-log <site-id> <deployment-id>');
+        const data = await get(`/api/v1/sites/${siteId}/deployments/${deployId}/log`);
+        process.stdout.write((data.log || '') + '\n');
+    },
+
+    async instances() {
+        emit(await get('/api/v1/instances'), 'instances',
+            ['id', 'name', 'kind', 'status', 'template']);
+    },
+
+    async instance([id]) {
+        if (!id) die('Usage: hoh instance <instance-id>');
+        emit(await get(`/api/v1/instances/${id}`));
+    },
+
+    async logs([id]) {
+        if (!id) die('Usage: hoh logs <instance-id> [-n <lines>]');
+        const lines = flags.n ? `?lines=${encodeURIComponent(flags.n)}` : '';
+        const data = await get(`/api/v1/instances/${id}/logs${lines}`);
+        process.stdout.write((data.lines || '') + '\n');
+    },
+
+    async power([id, action]) {
+        if (!id || !action) die('Usage: hoh power <instance-id> start|stop|restart');
+        const result = await post(`/api/v1/instances/${id}/power`, { action });
+        console.log(`Instance ${result.id}: ${result.action} -> ${result.status}`);
+    },
+
+    async vars([scope, id, verb, key, value]) {
+        const bases = {
+            instance: (i) => `/api/v1/instances/${i}/variables`,
+            env: (i) => `/api/v1/environments/${i}/variables`,
+        };
+        if (!bases[scope] || !id) {
+            die('Usage: hoh vars instance|env <id> [set <KEY> [<value>] [--secret] | unset <KEY>]');
+        }
+        const base = bases[scope](id);
+        if (!verb) {
+            const data = await get(base);
+            if (flags.json) return emit(data);
+            table((data.variables || []).map(v => ({
+                key: v.key, kind: v.kind,
+                value: v.kind === 'secret' ? (v.has_value ? '(set)' : '(empty)') : v.value,
+            })), ['key', 'kind', 'value']);
+            return;
+        }
+        if (verb === 'set') {
+            if (!key) die('Usage: hoh vars ' + scope + ' <id> set <KEY> [<value>] [--secret]');
+            let resolved = value;
+            if (resolved === undefined) {
+                // No value on the command line: read it hidden, so secrets stay out of
+                // shell history and process listings.
+                resolved = await ask(`Value for ${key}: `, { hidden: true });
+                if (resolved === null) die('A value is required (pipe it or pass it inline).');
+            }
+            const kind = flags.secret ? 'secret' : 'plain';
+            await post(base, { key, kind, value: resolved });
+            console.log(`${key} set (${kind}).`);
+            return;
+        }
+        if (verb === 'unset') {
+            if (!key) die('Usage: hoh vars ' + scope + ' <id> unset <KEY>');
+            await post(`${base}/delete`, { key });
+            console.log(`${key} removed.`);
+            return;
+        }
+        die(`Unknown vars verb "${verb}".`);
+    },
+
+    help() {
+        console.log(`hoh - Hohenheim PaaS CLI (a thin client of /api/v1)
+
+Usage: hoh <command> [args] [--json] [--yes]
+
+  login <host>                       Store host + API key (verified first)
+  projects [<id>]                    Projects and environments you belong to
+  sites | site <id>                  Sites you hold manage on
+  deploy <site-id>                   Queue a git deploy
+  rollback <site-id> [--yes]        Roll back to the retained release (asks for the slug)
+  releases <site-id>                 Release/rollback operations
+  release <site-id> <op-id>          One operation, with its step log
+  builds <site-id>                   Sandbox build operations
+  build-log <site-id> <build-id>     One build's captured log
+  deployments <site-id>              Git deployment records
+  deploy-log <site-id> <deploy-id>   One git deploy's captured log
+  instances | instance <id>          Instances you hold manage on
+  logs <instance-id> [-n <lines>]    Tail an instance's console output
+  power <instance-id> <action>       start | stop | restart
+  vars instance|env <id> ...         List / set / unset variables (--secret for secrets;
+                                     secret values are WRITE-ONLY: reads never return them)
+
+Config: ~/.config/hoh/config.json, or HOH_HOST / HOH_TOKEN / HOH_CONTEXT.`);
+    },
+};
+
+// -- entry --------------------------------------------------------------------
+
+const flags = {};
+const positional = [];
+for (const arg of process.argv.slice(2)) {
+    if (arg === '--json') flags.json = true;
+    else if (arg === '--yes' || arg === '-y') flags.yes = true;
+    else if (arg === '--secret') flags.secret = true;
+    else if (arg.startsWith('-n=')) flags.n = arg.slice(3);
+    else if (arg === '-n') flags.n = 'NEXT';
+    else if (flags.n === 'NEXT') flags.n = arg;
+    else positional.push(arg);
+}
+if (flags.n === 'NEXT') delete flags.n;
+
+const command = positional.shift() || 'help';
+const handler = commands[command];
+if (!handler) die(`Unknown command "${command}". Run: hoh help`);
+handler(positional).catch(e => die(e.message || String(e)));
