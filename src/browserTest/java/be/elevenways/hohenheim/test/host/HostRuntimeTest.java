@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -134,6 +135,24 @@ class HostRuntimeTest {
                     assertThat(violations.all()).anySatisfy(violation ->
                         assertThat(violation.message().key())
                             .isEqualTo("host_runtime_mismatch")));
+
+            // 6. A capability the incus driver LACKS is a named refusal, never a silent
+            //    no-op: snapshots ride VolumeSnapshotSupport, which driver #2 does not
+            //    implement (its state is a rootfs, not named volumes), so the funnel
+            //    refuses by name before any daemon is asked.
+            Row incusInstance = Models.get(InstanceModel.class).createEmptyRow();
+            incusInstance.set(InstanceModel.NAME, "snapshotless");
+            incusInstance.set(InstanceModel.KIND, "hohenheim:incus_container");
+            incusInstance.set(InstanceModel.SETTINGS, Map.of("image", "alpine/3.22"));
+            incusInstance.set(InstanceModel.SERVER_ID, admitted.get(ServerModel.ID));
+            Models.get(InstanceModel.class).save(incusInstance);
+            assertThat(catchThrowable(() -> new InstanceSnapshots()
+                    .create(incusInstance.get(InstanceModel.ID), null)))
+                .as("step 6: the missing snapshot capability refuses BY NAME")
+                .isInstanceOfSatisfying(Violations.class, violations ->
+                    assertThat(violations.all()).anySatisfy(violation ->
+                        assertThat(violation.message().key())
+                            .isEqualTo("snapshots_unsupported")));
         });
     }
 
