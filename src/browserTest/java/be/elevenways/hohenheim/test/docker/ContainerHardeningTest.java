@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.runtime.NetworkPosture;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
@@ -131,7 +134,7 @@ class ContainerHardeningTest {
 
         // 3. MANAGED DATABASE -- declares SERVICE per engine; redis is the fast one to
         //    provision, and it genuinely cannot start without those capabilities.
-        ManagedDatabase databases = new ManagedDatabase(docker);
+        ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         String dbName = "hardening" + System.nanoTime();
         try {
             databases.provision(dbName, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,

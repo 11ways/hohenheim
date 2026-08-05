@@ -7,6 +7,10 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.hohenheim.server.runtime.NetworkPosture;
+import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +26,19 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * Provisions database engines as managed Docker containers (Phase 3). Each database
  * runs in its own container with a named volume for persistence and an ephemeral
  * 127.0.0.1 published port; connection details are returned to the caller.
+ *
+ * AIDEV-NOTE: since the isolation wave a record-backed database container lives on its
+ * OWN policied network ({@link NetworkPosture#PRIVATE} with {@link Egress#NONE}: an
+ * engine has no legitimate outbound-initiated traffic, so an exfiltrating one finds the
+ * door closed) and provisioning REFUSES on a host that cannot enforce the policy. The
+ * declared posture arrives through the constructor -- DatabaseService, the production
+ * path, always declares PRIVATE; only record-less test/preview callers may declare
+ * SHARED_BRIDGE, and PRIVATE without a record id is refused because an unlabelled
+ * network could never be attributed or reconciled. A pre-isolation container on the
+ * shared bridge migrates the moment it is next re-provisioned (provision replaces the
+ * container; the named data volume carries the data across). Host-process sites keep
+ * reaching the engine over the 127.0.0.1 published port; Docker sites join the
+ * database's network instead (see SiteInstances).
  *
  * @author  Jelle De Loecker
  * @since   0.1.0
@@ -178,9 +195,19 @@ public class ManagedDatabase {
                              String user, String password, String database) {}
 
     private final DockerClient docker;
+    private final WorkloadNetworkPolicy policy;
+    private final NetworkPosture posture;
 
-    public ManagedDatabase(DockerClient docker) {
+    /**
+     * @param policy  the applier bound to the host the {@code docker} client points at
+     * @param posture PRIVATE for every record-backed database; SHARED_BRIDGE is only for
+     *                record-less test/preview provisioning
+     */
+    public ManagedDatabase(DockerClient docker, WorkloadNetworkPolicy policy,
+                           NetworkPosture posture) {
         this.docker = docker;
+        this.policy = policy;
+        this.posture = posture;
     }
 
     /**
@@ -224,6 +251,22 @@ public class ManagedDatabase {
         String volumeName = containerName + "-data";
         String imageRef = (image == null || image.isBlank()) ? engine.defaultImage : image;
 
+        Map<String, String> owner = recordId != null
+            ? OwnerLabels.of(DatabaseModel.MODEL_ID, recordId) : null;
+
+        // Network AND verified kernel policy FIRST: an unenforceable host must never
+        // reach the point where an image is pulled, let alone a container created.
+        String network = null;
+        if (this.posture == NetworkPosture.PRIVATE) {
+            if (owner == null) {
+                throw new IOException("REFUSED to provision '" + name + "' on a private"
+                    + " network without a database record: the network could never be"
+                    + " attributed or reconciled. Record-less callers declare SHARED_BRIDGE.");
+            }
+            network = WorkloadNetworks.ensure(this.docker, this.policy, containerName, owner,
+                Egress.NONE);
+        }
+
         docker.ensureImage(imageRef, null);
 
         // Replace a prior container for this database ONLY when the daemon attributes it
@@ -231,11 +274,9 @@ public class ManagedDatabase {
         // or unattributable container is a loud refusal, never a force-remove.
         OwnerLabels.removeIfOwnedBy(docker, containerName, DatabaseModel.MODEL_ID, recordId);
 
-        Map<String, String> owner = recordId != null
-            ? OwnerLabels.of(DatabaseModel.MODEL_ID, recordId) : null;
         String id = docker.createContainer(containerName,
             buildSpec(engine, imageRef, volumeName, engine.env(user, password, database),
-                engine.containerCommand(password), ephemeral, limits, owner),
+                engine.containerCommand(password), ephemeral, limits, owner, network),
             engine.hardening());
         docker.startContainer(id);
 
@@ -309,6 +350,12 @@ public class ManagedDatabase {
                     throw e;
                 }
             }
+        }
+        // The private network and its kernel chains die with the workload, VERIFIED
+        // (absent network = observed no-op, so a pre-isolation database on the shared
+        // bridge destroys cleanly too).
+        if (this.posture == NetworkPosture.PRIVATE) {
+            WorkloadNetworks.teardown(docker, this.policy, containerName);
         }
     }
 
@@ -522,7 +569,8 @@ public class ManagedDatabase {
     private static Map<String, Object> buildSpec(Engine engine, String imageRef, String volumeName,
                                                  Map<String, String> env, @Nullable List<String> command,
                                                  boolean ephemeral, ResourceLimits limits,
-                                                 @Nullable Map<String, String> ownerLabels) {
+                                                 @Nullable Map<String, String> ownerLabels,
+                                                 @Nullable String network) {
         String portKey = engine.port + "/tcp";
         List<String> envList = new ArrayList<>();
         env.forEach((key, value) -> envList.add(key + "=" + value));
@@ -554,7 +602,16 @@ public class ManagedDatabase {
             spec.put("Cmd", command);
         }
         spec.put("ExposedPorts", Map.of(portKey, Map.of()));
+        // AIDEV-NOTE: attached in the CREATE body, never with a connect call afterwards
+        // (a post-hoc connect leaves the container on the default bridge in between).
+        // A null network is the SHARED_BRIDGE test posture: nothing is attached.
+        if (network != null) {
+            spec.put("NetworkingConfig", Map.of("EndpointsConfig", Map.of(network, Map.of())));
+        }
         Map<String, Object> hostConfig = new LinkedHashMap<>();
+        if (network != null) {
+            hostConfig.put("NetworkMode", network);
+        }
         hostConfig.put("PortBindings", Map.of(portKey, List.of(Map.of("HostIp", "127.0.0.1", "HostPort", ""))));
         hostConfig.put("Mounts", List.of(dataMount));
         limits.applyTo(hostConfig);

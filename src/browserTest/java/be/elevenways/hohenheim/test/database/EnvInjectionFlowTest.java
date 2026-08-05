@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.hohenheim.test.network.PrivateNetns;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -69,7 +70,13 @@ class EnvInjectionFlowTest {
         monitor = new ProcessMonitor();
         portAllocator = new PortAllocator();
         service = new DatabaseService();
+
+        netns = PrivateNetns.installEnforcing();
+        assumeTrue(netns != null,
+            "no private netns: record-backed provisioning refuses without an enforceable policy");
     }
+
+    private static PrivateNetns netns;
 
     @AfterAll
     static void cleanup() throws Exception {
@@ -79,6 +86,8 @@ class EnvInjectionFlowTest {
         if (service != null && dbName != null) {
             service.destroy(dbName, true);
         }
+        PrivateNetns.uninstall(netns);
+        netns = null;
     }
 
     /** Spawns a child that prints its whole environment, using the REAL injection path. */

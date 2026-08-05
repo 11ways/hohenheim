@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.server.runtime.NetworkPosture;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -55,12 +57,17 @@ public class DatabaseService extends DatasourceScoped {
     public DatabaseService() {
         super(null);
         ServerService servers = new ServerService();
-        this.managedFor = serverName -> new ManagedDatabase(servers.clientFor(serverName));
+        // The production path always declares PRIVATE: a record-backed database gets its
+        // own policied network or does not provision, and the nft lane targets the
+        // kernel of the server the container lands on.
+        this.managedFor = serverName -> new ManagedDatabase(servers.clientFor(serverName),
+            WorkloadNetworkPolicy.forServer(serverName), NetworkPosture.PRIVATE);
     }
 
     public DatabaseService(DockerClient docker, Datasource datasource) {
         super(datasource);
-        ManagedDatabase fixed = new ManagedDatabase(docker);
+        ManagedDatabase fixed = new ManagedDatabase(docker,
+            WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.PRIVATE);
         this.managedFor = serverName -> fixed;   // tests: a single host regardless of server name
     }
 

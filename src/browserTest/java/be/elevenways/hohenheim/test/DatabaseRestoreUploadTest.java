@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.runtime.NetworkPosture;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -56,7 +59,7 @@ class DatabaseRestoreUploadTest extends HohenheimTestBase {
 
         String name = "restoreui" + System.nanoTime();
         String container = "hohenheim-db-" + name;
-        ManagedDatabase databases = new ManagedDatabase(docker);
+        ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         DatabaseModel model = Models.get(DatabaseModel.class);
         try {
             // A live container plus the app-side record the restore handler resolves it by.

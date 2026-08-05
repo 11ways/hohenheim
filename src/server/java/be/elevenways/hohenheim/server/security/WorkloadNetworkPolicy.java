@@ -80,7 +80,16 @@ public final class WorkloadNetworkPolicy {
         if (installed != null) {
             return installed;
         }
-        Row server = Models.get(ServerModel.class).findByName(serverName);
+        Row server;
+        try {
+            server = Models.get(ServerModel.class).findByName(serverName);
+        } catch (RuntimeException noInventory) {
+            // No server inventory in scope (a record-less caller that never touches a
+            // remote host, e.g. a SHARED_BRIDGE test): there is only the local daemon,
+            // whose applier is the local sudo one. A real remote deploy always has the
+            // model registered, so this fallback can never silently mis-target a host.
+            return PRODUCTION;
+        }
         if (server == null || !ServerModel.MODE_SSH.equals(server.get(ServerModel.MODE))) {
             return PRODUCTION;
         }
