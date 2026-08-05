@@ -1,6 +1,10 @@
 package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -40,16 +44,6 @@ public final class WorkloadNetworkPolicy {
     /** Our own table, NOT NftService's {@code inet hohenheim}: two owners, no shared flush. */
     public static final String TABLE = "hohenheim_net";
 
-    /** The cloud instance-metadata range: credentials for the whole host, one HTTP GET away. */
-    public static final String METADATA_RANGE = "169.254.0.0/16";
-
-    /** RFC1918 plus the metadata range: everything a tenant workload may not reach. */
-    private static final List<String> DENIED_V4 =
-        List.of(METADATA_RANGE, "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16");
-
-    /** ULA (where a v6-enabled daemon puts container networks) and link-local. */
-    private static final List<String> DENIED_V6 = List.of("fc00::/7", "fe80::/10");
-
     private final @NonNull NftRunner runner;
     private final @NonNull BooleanSupplier enabled;
 
@@ -62,20 +56,35 @@ public final class WorkloadNetworkPolicy {
      */
     private static volatile @Nullable WorkloadNetworkPolicy override;
 
+    /** The fleet-wide enforcement switch; per-host CAPABILITY is the preflight's job. */
+    private static final BooleanSupplier ENABLED_SETTING = () -> Boolean.TRUE.equals(
+        HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NFTABLES_ENABLED));
+
     private static final WorkloadNetworkPolicy PRODUCTION = new WorkloadNetworkPolicy(
-        new NftRunner.Sudo(),
-        () -> Boolean.TRUE.equals(
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NFTABLES_ENABLED)));
+        new NftRunner.Sudo(), ENABLED_SETTING);
 
     public WorkloadNetworkPolicy(@NonNull NftRunner runner, @NonNull BooleanSupplier enabled) {
         this.runner = runner;
         this.enabled = enabled;
     }
 
-    /** The applier every runtime uses; the test override when one is installed. */
-    public static @NonNull WorkloadNetworkPolicy current() {
+    /**
+     * The applier for one inventoried host's OWN kernel; the test override when one is
+     * installed. There is deliberately no local-only accessor: a runtime built for a
+     * remote daemon with a local applier isolates nothing while verifying everything
+     * (the rules land in the controller's kernel), so the server name travels or the
+     * policy does not get built.
+     */
+    public static @NonNull WorkloadNetworkPolicy forServer(@NonNull String serverName) {
         WorkloadNetworkPolicy installed = override;
-        return installed != null ? installed : PRODUCTION;
+        if (installed != null) {
+            return installed;
+        }
+        Row server = Models.get(ServerModel.class).findByName(serverName);
+        if (server == null || !ServerModel.MODE_SSH.equals(server.get(ServerModel.MODE))) {
+            return PRODUCTION;
+        }
+        return new WorkloadNetworkPolicy(NftRunner.forServer(server), ENABLED_SETTING);
     }
 
     /** @param policy the applier {@link #current()} returns, or null to restore production */
@@ -113,11 +122,12 @@ public final class WorkloadNetworkPolicy {
      * @throws IOException when enforcement is off, nft refuses, or the chains read back
      *                     without a rule we just applied
      */
-    public void apply(@NonNull WorkloadNetwork network) throws IOException {
+    public void apply(@NonNull WorkloadNetwork network, @NonNull Egress egress)
+            throws IOException {
         requireEnabled(network.name());
 
         String key = chainKey(network.name());
-        List<String> forward = forwardRules(network);
+        List<String> forward = forwardRules(network, egress);
         List<String> input = inputRules(network);
 
         StringBuilder ruleset = new StringBuilder();
@@ -203,23 +213,31 @@ public final class WorkloadNetworkPolicy {
      * AIDEV-NOTE: order is the policy. Established/related first, or the reply leg of an
      * inbound connection to a published port dies. The workload's OWN subnet is accepted
      * before the RFC1918 denies, because that subnet sits inside 172.16/12 and would
-     * otherwise be denied to itself. Everything not named here falls through to the chain's
-     * accept policy -- this is egress-restrictive, not egress-closed; a closed default
-     * belongs to a per-workload egress allowlist that does not exist yet.
+     * otherwise be denied to itself. With {@link Egress#OPEN} everything not named here
+     * falls through to the chain's accept policy; {@link Egress#NONE} appends a final
+     * saddr-scoped drop so nothing the workload initiates leaves at all -- the kind
+     * DECLARES which, there is no ambient default.
      */
-    static @NonNull List<String> forwardRules(@NonNull WorkloadNetwork network) {
+    static @NonNull List<String> forwardRules(@NonNull WorkloadNetwork network,
+                                              @NonNull Egress egress) {
         List<String> rules = new ArrayList<>();
         rules.add("ct state established,related accept");
         rules.add("ip saddr " + network.ipv4Subnet() + " ip daddr " + network.ipv4Subnet()
             + " accept");
-        for (String denied : DENIED_V4) {
+        for (String denied : TenantNetworkRanges.DENIED_V4) {
             rules.add("ip saddr " + network.ipv4Subnet() + " ip daddr " + denied + " drop");
         }
         String v6 = network.ipv6Subnet();
         if (v6 != null) {
             rules.add("ip6 saddr " + v6 + " ip6 daddr " + v6 + " accept");
-            for (String denied : DENIED_V6) {
+            for (String denied : TenantNetworkRanges.DENIED_V6) {
                 rules.add("ip6 saddr " + v6 + " ip6 daddr " + denied + " drop");
+            }
+        }
+        if (egress == Egress.NONE) {
+            rules.add("ip saddr " + network.ipv4Subnet() + " drop");
+            if (v6 != null) {
+                rules.add("ip6 saddr " + v6 + " drop");
             }
         }
         return List.copyOf(rules);

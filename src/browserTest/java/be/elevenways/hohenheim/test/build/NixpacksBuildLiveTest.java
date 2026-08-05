@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.build;
 
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -290,7 +291,7 @@ class NixpacksBuildLiveTest {
     private static SandboxedBuilds.Result nixpacksBuild(DockerClient docker, int ownerId,
                                                         Path context) {
         String tag = "hohenheim-buildtest-nixpacks-" + System.nanoTime() + ":latest";
-        return new SandboxedBuilds(docker, WorkloadNetworkPolicy.current(), () -> {})
+        return new SandboxedBuilds(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), () -> {})
             .run(new BuildRequest(SiteModel.MODEL_ID, ownerId,
                 BuildOperationModel.KIND_NIXPACKS, context, null, tag, Map.of(),
                 "test-ref", null, new BuildQuota(2.0, 2048, 4096L * 1024 * 1024,

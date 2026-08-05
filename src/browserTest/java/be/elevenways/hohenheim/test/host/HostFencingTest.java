@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.process.PortAllocator;
-import be.elevenways.hohenheim.server.runtime.InstanceNetworks;
+import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -298,7 +298,7 @@ class HostFencingTest {
             // already gone
         }
         try {
-            docker.removeNetwork(InstanceNetworks.networkName(handle));
+            docker.removeNetwork(WorkloadNetworks.networkName(handle));
         } catch (IOException ignored) {
             // never created
         }

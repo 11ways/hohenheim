@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.build;
 
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -376,7 +377,7 @@ class SandboxedBuildLiveTest {
         try {
             String tag = "hohenheim-buildtest-" + name + "-" + System.nanoTime() + ":latest";
             SandboxedBuilds.Result result = new SandboxedBuilds(docker,
-                WorkloadNetworkPolicy.current(), () -> {}).run(new BuildRequest(
+                WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), () -> {}).run(new BuildRequest(
                     SiteModel.MODEL_ID, ownerId, BuildOperationModel.KIND_DOCKERFILE,
                     context, "Dockerfile", tag, args, "test-ref", registry, quota));
             removeImage(docker, result.imageId());

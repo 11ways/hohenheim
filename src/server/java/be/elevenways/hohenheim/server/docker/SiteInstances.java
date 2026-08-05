@@ -341,7 +341,8 @@ public final class SiteInstances {
         String buildContext = str(settings.get("build_context"));
         if (!buildContext.isEmpty()) {
             String tag = "hohenheim-site-" + siteId + ":latest";
-            SandboxedBuilds.Result build = new SandboxedBuilds(docker).run(new BuildRequest(
+            SandboxedBuilds.Result build = new SandboxedBuilds(docker,
+                serverNameFor(settings)).run(new BuildRequest(
                 SiteModel.MODEL_ID, siteId,
                 BuildOperationModel.kindOrDefault(settings.get("builder")),
                 Path.of(buildContext), str(settings.get("dockerfile")), tag,
@@ -554,8 +555,16 @@ public final class SiteInstances {
         if (server == null || server.toString().isBlank()) {
             return new DockerClient();
         }
-        return new ServerService().clientFor(
-            ServerModel.nameOf(ServerModel.canonicalServerId(server)));
+        return new ServerService().clientFor(serverNameFor(settings));
+    }
+
+    /** The inventoried server name a site's settings resolve to ("local" when blank). */
+    static @NonNull String serverNameFor(@NonNull Map<String, Object> settings) {
+        Object server = settings.get("server");
+        if (server == null || server.toString().isBlank()) {
+            return ServerModel.MODE_LOCAL;
+        }
+        return ServerModel.nameOf(ServerModel.canonicalServerId(server));
     }
 
     private static @NonNull String str(@Nullable Object value) {

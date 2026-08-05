@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.WorkloadNetwork;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
@@ -84,7 +85,7 @@ class WorkloadNetworkPolicyTest {
 
             // 2. Apply the policy through the production applier, which verifies its own
             //    work by reading the chains back out of the kernel.
-            policy.apply(network);
+            policy.apply(network, Egress.OPEN);
 
             assertThat(netns.probe(tenant, METADATA, PEER_PORT))
                 .as("step 2: the metadata service is blocked").isEqualTo("BLOCKED");
@@ -110,7 +111,7 @@ class WorkloadNetworkPolicyTest {
                 .contains("ip saddr " + TENANT_SUBNET + " drop");
 
             // 4. Re-applying is idempotent: same rules, still exactly one copy of each.
-            policy.apply(network);
+            policy.apply(network, Egress.OPEN);
             String reapplied = netns.inHost("nft", "list", "table", "inet",
                 WorkloadNetworkPolicy.TABLE).stdout();
             assertThat(occurrences(reapplied,
@@ -140,6 +141,59 @@ class WorkloadNetworkPolicyTest {
     }
 
     /**
+     * Egress is a DECLARED fact: the same network under {@link Egress#NONE} loses the
+     * internet while inbound connections keep their reply leg, and re-declaring
+     * {@link Egress#OPEN} restores it -- so the closed posture is the rules, not a
+     * fixture accident.
+     */
+    @Test
+    void aDeclaredClosedEgressBlocksTheInternetWhileRepliesKeepFlowing() throws IOException {
+        assumeTrue(PrivateNetns.available(),
+            "unshare/nsenter/nft/ip/python3 unavailable: cannot build a private netns");
+
+        try (PrivateNetns netns = new PrivateNetns()) {
+            long tenant = netns.nested();
+            long peer = netns.nested();
+            wire(netns, tenant, peer);
+            netns.listen(tenant, 9090);
+
+            WorkloadNetworkPolicy policy = new WorkloadNetworkPolicy(netns.nftRunner(), () -> true);
+            WorkloadNetwork network = new WorkloadNetwork("hohenheim-db-egress-net",
+                TENANT_SUBNET, TENANT_GATEWAY, TENANT_SUBNET_V6);
+
+            // 1. Declared OPEN: the public internet is reachable.
+            policy.apply(network, Egress.OPEN);
+            assertThat(netns.probe(tenant, PUBLIC, PEER_PORT))
+                .as("step 1: declared-open egress keeps the internet")
+                .isEqualTo("REACHABLE");
+
+            // 2. Re-declared NONE: the very same probe is now blocked, and the kernel
+            //    carries the final saddr-scoped drop.
+            policy.apply(network, Egress.NONE);
+            assertThat(netns.probe(tenant, PUBLIC, PEER_PORT))
+                .as("step 2: declared-closed egress blocks the internet")
+                .isEqualTo("BLOCKED");
+            assertThat(netns.inHost("nft", "list", "table", "inet",
+                WorkloadNetworkPolicy.TABLE).stdout())
+                .as("step 2: the kernel carries the egress drop, not just our intent")
+                .contains("ip saddr " + TENANT_SUBNET + " drop");
+
+            // 3. Inbound still answers: a connection INTO the closed workload gets its
+            //    reply leg through the established/related accept that precedes the drop.
+            assertThat(netns.probe(peer, TENANT_ADDRESS, 9090))
+                .as("step 3: closed egress still answers inbound connections")
+                .isEqualTo("REACHABLE");
+
+            // 4. THE COUNTERFACTUAL: re-declare OPEN and the internet returns, so step 2
+            //    measured the declaration and not a broken route.
+            policy.apply(network, Egress.OPEN);
+            assertThat(netns.probe(tenant, PUBLIC, PEER_PORT))
+                .as("step 4: declaring egress open again restores the internet")
+                .isEqualTo("REACHABLE");
+        }
+    }
+
+    /**
      * The two ways this applier is not {@link be.elevenways.hohenheim.server.security.NftService}:
      * it refuses when enforcement is off, and it disbelieves a successful exit code.
      */
@@ -155,7 +209,7 @@ class WorkloadNetworkPolicyTest {
             // 1. Enforcement off: apply refuses, loudly, and nothing reaches the kernel.
             WorkloadNetworkPolicy disabled =
                 new WorkloadNetworkPolicy(netns.nftRunner(), () -> false);
-            assertThatThrownBy(() -> disabled.apply(network))
+            assertThatThrownBy(() -> disabled.apply(network, Egress.OPEN))
                 .as("step 1: a host that cannot enforce the policy refuses instead of pretending")
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("REFUSED to deploy")
@@ -166,7 +220,7 @@ class WorkloadNetworkPolicyTest {
 
             // 2. A real apply lands.
             WorkloadNetworkPolicy policy = new WorkloadNetworkPolicy(netns.nftRunner(), () -> true);
-            policy.apply(network);
+            policy.apply(network, Egress.OPEN);
             assertThat(netns.inHost("nft", "list", "ruleset").stdout())
                 .as("step 2: the enabled applier really wrote the chain")
                 .contains("ip saddr " + TENANT_SUBNET + " ip daddr 169.254.0.0/16 drop");
@@ -179,7 +233,7 @@ class WorkloadNetworkPolicyTest {
             WorkloadNetworkPolicy lied = new WorkloadNetworkPolicy(lying, () -> true);
             WorkloadNetwork moved = new WorkloadNetwork(network.name(),
                 "172.31.6.0/24", "172.31.6.1", null);
-            assertThatThrownBy(() -> lied.apply(moved))
+            assertThatThrownBy(() -> lied.apply(moved, Egress.OPEN))
                 .as("step 3: exit 0 is not proof; the kernel is re-read and the lie is caught")
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("nft reported success but the kernel does not carry the rule")
@@ -187,7 +241,7 @@ class WorkloadNetworkPolicyTest {
 
             // 4. A chain that vanished between apply and verify is caught the same way.
             netns.inHost("nft", "delete", "table", "inet", WorkloadNetworkPolicy.TABLE);
-            assertThatThrownBy(() -> lied.apply(network))
+            assertThatThrownBy(() -> lied.apply(network, Egress.OPEN))
                 .as("step 4: a missing chain is a refusal, never a shrug")
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("cannot be read back");

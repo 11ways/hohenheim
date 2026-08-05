@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
-import be.elevenways.hohenheim.server.runtime.InstanceNetworks;
+import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.LiveIdOffsets;
@@ -197,7 +197,7 @@ class InstanceStatsLiveTest {
             // already gone
         }
         try {
-            docker.removeNetwork(InstanceNetworks.networkName(container));
+            docker.removeNetwork(WorkloadNetworks.networkName(container));
         } catch (IOException ignored) {
             // a deploy that never reached the network has none to remove
         }

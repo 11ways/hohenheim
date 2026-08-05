@@ -170,7 +170,9 @@ public final class PreviewDeployments {
             }
 
             // 2. Sandboxed, digest-pinned build of the preview's image.
-            SandboxedBuilds.Result build = new SandboxedBuilds(new DockerClient())
+            // Previews build against the local daemon, so the policy targets "local".
+            SandboxedBuilds.Result build = new SandboxedBuilds(new DockerClient(),
+                ServerModel.MODE_LOCAL)
                 .run(new BuildRequest(PreviewDeploymentModel.MODEL_ID, previewId,
                     BuildOperationModel.kindOrDefault(siteSettings.get("builder")),
                     checkout.toPath(),

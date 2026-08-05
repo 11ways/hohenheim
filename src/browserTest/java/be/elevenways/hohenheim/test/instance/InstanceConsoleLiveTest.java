@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.server.runtime.InstanceNetworks;
+import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.LiveIdOffsets;
@@ -298,7 +298,7 @@ class InstanceConsoleLiveTest {
             // already gone
         }
         try {
-            docker.removeNetwork(InstanceNetworks.networkName(handle));
+            docker.removeNetwork(WorkloadNetworks.networkName(handle));
         } catch (IOException ignored) {
             // already gone
         }
