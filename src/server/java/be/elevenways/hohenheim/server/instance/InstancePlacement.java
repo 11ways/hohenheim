@@ -53,20 +53,30 @@ public final class InstancePlacement {
      * @throws Violations {@code no_placement_available} when no admitted host accepts
      *         this owner's workload -- named, never a silent fall back to the local daemon
      */
-    public static int forActor(@Nullable AccessContext ctx, @Nullable Integer requested) {
+    public static int forActor(@Nullable AccessContext ctx, @Nullable Integer requested,
+                               @NonNull String requiredRuntime) {
         if (ctx == null || HohenheimAccess.isAdmin(ctx)) {
-            return requested != null ? requested : ServerModel.localServerId();
+            if (requested != null) {
+                return requested;
+            }
+            // The implicit local daemon is a DOCKER host; a kind needing another runtime
+            // has no implicit default and walks the same chooser a tenant create does.
+            if (ServerModel.RUNTIME_DOCKER.equals(requiredRuntime)) {
+                return ServerModel.localServerId();
+            }
         }
         return chooseForOwner(HohenheimAccess.packSubjects(
-            HohenheimAccess.creationOwnerSubjects(ctx)));
+            HohenheimAccess.creationOwnerSubjects(ctx)), requiredRuntime);
     }
 
     /**
      * @param packedOwner the packed manage-subject set the new instance will answer to
+     * @param requiredRuntime the kind's declared host runtime; only matching hosts qualify
      * @return the chosen host id
      * @throws Violations {@code no_placement_available}
      */
-    public static int chooseForOwner(@NonNull String packedOwner) {
+    public static int chooseForOwner(@NonNull String packedOwner,
+                                     @NonNull String requiredRuntime) {
         String bucket = InstanceQuota.bucketKeyOf(packedOwner);
         Integer chosen = null;
         long chosenLoad = Long.MAX_VALUE;
@@ -74,7 +84,8 @@ public final class InstancePlacement {
         for (Row server : Models.get(ServerModel.class).find()
                 .orderBy(ServerModel.ID, SortOrder.ASC).all()) {
             Integer serverId = server.get(ServerModel.ID);
-            if (serverId == null || !acceptsTenantWorkload(server, bucket)) {
+            if (serverId == null || !ServerModel.runtimeOf(server).equals(requiredRuntime)
+                    || !acceptsTenantWorkload(server, bucket)) {
                 continue;
             }
             long load = liveInstancesOn(serverId);

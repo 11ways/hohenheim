@@ -32,6 +32,8 @@ public final class HostProbe {
         NOT_PINNED("not_pinned"),
         NO_IDENTITY("no_identity"),
         DOCKER_ABSENT("docker_absent"),
+        /** The Incus daemon answered but does not trust this client's certificate. */
+        UNTRUSTED("untrusted"),
         TIMEOUT("timeout");
 
         public final String token;
@@ -77,7 +79,9 @@ public final class HostProbe {
             || folded.contains("temporary failure in name resolution")) {
             kind = FailureKind.DNS;
         } else if (folded.contains("host key verification failed")
-            || folded.contains("remote host identification has changed")) {
+            || folded.contains("remote host identification has changed")
+            // The Incus lane's pin refusal (IncusTls' own words wrapped by the handshake).
+            || folded.contains("does not match the pinned certificate")) {
             kind = FailureKind.HOST_KEY_CHANGED;
         } else if (folded.contains("permission denied")
             || folded.contains("authentication failed")

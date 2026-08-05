@@ -31,6 +31,12 @@ public class ServerModel extends Model {
     /** {@link #MODE} value for a remote daemon reached over SSH. */
     public static final String MODE_SSH = "ssh";
 
+    /** {@link #RUNTIME}: the host runs a Docker daemon (unix socket locally, ssh remotely). */
+    public static final String RUNTIME_DOCKER = "docker";
+
+    /** {@link #RUNTIME}: the host runs an Incus daemon (unix socket, or HTTPS + client cert). */
+    public static final String RUNTIME_INCUS = "incus";
+
     /** {@link #ADMISSION}: enrolled, never (successfully) probed or never admitted -- no placement. */
     public static final String ADMISSION_BLOCKED = "blocked";
 
@@ -59,6 +65,36 @@ public class ServerModel extends Model {
         .value(MODE_SSH, v -> v.displayName("SSH").icon("terminal").color("indigo"))
         .build());
     public static final StringField SSH_TARGET = SCHEMA.addField(StringField.builder().name("ssh_target").build());
+
+    /**
+     * The DECLARED runtime this host runs, the discriminator every per-host dispatch
+     * (client construction, preflight battery, placement) reads. Docker hosts connect
+     * per {@link #MODE}/{@link #SSH_TARGET}; Incus hosts connect per {@link #INCUS_URL}.
+     *
+     * AIDEV-NOTE: Incus's TLS trust store IS the node-identity story earlier audits
+     * wanted a bespoke agent for: enrolling this controller's client certificate on the
+     * daemon (trust token or incus config trust) gives the pair a mutual, revocable,
+     * per-node identity -- the client cert names this controller to the host, the pinned
+     * server cert names the host to this controller. No agent needed.
+     */
+    public static final EnumField RUNTIME = SCHEMA.addField(EnumField.builder("runtime")
+        .value(RUNTIME_DOCKER, v -> v.displayName("Docker").icon("box")
+            .label(Microcopy.of("docker").withFilter("scope", "host_runtime")).color("blue"))
+        .value(RUNTIME_INCUS, v -> v.displayName("Incus").icon("cubes")
+            .label(Microcopy.of("incus").withFilter("scope", "host_runtime")).color("green"))
+        .defaultValue(RUNTIME_DOCKER)
+        .build());
+
+    /**
+     * How the Incus daemon is reached: {@code https://host:8443} (remote, TLS client
+     * certificate + pinned server certificate) or {@code unix://} / blank for the local
+     * socket. Meaningless for {@link #RUNTIME_DOCKER} hosts and kept null there.
+     */
+    public static final StringField INCUS_URL = SCHEMA.addField(
+        StringField.builder().name("incus_url").nullable(true)
+            .label(HohenheimFormCopy.label("incus_url"))
+            .help(HohenheimFormCopy.help("incus_url"))
+            .build());
 
     /**
      * The host's declared isolation posture. Data the allocator reads, never operator
@@ -302,6 +338,38 @@ public class ServerModel extends Model {
     /** The server with this unique name, or null if none. */
     public Row findByName(String name) {
         return find().where(NAME.eq(name)).first();
+    }
+
+    // -- the runtime declaration ----------------------------------------------
+
+    /** The host's declared runtime; a null column (pre-M070 row) folds to docker. */
+    public static @NonNull String runtimeOf(@NonNull Row server) {
+        String runtime = server.get(RUNTIME);
+        return runtime == null || runtime.isBlank() ? RUNTIME_DOCKER : runtime;
+    }
+
+    /** Whether this host declares the Incus runtime. */
+    public static boolean isIncus(@NonNull Row server) {
+        return RUNTIME_INCUS.equals(runtimeOf(server));
+    }
+
+    /** Whether this host's Incus daemon is reached over HTTPS (vs the local socket). */
+    public static boolean isIncusHttps(@NonNull Row server) {
+        String url = server.get(INCUS_URL);
+        return isIncus(server) && url != null && url.trim().startsWith("https://");
+    }
+
+    /**
+     * Whether connecting to this host requires a pinned, operator-CONFIRMED identity:
+     * every remote transport does (docker over ssh, incus over https), only the two
+     * local-socket shapes do not. THE gate admission and placement key on -- never
+     * re-derive from MODE alone, which says nothing about an Incus host.
+     */
+    public static boolean requiresPinnedIdentity(@NonNull Row server) {
+        if (isIncus(server)) {
+            return isIncusHttps(server);
+        }
+        return MODE_SSH.equals(server.get(MODE));
     }
 
     // -- THE canonical host-key derivation -----------------------------------

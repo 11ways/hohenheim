@@ -52,7 +52,9 @@ public final class HostAdmission {
      * @throws Violations {@code host_key_unverified}
      */
     public static void requireVerifiedIdentity(@NonNull Row server) {
-        if (!ServerModel.MODE_SSH.equals(server.get(ServerModel.MODE))) {
+        // Remote transports only: docker-over-ssh AND incus-over-https both pin; the two
+        // local-socket shapes have no wire identity to verify.
+        if (!ServerModel.requiresPinnedIdentity(server)) {
             return;
         }
         String pinned = server.get(ServerModel.HOST_KEY);

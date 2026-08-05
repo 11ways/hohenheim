@@ -3,7 +3,10 @@ package be.elevenways.hohenheim.server.docker;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostProbe;
+import be.elevenways.hohenheim.server.incus.IncusClient;
+import be.elevenways.hohenheim.server.incus.IncusClients;
 import be.elevenways.hohenheim.server.util.DatasourceScoped;
+import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -12,6 +15,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -61,7 +65,7 @@ public class ServerService extends DatasourceScoped {
     /** A server with its LIVE reachability and host resource snapshot (explicit probes only). */
     public record Summary(String name, String mode, String sshTarget, boolean reachable,
                           int cpus, long memoryBytes, int containersRunning, int containersTotal,
-                          int images, String dockerVersion, String operatingSystem,
+                          int images, String daemonVersion, String operatingSystem,
                           String osType, String architecture,
                           @Nullable String errorKind, @Nullable String errorDetail) {}
 
@@ -114,7 +118,7 @@ public class ServerService extends DatasourceScoped {
         if (row == null) {
             return null;
         }
-        HostProbe.Outcome outcome = probe(row);
+        HostProbe.Outcome outcome = ServerModel.isIncus(row) ? probeIncus(row) : probe(row);
         if (outcome.reachable()) {
             exec(() -> HostProbe.recordSuccess(name));
         } else {
@@ -183,6 +187,13 @@ public class ServerService extends DatasourceScoped {
     }
 
     private static DockerTransport transportFor(Row row) {
+        // A host that declares the incus runtime addresses NO Docker daemon: falling
+        // through to the local unix socket here would aim every "docker" call for that
+        // host at THIS machine's daemon -- a wrong-host operation, not an error.
+        if (ServerModel.isIncus(row)) {
+            throw new IllegalArgumentException("Host '" + row.get(ServerModel.NAME)
+                + "' declares the incus runtime; it has no Docker daemon to address");
+        }
         if (MODE_SSH.equals(row.get(ServerModel.MODE))) {
             // Fails closed (HostKeys.HostTrustException) on an unpinned host or one with
             // no client identity, rather than falling back to ambient ssh trust.
@@ -200,6 +211,72 @@ public class ServerService extends DatasourceScoped {
         } catch (Exception e) {
             return HostProbe.classify(e);
         }
+    }
+
+    /**
+     * The Incus probe: {@code GET /1.0} over the pinned+identified lane, refusing an
+     * UNTRUSTED answer (any TLS client gets a partial /1.0, so "it answered" alone
+     * would be the reports-success shape). The facts are bridged onto the docker-info
+     * key spelling {@link #summaryOf} reads -- an in-memory translation, never stored.
+     */
+    private static HostProbe.Outcome probeIncus(Row row) {
+        try {
+            IncusClient client = IncusClients.forServer(row);
+            Map<String, Object> server = client.server();
+            if (!"trusted".equals(server.get("auth"))) {
+                return HostProbe.Outcome.failure(HostProbe.FailureKind.UNTRUSTED,
+                    "the Incus daemon answers but reports this client '"
+                        + server.get("auth") + "'; enroll the client certificate");
+            }
+            Map<String, Object> environment =
+                server.get("environment") instanceof Map<?, ?> map
+                    ? castMap(map) : Map.of();
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("ServerVersion", environment.get("server_version"));
+            info.put("OperatingSystem", environment.get("os_name"));
+            info.put("OSType", environment.get("kernel") != null
+                ? BlastString.lower(String.valueOf(environment.get("kernel"))) : "");
+            info.put("Architecture", environment.get("kernel_architecture"));
+            Map<String, Object> resources = client.resources();
+            if (resources.get("cpu") instanceof Map<?, ?> cpu
+                    && cpu.get("total") instanceof Number total) {
+                info.put("NCPU", total.intValue());
+            }
+            if (resources.get("memory") instanceof Map<?, ?> memory
+                    && memory.get("total") instanceof Number total) {
+                info.put("MemTotal", total.longValue());
+            }
+            int running = 0;
+            List<Map<String, Object>> instances = client.instances();
+            for (Map<String, Object> instance : instances) {
+                if ("Running".equalsIgnoreCase(String.valueOf(instance.get("status")))) {
+                    running++;
+                }
+            }
+            info.put("Containers", instances.size());
+            info.put("ContainersRunning", running);
+            return HostProbe.Outcome.success(info);
+        } catch (Exception e) {
+            return HostProbe.classify(e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Map<?, ?> map) {
+        return (Map<String, Object>) map;
+    }
+
+    /**
+     * An {@link IncusClient} for the named server; fails closed (HostTrustException)
+     * on an unpinned https endpoint or a missing client identity, and refuses a host
+     * whose declared runtime is not incus.
+     */
+    public IncusClient incusClientFor(String name) {
+        Row row = query(() -> model().findByName(name));
+        if (row == null) {
+            throw new IllegalArgumentException("No server named '" + name + "'");
+        }
+        return IncusClients.forServer(row);
     }
 
     private static Summary summaryOf(Row row, HostProbe.Outcome outcome) {

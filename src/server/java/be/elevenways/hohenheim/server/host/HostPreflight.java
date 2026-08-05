@@ -91,6 +91,11 @@ public final class HostPreflight {
         if (server == null) {
             throw new IllegalArgumentException("No server named '" + serverName + "'");
         }
+        // The runtime declaration is DATA on the record: an Incus host gets the Incus
+        // battery through the same store funnel, never a Docker probe aimed at it.
+        if (ServerModel.isIncus(server)) {
+            return IncusPreflight.runAndStore(server);
+        }
         Report report;
         try {
             report = run(servers.clientFor(serverName), nftProbeFor(server));

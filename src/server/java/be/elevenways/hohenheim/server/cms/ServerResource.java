@@ -7,6 +7,8 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.incus.IncusEndpoint;
+import be.elevenways.hohenheim.server.incus.IncusTrust;
 import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -89,14 +91,28 @@ public final class ServerResource extends RowResource {
         .visibleIn(EditView.EDIT)
         .build();
 
+    /**
+     * Write-only: a pasted Incus trust token triggers {@link IncusTrust#enrollWithToken}
+     * on save and is never stored -- tokens are one-use and short-lived by design.
+     */
+    private static final StringField INCUS_TRUST_TOKEN = StringField.builder("incus_trust_token")
+        .label(HohenheimFormCopy.label("incus_trust_token"))
+        .help(HohenheimFormCopy.help("incus_trust_token"))
+        .build();
+
     private final FormSpec formSpec = FormSpec.builder()
         .add(ServerModel.NAME)
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.RUNTIME))
         .add(ServerModel.SSH_TARGET)
+        .add(ServerModel.INCUS_URL)
+        .add(INCUS_TRUST_TOKEN)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.POSTURE))
         .add(ServerModel.PUBLIC_IPV4)
         .add(ServerModel.PUBLIC_IPV6)
-        .add(Computed.of(TRUST_NOTICE, values -> hostCopy(Microcopy.of("trust_notice_body")))
-            .dependsOn("name")
+        .add(Computed.of(TRUST_NOTICE, values -> hostCopy(Microcopy.of(
+                ServerModel.RUNTIME_INCUS.equals(values.get("runtime"))
+                    ? "trust_notice_body_incus" : "trust_notice_body")))
+            .dependsOn("runtime")
             .build())
         .add(Computed.of(HOST_KEY_STATE, values -> hostKeyState(String.valueOf(values.get("name"))))
             .dependsOn("name")
@@ -112,15 +128,15 @@ public final class ServerResource extends RowResource {
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(ServerModel.NAME).filterable().build())
-        .column(ColumnSpec.fromField(ServerModel.MODE).filterable().build())
+        .column(ColumnSpec.fromField(ServerModel.RUNTIME).filterable().build())
         .column(ColumnSpec.fromField(ServerModel.SSH_TARGET).filterable().build())
         .column(ColumnSpec.fromField(ServerModel.ADMISSION).filterable().build())
         .column(ColumnSpec.fromField(ServerModel.POSTURE).filterable().build())
         .column(ColumnSpec.virtual("host_status", Microcopy.of("host_status").withFilter("scope", "server")).build())
         .filter(FilterSpec.forField(ServerModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(ServerModel.NAME)).build())
-        .filter(FilterSpec.forField(ServerModel.MODE, FilterSpec.Kind.SELECT)
-            .label(FieldLabels.labelFor(ServerModel.MODE)).build())
+        .filter(FilterSpec.forField(ServerModel.RUNTIME, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(ServerModel.RUNTIME)).build())
         .filter(FilterSpec.forField(ServerModel.ADMISSION, FilterSpec.Kind.SELECT)
             .label(FieldLabels.labelFor(ServerModel.ADMISSION)).build())
         .filter(FilterSpec.forField(ServerModel.SSH_TARGET, FilterSpec.Kind.TEXT)
@@ -153,8 +169,16 @@ public final class ServerResource extends RowResource {
         if (coerced.containsKey("name")) {
             row.set(ServerModel.NAME, (String) coerced.get("name"));
         }
+        if (coerced.containsKey("runtime") && coerced.get("runtime") instanceof String runtime) {
+            row.set(ServerModel.RUNTIME, runtime);
+        }
         if (coerced.containsKey("ssh_target")) {
             row.set(ServerModel.SSH_TARGET, (String) coerced.get("ssh_target"));
+        }
+        if (coerced.containsKey("incus_url")) {
+            Object url = coerced.get("incus_url");
+            String value = url != null ? String.valueOf(url).trim() : "";
+            row.set(ServerModel.INCUS_URL, value.isEmpty() ? null : value);
         }
         if (coerced.containsKey("posture") && coerced.get("posture") instanceof String posture) {
             row.set(ServerModel.POSTURE, posture);
@@ -198,11 +222,13 @@ public final class ServerResource extends RowResource {
             return hostCopy(Microcopy.of("host_never_probed").withArg("admission", admission));
         }
         Object capabilities = row.get(ServerModel.CAPABILITIES);
-        String docker = capabilities instanceof Map<?, ?> map
-            && map.get("docker_version") instanceof String version && !version.isBlank()
-            ? "Docker " + version : "Docker";
+        String label = ServerModel.isIncus(row) ? "Incus" : "Docker";
+        String versionKey = ServerModel.isIncus(row) ? "incus_version" : "docker_version";
+        String daemon = capabilities instanceof Map<?, ?> map
+            && map.get(versionKey) instanceof String version && !version.isBlank()
+            ? label + " " + version : label;
         return hostCopy(Microcopy.of("host_stored_state")
-            .withArg("docker", docker)
+            .withArg("docker", daemon)
             .withArg("admission", admission));
     }
 
@@ -213,7 +239,7 @@ public final class ServerResource extends RowResource {
      */
     private @NonNull String hostKeyState(@NonNull String name) {
         Row row = Models.get(ServerModel.class).findByName(name);
-        if (row == null || !ServerModel.MODE_SSH.equals(row.get(ServerModel.MODE))) {
+        if (row == null || !ServerModel.requiresPinnedIdentity(row)) {
             return hostCopy(Microcopy.of("host_key_local"));
         }
         String fingerprint = row.get(ServerModel.HOST_KEY_FINGERPRINT);
@@ -224,7 +250,7 @@ public final class ServerResource extends RowResource {
         if (offered != null && !offered.isBlank()) {
             return hostCopy(Microcopy.of("host_key_mismatch_state")
                 .withArg("pinned", fingerprint)
-                .withArg("offered", HostKeys.fingerprintOf(offered)));
+                .withArg("offered", fingerprintFor(row, offered)));
         }
         return hostCopy(Microcopy.of(Boolean.TRUE.equals(row.get(ServerModel.HOST_KEY_VERIFIED))
             ? "host_key_confirmed" : "host_key_unconfirmed").withArg("fingerprint", fingerprint));
@@ -233,7 +259,7 @@ public final class ServerResource extends RowResource {
     /** The public half of this host's OWN client key, for the remote's authorized_keys. */
     private @NonNull String identityPublicKey(@NonNull String name) {
         Row row = Models.get(ServerModel.class).findByName(name);
-        if (row == null || !ServerModel.MODE_SSH.equals(row.get(ServerModel.MODE))) {
+        if (row == null || !ServerModel.requiresPinnedIdentity(row)) {
             return "";
         }
         String publicKey = row.get(ServerModel.IDENTITY_PUBLIC_KEY);
@@ -243,14 +269,18 @@ public final class ServerResource extends RowResource {
 
     /** The detail page's LIVE overview; the probe persists its typed outcome either way. */
     private @NonNull String serverOverview(@NonNull String name) {
+        Row row = Models.get(ServerModel.class).findByName(name);
+        String label = row != null && ServerModel.isIncus(row) ? "Incus" : "Docker";
         ServerService.Summary summary = this.serverService.probeAndStore(name);
         return summary == null || !summary.reachable()
-            ? hostCopy(Microcopy.of("host_docker_unavailable"))
-            : formatSummary(summary);
+            ? hostCopy(Microcopy.of("host_daemon_unavailable").withArg("daemon", label))
+            : formatSummary(summary, label);
     }
 
-    private static @NonNull String formatSummary(ServerService.@NonNull Summary summary) {
-        String docker = summary.dockerVersion().isBlank() ? "Docker" : "Docker " + summary.dockerVersion();
+    private static @NonNull String formatSummary(ServerService.@NonNull Summary summary,
+                                                 @NonNull String label) {
+        String docker = summary.daemonVersion().isBlank() ? label
+            : label + " " + summary.daemonVersion();
         String platform = summary.osType();
         if (!summary.architecture().isBlank()) {
             platform = platform.isBlank() ? summary.architecture() : platform + "/" + summary.architecture();
@@ -307,8 +337,20 @@ public final class ServerResource extends RowResource {
         return actions;
     }
 
+    /** Hosts with a WIRE identity to pin: docker-over-ssh and incus-over-https. */
     private static boolean isRemote(@NonNull Row row) {
-        return ServerModel.MODE_SSH.equals(row.get(ServerModel.MODE));
+        return ServerModel.requiresPinnedIdentity(row);
+    }
+
+    /** The runtime-appropriate scan (ssh-keyscan, or a TLS certificate capture). */
+    private static HostKeys.@NonNull ScanResult scanFor(@NonNull Row row) {
+        return ServerModel.isIncus(row) ? IncusTrust.scanAndPin(row) : HostKeys.scanAndPin(row);
+    }
+
+    /** The runtime-appropriate digest of an offered key line / certificate PEM. */
+    private static @NonNull String fingerprintFor(@NonNull Row row, @NonNull String offered) {
+        return ServerModel.isIncus(row) ? IncusTrust.fingerprintOf(offered)
+            : HostKeys.fingerprintOf(offered);
     }
 
     private static boolean isPinned(@NonNull Row row) {
@@ -329,8 +371,8 @@ public final class ServerResource extends RowResource {
             .icon(Icon.of("fingerprint"))
             .visibleFor((row, ctx) -> isRemote(row))
             .handler((row, ctx) -> {
-                HostKeys.ensureIdentity(row);
-                HostKeys.ScanResult result = HostKeys.scanAndPin(row);
+                ensureIdentityFor(row);
+                HostKeys.ScanResult result = scanFor(row);
                 if (result.outcome() == HostKeys.ScanOutcome.MISMATCH) {
                     // Loud and red. The quarantine is already persisted by scanAndPin;
                     // this is the operator-facing half of the same event.
@@ -413,7 +455,7 @@ public final class ServerResource extends RowResource {
                     return builder.body(Microcopy.of("repin_host_key_generic")
                         .withFilter("scope", "server")).build();
                 }
-                String fingerprint = HostKeys.fingerprintOf(offered);
+                String fingerprint = fingerprintFor(row, offered);
                 return builder
                     .body(Microcopy.of("repin_host_key_body").withFilter("scope", "server")
                         .withArg("name", row.get(ServerModel.NAME))
@@ -423,7 +465,11 @@ public final class ServerResource extends RowResource {
                     .build();
             })
             .handler((row, ctx) -> {
-                HostKeys.repin(row);
+                if (ServerModel.isIncus(row)) {
+                    IncusTrust.repin(row);
+                } else {
+                    HostKeys.repin(row);
+                }
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("host_key_repinned_toast").withFilter("scope", "server")
                         .withArg("fingerprint", row.get(ServerModel.HOST_KEY_FINGERPRINT)));
@@ -453,7 +499,11 @@ public final class ServerResource extends RowResource {
                 .requireTypedConfirmation(row.get(ServerModel.NAME))
                 .build())
             .handler((row, ctx) -> {
-                HostKeys.rotateIdentity(row);
+                if (ServerModel.isIncus(row)) {
+                    IncusTrust.rotateIdentity(row);
+                } else {
+                    HostKeys.rotateIdentity(row);
+                }
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("identity_rotated_toast").withFilter("scope", "server")
                         .withArg("name", row.get(ServerModel.NAME)));
@@ -542,15 +592,22 @@ public final class ServerResource extends RowResource {
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
+        String runtime = runtimeOf(values, null);
         validate(values, null);
-        values.put("mode", ServerService.MODE_SSH);
+        String token = takeTrustToken(values);
+        // MODE is the DOCKER lane's transport discriminator; an incus host keeps the
+        // default (its transport is declared by incus_url instead).
+        values.put("mode", ServerModel.RUNTIME_DOCKER.equals(runtime)
+            ? ServerService.MODE_SSH : ServerService.MODE_LOCAL);
         Object id = super.persistRow(values, accessContext);
-        // Enrollment mints the host's OWN client key immediately, so the very first
-        // thing the operator sees on the record is the public key to install -- there
-        // is never a window in which the controller's ambient identity would do.
+        // Enrollment mints the host's OWN client identity immediately, so the very
+        // first thing the operator sees on the record is the credential to install
+        // (authorized_keys, or incus config trust) -- there is never a window in which
+        // the controller's ambient identity would do.
         Row created = Models.get(ServerModel.class).findById(id);
         if (created != null) {
-            HostKeys.ensureIdentity(created);
+            ensureIdentityFor(created);
+            enrollTokenIfGiven(created, token);
         }
         ServerOptions.refresh();
         return id;
@@ -569,10 +626,62 @@ public final class ServerResource extends RowResource {
             return;
         }
         Map<String, Object> values = CmsSupport.mutable(coerced);
+        String runtime = runtimeOf(values, existing);
         validate(values, existing);
-        values.put("mode", ServerService.MODE_SSH);
+        String token = takeTrustToken(values);
+        values.put("mode", ServerModel.RUNTIME_DOCKER.equals(runtime)
+            ? ServerService.MODE_SSH : ServerService.MODE_LOCAL);
         super.updateRow(existing, values, accessContext);
+        Row saved = Models.get(ServerModel.class).findById(existing.get(ServerModel.ID));
+        if (saved != null) {
+            enrollTokenIfGiven(saved, token);
+        }
         ServerOptions.refresh();
+    }
+
+    /** The submitted (or stored) runtime this write is about. */
+    private static @NonNull String runtimeOf(@NonNull Map<String, Object> values,
+                                             @Nullable Row existing) {
+        Object submitted = values.get("runtime");
+        if (submitted instanceof String runtime && !runtime.isBlank()) {
+            return runtime;
+        }
+        return existing != null ? ServerModel.runtimeOf(existing) : ServerModel.RUNTIME_DOCKER;
+    }
+
+    /** Pull the one-shot trust token OUT of the values so it is never persisted. */
+    private static @Nullable String takeTrustToken(@NonNull Map<String, Object> values) {
+        Object token = values.remove("incus_trust_token");
+        String text = token != null ? String.valueOf(token).trim() : "";
+        return text.isEmpty() ? null : text;
+    }
+
+    /** Mint the runtime-appropriate client identity when the record has none. */
+    private static void ensureIdentityFor(@NonNull Row server) {
+        if (ServerModel.isIncus(server)) {
+            IncusTrust.ensureIdentity(server);
+        } else {
+            HostKeys.ensureIdentity(server);
+        }
+    }
+
+    /**
+     * Self-enroll on the daemon with a pasted trust token. Requires the pin first --
+     * enrolling a credential on a server nobody verified would put the ceremony's
+     * steps in an order that defeats it -- so a missing pin is scanned in place
+     * (pinned UNVERIFIED, confirm still required for admission).
+     */
+    private static void enrollTokenIfGiven(@NonNull Row server, @Nullable String token) {
+        if (token == null) {
+            return;
+        }
+        if (!ServerModel.isIncusHttps(server)) {
+            throw Violations.ofForm(CmsSupport.violationText("incus_token_needs_https"));
+        }
+        if (!isPinned(server)) {
+            IncusTrust.scanAndPin(server);
+        }
+        IncusTrust.enrollWithToken(server, token);
     }
 
     @Override
@@ -594,6 +703,19 @@ public final class ServerResource extends RowResource {
         }
         if (name == null || name.isEmpty() || !name.matches("[a-z0-9][a-z0-9-]*")) {
             throw Violations.ofField("name", name, CmsSupport.violationText("name_format"));
+        }
+        if (ServerModel.RUNTIME_INCUS.equals(runtimeOf(coerced, existing))) {
+            Object urlValue = coerced.get("incus_url");
+            String url = urlValue != null ? String.valueOf(urlValue).trim()
+                : existing != null ? String.valueOf(
+                    (Object) existing.get(ServerModel.INCUS_URL)) : "";
+            try {
+                IncusEndpoint.parse(url);
+            } catch (IllegalArgumentException bad) {
+                throw Violations.ofField("incus_url", url,
+                    CmsSupport.violationText("incus_url_format"));
+            }
+            return;
         }
         Object targetValue = coerced.get("ssh_target");
         String target = targetValue != null ? String.valueOf(targetValue).trim() : "";
