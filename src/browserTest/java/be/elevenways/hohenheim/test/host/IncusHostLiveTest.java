@@ -253,6 +253,43 @@ class IncusHostLiveTest {
         });
     }
 
+    /**
+     * The FIXTURE's own contract, which every live Incus class depends on: a remote
+     * command that never closes its output must become a NAMED failure on a wall clock,
+     * not a hang.
+     *
+     * AIDEV-NOTE: this exists because the fixture used to read stdout with a plain
+     * {@code readAllBytes()} before its {@code waitFor(timeout)}, so the timeout could
+     * never fire; a single such call sat until Gradle killed the task at 30 minutes and
+     * reported the test SKIPPED, which reads as a green-ish run. A hang is the worst
+     * failure shape a live suite has -- it costs the whole run and names nothing.
+     */
+    @Test
+    void aRemoteCommandThatNeverEndsIsKilledAndNamedInsteadOfHanging() {
+        long startedAt = System.nanoTime();
+        Throwable refusal = catchThrowable(() ->
+            remote.hostCommand(5, "sh", "-c", "'sleep 120'"));
+        long elapsedSeconds = (System.nanoTime() - startedAt) / 1_000_000_000L;
+
+        assertThat(refusal)
+            .as("step 1: the budget is enforced instead of the call blocking forever")
+            .isInstanceOf(IOException.class);
+        assertThat(refusal.getMessage())
+            .as("step 1: and the refusal names the command and the budget it outlived")
+            .contains("sleep 120").contains("5s budget").contains("killed");
+        assertThat(elapsedSeconds)
+            .as("step 2: it returned on the budget, not on the remote command's own clock")
+            .isLessThan(60L);
+
+        // 3. The lane still works normally afterwards: the timeout path leaves no
+        //    wedged process or half-drained pipe behind.
+        assertThat(catchThrowable(() -> assertThat(remote.hostCommand("echo", "alive"))
+                .as("step 3: a normal command still answers over the same lane")
+                .isEqualTo("alive")))
+            .as("step 3: and does so without throwing")
+            .isNull();
+    }
+
     /** A freshly minted, genuinely valid certificate that is NOT the daemon's. */
     private static String decoyCertificatePem() {
         Path directory = null;
