@@ -34,12 +34,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * does not declare otherwise: the reverse proxy reaches those ports over 127.0.0.1 and
  * the world cannot.
  *
- * AIDEV-NOTE: the instance tier is the tenant-authored tier, and it REFUSES to deploy on a
- * host that cannot enforce the network policy (see {@link WorkloadNetworkPolicy}). That
- * refusal is the whole point: an instance that starts unprotected can reach the host, the
- * cloud metadata service and every other container on the daemon. The operator-authored
- * tiers (stacks, Docker sites, managed databases) deliberately do NOT refuse and stay on
- * the shared default bridge -- a declared difference, not an accident.
+ * AIDEV-NOTE: every PRIVATE-posture workload REFUSES to deploy on a host that cannot
+ * enforce the network policy (see {@link WorkloadNetworkPolicy}). That refusal is the
+ * whole point: a workload that starts unprotected can reach the host, the cloud
+ * metadata service and every other container on the daemon. Since the isolation wave
+ * that covers instances, Docker sites and managed databases alike; the only remaining
+ * SHARED_BRIDGE author is a stack record whose operator explicitly declared that
+ * posture (the pre-isolation stacks a migration stamped, see StackModel).
  */
 public final class DockerInstanceRuntime
         implements InstanceRuntime, VolumeSnapshotSupport, FileStagingSupport, InstallSupport,
@@ -49,23 +50,28 @@ public final class DockerInstanceRuntime
     private final @NonNull DockerClient docker;
     private final @NonNull WorkloadNetworkPolicy policy;
     private final @NonNull NetworkPosture posture;
+    private final @NonNull Egress egress;
 
     public DockerInstanceRuntime(@NonNull DockerClient docker,
                                  @NonNull WorkloadNetworkPolicy policy) {
-        this(docker, policy, NetworkPosture.PRIVATE);
+        this(docker, policy, NetworkPosture.PRIVATE, Egress.OPEN);
     }
 
     /**
      * @param posture the KIND-declared posture; {@link NetworkPosture#SHARED_BRIDGE} skips
-     *        the per-workload network and nft verification entirely (the operator-tier
-     *        Docker-site posture), it never degrades a failed PRIVATE materialization
+     *        the per-workload network and nft verification entirely, it never degrades a
+     *        failed PRIVATE materialization
+     * @param egress  the KIND-declared egress posture, materialized into the network
+     *        policy alongside the tenant-range denies
      */
     public DockerInstanceRuntime(@NonNull DockerClient docker,
                                  @NonNull WorkloadNetworkPolicy policy,
-                                 @NonNull NetworkPosture posture) {
+                                 @NonNull NetworkPosture posture,
+                                 @NonNull Egress egress) {
         this.docker = docker;
         this.policy = policy;
         this.posture = posture;
+        this.egress = egress;
     }
 
     @Override
@@ -81,7 +87,8 @@ public final class DockerInstanceRuntime
         // the point where an image is pulled, let alone a container created. A
         // SHARED_BRIDGE kind declared no such network, so there is nothing to verify.
         String network = this.posture == NetworkPosture.PRIVATE
-            ? InstanceNetworks.ensure(this.docker, this.policy, spec.handle(), spec.ownerLabels())
+            ? WorkloadNetworks.ensure(this.docker, this.policy, spec.handle(), spec.ownerLabels(),
+                this.egress)
             : null;
         this.docker.ensureImage(spec.image(), null);
         OwnerLabels.removeIfOwnedBy(this.docker, spec.handle(), owner.model(), owner.id());
@@ -94,7 +101,7 @@ public final class DockerInstanceRuntime
         // Docker networks survive a host reboot; nftables rules do not. Re-verifying here
         // is what stops a reboot from turning every stopped instance into an unisolated one.
         if (this.posture == NetworkPosture.PRIVATE) {
-            InstanceNetworks.ensureForStart(this.docker, this.policy, handle);
+            WorkloadNetworks.ensureForStart(this.docker, this.policy, handle, this.egress);
         }
         this.docker.startContainer(handle);
     }
@@ -122,7 +129,7 @@ public final class DockerInstanceRuntime
         // The network and its kernel chains are OURS and nothing else uses them, so they
         // die with the workload -- unlike a named volume, there is nothing in them to lose.
         if (this.posture == NetworkPosture.PRIVATE) {
-            InstanceNetworks.teardown(this.docker, this.policy, handle);
+            WorkloadNetworks.teardown(this.docker, this.policy, handle);
         }
     }
 
@@ -134,13 +141,13 @@ public final class DockerInstanceRuntime
             throws IOException {
         // The SAME create-verify-or-refuse path as a per-instance network: a link network
         // whose kernel policy cannot land never exists to be attached to.
-        return InstanceNetworks.ensure(this.docker, this.policy, linkHandle, ownerLabels);
+        return WorkloadNetworks.ensure(this.docker, this.policy, linkHandle, ownerLabels, this.egress);
     }
 
     @Override
     public void connectToLinkNetwork(@NonNull String linkHandle, @NonNull String containerHandle)
             throws IOException {
-        String network = InstanceNetworks.networkName(linkHandle);
+        String network = WorkloadNetworks.networkName(linkHandle);
         for (String member : linkMembers(network)) {
             if (member.equals(containerHandle)) {
                 return;
@@ -151,14 +158,14 @@ public final class DockerInstanceRuntime
 
     @Override
     public void removeLinkNetwork(@NonNull String linkHandle) throws IOException {
-        String network = InstanceNetworks.networkName(linkHandle);
+        String network = WorkloadNetworks.networkName(linkHandle);
         Map<String, Object> existing = this.docker.findNetworkByName(network);
         if (existing != null) {
             for (String member : linkMembers(network)) {
                 this.docker.disconnectContainerFromNetwork(network, member, true);
             }
         }
-        InstanceNetworks.teardown(this.docker, this.policy, linkHandle);
+        WorkloadNetworks.teardown(this.docker, this.policy, linkHandle);
     }
 
     /** Container NAMES currently attached to a network; empty when the network is absent. */
@@ -645,9 +652,10 @@ public final class DockerInstanceRuntime
         }
         // The install runs INSIDE the instance's private network: it may need egress
         // (downloading server files is the archetypal install step) but must enjoy the
-        // same host/metadata/tenant deny policy as the workload itself.
-        String network = InstanceNetworks.ensure(this.docker, this.policy, spec.handle(),
-            spec.ownerLabels());
+        // same host/metadata/tenant deny policy as the workload itself -- including the
+        // kind's declared egress, so a closed-egress kind gets a closed-egress install.
+        String network = WorkloadNetworks.ensure(this.docker, this.policy, spec.handle(),
+            spec.ownerLabels(), this.egress);
         this.docker.ensureImage(installImage, null);
 
         String handle = spec.handle() + "-install";

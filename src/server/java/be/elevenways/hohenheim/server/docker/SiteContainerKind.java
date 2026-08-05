@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
+import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
@@ -32,12 +33,15 @@ import java.util.Map;
  * written exclusively by {@link SiteInstances} inside the GeneratedRows system scope
  * (a standalone create of this kind is refused, see SiteInstances.install).
  *
- * Two DECLARED differences from {@code DockerContainerKind}, both workload-shape
- * declarations and neither reachable from any settings form: {@link #tenantAuthored()}
- * is false (operator tier, predates host admission), and the network posture is
- * {@link NetworkPosture#SHARED_BRIDGE} (the posture Docker sites have always run with;
- * moving sites onto private networks is the named follow-up that also unlocks
- * database env injection for them). Port shape is fixed: loopback/tcp/ephemeral
+ * One DECLARED difference from {@code DockerContainerKind}, a workload-shape
+ * declaration not reachable from any settings form: {@link #tenantAuthored()} is false
+ * (operator tier, predates host admission). The network posture is
+ * {@link NetworkPosture#PRIVATE} like every other tier since the isolation wave: a
+ * site release container gets its own policied network, which is also what makes
+ * database env injection possible for Docker sites (the container joins each attached
+ * database's network as a second network, see {@code SiteInstances}). A site container
+ * still on the old shared bridge migrates the moment its next release deploys -- the
+ * release path replaces the container. Port shape is fixed: loopback/tcp/ephemeral
  * record-after -- the reverse proxy reaches the workload over 127.0.0.1, the world
  * cannot.
  */
@@ -144,7 +148,7 @@ public final class SiteContainerKind implements InstanceKindHandler {
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
         return new DockerInstanceRuntime(new ServerService().clientFor(serverName),
-            WorkloadNetworkPolicy.current(), NetworkPosture.SHARED_BRIDGE);
+            WorkloadNetworkPolicy.forServer(serverName), NetworkPosture.PRIVATE, Egress.OPEN);
     }
 
     @Override

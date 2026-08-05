@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -36,6 +39,32 @@ public interface NftRunner {
      *                everything in argv
      */
     @NonNull Result run(@NonNull List<String> nftArgs, @Nullable String stdin);
+
+    /** Longer budget for the ssh lane: connection setup rides the same clock. */
+    long SSH_TIMEOUT_SECONDS = 15;
+
+    /**
+     * THE runner for one inventoried host: local sudo, or the same sudo command over the
+     * pinned+identified ssh lane for an SSH-mode host.
+     *
+     * AIDEV-NOTE: nft rules only isolate anything when they land in the kernel of the
+     * host the WORKLOAD runs on. Building a policy applier around a plain {@code Sudo}
+     * for a remote server applies and "verifies" the rules on the CONTROLLER's kernel
+     * while the remote workload starts wide open -- that exact silent-success defect
+     * shipped once, which is why this factory exists and why per-server callers must
+     * never construct {@link Sudo} directly.
+     */
+    static @NonNull NftRunner forServer(@NonNull Row server) {
+        if (ServerModel.MODE_SSH.equals(server.get(ServerModel.MODE))) {
+            return (args, stdin) -> {
+                List<String> argv = new ArrayList<>(HostKeys.sshArgv(server,
+                    List.of("sudo", "-n", "--", "nft")));
+                argv.addAll(args);
+                return Sudo.execute(argv, stdin, SSH_TIMEOUT_SECONDS);
+            };
+        }
+        return new Sudo();
+    }
 
     record Result(int exitCode, @NonNull String stdout, @NonNull String stderr) {
         public boolean ok() {

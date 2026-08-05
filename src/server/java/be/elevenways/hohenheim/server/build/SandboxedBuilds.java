@@ -40,8 +40,12 @@ public final class SandboxedBuilds {
     /** Test seam: runs after the durable running stamp, before any daemon work. */
     private final @NonNull Runnable beforeSandbox;
 
-    public SandboxedBuilds(@NonNull DockerClient docker) {
-        this(docker, WorkloadNetworkPolicy.current(), () -> {});
+    /**
+     * @param serverName the inventoried host the daemon client points at; the nft policy
+     *        must land in THAT host's kernel, so the name travels with the client
+     */
+    public SandboxedBuilds(@NonNull DockerClient docker, @NonNull String serverName) {
+        this(docker, WorkloadNetworkPolicy.forServer(serverName), () -> {});
     }
 
     public SandboxedBuilds(@NonNull DockerClient docker, @NonNull WorkloadNetworkPolicy policy,

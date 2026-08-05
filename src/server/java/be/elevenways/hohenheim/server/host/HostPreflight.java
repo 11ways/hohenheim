@@ -71,11 +71,6 @@ public final class HostPreflight {
         }
     }
 
-    /** The nft seam: local sudo in production, ssh for remote hosts, a netns runner in tests. */
-    public interface NftProbe {
-        NftRunner.@NonNull Result run(@NonNull List<String> nftArgs, @Nullable String stdin);
-    }
-
     private HostPreflight() {
     }
 
@@ -98,7 +93,9 @@ public final class HostPreflight {
         }
         Report report;
         try {
-            report = run(servers.clientFor(serverName), nftProbeFor(server));
+            // The SAME per-server nft lane the workload policy applier uses -- what this
+            // probe proves is what a deploy will later rely on, not a lookalike.
+            report = run(servers.clientFor(serverName), NftRunner.forServer(server));
         } catch (HostKeys.HostTrustException refusal) {
             // An unpinned host cannot be probed at all -- that refusal is itself the
             // verdict, and it must be STORED like any other, not thrown at the operator
@@ -112,27 +109,12 @@ public final class HostPreflight {
         return report;
     }
 
-    /** The production nft seam per host mode: local sudo, or the same sudo command over ssh. */
-    static @NonNull NftProbe nftProbeFor(@NonNull Row server) {
-        if (ServerModel.MODE_SSH.equals(server.get(ServerModel.MODE))) {
-            return (args, stdin) -> {
-                // Same pinned/identified ssh lane as the docker transport -- one seam.
-                List<String> argv = new ArrayList<>(HostKeys.sshArgv(server,
-                    List.of("sudo", "-n", "--", "nft")));
-                argv.addAll(args);
-                return NftRunner.Sudo.execute(argv, stdin, 15);
-            };
-        }
-        NftRunner local = new NftRunner.Sudo();
-        return local::run;
-    }
-
     /**
      * The probe battery against one daemon, with an injectable nft seam so tests can
      * point the nft half at a private netns while the container half runs against the
      * real daemon.
      */
-    public static @NonNull Report run(@NonNull DockerClient docker, @NonNull NftProbe nft) {
+    public static @NonNull Report run(@NonNull DockerClient docker, @NonNull NftRunner nft) {
         List<Check> checks = new ArrayList<>();
         Map<String, Object> facts = new LinkedHashMap<>();
         HostProbe.Outcome[] daemonFailure = new HostProbe.Outcome[1];
@@ -322,7 +304,7 @@ public final class HostPreflight {
      * it. The networking work proved its rule strings in a private namespace but could
      * NOT prove the host accepts them; this check is that missing proof.
      */
-    private static void checkNftables(NftProbe nft, List<Check> checks) {
+    private static void checkNftables(NftRunner nft, List<Check> checks) {
         String table = "hohenheim_preflight_" + Long.toHexString(System.nanoTime());
         try {
             NftRunner.Result added = nft.run(List.of("-f", "-"),

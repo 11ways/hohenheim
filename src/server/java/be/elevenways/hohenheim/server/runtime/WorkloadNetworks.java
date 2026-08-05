@@ -10,9 +10,10 @@ import java.io.IOException;
 import java.util.Map;
 
 /**
- * THE private-network half of the instance tier: one user-defined Docker network per
- * instance, owner-labelled at birth, with the host deny policy applied to the kernel
- * BEFORE any container is created on it.
+ * THE private-network half of every Docker-backed workload tier (instances, site
+ * release containers, managed databases, build sandboxes): one user-defined Docker
+ * network per workload, owner-labelled at birth, with the host deny policy applied to
+ * the kernel BEFORE any container is created on it.
  *
  * AIDEV-NOTE: network-per-WORKLOAD, not network-per-tenant. It is the shape StackDeployer
  * already proved (per-stack network, labels at creation, attached in the create body) and
@@ -36,12 +37,12 @@ import java.util.Map;
  * start covers the host that rebooted -- Docker networks survive a reboot, nftables rules
  * do not.
  */
-public final class InstanceNetworks {
+public final class WorkloadNetworks {
 
-    /** Suffix that turns an instance handle into its network name. */
+    /** Suffix that turns a workload handle into its network name. */
     public static final String SUFFIX = "-net";
 
-    private InstanceNetworks() {}
+    private WorkloadNetworks() {}
 
     /** @return the private network name of one instance handle */
     public static @NonNull String networkName(@NonNull String handle) {
@@ -61,7 +62,8 @@ public final class InstanceNetworks {
     public static @NonNull String ensure(@NonNull DockerClient docker,
                                          @NonNull WorkloadNetworkPolicy policy,
                                          @NonNull String handle,
-                                         @NonNull Map<String, String> ownerLabels)
+                                         @NonNull Map<String, String> ownerLabels,
+                                         @NonNull Egress egress)
             throws IOException {
         String name = networkName(handle);
         // Loudest, cheapest refusal first: nothing reaches the daemon on a host that
@@ -78,7 +80,7 @@ public final class InstanceNetworks {
         }
 
         try {
-            policy.apply(WorkloadNetwork.fromInspect(docker.inspectNetwork(name)));
+            policy.apply(WorkloadNetwork.fromInspect(docker.inspectNetwork(name)), egress);
         } catch (IOException e) {
             if (created) {
                 // An unenforced network of ours is debris, not a resource: remove what this
@@ -102,7 +104,8 @@ public final class InstanceNetworks {
      */
     public static void ensureForStart(@NonNull DockerClient docker,
                                       @NonNull WorkloadNetworkPolicy policy,
-                                      @NonNull String handle) throws IOException {
+                                      @NonNull String handle,
+                                      @NonNull Egress egress) throws IOException {
         String name = networkName(handle);
         policy.requireEnabled(name);
 
@@ -118,7 +121,7 @@ public final class InstanceNetworks {
                 + "' carries no hohenheim owner labels, so it is not attributably ours and we"
                 + " will not enforce a tenant policy onto a stranger's network.");
         }
-        policy.apply(WorkloadNetwork.fromInspect(docker.inspectNetwork(name)));
+        policy.apply(WorkloadNetwork.fromInspect(docker.inspectNetwork(name)), egress);
     }
 
     /**

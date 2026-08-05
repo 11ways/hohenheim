@@ -5,7 +5,8 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
-import be.elevenways.hohenheim.server.runtime.InstanceNetworks;
+import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -57,7 +58,7 @@ import java.util.stream.Stream;
  *
  * AIDEV-NOTE: the network is established and VERIFIED IN THE KERNEL before the container
  * exists, and an unenforceable host REFUSES the build. That is inherited from
- * {@link InstanceNetworks}/{@link WorkloadNetworkPolicy} on purpose: a build that starts
+ * {@link WorkloadNetworks}/{@link WorkloadNetworkPolicy} on purpose: a build that starts
  * unprotected is worse than a build that does not start, and the never-throwing
  * {@code NftService} would have let exactly that happen.
  *
@@ -142,7 +143,10 @@ public final class BuildSandbox {
             throw new IOException("REFUSED to build: the build context is " + contextBytes
                 + " bytes, over the " + quota.diskBytes() + " byte disk quota");
         }
-        String network = InstanceNetworks.ensure(this.docker, this.policy, handle, ownerLabels);
+        // Builds declare OPEN egress: fetching base images, packages and dependencies
+        // is what a build does; the tenant-range denies still apply.
+        String network = WorkloadNetworks.ensure(this.docker, this.policy, handle, ownerLabels,
+            Egress.OPEN);
         log.line("[hohenheim] sandbox network " + network
             + " created with a verified host/metadata/tenant deny policy");
 
@@ -179,7 +183,7 @@ public final class BuildSandbox {
                 // mask the run's real outcome with cleanup noise.
             }
             try {
-                InstanceNetworks.teardown(this.docker, this.policy, handle);
+                WorkloadNetworks.teardown(this.docker, this.policy, handle);
             } catch (IOException e) {
                 Blast.log("BUILD: could not tear down sandbox network of", handle, "-",
                     e.getMessage());

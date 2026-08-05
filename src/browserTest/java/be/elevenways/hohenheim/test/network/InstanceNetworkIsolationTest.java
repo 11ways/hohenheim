@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.server.runtime.InstanceNetworks;
+import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.LiveIdOffsets;
@@ -108,7 +108,7 @@ class InstanceNetworkIsolationTest {
                     List<String> networksA = networkNamesOf(docker, handleA);
                     assertThat(networksA)
                         .as("step 1: tenant A sits on exactly its own private network")
-                        .containsExactly(InstanceNetworks.networkName(handleA));
+                        .containsExactly(WorkloadNetworks.networkName(handleA));
                     assertThat(networksA)
                         .as("step 1: and never on the shared default bridge")
                         .doesNotContain("bridge");
@@ -116,7 +116,7 @@ class InstanceNetworkIsolationTest {
                     // 2. The network carries owner labels at BIRTH, so the reconciler
                     //    attributes it instead of reporting a permanent orphan.
                     Map<String, Object> network = io(() -> docker.inspectNetwork(
-                        InstanceNetworks.networkName(handleA)));
+                        WorkloadNetworks.networkName(handleA)));
                     OwnerLabels.Owner owner = OwnerLabels.parse(
                         (Map<?, ?>) network.get("Labels"));
                     assertThat(owner).as("step 2: the network is owner-labelled").isNotNull();
@@ -124,7 +124,7 @@ class InstanceNetworkIsolationTest {
                         .isEqualTo(String.valueOf(ids[0]));
                     DockerReconciler.Finding finding = DockerReconciler.classify(
                         DockerReconciler.KIND_NETWORK,
-                        InstanceNetworks.networkName(handleA),
+                        WorkloadNetworks.networkName(handleA),
                         (Map<?, ?>) network.get("Labels"),
                         LIVE_RECORDS);
                     assertThat(finding.bucket())
@@ -143,7 +143,7 @@ class InstanceNetworkIsolationTest {
                     //    B's network (the only legitimate post-hoc connect: a SECOND network
                     //    for an already-isolated container) and the very same probe succeeds.
                     io(() -> docker.connectContainerToNetwork(
-                        InstanceNetworks.networkName(handleB), handleA, null));
+                        WorkloadNetworks.networkName(handleB), handleA, null));
                     try {
                         assertThat(connects(docker, handleA, addressB, 80))
                             .as("step 4: the same probe succeeds once the two share a network,"
@@ -151,14 +151,14 @@ class InstanceNetworkIsolationTest {
                             .isTrue();
                     } finally {
                         io(() -> docker.disconnectContainerFromNetwork(
-                            InstanceNetworks.networkName(handleB), handleA, true));
+                            WorkloadNetworks.networkName(handleB), handleA, true));
                     }
 
                     // 5. Teardown removes the network with the workload; nothing lingers for
                     //    the reconciler to report.
                     service.destroy(ids[0]);
                     assertThat(io(() -> docker.findNetworkByName(
-                        InstanceNetworks.networkName(handleA))))
+                        WorkloadNetworks.networkName(handleA))))
                         .as("step 5: destroy removes the private network too").isNull();
                     service.destroy(ids[1]);
                 });
@@ -215,7 +215,7 @@ class InstanceNetworkIsolationTest {
 
                 // 3. And no half-built network was left behind either.
                 assertThat(io(() -> docker.findNetworkByName(
-                    InstanceNetworks.networkName(handle))))
+                    WorkloadNetworks.networkName(handle))))
                     .as("step 3: no unenforced network was left behind").isNull();
 
                 // 4. The record is stamped error rather than quietly claiming to run.
@@ -320,7 +320,7 @@ class InstanceNetworkIsolationTest {
             // a passing run has nothing to remove
         }
         try {
-            docker.removeNetwork(InstanceNetworks.networkName(handle));
+            docker.removeNetwork(WorkloadNetworks.networkName(handle));
         } catch (IOException ignored) {
             // likewise
         }

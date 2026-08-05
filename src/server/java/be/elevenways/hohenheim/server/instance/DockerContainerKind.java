@@ -168,7 +168,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
         return new DockerInstanceRuntime(new ServerService().clientFor(serverName),
-            WorkloadNetworkPolicy.current());
+            WorkloadNetworkPolicy.forServer(serverName));
     }
 
     @Override
