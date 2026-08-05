@@ -71,6 +71,81 @@ public final class InstanceVariables {
     }
 
     /**
+     * Set (create or replace) ONE direct value on an instance or an environment --
+     * the automation-API write lane. Exactly one owner id must be non-null (the
+     * model's owner hook re-checks); existing rows for the same key are replaced so
+     * one key never answers twice. Secret values enter the encrypted carrier only.
+     *
+     * @throws Violations {@code variable_key_required}, {@code variable_kind_unknown},
+     *         plus the model's carrier/owner invariants
+     */
+    public void setValue(@Nullable Integer instanceId, @Nullable Integer environmentId,
+                         @NonNull String key, @NonNull String kind, @NonNull String value) {
+        if (key.isBlank()) {
+            throw Violations.ofField("key", key,
+                Microcopy.of("variable_key_required").withFilter("scope", "violations"));
+        }
+        if ((instanceId == null) == (environmentId == null)) {
+            throw Violations.ofField("environment_id", environmentId,
+                Microcopy.of("variable_one_owner").withFilter("scope", "violations"));
+        }
+        boolean secret = InstanceVariableModel.KIND_SECRET.equals(kind);
+        if (!secret && !InstanceVariableModel.KIND_PLAIN.equals(kind)) {
+            throw Violations.ofField("kind", kind,
+                Microcopy.of("variable_kind_unknown").withFilter("scope", "violations")
+                    .withArg("kind", kind));
+        }
+        InstanceVariableModel model = Models.get(InstanceVariableModel.class);
+        for (Row existing : rowsForKey(model, instanceId, environmentId, key)) {
+            model.delete(existing.get(InstanceVariableModel.ID));
+        }
+        Row row = model.createEmptyRow();
+        row.set(InstanceVariableModel.INSTANCE_ID, instanceId);
+        row.set(InstanceVariableModel.ENVIRONMENT_ID, environmentId);
+        row.set(InstanceVariableModel.KEY, key);
+        row.set(InstanceVariableModel.KIND, secret
+            ? InstanceVariableModel.KIND_SECRET : InstanceVariableModel.KIND_PLAIN);
+        if (secret) {
+            row.set(InstanceVariableModel.SECRET_VALUE, value);
+        } else {
+            row.set(InstanceVariableModel.PLAIN_VALUE, value);
+        }
+        model.save(row);
+    }
+
+    /**
+     * Remove one direct value by key from an instance or an environment.
+     *
+     * @return whether a row existed for the key
+     */
+    public boolean removeValue(@Nullable Integer instanceId, @Nullable Integer environmentId,
+                               @NonNull String key) {
+        InstanceVariableModel model = Models.get(InstanceVariableModel.class);
+        boolean removed = false;
+        for (Row existing : rowsForKey(model, instanceId, environmentId, key)) {
+            model.delete(existing.get(InstanceVariableModel.ID));
+            removed = true;
+        }
+        return removed;
+    }
+
+    private static @NonNull List<Row> rowsForKey(@NonNull InstanceVariableModel model,
+                                                 @Nullable Integer instanceId,
+                                                 @Nullable Integer environmentId,
+                                                 @NonNull String key) {
+        if (instanceId == null && environmentId == null) {
+            return List.of();
+        }
+        var query = model.find().where(InstanceVariableModel.KEY.eq(key));
+        if (instanceId != null) {
+            query.where(InstanceVariableModel.INSTANCE_ID.eq(instanceId));
+        } else {
+            query.where(InstanceVariableModel.ENVIRONMENT_ID.eq(environmentId));
+        }
+        return query.all();
+    }
+
+    /**
      * Every variable value of one instance, secrets decrypted (the ORM read path owns
      * that): what env injection and file rendering consume. The instance's ENVIRONMENT
      * contributes its values as the baseline and the instance's own row for the same

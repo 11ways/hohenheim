@@ -5211,6 +5211,30 @@
     "text": "A {$kind} variable must carry its value in the matching column only",
     "scope": "violations"
   },
+  "deploy_not_available": {
+    "text": "This site has no on-demand deploy; only git-sourced sites can be deployed",
+    "scope": "violations"
+  },
+  "rollback_not_available": {
+    "text": "No rollback target is available for this site",
+    "scope": "violations"
+  },
+  "variable_key_required": {
+    "text": "A variable key is required",
+    "scope": "violations"
+  },
+  "variable_kind_unknown": {
+    "text": "Unknown variable kind {$kind}",
+    "scope": "violations"
+  },
+  "variable_not_found": {
+    "text": "No variable exists for this key",
+    "scope": "violations"
+  },
+  "logs_unavailable": {
+    "text": "The logs of {$name} cannot be read right now",
+    "scope": "violations"
+  },
   "variable_type_unknown": {
     "text": "No handler is registered for variable type {$type}",
     "scope": "violations"

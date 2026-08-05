@@ -3,22 +3,16 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
-import be.elevenways.zenit.common.result.ActionResult;
-import be.elevenways.zenit.common.result.ErrorResponse;
-import be.elevenways.zenit.common.result.ErrorResult;
-import be.elevenways.zenit.common.result.JsonResult;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -60,7 +54,7 @@ public final class InstanceApi {
 
     public static void init() {
         HohenheimEndpoints.API_INSTANCES.setHandler(conduit -> {
-            AccessContext ctx = requireKey(conduit);
+            AccessContext ctx = ApiConduits.requireKey(conduit);
             if (ctx == null) {
                 return null;
             }
@@ -68,11 +62,11 @@ public final class InstanceApi {
             for (Row row : visibleInstances(ctx)) {
                 instances.add(projection(row));
             }
-            return json(Map.of("instances", instances));
+            return ApiConduits.json(Map.of("instances", instances));
         });
 
         HohenheimEndpoints.API_INSTANCE.setHandler(conduit -> {
-            AccessContext ctx = requireKey(conduit);
+            AccessContext ctx = ApiConduits.requireKey(conduit);
             if (ctx == null) {
                 return null;
             }
@@ -80,11 +74,11 @@ public final class InstanceApi {
             if (row == null) {
                 return null;
             }
-            return json(projection(row));
+            return ApiConduits.json(projection(row));
         });
 
         HohenheimEndpoints.API_INSTANCE_POWER.setHandler(conduit -> {
-            AccessContext ctx = requireKey(conduit);
+            AccessContext ctx = ApiConduits.requireKey(conduit);
             if (ctx == null) {
                 return null;
             }
@@ -93,7 +87,7 @@ public final class InstanceApi {
                 return null;
             }
             int instanceId = row.get(InstanceModel.ID);
-            String action = formValue(conduit, "action");
+            String action = ApiConduits.formValue(conduit, "action");
             InstanceService service = new InstanceService();
             try {
                 switch (action) {
@@ -104,20 +98,21 @@ public final class InstanceApi {
                         service.deploy(instanceId);
                     }
                     default -> {
-                        return refusal(conduit, Violations.ofField("action", action,
-                            violationText("unknown_power_action")));
+                        return ApiConduits.refusal(conduit, Violations.ofField("action", action,
+                            ApiConduits.violationText("unknown_power_action")));
                     }
                 }
             } catch (Violations refused) {
-                return refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "power_" + action, ORIGIN);
-            return json(Map.of("id", instanceId, "action", action,
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "power_" + action,
+                ApiConduits.ORIGIN);
+            return ApiConduits.json(Map.of("id", instanceId, "action", action,
                 "status", String.valueOf((Object) reload(instanceId).get(InstanceModel.STATUS))));
         });
 
         HohenheimEndpoints.API_INSTANCE_COMMAND.setHandler(conduit -> {
-            AccessContext ctx = requireKey(conduit);
+            AccessContext ctx = ApiConduits.requireKey(conduit);
             if (ctx == null) {
                 return null;
             }
@@ -126,10 +121,10 @@ public final class InstanceApi {
                 return null;
             }
             int instanceId = row.get(InstanceModel.ID);
-            String command = formValue(conduit, "command");
+            String command = ApiConduits.formValue(conduit, "command");
             if (command.isEmpty()) {
-                return refusal(conduit, Violations.ofField("command", command,
-                    violationText("console_command_required")));
+                return ApiConduits.refusal(conduit, Violations.ofField("command", command,
+                    ApiConduits.violationText("console_command_required")));
             }
             try {
                 // The console hub owns the manage check for the socket; the command lane
@@ -137,14 +132,15 @@ public final class InstanceApi {
                 HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.MANAGE);
                 InstanceConsoles.sendCommand(instanceId, command);
             } catch (Violations refused) {
-                return refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "console_command", ORIGIN);
-            return json(Map.of("id", instanceId, "status", "sent"));
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "console_command",
+                ApiConduits.ORIGIN);
+            return ApiConduits.json(Map.of("id", instanceId, "status", "sent"));
         });
 
         HohenheimEndpoints.API_INSTANCE_BACKUP.setHandler(conduit -> {
-            AccessContext ctx = requireKey(conduit);
+            AccessContext ctx = ApiConduits.requireKey(conduit);
             if (ctx == null) {
                 return null;
             }
@@ -155,15 +151,16 @@ public final class InstanceApi {
             int instanceId = row.get(InstanceModel.ID);
             try {
                 int backupId = new InstanceBackups().backupNow(instanceId);
-                ActivityLog.record(Models.get(InstanceModel.class), instanceId, "backup", ORIGIN);
-                return json(Map.of("id", instanceId, "backup", backupId));
+                ActivityLog.record(Models.get(InstanceModel.class), instanceId, "backup",
+                    ApiConduits.ORIGIN);
+                return ApiConduits.json(Map.of("id", instanceId, "backup", backupId));
             } catch (Violations refused) {
-                return refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, refused);
             }
         });
 
         HohenheimEndpoints.API_INSTANCE_SNAPSHOT.setHandler(conduit -> {
-            AccessContext ctx = requireKey(conduit);
+            AccessContext ctx = ApiConduits.requireKey(conduit);
             if (ctx == null) {
                 return null;
             }
@@ -174,24 +171,26 @@ public final class InstanceApi {
             int instanceId = row.get(InstanceModel.ID);
             try {
                 int snapshotId = new InstanceSnapshots().create(instanceId,
-                    emptyToNull(formValue(conduit, "note")));
-                ActivityLog.record(Models.get(InstanceModel.class), instanceId, "snapshot", ORIGIN);
-                return json(Map.of("id", instanceId, "snapshot", snapshotId));
+                    emptyToNull(ApiConduits.formValue(conduit, "note")));
+                ActivityLog.record(Models.get(InstanceModel.class), instanceId, "snapshot",
+                    ApiConduits.ORIGIN);
+                return ApiConduits.json(Map.of("id", instanceId, "snapshot", snapshotId));
             } catch (Violations refused) {
-                return refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, refused);
             }
         });
 
         HohenheimEndpoints.API_INSTANCE_CREATE.setHandler(conduit -> {
-            AccessContext ctx = requireKey(conduit);
+            AccessContext ctx = ApiConduits.requireKey(conduit);
             if (ctx == null) {
                 return null;
             }
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
             Row template = InstanceTemplates.templateFrom(form);
             if (template == null) {
-                return refusal(conduit, Violations.ofField("template_id", form.get("template_id"),
-                    violationText("unknown_template")));
+                return ApiConduits.refusal(conduit,
+                    Violations.ofField("template_id", form.get("template_id"),
+                        ApiConduits.violationText("unknown_template")));
             }
             try {
                 // The SAME funnel the create page posts to: create authority, template
@@ -199,16 +198,91 @@ public final class InstanceApi {
                 int instanceId = new InstanceTemplates().createFromTemplate(template,
                     InstanceTemplates.submittedString(form, "name"),
                     InstanceTemplates.submittedInteger(form, "server_id"), form, ctx);
-                ActivityLog.record(Models.get(InstanceModel.class), instanceId, "created", ORIGIN);
-                return json(projection(reload(instanceId)));
+                ActivityLog.record(Models.get(InstanceModel.class), instanceId, "created",
+                    ApiConduits.ORIGIN);
+                return ApiConduits.json(projection(reload(instanceId)));
             } catch (Violations refused) {
-                return refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, refused);
             }
         });
-    }
 
-    /** Accountability origin of everything this surface does (zenit-auth's convention). */
-    private static final String ORIGIN = "api";
+        HohenheimEndpoints.API_INSTANCE_LOGS.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) {
+                return null;
+            }
+            Row row = visibleInstance(conduit, ctx);
+            if (row == null) {
+                return null;
+            }
+            int instanceId = row.get(InstanceModel.ID);
+            try {
+                return ApiConduits.json(Map.of("id", instanceId,
+                    "lines", InstanceConsoles.tail(instanceId, clampLines(conduit))));
+            } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            }
+        });
+
+        HohenheimEndpoints.API_INSTANCE_VARIABLES.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) {
+                return null;
+            }
+            Row row = visibleInstance(conduit, ctx);
+            if (row == null) {
+                return null;
+            }
+            int instanceId = row.get(InstanceModel.ID);
+            return ApiConduits.json(Map.of("id", instanceId, "variables", variableProjection(
+                Models.get(InstanceVariableModel.class).findByInstanceId(instanceId))));
+        });
+
+        HohenheimEndpoints.API_INSTANCE_VARIABLE_SET.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) {
+                return null;
+            }
+            Row row = visibleInstance(conduit, ctx);
+            if (row == null) {
+                return null;
+            }
+            int instanceId = row.get(InstanceModel.ID);
+            try {
+                new InstanceVariables().setValue(instanceId, null,
+                    ApiConduits.formValue(conduit, "key"),
+                    kindOrDefault(ApiConduits.formValue(conduit, "kind")),
+                    ApiConduits.formValue(conduit, "value"));
+            } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            }
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "variable_set",
+                ApiConduits.ORIGIN);
+            return ApiConduits.json(Map.of("id", instanceId, "status", "set",
+                "key", ApiConduits.formValue(conduit, "key")));
+        });
+
+        HohenheimEndpoints.API_INSTANCE_VARIABLE_DELETE.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) {
+                return null;
+            }
+            Row row = visibleInstance(conduit, ctx);
+            if (row == null) {
+                return null;
+            }
+            int instanceId = row.get(InstanceModel.ID);
+            String key = ApiConduits.formValue(conduit, "key");
+            boolean removed = new InstanceVariables().removeValue(instanceId, null, key);
+            if (!removed) {
+                return ApiConduits.refusal(conduit, Violations.ofField("key", key,
+                    ApiConduits.violationText("variable_not_found")));
+            }
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "variable_deleted",
+                ApiConduits.ORIGIN);
+            return ApiConduits.json(Map.of("id", instanceId, "status", "deleted", "key", key));
+        });
+    }
 
     // -- visibility -----------------------------------------------------------
 
@@ -256,22 +330,6 @@ public final class InstanceApi {
         return row;
     }
 
-    /**
-     * Refuse anything that is not an API key. A browser session reaching an automation
-     * endpoint would be a CSRF-exempt, cookie-authenticated mutation, which is what
-     * csrfExempt would otherwise cost; it is also how the two surfaces stay honestly
-     * separate ("HTML routes are not the automation API").
-     *
-     * @return the access context, or null when the response has already been ended
-     */
-    private static @Nullable AccessContext requireKey(@NonNull Conduit conduit) {
-        if (!(conduit.getAttribute(ConduitAttributes.PRINCIPAL) instanceof ApiKeyPrincipal)) {
-            conduit.forbidden();
-            return null;
-        }
-        return AccessContext.of(conduit);
-    }
-
     // -- projection -----------------------------------------------------------
 
     /**
@@ -288,6 +346,55 @@ public final class InstanceApi {
         entry.put("template", templateNameOf(instance));
         entry.put("created_at", String.valueOf((Object) instance.get(InstanceModel.CREATED_AT)));
         return entry;
+    }
+
+    /**
+     * The enumerated variable view: key, kind, and the value ONLY for plain rows.
+     *
+     * AIDEV-NOTE: a secret's value has NO representation here, deliberately -- a GET
+     * that echoes a stored secret makes every CI log, shell history and proxy cache a
+     * leak, and it is the ONE surface redaction doctrine cannot reach once emitted.
+     * Secrets are write-only over the API: {@code has_value} says one is stored,
+     * re-setting it is the recovery, and env injection is the only reader. This is the
+     * same posture as the provisioning page, which never puts the value in its vars.
+     */
+    public static @NonNull List<Map<String, Object>> variableProjection(@NonNull List<Row> rows) {
+        List<Map<String, Object>> variables = new ArrayList<>();
+        for (Row row : rows) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            boolean secret = InstanceVariableModel.KIND_SECRET
+                .equals(row.get(InstanceVariableModel.KIND));
+            entry.put("key", row.get(InstanceVariableModel.KEY));
+            entry.put("kind", secret
+                ? InstanceVariableModel.KIND_SECRET : InstanceVariableModel.KIND_PLAIN);
+            if (secret) {
+                String stored = row.get(InstanceVariableModel.SECRET_VALUE);
+                entry.put("has_value", stored != null && !stored.isEmpty());
+            } else {
+                entry.put("value", row.get(InstanceVariableModel.PLAIN_VALUE));
+            }
+            variables.add(entry);
+        }
+        return variables;
+    }
+
+    /** Unspecified kind means plain -- the model's own default, restated for the form lane. */
+    public static @NonNull String kindOrDefault(@NonNull String kind) {
+        return kind.isEmpty() ? InstanceVariableModel.KIND_PLAIN : kind;
+    }
+
+    /** The requested tail length, clamped to a sane window (default 200, max 2000). */
+    static int clampLines(@NonNull Conduit conduit) {
+        String raw = conduit.getQueryParam("lines");
+        int lines = 200;
+        if (raw != null && !raw.isEmpty()) {
+            try {
+                lines = Integer.parseInt(raw);
+            } catch (NumberFormatException ignored) {
+                // An unparsable request keeps the default; the window is advisory.
+            }
+        }
+        return Math.max(1, Math.min(lines, 2000));
     }
 
     private static @NonNull String templateNameOf(@NonNull Row instance) {
@@ -310,40 +417,7 @@ public final class InstanceApi {
         return row;
     }
 
-    /**
-     * Map a typed refusal onto 422 carrying the violation's MACHINE KEY as the error
-     * code, so an API caller and an HTML caller are told the same named thing (the
-     * HTML surface renders the same Microcopy).
-     */
-    @SuppressWarnings("unchecked")
-    private static @NonNull ActionResult<Object> refusal(@NonNull Conduit conduit,
-                                                        @NonNull Violations violations) {
-        List<Violation> all = violations.all();
-        String code = "REFUSED";
-        String message = violations.getMessage();
-        if (!all.isEmpty()) {
-            code = all.get(0).message().key();
-            message = all.get(0).message()
-                .resolve(conduit.getLocales(), conduit.getMessageResolver());
-        }
-        return (ActionResult<Object>) (ActionResult<?>) new ErrorResult(
-            ErrorResponse.of(422, code, message));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static @NonNull ActionResult<Object> json(@NonNull Map<String, Object> body) {
-        return (ActionResult<Object>) (ActionResult<?>) new JsonResult<>(body);
-    }
-
-    private static @NonNull String formValue(@NonNull Conduit conduit, @NonNull String name) {
-        return InstanceTemplates.submittedString(FormSubmissionRawValues.fromConduit(conduit), name);
-    }
-
     private static @Nullable String emptyToNull(@NonNull String value) {
         return value.isEmpty() ? null : value;
-    }
-
-    private static @NonNull Microcopy violationText(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
     }
 }

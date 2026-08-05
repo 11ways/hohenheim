@@ -193,6 +193,30 @@ public final class InstanceConsoles {
             service.leases(), Db.current());
     }
 
+    /**
+     * The last {@code lines} lines of the workload's captured output -- the one-shot
+     * automation-API read beside the streaming console. Works on a stopped container
+     * too (the daemon keeps its log); a workload the daemon cannot answer for is a
+     * named refusal, never an empty success.
+     *
+     * @throws Violations {@code console_unsupported}, {@code logs_unavailable}
+     */
+    public static @NonNull String tail(int instanceId, int lines) {
+        InstanceService.Resolved resolved = new InstanceService().resolve(instanceId);
+        if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
+            throw Violations.ofForm(Microcopy.of("console_unsupported")
+                .withFilter("scope", "violations")
+                .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
+        }
+        try {
+            return support.consoleTail(resolved.spec().handle(), lines);
+        } catch (IOException e) {
+            throw Violations.ofForm(Microcopy.of("logs_unavailable")
+                .withFilter("scope", "violations")
+                .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
+        }
+    }
+
     /** The live session of an instance, or null. */
     public static @Nullable InstanceConsoleSession peek(int instanceId) {
         InstanceConsoleSession session = SESSIONS.get(instanceId);
