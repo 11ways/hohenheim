@@ -89,7 +89,21 @@ public final class IncusNetworkPolicy {
         // exactly what we want, nothing is written; the read-back verification below
         // still runs either way.
         if (existing == null) {
-            this.incus.createNetworkAcl(definition);
+            try {
+                this.incus.createNetworkAcl(definition);
+            } catch (IncusClient.ApiException raced) {
+                // AIDEV-NOTE: two deploys on a FRESH host both read "no ACL" and both
+                // POST it; the loser gets 400 "already exists" and used to fail the whole
+                // install for it (observed live 2026-08-05 with the ACL absent and seven
+                // live classes deploying at once: "install_failed ... The network ACL
+                // already exists"). Having the ACL is the goal, not having been the one
+                // to create it -- and the read-back below is the gate either way, so a
+                // winner that wrote something DIFFERENT is still caught. Any other
+                // refusal still propagates.
+                if (!raced.isAlreadyExists()) {
+                    throw raced;
+                }
+            }
         } else if (!carriesExactly(existing, wantEgress)) {
             this.incus.updateNetworkAcl(ACL_NAME, definition);
         }
