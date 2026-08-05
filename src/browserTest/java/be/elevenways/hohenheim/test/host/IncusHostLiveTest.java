@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
@@ -95,7 +96,7 @@ class IncusHostLiveTest {
                 assertThat(IncusTrust.ensureIdentity(host))
                     .as("step 3: a fresh record mints its client certificate").isTrue();
                 Row withIdentity = model.findByName(HOST);
-                String clientCert = withIdentity.get(ServerModel.IDENTITY_PUBLIC_KEY);
+                String clientCert = withIdentity.get(HostTrustSlot.INCUS_TLS.clientPublic());
                 assertThat(clientCert)
                     .as("step 3: the identity is a PEM certificate, ready to install")
                     .contains("BEGIN CERTIFICATE");
@@ -112,7 +113,7 @@ class IncusHostLiveTest {
 
                 // 5. A scanned pin is UNVERIFIED and blocks admission by name.
                 Row pinned = model.findByName(HOST);
-                assertThat((Boolean) pinned.get(ServerModel.HOST_KEY_VERIFIED))
+                assertThat((Boolean) pinned.get(ServerModel.INCUS_SERVER_CERT_VERIFIED))
                     .as("step 5: scanned = unverified").isFalse();
                 pinned.set(ServerModel.PREFLIGHT_OK, true);
                 model.save(pinned);
@@ -122,7 +123,7 @@ class IncusHostLiveTest {
                         assertThat(violations.all()).anySatisfy(violation ->
                             assertThat(violation.message().key())
                                 .isEqualTo("host_key_unverified")));
-                HostKeys.confirm(pinned);
+                IncusTrust.confirm(pinned);
 
                 // 6. BEFORE enrollment the daemon answers but does not trust us, and the
                 //    preflight says exactly that: reachability alone must never pass the
@@ -191,12 +192,13 @@ class IncusHostLiveTest {
                 // 10. The pin now names a DIFFERENT certificate: fail CLOSED, classified
                 //     host_key_changed, quarantined, nothing re-pinned.
                 Row seen = model.findByName(HOST);
-                String realPin = seen.get(ServerModel.HOST_KEY);
+                String realPin = seen.get(ServerModel.INCUS_SERVER_CERT);
                 String decoy = decoyCertificatePem();
                 assertThat(decoy).as("step 10: the decoy really is a different certificate")
                     .isNotEqualTo(realPin);
-                seen.set(ServerModel.HOST_KEY, decoy);
-                seen.set(ServerModel.HOST_KEY_FINGERPRINT, IncusTrust.fingerprintOf(decoy));
+                seen.set(ServerModel.INCUS_SERVER_CERT, decoy);
+                seen.set(ServerModel.INCUS_SERVER_CERT_FINGERPRINT,
+                    IncusTrust.fingerprintOf(decoy));
                 model.save(seen);
                 ServerService.Summary changed = servers.probeAndStore(HOST);
                 assertThat(changed.reachable())
@@ -221,17 +223,17 @@ class IncusHostLiveTest {
                     .as("step 11: naming the certificate the real daemon offers")
                     .isEqualTo(remote.fingerprint());
                 Row afterRescan = model.findByName(HOST);
-                assertThat((String) afterRescan.get(ServerModel.HOST_KEY))
+                assertThat((String) afterRescan.get(ServerModel.INCUS_SERVER_CERT))
                     .as("step 11: and STILL nothing re-pinned it").isEqualTo(decoy);
 
                 // 12. Recovery is the explicit repin, landing back at the bottom of the
                 //     ceremony, after which the daemon is reachable again.
                 IncusTrust.repin(afterRescan);
                 Row repinned = model.findByName(HOST);
-                assertThat((String) repinned.get(ServerModel.HOST_KEY_FINGERPRINT))
+                assertThat((String) repinned.get(ServerModel.INCUS_SERVER_CERT_FINGERPRINT))
                     .as("step 12: the repin adopts the real certificate")
                     .isEqualTo(remote.fingerprint());
-                assertThat((Boolean) repinned.get(ServerModel.HOST_KEY_VERIFIED))
+                assertThat((Boolean) repinned.get(ServerModel.INCUS_SERVER_CERT_VERIFIED))
                     .as("step 12: unconfirmed again").isFalse();
                 ServerService.Summary recovered = servers.probeAndStore(HOST);
                 assertThat(recovered.reachable())

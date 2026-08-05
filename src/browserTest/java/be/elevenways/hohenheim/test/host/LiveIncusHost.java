@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
@@ -90,6 +91,12 @@ public final class LiveIncusHost {
         row.set(ServerModel.HOST_KEY_FINGERPRINT, null);
         row.set(ServerModel.HOST_KEY_OFFERED, null);
         row.set(ServerModel.HOST_KEY_VERIFIED, false);
+        row.set(ServerModel.INCUS_SERVER_CERT, null);
+        row.set(ServerModel.INCUS_SERVER_CERT_FINGERPRINT, null);
+        row.set(ServerModel.INCUS_SERVER_CERT_OFFERED, null);
+        row.set(ServerModel.INCUS_SERVER_CERT_VERIFIED, false);
+        row.set(ServerModel.INCUS_CLIENT_CERT, null);
+        row.set(ServerModel.INCUS_CLIENT_KEY, null);
         row.set(ServerModel.PREFLIGHT_OK, false);
         row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
         row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
@@ -133,10 +140,10 @@ public final class LiveIncusHost {
         Row host = enrol(hostName);
         IncusTrust.ensureIdentity(host);
         String fingerprint = IncusTrust.fingerprintOf(
-            host.get(ServerModel.IDENTITY_PUBLIC_KEY));
+            host.get(HostTrustSlot.INCUS_TLS.clientPublic()));
         IncusTrust.scanAndPin(host);
         Row pinned = Models.get(ServerModel.class).findByName(hostName);
-        HostKeys.confirm(pinned);
+        IncusTrust.confirm(pinned);
         try {
             IncusTrust.enrollWithToken(Models.get(ServerModel.class).findByName(hostName),
                 mintTrustToken(clientName));
@@ -151,6 +158,91 @@ public final class LiveIncusHost {
         ready.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
         Models.get(ServerModel.class).save(ready);
         return fingerprint;
+    }
+
+    /**
+     * Walk the PRODUCT's ssh trust ceremony for this host's admin lane, doing only the
+     * parts an operator does out of band: declare the target, install the product's
+     * minted public key in the remote's authorized_keys, and compare the scanned
+     * fingerprint against what the host itself reports before confirming it.
+     *
+     * AIDEV-NOTE: the comparison is genuinely out of band with respect to the code under
+     * test. The product scans with {@code ssh-keyscan} FROM THE CONTROLLER; this reads
+     * {@code ssh-keygen -lf} on the host's own filesystem over the fixture's already
+     * authenticated operator session -- the same trust root {@code incus info}'s
+     * certificate fingerprint and the trust token come from. Two different channels
+     * agreeing is the property the confirm step is supposed to record.
+     *
+     * @return the ssh host-key fingerprint both channels agreed on
+     */
+    public String enrollSshLaneThroughProduct(String hostName) {
+        ServerModel model = Models.get(ServerModel.class);
+        Row host = model.findByName(hostName);
+        host.set(ServerModel.SSH_TARGET, this.trustTarget);
+        model.save(host);
+
+        Row withTarget = model.findByName(hostName);
+        HostKeys.ensureIdentity(withTarget);
+        Row withIdentity = model.findByName(hostName);
+        try {
+            authorizeKey(withIdentity.get(HostTrustSlot.SSH.clientPublic()));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        HostKeys.ScanResult scan = HostKeys.scanAndPin(withIdentity);
+        String reported;
+        try {
+            reported = hostSshFingerprint();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        Assumptions.assumeTrue(scan.fingerprint().equals(reported),
+            "the scanned ssh host key (" + scan.fingerprint() + ") is not what "
+                + this.trustTarget + " reports for itself (" + reported + ")");
+        HostKeys.confirm(model.findByName(hostName));
+        return reported;
+    }
+
+    /** The operator act: put one public key in the remote account's authorized_keys. */
+    public void authorizeKey(String publicKey) throws IOException {
+        String line = publicKey.trim().replace("'", "");
+        ssh(List.of("sh", "-c", "'mkdir -p ~/.ssh && chmod 700 ~/.ssh &&"
+            + " touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys &&"
+            + " grep -qxF \"" + line + "\" ~/.ssh/authorized_keys ||"
+            + " echo \"" + line + "\" >> ~/.ssh/authorized_keys'"));
+    }
+
+    /**
+     * Remove one public key from the remote account's authorized_keys.
+     *
+     * @return what the remote reports afterwards: "removed", "STILL PRESENT", or the failure
+     */
+    public String deauthorizeKey(String publicKey) {
+        String line = publicKey.trim().replace("'", "");
+        try {
+            ssh(List.of("sh", "-c", "'grep -vxF \"" + line + "\" ~/.ssh/authorized_keys"
+                + " > ~/.ssh/authorized_keys.tmp && mv ~/.ssh/authorized_keys.tmp"
+                + " ~/.ssh/authorized_keys'"));
+            String remaining = ssh(List.of("sh", "-c", "'grep -cxF \"" + line
+                + "\" ~/.ssh/authorized_keys || true'")).trim();
+            return "0".equals(remaining) ? "removed"
+                : "STILL PRESENT (" + remaining + " copies)";
+        } catch (IOException failed) {
+            return "NOT removed: " + failed.getMessage();
+        }
+    }
+
+    /** What the host reports as its OWN ssh host key digest, read on the host itself. */
+    public String hostSshFingerprint() throws IOException {
+        String output = ssh(List.of("sh", "-c",
+            "'ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub'")).trim();
+        for (String token : output.split("\\s+")) {
+            if (token.startsWith("SHA256:")) {
+                return token;
+            }
+        }
+        throw new IOException("ssh-keygen -lf printed no SHA256 digest: " + output);
     }
 
     /** Run one shell command INSIDE the instance, over the host's own CLI. */

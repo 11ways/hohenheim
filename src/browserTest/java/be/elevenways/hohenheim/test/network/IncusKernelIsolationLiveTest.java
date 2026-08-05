@@ -1,11 +1,13 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
+import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.server.security.NftRunner;
+import be.elevenways.hohenheim.server.task.VerifyIncusIsolation;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
@@ -42,11 +44,15 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * an API return value -- an API that answers correctly while the kernel leaks is the
  * whole defect.
  *
- * AIDEV-NOTE: the nft lane is injected through {@code overrideRunnerForTest} because an
- * https-enrolled Incus host has no PRODUCT shell lane (its ssh columns carry the
- * daemon's TLS material), so without the override every kernel-truth assertion would
- * SKIP -- and a skipped test is a green test. The override carries the PRODUCTION
- * verifier onto the real host's real nftables; nothing about the decision is faked.
+ * AIDEV-NOTE: the nft lane is the PRODUCTION one and no test seam is installed here. The
+ * host record carries its own pinned ssh admin lane (M074 gave ssh trust its own columns,
+ * so the daemon's TLS material no longer occupies them), the fixture performs only the
+ * acts an operator performs -- install the product-minted public key in authorized_keys,
+ * compare the scanned fingerprint against what the host reports for itself -- and every
+ * kernel read below travels {@code HostKeys.sshArgv} -> {@code NftRunner.forServer}.
+ * The earlier wave could only prove the MECHANISM through {@code overrideRunnerForTest};
+ * this proves the DEPLOYMENT. The fixture's own ssh helpers stay the INJECTION lane (they
+ * break the kernel), never the verification lane.
  */
 class IncusKernelIsolationLiveTest {
 
@@ -56,6 +62,7 @@ class IncusKernelIsolationLiveTest {
     private static SqliteDatasource datasource;
     private static LiveIncusHost remote;
     private static String enrolledFingerprint;
+    private static String authorizedKey;
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -72,17 +79,31 @@ class IncusKernelIsolationLiveTest {
 
         Db.run(datasource, () -> enrolledFingerprint =
             remote.enrollThroughProduct(HOST, "hohenheim-live-kernel"));
-        IncusKernelIsolation.overrideRunnerForTest(hostNftRunner());
     }
 
+    /**
+     * Give the host back exactly what it lent us: the enrolled client certificate and the
+     * authorized_keys line. Both are working CREDENTIALS on a real machine, so the
+     * outcome is PRINTED rather than swallowed -- a cleanup that silently fails leaves
+     * root access behind and reports success, which is the shape this whole wave hunts.
+     */
     @AfterAll
     static void tearDown() {
-        IncusKernelIsolation.overrideRunnerForTest(null);
-        if (remote != null && enrolledFingerprint != null) {
+        if (remote == null) {
+            return;
+        }
+        if (authorizedKey != null) {
+            System.out.println("=== cleanup: authorized_keys -> "
+                + remote.deauthorizeKey(authorizedKey));
+        }
+        if (enrolledFingerprint != null) {
             try {
                 remote.removeTrustEntry(enrolledFingerprint);
-            } catch (IOException ignored) {
-                // nothing enrolled, nothing to remove
+                System.out.println("=== cleanup: trust entry " + enrolledFingerprint
+                    + " removed");
+            } catch (IOException failed) {
+                System.out.println("=== cleanup: trust entry " + enrolledFingerprint
+                    + " NOT removed: " + failed.getMessage());
             }
         }
     }
@@ -91,8 +112,55 @@ class IncusKernelIsolationLiveTest {
     void kernelDivergenceIsSeenRepairedAndOtherwiseStopsTheWorkload() {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
-            Row host = Models.get(ServerModel.class).findByName(HOST);
+            ServerModel model = Models.get(ServerModel.class);
+
+            // 1. WITHOUT an ssh admin lane this remote daemon's kernel is unreadable, and
+            //    the product says so instead of guessing. This is the state every https
+            //    Incus host was in before the trust columns were split.
+            Row laneless = model.findByName(HOST);
+            assertThat(ServerModel.hasSshLane(laneless))
+                .as("step 1: the enrolled host starts with no ssh admin lane")
+                .isFalse();
+            assertThat(IncusKernelIsolation.forServer(laneless).available())
+                .as("step 1: so kernel truth is UNAVAILABLE, never assumed fine")
+                .isFalse();
+            assertThatInspectRefuses(IncusKernelIsolation.forServer(laneless),
+                "hohenheim-instance-0");
+
+            // 2. The operator enrolls the second trust relationship, walking the SAME
+            //    ceremony the docker hosts walk (scan, out-of-band compare, confirm) --
+            //    and it lands in its OWN columns, next to the daemon certificate.
+            String sshFingerprint = remote.enrollSshLaneThroughProduct(HOST);
+            Row host = model.findByName(HOST);
+            authorizedKey = host.get(HostTrustSlot.SSH.clientPublic());
+            assertThat((String) host.get(ServerModel.HOST_KEY_FINGERPRINT))
+                .as("step 2: the ssh pin is the host's own ssh host key")
+                .isEqualTo(sshFingerprint);
+            assertThat((String) host.get(ServerModel.INCUS_SERVER_CERT_FINGERPRINT))
+                .as("step 2: and the daemon certificate is untouched beside it")
+                .isEqualTo(remote.fingerprint());
+            assertThat((String) host.get(ServerModel.HOST_KEY))
+                .as("step 2: the ssh slot holds a known_hosts line, never a PEM")
+                .startsWith("ssh-").doesNotContain("BEGIN CERTIFICATE");
+            assertThat((String) host.get(ServerModel.INCUS_SERVER_CERT))
+                .as("step 2: and the tls slot holds the PEM")
+                .contains("BEGIN CERTIFICATE");
+
+            // 3. THE PRODUCTION PATH: no test seam is installed, so this verifier reaches
+            //    daystrom's kernel over HostKeys.sshArgv with the pin it just confirmed.
             IncusKernelIsolation kernel = IncusKernelIsolation.forServer(host);
+            assertThat(kernel.available())
+                .as("step 3: kernel truth is now readable through the product's own lane")
+                .isTrue();
+
+            // 4. An UNCONFIRMED lane is not a lane: refusing to answer stays the verdict
+            //    until a human compared the fingerprint.
+            host.set(ServerModel.HOST_KEY_VERIFIED, false);
+            model.save(host);
+            assertThat(IncusKernelIsolation.forServer(model.findByName(HOST)).available())
+                .as("step 4: an unconfirmed ssh pin leaves the host unverifiable")
+                .isFalse();
+            HostKeys.confirm(model.findByName(HOST));
 
             int idA = instanceRecord("kernel-tenant-a", 8011);
             int idB = instanceRecord("kernel-tenant-b", 8022);
@@ -104,76 +172,96 @@ class IncusKernelIsolationLiveTest {
                 service.deploy(idB);
                 String peer = addressOf(handleB);
 
-                // 1. As deployed: the kernel carries the isolation for A's LIVE tap, and
+                // 5. As deployed: the kernel carries the isolation for A's LIVE tap, and
                 //    the boundary really holds -- A cannot reach B, but the internet is
                 //    up (an ADDRESS LITERAL, so a working v6 cannot fake a v4 pass).
-                assertThat(kernel.available())
-                    .as("step 1: the test lane reaches the daemon host's nftables")
-                    .isTrue();
+                evidence("step 5: AS DEPLOYED (read through the product's ssh lane)");
                 assertThat(kernel.inspect(handleA).missing())
-                    .as("step 1: the as-deployed kernel is missing nothing")
+                    .as("step 5: the as-deployed kernel is missing nothing")
                     .isEmpty();
                 assertThat(canReach(handleA, peer))
-                    .as("step 1: tenant A cannot reach tenant B (" + peer + ")")
+                    .as("step 5: tenant A cannot reach tenant B (" + peer + ")")
                     .isFalse();
                 assertThat(canReach(handleA, "1.1.1.1"))
-                    .as("step 1: A still reaches the internet, so its NIC is alive")
+                    .as("step 5: A still reaches the internet, so its NIC is alive")
                     .isTrue();
 
-                // 2. THE DIVERGENCE, produced as the daemon produces it: A's chains are
+                // 6. THE DIVERGENCE, produced as the daemon produces it: A's chains are
                 //    gone from the kernel while every daemon-side fact stays perfect.
                 dropChains(handleA);
                 assertThat(nicAclOf(handleA))
-                    .as("step 2: the daemon still reports the NIC as fully isolated")
+                    .as("step 6: the daemon still reports the NIC as fully isolated")
                     .isEqualTo(IncusNetworkPolicy.ACL_NAME);
                 assertThat(aclShow())
-                    .as("step 2: and the ACL still reads back with every tenant reject")
+                    .as("step 6: and the ACL still reads back with every tenant reject")
                     .contains("10.0.0.0/8").contains("169.254.0.0/16").contains("fc00::/7");
+                evidence("step 6: DIVERGED (config still says isolated)");
                 assertThat(canReach(handleA, peer))
-                    .as("step 2: THE LEAK -- A now reaches B while config says isolated")
+                    .as("step 6: THE LEAK -- A now reaches B while config says isolated")
                     .isTrue();
 
-                // 3. The kernel verifier is the ONLY layer that sees it.
+                // 7. The kernel verifier is the ONLY layer that sees it.
                 IncusKernelIsolation.Divergence diverged = kernel.inspect(handleA);
                 assertThat(diverged.enforced())
-                    .as("step 3: kernel truth reports the divergence config cannot see")
+                    .as("step 7: kernel truth reports the divergence config cannot see")
                     .isFalse();
                 assertThat(diverged.describe())
-                    .as("step 3: the refusal names the workload and the missing ranges")
+                    .as("step 7: the refusal names the workload and the missing ranges")
                     .contains(handleA).contains("10.0.0.0/8");
 
-                // 4. enforce() repairs through the daemon's own re-apply lever, and the
-                //    boundary is measurably back.
-                kernel.enforce(handleA);
+                // 8. The SWEEP is what runs in production, and it repairs through the
+                //    daemon's own re-apply lever; the boundary is measurably back.
+                assertThat(sweepOutcome())
+                    .as("step 8: the production sweep repairs the diverged workload")
+                    .satisfies(outcome -> {
+                        assertThat(outcome.verifiable())
+                            .as("step 8: over a lane it can actually read").isTrue();
+                        assertThat(outcome.repaired())
+                            .as("step 8: naming the workload it repaired")
+                            .contains(handleA);
+                        assertThat(outcome.stopped())
+                            .as("step 8: and stopping nothing, because the repair took")
+                            .isEmpty();
+                    });
+                evidence("step 8: REPAIRED by the production sweep");
                 assertThat(kernel.inspect(handleA).missing())
-                    .as("step 4: the kernel carries the isolation again")
+                    .as("step 8: the kernel carries the isolation again")
                     .isEmpty();
                 assertThat(canReach(handleA, peer))
-                    .as("step 4: and A can no longer reach B")
+                    .as("step 8: and A can no longer reach B")
                     .isFalse();
                 assertThat(canReach(handleA, "1.1.1.1"))
-                    .as("step 4: the repair did not sever the NIC")
+                    .as("step 8: the repair did not sever the NIC")
                     .isTrue();
 
-                // 5. UNREPAIRABLE: with the ACL no longer referenced by A's NIC, the
+                // 9. UNREPAIRABLE: with the ACL no longer referenced by A's NIC, the
                 //    re-apply lever cannot reach it. enforce() must REFUSE rather than
                 //    report success, naming the workload.
                 dropAcl(handleA);
                 dropChains(handleA);
                 assertThat(canReach(handleA, peer))
-                    .as("step 5: A is unisolated again")
+                    .as("step 9: A is unisolated again")
                     .isTrue();
                 assertThatEnforceRefuses(kernel, handleA);
 
-                // 6. The declared consequence: an unisolated, unrepairable workload does
-                //    not stay reachable. The service stop is what the sweep calls.
-                service.stop(idA);
+                // 10. The declared consequence, through the SWEEP: an unisolated,
+                //     unrepairable workload does not stay reachable.
+                assertThat(sweepOutcome())
+                    .as("step 10: the sweep stops what it cannot re-isolate")
+                    .satisfies(outcome -> {
+                        assertThat(outcome.stopped())
+                            .as("step 10: naming the stopped workload")
+                            .contains(handleA);
+                        assertThat(outcome.errors())
+                            .as("step 10: with the refusal recorded, not swallowed")
+                            .anyMatch(error -> error.contains("REFUSED to leave"));
+                    });
                 assertThat(runningState(handleA))
-                    .as("step 6: the workload is stopped at the DAEMON, not just in a log")
+                    .as("step 10: the workload is stopped at the DAEMON, not just in a log")
                     .isNotEqualTo("Running");
                 assertThat(Models.get(InstanceModel.class).findById(idA)
                         .get(InstanceModel.STATUS))
-                    .as("step 6: and the record records the stop")
+                    .as("step 10: and the record records the stop")
                     .isEqualTo(InstanceModel.STATUS_STOPPED);
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -189,6 +277,39 @@ class IncusKernelIsolationLiveTest {
         });
     }
 
+    /**
+     * Print the daemon host's bridge-filter table at a named moment. This is the EVIDENCE
+     * the whole mechanism turns on -- the table the verifier reads and the daemon's own
+     * config cannot see -- so a failing run in CI carries it instead of a bare boolean.
+     */
+    private static void evidence(String label) {
+        System.out.println("=== " + label + " ===");
+        System.out.println(hostCmd("nft", "list", "table", "bridge", "incus"));
+    }
+
+    /** This host's outcome from the PRODUCTION sweep the scheduled task runs. */
+    private static VerifyIncusIsolation.HostOutcome sweepOutcome() {
+        for (VerifyIncusIsolation.HostOutcome outcome : VerifyIncusIsolation.sweep()) {
+            if (HOST.equals(outcome.server())) {
+                return outcome;
+            }
+        }
+        throw new AssertionError("the sweep did not visit " + HOST + "; it only reports on"
+            + " hosts carrying RUNNING instances");
+    }
+
+    private static void assertThatInspectRefuses(IncusKernelIsolation kernel, String handle) {
+        try {
+            kernel.inspect(handle);
+            throw new AssertionError("inspect() answered for a host whose kernel cannot be"
+                + " read; an unreadable kernel must never be reported as a pass");
+        } catch (IOException refused) {
+            assertThat(refused.getMessage())
+                .as("the refusal names the missing lane rather than guessing")
+                .contains("REFUSED to report").contains("ssh admin lane");
+        }
+    }
+
     private static void assertThatEnforceRefuses(IncusKernelIsolation kernel, String handle) {
         try {
             kernel.enforce(handle);
@@ -200,20 +321,6 @@ class IncusKernelIsolationLiveTest {
                 .as("step 5: the refusal names the workload and says it may not keep running")
                 .contains(handle).contains("REFUSED to leave");
         }
-    }
-
-    /** The nft lane onto the DAEMON'S host, over the operator ssh target of the fixture. */
-    private static NftRunner hostNftRunner() {
-        return (args, stdin) -> {
-            List<String> argv = new java.util.ArrayList<>(List.of("nft"));
-            argv.addAll(args);
-            try {
-                return new NftRunner.Result(0, remote.hostCommand(
-                    argv.toArray(new String[0])), "");
-            } catch (IOException e) {
-                return new NftRunner.Result(1, "", String.valueOf(e.getMessage()));
-            }
-        };
     }
 
     /** Remove one instance's bridge-filter chains: the failed-teardown outcome. */

@@ -55,7 +55,10 @@ public interface NftRunner {
      * never construct {@link Sudo} directly.
      */
     static @NonNull NftRunner forServer(@NonNull Row server) {
-        if (ServerModel.MODE_SSH.equals(server.get(ServerModel.MODE))) {
+        // The ssh LANE, not the docker transport mode: an Incus host reached over https
+        // is MODE local by construction (incus_url is its transport) and still runs its
+        // workloads on a machine whose kernel we must be able to read.
+        if (ServerModel.hasSshLane(server)) {
             return (args, stdin) -> {
                 List<String> argv = new ArrayList<>(HostKeys.sshArgv(server,
                     List.of("sudo", "-n", "--", "nft")));

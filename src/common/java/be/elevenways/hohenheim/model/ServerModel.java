@@ -169,6 +169,14 @@ public class ServerModel extends Model {
      * AIDEV-NOTE: populated since the pinning wave (M057). An operator who cannot SEE a
      * fingerprint can never notice it changed, so this is displayed on the host form and
      * is the phrase the confirm/re-pin ceremonies make the operator type.
+     *
+     * AIDEV-NOTE: SSH ONLY since M074. This column and its four siblings used to be
+     * shared with the Incus TLS ceremony, which meant one column was the authority for
+     * two independent trust relationships -- it bit twice (the backup lane needed a
+     * {@code MODE_SSH && !isIncus} guard so a certificate PEM could not reach the
+     * known_hosts writer, and an Incus host could not hold an ssh admin lane at all
+     * because its TLS material occupied the slot). The Incus side now lives in
+     * {@link #INCUS_SERVER_CERT} and friends; see {@code HostTrustSlot}.
      */
     public static final StringField HOST_KEY_FINGERPRINT = SCHEMA.addField(
         StringField.builder().name("host_key_fingerprint").nullable(true).build());
@@ -211,9 +219,48 @@ public class ServerModel extends Model {
      * The per-host client PRIVATE key; encrypted at rest and never rendered. One key per
      * host, so a rotated or leaked credential is scoped to one machine instead of every
      * host the controller account can reach.
+     *
+     * AIDEV-NOTE: SSH ONLY since M074, like {@link #HOST_KEY} -- an Incus host's client
+     * CERTIFICATE lives in {@link #INCUS_CLIENT_KEY}. The two cannot share a column
+     * because an Incus host now legitimately holds both at once.
      */
     public static final TextField IDENTITY_PRIVATE_KEY = SCHEMA.addField(
         TextField.builder().name("identity_private_key").nullable(true)
+            .secret().encrypted().build());
+
+    // -- the Incus TLS trust relationship, INDEPENDENT of the ssh one above ----
+
+    /**
+     * The PINNED Incus server certificate (PEM) the https transport verifies against;
+     * null means unpinned, and an unpinned https Incus host is not connectable at all.
+     * The exact twin of {@link #HOST_KEY} for a different wire.
+     */
+    public static final TextField INCUS_SERVER_CERT = SCHEMA.addField(
+        TextField.builder().name("incus_server_cert").nullable(true).build());
+
+    /** The operator-facing digest of {@link #INCUS_SERVER_CERT} ({@code incus info}'s hex). */
+    public static final StringField INCUS_SERVER_CERT_FINGERPRINT = SCHEMA.addField(
+        StringField.builder().name("incus_server_cert_fingerprint").nullable(true).build());
+
+    /** Whether an operator confirmed {@link #INCUS_SERVER_CERT_FINGERPRINT} out of band. */
+    public static final BooleanField INCUS_SERVER_CERT_VERIFIED = SCHEMA.addField(
+        BooleanField.builder("incus_server_cert_verified").defaultValue(false).build());
+
+    /** When {@link #INCUS_SERVER_CERT} was pinned (or re-pinned). */
+    public static final DateTimeField INCUS_SERVER_CERT_PINNED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("incus_server_cert_pinned_at").build());
+
+    /** The certificate a rescan saw the daemon OFFER while it disagreed with the pin. */
+    public static final TextField INCUS_SERVER_CERT_OFFERED = SCHEMA.addField(
+        TextField.builder().name("incus_server_cert_offered").nullable(true).build());
+
+    /** The per-host client CERTIFICATE an operator enrolls on the daemon's trust store. */
+    public static final TextField INCUS_CLIENT_CERT = SCHEMA.addField(
+        TextField.builder().name("incus_client_cert").nullable(true).build());
+
+    /** The per-host client certificate's PRIVATE key; encrypted at rest, never rendered. */
+    public static final TextField INCUS_CLIENT_KEY = SCHEMA.addField(
+        TextField.builder().name("incus_client_key").nullable(true)
             .secret().encrypted().build());
 
     /** The controller version that last probed this host (compatibility-window bookkeeping). */
@@ -357,6 +404,24 @@ public class ServerModel extends Model {
     public static boolean isIncusHttps(@NonNull Row server) {
         String url = server.get(INCUS_URL);
         return isIncus(server) && url != null && url.trim().startsWith("https://");
+    }
+
+    /**
+     * Whether this host declares an ssh ADMIN lane: a shell on the machine itself,
+     * independent of what daemon it runs.
+     *
+     * AIDEV-NOTE: {@code ssh_target} is THE single authority for "there is a shell we can
+     * reach", deliberately not {@link #MODE}. MODE is the DOCKER transport discriminator
+     * ({@code local} vs {@code ssh}) and the host form stamps it from the RUNTIME, so an
+     * Incus host is always {@code local} there and could never declare a shell through
+     * it. For a docker host the two agree by construction: the form requires an
+     * ssh_target for a docker host (mode ssh) and the reserved {@code local} row carries
+     * none. This lane is what lets {@code IncusKernelIsolation} read the DAEMON HOST's
+     * nftables for a host addressed over https.
+     */
+    public static boolean hasSshLane(@NonNull Row server) {
+        String target = server.get(SSH_TARGET);
+        return target != null && !target.isBlank();
     }
 
     /**

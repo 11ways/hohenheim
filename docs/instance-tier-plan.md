@@ -3348,20 +3348,64 @@ the layer we can close it. What was established, in order:
   whose kernel cannot be READ is a different case and is never stopped -- it is
   reported unverifiable every sweep, because refusing to answer is not evidence
   of a leak.
-- OPEN, stated as open: an Incus daemon addressed over https has NO product
-  shell lane on its host record (its ssh columns carry the daemon's TLS
-  material), so kernel truth is unavailable for a remote Incus host today and
-  those hosts' isolation is UNCONFIRMED rather than verified. A local
-  unix-socket daemon is fully covered. Giving the Incus host record its own
-  pinned ssh admin lane is the follow-up that closes it; until then the live
-  test injects the lane through the documented test seam, which is why the
-  mechanism is proven against a real kernel but the remote production path is
-  not yet.
+- CLOSED 2026-08-05 by the trust-split wave below (was: OPEN -- an https Incus
+  daemon had no product shell lane, so its kernel truth was unavailable and the
+  live test had to inject the lane through the test seam).
   NOT in slice 1 (later slices): framebuffer console + plumage viewer,
   Windows prepared templates, host drain / cold migration, the closed
   Proxmox-use inventory, and any admin/tenant UI for device editing (the
   mechanism's wired consumers are deploy-reconcile + destroy-cleanup + the
   service lane).
+
+STATUS (2026-08-05, trust-split wave): the remote-host gap the kernel-truth wave
+left OPEN is closed, and the isolation sweep now verifies daystrom through the
+PRODUCTION path. What was established:
+
+- ROOT CAUSE was an overloaded column, not a missing feature. `servers.host_key`
+  (+ fingerprint/verified/pinned_at/offered) and `identity_public_key`/
+  `identity_private_key` held EITHER ssh material (docker host) OR Incus TLS
+  material (incus host). One column cannot be the authority for two independent
+  trust relationships, and it had already bitten twice: the backup gate carried
+  a `MODE_SSH && !isIncus` guard purely to keep a certificate PEM out of the
+  known_hosts writer, and an Incus host could not hold an ssh admin lane at all
+  because its certificate occupied the slot that lane needed.
+- SHAPE: M074 gives the Incus TLS relationship its own seven columns
+  (`incus_server_cert*`, `incus_client_cert`, `incus_client_key`) and leaves the
+  ssh columns meaning what their docblocks always said. `HostTrustSlot` (common)
+  names the two slots; `HostPins` is the one state machine parameterised over a
+  slot, so the ceremonies still cannot drift apart but cannot write into each
+  other's columns either. A host now holds BOTH at once, which is what an Incus
+  host needs.
+- The ssh admin lane walks the SAME ceremony, not a weaker one: scan, out-of-band
+  fingerprint confirmation, quarantine on change, per-host client key,
+  `HostKeys.sshArgv` for every argv. `ServerModel.hasSshLane` (ssh_target
+  non-blank) is the single authority for "there is a shell", deliberately not
+  MODE -- MODE is the docker transport discriminator and the host form stamps it
+  from the runtime, so an Incus host is always `local` there.
+- OPTIONAL by design: `IncusKernelIsolation.available()` answers true only for a
+  lane that is declared AND pinned AND confirmed AND unquarantined. Without one,
+  the host keeps working for everything else and is reported UNVERIFIABLE every
+  sweep -- refusing to answer is still not evidence of a leak. A non-required
+  `kernel_isolation_lane` preflight check now says so on the record instead of
+  only in a log line.
+- EXISTING ROWS: the pin half moves losslessly (plaintext columns). The incus
+  CLIENT KEY does not and is cleared: zenit binds table+column into the
+  encrypted envelope's AAD, so a copied envelope would not decrypt -- by design,
+  since that binding is what stops a cross-column graft. Such a host lands on the
+  typed NO_IDENTITY refusal whose recovery is the existing two-click ceremony
+  (rotate identity, paste a trust token).
+- PROVEN ON DAYSTROM THROUGH THE PRODUCTION PATH: IncusKernelIsolationLiveTest
+  installs no test seam. The fixture performs only operator acts (put the
+  product-minted public key in authorized_keys, read the host's own
+  `ssh-keygen -lf` digest for the out-of-band comparison); every kernel read
+  travels `HostKeys.sshArgv` -> `NftRunner.forServer` -> `sudo -n -- nft`. The
+  journey asserts lane-less = unavailable + named refusal, unconfirmed =
+  unavailable, then drives the same divergence (drop the instance's `bridge
+  incus` chains while it runs) and requires `VerifyIncusIsolation.sweep()` --
+  the production sweep, not the raw verifier -- to repair the repairable one and
+  STOP the unrepairable one.
+- The test seam survives for what it is now good for: pointing the verifier at a
+  kernel the record does not name. Nothing in the daystrom proof uses it.
 
 Phase gate: provision Linux from cloud-init and Windows from a prepared template;
 attach/resize a disk and NIC under quota; enforce the network policy; snapshot;

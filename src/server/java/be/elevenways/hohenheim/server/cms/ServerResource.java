@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 
+import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -45,6 +46,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 
 /**
@@ -91,6 +96,20 @@ public final class ServerResource extends RowResource {
         .visibleIn(EditView.EDIT)
         .build();
 
+    /** The Incus daemon's PINNED server certificate, a different trust relationship. */
+    private static final StringField INCUS_CERT_STATE = StringField.builder("incus_cert_state")
+        .label(HohenheimFormCopy.label("incus_cert_state"))
+        .help(HohenheimFormCopy.help("incus_cert_state"))
+        .visibleIn(EditView.EDIT)
+        .build();
+
+    /** The client CERTIFICATE an operator enrolls on the daemon (the ssh key's twin). */
+    private static final StringField INCUS_CLIENT_CERT = StringField.builder("incus_client_cert")
+        .label(HohenheimFormCopy.label("incus_client_cert"))
+        .help(HohenheimFormCopy.help("incus_client_cert"))
+        .visibleIn(EditView.EDIT)
+        .build();
+
     /**
      * Write-only: a pasted Incus trust token triggers {@link IncusTrust#enrollWithToken}
      * on save and is never stored -- tokens are one-use and short-lived by design.
@@ -119,6 +138,14 @@ public final class ServerResource extends RowResource {
             .build())
         .add(Computed.of(IDENTITY_PUBLIC_KEY,
                 values -> identityPublicKey(String.valueOf(values.get("name"))))
+            .dependsOn("name")
+            .build())
+        .add(Computed.of(INCUS_CERT_STATE,
+                values -> incusCertState(String.valueOf(values.get("name"))))
+            .dependsOn("name")
+            .build())
+        .add(Computed.of(INCUS_CLIENT_CERT,
+                values -> incusClientCertificate(String.valueOf(values.get("name"))))
             .dependsOn("name")
             .build())
         .add(Computed.of(LIVE_OVERVIEW, values -> serverOverview(String.valueOf(values.get("name"))))
@@ -233,38 +260,72 @@ public final class ServerResource extends RowResource {
     }
 
     /**
-     * The pin as the operator must be able to READ it: which fingerprint we enforce,
+     * The SSH pin as the operator must be able to READ it: which fingerprint we enforce,
      * whether a human ever confirmed it, and -- loudly -- that the host has since offered
-     * a different one.
+     * a different one. An Incus host shows this for its ADMIN lane, which is a different
+     * relationship from its daemon certificate below.
      */
     private @NonNull String hostKeyState(@NonNull String name) {
         Row row = Models.get(ServerModel.class).findByName(name);
-        if (row == null || !ServerModel.requiresPinnedIdentity(row)) {
-            return hostCopy(Microcopy.of("host_key_local"));
+        if (row == null || !ServerModel.hasSshLane(row)) {
+            // An Incus host without a lane is not "local" -- it is a host whose kernel we
+            // cannot read, and the copy says which of the two this is.
+            return hostCopy(Microcopy.of(row != null && ServerModel.isIncus(row)
+                ? "ssh_lane_none" : "host_key_local"));
         }
-        String fingerprint = row.get(ServerModel.HOST_KEY_FINGERPRINT);
-        if (fingerprint == null || fingerprint.isBlank()) {
-            return hostCopy(Microcopy.of("host_key_none"));
-        }
-        String offered = row.get(ServerModel.HOST_KEY_OFFERED);
-        if (offered != null && !offered.isBlank()) {
-            return hostCopy(Microcopy.of("host_key_mismatch_state")
-                .withArg("pinned", fingerprint)
-                .withArg("offered", fingerprintFor(row, offered)));
-        }
-        return hostCopy(Microcopy.of(Boolean.TRUE.equals(row.get(ServerModel.HOST_KEY_VERIFIED))
-            ? "host_key_confirmed" : "host_key_unconfirmed").withArg("fingerprint", fingerprint));
+        return pinState(row, HostTrustSlot.SSH, HostKeys::fingerprintOf,
+            "host_key_none", "host_key_confirmed", "host_key_unconfirmed");
     }
 
-    /** The public half of this host's OWN client key, for the remote's authorized_keys. */
-    private @NonNull String identityPublicKey(@NonNull String name) {
+    /** The Incus daemon's pinned server certificate, read the same way. */
+    private @NonNull String incusCertState(@NonNull String name) {
         Row row = Models.get(ServerModel.class).findByName(name);
-        if (row == null || !ServerModel.requiresPinnedIdentity(row)) {
+        if (row == null || !ServerModel.isIncusHttps(row)) {
             return "";
         }
-        String publicKey = row.get(ServerModel.IDENTITY_PUBLIC_KEY);
+        return pinState(row, HostTrustSlot.INCUS_TLS, IncusTrust::fingerprintOf,
+            "incus_cert_none", "incus_cert_confirmed", "incus_cert_unconfirmed");
+    }
+
+    /** One slot's pin state: unpinned, MISMATCH (loudest), confirmed or unconfirmed. */
+    private @NonNull String pinState(@NonNull Row row, @NonNull HostTrustSlot slot,
+                                     @NonNull UnaryOperator<String> digest,
+                                     @NonNull String noneKey, @NonNull String confirmedKey,
+                                     @NonNull String unconfirmedKey) {
+        String fingerprint = row.get(slot.fingerprint());
+        if (fingerprint == null || fingerprint.isBlank()) {
+            return hostCopy(Microcopy.of(noneKey));
+        }
+        String offered = slot.offeredOf(row);
+        if (!offered.isBlank()) {
+            return hostCopy(Microcopy.of("host_key_mismatch_state")
+                .withArg("pinned", fingerprint)
+                .withArg("offered", digest.apply(offered)));
+        }
+        return hostCopy(Microcopy.of(Boolean.TRUE.equals(row.get(slot.verified()))
+            ? confirmedKey : unconfirmedKey).withArg("fingerprint", fingerprint));
+    }
+
+    /** The public half of this host's OWN ssh key, for the remote's authorized_keys. */
+    private @NonNull String identityPublicKey(@NonNull String name) {
+        Row row = Models.get(ServerModel.class).findByName(name);
+        if (row == null || !ServerModel.hasSshLane(row)) {
+            return "";
+        }
+        String publicKey = row.get(HostTrustSlot.SSH.clientPublic());
         return publicKey != null && !publicKey.isBlank() ? publicKey
             : hostCopy(Microcopy.of("identity_missing"));
+    }
+
+    /** This host's client CERTIFICATE, for the daemon's trust store. */
+    private @NonNull String incusClientCertificate(@NonNull String name) {
+        Row row = Models.get(ServerModel.class).findByName(name);
+        if (row == null || !ServerModel.isIncusHttps(row)) {
+            return "";
+        }
+        String certificate = row.get(HostTrustSlot.INCUS_TLS.clientPublic());
+        return certificate != null && !certificate.isBlank() ? certificate
+            : hostCopy(Microcopy.of("incus_client_missing"));
     }
 
     /** The detail page's LIVE overview; the probe persists its typed outcome either way. */
@@ -323,13 +384,65 @@ public final class ServerResource extends RowResource {
 
     // -- host lifecycle actions ----------------------------------------------
 
+    /**
+     * ONE trust relationship as the admin surface sees it: which slot it pins, when it
+     * applies to a row, the ceremony calls, and its own copy. A host record can carry
+     * TWO of these at once -- an Incus daemon's TLS certificate and the ssh admin lane
+     * kernel-truth verification reads through -- so every action below is built per lane
+     * instead of branching on the runtime inside one shared action.
+     *
+     * AIDEV-NOTE: this replaced a single quartet that dispatched on {@code isIncus}
+     * inside its handlers while wearing ssh-only copy ("Scan host key", "the SSH host key
+     * this machine presents") on an Incus host. Two relationships, two action sets, two
+     * vocabularies -- the mechanism is zenit-cms {@code RowAction}, no bespoke page.
+     */
+    private record TrustLane(@NonNull String id, @NonNull HostTrustSlot slot,
+                             @NonNull Predicate<Row> applies,
+                             @NonNull Function<Row, HostKeys.ScanResult> scan,
+                             @NonNull Consumer<Row> confirm,
+                             @NonNull Consumer<Row> repin,
+                             @NonNull Consumer<Row> rotate,
+                             @NonNull UnaryOperator<String> digest,
+                             @NonNull LaneCopy copy) {
+    }
+
+    /** The base microcopy keys of one lane; hints/bodies follow by suffix. */
+    private record LaneCopy(@NonNull String scan, @NonNull String confirm,
+                            @NonNull String repin, @NonNull String rotate,
+                            @NonNull String pinnedToast, @NonNull String unchangedToast,
+                            @NonNull String confirmedToast, @NonNull String repinnedToast,
+                            @NonNull String rotatedToast, @NonNull String mismatch) {
+    }
+
+    /** The ssh host-key lane: a docker host's transport, an Incus host's admin shell. */
+    private static final TrustLane SSH_LANE = new TrustLane("host_key", HostTrustSlot.SSH,
+        ServerModel::hasSshLane, HostKeys::scanAndPin, HostKeys::confirm, HostKeys::repin,
+        HostKeys::rotateIdentity, HostKeys::fingerprintOf,
+        new LaneCopy("scan_host_key", "confirm_host_key", "repin_host_key", "rotate_identity",
+            "host_key_pinned_toast", "host_key_unchanged_toast", "host_key_confirmed_toast",
+            "host_key_repinned_toast", "identity_rotated_toast", "host_key_mismatch"));
+
+    /** The Incus daemon's TLS lane: pinned server certificate + enrolled client certificate. */
+    private static final TrustLane INCUS_LANE = new TrustLane("incus_cert",
+        HostTrustSlot.INCUS_TLS, ServerModel::isIncusHttps, IncusTrust::scanAndPin,
+        IncusTrust::confirm, IncusTrust::repin, IncusTrust::rotateIdentity,
+        IncusTrust::fingerprintOf,
+        new LaneCopy("scan_incus_cert", "confirm_incus_cert", "repin_incus_cert",
+            "rotate_incus_identity", "incus_cert_pinned_toast", "incus_cert_unchanged_toast",
+            "incus_cert_confirmed_toast", "incus_cert_repinned_toast",
+            "incus_identity_rotated_toast", "incus_cert_mismatch"));
+
+    private static final List<TrustLane> TRUST_LANES = List.of(INCUS_LANE, SSH_LANE);
+
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(this.scanHostKeyAction());
-        actions.add(this.confirmHostKeyAction());
-        actions.add(this.repinHostKeyAction());
-        actions.add(this.rotateIdentityAction());
+        for (TrustLane lane : TRUST_LANES) {
+            actions.add(this.scanAction(lane));
+            actions.add(this.confirmAction(lane));
+            actions.add(this.repinAction(lane));
+            actions.add(this.rotateAction(lane));
+        }
         actions.add(this.preflightAction());
         actions.add(this.admitAction());
         actions.add(this.cordonAction());
@@ -337,57 +450,39 @@ public final class ServerResource extends RowResource {
         return actions;
     }
 
-    /** Hosts with a WIRE identity to pin: docker-over-ssh and incus-over-https. */
-    private static boolean isRemote(@NonNull Row row) {
-        return ServerModel.requiresPinnedIdentity(row);
-    }
-
-    /** The runtime-appropriate scan (ssh-keyscan, or a TLS certificate capture). */
-    private static HostKeys.@NonNull ScanResult scanFor(@NonNull Row row) {
-        return ServerModel.isIncus(row) ? IncusTrust.scanAndPin(row) : HostKeys.scanAndPin(row);
-    }
-
-    /** The runtime-appropriate digest of an offered key line / certificate PEM. */
-    private static @NonNull String fingerprintFor(@NonNull Row row, @NonNull String offered) {
-        return ServerModel.isIncus(row) ? IncusTrust.fingerprintOf(offered)
-            : HostKeys.fingerprintOf(offered);
-    }
-
-    private static boolean isPinned(@NonNull Row row) {
-        String pinned = row.get(ServerModel.HOST_KEY);
-        return pinned != null && !pinned.isBlank();
+    private static @NonNull Microcopy serverCopy(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", "server");
     }
 
     /**
-     * Ask the host which key it offers and pin it if there is nothing to contradict.
-     * A DIFFERENT key never re-pins here: it is stored as evidence and the host is
-     * quarantined, because "reconnect and it healed itself" is the exact behaviour a
-     * man-in-the-middle needs.
+     * Ask the host which identity it offers on this lane and pin it if there is nothing
+     * to contradict. A DIFFERENT one never re-pins here: it is stored as evidence and the
+     * host is quarantined, because "reconnect and it healed itself" is the exact behaviour
+     * a man-in-the-middle needs.
      */
-    private @NonNull RowAction<Row> scanHostKeyAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "scan_host_key"))
-            .label(Microcopy.of("scan_host_key").withFilter("scope", "server"))
-            .description(Microcopy.of("scan_host_key_hint").withFilter("scope", "server"))
+    private @NonNull RowAction<Row> scanAction(@NonNull TrustLane lane) {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "scan_" + lane.id()))
+            .label(serverCopy(lane.copy().scan()))
+            .description(serverCopy(lane.copy().scan() + "_hint"))
             .icon(Icon.of("fingerprint"))
-            .visibleFor((row, ctx) -> isRemote(row))
+            .visibleFor((row, ctx) -> lane.applies().test(row))
             .handler((row, ctx) -> {
-                ensureIdentityFor(row);
-                HostKeys.ScanResult result = scanFor(row);
+                ensureLaneIdentity(row, lane);
+                HostKeys.ScanResult result = lane.scan().apply(row);
                 if (result.outcome() == HostKeys.ScanOutcome.MISMATCH) {
                     // Loud and red. The quarantine is already persisted by scanAndPin;
                     // this is the operator-facing half of the same event.
                     // AIDEV-NOTE: a thrown Violations is the only ERROR-level action
                     // outcome zenit-cms offers -- CmsActionResult.Refresh carries a
                     // success toast only, and errorToast() does not refresh.
-                    throw Violations.ofForm(CmsSupport.violationText("host_key_mismatch")
+                    throw Violations.ofForm(CmsSupport.violationText(lane.copy().mismatch())
                         .withArg("name", String.valueOf((Object) row.get(ServerModel.NAME)))
                         .withArg("pinned", String.valueOf(result.previous()))
                         .withArg("offered", result.fingerprint()));
                 }
-                return CmsActionResult.refreshWithToast(Microcopy.of(
+                return CmsActionResult.refreshWithToast(serverCopy(
                         result.outcome() == HostKeys.ScanOutcome.PINNED
-                            ? "host_key_pinned_toast" : "host_key_unchanged_toast")
-                    .withFilter("scope", "server")
+                            ? lane.copy().pinnedToast() : lane.copy().unchangedToast())
                     .withArg("fingerprint", result.fingerprint()));
             })
             .build();
@@ -397,116 +492,102 @@ public final class ServerResource extends RowResource {
      * The operator states, by typing the fingerprint, that they compared it against what
      * the host's own administrator reports. Nothing else in the product sets this flag.
      */
-    private @NonNull RowAction<Row> confirmHostKeyAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "confirm_host_key"))
-            .label(Microcopy.of("confirm_host_key").withFilter("scope", "server"))
-            .description(Microcopy.of("confirm_host_key_hint").withFilter("scope", "server"))
+    private @NonNull RowAction<Row> confirmAction(@NonNull TrustLane lane) {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "confirm_" + lane.id()))
+            .label(serverCopy(lane.copy().confirm()))
+            .description(serverCopy(lane.copy().confirm() + "_hint"))
             .icon(Icon.of("shield-halved"))
-            .visibleFor((row, ctx) -> isRemote(row) && isPinned(row)
-                && !Boolean.TRUE.equals(row.get(ServerModel.HOST_KEY_VERIFIED)))
+            .visibleFor((row, ctx) -> lane.applies().test(row) && lane.slot().isPinned(row)
+                && !Boolean.TRUE.equals(row.get(lane.slot().verified())))
             .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("confirm_host_key").withFilter("scope", "server"))
-                .body(Microcopy.of("confirm_host_key_generic").withFilter("scope", "server"))
+                .title(serverCopy(lane.copy().confirm()))
+                .body(serverCopy(lane.copy().confirm() + "_generic"))
                 .build())
             .dynamicConfirmation(row -> ConfirmationSpec.builder()
-                .title(Microcopy.of("confirm_host_key").withFilter("scope", "server"))
-                .body(Microcopy.of("confirm_host_key_body").withFilter("scope", "server")
+                .title(serverCopy(lane.copy().confirm()))
+                .body(serverCopy(lane.copy().confirm() + "_body")
                     .withArg("name", row.get(ServerModel.NAME))
-                    .withArg("fingerprint", row.get(ServerModel.HOST_KEY_FINGERPRINT)))
-                .requireTypedConfirmation(row.get(ServerModel.HOST_KEY_FINGERPRINT))
+                    .withArg("fingerprint", row.get(lane.slot().fingerprint())))
+                .requireTypedConfirmation(row.get(lane.slot().fingerprint()))
                 .build())
             .handler((row, ctx) -> {
-                HostKeys.confirm(row);
-                return CmsActionResult.refreshWithToast(
-                    Microcopy.of("host_key_confirmed_toast").withFilter("scope", "server")
-                        .withArg("name", row.get(ServerModel.NAME)));
+                lane.confirm().accept(row);
+                return CmsActionResult.refreshWithToast(serverCopy(lane.copy().confirmedToast())
+                    .withArg("name", row.get(ServerModel.NAME)));
             })
             .build();
     }
 
     /**
-     * Adopt the key the host now offers -- the explicit operator act a mismatch demands.
-     * Destructive on purpose: the confirmation names both fingerprints and asks for the
-     * NEW one to be typed, and the re-pinned host lands unverified, unpreflighted and
-     * unadmitted.
+     * Adopt the identity the host now offers -- the explicit operator act a mismatch
+     * demands. Destructive on purpose: the confirmation names both fingerprints and asks
+     * for the NEW one to be typed, and the re-pinned host lands unverified, unpreflighted
+     * and unadmitted.
      */
-    private @NonNull RowAction<Row> repinHostKeyAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "repin_host_key"))
-            .label(Microcopy.of("repin_host_key").withFilter("scope", "server"))
-            .description(Microcopy.of("repin_host_key_hint").withFilter("scope", "server"))
+    private @NonNull RowAction<Row> repinAction(@NonNull TrustLane lane) {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "repin_" + lane.id()))
+            .label(serverCopy(lane.copy().repin()))
+            .description(serverCopy(lane.copy().repin() + "_hint"))
             .icon(Icon.of("triangle-exclamation"))
             .style(ActionStyle.DESTRUCTIVE)
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> {
-                String offered = row.get(ServerModel.HOST_KEY_OFFERED);
-                return isRemote(row) && offered != null && !offered.isBlank();
-            })
+            .visibleFor((row, ctx) -> lane.applies().test(row)
+                && !lane.slot().offeredOf(row).isBlank())
             .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("repin_host_key").withFilter("scope", "server"))
-                .body(Microcopy.of("repin_host_key_generic").withFilter("scope", "server"))
+                .title(serverCopy(lane.copy().repin()))
+                .body(serverCopy(lane.copy().repin() + "_generic"))
                 .style(ActionStyle.DESTRUCTIVE)
                 .build())
             .dynamicConfirmation(row -> {
-                String offered = row.get(ServerModel.HOST_KEY_OFFERED);
+                String offered = lane.slot().offeredOf(row);
                 ConfirmationSpec.Builder builder = ConfirmationSpec.builder()
-                    .title(Microcopy.of("repin_host_key").withFilter("scope", "server"))
+                    .title(serverCopy(lane.copy().repin()))
                     .style(ActionStyle.DESTRUCTIVE);
-                if (offered == null || offered.isBlank()) {
-                    return builder.body(Microcopy.of("repin_host_key_generic")
-                        .withFilter("scope", "server")).build();
+                if (offered.isBlank()) {
+                    return builder.body(serverCopy(lane.copy().repin() + "_generic")).build();
                 }
-                String fingerprint = fingerprintFor(row, offered);
+                String fingerprint = lane.digest().apply(offered);
                 return builder
-                    .body(Microcopy.of("repin_host_key_body").withFilter("scope", "server")
+                    .body(serverCopy(lane.copy().repin() + "_body")
                         .withArg("name", row.get(ServerModel.NAME))
-                        .withArg("pinned", row.get(ServerModel.HOST_KEY_FINGERPRINT))
+                        .withArg("pinned", row.get(lane.slot().fingerprint()))
                         .withArg("offered", fingerprint))
                     .requireTypedConfirmation(fingerprint)
                     .build();
             })
             .handler((row, ctx) -> {
-                if (ServerModel.isIncus(row)) {
-                    IncusTrust.repin(row);
-                } else {
-                    HostKeys.repin(row);
-                }
-                return CmsActionResult.refreshWithToast(
-                    Microcopy.of("host_key_repinned_toast").withFilter("scope", "server")
-                        .withArg("fingerprint", row.get(ServerModel.HOST_KEY_FINGERPRINT)));
+                lane.repin().accept(row);
+                return CmsActionResult.refreshWithToast(serverCopy(lane.copy().repinnedToast())
+                    .withArg("fingerprint", row.get(lane.slot().fingerprint())));
             })
             .build();
     }
 
-    /** Mint a fresh per-host client key; the old one stops working immediately. */
-    private @NonNull RowAction<Row> rotateIdentityAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "rotate_host_identity"))
-            .label(Microcopy.of("rotate_identity").withFilter("scope", "server"))
-            .description(Microcopy.of("rotate_identity_hint").withFilter("scope", "server"))
+    /** Mint a fresh per-host client credential; the old one stops working immediately. */
+    private @NonNull RowAction<Row> rotateAction(@NonNull TrustLane lane) {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "rotate_" + lane.id()))
+            .label(serverCopy(lane.copy().rotate()))
+            .description(serverCopy(lane.copy().rotate() + "_hint"))
             .icon(Icon.of("key"))
             .style(ActionStyle.DESTRUCTIVE)
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> isRemote(row))
+            .visibleFor((row, ctx) -> lane.applies().test(row))
             .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("rotate_identity").withFilter("scope", "server"))
-                .body(Microcopy.of("rotate_identity_generic").withFilter("scope", "server"))
+                .title(serverCopy(lane.copy().rotate()))
+                .body(serverCopy(lane.copy().rotate() + "_generic"))
                 .style(ActionStyle.DESTRUCTIVE)
                 .build())
             .dynamicConfirmation(row -> ConfirmationSpec.builder()
-                .title(Microcopy.of("rotate_identity").withFilter("scope", "server"))
-                .body(Microcopy.of("rotate_identity_body").withFilter("scope", "server")
+                .title(serverCopy(lane.copy().rotate()))
+                .body(serverCopy(lane.copy().rotate() + "_body")
                     .withArg("name", row.get(ServerModel.NAME)))
                 .style(ActionStyle.DESTRUCTIVE)
                 .requireTypedConfirmation(row.get(ServerModel.NAME))
                 .build())
             .handler((row, ctx) -> {
-                if (ServerModel.isIncus(row)) {
-                    IncusTrust.rotateIdentity(row);
-                } else {
-                    HostKeys.rotateIdentity(row);
-                }
-                return CmsActionResult.refreshWithToast(
-                    Microcopy.of("identity_rotated_toast").withFilter("scope", "server")
-                        .withArg("name", row.get(ServerModel.NAME)));
+                lane.rotate().accept(row);
+                return CmsActionResult.refreshWithToast(serverCopy(lane.copy().rotatedToast())
+                    .withArg("name", row.get(ServerModel.NAME)));
             })
             .build();
     }
@@ -656,13 +737,23 @@ public final class ServerResource extends RowResource {
         return text.isEmpty() ? null : text;
     }
 
-    /** Mint the runtime-appropriate client identity when the record has none. */
+    /** Mint the client credential of every lane this record declares and lacks. */
     private static void ensureIdentityFor(@NonNull Row server) {
-        if (ServerModel.isIncus(server)) {
-            IncusTrust.ensureIdentity(server);
-        } else {
-            HostKeys.ensureIdentity(server);
+        for (TrustLane lane : TRUST_LANES) {
+            ensureLaneIdentity(server, lane);
         }
+    }
+
+    /** Mint ONE lane's client credential when the record declares that lane and has none. */
+    private static void ensureLaneIdentity(@NonNull Row server, @NonNull TrustLane lane) {
+        if (!lane.applies().test(server)) {
+            return;
+        }
+        String existing = server.get(lane.slot().clientPrivate());
+        if (existing != null && !existing.isBlank()) {
+            return;
+        }
+        lane.rotate().accept(server);
     }
 
     /**
@@ -678,7 +769,7 @@ public final class ServerResource extends RowResource {
         if (!ServerModel.isIncusHttps(server)) {
             throw Violations.ofForm(CmsSupport.violationText("incus_token_needs_https"));
         }
-        if (!isPinned(server)) {
+        if (!HostTrustSlot.INCUS_TLS.isPinned(server)) {
             IncusTrust.scanAndPin(server);
         }
         IncusTrust.enrollWithToken(server, token);
@@ -704,6 +795,8 @@ public final class ServerResource extends RowResource {
         if (name == null || name.isEmpty() || !name.matches("[a-z0-9][a-z0-9-]*")) {
             throw Violations.ofField("name", name, CmsSupport.violationText("name_format"));
         }
+        Object targetValue = coerced.get("ssh_target");
+        String target = targetValue != null ? String.valueOf(targetValue).trim() : "";
         if (ServerModel.RUNTIME_INCUS.equals(runtimeOf(coerced, existing))) {
             Object urlValue = coerced.get("incus_url");
             String url = urlValue != null ? String.valueOf(urlValue).trim()
@@ -715,10 +808,15 @@ public final class ServerResource extends RowResource {
                 throw Violations.ofField("incus_url", url,
                     CmsSupport.violationText("incus_url_format"));
             }
+            // The admin lane is OPTIONAL on an Incus host (the daemon is driven over
+            // https), but a declared one is held to the same spelling as anywhere else:
+            // a target that could be read as an ssh option must never reach an argv.
+            if (!target.isEmpty() && !SSH_TARGET.matcher(target).matches()) {
+                throw Violations.ofField("ssh_target", target,
+                    CmsSupport.violationText("ssh_target_format"));
+            }
             return;
         }
-        Object targetValue = coerced.get("ssh_target");
-        String target = targetValue != null ? String.valueOf(targetValue).trim() : "";
         if (target.isEmpty() || !SSH_TARGET.matcher(target).matches()) {
             throw Violations.ofField("ssh_target", target, CmsSupport.violationText("ssh_target_format"));
         }

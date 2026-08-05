@@ -6713,5 +6713,125 @@
   "device_detach_failed": {
     "text": "Detaching '{$device}' from {$name} failed: {$reason}",
     "scope": "violations"
+  },
+  "scan_incus_cert": {
+    "text": "Scan server certificate",
+    "scope": "server"
+  },
+  "scan_incus_cert_hint": {
+    "text": "Read the TLS certificate this Incus daemon presents and pin it. A certificate that disagrees with the pin is never adopted here.",
+    "scope": "server"
+  },
+  "incus_cert_pinned_toast": {
+    "text": "Pinned {$fingerprint}. Compare it with the certificate_fingerprint 'incus info' prints on the host, then confirm it.",
+    "scope": "server"
+  },
+  "incus_cert_unchanged_toast": {
+    "text": "The daemon still presents the pinned certificate ({$fingerprint}).",
+    "scope": "server"
+  },
+  "confirm_incus_cert": {
+    "text": "Confirm certificate fingerprint",
+    "scope": "server"
+  },
+  "confirm_incus_cert_hint": {
+    "text": "Record that you compared the pinned certificate fingerprint out of band.",
+    "scope": "server"
+  },
+  "confirm_incus_cert_generic": {
+    "text": "Confirm this daemon's pinned certificate fingerprint?",
+    "scope": "server"
+  },
+  "confirm_incus_cert_body": {
+    "text": "Type the fingerprint to confirm you compared {$fingerprint} for {$name} against the certificate_fingerprint 'incus info' prints on the host itself. Until you do, this host cannot be admitted for placement.",
+    "scope": "server"
+  },
+  "incus_cert_confirmed_toast": {
+    "text": "Server certificate of {$name} confirmed.",
+    "scope": "server"
+  },
+  "repin_incus_cert": {
+    "text": "Re-pin changed certificate",
+    "scope": "server"
+  },
+  "repin_incus_cert_hint": {
+    "text": "Adopt the certificate this daemon now presents. Only do this once you know why it changed.",
+    "scope": "server"
+  },
+  "repin_incus_cert_generic": {
+    "text": "Adopt the certificate this daemon now presents?",
+    "scope": "server"
+  },
+  "repin_incus_cert_body": {
+    "text": "{$name} presented a DIFFERENT server certificate. Pinned: {$pinned}. Offered: {$offered}. If you did not deliberately replace the daemon's certificate, this is what a man-in-the-middle looks like and you must not continue. Type the offered fingerprint to adopt it; the host then has to be confirmed, preflighted and admitted again.",
+    "scope": "server"
+  },
+  "incus_cert_repinned_toast": {
+    "text": "Re-pinned {$fingerprint}. The host is unconfirmed and unadmitted again.",
+    "scope": "server"
+  },
+  "rotate_incus_identity": {
+    "text": "Rotate client certificate",
+    "scope": "server"
+  },
+  "rotate_incus_identity_hint": {
+    "text": "Generate a new client certificate for this daemon. The old one keeps working until you remove its trust entry there.",
+    "scope": "server"
+  },
+  "rotate_incus_identity_generic": {
+    "text": "Generate a new client certificate for this daemon?",
+    "scope": "server"
+  },
+  "rotate_incus_identity_body": {
+    "text": "A new client certificate is generated for {$name}. Hohenheim cannot drive the daemon again until the new certificate is enrolled there (paste a trust token, or run incus config trust add-certificate). Type the host name to continue.",
+    "scope": "server"
+  },
+  "incus_identity_rotated_toast": {
+    "text": "New client certificate generated for {$name}. Enroll it on the daemon.",
+    "scope": "server"
+  },
+  "incus_cert_none": {
+    "text": "Not pinned. Scan the server certificate before this daemon can be reached at all.",
+    "scope": "server"
+  },
+  "incus_cert_confirmed": {
+    "text": "{$fingerprint} (confirmed)",
+    "scope": "server"
+  },
+  "incus_cert_unconfirmed": {
+    "text": "{$fingerprint} (NOT confirmed -- compare it against incus info on the host and confirm it)",
+    "scope": "server"
+  },
+  "incus_client_missing": {
+    "text": "No client certificate yet.",
+    "scope": "server"
+  },
+  "incus_cert_state": [
+    {
+      "text": "Server certificate",
+      "scope": "field"
+    },
+    {
+      "text": "The Incus server certificate fingerprint Hohenheim enforces on every https connection to this daemon.",
+      "scope": "help"
+    }
+  ],
+  "incus_client_cert": [
+    {
+      "text": "Hohenheim client certificate",
+      "scope": "field"
+    },
+    {
+      "text": "Enroll this certificate on the daemon (incus config trust add-certificate). It is unique to this host, so revoking it affects nothing else.",
+      "scope": "help"
+    }
+  ],
+  "incus_cert_mismatch": {
+    "text": "{$name} presented a different Incus server certificate (pinned {$pinned}, offered {$offered}). Nothing was re-pinned and the host is blocked; verify out of band before adopting the new certificate.",
+    "scope": "violations"
+  },
+  "ssh_lane_none": {
+    "text": "No SSH admin lane. This host runs fine without one, but its workload isolation can only be read from the daemon's own configuration and stays UNCONFIRMED in the kernel. To enable kernel verification, set an SSH target, scan the host key and confirm it.",
+    "scope": "server"
   }
 }

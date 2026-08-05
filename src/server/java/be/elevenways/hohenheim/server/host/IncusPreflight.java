@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.incus.IncusClient;
+import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusClients;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -46,8 +47,42 @@ public final class IncusPreflight {
                 outcome.kind().token + ": " + outcome.detail())),
                 Map.of(), false, Instant.now(), outcome);
         }
+        report = withKernelLaneCheck(server, report);
         HostPreflight.store(String.valueOf((Object) server.get(ServerModel.NAME)), report);
         return report;
+    }
+
+    /**
+     * Report whether kernel-truth isolation verification can READ this host at all, so
+     * "UNCONFIRMED every sweep" is visible on the record instead of only in a log line.
+     *
+     * AIDEV-NOTE: NON-required on purpose. The ssh admin lane is optional -- an Incus host
+     * without one runs workloads perfectly well and is merely unverifiable -- so making
+     * this block admission would turn a missing diagnostic into an outage. It warns, and
+     * the warning says exactly what is lost.
+     */
+    private static HostPreflight.@NonNull Report withKernelLaneCheck(
+            @NonNull Row server, HostPreflight.@NonNull Report report) {
+        boolean readable;
+        String detail;
+        try {
+            IncusKernelIsolation isolation = IncusKernelIsolation.forServer(server);
+            readable = isolation.available();
+            detail = readable
+                ? "the daemon host's nftables are readable, so workload isolation is"
+                    + " verified in the kernel every sweep"
+                : "no trusted ssh admin lane on this record, so this host's workload"
+                    + " isolation can only be read from the daemon's own configuration"
+                    + " and stays UNCONFIRMED in the kernel";
+        } catch (RuntimeException unreachable) {
+            readable = false;
+            detail = "could not build the kernel-truth verifier: " + unreachable.getMessage();
+        }
+        List<HostPreflight.Check> checks = new ArrayList<>(report.checks());
+        checks.add(new HostPreflight.Check("kernel_isolation_lane",
+            readable ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_WARN, false, detail));
+        return new HostPreflight.Report(List.copyOf(checks), report.facts(), report.passed(),
+            report.at(), report.daemonFailure());
     }
 
     /** The battery itself, injectable for tests. */

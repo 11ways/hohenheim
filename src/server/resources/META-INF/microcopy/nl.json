@@ -6709,5 +6709,125 @@
   "device_detach_failed": {
     "text": "Afkoppelen van '{$device}' van {$name} is mislukt: {$reason}",
     "scope": "violations"
+  },
+  "scan_incus_cert": {
+    "text": "Servercertificaat scannen",
+    "scope": "server"
+  },
+  "scan_incus_cert_hint": {
+    "text": "Lees het TLS-certificaat dat deze Incus-daemon aanbiedt en pin het vast. Een certificaat dat niet overeenkomt met de pin wordt hier nooit overgenomen.",
+    "scope": "server"
+  },
+  "incus_cert_pinned_toast": {
+    "text": "{$fingerprint} vastgepind. Vergelijk het met de certificate_fingerprint die 'incus info' op de host toont en bevestig het daarna.",
+    "scope": "server"
+  },
+  "incus_cert_unchanged_toast": {
+    "text": "De daemon biedt nog steeds het vastgepinde certificaat aan ({$fingerprint}).",
+    "scope": "server"
+  },
+  "confirm_incus_cert": {
+    "text": "Vingerafdruk van certificaat bevestigen",
+    "scope": "server"
+  },
+  "confirm_incus_cert_hint": {
+    "text": "Leg vast dat je de vastgepinde vingerafdruk buiten dit kanaal om vergeleken hebt.",
+    "scope": "server"
+  },
+  "confirm_incus_cert_generic": {
+    "text": "De vastgepinde vingerafdruk van deze daemon bevestigen?",
+    "scope": "server"
+  },
+  "confirm_incus_cert_body": {
+    "text": "Typ de vingerafdruk om te bevestigen dat je {$fingerprint} voor {$name} vergeleken hebt met de certificate_fingerprint die 'incus info' op de host zelf toont. Tot dan kan deze host niet toegelaten worden voor plaatsing.",
+    "scope": "server"
+  },
+  "incus_cert_confirmed_toast": {
+    "text": "Servercertificaat van {$name} bevestigd.",
+    "scope": "server"
+  },
+  "repin_incus_cert": {
+    "text": "Gewijzigd certificaat opnieuw vastpinnen",
+    "scope": "server"
+  },
+  "repin_incus_cert_hint": {
+    "text": "Neem het certificaat over dat deze daemon nu aanbiedt. Doe dit pas als je weet waarom het veranderd is.",
+    "scope": "server"
+  },
+  "repin_incus_cert_generic": {
+    "text": "Het certificaat overnemen dat deze daemon nu aanbiedt?",
+    "scope": "server"
+  },
+  "repin_incus_cert_body": {
+    "text": "{$name} bood een ANDER servercertificaat aan. Vastgepind: {$pinned}. Aangeboden: {$offered}. Als je het certificaat van de daemon niet bewust vervangen hebt, is dit hoe een man-in-the-middle eruitziet en mag je niet doorgaan. Typ de aangeboden vingerafdruk om het over te nemen; daarna moet de host opnieuw bevestigd, gekeurd en toegelaten worden.",
+    "scope": "server"
+  },
+  "incus_cert_repinned_toast": {
+    "text": "{$fingerprint} opnieuw vastgepind. De host is weer onbevestigd en niet toegelaten.",
+    "scope": "server"
+  },
+  "rotate_incus_identity": {
+    "text": "Clientcertificaat vervangen",
+    "scope": "server"
+  },
+  "rotate_incus_identity_hint": {
+    "text": "Genereer een nieuw clientcertificaat voor deze daemon. Het oude blijft werken tot je de vertrouwensregel daar verwijdert.",
+    "scope": "server"
+  },
+  "rotate_incus_identity_generic": {
+    "text": "Een nieuw clientcertificaat genereren voor deze daemon?",
+    "scope": "server"
+  },
+  "rotate_incus_identity_body": {
+    "text": "Er wordt een nieuw clientcertificaat gegenereerd voor {$name}. Hohenheim kan de daemon pas opnieuw aansturen wanneer dat certificaat daar ingeschreven is (vertrouwenstoken plakken of incus config trust add-certificate). Typ de hostnaam om door te gaan.",
+    "scope": "server"
+  },
+  "incus_identity_rotated_toast": {
+    "text": "Nieuw clientcertificaat gegenereerd voor {$name}. Schrijf het in op de daemon.",
+    "scope": "server"
+  },
+  "incus_cert_none": {
+    "text": "Niet vastgepind. Scan het servercertificaat voordat deze daemon uberhaupt bereikt kan worden.",
+    "scope": "server"
+  },
+  "incus_cert_confirmed": {
+    "text": "{$fingerprint} (bevestigd)",
+    "scope": "server"
+  },
+  "incus_cert_unconfirmed": {
+    "text": "{$fingerprint} (NIET bevestigd -- vergelijk met incus info op de host en bevestig)",
+    "scope": "server"
+  },
+  "incus_client_missing": {
+    "text": "Nog geen clientcertificaat.",
+    "scope": "server"
+  },
+  "incus_cert_state": [
+    {
+      "text": "Servercertificaat",
+      "scope": "field"
+    },
+    {
+      "text": "De vingerafdruk van het Incus-servercertificaat die Hohenheim afdwingt bij elke https-verbinding met deze daemon.",
+      "scope": "help"
+    }
+  ],
+  "incus_client_cert": [
+    {
+      "text": "Clientcertificaat van Hohenheim",
+      "scope": "field"
+    },
+    {
+      "text": "Schrijf dit certificaat in op de daemon (incus config trust add-certificate). Het is uniek voor deze host, dus intrekken raakt niets anders.",
+      "scope": "help"
+    }
+  ],
+  "incus_cert_mismatch": {
+    "text": "{$name} bood een ander Incus-servercertificaat aan (vastgepind {$pinned}, aangeboden {$offered}). Er is niets opnieuw vastgepind en de host is geblokkeerd; verifieer buiten dit kanaal om voor je het nieuwe certificaat overneemt.",
+    "scope": "violations"
+  },
+  "ssh_lane_none": {
+    "text": "Geen SSH-beheerkanaal. Deze host werkt prima zonder, maar de isolatie van zijn workloads is dan alleen uit de configuratie van de daemon te lezen en blijft ONBEVESTIGD in de kernel. Zet een SSH-doel, scan de hostsleutel en bevestig ze om kernelverificatie aan te zetten.",
+    "scope": "server"
   }
 }
