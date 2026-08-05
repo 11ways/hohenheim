@@ -2446,6 +2446,43 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   per-instance backup schedules (see the Phase 5 record-schedule STATUS);
   the other gaps in this list stand unchanged.
 
+  STATUS (2026-08-05): the INCUS DRIVER half LANDED, proven live against a real
+  remote Incus 7.3 daemon (daystrom, https://10.47.1.99:8443). What shipped:
+  `IncusClient` over its own transport contract (`IncusTransport`: REST envelope
+  + a first-class RFC 6455 websocket lane, hand-rolled because java.net.http
+  cannot disable hostname verification per-client nor ride a unix socket;
+  HTTPS = pinned server cert + per-host client cert, unix socket locally; the
+  raw HTTP/1.1 framing is the shared `Http11` codec DockerClient now also uses);
+  the trust ceremony (`IncusTrust` + the shared `HostPins` state machine: scan
+  pins UNVERIFIED, typed confirm, mismatch quarantines through the SAME
+  HostProbe funnel as ssh, repin lands at the ceremony's bottom; trust-token
+  enrollment `POST /1.0/certificates` proven live -- this TLS pair IS the
+  node-identity story, see ServerModel.RUNTIME's AIDEV-NOTE); host records
+  declare their runtime AS DATA (M070 `runtime`+`incus_url`; client
+  construction, `IncusPreflight` (trusted/driver/storage/network checks, the
+  observed incus version recorded like docker_version), placement
+  (`requiredRuntime` filter), resolve (host_runtime_mismatch) and the admin
+  ServerResource all dispatch on it); and `IncusInstanceRuntime` +
+  `incus_container` kind: system containers from the images: simplestreams
+  server, owner labels on `user.*` config, unprivileged by default with
+  privileged as a warned admin flag, ConsoleStreamSupport over the console
+  websocket, exit codes REFUSED by name (Incus reports none), snapshots refuse
+  `snapshots_unsupported` by name. Proven by `IncusHostLiveTest`,
+  `IncusInstanceRuntimeLiveTest` (full funnel deploy/console/stop/redeploy/
+  destroy + foreign-name refusal, asserted at the daemon over its own CLI) and
+  `HostRuntimeTest`; live tests opt in via
+  `~/.config/hohenheim-livehost/incus.properties` (LiveRemoteHost pattern).
+  HONEST GAPS, deliberate: the Phase 4 GATE's snapshot/backup half does NOT
+  cover incus yet -- VolumeSnapshotSupport's tar-per-volume contract does not
+  fit a rootfs-stateful system container; the path is a native-snapshot
+  capability seam (Incus snapshots + `/1.0/instances/{n}/backups` export as the
+  payload inside the existing encrypted .hib envelope, corruption/interruption
+  refusals reused), then the nightly-schedule round trip on a Debian container.
+  Also not built: per-instance network isolation on incus (containers share the
+  managed bridge -- the shared_container posture is the operator's declared
+  risk), port publications (proxy devices), InstanceFileSupport/FileStaging/
+  Install on incus (each refuses by name through the existing funnels).
+
 ---
 
 ## Phase 5 -- Templates and the game surface
