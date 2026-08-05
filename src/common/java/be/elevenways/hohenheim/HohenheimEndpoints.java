@@ -2,6 +2,7 @@ package be.elevenways.hohenheim;
 
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.data.DataPage;
 import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.routing.EndpointRoute;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
@@ -189,7 +190,21 @@ public class HohenheimEndpoints {
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_provider_browse");
 
-    public static final Endpoint<Object> GIT_PROVIDER_REPOSITORIES = Endpoint.<Object>builder()
+    /** Optional search text for the provider browse endpoints (query param). */
+    public static final ParameterDefinition<String> PROVIDER_TEXT = ParameterDefinition.builder(String.class)
+        .name("text")
+        .stringResolver(s -> s)
+        .build();
+
+    /** Repository the branch listing addresses (query param -- paths carry slashes). */
+    public static final ParameterDefinition<String> PROVIDER_REPOSITORY = ParameterDefinition.builder(String.class)
+        .name("repository")
+        .stringResolver(s -> s)
+        .build();
+
+    // Typed DataPage answers, so the admin picker's DataProviders ride
+    // Endpoint.call directly (the RecordSourceEndpoints shape).
+    public static final Endpoint<DataPage> GIT_PROVIDER_REPOSITORIES = Endpoint.<DataPage>builder()
         .identifier(Identifier.of("hohenheim", "git_provider_repositories"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("admin").addDelimiter().addStatic("git-providers").addDelimiter()
@@ -198,7 +213,7 @@ public class HohenheimEndpoints {
         .rateLimit(PROVIDER_BROWSE_LIMIT)
         .build();
 
-    public static final Endpoint<Object> GIT_PROVIDER_BRANCHES = Endpoint.<Object>builder()
+    public static final Endpoint<DataPage> GIT_PROVIDER_BRANCHES = Endpoint.<DataPage>builder()
         .identifier(Identifier.of("hohenheim", "git_provider_branches"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("admin").addDelimiter().addStatic("git-providers").addDelimiter()
