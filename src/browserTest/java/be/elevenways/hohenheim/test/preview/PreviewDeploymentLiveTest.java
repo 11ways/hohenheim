@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.preview;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.DeploymentModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
@@ -180,11 +181,34 @@ class PreviewDeploymentLiveTest {
         return settings;
     }
 
+    /** Wait for the fixture site's async initial git deploy so its host lease is free. */
+    private static void awaitInitialDeployFinished() throws InterruptedException {
+        var deployments = Models.get(DeploymentModel.class);
+        for (int i = 0; i < 240; i++) {
+            List<Row> rows = deployments.findBySiteId(siteId, 5);
+            if (!rows.isEmpty() && !DeploymentModel.STATUS_RUNNING
+                    .equals(rows.get(0).get(DeploymentModel.STATUS))) {
+                return;
+            }
+            Thread.sleep(250);
+        }
+        throw new AssertionError("Timed out waiting for the fixture site's initial deploy");
+    }
+
     @Test
     void aPreviewIsCreatedServesIsolatedAndIsFullyReclaimedOnExpiry() throws Exception {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         assumeTrue(netns != null, "no private netns: the sandbox refuses to build unprotected");
         DockerClient docker = new DockerClient();
+
+        // AIDEV-NOTE: the git handler kicks off an ASYNC initial deploy of the fixture
+        // site at proxy start, and that deploy holds the host-1 lease for its whole
+        // build (~5s measured). The preview deploy's lease acquire budget is 5s, so
+        // starting it while the initial deploy runs loses the race by milliseconds
+        // (host_lease_unavailable). Await the initial deploy first, like
+        // GitDeploymentFlowTest does -- the serialization itself is intended product
+        // behaviour, the race was the test's.
+        awaitInitialDeployFinished();
 
         // 1. CREATE: build the feature ref through the sandbox and deploy it.
         Row preview = PreviewDeployments.deploy(siteId, "feature-x", null, 41);
