@@ -3339,6 +3339,10 @@ the layer we can close it. What was established, in order:
   identical `security.acls` value repaired nothing (`devicesUpdate` only
   reloads devices whose config actually changed), while the ACL bump restored
   all three chains and the peer went back to 100% loss.
+  SUPERSEDED 2026-08-06 by the per-instance lever below: the ACL bump repairs
+  correctly but reloads EVERY NIC referencing the shared ACL, so it fails on a
+  neighbour's transitioning veth. The finding that an IDENTICAL device write
+  repairs nothing still stands and is why the replacement changes a key.
 - DECISION on a running workload found diverged: repair first, then STOP. A
   transient daemon race therefore costs no availability at all; only a workload
   the daemon REFUSES to re-isolate is stopped. What is at stake in the other
@@ -3406,6 +3410,39 @@ PRODUCTION path. What was established:
   STOP the unrepairable one.
 - The test seam survives for what it is now good for: pointing the verifier at a
   kernel the record does not name. Nothing in the daystrom proof uses it.
+
+STATUS (2026-08-06, cross-tenant lever wave): the repair lever was coupling
+tenants together and now does not. Found by the trust-split wave's own live
+test under the full nine-class parallel set; the refusal it recorded for OUR
+workload named a FOREIGN instance, which is what gave it away.
+
+- MEASURED at the daemon, not inferred from the message. With two workloads
+  sharing the `hohenheim-isolation` ACL and one of them looping start/stop,
+  21 of 103 ACL config-key bumps FAILED outright ("Failed updating bridge NIC
+  ACL: ... Unknown or missing host side veth device") naming the NEIGHBOUR. A
+  cleanly STOPPED neighbour is skipped and harmless -- the window is every
+  start and every stop, which on a busy host is common, not exotic.
+- WHY IT MATTERED: an unrepairable workload is STOPPED by declared policy, so
+  one tenant's ordinary churn could have cost every other tenant on the host
+  their availability for a fault that was never theirs.
+- LEVER NOW: toggle `security.acls.default.egress.logged` on OUR OWN NIC
+  device. `false` is the daemon's own default, so the generated ruleset is
+  byte-identical with and without it (36-line diff, empty) -- the only thing
+  that changes is that the device config differs from what the daemon last
+  applied, which is what `devicesUpdate` keys on. `security.acls` is never
+  touched, so the NIC never stops declaring isolation for even an instant.
+  Restored 3 of 3 chains, and 116 of 116 toggles succeeded under the same
+  neighbour churn that broke a fifth of the ACL bumps.
+- The SHARED ACL stays. The coupling was in the lever, not in sharing the
+  policy object, so isolation semantics are unchanged and no per-workload ACL
+  lifecycle was introduced.
+- ALSO FIXED, same shape one layer up: two deploys on a FRESH host both read
+  "no ACL" and both POST it, and the loser's 400 "already exists" failed a
+  tenant's install for another tenant's win. The loser now proceeds to the
+  read-back, which stays the gate -- a winner that wrote a weaker ruleset is
+  still refused.
+- The live test now asserts the property directly: every workload named in a
+  sweep's recorded refusals must be OURS.
 
 Phase gate: provision Linux from cloud-init and Windows from a prepared template;
 attach/resize a disk and NIC under quota; enforce the network policy; snapshot;
