@@ -44,7 +44,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -316,7 +319,7 @@ class IncusSnapshotBackupLiveTest {
                 write(artifact, bytes);
                 long instancesBefore = Models.get(InstanceModel.class).find().count();
                 long quotaBeforeCorrupt = InstanceQuota.usedBy(operatorBucket);
-                long daemonBefore = daemonInstanceCount();
+                Set<String> daemonBefore = daemonInstanceHandles();
                 assertThat(catchThrowable(() ->
                         backups.restoreToNew(backupId, "never-born", null)))
                     .as("step 8: corrupted backup is a named refusal")
@@ -327,8 +330,12 @@ class IncusSnapshotBackupLiveTest {
                     .as("step 8: no instance record was created").isEqualTo(instancesBefore);
                 assertThat(InstanceQuota.usedBy(operatorBucket))
                     .as("step 8: no quota was spent").isEqualTo(quotaBeforeCorrupt);
-                assertThat(daemonInstanceCount())
-                    .as("step 8: no instance appeared at the daemon").isEqualTo(daemonBefore);
+                Set<String> appeared = daemonInstanceHandles();
+                appeared.removeAll(daemonBefore);
+                assertThat(appeared)
+                    .as("step 8: no instance appeared at the daemon for the refused"
+                        + " restore (appeared: %s)", appeared)
+                    .noneMatch(daemonHandle -> isOwnIdBlock(daemonHandle, id));
 
                 // 9. INTERRUPTED UPLOAD: a store that dies mid-stream leaves a FAILED
                 //    row, no artifact, no staging debris, and the failed row refuses
@@ -434,10 +441,37 @@ class IncusSnapshotBackupLiveTest {
         }
     }
 
-    private static long daemonInstanceCount() {
-        String list = query("/1.0/instances");
-        return list.chars().filter(c -> c == ',').count()
-            + (list.replace("[", "").replace("]", "").isBlank() ? 0 : 1);
+    /** Every instance handle the daemon currently carries, ours and other classes'. */
+    private static Set<String> daemonInstanceHandles() {
+        Set<String> handles = new TreeSet<>();
+        Matcher matcher = Pattern.compile("/1\\.0/instances/([^\"?]+)")
+            .matcher(query("/1.0/instances"));
+        while (matcher.find()) {
+            handles.add(matcher.group(1));
+        }
+        return handles;
+    }
+
+    /**
+     * Whether a daemon handle names an id THIS class could have allocated.
+     *
+     * AIDEV-NOTE: this replaced a whole-daemon instance COUNT, which was wrong in two
+     * ways at once. daystrom is shared by every live Incus class and browserTestIsolated
+     * runs them in parallel forks, so a sibling class destroying its own workload inside
+     * the window dropped the count and failed this step for a reason it says nothing
+     * about (observed 2026-08-05: expected 6, got 5, while IncusCommunityAppLiveTest
+     * destroyed instance 4543113 mid-window). Worse in the other direction: a count is
+     * blind by construction -- one of OUR instances appearing while one of theirs
+     * vanished leaves the count equal and the step reports success, which is exactly the
+     * failure this gate exists to catch. Handles carry ids and {@link LiveIdOffsets}
+     * gives every class its own random id base, so judging only handles from this class's
+     * block is both race-free and strictly stronger. IncusCommunityAppLiveTest's
+     * own-handles sweep is the same shape.
+     */
+    private static boolean isOwnIdBlock(String daemonHandle, int ownInstanceId) {
+        Matcher matcher = Pattern.compile("^hohenheim-instance-(\\d+)$").matcher(daemonHandle);
+        return matcher.matches()
+            && Math.abs(Long.parseLong(matcher.group(1)) - ownInstanceId) < 1000L;
     }
 
     private static byte[] read(Path file) {
