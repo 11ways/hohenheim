@@ -30,6 +30,7 @@ class BackupArchiveTest {
     private BackupManifest manifest(String sha, long size) {
         return new BackupManifest(BackupManifest.FORMAT_VERSION, "2026-08-03T00:00:00Z",
             "test", "fixture", "hohenheim:docker_container",
+            BackupManifest.PAYLOAD_VOLUME_TARS,
             Map.of("image", "alpine", "environment_variables", Map.of("SECRET", "s3cret")),
             "alpine:latest", "sha256:abc", "", 8080, "tcp",
             List.of(new BackupManifest.VolumeEntry("data", "/data", "data.tar", sha, size)));

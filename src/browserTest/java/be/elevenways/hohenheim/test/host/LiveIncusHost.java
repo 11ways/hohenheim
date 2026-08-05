@@ -1,8 +1,13 @@
 package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.HostAdmission;
+import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.incus.IncusTrust;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import org.junit.jupiter.api.Assumptions;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -115,6 +120,57 @@ public final class LiveIncusHost {
     /** Remove an enrolled client certificate by its sha256-hex fingerprint (cleanup). */
     public void removeTrustEntry(String certificateFingerprint) throws IOException {
         ssh(List.of("incus", "config", "trust", "remove", certificateFingerprint));
+    }
+
+    /**
+     * The FULL product enrollment ceremony against this host -- identity, pin,
+     * confirm, token enrollment, preflight, admission -- with no fixture shortcut
+     * writing any verdict. Call inside a {@code Db.run} scope.
+     *
+     * @return the enrolled client certificate's fingerprint (for trust cleanup)
+     */
+    public String enrollThroughProduct(String hostName, String clientName) {
+        Row host = enrol(hostName);
+        IncusTrust.ensureIdentity(host);
+        String fingerprint = IncusTrust.fingerprintOf(
+            host.get(ServerModel.IDENTITY_PUBLIC_KEY));
+        IncusTrust.scanAndPin(host);
+        Row pinned = Models.get(ServerModel.class).findByName(hostName);
+        HostKeys.confirm(pinned);
+        try {
+            IncusTrust.enrollWithToken(Models.get(ServerModel.class).findByName(hostName),
+                mintTrustToken(clientName));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        HostPreflight.Report report = HostPreflight.runAndStore(hostName);
+        Assumptions.assumeTrue(report.passed(),
+            "incus preflight did not pass: " + report.checks());
+        Row ready = Models.get(ServerModel.class).findByName(hostName);
+        HostAdmission.requireAdmittable(ready);
+        ready.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+        Models.get(ServerModel.class).save(ready);
+        return fingerprint;
+    }
+
+    /** Run one shell command INSIDE the instance, over the host's own CLI. */
+    public String exec(String handle, String command) throws IOException {
+        return ssh(List.of("incus", "exec", handle, "--", "sh", "-c",
+            "'" + command.replace("'", "'\\''") + "'")).trim();
+    }
+
+    /** Force-remove one instance over the host's own CLI (cleanup; absent is fine). */
+    public void forceDelete(String handle) {
+        try {
+            ssh(List.of("incus", "delete", "--force", handle));
+        } catch (IOException ignored) {
+            // already gone
+        }
+    }
+
+    /** Raw REST truth over the host's own CLI ({@code incus query <path>}). */
+    public String query(String path) throws IOException {
+        return ssh(List.of("incus", "query", path)).trim();
     }
 
     /** The daemon-side truth of one instance, read over the host's own CLI. */

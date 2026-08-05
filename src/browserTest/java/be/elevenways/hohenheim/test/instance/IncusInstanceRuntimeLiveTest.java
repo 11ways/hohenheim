@@ -4,11 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ServerService;
-import be.elevenways.hohenheim.server.host.HostAdmission;
-import be.elevenways.hohenheim.server.host.HostKeys;
-import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.incus.IncusClient;
-import be.elevenways.hohenheim.server.incus.IncusTrust;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
@@ -78,27 +74,8 @@ class IncusInstanceRuntimeLiveTest {
 
         // The REAL enrollment path, product code end to end: identity, pin, confirm,
         // token enrollment, preflight, admit -- no fixture shortcut writes the verdict.
-        Db.run(datasource, () -> {
-            Row host = remote.enrol(HOST);
-            IncusTrust.ensureIdentity(host);
-            enrolledFingerprint = IncusTrust.fingerprintOf(
-                host.get(ServerModel.IDENTITY_PUBLIC_KEY));
-            IncusTrust.scanAndPin(host);
-            Row pinned = Models.get(ServerModel.class).findByName(HOST);
-            HostKeys.confirm(pinned);
-            try {
-                IncusTrust.enrollWithToken(Models.get(ServerModel.class).findByName(HOST),
-                    remote.mintTrustToken("hohenheim-live-instance"));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            HostPreflight.Report report = HostPreflight.runAndStore(HOST);
-            assumeTrue(report.passed(), "incus preflight did not pass: " + report.checks());
-            Row ready = Models.get(ServerModel.class).findByName(HOST);
-            HostAdmission.requireAdmittable(ready);
-            ready.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-            Models.get(ServerModel.class).save(ready);
-        });
+        Db.run(datasource, () -> enrolledFingerprint =
+            remote.enrollThroughProduct(HOST, "hohenheim-live-instance"));
     }
 
     @AfterAll
@@ -220,7 +197,9 @@ class IncusInstanceRuntimeLiveTest {
                     .isInstanceOf(IOException.class)
                     .hasMessageContaining("no init exit status");
 
-                // 5. Redeploy replaces the OWN stopped instance (attribution verified).
+                // 5. Redeploy CONVERGES onto the OWN stopped instance (attribution
+                //    verified; the rootfs is stateful, so it is never recreated from
+                //    the image -- the snapshot/backup live test proves data survives).
                 InstanceStatus redeployed = service.deploy(id);
                 assertThat(redeployed.state())
                     .as("step 5: redeploy runs again").isEqualTo(ContainerState.RUNNING);

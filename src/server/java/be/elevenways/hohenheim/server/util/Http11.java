@@ -3,7 +3,10 @@ package be.elevenways.hohenheim.server.util;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -109,6 +112,179 @@ public final class Http11 {
             return Integer.parseInt(parts[1]);
         } catch (NumberFormatException e) {
             throw new IOException("Bad status code from " + peer + ": " + statusLine);
+        }
+    }
+
+    // -- streaming half (bodies too large to buffer) --------------------------
+
+    /** One parsed response HEAD: status + headers, body still on the stream. */
+    public record Head(int status, @NonNull Map<String, String> headers) {
+
+        public @Nullable String header(@NonNull String name) {
+            return this.headers.get(name.toLowerCase(Locale.ROOT));
+        }
+
+        public boolean chunked() {
+            String encoding = header("transfer-encoding");
+            return encoding != null && encoding.toLowerCase(Locale.ROOT).contains("chunked");
+        }
+    }
+
+    /**
+     * Read EXACTLY the response head (up to CRLFCRLF) off the stream, leaving the body
+     * unread -- the streaming counterpart of {@link #parse}.
+     */
+    public static @NonNull Head readHead(@NonNull InputStream in, @NonNull String peer)
+            throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        int matched = 0;
+        while (matched < 4) {
+            int value = in.read();
+            if (value < 0) {
+                throw new IOException("Connection closed inside the response head from " + peer);
+            }
+            buffer.write(value);
+            boolean cr = value == '\r';
+            boolean lf = value == '\n';
+            matched = switch (matched) {
+                case 0 -> cr ? 1 : 0;
+                case 1 -> lf ? 2 : cr ? 1 : 0;
+                case 2 -> cr ? 3 : 0;
+                default -> lf ? 4 : cr ? 1 : 0;
+            };
+            if (buffer.size() > 64 * 1024) {
+                throw new IOException("Oversized response head from " + peer);
+            }
+        }
+        String[] headLines = buffer.toString(StandardCharsets.ISO_8859_1).trim().split("\r\n");
+        int status = parseStatus(headLines[0], peer);
+        Map<String, String> headers = new LinkedHashMap<>();
+        for (int i = 1; i < headLines.length; i++) {
+            int colon = headLines[i].indexOf(':');
+            if (colon > 0) {
+                headers.put(headLines[i].substring(0, colon).toLowerCase(Locale.ROOT),
+                    headLines[i].substring(colon + 1).trim());
+            }
+        }
+        return new Head(status, headers);
+    }
+
+    /**
+     * Stream the response body ({@code Content-Length}, chunked, or read-to-EOF under
+     * {@code Connection: close}) to {@code out} without buffering it whole.
+     *
+     * @param maxBytes hard cap; exceeding it is an IOException, never a truncated file
+     * @return bytes written
+     */
+    public static long copyBody(@NonNull InputStream in, @NonNull Head head,
+                                @NonNull OutputStream out, long maxBytes,
+                                @NonNull String peer) throws IOException {
+        if (head.chunked()) {
+            return copyChunked(in, out, maxBytes, peer);
+        }
+        String declared = head.header("content-length");
+        long limit = maxBytes;
+        boolean toEof = declared == null;
+        long remaining = Long.MAX_VALUE;
+        if (!toEof) {
+            try {
+                remaining = Long.parseLong(declared.trim());
+            } catch (NumberFormatException bad) {
+                throw new IOException("Bad Content-Length from " + peer + ": " + declared);
+            }
+            if (remaining > limit) {
+                throw new IOException("Response body from " + peer + " (" + remaining
+                    + " bytes) exceeds the " + limit + "-byte cap");
+            }
+        }
+        byte[] buffer = new byte[64 * 1024];
+        long written = 0;
+        while (remaining > 0) {
+            int want = (int) Math.min(buffer.length, remaining);
+            int read = in.read(buffer, 0, want);
+            if (read < 0) {
+                if (toEof) {
+                    return written;
+                }
+                throw new IOException("Response body from " + peer + " truncated at "
+                    + written + " of " + declared + " bytes");
+            }
+            written += read;
+            if (written > limit) {
+                throw new IOException("Response body from " + peer + " exceeds the "
+                    + limit + "-byte cap");
+            }
+            out.write(buffer, 0, read);
+            if (!toEof) {
+                remaining -= read;
+            }
+        }
+        return written;
+    }
+
+    private static long copyChunked(InputStream in, OutputStream out, long maxBytes,
+                                    String peer) throws IOException {
+        byte[] buffer = new byte[64 * 1024];
+        long written = 0;
+        while (true) {
+            String sizeToken = readLine(in, peer);
+            int semicolon = sizeToken.indexOf(';');
+            if (semicolon >= 0) {
+                sizeToken = sizeToken.substring(0, semicolon);
+            }
+            long size;
+            try {
+                size = Long.parseLong(sizeToken.trim(), 16);
+            } catch (NumberFormatException bad) {
+                throw new IOException("Malformed chunked body from " + peer
+                    + ": bad chunk size '" + sizeToken + "'");
+            }
+            if (size == 0) {
+                // Trailers (if any) end at the first empty line.
+                while (!readLine(in, peer).isEmpty()) {
+                    // discard trailer
+                }
+                return written;
+            }
+            long remaining = size;
+            while (remaining > 0) {
+                int read = in.read(buffer, 0, (int) Math.min(buffer.length, remaining));
+                if (read < 0) {
+                    throw new IOException("Malformed chunked body from " + peer
+                        + ": chunk exceeds available data");
+                }
+                written += read;
+                if (written > maxBytes) {
+                    throw new IOException("Response body from " + peer + " exceeds the "
+                        + maxBytes + "-byte cap");
+                }
+                out.write(buffer, 0, read);
+                remaining -= read;
+            }
+            String terminator = readLine(in, peer);
+            if (!terminator.isEmpty()) {
+                throw new IOException("Malformed chunked body from " + peer
+                    + ": chunk not CRLF-terminated");
+            }
+        }
+    }
+
+    /** One CRLF-terminated line off the stream (the terminator is consumed, not returned). */
+    private static @NonNull String readLine(InputStream in, String peer) throws IOException {
+        ByteArrayOutputStream line = new ByteArrayOutputStream();
+        while (true) {
+            int value = in.read();
+            if (value < 0) {
+                throw new IOException("Connection closed mid-line from " + peer);
+            }
+            if (value == '\n') {
+                String text = line.toString(StandardCharsets.ISO_8859_1);
+                return text.endsWith("\r") ? text.substring(0, text.length() - 1) : text;
+            }
+            line.write(value);
+            if (line.size() > 64 * 1024) {
+                throw new IOException("Oversized line from " + peer);
+            }
         }
     }
 

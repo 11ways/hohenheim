@@ -2478,10 +2478,61 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   capability seam (Incus snapshots + `/1.0/instances/{n}/backups` export as the
   payload inside the existing encrypted .hib envelope, corruption/interruption
   refusals reused), then the nightly-schedule round trip on a Debian container.
-  Also not built: per-instance network isolation on incus (containers share the
+  SUPERSEDED (2026-08-05, second wave): that gap is CLOSED and the Phase 4 gate
+  is MET on incus -- see the STATUS below. Still not built, unchanged:
+  per-instance network isolation on incus (containers share the
   managed bridge -- the shared_container posture is the operator's declared
   risk), port publications (proxy devices), InstanceFileSupport/FileStaging/
   Install on incus (each refuses by name through the existing funnels).
+
+  STATUS (2026-08-05, second wave): the SNAPSHOT/BACKUP half LANDED ON INCUS and
+  the Phase 4 gate is MET, proven live against daystrom (Incus 7.3). What
+  shipped: `NativeSnapshotSupport` -- the whole-instance capability seam BESIDE
+  `VolumeSnapshotSupport` (a driver implements exactly one; neither = the named
+  `snapshots_unsupported` refusal) -- implemented by `IncusInstanceRuntime`:
+  pool-resident native snapshots (LIVE, crash-consistent -- the storage driver's
+  atomic snapshot is the declared consistency model, vs the volume lane's cold
+  capture), whole-instance export (`/1.0/instances/{n}/backups`,
+  optimized_storage=false so the tarball restores onto any pool driver;
+  temporary daemon backup object deleted after export) STREAMED through new
+  transport lanes (Http11 grew a streaming head/body codec;
+  upload streams the archive from disk, download caps and streams to disk), and
+  import-as-new (`X-Incus-Name`) whose contract INCLUDES re-identification: one
+  definition write replaces the source's owner labels with the new record's and
+  drops volatile `*.hwaddr` keys (the daemon refuses to start a clone beside its
+  still-running source otherwise -- found live, "MAC address already defined").
+  PAYLOAD-KIND DECISION: the backup manifest carries an explicit `payload` fact
+  (`volume_tars` | `instance_export`) written by the capture seam; restore
+  dispatches on IT and refuses unknown values whole -- `kind` stays the
+  authority over how the instance RUNS, `payload` over how bytes unpack, one
+  authority per fact (AIDEV-NOTE in BackupManifest). Snapshot rows grew
+  `native_name` (M071); restore verifies the daemon still HOLDS the snapshot
+  before touching live state (capacity deliberately skipped: a pool rollback
+  moves no bytes onto the host); `RestoreCapacity` dispatches on the host's
+  declared runtime (incus = default-profile root pool's space). DATA-LOSS FIX
+  found by the gate: `IncusInstanceRuntime.create` now CONVERGES onto an
+  existing OWNED instance (rewrites managed config keys, keeps the rootfs)
+  instead of replace-from-image -- the Docker replace semantic was silent rootfs
+  loss on every redeploy of a stopped incus instance. Proven by
+  `IncusSnapshotBackupLiveTest` (opt-in via the same incus.properties; skips
+  green elsewhere): a DEBIAN container, the nightly cron schedule executing the
+  snapshot action through the real chain runner, snapshot-restore round trip
+  (replace not merge, marker asserted over the host's own CLI, which also
+  proves converge -- a recreate would wipe it), OFF-HOST backup (the instance
+  host is REMOTE, the filesystem target is the controller: a different failure
+  domain by construction, the plan's stated floor), restore-to-NEW (own id, own
+  quota slot, settings + secret variable + data intact, daemon attributes the
+  import to the NEW record), corrupt-artifact refusal with step 7 as its
+  positive anchor (no record, no quota, no daemon instance), interrupted upload
+  (FAILED row, no artifact, no .part debris, not restorable, source keeps
+  running), snapshot delete verified AT the daemon. Three counterfactuals
+  failed as required (no-op restore, label re-stamp dropped -- caught by the
+  foreign-instance guard itself -- and cleanup skipped). FIXED IN CORE while
+  here: `Violations.getMessage` now carries the message ARGS (the WHY was
+  invisible in every log/test report; rejected VALUES stay hidden), pinned by
+  ViolationLoggingTest. Also: reinstall now refuses `install_unsupported`
+  BEFORE the clear-policy volume branch (the honest refusal for a driver with
+  no install lane).
 
 ---
 

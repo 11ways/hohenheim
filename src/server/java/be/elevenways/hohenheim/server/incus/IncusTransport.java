@@ -5,6 +5,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Map;
 
 /**
  * Carries Incus API exchanges to one daemon: single-shot REST calls plus the WEBSOCKET
@@ -26,6 +28,28 @@ public interface IncusTransport {
      */
     Http11.@NonNull Raw exchange(@NonNull String method, @NonNull String pathAndQuery,
                                  @Nullable String jsonBody, long timeoutMs) throws IOException;
+
+    /**
+     * One exchange whose request body STREAMS from a local file (backup import): the
+     * archive never sits in controller memory. The response is the ordinary small
+     * envelope.
+     */
+    Http11.@NonNull Raw exchangeUpload(@NonNull String method, @NonNull String pathAndQuery,
+                                       @NonNull Path bodyFile, @NonNull String contentType,
+                                       @Nullable Map<String, String> extraHeaders,
+                                       long timeoutMs) throws IOException;
+
+    /**
+     * One exchange whose response body STREAMS to a local file (backup export). A JSON
+     * answer (an error envelope, or any non-2xx status) is returned IN the Raw's body
+     * with nothing written to {@code destination}; a binary 2xx body lands in the file
+     * and the Raw's body is empty.
+     *
+     * @param maxBytes hard cap on the downloaded body
+     */
+    Http11.@NonNull Raw exchangeDownload(@NonNull String method, @NonNull String pathAndQuery,
+                                         @NonNull Path destination, long maxBytes,
+                                         long timeoutMs) throws IOException;
 
     /**
      * Open one websocket (RFC 6455 client handshake included) to an Incus endpoint.

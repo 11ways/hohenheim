@@ -20,6 +20,8 @@ import java.util.Map;
  * @param controllerVersion the controller build that wrote it
  * @param instanceName      the source instance's name
  * @param kind              the instance kind token ({@code hohenheim:docker_container})
+ * @param payload           how the payload entries unpack ({@link #PAYLOAD_VOLUME_TARS}
+ *                          or {@link #PAYLOAD_INSTANCE_EXPORT})
  * @param settings          the FULL instance settings map, secrets included
  * @param imageReference    the image reference the workload ran
  * @param imageId           the daemon's immutable image id, when known
@@ -34,6 +36,7 @@ public record BackupManifest(int version,
                              @NonNull String controllerVersion,
                              @NonNull String instanceName,
                              @NonNull String kind,
+                             @NonNull String payload,
                              @NonNull Map<String, Object> settings,
                              @NonNull String imageReference,
                              @Nullable String imageId,
@@ -44,6 +47,23 @@ public record BackupManifest(int version,
 
     /** The one manifest format this build writes and reads. */
     public static final int FORMAT_VERSION = 1;
+
+    // AIDEV-NOTE: payload-kind is its OWN manifest fact, written by the capture seam
+    // and dispatched on by restore -- never derived from instance.kind. One authority
+    // per fact: `kind` answers "which driver runs this instance", `payload` answers
+    // "which capability seam unpacks these bytes"; deriving one from the other would
+    // make the kind a second authority over payload interpretation, and a future kind
+    // reusing an existing payload shape would then need a mapping table nobody owns.
+    // An unknown payload value is a whole-archive refusal, never a guess.
+
+    /** {@link #payload()}: one checksummed tar PER LOGICAL VOLUME (the Docker lane). */
+    public static final String PAYLOAD_VOLUME_TARS = "volume_tars";
+
+    /**
+     * {@link #payload()}: ONE whole-instance export tarball produced by the source
+     * driver's {@code NativeSnapshotSupport}, listed as the single inventory entry.
+     */
+    public static final String PAYLOAD_INSTANCE_EXPORT = "instance_export";
 
     /** One captured volume payload: archive entry {@code volumes/<name>.tar}. */
     public record VolumeEntry(@NonNull String name, @NonNull String containerPath,
@@ -67,6 +87,7 @@ public record BackupManifest(int version,
         Map<String, Object> instance = new LinkedHashMap<>();
         instance.put("name", this.instanceName);
         instance.put("kind", this.kind);
+        instance.put("payload", this.payload);
         instance.put("settings", this.settings);
         instance.put("image_reference", this.imageReference);
         instance.put("image_id", this.imageId);
@@ -97,6 +118,7 @@ public record BackupManifest(int version,
         summary.put("created", this.created);
         summary.put("name", this.instanceName);
         summary.put("kind", this.kind);
+        summary.put("payload", this.payload);
         summary.put("image_reference", this.imageReference);
         summary.put("image_id", this.imageId);
         summary.put("volume_count", this.volumes.size());
@@ -124,6 +146,11 @@ public record BackupManifest(int version,
         }
         String name = requireText(instance.get("name"), "instance.name");
         String kind = requireText(instance.get("kind"), "instance.kind");
+        String payload = requireText(instance.get("payload"), "instance.payload");
+        if (!PAYLOAD_VOLUME_TARS.equals(payload) && !PAYLOAD_INSTANCE_EXPORT.equals(payload)) {
+            throw new IOException("Backup manifest payload kind '" + payload
+                + "' is not one this build can unpack; the backup is refused whole");
+        }
         if (!(instance.get("settings") instanceof Map<?, ?> settings)) {
             throw new IOException("Backup manifest has no 'instance.settings' map");
         }
@@ -155,8 +182,8 @@ public record BackupManifest(int version,
         @SuppressWarnings("unchecked")
         Map<String, Object> typedSettings = (Map<String, Object>) settings;
         return new BackupManifest(version.intValue(), created, controllerVersion, name, kind,
-            typedSettings, imageReference, imageId, ownership, containerPort, protocol,
-            List.copyOf(volumes));
+            payload, typedSettings, imageReference, imageId, ownership, containerPort,
+            protocol, List.copyOf(volumes));
     }
 
     private static @NonNull String requireText(@Nullable Object value, @NonNull String field)

@@ -91,6 +91,13 @@ public final class InstanceInstalls {
             throw refusal("reinstall_no_step", resolved.row(), null);
         }
         requireNotRunning(resolved);
+        // The honest refusal for a driver that cannot run install steps at all comes
+        // FIRST: without this, an incus reinstall with a clear policy would name the
+        // (native-snapshotting) driver's missing VOLUME support instead of the install
+        // capability it actually lacks.
+        if (!(resolved.runtime() instanceof InstallSupport)) {
+            throw refusal("install_unsupported", resolved.row(), null);
+        }
         long fence = this.instances.leases().requireFence(resolved.serverId());
 
         if (InstanceTemplateModel.REINSTALL_CLEAR

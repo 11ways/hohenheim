@@ -5034,7 +5034,19 @@
     "scope": "violations"
   },
   "snapshots_unsupported": {
-    "text": "The {$kind} driver cannot snapshot volumes",
+    "text": "The {$kind} driver has no snapshot support",
+    "scope": "violations"
+  },
+  "snapshot_missing": {
+    "text": "The daemon no longer holds snapshot {$snapshot} of {$name}; restore refused",
+    "scope": "violations"
+  },
+  "snapshot_delete_failed": {
+    "text": "Could not remove snapshot {$snapshot} at the daemon: {$reason}",
+    "scope": "violations"
+  },
+  "backup_payload_mismatch": {
+    "text": "This backup's {$payload} payload cannot be restored by the {$kind} driver",
     "scope": "violations"
   },
   "restore_capacity": {
@@ -5056,7 +5068,7 @@
     }
   ],
   "snapshot_confirm": {
-    "text": "Take a snapshot? A running instance is stopped briefly while its volumes are copied, then started again.",
+    "text": "Take a snapshot? Drivers that copy volumes briefly stop a running instance and start it again; drivers with native snapshots capture it live.",
     "scope": "instance"
   },
   "snapshot_taken": {

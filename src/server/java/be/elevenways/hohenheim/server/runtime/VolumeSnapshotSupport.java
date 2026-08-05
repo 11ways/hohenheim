@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.runtime;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -26,9 +25,6 @@ public interface VolumeSnapshotSupport {
     /** One captured volume payload: which volume, where it mounts, and the tar written. */
     record CapturedVolume(@NonNull String name, @NonNull String containerPath,
                           @NonNull Path file, long size) {}
-
-    /** The workload's resolved image identity (mutable ref + immutable daemon id). */
-    record ImageIdentity(@NonNull String reference, @Nullable String id) {}
 
     /**
      * Capture each logical volume's contents into {@code directory} as one tar per

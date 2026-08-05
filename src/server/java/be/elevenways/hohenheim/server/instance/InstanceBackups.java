@@ -10,11 +10,12 @@ import be.elevenways.hohenheim.server.backup.BackupArchive;
 import be.elevenways.hohenheim.server.backup.BackupManifest;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
+import be.elevenways.hohenheim.server.runtime.ImageIdentity;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
+import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -85,8 +86,12 @@ public final class InstanceBackups {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.BACKUPS);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
-        VolumeSnapshotSupport support = InstanceSnapshots.requireSupport(resolved);
-        Map<String, String> volumes = InstanceSnapshots.logicalVolumes(resolved);
+        NativeSnapshotSupport nativeSupport = resolved.runtime()
+            instanceof NativeSnapshotSupport n ? n : null;
+        VolumeSnapshotSupport support = nativeSupport == null
+            ? InstanceSnapshots.requireSupport(resolved) : null;
+        Map<String, String> volumes = nativeSupport == null
+            ? InstanceSnapshots.logicalVolumes(resolved) : Map.of();
         // Health BEFORE the capture: a dead target must not cost the workload downtime.
         try {
             target.healthCheck();
@@ -101,33 +106,68 @@ public final class InstanceBackups {
         String stamp = STAMP.format(Instant.now());
         Path staging = stagingRoot().resolve("backup-" + instanceId + "-" + stamp);
         List<VolumeSnapshotSupport.CapturedVolume> captured;
-        VolumeSnapshotSupport.ImageIdentity image;
+        ImageIdentity image;
+        String payload;
 
-        // -- capture phase (cold) ----------------------------------------------
-        if (wasRunning) {
-            TenantWrites.inAuthorizedOperation(() -> this.instances.stop(instanceId));
-        }
-        long fence = this.instances.leases().requireFence(resolved.serverId());
-        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
-            fence, InstanceModel.STATUS_CAPTURING, resolved.row().get(InstanceModel.NAME));
-        try {
-            Files.createDirectories(staging);
-            image = support.imageIdentity(resolved.spec());
-            captured = support.captureVolumes(resolved.spec(), volumes, staging,
-                InstanceSnapshots.maxArchiveBytes());
-        } catch (IOException error) {
-            InstanceSnapshots.deleteRecursively(staging);
+        if (nativeSupport != null) {
+            // -- capture phase (native lane: LIVE, crash-consistent) ------------
+            // The daemon's own atomic export stands in for the stop; the CAPTURING
+            // stamp still gates rival power actions for the operation's duration.
+            String prior = wasRunning ? InstanceModel.STATUS_RUNNING
+                : InstanceModel.STATUS_STOPPED;
+            long fence = this.instances.leases().requireFence(resolved.serverId());
+            InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
+                resolved.serverId(), fence, InstanceModel.STATUS_CAPTURING,
+                resolved.row().get(InstanceModel.NAME));
+            try {
+                Files.createDirectories(staging);
+                image = nativeSupport.imageIdentity(resolved.spec());
+                Path export = staging.resolve("instance.tar");
+                long size = nativeSupport.exportBackup(resolved.spec(), export,
+                    InstanceSnapshots.maxArchiveBytes());
+                captured = List.of(new VolumeSnapshotSupport.CapturedVolume(
+                    "instance", "/", export, size));
+                payload = BackupManifest.PAYLOAD_INSTANCE_EXPORT;
+            } catch (IOException error) {
+                InstanceSnapshots.deleteRecursively(staging);
+                InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
+                    resolved.serverId(), fence, prior,
+                    resolved.row().get(InstanceModel.NAME));
+                failedRow(instanceId, targetId, null, InstanceSnapshots.describe(error));
+                throw refusal("instance_backup_failed", resolved.row(), error);
+            }
+            InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
+                resolved.serverId(), fence, prior, resolved.row().get(InstanceModel.NAME));
+        } else {
+            // -- capture phase (volume lane: COLD) ------------------------------
+            payload = BackupManifest.PAYLOAD_VOLUME_TARS;
+            if (wasRunning) {
+                TenantWrites.inAuthorizedOperation(() -> this.instances.stop(instanceId));
+            }
+            long fence = this.instances.leases().requireFence(resolved.serverId());
+            InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
+                resolved.serverId(), fence, InstanceModel.STATUS_CAPTURING,
+                resolved.row().get(InstanceModel.NAME));
+            try {
+                Files.createDirectories(staging);
+                image = support.imageIdentity(resolved.spec());
+                captured = support.captureVolumes(resolved.spec(), volumes, staging,
+                    InstanceSnapshots.maxArchiveBytes());
+            } catch (IOException error) {
+                InstanceSnapshots.deleteRecursively(staging);
+                InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
+                    resolved.serverId(), fence, InstanceModel.STATUS_STOPPED,
+                    resolved.row().get(InstanceModel.NAME));
+                redeployBestEffort(instanceId, wasRunning);
+                failedRow(instanceId, targetId, null, InstanceSnapshots.describe(error));
+                throw refusal("instance_backup_failed", resolved.row(), error);
+            }
             InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
                 resolved.serverId(), fence, InstanceModel.STATUS_STOPPED,
                 resolved.row().get(InstanceModel.NAME));
-            redeployBestEffort(instanceId, wasRunning);
-            failedRow(instanceId, targetId, null, InstanceSnapshots.describe(error));
-            throw refusal("instance_backup_failed", resolved.row(), error);
-        }
-        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
-            fence, InstanceModel.STATUS_STOPPED, resolved.row().get(InstanceModel.NAME));
-        if (wasRunning) {
-            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
+            if (wasRunning) {
+                TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
+            }
         }
 
         // -- archive + upload phase (workload already back up) ------------------
@@ -139,7 +179,7 @@ public final class InstanceBackups {
         backup.set(InstanceBackupModel.REMOTE_KEY, key);
         Models.get(InstanceBackupModel.class).save(backup);
         try {
-            BackupManifest manifest = buildManifest(resolved, image, captured);
+            BackupManifest manifest = buildManifest(resolved, image, payload, captured);
             Map<String, Path> files = new LinkedHashMap<>();
             for (VolumeSnapshotSupport.CapturedVolume volume : captured) {
                 files.put(volume.file().getFileName().toString(), volume.file());
@@ -256,9 +296,7 @@ public final class InstanceBackups {
                 ? ServerModel.canonicalServerId(serverSpelling)
                 : sourceServerId(backup);
             HostAdmission.requireInstancePlacement(serverId);
-            RestoreCapacity.require(serverId,
-                new ServerService().clientFor(ServerModel.nameOf(serverId)),
-                manifest.totalVolumeBytes());
+            RestoreCapacity.require(serverId, manifest.totalVolumeBytes());
 
             // -- create the NEW record (quota reserves in the save pipeline) ----
             Row record = Models.get(InstanceModel.class).createEmptyRow();
@@ -271,16 +309,35 @@ public final class InstanceBackups {
             int newId = record.get(InstanceModel.ID);
 
             Resolved resolved = this.instances.resolve(newId);
-            VolumeSnapshotSupport support = InstanceSnapshots.requireSupport(resolved);
-            Map<String, String> volumes = InstanceSnapshots.logicalVolumes(resolved);
             long fence = this.instances.leases().requireFence(resolved.serverId());
             InstanceOperationGuard.stamp(this.instances.leases(), newId, resolved.serverId(),
                 fence, InstanceModel.STATUS_RESTORING, record.get(InstanceModel.NAME));
             try {
-                resolved.runtime().create(resolved.spec());
-                Map<String, Path> tars = BackupArchive.extractVolumes(opened,
-                    staging.resolve("volumes"));
-                support.restoreVolumes(resolved.spec(), volumes, tars);
+                if (BackupManifest.PAYLOAD_INSTANCE_EXPORT.equals(manifest.payload())) {
+                    // Native lane: the daemon rebuilds the whole instance from its own
+                    // export; the deploy below CONVERGES onto it (the incus driver
+                    // never replaces an owned instance from its image).
+                    if (!(resolved.runtime() instanceof NativeSnapshotSupport nativeSupport)) {
+                        throw Violations.ofForm(violationText("backup_payload_mismatch")
+                            .withArg("payload", manifest.payload())
+                            .withArg("kind", manifest.kind()));
+                    }
+                    Map<String, Path> tars = BackupArchive.extractVolumes(opened,
+                        staging.resolve("volumes"));
+                    Path export = tars.get("instance");
+                    if (export == null) {
+                        throw new IOException("Backup archive carries no 'instance'"
+                            + " payload entry for its instance_export manifest");
+                    }
+                    nativeSupport.importBackup(resolved.spec(), export);
+                } else {
+                    VolumeSnapshotSupport support = InstanceSnapshots.requireSupport(resolved);
+                    Map<String, String> volumes = InstanceSnapshots.logicalVolumes(resolved);
+                    resolved.runtime().create(resolved.spec());
+                    Map<String, Path> tars = BackupArchive.extractVolumes(opened,
+                        staging.resolve("volumes"));
+                    support.restoreVolumes(resolved.spec(), volumes, tars);
+                }
             } catch (IOException error) {
                 InstanceOperationGuard.stamp(this.instances.leases(), newId,
                     resolved.serverId(), fence, InstanceModel.STATUS_ERROR,
@@ -359,7 +416,8 @@ public final class InstanceBackups {
 
     private @NonNull BackupManifest buildManifest(
             @NonNull Resolved resolved,
-            VolumeSnapshotSupport.@NonNull ImageIdentity image,
+            @NonNull ImageIdentity image,
+            @NonNull String payload,
             @NonNull List<VolumeSnapshotSupport.CapturedVolume> captured) throws IOException {
         int instanceId = resolved.row().get(InstanceModel.ID);
         Set<String> subjects = HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, instanceId);
@@ -378,8 +436,8 @@ public final class InstanceBackups {
             HostPreflight.controllerVersion(),
             String.valueOf((Object) resolved.row().get(InstanceModel.NAME)),
             String.valueOf((Object) resolved.row().get(InstanceModel.KIND)),
-            settings, image.reference(), image.id(), ownership, containerPort, "tcp",
-            volumes);
+            payload, settings, image.reference(), image.id(), ownership, containerPort,
+            "tcp", volumes);
     }
 
     private void redeployBestEffort(int instanceId, boolean wasRunning) {
