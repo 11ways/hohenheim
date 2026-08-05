@@ -25,6 +25,10 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -222,6 +226,11 @@ class IncusKernelIsolationLiveTest {
                         assertThat(outcome.stopped())
                             .as("step 8: and stopping nothing, because the repair took")
                             .isEmpty();
+                        assertThat(outcome.errors())
+                            .as("step 8: with no error at all -- a repair that reloaded"
+                                + " every workload on the daemon would fail here the"
+                                + " moment any neighbour's NIC was mid transition")
+                            .isEmpty();
                     });
                 evidence("step 8: REPAIRED by the production sweep");
                 assertThat(kernel.inspect(handleA).missing())
@@ -255,6 +264,17 @@ class IncusKernelIsolationLiveTest {
                         assertThat(outcome.errors())
                             .as("step 10: with the refusal recorded, not swallowed")
                             .anyMatch(error -> error.contains("REFUSED to leave"));
+                        // THE cross-tenant property. A repair lever that walks every NIC
+                        // referencing the shared ACL fails on a NEIGHBOUR's transitioning
+                        // veth, and the refusal it records then blames a workload that is
+                        // not ours -- which, since an unrepairable workload is STOPPED,
+                        // means one tenant's churn can stop another tenant's instance.
+                        // Measured on daystrom: 21 of 103 shared-ACL bumps failed that
+                        // way under neighbour churn, 0 of 116 per-instance toggles did.
+                        assertThat(blamedHandles(outcome.errors()))
+                            .as("step 10: and every workload the refusals name is OURS;"
+                                + " a repair must never depend on a neighbour's NIC")
+                            .isSubsetOf(handleA, handleB);
                     });
                 assertThat(runningState(handleA))
                     .as("step 10: the workload is stopped at the DAEMON, not just in a log")
@@ -285,6 +305,18 @@ class IncusKernelIsolationLiveTest {
     private static void evidence(String label) {
         System.out.println("=== " + label + " ===");
         System.out.println(hostCmd("nft", "list", "table", "bridge", "incus"));
+    }
+
+    /** Every instance handle named anywhere in a sweep's recorded errors. */
+    private static Set<String> blamedHandles(List<String> errors) {
+        Set<String> handles = new TreeSet<>();
+        for (String error : errors) {
+            Matcher matcher = Pattern.compile("hohenheim-instance-\\d+").matcher(error);
+            while (matcher.find()) {
+                handles.add(matcher.group());
+            }
+        }
+        return handles;
     }
 
     /** This host's outcome from the PRODUCTION sweep the scheduled task runs. */
