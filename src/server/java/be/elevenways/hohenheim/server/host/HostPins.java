@@ -26,6 +26,30 @@ public final class HostPins {
     }
 
     /**
+     * Whether the host is QUARANTINED: something observed an identity that cannot be
+     * reconciled with the pin, recorded either as a stored OFFER (a rescan disagreed)
+     * or as the typed {@code host_key_changed} verdict of a failed connection.
+     *
+     * AIDEV-NOTE: the two markers are written by DIFFERENT paths and only one fires per
+     * case -- {@link #apply} stores the offer when a rescan disagrees, {@link
+     * HostProbe#recordFailure} stores the kind when a live connection is refused and
+     * nobody rescanned -- so asking about either is the only complete question. Each
+     * clears on its own honest event (a rescan that agrees drops the offer, a reached
+     * daemon drops the error kind, {@link #repin} drops both); a quarantine never
+     * expires by itself. Never re-derive it from admission: quarantine DOWNGRADES
+     * admission, but an operator may also block a perfectly trusted host, and reading
+     * the downgrade as the cause would make those two indistinguishable.
+     */
+    public static boolean isQuarantined(@NonNull Row server) {
+        String offered = server.get(ServerModel.HOST_KEY_OFFERED);
+        if (offered != null && !offered.isBlank()) {
+            return true;
+        }
+        return HostProbe.FailureKind.HOST_KEY_CHANGED.token
+            .equals(server.get(ServerModel.LAST_ERROR_KIND));
+    }
+
+    /**
      * Record what a scan OFFERED against what is pinned.
      *
      * @param offeredMaterial the offered key/certificate in its stored spelling

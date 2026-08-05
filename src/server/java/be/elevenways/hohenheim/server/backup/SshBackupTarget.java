@@ -1,7 +1,12 @@
 package be.elevenways.hohenheim.server.backup;
 
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
-import be.elevenways.zenit.server.security.SecureTokens;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -19,19 +24,25 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /**
- * Backup target over SSH to another host: the remote/object implementation of the
- * target seam. Bytes stream through the ssh process with a bounded buffer (never a
- * whole-archive byte[]), writes land on a {@code .part} staging name and commit via
- * remote {@code mv}, and verification asks the REMOTE host for the committed file's
- * sha256 -- the artifact the restore would read, not the bytes we sent.
+ * Backup target over SSH to an INVENTORIED HOST RECORD: the remote/object
+ * implementation of the target seam. Bytes stream through the ssh process with a
+ * bounded buffer (never a whole-archive byte[]), writes land on a {@code .part}
+ * staging name and commit via remote {@code mv}, and verification asks the REMOTE
+ * host for the committed file's sha256 -- the artifact the restore would read, not
+ * the bytes we sent.
  *
- * Trust rides {@link HostKeys#pinnedArgv}, the same seam the daemon lane uses: strict
- * checking against a known_hosts holding EXACTLY the configured pin, an alias so no
- * {@code [host]:port} spelling subtlety can turn a mismatch into a miss, and no
- * accept-new anywhere. The pin is REQUIRED -- the old "or else the OS user's ambient
- * known_hosts" fallback was silent trust-on-first-use nothing in the product could
- * display or defend, i.e. the exact hole the host-key-pinning wave closed everywhere
- * else.
+ * AIDEV-NOTE: the destination is a {@code servers} row, never a typed-in
+ * {@code user@host} with a pasted pin beside it. Two authorities over "is this remote
+ * host the one we think it is" is one too many, and the pasted one was strictly
+ * weaker: nothing forced the operator to have verified the line they pasted, where a
+ * host record walks scan / display / out-of-band confirm / pin and QUARANTINES on a
+ * later mismatch. Every exchange re-reads the row and re-passes the gate, so a host
+ * quarantined mid-backup stops the very next command instead of at the next operation.
+ *
+ * Trust therefore rides {@link HostKeys#sshArgv} -- THE inventoried-host argv, which
+ * also brings the per-host client identity and {@code IdentitiesOnly=yes}. There is no
+ * argv construction in this class at all, which is how "no ambient known_hosts, ever"
+ * is true BY CONSTRUCTION here rather than by inspection.
  */
 public final class SshBackupTarget implements BackupTarget {
 
@@ -42,29 +53,41 @@ public final class SshBackupTarget implements BackupTarget {
 
     private static final long COMMAND_TIMEOUT_MS = 600_000;
 
-    private final @NonNull String target;
+    private final int serverId;
     private final @NonNull String basePath;
-    private final @NonNull String pinnedHostKey;
-    private final @NonNull String alias;
 
     /**
-     * @param target        {@code [user@]host[:port]}
-     * @param basePath      absolute remote directory backups live under
-     * @param pinnedHostKey the host key line to pin; there is no unpinned mode
-     * @throws IOException when no pin was configured
+     * @param serverId the {@code servers} row this destination lives on
+     * @param basePath absolute remote directory backups live under
      */
-    public SshBackupTarget(@NonNull String target, @NonNull String basePath,
-                           @Nullable String pinnedHostKey) throws IOException {
-        if (pinnedHostKey == null || pinnedHostKey.isBlank()) {
-            throw new IOException("SSH backup target '" + target + "' has no pinned host"
-                + " key; scan the host and record its key line before backing up to it");
-        }
-        this.target = target;
+    public SshBackupTarget(int serverId, @NonNull String basePath) {
+        this.serverId = serverId;
         this.basePath = basePath;
-        this.pinnedHostKey = pinnedHostKey.trim();
-        // Stable per destination, and a legal HostKeyAlias token whatever the operator
-        // typed as a target (user@, IPv6 literal, :port).
-        this.alias = "hohenheim-backup-" + SecureTokens.sha256Hex(target).substring(0, 16);
+    }
+
+    /**
+     * The destination host, re-read and re-gated per exchange.
+     *
+     * @throws Violations when the host vanished, is not an ssh host, is unconfirmed or
+     *                    is quarantined
+     */
+    private @NonNull Row destination() {
+        Row server = Models.get(ServerModel.class).findById(this.serverId);
+        if (server == null) {
+            throw Violations.ofForm(Microcopy.of("backup_target_host_missing")
+                .withFilter("scope", "violations").withArg("id", this.serverId));
+        }
+        HostAdmission.requireBackupDestination(server);
+        return server;
+    }
+
+    /**
+     * Pass the destination gate without connecting.
+     *
+     * @throws Violations naming why this host may not receive backups
+     */
+    public void requireUsableDestination() {
+        destination();
     }
 
     @Override
@@ -161,20 +184,23 @@ public final class SshBackupTarget implements BackupTarget {
         return runStreaming(remoteCommand, stdin, stdout);
     }
 
+    /**
+     * AIDEV-NOTE: swallows the REFUSAL too (a host quarantined between the failed write
+     * and this cleanup), because this runs inside a catch block whose original error is
+     * the one that must reach the caller. The .part suffix marks the debris regardless.
+     */
     private void bestEffort(@NonNull String remoteCommand) {
         try {
             runStreaming(remoteCommand, null, null);
-        } catch (IOException ignored) {
-            // cleanup is best effort; the .part suffix marks the debris regardless
+        } catch (IOException | RuntimeException ignored) {
+            // cleanup is best effort; the caller rethrows the failure that got us here
         }
     }
 
     private byte @NonNull [] runStreaming(@NonNull String remoteCommand,
                                           @Nullable InputStream stdin,
                                           @Nullable OutputStream stdout) throws IOException {
-        List<String> argv = HostKeys.pinnedArgv(this.alias, this.pinnedHostKey, this.target,
-            List.of("-o", "ConnectTimeout=10"));
-        argv.add(remoteCommand);
+        List<String> argv = HostKeys.sshArgv(destination(), List.of(remoteCommand));
         return exchange(argv, stdin, stdout, remoteCommand);
     }
 

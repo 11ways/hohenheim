@@ -2446,6 +2446,25 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   per-instance backup schedules (see the Phase 5 record-schedule STATUS);
   the other gaps in this list stand unchanged.
 
+  SUPERSEDED (2026-08-05): the `ssh` backup kind no longer addresses a
+  free-form `user@host` with its own pasted host-key pin. Its settings are now
+  a HOST RECORD reference plus a path, so the destination's identity is the
+  host record's pinned, operator-CONFIRMED key and its quarantine state, and
+  there is exactly one authority over "is this remote host the one we think it
+  is". A quarantined or unconfirmed host is refused as a destination by name
+  (`host_quarantined` / `host_key_unverified`), and a non-ssh host is refused
+  outright (`host_not_ssh`) rather than selling a controller-local directory as
+  off-host. Trust is NOT a second admission axis: a storage host needs the
+  TRUST half of the host record only, never a compute preflight or an admit, so
+  it stays `blocked` for placement forever and needs no new role column.
+  `SshBackupTarget` builds no argv of its own at all -- every exchange goes
+  through `HostKeys.sshArgv`, which also brings the per-host client identity,
+  so the old ambient-`known_hosts` shape is unexpressible rather than merely
+  absent. `BackupTargetsTest` now walks one fixture through unpinned,
+  unconfirmed, healthy, quarantined and key-changed against a real sshd;
+  `LiveOffHostBackupTest` enrols starfleet as a host record and re-proves the
+  off-host round trip through it.
+
   STATUS (2026-08-05): the INCUS DRIVER half LANDED, proven live against a real
   remote Incus 7.3 daemon (daystrom, https://10.47.1.99:8443). What shipped:
   `IncusClient` over its own transport contract (`IncusTransport`: REST envelope

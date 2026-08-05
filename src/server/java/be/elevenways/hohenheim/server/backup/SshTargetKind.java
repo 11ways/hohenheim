@@ -1,44 +1,52 @@
 package be.elevenways.hohenheim.server.backup;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.field.EnumField;
+import be.elevenways.zenit.common.orm.field.RegistryEnumField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
 import java.util.Map;
 
 /**
- * SSH backup-target kind: a directory on ANOTHER host, reached over ssh with strict
- * host-key checking against a REQUIRED pin recorded in the settings -- accept-new and
- * ambient known_hosts do not exist here by decision.
+ * SSH backup-target kind: a directory on an ENROLLED HOST, reached over ssh through
+ * that host record's pinned, operator-confirmed identity.
+ *
+ * The kind stores a host REFERENCE and a path -- no {@code user@host}, no pasted key
+ * line. The trust ceremony (scan, show the fingerprint, confirm out of band, pin,
+ * quarantine on mismatch) already exists on the host record and is the only authority
+ * over the destination's identity; accept-new and ambient known_hosts do not exist
+ * anywhere in this lane.
  */
 public final class SshTargetKind implements BackupTargetKindHandler {
 
     public static final Identifier ID = Identifier.of("hohenheim", "ssh");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
-    public static final StringField TARGET = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("target")
-            .label(HohenheimFormCopy.label("ssh_target"))
-            .help(HohenheimFormCopy.help("backup_ssh_target"))
+    /**
+     * The destination host record, stored as the {@code hohenheim:<id>} registry key
+     * every other host-picking settings field uses, so a host rename never re-points a
+     * backup target at a different machine.
+     */
+    public static final EnumField SERVER = SETTINGS_SCHEMA.addField(
+        RegistryEnumField.builder("server")
+            .registry(ServerOptions.REGISTRY)
+            .label(HohenheimFormCopy.label("server"))
+            .help(HohenheimFormCopy.help("backup_ssh_server"))
             .build());
 
     public static final StringField PATH = SETTINGS_SCHEMA.addField(
         StringField.builder().name("path")
             .label(HohenheimFormCopy.label("directory"))
             .help(HohenheimFormCopy.help("backup_ssh_path"))
-            .build());
-
-    /** Required: an unpinned ssh target would be trust-on-first-use with no pin to show. */
-    public static final StringField HOST_KEY = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("host_key")
-            .label(HohenheimFormCopy.label("host_key"))
-            .help(HohenheimFormCopy.help("backup_ssh_host_key"))
-            .required()
             .build());
 
     @Override
@@ -65,19 +73,42 @@ public final class SshTargetKind implements BackupTargetKindHandler {
     public String getColor() { return "blue"; }
 
     @Override
-    public Schema getSchema() { return SETTINGS_SCHEMA; }
+    public Schema getSchema() {
+        ServerOptions.ensureFresh();
+        return SETTINGS_SCHEMA;
+    }
 
+    /**
+     * @throws IOException when the settings name no host or no absolute path
+     * @throws Violations when the named host is not an ssh host, is unconfirmed or is
+     *         quarantined
+     */
     @Override
     public @NonNull BackupTarget targetFor(@NonNull Map<String, Object> settings) throws IOException {
-        String target = text(settings.get("target"));
         String path = text(settings.get("path"));
-        if (target.isEmpty()) {
-            throw new IOException("SSH backup target has no user@host configured");
-        }
         if (path.isEmpty() || !path.startsWith("/")) {
             throw new IOException("SSH backup target needs an absolute remote directory path");
         }
-        return new SshBackupTarget(target, path, text(settings.get("host_key")));
+        String spelling = text(settings.get("server"));
+        if (spelling.isEmpty()) {
+            // Explicit, because canonicalServerId folds a blank spelling to the LOCAL
+            // host, and "the local host is not an ssh destination" is a confusing way to
+            // say "you picked no host".
+            throw new IOException("SSH backup target names no destination host");
+        }
+        int serverId;
+        try {
+            serverId = ServerModel.canonicalServerId(spelling);
+        } catch (IllegalArgumentException unknown) {
+            throw new IOException("SSH backup target names no enrolled host: "
+                + unknown.getMessage());
+        }
+        SshBackupTarget target = new SshBackupTarget(serverId, path);
+        // Gate at RESOLUTION as well as per exchange: the admin's test-connection action
+        // and every backup operation resolve through here, so an unusable destination is
+        // named before any downtime is spent on it.
+        target.requireUsableDestination();
+        return target;
     }
 
     private static String text(Object value) {
