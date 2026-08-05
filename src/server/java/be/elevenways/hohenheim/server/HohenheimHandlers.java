@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.files.InstanceFileEndpoints;
+import be.elevenways.hohenheim.server.api.PaasApi;
 import be.elevenways.hohenheim.server.instance.InstanceApi;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
@@ -112,6 +113,7 @@ public final class HohenheimHandlers {
         initDevTunnel();
         initApi();
         InstanceApi.init();
+        PaasApi.init();
         InstanceFileEndpoints.init();
         InstanceStatsHandler.init();
     }
@@ -989,12 +991,7 @@ public final class HohenheimHandlers {
     }
 
     private static Optional<GitSiteRequestHandler> gitHandler(Integer siteId) {
-        var proxy = ServerMain.getProxyServer();
-        if (proxy != null && siteId != null
-            && proxy.getDispatcher().findHandlerBySiteId(siteId) instanceof GitSiteRequestHandler git) {
-            return Optional.of(git);
-        }
-        return Optional.empty();
+        return Optional.ofNullable(SiteHandlers.git(siteId));
     }
 
     private static Map<String, String> formMap(Conduit conduit) {

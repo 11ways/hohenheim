@@ -22,4 +22,15 @@ public final class SiteHandlers {
         }
         return handler instanceof ManagedProcessSiteHandler managed ? managed : null;
     }
+
+    /** The live git deployment wrapper of a site, or null (proxy down, not git-sourced). */
+    public static @Nullable GitSiteRequestHandler git(@Nullable Integer siteId) {
+        var proxy = ServerMain.getProxyServer();
+        if (proxy != null && siteId != null
+            && proxy.getDispatcher().findHandlerBySiteId(siteId)
+                instanceof GitSiteRequestHandler git) {
+            return git;
+        }
+        return null;
+    }
 }

@@ -5207,6 +5207,30 @@
     "text": "Een {$kind}-variabele mag zijn waarde enkel in de bijhorende kolom dragen",
     "scope": "violations"
   },
+  "deploy_not_available": {
+    "text": "Deze site heeft geen on-demand deploy; enkel git-sites kunnen gedeployed worden",
+    "scope": "violations"
+  },
+  "rollback_not_available": {
+    "text": "Er is geen rollbackdoel beschikbaar voor deze site",
+    "scope": "violations"
+  },
+  "variable_key_required": {
+    "text": "Een variabelesleutel is verplicht",
+    "scope": "violations"
+  },
+  "variable_kind_unknown": {
+    "text": "Onbekend variabelesoort {$kind}",
+    "scope": "violations"
+  },
+  "variable_not_found": {
+    "text": "Er bestaat geen variabele voor deze sleutel",
+    "scope": "violations"
+  },
+  "logs_unavailable": {
+    "text": "De logs van {$name} kunnen nu niet gelezen worden",
+    "scope": "violations"
+  },
   "variable_type_unknown": {
     "text": "Er is geen handler geregistreerd voor variabeletype {$type}",
     "scope": "violations"

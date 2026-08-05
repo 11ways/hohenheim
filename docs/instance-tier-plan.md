@@ -3103,6 +3103,35 @@ network, quota, ownership, secret and durable-operation mechanisms.
   API keys are capability/permission narrowed and browser sessions remain CSRF
   protected. Import tooling covers the Hohenheim records predating this model.
 
+  LANDED 2026-08-05 (re-verify, do not assume). The API extends the existing
+  `/api/v1` znit_-key lane (`PaasApi` + the shared `ApiConduits` plumbing the
+  instance lane now rides too): projects/environments by MEMBERSHIP (gated on
+  the key covering site/instance `manage` -- membership is grant-derived, so
+  the listing enforces scope narrowing itself, mutation-proven), sites via
+  `managedSiteScope`, deploy = the git wrapper's `enqueueDeploy` and rollback =
+  the SAME two lanes the UI offers (SiteReleases release-engine for docker,
+  previous slot for git process/static -- proven by the engine's own
+  `release_no_rollback_target` coming back over the wire), the three
+  operation-record lanes (git DeploymentModel, ReleaseOperationModel with step
+  log on the detail read, BuildOperationModel with its captured log), instance
+  console tail (`InstanceConsoles.tail`, named `logs_unavailable` refusal,
+  never an empty success), and variables over the ONE `instance_variables`
+  mechanism for instances AND environments -- secrets are WRITE-ONLY over the
+  API (`has_value` only; the projection mutation fails PaasApiTest). One
+  uniform 404 everywhere, including child records of another site. Rollback
+  demands no server-side phrase ON PURPOSE (ConfirmationSpec is a client
+  interlock; a server phrase here would be theater the HTML lane lacks) -- the
+  CLI owns the human interlock: `tools/hoh` (single-file node, thin client,
+  config 0600 via `hoh login`) types back the site slug or refuses
+  non-interactively without `--yes`, proven against a stub server
+  (`tools/hoh.test.js`: refusal AND no request on the wire). Docs:
+  `docs/paas-api.md`. Import tooling for pre-model records is the ledgered
+  `ProjectAdoptionSeeder` from the projects wave (`hohenheim.project-adoption`),
+  already covering live sites+instances; no second importer was built. NOT
+  here: an API create/delete lane for projects/sites (admin resources own
+  those), per-preview API surface, streaming log follow (the console WS stays
+  the streaming transport).
+
 Phase gate: two mutually hostile projects deploy from separate repositories;
 one uses a Dockerfile and one a buildpack; a preview is created and expires;
 a failed candidate never receives production traffic; a healthy candidate swaps

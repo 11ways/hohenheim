@@ -70,6 +70,31 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
+    public static final ParameterDefinition<Integer> PROJECT_ID = ParameterDefinition.builder(Integer.class)
+        .name("projectId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
+    public static final ParameterDefinition<Integer> ENVIRONMENT_ID = ParameterDefinition.builder(Integer.class)
+        .name("environmentId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
+    public static final ParameterDefinition<Integer> DEPLOYMENT_ID = ParameterDefinition.builder(Integer.class)
+        .name("deploymentId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
+    public static final ParameterDefinition<Integer> RELEASE_ID = ParameterDefinition.builder(Integer.class)
+        .name("releaseId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
+    public static final ParameterDefinition<Integer> BUILD_ID = ParameterDefinition.builder(Integer.class)
+        .name("buildId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
     // --- Rate limits: expensive or upstream-quota-bound operations. ---
     // The LE request burns Let's Encrypt quota; db dump/restore stream whole
     // databases; deploys spawn builds. Keyed per principal (per IP for
@@ -141,6 +166,19 @@ public class HohenheimEndpoints {
         RateLimitPolicy.of(30, Duration.ofMinutes(1))
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_instance_files_write");
+
+    // The PaaS surface: reads are generous enough for a polling CI job and still
+    // bounded; variable writes mutate deploy inputs and are tighter. Deploy and
+    // rollback ride the existing DEPLOY_LIMIT -- they spawn builds either way.
+    private static final RateLimitPolicy PAAS_READ_LIMIT =
+        RateLimitPolicy.of(120, Duration.ofMinutes(1))
+            .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
+            .named("hh_paas_read");
+
+    private static final RateLimitPolicy PAAS_WRITE_LIMIT =
+        RateLimitPolicy.of(30, Duration.ofMinutes(1))
+            .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
+            .named("hh_paas_write");
 
     // --- Let's Encrypt request (POST for the CMS certificate-request page) ---
     public static final Endpoint<Object> CERTIFICATES_REQUEST = Endpoint.<Object>builder()
@@ -477,6 +515,216 @@ public class HohenheimEndpoints {
         .requiresLogin()
         .csrfExempt()
         .rateLimit(INSTANCE_FILES_WRITE_LIMIT)
+        .build();
+
+    // --- PaaS API v1 (znit_ bearer keys via zenit-auth) ---
+    //
+    // The operator-facing automation seam over the machinery that already exists:
+    // projects/environments, git-sourced deployments, health-gated releases with
+    // digest-pinned rollback, per-deployment logs and the table-backed variable
+    // mechanism. Same three rules as the instance lane above: no authorization
+    // decision in a handler beyond the shared visibility walk, no existence oracle
+    // (one byte-identical 404), no field that was not enumerated. Handlers refuse
+    // non-API-key principals, which is what makes every csrfExempt below safe.
+
+    public static final Endpoint<Object> API_PROJECTS = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_projects"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("projects").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_PROJECT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_project"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("projects").addDelimiter().addParameter(PROJECT_ID).build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_V1_SITES = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_sites"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_V1_SITE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID).build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_V1_SITE_DEPLOY = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_deploy"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("deploy").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(DEPLOY_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_V1_SITE_ROLLBACK = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_rollback"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("rollback").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(DEPLOY_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_V1_SITE_DEPLOYMENTS = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_deployments"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("deployments").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_V1_SITE_DEPLOYMENT_LOG = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_deployment_log"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("deployments").addDelimiter().addParameter(DEPLOYMENT_ID)
+            .addDelimiter().addStatic("log").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_V1_SITE_RELEASES = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_releases"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("releases").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_V1_SITE_RELEASE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_release"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("releases").addDelimiter().addParameter(RELEASE_ID).build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_V1_SITE_BUILDS = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_builds"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("builds").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_V1_SITE_BUILD_LOG = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_build_log"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("builds").addDelimiter().addParameter(BUILD_ID)
+            .addDelimiter().addStatic("log").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_INSTANCE_LOGS = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_logs"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("logs").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_INSTANCE_VARIABLES = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_variables"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("variables").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_VARIABLE_SET = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_variable_set"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("variables").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(PAAS_WRITE_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_VARIABLE_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_variable_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("variables").addDelimiter().addStatic("delete").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(PAAS_WRITE_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_ENVIRONMENT_VARIABLES = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_environment_variables"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("environments").addDelimiter().addParameter(ENVIRONMENT_ID)
+            .addDelimiter().addStatic("variables").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_ENVIRONMENT_VARIABLE_SET = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_environment_variable_set"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("environments").addDelimiter().addParameter(ENVIRONMENT_ID)
+            .addDelimiter().addStatic("variables").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(PAAS_WRITE_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_ENVIRONMENT_VARIABLE_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_environment_variable_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("environments").addDelimiter().addParameter(ENVIRONMENT_ID)
+            .addDelimiter().addStatic("variables").addDelimiter().addStatic("delete").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(PAAS_WRITE_LIMIT)
         .build();
 
     // --- Instance file manager, HTML lane (the Files tab posts here) ---
