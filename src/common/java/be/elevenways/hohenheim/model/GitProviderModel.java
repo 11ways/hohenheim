@@ -30,7 +30,7 @@ public class GitProviderModel extends Model {
     /** {@link #KIND} of a GitHub-compatible provider (github.com or GHE). */
     public static final String KIND_GITHUB = "github";
 
-    /** {@link #KIND} of a GitLab-compatible provider; declared, not yet implemented. */
+    /** {@link #KIND} of a GitLab-compatible provider (gitlab.com or self-hosted). */
     public static final String KIND_GITLAB = "gitlab";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

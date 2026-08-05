@@ -17,11 +17,10 @@ import java.util.Map;
 
 /**
  * The one construction funnel of provider clients, and the derivation of the per-clone
- * credential environment. GITLAB is a DECLARED kind this refuses by name -- the path:
- * a {@code GitlabProviderClient} implementing the same seam (project listing via
- * {@code /api/v4/projects?membership=true}, branches via {@code /repository/branches},
- * commit statuses via {@code /statuses/:sha}, clone user {@code oauth2}), constructed
- * here, with webhook verification already handled (X-Gitlab-Token in GitWebhookHandler).
+ * credential environment. Kinds: {@link GithubProviderClient} (PAT or App-minted
+ * installation tokens) and {@link GitlabProviderClient} (v4 API, clone user
+ * {@code oauth2}); webhook verification is kind-agnostic in GitWebhookHandler
+ * (X-Hub-Signature-256 / X-Gitea-Signature HMAC, X-Gitlab-Token shared secret).
  */
 public final class GitProviders {
 
@@ -63,6 +62,10 @@ public final class GitProviders {
                 provider.get(GitProviderModel.APP_ID),
                 provider.get(GitProviderModel.APP_INSTALLATION_ID),
                 provider.get(GitProviderModel.APP_PRIVATE_KEY_PEM));
+        }
+        if (GitProviderModel.KIND_GITLAB.equals(kind)) {
+            return new GitlabProviderClient(baseUrl,
+                provider.get(GitProviderModel.ACCESS_TOKEN));
         }
         throw Violations.ofField("kind", kind,
             Microcopy.of("git_provider_kind_unavailable")

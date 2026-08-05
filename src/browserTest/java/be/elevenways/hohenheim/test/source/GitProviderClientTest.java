@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * The GitHub provider client against a FAKE provider API: repository/branch listing,
  * deployment statuses, and the App JWT -> installation-token mint -- asserted on the
  * wire the fake captured (headers, bodies, real RS256 signature verification), never on
- * the client's own claims. Also proves the GitLab kind refuses by name and a
+ * the client's own claims. Also proves an undeclared kind refuses by name and a
  * redirecting provider is never followed.
  */
 class GitProviderClientTest {
@@ -205,9 +205,14 @@ class GitProviderClientTest {
         assertThat(credential.username()).isEqualTo("x-access-token");
         assertThat(credential.secret()).isEqualTo("pat-token");
 
-        // 4. A malformed repository never becomes a URL path.
+        // 4. A malformed repository never becomes a URL path. The dot-dot case
+        //    matters separately: ".." matches the name charset and would
+        //    URL-normalize into a different API endpoint.
         assertThat(catchThrowable(() -> client.listBranches("../../evil")))
             .as("step 4: path tricks are refused before any request")
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThat(catchThrowable(() -> client.listBranches("acme/..")))
+            .as("step 4: a dot-dot segment is refused before any request")
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -284,14 +289,14 @@ class GitProviderClientTest {
     }
 
     @Test
-    void gitlabIsADeclaredKindThatRefusesByName() {
+    void anUndeclaredKindRefusesByName() {
         Row provider = Models.get(GitProviderModel.class).createEmptyRow();
         provider.set(GitProviderModel.ID, 9005);
-        provider.set(GitProviderModel.NAME, "gl");
-        provider.set(GitProviderModel.KIND, GitProviderModel.KIND_GITLAB);
+        provider.set(GitProviderModel.NAME, "bb");
+        provider.set(GitProviderModel.KIND, "bitbucket");
         Throwable refused = catchThrowable(() -> GitProviders.clientFor(provider));
         assertThat(refused)
-            .as("the declared-but-unimplemented kind refuses loudly, never half-works")
+            .as("an undeclared kind refuses loudly, never half-works")
             .isInstanceOf(be.elevenways.zenit.common.validation.Violations.class);
     }
 
