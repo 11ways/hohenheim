@@ -1,9 +1,5 @@
 package be.elevenways.hohenheim.server.security;
 
-import org.checkerframework.checker.nullness.qual.NonNull;
-
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.List;
 
 /**
@@ -31,47 +27,4 @@ public final class TenantNetworkRanges {
     public static final List<String> DENIED_V6 = List.of("fc00::/7", "fe80::/10");
 
     private TenantNetworkRanges() {}
-
-    /**
-     * Whether one of the denied ranges fully covers a subnet -- the guard an
-     * enforcement backend runs before trusting the static rule set to isolate a
-     * bridge whose subnet an operator chose.
-     */
-    public static boolean covers(@NonNull String subnetCidr) {
-        for (String denied : subnetCidr.indexOf(':') >= 0 ? DENIED_V6 : DENIED_V4) {
-            if (contains(denied, subnetCidr)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** Whether the outer CIDR contains the whole inner CIDR (same address family). */
-    static boolean contains(@NonNull String outerCidr, @NonNull String innerCidr) {
-        int outerSlash = outerCidr.indexOf('/');
-        int innerSlash = innerCidr.indexOf('/');
-        if (outerSlash < 0 || innerSlash < 0) {
-            return false;
-        }
-        byte[] outer;
-        byte[] inner;
-        try {
-            outer = InetAddress.getByName(outerCidr.substring(0, outerSlash)).getAddress();
-            inner = InetAddress.getByName(innerCidr.substring(0, innerSlash)).getAddress();
-        } catch (UnknownHostException unparseable) {
-            return false;
-        }
-        int outerBits = Integer.parseInt(outerCidr.substring(outerSlash + 1));
-        int innerBits = Integer.parseInt(innerCidr.substring(innerSlash + 1));
-        if (outer.length != inner.length || innerBits < outerBits) {
-            return false;
-        }
-        for (int bit = 0; bit < outerBits; bit++) {
-            int mask = 0x80 >> (bit & 7);
-            if (((outer[bit >> 3] ^ inner[bit >> 3]) & mask) != 0) {
-                return false;
-            }
-        }
-        return true;
-    }
 }

@@ -1775,16 +1775,45 @@ block is what the code does; amend the prose, do not code against it.
     REFUSES -- no container, no network -- which is the whole distinction from
     `NftService`. `ContainerHardening` now also refuses `NetworkMode`/`PidMode`/etc
     of the form `container:<id>`, which was the string that opted a workload out of
-    all of this. **STILL OPEN and deliberately so:** stacks, Docker sites and managed
-    databases remain on the shared default bridge and can still reach each other, the
-    host and the metadata address -- they are operator-authored, and migrating them
-    is a separate slice; per-TENANT grouping (one network per packed manage-subject
-    set rather than per workload); egress is restrictive, not closed (no per-workload
-    allowlist); the `DatabaseEnvInjection` limitation for Docker sites is untouched
-    because that needs the site tier on user-defined networks; and the applier is
-    proven against real nftables in a private network namespace, NOT against a host
-    netns (no machine in the loop has passwordless `nft`), so the host preflight this
-    phase already demands must actually verify nft before a host accepts tenants.
+    all of this.
+  - **EXTENDED 2026-08-05 (isolation wave): Docker sites, managed databases and Incus
+    system containers now isolated too; egress is a declared fact.** `InstanceNetworks`
+    was generalised to `WorkloadNetworks` (unchanged mechanics). `WorkloadNetworkPolicy`
+    gained `forServer(name)` -- the nft lane now targets the KERNEL OF THE HOST THE
+    WORKLOAD LANDS ON (ssh sudo nft for an SSH-mode host), because a local applier for a
+    remote daemon "verifies" rules on the controller while the workload runs wide open;
+    `HostPreflight` uses the same `NftRunner.forServer` so what it probes is what a deploy
+    relies on. A new `Egress` enum is a KIND-declared fact materialised into the forward
+    chain (`OPEN` = restrictive default, `NONE` = a final saddr-scoped drop). `SiteContainerKind`
+    is now `PRIVATE`/`OPEN` (a site release container migrates the moment its next release
+    deploys -- the release path replaces the container). `ManagedDatabase` takes
+    `NetworkPosture`+`WorkloadNetworkPolicy`; the production `DatabaseService` path declares
+    `PRIVATE`+`NONE` (an engine has no legitimate outbound-initiated traffic) and REFUSES to
+    provision a record-backed DB on a host that cannot enforce -- record-less test/preview
+    callers keep `SHARED_BRIDGE`. Incus: `IncusNetworkPolicy` attaches ONE shared
+    `hohenheim-isolation` network ACL (egress-reject the same `TenantNetworkRanges`) to every
+    instance's `eth0` in the CREATE body, read-back-VERIFIED off the daemon; `IncusPreflight`
+    grows a `network_acl` probe (create+read+delete) so a daemon that cannot carry an ACL is
+    refused admission; the shared `TenantNetworkRanges` vocabulary is denied identically by
+    both backends. Tests: `WorkloadNetworkPolicyTest` gains an egress-NONE journey (netns,
+    counterfactual re-declares OPEN); `DatabaseNetworkIsolationTest` (real docker, two redis
+    DBs, negative + positive anchor + destroy sweeps the network); `IncusNetworkIsolationLiveTest`
+    (daystrom, two subjects, A cannot reach B over v4 AND v6, positive anchor 1.1.1.1, host
+    gateway denied -- opt-in via `~/.config/hohenheim-livehost`, skips green elsewhere).
+    Proven on daystrom (Incus 7.3, Docker 29.7.1): baseline A<->B reachable v4+v6, ACL applied
+    A blocked v4+v6, DNS+internet intact.
+  - **STILL OPEN and deliberately so:** STACKS remain on their per-stack network without the
+    metadata/host deny policy -- they already get cross-tenant isolation from their own bridge,
+    but a stack service can still reach the metadata address and the host; applying the throwing
+    policy to stacks means stacks refuse on a host without enforcement (a behaviour change for
+    operator workloads that needs netns fixtures across the stack test suite), so it is a named
+    separate slice (`StackDeployer.ensureNetwork` is the seam). `DatabaseEnvInjection` for
+    DOCKER sites is still `127.0.0.1`-shaped: now that both tiers are on private networks a
+    Docker site container must JOIN each attached database's network and address the DB by its
+    container IP (host-process sites are unaffected -- they reach the published loopback port);
+    unblocked by this wave but not built (`SiteInstances`/`DatabaseEnvInjection` seam). Per-TENANT
+    grouping (one network per packed manage-subject set rather than per workload) and a
+    per-workload egress ALLOWLIST (beyond the OPEN/NONE binary) remain future tightenings.
 - **Already done, do not re-schedule:** `KnownCapabilities`/sensitivity classes
   (zenit core, wired -- Phase 3 only needs to REGISTER the instance vocabulary,
   which is an hour, not a workstream); `RecordGrants` + the grant-scoped
