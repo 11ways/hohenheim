@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -12,7 +11,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  *
  * @author Jelle De Loecker
  */
-public class M049_DnsRecordAttribution extends Migration {
+public class M049_DnsRecordAttribution extends HohenheimMigration {
 
     public M049_DnsRecordAttribution() {
         super("2026_08_03_000049", "Attribute system-generated DNS records");

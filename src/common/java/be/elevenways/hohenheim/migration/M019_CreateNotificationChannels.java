@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.migration;
 
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M019_CreateNotificationChannels extends Migration {
+public class M019_CreateNotificationChannels extends HohenheimMigration {
 
     public M019_CreateNotificationChannels() {
         super("2026_05_26_000019", "Create notification_channels table");

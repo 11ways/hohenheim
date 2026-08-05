@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M012_CreateSystemUsers extends Migration {
+public class M012_CreateSystemUsers extends HohenheimMigration {
 
     public M012_CreateSystemUsers() {
         super("2026_04_09_000012", "Create system_users table for per-site uid selection");

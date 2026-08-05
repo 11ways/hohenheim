@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -9,7 +8,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * rows and backup rows as DISTINCT records (a snapshot dies with the host, a backup
  * leaves it), plus the per-instance backup wiring columns.
  */
-public class M058_SnapshotsAndBackups extends Migration {
+public class M058_SnapshotsAndBackups extends HohenheimMigration {
 
     public M058_SnapshotsAndBackups() {
         super("2026_08_03_170000", "Instance snapshots, backups and backup targets");

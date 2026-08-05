@@ -8,7 +8,7 @@ import be.elevenways.zenit.common.orm.datasource.ColumnType;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.migration.Migration;
+import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 import be.elevenways.zenit.common.orm.quota.M001_CreateQuotaTable;
 import be.elevenways.zenit.common.orm.quota.Quotas;
@@ -35,7 +35,7 @@ import java.util.TreeSet;
  *
  * @author Jelle De Loecker
  */
-public class M055_InstanceQuotas extends Migration {
+public class M055_InstanceQuotas extends HohenheimMigration {
 
     public M055_InstanceQuotas() {
         super("2026_08_03_130000", "Instance quotas");

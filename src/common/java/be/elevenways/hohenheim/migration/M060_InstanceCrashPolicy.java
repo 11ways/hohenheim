@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -9,7 +8,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * enforces on an unexpected exit (the readiness/stop matcher data itself already lives
  * on instance_templates since M059).
  */
-public class M060_InstanceCrashPolicy extends Migration {
+public class M060_InstanceCrashPolicy extends HohenheimMigration {
 
     public M060_InstanceCrashPolicy() {
         super("2026_08_03_190000", "Instance crash policy");

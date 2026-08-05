@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M021_AddCertLetsencryptEmail extends Migration {
+public class M021_AddCertLetsencryptEmail extends HohenheimMigration {
 
     public M021_AddCertLetsencryptEmail() {
         super("2026_06_10_000021", "Add per-certificate Let's Encrypt account email");

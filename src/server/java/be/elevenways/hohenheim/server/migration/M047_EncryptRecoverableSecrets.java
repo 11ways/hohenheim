@@ -13,7 +13,7 @@ import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.field.Field;
-import be.elevenways.zenit.common.orm.migration.Migration;
+import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 import be.elevenways.zenit.server.orm.crypto.EncryptionScope;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
@@ -28,7 +28,7 @@ import java.util.List;
  * @author Jelle De Loecker
  * @since  0.6.0
  */
-public class M047_EncryptRecoverableSecrets extends Migration {
+public class M047_EncryptRecoverableSecrets extends HohenheimMigration {
 
     /** One plaintext column to fold into the encrypted-envelope path. */
     public record Target(@NonNull String table, @NonNull Field<?, ?> field, boolean jsonColumn) {}

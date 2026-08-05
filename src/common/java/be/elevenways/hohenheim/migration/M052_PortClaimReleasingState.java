@@ -8,7 +8,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -18,7 +17,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
  * A claim whose teardown was not OBSERVED to succeed parks in {@code releasing} instead of
  * being deleted, and keeps blocking rival claims until an observer frees it (C6).
  */
-public class M052_PortClaimReleasingState extends Migration {
+public class M052_PortClaimReleasingState extends HohenheimMigration {
 
     public M052_PortClaimReleasingState() {
         // Sorts after zenit-auth's 2026_08_03_000130-class versions in the shared ordering.

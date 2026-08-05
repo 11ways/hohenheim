@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.migration;
 
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 import java.util.List;
@@ -20,7 +19,7 @@ import java.util.List;
  *
  * @author Jelle De Loecker
  */
-public class M046_DyndnsTokenIndex extends Migration {
+public class M046_DyndnsTokenIndex extends HohenheimMigration {
 
     /** ONE name for the index, so up() and down() can never drift apart. */
     private static final String DYNDNS_TOKEN_INDEX = "dns_records_dyndns_token_index";

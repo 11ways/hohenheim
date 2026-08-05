@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -9,7 +8,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * store and reporter registry are gone. The sites.security_report_token
  * column STAYS (it now holds the site's raw spamservice client key).
  */
-public class M040_DropSecurityIngestTables extends Migration {
+public class M040_DropSecurityIngestTables extends HohenheimMigration {
 
     public M040_DropSecurityIngestTables() {
         super("2026_07_22_000040", "Drop the security event and reporter tables");

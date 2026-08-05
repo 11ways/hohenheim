@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -13,7 +12,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * enrolled before preflight existed -- a host with no successful probe is never
  * silently trusted. Nothing is live, so no heal admits existing hosts.
  */
-public class M056_HostIdentityAndFencing extends Migration {
+public class M056_HostIdentityAndFencing extends HohenheimMigration {
 
     public M056_HostIdentityAndFencing() {
         super("2026_08_03_140000", "Host identity, admission and fencing columns");

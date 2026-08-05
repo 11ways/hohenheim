@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M029_AddDatabaseLimits extends Migration {
+public class M029_AddDatabaseLimits extends HohenheimMigration {
 
     public M029_AddDatabaseLimits() {
         super("2026_07_08_000029", "Add resource-limit columns to managed_databases");

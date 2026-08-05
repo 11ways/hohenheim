@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -10,7 +9,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * a site own TWO releases at once during a zero-downtime swap. No data heals: existing
  * instances are each their owner's only release, which the column default states.
  */
-public class M066_ReleaseOperations extends Migration {
+public class M066_ReleaseOperations extends HohenheimMigration {
 
     public M066_ReleaseOperations() {
         super("2026_08_05_110000", "Release operations and instance runtime roles");

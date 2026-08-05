@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -9,7 +8,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * what it emitted, on the build operation itself. No data heals -- every pre-existing
  * row is a dockerfile build, whose detection is legitimately null.
  */
-public class M069_BuildDetection extends Migration {
+public class M069_BuildDetection extends HohenheimMigration {
 
     public M069_BuildDetection() {
         super("2026_08_08_100000", "Build detection record");

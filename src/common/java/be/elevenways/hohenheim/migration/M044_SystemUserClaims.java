@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -11,7 +10,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * exclusive at the database level; SQLite treats NULLs as distinct, so unclaimed rows
  * coexist freely.
  */
-public class M044_SystemUserClaims extends Migration {
+public class M044_SystemUserClaims extends HohenheimMigration {
 
     public M044_SystemUserClaims() {
         super("2026_07_29_000044", "Record per-site system user claims");

@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M023_AddDomainResponseHeaders extends Migration {
+public class M023_AddDomainResponseHeaders extends HohenheimMigration {
 
     public M023_AddDomainResponseHeaders() {
         super("2026_06_10_000023", "Add response header rules to site_domains");

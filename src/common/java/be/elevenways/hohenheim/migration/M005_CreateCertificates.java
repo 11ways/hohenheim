@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M005_CreateCertificates extends Migration {
+public class M005_CreateCertificates extends HohenheimMigration {
 
     public M005_CreateCertificates() {
         super("2026_03_31_000005", "Create certificates table");

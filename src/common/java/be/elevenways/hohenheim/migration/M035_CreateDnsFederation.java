@@ -1,14 +1,13 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
  * DNS federation: per-zone primary/secondary role, transfer peers, and the
  * replica bookkeeping columns.
  */
-public class M035_CreateDnsFederation extends Migration {
+public class M035_CreateDnsFederation extends HohenheimMigration {
 
     public M035_CreateDnsFederation() {
         super("2026_07_17_000035", "Add DNS zone roles, transfer peers, and replica state");

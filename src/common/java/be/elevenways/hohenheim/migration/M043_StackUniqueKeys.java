@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.migration;
 
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -11,7 +10,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * Self-healing: pre-existing duplicates are renamed out of the way before the index
  * is created, so an install carrying them upgrades instead of failing to boot.
  */
-public class M043_StackUniqueKeys extends Migration {
+public class M043_StackUniqueKeys extends HohenheimMigration {
 
     // AIDEV-NOTE: This migration used to open with schema.assertUnique(...), which threw a
     // DataSourceException on the first duplicate, became a failed MigrationResult and died in

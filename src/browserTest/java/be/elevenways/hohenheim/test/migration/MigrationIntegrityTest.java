@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.migration;
 
+import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.hohenheim.migration.M017_CreateServers;
 import be.elevenways.hohenheim.migration.M042_CreateStacks;
 import be.elevenways.hohenheim.migration.M043_StackUniqueKeys;
@@ -421,6 +422,33 @@ class MigrationIntegrityTest {
                 schema.dropTable("managed_databases");
             }
         };
+    }
+
+    @Test
+    void everyHohenheimMigrationDeclaresTheOneHohenheimStream() {
+        // The migrations span TWO packages (common migration/ + server migration/) but are
+        // ONE curated M001..M072 timeline. A second version stream would silently drop
+        // same-stream out-of-order detection between the halves, so fragmenting must fail
+        // HERE, not go unnoticed the next time a migration file moves packages.
+        List<String> offStream = new ArrayList<>();
+        int hohenheimMigrations = 0;
+        for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations("default")) {
+            Migration migration = supplier.get();
+            if (!migration.getClass().getName().startsWith("be.elevenways.hohenheim.")) {
+                continue;
+            }
+            hohenheimMigrations++;
+            if (!HohenheimMigration.STREAM.equals(migration.getVersionStream())) {
+                offStream.add(migration.getClass().getName() + " -> " + migration.getVersionStream());
+            }
+        }
+        assertThat(hohenheimMigrations)
+            .as("discovery must see the whole shipped set (68 when this pin was written)")
+            .isGreaterThanOrEqualTo(68);
+        assertThat(offStream)
+            .as("every hohenheim migration must declare HohenheimMigration.STREAM; a second "
+                + "stream fragments out-of-order drift detection")
+            .isEmpty();
     }
 
     @Test

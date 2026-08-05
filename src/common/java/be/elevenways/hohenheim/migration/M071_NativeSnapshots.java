@@ -1,14 +1,13 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
  * Daemon-side snapshot names on instance snapshot rows: the Incus driver's snapshots
  * live in the instance's own storage pool instead of a controller directory.
  */
-public class M071_NativeSnapshots extends Migration {
+public class M071_NativeSnapshots extends HohenheimMigration {
 
     public M071_NativeSnapshots() {
         super("2026_08_11_100000", "Native snapshots");

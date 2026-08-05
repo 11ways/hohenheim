@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -9,7 +8,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * security events, IP bans, plus the per-site raw reporter token column used
  * for env injection into managed children.
  */
-public class M039_CreateSecurityTables extends Migration {
+public class M039_CreateSecurityTables extends HohenheimMigration {
 
     public M039_CreateSecurityTables() {
         super("2026_07_22_000039", "Create the security reporter, event, and ban tables");

@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.migration;
 
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -11,7 +10,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * @throws UnsupportedOperationException from {@link #down} — the transform is
  *         not reversed; all readers also accept the legacy shapes.
  */
-public class M025_MapShapedSettings extends Migration {
+public class M025_MapShapedSettings extends HohenheimMigration {
 
     public M025_MapShapedSettings() {
         super("2026_07_07_000025", "Map-shaped env vars, headers, credentials + registry-keyed user/node");

@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M022_CreateSiteAuthProviders extends Migration {
+public class M022_CreateSiteAuthProviders extends HohenheimMigration {
 
     public M022_CreateSiteAuthProviders() {
         super("2026_06_04_000022", "Create site_auth_providers + site_sessions and link to sites");

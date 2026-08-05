@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M018_AddDatabaseServer extends Migration {
+public class M018_AddDatabaseServer extends HohenheimMigration {
 
     public M018_AddDatabaseServer() {
         super("2026_05_25_000018", "Add target server to managed_databases");

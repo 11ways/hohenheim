@@ -7,7 +7,7 @@ import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.common.orm.migration.Migration;
+import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 import be.elevenways.zenit.common.task.record.M001_CreateRecordScheduleTables;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
@@ -31,7 +31,7 @@ import java.util.Map;
  *
  * @author Jelle De Loecker
  */
-public class M061_InstanceBackupSchedules extends Migration {
+public class M061_InstanceBackupSchedules extends HohenheimMigration {
 
     public M061_InstanceBackupSchedules() {
         super("2026_08_04_110000", "Instance backup schedules");

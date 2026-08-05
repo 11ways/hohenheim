@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M009_CreateAccessLists extends Migration {
+public class M009_CreateAccessLists extends HohenheimMigration {
 
     public M009_CreateAccessLists() {
         super("2026_04_02_000009", "Create access_lists table and link to sites");

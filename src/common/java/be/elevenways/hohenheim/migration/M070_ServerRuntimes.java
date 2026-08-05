@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -9,7 +8,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * connection URL, so which daemon a host runs is data the dispatch reads, never an
  * assumption baked into a client constructor.
  */
-public class M070_ServerRuntimes extends Migration {
+public class M070_ServerRuntimes extends HohenheimMigration {
 
     public M070_ServerRuntimes() {
         super("2026_08_09_100000", "Server runtimes");

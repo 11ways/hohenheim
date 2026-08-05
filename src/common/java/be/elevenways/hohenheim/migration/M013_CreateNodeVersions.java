@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M013_CreateNodeVersions extends Migration {
+public class M013_CreateNodeVersions extends HohenheimMigration {
 
     public M013_CreateNodeVersions() {
         super("2026_04_09_000013", "Create node_versions table for per-site node binary selection");

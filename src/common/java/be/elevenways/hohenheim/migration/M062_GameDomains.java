@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 import java.util.List;
@@ -13,7 +12,7 @@ import java.util.List;
  * The (site_domain_id, proxy_instance_id) unique index is safe on a NEW table (no live
  * data to heal); a domain may still map through several proxies.
  */
-public class M062_GameDomains extends Migration {
+public class M062_GameDomains extends HohenheimMigration {
 
     public M062_GameDomains() {
         super("2026_08_04_120000", "Game domain mappings");

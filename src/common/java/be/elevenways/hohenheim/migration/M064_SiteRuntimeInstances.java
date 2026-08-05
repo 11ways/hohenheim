@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 /**
@@ -11,7 +10,7 @@ import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
  * and the pre-lowering site containers were owned by naming convention plus site labels,
  * which SiteInstances retires at first deploy.
  */
-public class M064_SiteRuntimeInstances extends Migration {
+public class M064_SiteRuntimeInstances extends HohenheimMigration {
 
     public M064_SiteRuntimeInstances() {
         super("2026_08_04_140000", "Site-owned runtime instances");

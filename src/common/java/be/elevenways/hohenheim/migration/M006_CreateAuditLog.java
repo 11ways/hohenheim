@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M006_CreateAuditLog extends Migration {
+public class M006_CreateAuditLog extends HohenheimMigration {
 
     public M006_CreateAuditLog() {
         super("2026_03_31_000006", "Create audit_log table");

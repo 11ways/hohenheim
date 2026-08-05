@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M017_CreateServers extends Migration {
+public class M017_CreateServers extends HohenheimMigration {
 
     public M017_CreateServers() {
         super("2026_05_25_000017", "Create servers table for the multi-server inventory");

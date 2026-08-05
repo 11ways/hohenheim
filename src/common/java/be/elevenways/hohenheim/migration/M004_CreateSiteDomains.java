@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M004_CreateSiteDomains extends Migration {
+public class M004_CreateSiteDomains extends HohenheimMigration {
 
     public M004_CreateSiteDomains() {
         super("2026_03_31_000004", "Create site_domains table");

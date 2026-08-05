@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M011_CreateProclogs extends Migration {
+public class M011_CreateProclogs extends HohenheimMigration {
 
     public M011_CreateProclogs() {
         super("2026_04_02_000011", "Create proclogs table for process output");

@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M015_CreateManagedDatabases extends Migration {
+public class M015_CreateManagedDatabases extends HohenheimMigration {
 
     public M015_CreateManagedDatabases() {
         super("2026_05_25_000015", "Create managed_databases table for the database manager");

@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
-public class M030_AddNotificationEvents extends Migration {
+public class M030_AddNotificationEvents extends HohenheimMigration {
 
     public M030_AddNotificationEvents() {
         super("2026_07_08_000030", "Add per-event subscriptions to notification_channels");

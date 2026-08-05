@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 
 import java.util.List;
@@ -14,7 +13,7 @@ import java.util.List;
  * nothing could have written any of this before it existed, and the new unique index
  * covers a freshly-created empty table only.
  */
-public class M068_GitProvidersWebhooksPreviews extends Migration {
+public class M068_GitProvidersWebhooksPreviews extends HohenheimMigration {
 
     public M068_GitProvidersWebhooksPreviews() {
         super("2026_08_07_100000", "Git providers, webhooks and preview deployments");
