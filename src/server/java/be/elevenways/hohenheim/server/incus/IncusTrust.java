@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
@@ -31,6 +32,11 @@ import java.util.Map;
  * AIDEV-NOTE: this enrollment IS the node-identity story (see ServerModel.RUNTIME).
  * The client certificate is minted per HOST record, mirroring the per-host ssh
  * identity: revoking one host's trust entry touches nothing else.
+ *
+ * AIDEV-NOTE: every read and write here goes through {@link HostTrustSlot#INCUS_TLS}.
+ * Before M074 this ceremony wrote the SAME columns as the ssh one, which is why an Incus
+ * host could not also hold an ssh admin lane and why the backup lane needed a runtime
+ * check to keep a PEM out of the known_hosts writer.
  */
 public final class IncusTrust {
 
@@ -65,7 +71,8 @@ public final class IncusTrust {
                 .withArg("target", endpoint.describe())
                 .withArg("detail", String.valueOf(e.getMessage())));
         }
-        return HostPins.apply(server, pem, IncusTls.fingerprintOf(offered));
+        return HostPins.apply(server, HostTrustSlot.INCUS_TLS, pem,
+            IncusTls.fingerprintOf(offered));
     }
 
     /** The digest of a pinned/offered certificate PEM ({@code incus info}'s hex spelling). */
@@ -77,16 +84,24 @@ public final class IncusTrust {
         }
     }
 
+    /**
+     * Record the operator's out-of-band comparison of the pinned certificate fingerprint
+     * against what {@code incus info} reports ON the host.
+     */
+    public static void confirm(@NonNull Row server) {
+        HostPins.confirm(server, HostTrustSlot.INCUS_TLS);
+    }
+
     /** Adopt the offered certificate; lands unverified, unpreflighted (see HostPins). */
     public static void repin(@NonNull Row server) {
-        HostPins.repin(server, IncusTrust::fingerprintOf);
+        HostPins.repin(server, HostTrustSlot.INCUS_TLS, IncusTrust::fingerprintOf);
     }
 
     // -- the per-host client identity -----------------------------------------
 
     /** Mint the host's client certificate if it has none; returns true when one was made. */
     public static boolean ensureIdentity(@NonNull Row server) {
-        String existing = server.get(ServerModel.IDENTITY_PRIVATE_KEY);
+        String existing = server.get(HostTrustSlot.INCUS_TLS.clientPrivate());
         if (existing != null && !existing.isBlank()) {
             return false;
         }
@@ -119,8 +134,8 @@ public final class IncusTrust {
             String privateKey = Files.readString(key, StandardCharsets.UTF_8);
             String certificate = Files.readString(cert, StandardCharsets.UTF_8);
             ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "host_identity_rotated", () -> {
-                server.set(ServerModel.IDENTITY_PRIVATE_KEY, privateKey);
-                server.set(ServerModel.IDENTITY_PUBLIC_KEY, certificate);
+                server.set(HostTrustSlot.INCUS_TLS.clientPrivate(), privateKey);
+                server.set(HostTrustSlot.INCUS_TLS.clientPublic(), certificate);
                 Models.get(ServerModel.class).save(server);
             });
             Blast.slog("hohenheim.host.identity_rotated", Map.of("server", name));

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -57,16 +58,26 @@ public final class HostAdmission {
         if (!ServerModel.requiresPinnedIdentity(server)) {
             return;
         }
-        String pinned = server.get(ServerModel.HOST_KEY);
-        if (pinned == null || pinned.isBlank()
-            || !Boolean.TRUE.equals(server.get(ServerModel.HOST_KEY_VERIFIED))) {
+        requireTrustedSlot(server, HostTrustSlot.transportOf(server));
+    }
+
+    /**
+     * The gate one named trust relationship passes: pinned, operator-CONFIRMED and not
+     * quarantined. An Incus host carries two of these -- the TLS transport it is driven
+     * over and, optionally, the ssh admin lane kernel-truth verification reads through --
+     * and each answers for itself.
+     *
+     * @throws Violations {@code host_key_unverified} or {@code host_quarantined}
+     */
+    public static void requireTrustedSlot(@NonNull Row server, @NonNull HostTrustSlot slot) {
+        if (!slot.isConfirmed(server)) {
             throw Violations.ofForm(violation("host_key_unverified")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         // A confirmed pin the machine has since CONTRADICTED is not a verified identity.
         // The ssh client would refuse the connection anyway; refusing here means the
         // refusal is ours, named, and arrives before any work is spent on it.
-        if (HostPins.isQuarantined(server)) {
+        if (HostPins.isQuarantined(server, slot)) {
             throw Violations.ofForm(violation("host_quarantined")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
@@ -87,26 +98,26 @@ public final class HostAdmission {
      * SECOND authority over "may workloads land here" next to admission, which is the
      * very duplication this whole seam was rewritten to remove.
      *
-     * AIDEV-NOTE: an SSH host specifically, because {@code host_key} is OVERLOADED by
-     * runtime -- it holds an ssh key line for a docker/ssh host and an Incus server
-     * certificate PEM for an incus/https one. Handing the latter to the ssh known_hosts
-     * writer would materialise a line ssh can never match, i.e. a pin that silently
-     * verifies nothing, so the mode check is load-bearing and not a formality. That
-     * overloading is a pre-existing smell worth splitting into two columns one day.
+     * AIDEV-NOTE: an SSH-LANE host specifically, and it is the ssh SLOT that is checked,
+     * never the host's primary transport. Until M074 that read {@code MODE_SSH &&
+     * !isIncus}, because {@code host_key} was overloaded by runtime and handing an Incus
+     * certificate PEM to the known_hosts writer would materialise a line ssh can never
+     * match -- a pin that silently verifies nothing. The columns are split now, so the
+     * question is simply whether this host declares a shell we have pinned trust on; an
+     * Incus host that also carries an admin lane is a legitimate destination.
      *
      * @throws Violations {@code host_not_ssh}, {@code host_key_unverified} or
      *         {@code host_quarantined}
      */
     public static void requireBackupDestination(@NonNull Row server) {
-        if (!ServerModel.MODE_SSH.equals(server.get(ServerModel.MODE))
-                || ServerModel.isIncus(server)) {
+        if (!ServerModel.hasSshLane(server)) {
             // The local daemon has no wire identity to pin at all: a directory on the
             // controller is the FILESYSTEM kind, which says out loud that it shares the
             // controller's failure domain instead of pretending to be off-host.
             throw Violations.ofForm(violation("host_not_ssh")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
-        requireVerifiedIdentity(server);
+        requireTrustedSlot(server, HostTrustSlot.SSH);
     }
 
     /**

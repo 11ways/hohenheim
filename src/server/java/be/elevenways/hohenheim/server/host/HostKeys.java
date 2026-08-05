@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.Blast;
@@ -19,7 +20,6 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -38,6 +38,12 @@ import java.util.Map;
  * cannot change what Hohenheim enforces -- the previous shape leaned on the OS
  * user's ambient {@code ~/.ssh/known_hosts}, which nothing in the product could read,
  * display or defend.
+ *
+ * AIDEV-NOTE: every read and write here goes through {@link HostTrustSlot#SSH} and
+ * nothing else. The Incus TLS ceremony is the same STATE MACHINE ({@link HostPins}) over
+ * a different slot, so a certificate PEM cannot reach the known_hosts writer at all --
+ * before M074 both ceremonies wrote the same columns and only a runtime check stood
+ * between a PEM and a materialised pin ssh could never match.
  *
  * AIDEV-NOTE: {@code HostKeyAlias} makes both lookup and verification key on a
  * constant we own ({@code hohenheim-host-<id>}) instead of the target spelling, so
@@ -107,12 +113,12 @@ public final class HostKeys {
     public static @NonNull List<String> sshArgv(@NonNull Row server,
                                                 @NonNull List<String> remoteCommand) {
         String name = String.valueOf((Object) server.get(ServerModel.NAME));
-        String pinned = server.get(ServerModel.HOST_KEY);
+        String pinned = server.get(HostTrustSlot.SSH.material());
         if (pinned == null || pinned.isBlank()) {
             throw new HostTrustException(HostProbe.FailureKind.NOT_PINNED,
                 "Host '" + name + "' has no pinned SSH host key; scan and confirm it first");
         }
-        String privateKey = server.get(ServerModel.IDENTITY_PRIVATE_KEY);
+        String privateKey = server.get(HostTrustSlot.SSH.clientPrivate());
         if (privateKey == null || privateKey.isBlank()) {
             throw new HostTrustException(HostProbe.FailureKind.NO_IDENTITY,
                 "Host '" + name + "' has no Hohenheim client key; rotate the SSH key and"
@@ -223,8 +229,8 @@ public final class HostKeys {
     public static @NonNull ScanResult scanAndPin(@NonNull Row server) {
         Offer offer = scan(server);
         // The pin state machine is SHARED with the Incus certificate ceremony (HostPins);
-        // only the scan itself is ssh-specific.
-        return HostPins.apply(server, offer.keyLine(), offer.fingerprint());
+        // only the scan itself, and the SLOT it lands in, are ssh-specific.
+        return HostPins.apply(server, HostTrustSlot.SSH, offer.keyLine(), offer.fingerprint());
     }
 
     /**
@@ -233,17 +239,7 @@ public final class HostKeys {
      * a human comparing digests would make the whole ceremony decorative.
      */
     public static void confirm(@NonNull Row server) {
-        String pinned = server.get(ServerModel.HOST_KEY);
-        if (pinned == null || pinned.isBlank()) {
-            throw Violations.ofForm(violation("host_key_not_pinned"));
-        }
-        ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "host_key_verified", () -> {
-            server.set(ServerModel.HOST_KEY_VERIFIED, true);
-            Models.get(ServerModel.class).save(server);
-        });
-        Blast.slog("hohenheim.host.key_verified", Map.of(
-            "server", String.valueOf((Object) server.get(ServerModel.NAME)),
-            "fingerprint", String.valueOf((Object) server.get(ServerModel.HOST_KEY_FINGERPRINT))));
+        HostPins.confirm(server, HostTrustSlot.SSH);
     }
 
     /**
@@ -253,7 +249,7 @@ public final class HostKeys {
      * admitted; recovery is never a side effect of reconnecting.
      */
     public static void repin(@NonNull Row server) {
-        HostPins.repin(server, HostKeys::fingerprintOf);
+        HostPins.repin(server, HostTrustSlot.SSH, HostKeys::fingerprintOf);
     }
 
     /** The digest {@code ssh-keygen -lf} prints for a public key line. */
@@ -319,7 +315,7 @@ public final class HostKeys {
 
     /** Generate the host's client keypair if it has none; returns true when one was made. */
     public static boolean ensureIdentity(@NonNull Row server) {
-        String existing = server.get(ServerModel.IDENTITY_PRIVATE_KEY);
+        String existing = server.get(HostTrustSlot.SSH.clientPrivate());
         if (existing != null && !existing.isBlank()) {
             return false;
         }
@@ -349,8 +345,8 @@ public final class HostKeys {
             String publicKey = Files.readString(directory.resolve("id_ed25519.pub"),
                 StandardCharsets.UTF_8).trim();
             ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "host_identity_rotated", () -> {
-                server.set(ServerModel.IDENTITY_PRIVATE_KEY, privateKey);
-                server.set(ServerModel.IDENTITY_PUBLIC_KEY, publicKey);
+                server.set(HostTrustSlot.SSH.clientPrivate(), privateKey);
+                server.set(HostTrustSlot.SSH.clientPublic(), publicKey);
                 Models.get(ServerModel.class).save(server);
             });
             Blast.slog("hohenheim.host.identity_rotated", Map.of("server", name));

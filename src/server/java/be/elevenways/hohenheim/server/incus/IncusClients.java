@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostProbe;
@@ -32,14 +33,14 @@ public final class IncusClients {
             return new IncusClient(new UnixIncusTransport(endpoint.socketPath()));
         }
         String name = String.valueOf((Object) server.get(ServerModel.NAME));
-        String pinned = server.get(ServerModel.HOST_KEY);
+        String pinned = server.get(HostTrustSlot.INCUS_TLS.material());
         if (pinned == null || pinned.isBlank()) {
             throw new HostKeys.HostTrustException(HostProbe.FailureKind.NOT_PINNED,
                 "Host '" + name + "' has no pinned Incus server certificate; scan and"
                     + " confirm it first");
         }
-        String identityKey = server.get(ServerModel.IDENTITY_PRIVATE_KEY);
-        String identityCert = server.get(ServerModel.IDENTITY_PUBLIC_KEY);
+        String identityKey = server.get(HostTrustSlot.INCUS_TLS.clientPrivate());
+        String identityCert = server.get(HostTrustSlot.INCUS_TLS.clientPublic());
         if (identityKey == null || identityKey.isBlank()
                 || identityCert == null || identityCert.isBlank()) {
             throw new HostKeys.HostTrustException(HostProbe.FailureKind.NO_IDENTITY,

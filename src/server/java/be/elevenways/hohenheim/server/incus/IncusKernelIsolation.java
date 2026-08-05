@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.TenantNetworkRanges;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -41,11 +43,16 @@ import java.util.Map;
  *
  * AIDEV-NOTE: the runner is obtained through {@link NftRunner#forServer} -- the same lane
  * HostPreflight and WorkloadNetworkPolicy use -- and NEVER falls back to the controller's
- * own nft. An Incus daemon addressed over https has no shell lane on its host record
- * (the ssh columns carry the daemon's TLS material), so kernel truth is UNAVAILABLE
- * there: {@link #available} answers false and every caller must treat that as "not
- * verified", never as "verified fine". Running the controller's nft and calling it a
- * verification is precisely the defect NftRunner's own note names.
+ * own nft. Running the controller's nft and calling it a verification is precisely the
+ * defect NftRunner's own note names.
+ *
+ * AIDEV-NOTE: an Incus daemon addressed over https is verifiable exactly when its record
+ * declares a TRUSTED ssh admin lane (M074 gave the ssh trust its own columns, so the TLS
+ * pin no longer occupies them). The lane is OPTIONAL: a host without one, or with one
+ * that is unconfirmed or quarantined, makes {@link #available} answer false, and every
+ * caller must treat that as "not verified" -- never as "verified fine". Refusing to
+ * answer is not evidence of a leak, which is why an unverifiable host is reported every
+ * sweep and never stopped.
  */
 public final class IncusKernelIsolation {
 
@@ -60,10 +67,12 @@ public final class IncusKernelIsolation {
 
     /**
      * AIDEV-NOTE: TEST SEAM and the only one, the {@code WorkloadNetworkPolicy
-     * .overrideForTest} precedent exactly. The live Incus host is reached over https and
-     * therefore has no product shell lane, so without this every kernel-truth test would
-     * SKIP -- and a skipped test is a green test. The override lets a live test point the
-     * PRODUCTION verifier at the real daemon host's real nftables.
+     * .overrideForTest} precedent exactly. It is no longer needed to reach a REMOTE
+     * daemon's kernel -- since M074 a host record carries its own pinned ssh admin lane
+     * and IncusKernelIsolationLiveTest drives daystrom through that PRODUCTION path. What
+     * it remains good for is pointing the verifier at a kernel the record does not name
+     * (a lane-less host fixture, an injected failing runner); a test that uses it is
+     * proving the MECHANISM, never the deployment.
      */
     private static volatile @Nullable NftRunner runnerOverride;
 
@@ -102,10 +111,19 @@ public final class IncusKernelIsolation {
         if (!IncusEndpoint.of(server).https()) {
             return new NftRunner.Sudo();
         }
-        if (ServerModel.MODE_SSH.equals(server.get(ServerModel.MODE))) {
-            return NftRunner.forServer(server);
+        if (!ServerModel.hasSshLane(server)) {
+            return null;
         }
-        return null;
+        // The lane must be TRUSTED before it is used, on the ssh slot's own terms: an
+        // unconfirmed or quarantined admin lane is not a kernel we may believe. The
+        // refusal is swallowed into "unavailable" on purpose -- an unusable lane leaves
+        // the host UNVERIFIABLE, which is the honest verdict, never "verified fine".
+        try {
+            HostAdmission.requireTrustedSlot(server, HostTrustSlot.SSH);
+        } catch (RuntimeException untrusted) {
+            return null;
+        }
+        return NftRunner.forServer(server);
     }
 
     /** @return whether kernel truth can be READ for this host at all */
@@ -139,7 +157,8 @@ public final class IncusKernelIsolation {
         NftRunner nft = this.runner;
         if (nft == null) {
             throw new IOException("REFUSED to report on '" + handle + "': this Incus host is"
-                + " addressed over https and its record carries no ssh lane, so hohenheim"
+                + " addressed over https and its record declares no TRUSTED ssh admin lane"
+                + " (missing ssh target, unconfirmed host key, or quarantined), so hohenheim"
                 + " cannot read the daemon host's nftables. Running the controller's own nft"
                 + " here would verify the wrong kernel.");
         }
