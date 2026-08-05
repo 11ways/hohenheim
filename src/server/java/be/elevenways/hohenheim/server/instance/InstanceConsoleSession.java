@@ -159,6 +159,26 @@ final class InstanceConsoleSession {
     }
 
     /**
+     * Seed the ring with console output the daemon buffered BEFORE this attach (the
+     * deferred-attach shape: Incus only opens a console on a running workload). Runs
+     * before {@link #armReadiness}, whose backlog scan then covers the seeded text.
+     * The live stream may repeat some of it -- harmless for matching, and a viewer
+     * merely sees the boot text; line-splitting deliberately does not run over the
+     * seed, so a partial live chunk cannot fuse with backlog text into a false line.
+     */
+    void seedBacklog(@NonNull String text) {
+        if (text.isEmpty()) {
+            return;
+        }
+        synchronized (this) {
+            this.ring.insert(0, text);
+            if (this.ring.length() > RING_CAP) {
+                this.ring.delete(0, this.ring.length() - RING_CAP);
+            }
+        }
+    }
+
+    /**
      * Arm the readiness matcher AFTER the caller stamped {@code starting}: scans the
      * output already seen (so a line that raced the arm still counts), then watches
      * live lines. The action runs at most once, off the arming or pump thread.

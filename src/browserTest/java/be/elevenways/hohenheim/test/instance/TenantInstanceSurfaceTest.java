@@ -545,6 +545,86 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             .as("step 4: a hand-rolled POST is answered, not accepted silently")
             .isIn(200, 302, 303);
     }
+    /**
+     * The Phase 5b introduction gate: a template SCRIPT enters the system only through
+     * the admin-gated import endpoint. The property is LAYERED and both layers are
+     * probed: zenit-auth's {@code /admin} baseline ({@code auth.admin.access}) stops a
+     * plain tenant, and the endpoint's OWN {@code hohenheim.admin.access} stops a
+     * delegated auth-admin who passes the baseline. The operator import is the
+     * positive anchor, and it still lands unapproved.
+     */
+    @Test
+    @Order(8)
+    void tenantCannotIntroduceACatalogScriptAndAnOperatorCan() throws Exception {
+        long before = Models.get(InstanceTemplateModel.class).find()
+            .where(InstanceTemplateModel.NAME.eq("Gotify")).count();
+
+        // 1. The tenant's post never reaches the importer: zenit-auth's /admin
+        //    baseline refuses it, and the catalog stays exactly as it was.
+        HttpResponse<String> refused = tenantPost("/admin/instance-templates-import",
+            "catalog_app=gotify");
+        assertThat(refused.statusCode())
+            .as("step 1: a tenant cannot reach the import endpoint")
+            .isIn(302, 303, 403, 404);
+        assertThat(Models.get(InstanceTemplateModel.class).find()
+                .where(InstanceTemplateModel.NAME.eq("Gotify")).count())
+            .as("step 1: and no template row was introduced")
+            .isEqualTo(before);
+
+        // 1b. A delegated AUTH admin (user management authority, auth.admin.access)
+        //     passes the /admin baseline but must still hit the endpoint's own
+        //     hohenheim.admin.access -- the layer this endpoint declares for itself.
+        int authAdminId = tenant("auth-admin@surface.test", "Auth Admin");
+        GrantService.createDirectGrant("user", authAdminId, "auth.admin.access", true);
+        Session authSession = Zenit.getSessionStore().create();
+        authSession.set(be.elevenways.zenit.auth.AuthKeys.USER_ID, (long) authAdminId);
+        String authCsrf = ZenitAuth.randomToken();
+        authSession.set(CsrfTokens.TOKEN, authCsrf);
+        Zenit.getSessionStore().save(authSession);
+        HttpClient authClient = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER).build();
+        HttpResponse<String> authRefused = authClient.send(HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + "/admin/instance-templates-import"))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + authSession.id())
+            .header("X-Csrf-Token", authCsrf)
+            .POST(HttpRequest.BodyPublishers.ofString("catalog_app=gotify"))
+            .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(authRefused.statusCode())
+            .as("step 1b: an auth-admin without hohenheim.admin.access is refused"
+                + " by the endpoint's own permission")
+            .isIn(302, 303, 403, 404);
+        assertThat(Models.get(InstanceTemplateModel.class).find()
+                .where(InstanceTemplateModel.NAME.eq("Gotify")).count())
+            .as("step 1b: and still no template row was introduced")
+            .isEqualTo(before);
+
+        // 2. Positive anchor: the OPERATOR's session imports the same app, and the
+        //    imported row still lands unapproved (import is never the approval).
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER).build();
+        HttpResponse<String> imported = client.send(HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + "/admin/instance-templates-import"))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .header("X-Csrf-Token", csrfToken)
+            .POST(HttpRequest.BodyPublishers.ofString("catalog_app=gotify"))
+            .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(imported.statusCode())
+            .as("step 2: the operator's import redirects to the new template")
+            .isIn(302, 303);
+        Row introduced = Models.get(InstanceTemplateModel.class).find()
+            .where(InstanceTemplateModel.NAME.eq("Gotify")).first();
+        assertThat(introduced).as("step 2: the template row exists now").isNotNull();
+        try {
+            assertThat((Object) introduced.get(InstanceTemplateModel.APPROVED_AT))
+                .as("step 2: and it landed UNAPPROVED").isNull();
+        } finally {
+            Models.get(InstanceTemplateModel.class)
+                .delete(introduced.get(InstanceTemplateModel.ID));
+        }
+    }
+
     /** An admitted, container-accepting host an operator would have enrolled. */
     private static int admittedHost() {
         Model servers = Models.get(ServerModel.class);

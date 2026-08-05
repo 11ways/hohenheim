@@ -11,8 +11,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Minimal Incus REST client over an {@link IncusTransport}. Incus wraps every answer
@@ -185,6 +187,87 @@ public class IncusClient {
                 envelopeOf(raw);
             }
             return body;
+        }
+        envelopeOf(raw);   // throws the typed refusal
+        throw new IOException("unreachable");
+    }
+
+    // -- exec -----------------------------------------------------------------
+
+    /** One finished exec run: the process's exit code and its captured output. */
+    public record ExecResult(int exitCode, @NonNull String output) {}
+
+    /**
+     * Run one command inside a RUNNING instance, wait for it, and collect the recorded
+     * output (record-output mode: no websockets; the daemon writes stdout/stderr to
+     * instance log files, which are read and then deleted here -- leaving them behind
+     * would slowly fill the daemon's log directory).
+     *
+     * @param timeoutMs hard wall-clock cap on the wait; expiry throws while the daemon
+     *                  side keeps running (the caller owns the container's fate)
+     */
+    public @NonNull ExecResult exec(@NonNull String name, @NonNull List<String> command,
+                                    @NonNull Map<String, String> environment, long timeoutMs)
+            throws IOException {
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("command", command);
+        request.put("environment", environment);
+        request.put("record-output", true);
+        request.put("interactive", false);
+        request.put("wait-for-websocket", false);
+        String operation = asyncOperation("POST", "/1.0/instances/" + name + "/exec",
+            Json.stringify(request), DEFAULT_TIMEOUT_MS);
+        // NOT waitOperation: the daemon marks an exec whose process exits 127 as a
+        // FAILED operation ("Command not found", status 400) while metadata.return and
+        // the output files are all present -- for exec, a carried return code IS a
+        // completed run, whatever the operation's own verdict says.
+        long seconds = Math.max(1, timeoutMs / 1000);
+        Map<String, Object> finished = syncMetadata("GET",
+            operation + "/wait?timeout=" + seconds, null, timeoutMs + 5000);
+        boolean carriedReturn = finished.get("metadata") instanceof Map<?, ?> meta
+            && meta.get("return") instanceof Number;
+        Object statusCode = finished.get("status_code");
+        if (!carriedReturn
+                && (!(statusCode instanceof Number number) || number.intValue() != 200)) {
+            Object err = finished.get("err");
+            throw new ApiException(500, "Incus operation " + finished.get("description")
+                + " " + finished.get("status")
+                + (err != null && !String.valueOf(err).isEmpty() ? ": " + err : ""));
+        }
+
+        int exitCode = -1;
+        StringBuilder output = new StringBuilder();
+        if (finished.get("metadata") instanceof Map<?, ?> meta) {
+            if (meta.get("return") instanceof Number code) {
+                exitCode = code.intValue();
+            }
+            if (meta.get("output") instanceof Map<?, ?> files) {
+                // Key "1" = stdout, "2" = stderr; TreeMap keeps that order stable. The
+                // metadata's values are FULL API paths (logs/exec-output/... on current
+                // daemons) and are used verbatim -- reconstructing them broke once.
+                for (Object logPath : new TreeMap<>(castMap(files)).values()) {
+                    String path = String.valueOf(logPath);
+                    try {
+                        output.append(rawText(path));
+                    } finally {
+                        try {
+                            syncMetadata("DELETE", path, null, DEFAULT_TIMEOUT_MS);
+                        } catch (IOException cleanupFailed) {
+                            // the read succeeded or threw already; a leftover log file
+                            // is a daemon-side crumb, not a run outcome
+                        }
+                    }
+                }
+            }
+        }
+        return new ExecResult(exitCode, output.toString());
+    }
+
+    /** One raw-text API path's content (log files; plain text, NOT an envelope). */
+    private @NonNull String rawText(@NonNull String path) throws IOException {
+        Http11.Raw raw = this.transport.exchange("GET", path, null, DEFAULT_TIMEOUT_MS);
+        if (raw.status() >= 200 && raw.status() < 300) {
+            return new String(raw.body(), StandardCharsets.UTF_8);
         }
         envelopeOf(raw);   // throws the typed refusal
         throw new IOException("unreachable");

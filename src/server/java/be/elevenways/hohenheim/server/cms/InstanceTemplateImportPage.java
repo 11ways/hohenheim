@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.server.instance.CommunityScripts;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
@@ -33,6 +34,8 @@ public final class InstanceTemplateImportPage extends PanelPage {
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
         String error = conduit.getQueryParam("error");
         vars.put("error", error != null ? error : "");
+        vars.put("catalogApps", CommunityScripts.catalogApps());
+        vars.put("catalogRevision", CommunityScripts.catalogRevision());
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/template-import"), vars);
     }
 }

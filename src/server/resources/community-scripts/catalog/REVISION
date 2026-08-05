@@ -1,0 +1,6 @@
+repo: https://github.com/community-scripts/ProxmoxVE
+revision: 27f66a801627aad274756519eb040934318a1db1
+license: MIT (see the Copyright/License headers inside each vendored script)
+vendored: catalog/gotify (ct/gotify.sh, install/gotify-install.sh)
+vendored: catalog/adguard (ct/adguard.sh, install/adguard-install.sh)
+note: vendored scripts are byte-identical to upstream at the pinned revision.

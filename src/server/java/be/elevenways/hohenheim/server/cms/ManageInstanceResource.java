@@ -99,14 +99,14 @@ public final class ManageInstanceResource extends InstanceResource {
     @Override public boolean deletable() { return false; }
 
     /**
-     * Power plus the two artifact actions, each carrying the capability gate it declared
-     * on the base resource -- inherited verbatim, so /manage and /admin can never drift
-     * on what an action requires.
+     * Power, the two artifact actions and the in-place app update, each carrying the
+     * capability gate it declared on the base resource -- inherited verbatim, so
+     * /manage and /admin can never drift on what an action requires.
      */
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         return List.of(this.deployAction(), this.stopAction(),
-            this.snapshotAction(), this.backupAction());
+            this.snapshotAction(), this.backupAction(), this.appUpdateAction());
     }
 
     @Override

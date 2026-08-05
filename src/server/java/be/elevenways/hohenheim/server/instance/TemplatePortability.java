@@ -70,6 +70,7 @@ public final class TemplatePortability {
         body.put("settings", template.get(InstanceTemplateModel.SETTINGS));
         body.put("install_image", template.get(InstanceTemplateModel.INSTALL_IMAGE));
         body.put("install_script", template.get(InstanceTemplateModel.INSTALL_SCRIPT));
+        body.put("update_script", template.get(InstanceTemplateModel.UPDATE_SCRIPT));
         body.put("reinstall_policy", template.get(InstanceTemplateModel.REINSTALL_POLICY));
         body.put("readiness_line", template.get(InstanceTemplateModel.READINESS_LINE));
         body.put("stop_command", template.get(InstanceTemplateModel.STOP_COMMAND));
@@ -233,6 +234,7 @@ public final class TemplatePortability {
             body.get("version") instanceof Number v && v.intValue() > 0 ? v.intValue() : 1);
         template.set(InstanceTemplateModel.INSTALL_IMAGE, str(body.get("install_image")));
         template.set(InstanceTemplateModel.INSTALL_SCRIPT, str(body.get("install_script")));
+        template.set(InstanceTemplateModel.UPDATE_SCRIPT, str(body.get("update_script")));
         template.set(InstanceTemplateModel.REINSTALL_POLICY,
             InstanceTemplateModel.REINSTALL_CLEAR.equals(body.get("reinstall_policy"))
                 ? InstanceTemplateModel.REINSTALL_CLEAR : InstanceTemplateModel.REINSTALL_PRESERVE);

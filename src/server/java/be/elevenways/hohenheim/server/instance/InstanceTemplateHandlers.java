@@ -53,6 +53,20 @@ public final class InstanceTemplateHandlers {
 
         HohenheimEndpoints.INSTANCE_TEMPLATES_IMPORT.setHandler(conduit -> {
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
+            String catalogApp = submittedString(form, "catalog_app");
+            if (!catalogApp.isEmpty()) {
+                // The vendored community-scripts catalog: pinned content is copied
+                // into a NEW unapproved row; the endpoint's admin permission is what
+                // keeps script introduction an operator act.
+                try {
+                    int templateId = CommunityScripts.importApp(catalogApp);
+                    ActivityLog.record(Models.get(InstanceTemplateModel.class), templateId,
+                        "imported", "vendored catalog: " + catalogApp);
+                    return redirect("/admin/instance-templates/" + templateId);
+                } catch (Violations violations) {
+                    return importErrorText(conduit, firstMessage(conduit, violations));
+                }
+            }
             String document = submittedString(form, "document");
             String source = submittedString(form, "source");
             if (document.isEmpty()) {

@@ -5076,7 +5076,7 @@
     }
   ],
   "snapshot_confirm": {
-    "text": "Snapshot nemen? Drivers die volumes kopi\u00ebren stoppen een draaiende instantie kort en starten ze daarna weer; drivers met eigen snapshots leggen ze live vast.",
+    "text": "Snapshot nemen? Drivers die volumes kopiëren stoppen een draaiende instantie kort en starten ze daarna weer; drivers met eigen snapshots leggen ze live vast.",
     "scope": "instance"
   },
   "snapshot_taken": {
@@ -6549,5 +6549,69 @@
       "text": "GEVAAR: de root-gebruiker van een geprivilegieerde container valt samen met root op de HOST. Een systeemcontainer is zelfs ongeprivilegieerd geen veiligheidsgrens tegen een vastberaden root-gebruiker; geprivilegieerde modus haalt het meeste van wat overblijft weg. Laat uit tenzij de werklast er echt niet zonder kan.",
       "scope": "help"
     }
-  ]
+  ],
+  "update_script": [
+    {
+      "text": "Updatescript",
+      "scope": "field"
+    },
+    {
+      "text": "Script voor in-place app-updates, uitgevoerd in de draaiende instantie via de community-functiebibliotheek",
+      "scope": "help"
+    }
+  ],
+  "helper_not_implemented": {
+    "text": "Het {$what} roept community-scripts-helpers aan die de hohenheim-functiebibliotheek niet implementeert: {$helpers}",
+    "scope": "violations"
+  },
+  "catalog_app_unknown": {
+    "text": "Geen gebundelde catalogus-app met naam {$app}",
+    "scope": "violations"
+  },
+  "app_update_no_script": {
+    "text": "Het sjabloon van instantie {$name} heeft geen updatescript",
+    "scope": "violations"
+  },
+  "app_update_unsupported": {
+    "text": "De runtime van instantie {$name} kan geen in-place app-updates uitvoeren",
+    "scope": "violations"
+  },
+  "app_update_requires_running": {
+    "text": "Instantie {$name} moet draaien voor een in-place app-update",
+    "scope": "violations"
+  },
+  "app_update_failed": {
+    "text": "De app-update van instantie {$name} is mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "app_update": [
+    {
+      "text": "App bijwerken",
+      "scope": "instance"
+    },
+    {
+      "text": "App-update",
+      "scope": "schedule_action"
+    }
+  ],
+  "app_update_confirm": {
+    "text": "Het updatescript van het sjabloon in de draaiende instantie uitvoeren?",
+    "scope": "instance"
+  },
+  "app_updated_toast": {
+    "text": "App van {$name} bijgewerkt",
+    "scope": "instance"
+  },
+  "catalog_title": {
+    "text": "Gebundelde app-catalogus",
+    "scope": "template_import"
+  },
+  "catalog_help": {
+    "text": "Community-scripts-apps gebundeld op vastgezette revisie",
+    "scope": "template_import"
+  },
+  "catalog_import_action": {
+    "text": "Importeer {$app}",
+    "scope": "template_import"
+  }
 }

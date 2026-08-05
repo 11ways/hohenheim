@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.instance.InstanceAppUpdates;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -143,6 +144,7 @@ public class InstanceResource extends RowResource {
         actions.add(this.stopAction());
         actions.add(this.installAction());
         actions.add(this.reinstallAction());
+        actions.add(this.appUpdateAction());
         actions.add(this.snapshotAction());
         actions.add(this.backupAction());
         return actions;
@@ -214,6 +216,27 @@ public class InstanceResource extends RowResource {
                 new InstanceInstalls().reinstall(row.get(InstanceModel.ID));
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("reinstalled_toast").withFilter("scope", "instance")
+                        .withArg("name", row.get(InstanceModel.NAME)));
+            })
+            .build();
+    }
+
+    /** In-place app update: the template's update_script runs inside the RUNNING system. */
+    protected @NonNull RowAction<Row> appUpdateAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "app_update_instance"))
+            .label(Microcopy.of("app_update").withFilter("scope", "instance"))
+            .icon(Icon.of("arrow-up-from-bracket"))
+            .inlineInRow(false)
+            .visibleFor((row, ctx) -> InstanceAppUpdates.hasUpdateScript(row))
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("app_update").withFilter("scope", "instance"))
+                .body(Microcopy.of("app_update_confirm").withFilter("scope", "instance"))
+                .confirmLabel(Microcopy.of("app_update").withFilter("scope", "instance"))
+                .build())
+            .handler((row, ctx) -> {
+                new InstanceAppUpdates().update(row.get(InstanceModel.ID));
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("app_updated_toast").withFilter("scope", "instance")
                         .withArg("name", row.get(InstanceModel.NAME)));
             })
             .build();

@@ -6553,5 +6553,69 @@
       "text": "DANGER: a privileged container's root user maps onto the HOST's root user. A system container is not a security boundary against a determined root user even unprivileged; privileged mode removes most of what remains. Leave off unless the workload genuinely cannot run without it.",
       "scope": "help"
     }
-  ]
+  ],
+  "update_script": [
+    {
+      "text": "Update script",
+      "scope": "field"
+    },
+    {
+      "text": "In-place app update script, run inside the running instance through the community function library",
+      "scope": "help"
+    }
+  ],
+  "helper_not_implemented": {
+    "text": "The {$what} calls community-scripts helpers the hohenheim function library does not implement: {$helpers}",
+    "scope": "violations"
+  },
+  "catalog_app_unknown": {
+    "text": "No vendored catalog app named {$app}",
+    "scope": "violations"
+  },
+  "app_update_no_script": {
+    "text": "The template of instance {$name} declares no update script",
+    "scope": "violations"
+  },
+  "app_update_unsupported": {
+    "text": "The runtime of instance {$name} cannot run in-place app updates",
+    "scope": "violations"
+  },
+  "app_update_requires_running": {
+    "text": "Instance {$name} must be running for an in-place app update",
+    "scope": "violations"
+  },
+  "app_update_failed": {
+    "text": "The app update of instance {$name} failed: {$reason}",
+    "scope": "violations"
+  },
+  "app_update": [
+    {
+      "text": "Update app",
+      "scope": "instance"
+    },
+    {
+      "text": "App update",
+      "scope": "schedule_action"
+    }
+  ],
+  "app_update_confirm": {
+    "text": "Run the template's update script inside the running instance?",
+    "scope": "instance"
+  },
+  "app_updated_toast": {
+    "text": "Updated the app of {$name}",
+    "scope": "instance"
+  },
+  "catalog_title": {
+    "text": "Vendored app catalog",
+    "scope": "template_import"
+  },
+  "catalog_help": {
+    "text": "Community-scripts apps vendored at pinned revision",
+    "scope": "template_import"
+  },
+  "catalog_import_action": {
+    "text": "Import {$app}",
+    "scope": "template_import"
+  }
 }

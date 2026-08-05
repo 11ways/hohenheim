@@ -21,13 +21,15 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * {@code user.*} config keys (stamped at create, the same attribution doctrine), and
  * the console is Incus's own websocket lane.
  *
- * AIDEV-NOTE: capability honesty. This driver implements {@link ConsoleStreamSupport}
- * and {@link NativeSnapshotSupport}: an Incus system container's persistent state is
- * its ROOTFS, not named volumes, so {@code VolumeSnapshotSupport}'s tar-per-volume
- * contract does not fit -- snapshots are the daemon's own pool-resident snapshots and
- * a backup is its whole-instance export tarball. File staging and install still
- * refuse by name through the existing missing-capability funnels
- * (files_unsupported, install_unsupported), never a silent no-op.
+ * AIDEV-NOTE: capability honesty. This driver implements {@link ConsoleStreamSupport},
+ * {@link NativeSnapshotSupport}, {@link InstallSupport} and {@link AppUpdateSupport}:
+ * an Incus system container's persistent state is its ROOTFS, not named volumes, so
+ * {@code VolumeSnapshotSupport}'s tar-per-volume contract does not fit -- snapshots
+ * are the daemon's own pool-resident snapshots and a backup is its whole-instance
+ * export tarball. Install runs INSIDE the instance's own rootfs (created on demand,
+ * started for the run, stopped after), NOT in a sibling workload: the app installs
+ * into the system it will run on, which is the whole point of a system container.
+ * File staging still refuses by name (files_unsupported), never a silent no-op.
  *
  * AIDEV-NOTE: threat model. Containers land on the daemon's managed bridge -- there is
  * NO per-instance network with a verified kernel policy here yet (the Docker tier's
@@ -39,7 +41,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * carries a stated escape warning on the kind settings.
  */
 public final class IncusInstanceRuntime
-        implements InstanceRuntime, ConsoleStreamSupport, NativeSnapshotSupport {
+        implements InstanceRuntime, ConsoleStreamSupport, NativeSnapshotSupport,
+        InstallSupport, AppUpdateSupport {
 
     /** The public image server system-container aliases resolve against. */
     public static final String IMAGE_SERVER = "https://images.linuxcontainers.org";
@@ -231,6 +234,12 @@ public final class IncusInstanceRuntime
 
     // -- ConsoleStreamSupport -------------------------------------------------
 
+    /** Incus refuses a console operation on a stopped instance: attach must follow start. */
+    @Override
+    public boolean attachRequiresRunning() {
+        return true;
+    }
+
     @Override
     public @NonNull Console openConsole(@NonNull String handle) throws IOException {
         Map<String, Object> operation = this.incus.startConsole(handle);
@@ -273,6 +282,103 @@ public final class IncusInstanceRuntime
         }
         throw new IOException("Incus reports no init exit status for '" + handle
             + "'; the exit outcome cannot be observed on this driver");
+    }
+
+    // -- InstallSupport / AppUpdateSupport ------------------------------------
+
+    /** Output tail cap of one install/update run (the durable failure record). */
+    private static final int OUTPUT_TAIL_CHARS = 16 * 1024;
+
+    /** How long the freshly started system needs to accept an exec, worst case. */
+    private static final long EXEC_READY_TIMEOUT_MS = 30_000;
+
+    /**
+     * Run the install script INSIDE the instance's own system container: create it if
+     * absent (the converge path keeps an existing owned rootfs), start it, exec the
+     * script with {@code bash -ec}, and stop it again -- the platform's "installed but
+     * not running" state stays true at the daemon.
+     *
+     * @throws IOException for a separate install image: the rootfs IS the install
+     *         target, so "run the install elsewhere" cannot be honoured, only refused
+     */
+    @Override
+    public @NonNull InstallOutcome runInstall(@NonNull InstanceSpec spec,
+                                              @NonNull String installImage,
+                                              @NonNull String script,
+                                              @NonNull Map<String, String> env,
+                                              long timeoutMs) throws IOException {
+        if (!installImage.equals(spec.image())) {
+            throw new IOException("The incus driver runs install steps inside the"
+                + " instance's own rootfs; a separate install image ('" + installImage
+                + "') cannot be honoured. Leave the template's install image empty.");
+        }
+        create(spec);
+        boolean started = false;
+        try {
+            start(spec.handle());
+            started = true;
+            IncusClient.ExecResult result = execWhenReady(spec.handle(),
+                List.of("bash", "-ec", script), env, timeoutMs);
+            return new InstallOutcome(result.exitCode(), tailOf(result.output()));
+        } finally {
+            if (started) {
+                try {
+                    stop(spec.handle(), 10);
+                } catch (IOException stopFailed) {
+                    Blast.log("INCUS: could not stop", spec.handle(),
+                        "after its install run:", stopFailed.getMessage());
+                }
+            }
+        }
+    }
+
+    /** Run the update script inside the RUNNING workload (services restart in place). */
+    @Override
+    public InstallSupport.@NonNull InstallOutcome runAppUpdate(@NonNull InstanceSpec spec,
+                                                               @NonNull String script,
+                                                               @NonNull Map<String, String> env,
+                                                               long timeoutMs)
+            throws IOException {
+        if (!status(spec.handle()).running()) {
+            throw new IOException("Instance '" + spec.handle() + "' is not running;"
+                + " the in-place app update runs inside the live system");
+        }
+        IncusClient.ExecResult result = this.incus.exec(spec.handle(),
+            List.of("bash", "-ec", script), env, timeoutMs);
+        return new InstallOutcome(result.exitCode(), tailOf(result.output()));
+    }
+
+    /**
+     * Exec with a bring-up retry: the daemon refuses execs for a moment while the
+     * container's init is still coming up, and that refusal must not fail the install.
+     */
+    private IncusClient.@NonNull ExecResult execWhenReady(@NonNull String handle,
+                                                          @NonNull List<String> command,
+                                                          @NonNull Map<String, String> env,
+                                                          long timeoutMs) throws IOException {
+        long deadline = System.currentTimeMillis() + EXEC_READY_TIMEOUT_MS;
+        while (true) {
+            try {
+                return this.incus.exec(handle, command, env, timeoutMs);
+            } catch (IncusClient.ApiException refused) {
+                if (System.currentTimeMillis() >= deadline) {
+                    throw refused;
+                }
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw refused;
+                }
+            }
+        }
+    }
+
+    private static @NonNull String tailOf(@NonNull String output) {
+        if (output.length() <= OUTPUT_TAIL_CHARS) {
+            return output;
+        }
+        return output.substring(output.length() - OUTPUT_TAIL_CHARS);
     }
 
     // -- NativeSnapshotSupport ------------------------------------------------

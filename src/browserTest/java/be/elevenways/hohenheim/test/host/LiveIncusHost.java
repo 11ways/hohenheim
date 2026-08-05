@@ -168,6 +168,11 @@ public final class LiveIncusHost {
         }
     }
 
+    /** Run one command on the HOST itself (reachability probes from outside a container). */
+    public String hostCommand(String... command) throws IOException {
+        return ssh(List.of(command)).trim();
+    }
+
     /** Raw REST truth over the host's own CLI ({@code incus query <path>}). */
     public String query(String path) throws IOException {
         return ssh(List.of("incus", "query", path)).trim();

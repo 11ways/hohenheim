@@ -92,9 +92,8 @@ public final class InstanceInstalls {
         }
         requireNotRunning(resolved);
         // The honest refusal for a driver that cannot run install steps at all comes
-        // FIRST: without this, an incus reinstall with a clear policy would name the
-        // (native-snapshotting) driver's missing VOLUME support instead of the install
-        // capability it actually lacks.
+        // FIRST: without this, a reinstall with a clear policy on such a driver would
+        // name missing VOLUME support instead of the install capability it lacks.
         if (!(resolved.runtime() instanceof InstallSupport)) {
             throw refusal("install_unsupported", resolved.row(), null);
         }
@@ -102,7 +101,12 @@ public final class InstanceInstalls {
 
         if (InstanceTemplateModel.REINSTALL_CLEAR
                 .equals(template.get(InstanceTemplateModel.REINSTALL_POLICY))) {
-            if (!(resolved.runtime() instanceof VolumeSnapshotSupport volumes)) {
+            // A driver with named volumes must be able to wipe them owner-verified; a
+            // rootfs-stateful driver (incus) has none -- destroying the workload IS the
+            // wipe there, and the install re-creates the rootfs from the image.
+            Map<String, String> logical = logicalVolumes(resolved);
+            if (!logical.isEmpty()
+                    && !(resolved.runtime() instanceof VolumeSnapshotSupport)) {
                 throw refusal("snapshots_unsupported", resolved.row(), null);
             }
             try {
@@ -110,8 +114,10 @@ public final class InstanceInstalls {
                 // volumes themselves -- refused per volume unless the daemon attributes
                 // them to THIS record (never a stranger's data over a name collision).
                 resolved.runtime().destroy(resolved.spec().handle());
-                Map<String, String> logical = logicalVolumes(resolved);
-                volumes.removeVolumesForRestore(resolved.spec(), logical, logical.keySet());
+                if (!logical.isEmpty()
+                        && resolved.runtime() instanceof VolumeSnapshotSupport volumes) {
+                    volumes.removeVolumesForRestore(resolved.spec(), logical, logical.keySet());
+                }
             } catch (IOException error) {
                 InstanceOperationGuard.stampInstall(this.instances.leases(), instanceId,
                     resolved.serverId(), fence, InstanceModel.INSTALL_FAILED, describe(error),
@@ -126,6 +132,11 @@ public final class InstanceInstalls {
 
     private void runInstallStep(@NonNull Resolved resolved, @NonNull Row template, long fence) {
         int instanceId = resolved.row().get(InstanceModel.ID);
+        // The vocabulary gate's install-time lane, BEFORE any daemon contact: a script
+        // that sources the community function library and calls a helper the library
+        // does not implement is refused by name -- never run into a silent 127.
+        CommunityScripts.requireVocabularyImplemented(
+            template.get(InstanceTemplateModel.INSTALL_SCRIPT), "install script");
         requireNotRunning(resolved);
         if (!(resolved.runtime() instanceof InstallSupport support)) {
             throw refusal("install_unsupported", resolved.row(), null);
@@ -148,6 +159,13 @@ public final class InstanceInstalls {
 
         Map<String, String> env = new LinkedHashMap<>(resolved.spec().env());
         env.putAll(resolved.variables());
+        if (CommunityScripts.requiresFunctionLibrary(script)) {
+            // The one injection point of the pinned shim library: the script's
+            // `source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"` runs verbatim against it.
+            env.put(CommunityScripts.LIBRARY_MARKER, CommunityScripts.functionsLibrary());
+            env.put("APPLICATION",
+                String.valueOf((Object) resolved.row().get(InstanceModel.NAME)));
+        }
         try {
             InstallSupport.InstallOutcome outcome = support.runInstall(resolved.spec(),
                 installImage.trim(), script, env, INSTALL_TIMEOUT_MS);
