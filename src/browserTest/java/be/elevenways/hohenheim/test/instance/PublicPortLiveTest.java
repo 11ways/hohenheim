@@ -365,8 +365,25 @@ class PublicPortLiveTest {
             + " binding; ports = " + ports);
     }
 
-    /** First up, non-loopback IPv4 of this machine -- the "outside" vantage point. */
+    /**
+     * The machine's PRIMARY non-loopback IPv4 -- the "outside" vantage point, resolved
+     * from the default route (a connectionless UDP "connect" performs route selection
+     * without sending a packet). Interface-enumeration order was the old pick and is
+     * not stable under a parallel suite: Docker bridge interfaces come and go, and a
+     * transient bridge gateway chosen as the vantage point blackholes every probe.
+     * Falls back to enumeration on hosts with no default route.
+     */
     private static InetAddress nonLoopbackAddress() throws IOException {
+        try (DatagramSocket probe = new DatagramSocket()) {
+            probe.connect(InetAddress.getByName("192.0.2.1"), 53);
+            InetAddress routed = probe.getLocalAddress();
+            if (routed instanceof Inet4Address && !routed.isLoopbackAddress()
+                    && !routed.isAnyLocalAddress()) {
+                return routed;
+            }
+        } catch (IOException ignored) {
+            // no default route: fall through to enumeration
+        }
         Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
         while (interfaces.hasMoreElements()) {
             NetworkInterface candidate = interfaces.nextElement();
@@ -391,23 +408,41 @@ class PublicPortLiveTest {
         }
     }
 
-    /** Minimal HTTP GET with retries (the workload may need a moment to bind). */
+    /**
+     * Minimal HTTP GET as a bounded poll: retried on connect/read failures AND on a
+     * BLANK body -- the daemon-side proxy accepts as soon as the port is published and
+     * drops the relayed connection while the workload is still starting, which reads
+     * as a clean empty response, not an IOException. Still fails loudly after the
+     * deadline (throws the last error, or returns the empty body for the assertion).
+     */
     private static String httpGet(InetAddress address, int port) throws IOException {
         IOException last = null;
+        String lastBody = "";
         for (int attempt = 0; attempt < 20; attempt++) {
             try (Socket socket = new Socket()) {
                 socket.connect(new InetSocketAddress(address, port), 1_500);
                 socket.setSoTimeout(3_000);
                 socket.getOutputStream().write(
                     ("GET / HTTP/1.0\r\nHost: test\r\n\r\n").getBytes(StandardCharsets.UTF_8));
-                return new String(socket.getInputStream().readAllBytes(),
+                String body = new String(socket.getInputStream().readAllBytes(),
                     StandardCharsets.UTF_8);
+                if (!body.isBlank()) {
+                    return body;
+                }
+                last = null;
+                lastBody = body;
             } catch (IOException e) {
                 last = e;
-                sleep(400);
             }
+            sleep(400);
         }
-        throw last;
+        if (last != null) {
+            // Name the vantage point: a bare "Connect timed out" hides WHICH address
+            // never answered, and that is the first diagnostic question.
+            throw new IOException("no HTTP answer from " + address.getHostAddress() + ":"
+                + port + " within the poll deadline", last);
+        }
+        return lastBody;
     }
 
     /** Send one datagram and await the reply, retried (the responder loops per second). */
