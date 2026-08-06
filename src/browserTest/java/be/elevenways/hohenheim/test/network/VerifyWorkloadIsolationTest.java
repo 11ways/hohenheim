@@ -22,7 +22,7 @@ import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.stack.StackDeployer;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.server.stack.StackSpec;
-import be.elevenways.hohenheim.server.task.VerifyDockerIsolation;
+import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -53,7 +53,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * The reboot-window sweep against a REAL daemon and a REAL kernel: every Docker tier's
  * policied network (stack, instance, managed database, site-database link) loses its
  * chains the way a host reboot loses them -- the whole nftables table deleted while
- * containers and networks stay -- and {@link VerifyDockerIsolation#sweep()} must read
+ * containers and networks stay -- and {@link VerifyWorkloadIsolation#sweep()} must read
  * that out of the kernel, repair it, and hold the deny against real packets again.
  *
  * AIDEV-NOTE: the divergence is produced by deleting {@code table inet hohenheim_net}
@@ -63,7 +63,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * What this class does NOT prove is the boot scheduling of the task itself -- that is
  * the framework's bootAndCron contract, exercised by zenit's own task tests.
  */
-class VerifyDockerIsolationTest {
+class VerifyWorkloadIsolationTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String TEST_IMAGE = "alpine:latest";
@@ -202,11 +202,11 @@ class VerifyDockerIsolationTest {
 
                 // 4. ONE sweep. Every tier's workload is repaired, none contained,
                 //    no errors, on a verifiable host.
-                List<VerifyDockerIsolation.HostOutcome> outcomes =
-                    VerifyDockerIsolation.sweep();
+                List<VerifyWorkloadIsolation.HostOutcome> outcomes =
+                    VerifyWorkloadIsolation.sweep();
                 assertThat(outcomes)
                     .as("step 4: exactly the local host was swept").hasSize(1);
-                VerifyDockerIsolation.HostOutcome outcome = outcomes.get(0);
+                VerifyWorkloadIsolation.HostOutcome outcome = outcomes.get(0);
                 assertThat(outcome.verifiable())
                     .as("step 4: the host's kernel is readable").isTrue();
                 assertThat(outcome.errors())
@@ -239,7 +239,7 @@ class VerifyDockerIsolationTest {
 
                 // 6. A second sweep finds everything enforced: the repair is idempotent
                 //    and the sweep never oscillates.
-                VerifyDockerIsolation.HostOutcome second = VerifyDockerIsolation.sweep().get(0);
+                VerifyWorkloadIsolation.HostOutcome second = VerifyWorkloadIsolation.sweep().get(0);
                 assertThat(second.repaired())
                     .as("step 6: nothing left to repair on the second tick").isEmpty();
                 assertThat(second.enforced())
@@ -300,7 +300,7 @@ class VerifyDockerIsolationTest {
                     (args, stdin) -> {
                         throw new AssertionError("nft must never run with enforcement off");
                     }, () -> false));
-                VerifyDockerIsolation.HostOutcome off = VerifyDockerIsolation.sweep().get(0);
+                VerifyWorkloadIsolation.HostOutcome off = VerifyWorkloadIsolation.sweep().get(0);
                 assertThat(off.verifiable())
                     .as("step 2: enforcement off reads as unverifiable").isFalse();
                 assertThat(off.errors())
@@ -317,8 +317,8 @@ class VerifyDockerIsolationTest {
                 WorkloadNetworkPolicy.overrideForTest(new WorkloadNetworkPolicy(
                     (args, stdin) -> new NftRunner.Result(2, "", "injected read failure"),
                     () -> true));
-                VerifyDockerIsolation.HostOutcome unreadable =
-                    VerifyDockerIsolation.sweep().get(0);
+                VerifyWorkloadIsolation.HostOutcome unreadable =
+                    VerifyWorkloadIsolation.sweep().get(0);
                 assertThat(unreadable.errors())
                     .as("step 3: the unreadable kernel is reported UNCONFIRMED by name")
                     .anySatisfy(error -> assertThat(error)
@@ -338,8 +338,8 @@ class VerifyDockerIsolationTest {
                         ? real.run(args, stdin)
                         : new NftRunner.Result(1, "", "injected write failure"),
                     () -> true));
-                VerifyDockerIsolation.HostOutcome contained =
-                    VerifyDockerIsolation.sweep().get(0);
+                VerifyWorkloadIsolation.HostOutcome contained =
+                    VerifyWorkloadIsolation.sweep().get(0);
                 assertThat(contained.errors())
                     .as("step 4: the refused repair is on the record")
                     .anySatisfy(error -> assertThat(error)

@@ -2015,6 +2015,88 @@ block is what the code does; amend the prose, do not code against it.
       PrivateNetns cannot honestly exercise skuid matching). Seam unchanged:
       `SystemUsers.executionBuilder` uids, OUTPUT-hook chain in the same table, or
       per-process netns.
+      SUPERSEDED 2026-08-06 (process-tier wave): the slice LANDED, uid-keyed, and both
+      blockers above were answered rather than worked around.
+      - THE ESCAPE IS REAL, measured before anything was built: a process running as a
+        site's run-as uid on a host with the tier's own topology reaches the metadata
+        address and every service on the host's private addresses. Driven by real
+        connect() probes from that uid (`ProcessNetworkIsolationTest` step 1, and again
+        as the removal counterfactual in step 7).
+      - MECHANISM CHOSEN: uid-keyed OUTPUT rules, NOT a per-process netns.
+        `ProcessNetworkPolicy` (server/security) writes ONE base chain per run-as uid
+        (`out_uid_<uid>`, hook output, priority -10) into the SAME `inet hohenheim_net`
+        table, denying the SAME `TenantNetworkRanges` vocabulary -- no fork, no second
+        list. A netns per process was weighed and rejected: it would have to re-plumb the
+        loopback IPC channel, the loopback upstream listener and the loopback
+        database-attachment contract this tier is built on, which is a rewrite of the
+        process runtime, not an isolation slice. `NftChains` was extracted so the
+        network-keyed and uid-keyed appliers share ONE read/verify/remove semantics
+        (absent != unreadable, exists != hooked, "nft exited 0" != "the rule is there").
+      - RESOLVER CARVE-OUT, DECIDED AND RECORDED (AIDEV-NOTE on `ProcessNetworkPolicy`):
+        the nameservers of /etc/resolv.conf are read AT APPLY TIME and each one inside a
+        denied range gets an accept scoped to that ADDRESS and to port 53 (udp+tcp) only,
+        emitted before the drops. On a loopback-stub host (systemd-resolved, daystrom) the
+        carve-out set is EMPTY -- loopback is denied by nobody -- so the ruleset is
+        maximally tight; on a private-resolver host (this workstation, 10.47.0.2) it is
+        exactly one address on one port, proven port-scoped by a probe to :8080 on the
+        resolver address that stays BLOCKED. An operator who wants no hole at all points
+        resolv.conf at a local stub. DoT/DoH (853/443) are deliberately NOT carved out.
+        Tracking is by re-read on every apply (every spawn + every sweep tick), no cache.
+      - THE APPLIER THROWS, same contract as every other tier: `requireEnabled` refuses by
+        name ("REFUSED to start site 'x'"), `ManagedProcessSiteHandler.startProcess`
+        applies BEFORE the retry loop and returns null on refusal, so nothing is built or
+        spawned. No bypass, no new setting. A site with NO run-as user gets no policy
+        because the only identity it has is the daemon's own (denying that cuts the
+        control plane off its hosts) -- that shape is this tier's spelling of
+        `NetworkPosture.SHARED_BRIDGE` and `WorkloadIdentity.forSite` already refuses it
+        whenever it matters (tenant-managed, or require_dedicated_user on); it is warned
+        once per handler, never silent.
+      - HONEST SKUID TESTING, the second blocker: `UidMappedNetns` builds a netns whose
+        user namespace maps the caller's /etc/subuid RANGE, so several real uids exist
+        inside it. MEASURED while building it: nft renders `meta skuid` through the netns's
+        own user namespace, so the INNER uid is the number that matches (a rule naming the
+        outer subuid-mapped value counts zero packets). The test therefore hands the
+        production applier the same kind of number production hands it. Also measured and
+        recorded: any `-n` level makes nft print `ct state 0x2,0x4`, so there is no numeric
+        flag that would force numeric uids without breaking every chain's read-back --
+        nft >= 1.0 is required and an older one fails CLOSED (the refusal prints the
+        kernel state).
+      - RESIDUAL, NAMED: LOOPBACK is not denied. A process site can still reach a host
+        service bound to 127.0.0.1, because its IPC channel, its own listener and its
+        attached databases all ride loopback by design. Closing that is the netns rewrite
+        above. What IS closed: the metadata service, the host's private addresses, and the
+        whole private network.
+      - SWEEP: ONE mechanism, not a second one. `VerifyDockerIsolation` was RENAMED
+        `VerifyWorkloadIsolation` and grew a uid pass (role PROCESSES added to its schedule
+        gate); the rename is because the unit stopped being "a policied Docker network".
+        FINDING that shaped it: this tier has NO reboot hole -- every child is ours and
+        every spawn re-applies -- so what the sweep covers here is the MID-LIFE divergence
+        (something else flushing the table under a long-running child). Containment is
+        killing the children; the respawn goes back through the applier, so a host that
+        still cannot enforce keeps the site down with a named refusal instead of running it
+        unisolated. Enforcement-off is UNVERIFIABLE and kills nothing, as everywhere else.
+      - TESTS (all RAN, none skipped): `ProcessNetworkIsolationTest` (4) -- the packet
+        journey with a control uid, the sweep's repair/contain/unverifiable lanes against
+        the same real kernel, the pre-enforcement refusal, the carve-out decision on both
+        host shapes; `ManagedProcessSiteHandlerTest` +1 product-lane journey (refusal
+        before buildCommand, rejected-kernel refusal with the uid-keyed ruleset recorded,
+        and a no-run-as-user site still spawning). Regression on the extraction:
+        WorkloadNetworkPolicyTest 4, StackDeployerTest 10, StackNetworkIsolationTest 1,
+        VerifyWorkloadIsolationTest 2, NftServiceTest 10, HohenheimTaskBootstrapTest 3.
+        COUNTERFACTUAL run: dropping the deny rules from `outputRules` and making
+        `isolate()` return true on refusal fails 3 tests verbatim -- the kernel chain reads
+        back with only the ct rule and the carve-outs, the sweep's "repair" leaves the
+        metadata address REACHABLE, and the refused site spawns 10 times instead of 0.
+      - PROVEN ON DAYSTROM, real kernel, real uid, no namespace: a throwaway system user
+        (uid 960) reached a host service on 10.47.1.99:8099 and the internet and resolved
+        DNS; the exact production ruleset text applied to the HOST's own nftables turned
+        the host service into a timeout while 1.1.1.1:443 stayed REACHABLE and DNS stayed
+        RESOLVED with ZERO carve-out rules -- the loopback-stub consequence, on the host
+        shape the workstation cannot reproduce. root reached the same service throughout
+        (identity control), deleting the chain made it reachable again (counterfactual),
+        and the table, the user and the listener were removed afterwards. nft 1.1.6 printed
+        `meta skuid 960` numerically for a uid that HAS a passwd entry, which is the
+        name-rendering risk measured rather than assumed.
 - **Already done, do not re-schedule:** `KnownCapabilities`/sensitivity classes
   (zenit core, wired -- Phase 3 only needs to REGISTER the instance vocabulary,
   which is an hour, not a workstream); `RecordGrants` + the grant-scoped

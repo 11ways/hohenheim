@@ -113,7 +113,8 @@ verify that line before anything else.
 
 Fresh DB boot with 104 migrations; both preflights green over the local
 sockets; container + VM deploys; `VerifyIncusIsolation` and
-`VerifyDockerIsolation` both VERIFIABLE (no ssh lane anywhere) and both
+`VerifyDockerIsolation` (renamed `VerifyWorkloadIsolation` 2026-08-06 when the
+host-process tier joined it) both VERIFIABLE (no ssh lane anywhere) and both
 observed repairing a deliberately broken kernel (chains deleted while
 workloads ran) within one 5-minute sweep; tenant-range egress blocked and
 `http://1.1.1.1/` reachable from both tiers; product destroy paths left the

@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.proxy.ResolvedClientIp;
+import be.elevenways.hohenheim.server.security.ProcessNetworkPolicy;
 import be.elevenways.hohenheim.server.security.SecurityReportEnv;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -25,6 +26,7 @@ import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -107,6 +109,9 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
     // One warning per handler when children silently inherit a root daemon user
     private final AtomicBoolean warnedRootInherit = new AtomicBoolean(false);
+
+    // One warning per handler when a site has no uid to key its network isolation on
+    private final AtomicBoolean warnedNotIsolatable = new AtomicBoolean(false);
 
     // Rate limit for the crash-loop notification (one alert per episode, not per exit)
     private static final long CRASH_NOTIFY_INTERVAL_MS = 10 * 60 * 1000;
@@ -291,6 +296,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
      */
     public ManagedProcess startProcess() {
         if (destroyed.get()) return null;
+        if (!isolate()) return null;
         long backoffMs = 150;
         requestedCount.incrementAndGet();
 
@@ -343,6 +349,76 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
                     + " restarts are being throttled. Check the process logs.");
         } catch (Exception e) {
             Blast.log("PROCESS: could not send crash-loop notification -", e.getMessage());
+        }
+    }
+
+    /**
+     * Apply this site's kernel isolation before anything is spawned, or refuse the spawn.
+     *
+     * AIDEV-NOTE: applied per SPAWN, not once per handler, and that is what closes this
+     * tier's reboot window without a sweep entry doing it: every child is ours, so after a
+     * reboot (or any restart) the children are gone and come back through here, re-applying
+     * a ruleset the kernel lost. The container tiers cannot rely on that -- the Docker
+     * daemon restarts unless-stopped containers with no code path of ours in the loop --
+     * which is why {@code VerifyWorkloadIsolation} exists for THEM and covers this tier
+     * only for the mid-life divergence (something else flushing the table under a
+     * long-running child).
+     *
+     * AIDEV-NOTE: a site with no run-as user gets no policy, because the only identity its
+     * children have is the DAEMON's own uid and a deny keyed on that would cut the control
+     * plane off from its own hosts. That shape is not a hole opened here: it exists only
+     * while {@code process.require_dedicated_user} is off AND no tenant manages the site
+     * ({@code WorkloadIdentity.forSite} refuses it otherwise), which is this tier's spelling
+     * of the container tiers' declared {@code NetworkPosture.SHARED_BRIDGE}. It is warned
+     * about, never silent.
+     *
+     * AIDEV-NOTE: {@link #destroy()} deliberately does NOT remove the uid chain, unlike the
+     * network tiers' destroy paths. A handler is REPLACED (new one constructed, old one
+     * destroyed) whenever a site's settings change, so a removal here would race the
+     * replacement into deleting the policy out from under freshly spawned children. A
+     * leftover chain denies a uid nothing is running as, which is inert; the chain is
+     * rewritten on the next spawn either way.
+     *
+     * @return false when the spawn is refused
+     */
+    private boolean isolate() {
+        SystemUsers.RunAsUser runAs = getRunAsUser();
+        if (runAs == null) {
+            warnNotIsolatable();
+            return true;
+        }
+        try {
+            ProcessNetworkPolicy.current().apply(runAs.uid(), siteName);
+            return true;
+        } catch (IOException refused) {
+            Blast.log("PROCESS:", refused.getMessage());
+            return false;
+        }
+    }
+
+    /** Warn once per handler when a site's children cannot be isolated for lack of a uid. */
+    private void warnNotIsolatable() {
+        if (warnedNotIsolatable.compareAndSet(false, true)) {
+            Blast.log("PROCESS: site", siteName, "has no system user configured, so its child",
+                "processes run as the Hohenheim daemon and CANNOT be network-isolated;",
+                "configure a system user for this site.");
+        }
+    }
+
+    /**
+     * The uid this site's children actually run as, or null when they inherit the daemon's.
+     * The sweep asks the LIVE handler rather than re-reading settings: what the kernel must
+     * carry is the identity the running children have, not the one the record now names.
+     */
+    public @Nullable Integer runAsUid() {
+        SystemUsers.RunAsUser runAs = getRunAsUser();
+        return runAs != null ? runAs.uid() : null;
+    }
+
+    /** Kill every child of this site; the respawn re-applies (or re-refuses) the policy. */
+    public void killAllProcesses() {
+        for (ManagedProcess managed : processMap.values()) {
+            managed.kill();
         }
     }
 

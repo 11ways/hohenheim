@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.PortAllocator;
 import be.elevenways.hohenheim.server.process.ProcessGroupSupport;
 import be.elevenways.hohenheim.server.process.ProcessMonitor;
+import be.elevenways.hohenheim.server.security.NftRunner;
+import be.elevenways.hohenheim.server.security.ProcessNetworkPolicy;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -58,6 +61,7 @@ class ManagedProcessSiteHandlerTest {
 
     @AfterEach
     void reapHandlers() {
+        ProcessNetworkPolicy.overrideForTest(null);
         for (ManagedProcessSiteHandler handler : handlers) {
             handler.destroy();
         }
@@ -68,10 +72,21 @@ class ManagedProcessSiteHandlerTest {
     private final class SleepHandler extends ManagedProcessSiteHandler {
 
         private final AtomicInteger spawnCount = new AtomicInteger();
+        private final SystemUsers.RunAsUser runAs;
 
         SleepHandler(int siteId, Map<String, Object> settings) {
+            this(siteId, settings, null);
+        }
+
+        SleepHandler(int siteId, Map<String, Object> settings, SystemUsers.RunAsUser runAs) {
             super(siteId, "proc-test-" + siteId, settings, portAllocator, monitor);
+            this.runAs = runAs;
             handlers.add(this);
+        }
+
+        @Override
+        protected SystemUsers.RunAsUser getRunAsUser() {
+            return this.runAs;
         }
 
         @Override
@@ -129,6 +144,62 @@ class ManagedProcessSiteHandlerTest {
             Thread.sleep(100);
         }
         throw new AssertionError("Timed out waiting for: " + what);
+    }
+
+    /**
+     * The product lane of the process tier's isolation: nothing is spawned under a run-as
+     * identity whose kernel policy did not land, and the policy that is applied is THIS
+     * site's identity.
+     */
+    @Test
+    void aSiteWithARunAsUidNeverSpawnsWhenItsIsolationCannotBeApplied() throws Exception {
+        SystemUsers.RunAsUser runAs = new SystemUsers.RunAsUser("site-9130", 4242, 4242,
+            System.getProperty("java.io.tmpdir"));
+        List<String> applied = new CopyOnWriteArrayList<>();
+
+        // 1. Enforcement OFF: the refusal happens before anything is built or spawned.
+        ProcessNetworkPolicy.overrideForTest(new ProcessNetworkPolicy(
+            (args, stdin) -> new NftRunner.Result(0, "", ""), () -> false,
+            Path.of("/etc/resolv.conf")));
+        SleepHandler unenforceable = new SleepHandler(9130, settings(false, 1), runAs);
+        assertThat(unenforceable.startProcess())
+            .as("step 1: a site whose isolation is not enforceable does not spawn").isNull();
+        Thread.sleep(500);
+        assertThat(unenforceable.spawnCount)
+            .as("step 1: the refusal is before buildCommand, not after a failed exec")
+            .hasValue(0);
+        assertThat(unenforceable.runningProcessCount())
+            .as("step 1: no child is running").isZero();
+
+        // 2. Enforcement ON but the kernel rejects the ruleset: same outcome, and the
+        //    ruleset the applier tried carries this site's uid.
+        ProcessNetworkPolicy.overrideForTest(new ProcessNetworkPolicy((args, stdin) -> {
+            if (stdin != null) {
+                applied.add(stdin);
+            }
+            return new NftRunner.Result(1, "", "Error: could not process rule");
+        }, () -> true, Path.of("/etc/resolv.conf")));
+        SleepHandler rejected = new SleepHandler(9131, settings(false, 1), runAs);
+        assertThat(rejected.startProcess())
+            .as("step 2: a kernel that rejects the policy stops the spawn").isNull();
+        assertThat(rejected.spawnCount).as("step 2: still nothing built").hasValue(0);
+        assertThat(applied).as("step 2: the applier ran, keyed on THIS site's run-as uid")
+            .hasSize(1);
+        assertThat(applied.get(0))
+            .contains("chain inet hohenheim_net out_uid_4242")
+            .contains("meta skuid 4242 ip daddr 169.254.0.0/16 drop");
+
+        // 3. A site with NO run-as user has no identity to key a policy on, so it keeps
+        //    spawning even with enforcement off -- the tier's declared unisolated shape,
+        //    which WorkloadIdentity refuses independently whenever it actually matters.
+        ProcessNetworkPolicy.overrideForTest(new ProcessNetworkPolicy(
+            (args, stdin) -> new NftRunner.Result(0, "", ""), () -> false,
+            Path.of("/etc/resolv.conf")));
+        SleepHandler daemonUser = new SleepHandler(9132, settings(false, 1));
+        daemonUser.startMinimumServers();
+        awaitCondition("child spawned", () -> daemonUser.runningProcessCount() == 1);
+        assertThat(daemonUser.spawnCount)
+            .as("step 3: a site without a run-as user still spawns").hasValue(1);
     }
 
     @Test
