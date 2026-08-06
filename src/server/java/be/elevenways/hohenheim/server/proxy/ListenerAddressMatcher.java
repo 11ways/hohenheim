@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.security.IpLiterals;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
@@ -61,6 +62,14 @@ public final class ListenerAddressMatcher {
             if (second.contains(candidate)) overlap.add(candidate);
         }
         return overlap.isEmpty() ? null : List.copyOf(overlap);
+    }
+
+    /**
+     * THE overlap question, shared by the domain editor and the release quarantine: an empty
+     * restriction listens everywhere, so it overlaps every other set.
+     */
+    public static boolean overlap(@NonNull List<String> first, @NonNull List<String> second) {
+        return first.isEmpty() || second.isEmpty() || intersection(first, second) != null;
     }
 
     static int specificity(List<String> configured) {
