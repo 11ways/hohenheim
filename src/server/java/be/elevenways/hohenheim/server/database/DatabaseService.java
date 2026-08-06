@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.SiteDatabaseNetworks;
 import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -108,6 +109,7 @@ public class DatabaseService extends DatasourceScoped {
         try {
             ManagedDatabase.Connection connection = managedFor.apply(serverName)
                 .provision(name, engine, image, user, password, database, ephemeral, limits, recordId);
+            connection = withLinksReattached(name, recordId, serverName, connection);
             recordPublishedPort(recordId, serverName, connection);
             setStatus(name, STATUS_ACTIVE);
             return connection;
@@ -115,6 +117,28 @@ public class DatabaseService extends DatasourceScoped {
             setStatus(name, STATUS_FAILED);
             throw e;
         }
+    }
+
+    /**
+     * Provisioning REPLACES the container, so the fresh one must rejoin the link
+     * networks of every Docker site attached to this record -- and joining a running
+     * container re-allocates its published port, so the port is re-observed AFTER the
+     * joins and the returned connection carries the final number.
+     */
+    private ManagedDatabase.Connection withLinksReattached(String name, Integer recordId,
+                                                           String serverName,
+                                                           ManagedDatabase.Connection connection) {
+        if (recordId == null || !SiteDatabaseNetworks.reattachForDatabase(recordId)) {
+            return connection;
+        }
+        ManagedDatabase.LiveStatus fresh = managedFor.apply(serverName)
+            .status(name, connection.engine());
+        if (fresh.running() && fresh.port() != null
+                && !fresh.port().equals(connection.port())) {
+            return new ManagedDatabase.Connection(connection.engine(), connection.host(),
+                fresh.port(), connection.user(), connection.password(), connection.database());
+        }
+        return connection;
     }
 
     /** Provision asynchronously on the local host; see the server-aware overload. */
@@ -143,9 +167,11 @@ public class DatabaseService extends DatasourceScoped {
             serverName, limits, STATUS_PROVISIONING);
         PROVISION_EXECUTOR.submit(() -> {
             try {
-                recordPublishedPort(recordId, serverName, managedFor.apply(serverName)
+                ManagedDatabase.Connection connection = managedFor.apply(serverName)
                     .provision(name, engine, image, user, password, database, ephemeral, limits,
-                        recordId));
+                        recordId);
+                connection = withLinksReattached(name, recordId, serverName, connection);
+                recordPublishedPort(recordId, serverName, connection);
                 setStatus(name, STATUS_ACTIVE);
             } catch (Exception e) {
                 setStatus(name, STATUS_FAILED);

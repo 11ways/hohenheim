@@ -194,6 +194,15 @@ public class ManagedDatabase {
     public record Connection(Engine engine, String host, int port,
                              String user, String password, String database) {}
 
+    /**
+     * THE container handle of a managed database, and (via Docker's embedded DNS on any
+     * shared user-defined network) the hostname a joined container reaches it under --
+     * stable across re-provisioning, unlike the container's addresses and published port.
+     */
+    public static String containerHandle(String name) {
+        return "hohenheim-db-" + name;
+    }
+
     private final DockerClient docker;
     private final WorkloadNetworkPolicy policy;
     private final NetworkPosture posture;

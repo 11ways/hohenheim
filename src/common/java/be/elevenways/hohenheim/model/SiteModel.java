@@ -198,6 +198,10 @@ public class SiteModel extends Model {
         if (!doomed.isEmpty()) {
             Models.get(SiteDomainModel.class).find()
                 .where(SiteDomainModel.SITE_ID.in(doomed)).delete();
+            // Database attachments die with the site too: a dangling link row would keep
+            // reading as a live attachment (env fingerprints, link-network sweeps).
+            Models.get(SiteDatabaseModel.class).find()
+                .where(SiteDatabaseModel.SITE_ID.in(doomed)).delete();
         }
     }
 

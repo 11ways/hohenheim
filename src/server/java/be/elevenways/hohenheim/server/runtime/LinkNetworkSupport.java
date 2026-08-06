@@ -18,11 +18,16 @@ public interface LinkNetworkSupport {
      * Create (or verify) the link network named after {@code linkHandle} with its kernel
      * policy applied and read-back verified.
      *
+     * @param egress the DECLARED egress posture of the link network itself: OPEN for a
+     *        proxy-to-backend lane, NONE for a lane whose members (a database engine)
+     *        have no legitimate outbound-initiated traffic -- a second interface must
+     *        never widen what a NONE-egress workload was declared to do
      * @return the network name
      * @throws IOException when the network or its policy cannot be enforced
      */
     @NonNull String ensureLinkNetwork(@NonNull String linkHandle,
-                                      @NonNull Map<String, String> ownerLabels) throws IOException;
+                                      @NonNull Map<String, String> ownerLabels,
+                                      @NonNull Egress egress) throws IOException;
 
     /**
      * Connect an existing container to the link network; a no-op when already connected,

@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.LinkNetworkSupport;
 import be.elevenways.protoblast.common.Blast;
@@ -323,7 +324,8 @@ public final class GameDomains {
             int proxyId = mapping.get(GameDomainModel.PROXY_INSTANCE_ID);
             int backendId = mapping.get(GameDomainModel.BACKEND_INSTANCE_ID);
             String handle = linkHandle(proxyId, backendId);
-            links.ensureLinkNetwork(handle, OwnerLabels.of(InstanceModel.MODEL_ID, backendId));
+            links.ensureLinkNetwork(handle, OwnerLabels.of(InstanceModel.MODEL_ID, backendId),
+                Egress.OPEN);
             links.connectToLinkNetwork(handle, resolved.spec().handle());
         }
     }
@@ -668,7 +670,8 @@ public final class GameDomains {
         LinkNetworkSupport links = requireLinkSupport(proxy, proxyId);
         String handle = linkHandle(proxyId, backendId);
         try {
-            links.ensureLinkNetwork(handle, OwnerLabels.of(InstanceModel.MODEL_ID, backendId));
+            links.ensureLinkNetwork(handle, OwnerLabels.of(InstanceModel.MODEL_ID, backendId),
+                Egress.OPEN);
             if (proxyState != ContainerState.ABSENT) {
                 links.connectToLinkNetwork(handle, proxy.spec().handle());
             }

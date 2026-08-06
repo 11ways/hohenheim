@@ -1807,11 +1807,17 @@ block is what the code does; amend the prose, do not code against it.
     but a stack service can still reach the metadata address and the host; applying the throwing
     policy to stacks means stacks refuse on a host without enforcement (a behaviour change for
     operator workloads that needs netns fixtures across the stack test suite), so it is a named
-    separate slice (`StackDeployer.ensureNetwork` is the seam). `DatabaseEnvInjection` for
-    DOCKER sites is still `127.0.0.1`-shaped: now that both tiers are on private networks a
-    Docker site container must JOIN each attached database's network and address the DB by its
-    container IP (host-process sites are unaffected -- they reach the published loopback port);
-    unblocked by this wave but not built (`SiteInstances`/`DatabaseEnvInjection` seam). Per-TENANT
+    separate slice (`StackDeployer.ensureNetwork` is the seam). SUPERSEDED 2026-08-06: the
+    `DatabaseEnvInjection` half LANDED -- Docker sites attach databases again via a per-pair
+    LINK network (`SiteDatabaseNetworks`, `hohenheim-dblink-{site}-{db}`, Egress NONE, joined
+    between create and start on the `InstanceService.deploy` seam; the attachment ROW is the
+    authority: the source fingerprint folds the link set so attach/detach converge through a
+    release, the drain sweep removes stale networks, and the injected env is CONTAINER_NETWORK
+    style: DB container hostname + engine port, never `127.0.0.1`). Cross-host attachments are
+    refused BY NAME (validator + deploy path); host-process sites keep the loopback style
+    unchanged (`EnvInjectionFlowTest` pins it); proven end-to-end by `SiteDatabaseLinkLiveTest`
+    (real client in the site container queries over the injected address; unattached DB stays
+    unreachable with a positive anchor). Per-TENANT
     grouping (one network per packed manage-subject set rather than per workload) and a
     per-workload egress ALLOWLIST (beyond the OPEN/NONE binary) remain future tightenings.
 - **Already done, do not re-schedule:** `KnownCapabilities`/sensitivity classes

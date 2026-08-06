@@ -35,6 +35,10 @@
     "text": "A database is required",
     "scope": "violations"
   },
+  "database_server_mismatch": {
+    "text": "Database '{$name}' runs on server '{$server}' while this site deploys on server '{$site_server}': a Docker site reaches its database over a link network, which only exists when both run on the same server",
+    "scope": "violations"
+  },
   "hostname_required": {
     "text": "Hostname is required",
     "scope": "violations"
@@ -96,7 +100,7 @@
     "scope": "violations"
   },
   "site_type_no_injection": {
-    "text": "Sites of type '{$type}' cannot receive database credentials: only host-process site types (Node.js, Alchemy, Command, Java / Zenit) can reach a managed database",
+    "text": "Sites of type '{$type}' cannot receive database credentials: only site types that run a workload (host processes or a Docker container) can reach a managed database",
     "scope": "violations"
   },
   "tls_passthrough_backend_certificate": {

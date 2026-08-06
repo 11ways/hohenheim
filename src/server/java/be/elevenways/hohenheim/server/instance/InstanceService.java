@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.docker.SiteDatabaseNetworks;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostLeases;
@@ -116,6 +117,10 @@ public final class InstanceService {
             // game-domain link networks re-attach here, BEFORE start, with their policy
             // enforced -- a backend must never serve a window without its links.
             GameDomains.attachLinksBeforeStart(resolved, instanceId);
+            // Same seam for a Docker site's database links: the release container joins
+            // each attached database's link network before it starts, so the health gate
+            // probes the candidate WITH its database reachable.
+            SiteDatabaseNetworks.attachLinksBeforeStart(resolved, instanceId);
             // The console attaches BETWEEN create and start (docker run's own order),
             // so a readiness line printed in the first instant cannot be missed.
             watch = InstanceConsoles.prepare(resolved, instanceId, this.leases);

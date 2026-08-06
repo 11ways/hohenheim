@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -305,6 +306,13 @@ public final class DockerReconciler {
                     .where(InstanceModel.ID.eq(key))
                     .where(InstanceModel.DELETED_AT.isNull())
                     .first() != null;
+            }
+            // Site-database link networks are owned by their ATTACHMENT row: the row's
+            // deletion is what orphans the network, so a stale join a sweep missed is
+            // surfaced instead of sitting OWNED forever.
+            if (SiteDatabaseModel.MODEL_ID.equals(model)) {
+                return Models.get(SiteDatabaseModel.class).find()
+                    .where(SiteDatabaseModel.ID.eq(key)).first() != null;
             }
             return false;   // a model we cannot resolve is an alarm, not an assumption
         }
