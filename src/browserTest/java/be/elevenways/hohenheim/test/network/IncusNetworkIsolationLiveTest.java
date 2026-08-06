@@ -139,11 +139,10 @@ class IncusNetworkIsolationLiveTest {
             } finally {
                 remote.forceDelete(handleA);
                 remote.forceDelete(handleB);
-                try {
-                    hostCmd("incus", "network", "acl", "delete", IncusNetworkPolicy.ACL_NAME);
-                } catch (RuntimeException stillReferencedOrGone) {
-                    // best-effort sweep; a referenced ACL clears once both instances are gone
-                }
+                // The shared isolation ACL is deliberately NOT deleted: it is durable
+                // daemon infrastructure, and under parallel forks a per-class delete
+                // races another class's no-write-then-verify deploy (see the identical
+                // note in IncusKernelIsolationLiveTest; observed live 2026-08-06).
             }
         });
     }
