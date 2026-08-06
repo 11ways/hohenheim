@@ -6726,6 +6726,44 @@
       "scope": "help"
     }
   ],
+  "image_origin": [
+    {
+      "text": "Image origin",
+      "scope": "field"
+    },
+    {
+      "text": "Where the image comes from: fetched from the public catalog, or a prepared image an operator already published into the host's own image store.",
+      "scope": "help"
+    }
+  ],
+  "catalog": {
+    "text": "Catalog",
+    "scope": "image_origin"
+  },
+  "prepared": {
+    "text": "Prepared template",
+    "scope": "image_origin"
+  },
+  "secure_boot": [
+    {
+      "text": "Secure Boot",
+      "scope": "field"
+    },
+    {
+      "text": "Whether the image requires Secure Boot. Catalog Linux images are unsigned and need this off; a prepared image (e.g. Microsoft-signed Windows media) can require it on.",
+      "scope": "help"
+    }
+  ],
+  "guest_agent": [
+    {
+      "text": "Guest agent",
+      "scope": "field"
+    },
+    {
+      "text": "Whether the image carries an incus guest agent capable of running commands. Turn off for a prepared image with no agent; install and app-update actions refuse instead of waiting on a bring-up that will never happen.",
+      "scope": "help"
+    }
+  ],
   "device_size_gb": {
     "text": "Size (GB)",
     "scope": "field"

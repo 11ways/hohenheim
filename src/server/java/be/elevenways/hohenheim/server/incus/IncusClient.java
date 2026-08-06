@@ -123,6 +123,29 @@ public class IncusClient {
             syncPayload("GET", "/1.0/networks?recursion=1", null, DEFAULT_TIMEOUT_MS));
     }
 
+    // -- images -----------------------------------------------------------------
+
+    /**
+     * The resolved fingerprint of one alias in the daemon's OWN image store, or null
+     * when the alias does not exist there. Never resolves against a remote server --
+     * the prepared-template lane is the one consumer, and a prepared image is by
+     * definition already local.
+     */
+    public @Nullable String imageFingerprintForAlias(@NonNull String alias) throws IOException {
+        try {
+            Map<String, Object> metadata = syncMetadata("GET",
+                "/1.0/images/aliases/" + alias, null, DEFAULT_TIMEOUT_MS);
+            Object target = metadata.get("target");
+            return target instanceof String fingerprint && !fingerprint.isBlank()
+                ? fingerprint : null;
+        } catch (ApiException e) {
+            if (e.isNotFound()) {
+                return null;
+            }
+            throw e;
+        }
+    }
+
     // -- instances ------------------------------------------------------------
 
     /** The instance's definition ({@code GET /1.0/instances/{name}}). */

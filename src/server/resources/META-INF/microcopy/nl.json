@@ -6722,6 +6722,44 @@
       "scope": "help"
     }
   ],
+  "image_origin": [
+    {
+      "text": "Image-herkomst",
+      "scope": "field"
+    },
+    {
+      "text": "Waar het image vandaan komt: opgehaald uit de publieke catalogus, of een voorbereid image dat een operator al gepubliceerd heeft in de eigen image-opslag van de host.",
+      "scope": "help"
+    }
+  ],
+  "catalog": {
+    "text": "Catalogus",
+    "scope": "image_origin"
+  },
+  "prepared": {
+    "text": "Voorbereid sjabloon",
+    "scope": "image_origin"
+  },
+  "secure_boot": [
+    {
+      "text": "Secure Boot",
+      "scope": "field"
+    },
+    {
+      "text": "Of het image Secure Boot vereist. Catalogus-Linux-images zijn ongesigneerd en hebben dit uit nodig; een voorbereid image (bv. door Microsoft gesigneerde Windows-media) kan dit aan vereisen.",
+      "scope": "help"
+    }
+  ],
+  "guest_agent": [
+    {
+      "text": "Guest agent",
+      "scope": "field"
+    },
+    {
+      "text": "Of het image een incus guest agent bevat die commando's kan uitvoeren. Zet uit voor een voorbereid image zonder agent; installatie- en app-updateacties weigeren dan in plaats van te wachten op een opstart die nooit komt.",
+      "scope": "help"
+    }
+  ],
   "device_size_gb": {
     "text": "Grootte (GB)",
     "scope": "field"

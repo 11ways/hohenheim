@@ -8,13 +8,16 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.hohenheim.server.runtime.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DoubleField;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
@@ -36,7 +39,11 @@ import java.util.Map;
  * inferred: provisioning is cloud-init user-data (the guest's own first-boot lane;
  * there is no environment.* injection into a VM's init), the schema therefore carries
  * {@code cloud_init} instead of environment variables, and there is no privileged
- * flag because the hypervisor boundary is the point.
+ * flag because the hypervisor boundary is the point. A prepared template (Windows via
+ * Microsoft-signed media included) is a DECLARED image origin through this SAME driver,
+ * never a parallel VM path: {@code image_origin}, {@code secure_boot} and
+ * {@code guest_agent} are the settings that carry what a prepared image needs that a
+ * cloud-init Linux guest does not.
  */
 public final class IncusVmKind implements InstanceKindHandler {
 
@@ -71,6 +78,44 @@ public final class IncusVmKind implements InstanceKindHandler {
     public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
         DoubleField.builder().name("cpu_limit").label(HohenheimFormCopy.label("cpu_limit"))
             .help(HohenheimFormCopy.help("cpu_limit")).build());
+
+    /**
+     * The closed set of image origins. The keys come from {@link ImageOrigin} itself --
+     * a second spelling of "catalog"/"prepared" here would be a parallel vocabulary the
+     * driver and the form could drift apart on.
+     */
+    public static final EnumField IMAGE_ORIGIN = SETTINGS_SCHEMA.addField(
+        EnumField.builder("image_origin")
+            .value(ImageOrigin.CATALOG.key(), v -> v.displayName("Catalog")
+                .icon("cloud-arrow-down")
+                .label(Microcopy.of("catalog").withFilter("scope", "image_origin")))
+            .value(ImageOrigin.PREPARED.key(), v -> v.displayName("Prepared template")
+                .icon("hard-drive")
+                .label(Microcopy.of("prepared").withFilter("scope", "image_origin")))
+            .defaultValue(ImageOrigin.CATALOG.key())
+            .label(HohenheimFormCopy.label("image_origin"))
+            .help(HohenheimFormCopy.help("image_origin")).build());
+
+    /**
+     * DECLARED, not hardcoded: this driver always forced {@code security.secureboot=false}
+     * because catalog Linux images are unsigned, but a prepared image can genuinely
+     * REQUIRE Secure Boot (Microsoft-signed Windows media boots fine with it on). The
+     * setting is the image's own declaration, never an inference from the origin.
+     */
+    public static final BooleanField SECURE_BOOT = SETTINGS_SCHEMA.addField(
+        BooleanField.builder("secure_boot").defaultValue(false)
+            .label(HohenheimFormCopy.label("secure_boot"))
+            .help(HohenheimFormCopy.help("secure_boot")).build());
+
+    /**
+     * A prepared image may carry no incus guest agent at all; when declared false, an
+     * exec-driven operation (install/app-update) REFUSES BY NAME instead of waiting out
+     * the ready timeout and reporting a false timeout.
+     */
+    public static final BooleanField GUEST_AGENT = SETTINGS_SCHEMA.addField(
+        BooleanField.builder("guest_agent").defaultValue(true)
+            .label(HohenheimFormCopy.label("guest_agent"))
+            .help(HohenheimFormCopy.help("guest_agent")).build());
 
     @Override
     public @NonNull Identifier typeId() { return ID; }
@@ -115,12 +160,17 @@ public final class IncusVmKind implements InstanceKindHandler {
             ? String.valueOf(settings.get("image")).trim() : "";
         String cloudInit = settings.get("cloud_init") instanceof String text
             && !text.isBlank() ? text : null;
+        ImageOrigin imageOrigin = ImageOrigin.fromKey(
+            settings.get("image_origin") instanceof String origin ? origin : null);
+        boolean secureBoot = Boolean.TRUE.equals(settings.get("secure_boot"));
+        boolean guestAgent = !Boolean.FALSE.equals(settings.get("guest_agent"));
         // No command override (a VM boots its own kernel), no env (nothing injects
         // into a guest's init -- cloud-init is the provisioning lane), no named
         // volumes (attached disks are instance_devices rows), no port publication
         // (a VM is an addressable system) -- each absence is structural.
         return new InstanceSpec(handle, image, null, Map.of(), Map.of(), null,
             ResourceLimits.fromSettings(settings), VM,
-            OwnerLabels.of(InstanceModel.MODEL_ID, instanceId), cloudInit, null);
+            OwnerLabels.of(InstanceModel.MODEL_ID, instanceId), cloudInit, null,
+            imageOrigin, secureBoot, guestAgent);
     }
 }
