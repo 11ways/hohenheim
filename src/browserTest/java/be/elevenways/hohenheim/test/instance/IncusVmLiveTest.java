@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -9,6 +10,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
+import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
@@ -45,9 +47,10 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * Phase 8 slice 1 against the REAL remote Incus daemon: a Linux VM provisioned from
  * CLOUD-INIT through the template mechanism (typed variables, secret lane), deployed
- * through the SAME driver seam as containers, network policy enforced and proven by a
- * FAILING cross-workload probe beside a succeeding anchor, disk and NIC attached and
- * resized UNDER QUOTA, and destroyed with reclaim verified AT THE DAEMON.
+ * through the SAME driver seam as containers, network policy enforced and proven in the
+ * DAEMON'S KERNEL as well as its config -- with the boundary deliberately broken and
+ * repaired in place, so the isolation assertions are known to be able to fail -- disk and
+ * NIC attached and resized UNDER QUOTA, and destroyed with reclaim verified AT THE DAEMON.
  *
  * 512 MiB VM + 128 MiB peer container: the host's 3.9 GiB is the binding limit.
  */
@@ -64,7 +67,18 @@ class IncusVmLiveTest {
     private static SqliteDatasource datasource;
     private static LiveIncusHost remote;
     private static String enrolledFingerprint;
+    private static String authorizedKey;
 
+    /**
+     * AIDEV-NOTE: the ssh ADMIN lane is enrolled here on purpose, and it is not a
+     * convenience. Without it {@link IncusKernelIsolation#available()} answers false for
+     * an https daemon, so the driver's start-time check returns silently and
+     * {@code VerifyIncusIsolation} reports the host unverifiable and repairs nothing --
+     * the VM tier would run with its kernel-truth mechanism entirely INERT, which is what
+     * this class did until 2026-08-06 and is why an unisolated VM could reach a tenant
+     * peer with no layer noticing. A VM-tier host without this lane cannot back the Phase
+     * 8 claim, so the test host carries the configuration the claim requires.
+     */
     @BeforeAll
     static void setUp() throws Exception {
         remote = LiveIncusHost.configured();
@@ -79,13 +93,28 @@ class IncusVmLiveTest {
         LiveIdOffsets.apply(datasource);
         HohenheimTestRuntime.ensureBooted();
 
-        Db.run(datasource, () -> enrolledFingerprint =
-            remote.enrollThroughProduct(HOST, "hohenheim-live-vm"));
+        Db.run(datasource, () -> {
+            enrolledFingerprint = remote.enrollThroughProduct(HOST, "hohenheim-live-vm");
+            remote.enrollSshLaneThroughProduct(HOST);
+            authorizedKey = Models.get(ServerModel.class).findByName(HOST)
+                .get(HostTrustSlot.SSH.clientPublic());
+        });
     }
 
+    /**
+     * Give back both working credentials this class borrowed from a real machine, and
+     * PRINT the outcome: a cleanup that fails silently leaves root access behind.
+     */
     @AfterAll
     static void tearDown() {
-        if (remote != null && enrolledFingerprint != null) {
+        if (remote == null) {
+            return;
+        }
+        if (authorizedKey != null) {
+            System.out.println("=== cleanup: authorized_keys -> "
+                + remote.deauthorizeKey(authorizedKey));
+        }
+        if (enrolledFingerprint != null) {
             try {
                 remote.removeTrustEntry(enrolledFingerprint);
             } catch (IOException ignored) {
@@ -229,6 +258,80 @@ class IncusVmLiveTest {
                         + " >/dev/null 2>&1 && echo REACHED || echo ISOLATED"))
                     .as("step 7: the SAME probe from the VM is refused by the ACL")
                     .isEqualTo("ISOLATED");
+
+                // 7b. The CONTROL-PLANE probe. The peer above proves tenant-to-tenant; the
+                //     daemon host's own bridge address is what an unisolated tenant reaches
+                //     the machine running the control plane through, and no second workload
+                //     is involved in it at all.
+                //
+                //     AIDEV-NOTE: both probes measure the VM's OWN egress rules and nothing
+                //     else, and that is a property of how this product configures the NIC,
+                //     not of Incus. IncusNetworkPolicy.nicDevice sets
+                //     security.acls.default.ingress.action=allow, so a peer's chain does NOT
+                //     block the inbound leg -- verified on daystrom 2026-08-06, where a NIC
+                //     left at the daemon's own default-deny ingress kept answering ISOLATED
+                //     with the sender completely unfiltered, and the product-configured one
+                //     answered REACHED. Never re-derive "the peer's chain protects it": if
+                //     that ingress default ever changes, step 7d is what fails.
+                String gateway = gatewayOf(incus, definition);
+                assertThat(exec(handle, "ping -c 1 -W 2 " + gateway
+                        + " >/dev/null 2>&1 && echo REACHED || echo ISOLATED"))
+                    .as("step 7b: the VM cannot reach the daemon host at %s either", gateway)
+                    .isEqualTo("ISOLATED");
+
+                // 7c. KERNEL truth for the VM's LIVE tap, read through the product's own
+                //     ssh lane -- the only layer that sees the upstream teardown race, in
+                //     which incusd's postStop returns on a failed interface removal and
+                //     never removes the filters, leaving chains that name a DEAD tap while
+                //     the restarted VM's new tap matches nothing. The daemon's config and
+                //     its ACL both read back perfectly in that state.
+                IncusKernelIsolation kernel = IncusKernelIsolation.forServer(
+                    Models.get(ServerModel.class).findByName(HOST));
+                assertThat(kernel.available())
+                    .as("step 7c: this host's kernel is readable, so the VM tier's"
+                        + " isolation is verified and not merely configured")
+                    .isTrue();
+                assertThat(missingKernelRules(kernel, handle))
+                    .as("step 7c: and the kernel carries every tenant-range block for the"
+                        + " VM's live tap")
+                    .isEmpty();
+
+                // 7d. THE COUNTERFACTUAL, run in place: break the boundary exactly the way
+                //     incusd breaks it, and require every probe above to NOTICE. An
+                //     isolation assertion that has never been shown to fail is not a
+                //     boundary test, and this is the one shape it must catch -- the
+                //     kernel losing the rules while the daemon keeps reporting them.
+                dropVmChains(handle);
+                assertThat(exec(handle, "ping -c 1 -W 2 " + peerIp[0]
+                        + " >/dev/null 2>&1 && echo REACHED || echo ISOLATED"))
+                    .as("step 7d: step 7's own probe catches a real isolation loss")
+                    .isEqualTo("REACHED");
+                assertThat(exec(handle, "ping -c 1 -W 2 " + gateway
+                        + " >/dev/null 2>&1 && echo REACHED || echo ISOLATED"))
+                    .as("step 7d: and so does the control-plane probe")
+                    .isEqualTo("REACHED");
+                assertThat(missingKernelRules(kernel, handle))
+                    .as("step 7d: and so does kernel truth, naming the live tap")
+                    .isNotEmpty();
+                assertThat(String.valueOf(instanceOf(incus, handle).get("devices")))
+                    .as("step 7d: while the daemon's own config still claims isolation --"
+                        + " the divergence this whole mechanism exists for")
+                    .contains(IncusNetworkPolicy.ACL_NAME);
+
+                // 7e. Repaired through the product's own per-instance lever, and the
+                //     boundary is measurably back on both probes.
+                enforceKernel(kernel, handle);
+                assertThat(missingKernelRules(kernel, handle))
+                    .as("step 7e: the repair restored the kernel rules").isEmpty();
+                assertThat(exec(handle, "ping -c 1 -W 2 " + gateway
+                        + " >/dev/null 2>&1 && echo REACHED || echo ISOLATED"))
+                    .as("step 7e: and the VM is refused by the daemon host again")
+                    .isEqualTo("ISOLATED");
+                assertThat(exec(handle,
+                    "wget -q -O- --timeout=8 http://1.1.1.1/ >/dev/null 2>&1"
+                        + " && echo IPV4-OK || echo IPV4-DEAD"))
+                    .as("step 7e: the repair did not sever the NIC")
+                    .isEqualTo("IPV4-OK");
 
                 // 8. DISK under quota: exactly 2 GB of operator headroom.
                 HohenheimSettings.VALUES.setValue(
@@ -484,6 +587,60 @@ class IncusVmLiveTest {
             return incus.instance(handle);
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * The daemon bridge's OWN address, derived from the NIC's declared network -- the
+     * one-sided probe target. Never a hardcoded subnet: the managed bridge's range is
+     * auto-assigned by the daemon and differs per host.
+     */
+    private static String gatewayOf(IncusClient incus, Map<String, Object> definition) {
+        Map<?, ?> nic = (Map<?, ?>) ((Map<?, ?>) definition.get("devices")).get("eth0");
+        String network = String.valueOf(nic.get("network"));
+        Map<String, Object> bridge;
+        try {
+            bridge = incus.network(network);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        assertThat(bridge).as("the daemon knows the NIC's network '%s'", network).isNotNull();
+        String cidr = String.valueOf(((Map<?, ?>) bridge.get("config")).get("ipv4.address"));
+        assertThat(cidr).as("bridge '%s' has an IPv4 subnet", network).contains("/");
+        return cidr.substring(0, cidr.indexOf('/'));
+    }
+
+    /** Kernel truth for one workload, or the verifier's own refusal as a failure. */
+    private static List<String> missingKernelRules(IncusKernelIsolation kernel, String handle) {
+        try {
+            return kernel.inspect(handle).missing();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** The product's verify-repair-reverify lever; a refusal fails the journey. */
+    private static void enforceKernel(IncusKernelIsolation kernel, String handle) {
+        try {
+            kernel.enforce(handle);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Break the boundary the way incusd breaks it: remove the instance's bridge-filter
+     * chains while it runs, leaving every daemon-side fact intact.
+     */
+    private static void dropVmChains(String handle) {
+        for (String hook : List.of("in", "fwd", "out")) {
+            try {
+                remote.hostCommand("nft", "delete", "chain", "bridge",
+                    IncusKernelIsolation.TABLE, hook + "." + handle + "."
+                        + IncusNetworkPolicy.NIC);
+            } catch (IOException absent) {
+                // a chain the daemon never made is not an error; 7d measures the outcome
+            }
         }
     }
 
