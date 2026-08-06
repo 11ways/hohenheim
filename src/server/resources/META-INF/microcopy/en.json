@@ -2071,6 +2071,18 @@
     {
       "text": "Preview deployments",
       "scope": "preview_deployment"
+    },
+    {
+      "text": "Instance snapshots",
+      "scope": "instance_snapshot"
+    },
+    {
+      "text": "Instance backups",
+      "scope": "instance_backup"
+    },
+    {
+      "text": "Backup targets",
+      "scope": "backup_target"
     }
   ],
   "dashboard": {
@@ -5452,7 +5464,7 @@
       "scope": "field"
     },
     {
-      "text": "UPPER_CASE environment name; also the {{KEY}} token in command and config files",
+      "text": "UPPER_CASE environment name; also the \\{\\{KEY\\}\\} token in command and config files",
       "scope": "help"
     }
   ],
@@ -5549,7 +5561,7 @@
     "scope": "help"
   },
   "template_file_content": {
-    "text": "May contain {{KEY}} variable placeholders, substituted when the file is placed into the container",
+    "text": "May contain \\{\\{KEY\\}\\} variable placeholders, substituted when the file is placed into the container",
     "scope": "help"
   },
   "preserve": {
@@ -6658,7 +6670,7 @@
       "scope": "field"
     },
     {
-      "text": "First-boot provisioning (#cloud-config). {{KEY}} placeholders resolve against the instance's variables, secret variables included.",
+      "text": "First-boot provisioning (#cloud-config). \\{\\{KEY\\}\\} placeholders resolve against the instance's variables, secret variables included.",
       "scope": "help"
     }
   ],

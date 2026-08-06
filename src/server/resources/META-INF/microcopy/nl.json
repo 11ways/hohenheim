@@ -2067,6 +2067,18 @@
     {
       "text": "Preview-deployments",
       "scope": "preview_deployment"
+    },
+    {
+      "text": "Instantiesnapshots",
+      "scope": "instance_snapshot"
+    },
+    {
+      "text": "Instantieback-ups",
+      "scope": "instance_backup"
+    },
+    {
+      "text": "Back-updoelen",
+      "scope": "backup_target"
     }
   ],
   "dashboard": {
@@ -5448,7 +5460,7 @@
       "scope": "field"
     },
     {
-      "text": "UPPER_CASE-omgevingsnaam; ook het {{KEY}}-token in commando en configuratiebestanden",
+      "text": "UPPER_CASE-omgevingsnaam; ook het \\{\\{KEY\\}\\}-token in commando en configuratiebestanden",
       "scope": "help"
     }
   ],
@@ -5545,7 +5557,7 @@
     "scope": "help"
   },
   "template_file_content": {
-    "text": "Mag {{KEY}}-variabeleplaatshouders bevatten, vervangen wanneer het bestand in de container geplaatst wordt",
+    "text": "Mag \\{\\{KEY\\}\\}-variabeleplaatshouders bevatten, vervangen wanneer het bestand in de container geplaatst wordt",
     "scope": "help"
   },
   "preserve": {
@@ -6654,7 +6666,7 @@
       "scope": "field"
     },
     {
-      "text": "Provisionering bij eerste opstart (#cloud-config). {{KEY}}-plaatshouders worden ingevuld met de variabelen van de instantie, geheime variabelen inbegrepen.",
+      "text": "Provisionering bij eerste opstart (#cloud-config). \\{\\{KEY\\}\\}-plaatshouders worden ingevuld met de variabelen van de instantie, geheime variabelen inbegrepen.",
       "scope": "help"
     }
   ],
