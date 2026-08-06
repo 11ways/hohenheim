@@ -45,12 +45,14 @@ class ProjectAdoptionTest extends HohenheimTestBase {
 
     private static Integer userXId;
     private static Integer userYId;
+    private static Integer userZId;
     private static UserPrincipal principalX;
     private static UserPrincipal principalY;
 
     private static Integer instanceX1;
     private static Integer instanceX2;
     private static Integer instanceY1;
+    private static Integer instanceZ1;
     private static Integer instanceOperator;
     private static Integer siteSharedId;
     private static Integer siteXId;
@@ -63,12 +65,17 @@ class ProjectAdoptionTest extends HohenheimTestBase {
     static void seedLegacyLandscape() {
         userXId = user("adopt-x@project.test", "Adopt X");
         userYId = user("adopt-y@project.test", "Adopt Y");
+        userZId = user("adopt-z@project.test", "Adopt Z");
         principalX = new UserPrincipal(userXId, "Adopt X");
         principalY = new UserPrincipal(userYId, "Adopt Y");
 
         instanceX1 = instance(PREFIX + "x1");
         instanceX2 = instance(PREFIX + "x2");
         instanceY1 = instance(PREFIX + "y1");
+        // A fourth, "neighbour-shaped" owner set the exact-count assertions below never
+        // name: it keeps the landscape-derived operator expectation (step 7) exercised
+        // even when this class runs alone, exactly like same-fork residue would.
+        instanceZ1 = instance(PREFIX + "z1");
         instanceOperator = instance(PREFIX + "op");
         siteSharedId = site(PREFIX + "shared");
         siteXId = site(PREFIX + "site-x");
@@ -79,6 +86,8 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         RecordGrants.grant("user", userXId, InstanceModel.MODEL_ID, instanceX2,
             HohenheimAccess.MANAGE, true);
         RecordGrants.grant("user", userYId, InstanceModel.MODEL_ID, instanceY1,
+            HohenheimAccess.MANAGE, true);
+        RecordGrants.grant("user", userZId, InstanceModel.MODEL_ID, instanceZ1,
             HohenheimAccess.MANAGE, true);
         RecordGrants.grant("user", userXId, SiteModel.MODEL_ID, siteSharedId,
             HohenheimAccess.MANAGE, true);
@@ -167,6 +176,36 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         return row.get(SiteModel.ID);
     }
 
+    /**
+     * How many live instances the heal will move OUT of the operator bucket: charged
+     * to it (or stampless, which releases against it by convention), carrying a
+     * non-empty manage-subject set, and not yet project-owned. This mirrors the
+     * heal's own collect/skip rules so the step-7 expectation stays exact on a
+     * database that same-fork sibling classes also write to.
+     */
+    private static int operatorChargedAdoptees() {
+        String operatorBucket = InstanceQuota.bucketKeyOf("");
+        int count = 0;
+        for (Row row : Models.get(InstanceModel.class).find().all()) {
+            if (row.get(InstanceModel.DELETED_AT) != null) {
+                continue;
+            }
+            Set<String> subjects = HohenheimAccess.manageSubjectsOf(
+                InstanceModel.MODEL_ID, row.get(InstanceModel.ID));
+            if (subjects == null || subjects.isEmpty()) {
+                continue;
+            }
+            if (Projects.projectForSubjects(subjects) != null) {
+                continue;
+            }
+            String bucket = row.get(InstanceModel.QUOTA_BUCKET);
+            if (bucket == null || bucket.isBlank() || bucket.equals(operatorBucket)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     // -- the journey ----------------------------------------------------------
 
     /** The heal itself, with EXACT counts derived from the landscape it saw. */
@@ -184,14 +223,24 @@ class ProjectAdoptionTest extends HohenheimTestBase {
             .as("step 1: X never reached Y's instance").isFalse();
 
         long operatorUsedBefore = InstanceQuota.usedBy("");
+        // The operator bucket is SHARED across every class in this fork's database, and
+        // the heal is deliberately global: it also adopts any live user-granted instance
+        // a sibling class left behind, releasing THAT slot from the same bucket. The
+        // expected delta is therefore derived from the landscape the heal will see, not
+        // hardcoded to this class's trio (which is what made this assertion flaky).
+        int operatorAdoptees = operatorChargedAdoptees();
+        assertThat(operatorAdoptees)
+            .as("step 1: x1, x2, y1 and the neighbour-shaped z1 are operator-charged adoptees")
+            .isGreaterThanOrEqualTo(4);
 
-        // 2. Run the heal. The landscape THIS class planted is three distinct owner
-        //    sets ({X}, {Y}, {X,Y}); a shared server may carry more from neighbours,
-        //    so the exact assertions below are on THIS class's sets and records.
+        // 2. Run the heal. The landscape THIS class planted is four distinct owner
+        //    sets ({X}, {Y}, {X,Y}, {Z}); a shared server may carry more from
+        //    neighbours, so the exact assertions below are on THIS class's sets and
+        //    records.
         result = ProjectAdoption.run();
         assertThat(result.projectsCreated())
-            .as("step 2: at least the three distinct owner sets became projects")
-            .isGreaterThanOrEqualTo(3);
+            .as("step 2: at least the four distinct owner sets became projects")
+            .isGreaterThanOrEqualTo(4);
 
         // 3. Each record now answers to exactly ONE project subject, and records that
         //    shared an owner set share a project while others do not.
@@ -247,19 +296,34 @@ class ProjectAdoptionTest extends HohenheimTestBase {
             .as("step 6: and no project was manufactured for the operator")
             .isNull();
 
-        // 7. The quota followed the owner: X's live instances are charged to the
-        //    project bucket now, and the operator bucket handed those slots back.
+        // 7. The quota followed the owner: each adopted set's live instances are
+        //    charged to their project bucket now (class-owned buckets, so exact), and
+        //    the operator bucket handed back EXACTLY one slot per operator-charged
+        //    adoptee it lost -- ours plus any same-fork residue, per the derived count.
         String packX = HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(projectX));
+        String packY = HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(projectY));
         assertThat(InstanceQuota.usedBy(packX))
             .as("step 7: X's project bucket carries its two live instances")
             .isEqualTo(2);
+        assertThat(InstanceQuota.usedBy(packY))
+            .as("step 7: Y's project bucket carries its one live instance")
+            .isEqualTo(1);
         assertThat((String) Models.get(InstanceModel.class).findById(instanceX1)
                 .get(InstanceModel.QUOTA_BUCKET))
             .as("step 7: the charged-bucket column was restamped")
             .isEqualTo(InstanceQuota.bucketKeyOf(packX));
+        assertThat((String) Models.get(InstanceModel.class).findById(instanceY1)
+                .get(InstanceModel.QUOTA_BUCKET))
+            .as("step 7: y1's charged-bucket column was restamped too")
+            .isEqualTo(InstanceQuota.bucketKeyOf(packY));
+        assertThat((String) Models.get(InstanceModel.class).findById(instanceOperator)
+                .get(InstanceModel.QUOTA_BUCKET))
+            .as("step 7: the operator-owned instance keeps its operator stamp")
+            .isEqualTo(InstanceQuota.bucketKeyOf(""));
         assertThat(InstanceQuota.usedBy(""))
-            .as("step 7: the operator bucket released the adopted slots (x1, x2, y1)")
-            .isEqualTo(operatorUsedBefore - 3);
+            .as("step 7: the operator bucket released exactly one slot per"
+                + " operator-charged adoptee (x1, x2, y1, z1, plus any fork residue)")
+            .isEqualTo(operatorUsedBefore - operatorAdoptees);
 
         // 8. The per-owner override row follows, so the CAP survives the move.
         Row cap = Models.get(InstanceQuotaModel.class).findById(quotaOverrideId);
