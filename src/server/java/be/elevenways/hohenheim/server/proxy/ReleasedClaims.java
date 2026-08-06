@@ -19,6 +19,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -143,7 +145,34 @@ public final class ReleasedClaims {
     }
 
     /**
-     * The quarantine decision for a claim.
+     * The quarantine decision for a claim; who may take a route back is {@link #allows}.
+     *
+     * AIDEV-NOTE: the quarantine is a question about hostname SETS, exactly like the live
+     * conflict scan (HostnamePatterns) -- never about claim-key equality. A wildcard row
+     * routes a released exact hostname just as completely as an exact row does while
+     * spelling a DIFFERENT key, so a key-only check leaves the whole takeover open through
+     * one glob: release shop.example.com, claim *.example.com, and the dangling CNAME lands
+     * on the new tenant. The exact key stays an INDEXED lookup and answers first; only when
+     * it does not refuse does the overlap tier walk the ACTIVE ledger rows (bounded by the
+     * window, and far smaller than the site/domain scans that already ran).
+     *
+     * @param matchType the pending row's match type; the RELEASED side describes itself,
+     *                  its stored hostname being canonical (HostnamePatterns.effectiveKind)
+     * @return the ledger row refusing this claim, or null when the claim is allowed
+     */
+    public static @Nullable Row refusalFor(@NonNull String claimKey, @Nullable String matchType,
+                                           int claimantSiteId) {
+        Set<String> claimant = HohenheimAccess.manageSubjectsOf(claimantSiteId);
+        Row active = activeClaimFor(claimKey);
+        if (active != null && !allows(active, claimant)) {
+            return active;
+        }
+        return overlapRefusal(claimKey, matchType, claimant);
+    }
+
+    /**
+     * Whether a claimant may take a released route back: the same owner always may, and a
+     * grant-free site (a tenant's brand new one, or an operator's) is judged on the ACTOR.
      *
      * AIDEV-NOTE: an EMPTY claimant set means "no manage grants YET", which is both the
      * operator case and a tenant whose fresh site has not been granted anything yet (a
@@ -152,23 +181,51 @@ public final class ReleasedClaims {
      * so a tenant re-claiming through a new site is allowed while a stranger is not. Without
      * that lane, tenant self-service site creation would lock every tenant out of its own
      * released hostnames.
-     *
-     * @return the ledger row refusing this claim, or null when the claim is allowed
      */
-    public static @Nullable Row refusalFor(@NonNull String claimKey, int claimantSiteId) {
-        Row active = activeClaimFor(claimKey);
-        if (active == null) {
-            return null;
-        }
-        Set<String> former = parse(active.get(ReleasedRouteClaimModel.FORMER_SUBJECTS));
-        Set<String> claimant = HohenheimAccess.manageSubjectsOf(claimantSiteId);
+    private static boolean allows(@NonNull Row claim, @Nullable Set<String> claimant) {
+        Set<String> former = parse(claim.get(ReleasedRouteClaimModel.FORMER_SUBJECTS));
         if (claimant != null && claimant.equals(former)) {
+            return true;
+        }
+        return (claimant == null || claimant.isEmpty()) && actorIsAmong(former);
+    }
+
+    /**
+     * The first active claim whose route INTERSECTS this one and whose former owner is not
+     * the claimant. Path and listener set must match the way the live scan compares them --
+     * a different path or a disjoint listener set is a genuinely different route.
+     */
+    private static @Nullable Row overlapRefusal(@NonNull String claimKey,
+                                                @Nullable String matchType,
+                                                @Nullable Set<String> claimant) {
+        int days = windowDays();
+        if (days <= 0) {
             return null;
         }
-        if ((claimant == null || claimant.isEmpty()) && actorIsAmong(former)) {
-            return null;
+        String hostname = RouteClaims.hostnameOf(claimKey);
+        String path = RouteClaims.pathOf(claimKey);
+        List<String> listeners = RouteClaims.listenersOf(claimKey);
+        for (Row claim : Models.get(ReleasedRouteClaimModel.class).find()
+                .where(ReleasedRouteClaimModel.RELEASED_AT
+                    .gte(Instant.now().minus(Duration.ofDays(days))))
+                .orderBy(ReleasedRouteClaimModel.RELEASED_AT, SortOrder.DESC)
+                .orderBy(ReleasedRouteClaimModel.ID, SortOrder.DESC).all()) {
+            String releasedKey = claim.get(ReleasedRouteClaimModel.CLAIM_KEY);
+            if (releasedKey == null || releasedKey.equals(claimKey)) {
+                // The identical key was already judged, by the indexed lookup above.
+                continue;
+            }
+            if (!Objects.equals(path, RouteClaims.pathOf(releasedKey))
+                || !ListenerAddressMatcher.overlap(listeners, RouteClaims.listenersOf(releasedKey))
+                || !HostnamePatterns.intersect(hostname, matchType,
+                    RouteClaims.hostnameOf(releasedKey), null)) {
+                continue;
+            }
+            if (!allows(claim, claimant)) {
+                return claim;
+            }
         }
-        return active;
+        return null;
     }
 
     /** @return whole days left on a quarantine row, at least 1 while it is still active */

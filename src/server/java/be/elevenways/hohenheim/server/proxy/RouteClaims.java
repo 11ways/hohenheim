@@ -212,8 +212,27 @@ public final class RouteClaims {
 
     /** The hostname a claim key was built from, for the refusal message. */
     public static @NonNull String hostnameOf(@NonNull String key) {
-        int separator = key.indexOf(SEPARATOR);
-        return separator < 0 ? key : key.substring(0, separator);
+        return partOf(key, 0);
+    }
+
+    /**
+     * The canonical route path a claim key was built from, null for the catch-all -- so a
+     * released claim can be compared to a pending one on the two components that are not
+     * the hostname (the hostname itself is a SET question, see HostnamePatterns).
+     */
+    public static @Nullable String pathOf(@NonNull String key) {
+        String path = partOf(key, 1);
+        return path.isEmpty() ? null : path;
+    }
+
+    /** The listener restriction a claim key was built from; empty means every address. */
+    public static @NonNull List<String> listenersOf(@NonNull String key) {
+        return ListenerAddressMatcher.parse(partOf(key, 2));
+    }
+
+    private static @NonNull String partOf(@NonNull String key, int index) {
+        String[] parts = key.split(SEPARATOR, -1);
+        return index < parts.length ? parts[index] : "";
     }
 
     /**

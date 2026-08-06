@@ -1557,6 +1557,36 @@ past. It is small if Phase 1 is done right: it is a consumer, not a mechanism.
   empty set, because an empty set reads as operator-owned); and wildcard-vs-exact
   OVERLAP against a released claim stays explicitly OUT of scope -- only the
   identical claim key is quarantined.
+
+  VERIFIED 2026-08-06, by attack, with one LIVE BYPASS found and closed. Every
+  enforcement half was counterfactualled independently and each one failed the
+  attack when reverted: the write-path tier (5 tests fail), the enable-seam tier
+  (the stage-then-enable two-step alone), the site-restamp ledger write, the
+  domain beforeRemove write and the hostname-rename write. Newly proven and now
+  covered: the window's BOTH edges (refused one hour before expiry, claimable one
+  minute after) and `0` disabling record AND refusal; a HARD site delete ledgering
+  through the cascade with the owner set intact; the ACTOR lane (a grant-free new
+  site is judged on the acting identity -- former owner in, stranger and SYSTEM
+  out); and the lift landing in the activity log attributed to the admin that
+  invoked it.
+
+  The BYPASS: "OVERLAP stays out of scope" above was not a safe scope cut -- it
+  was the takeover itself, one glob wide. Releasing `shop.example.com` and then
+  claiming `*.example.com` from another tenant spelled a different claim key,
+  passed the key-only quarantine, and the dangling CNAME resolved into the new
+  tenant's site; the mirror case (an exact host carved out of a released wildcard
+  space) is sharper still, the exact tier being consulted first. The quarantine
+  now judges hostname SETS through `HostnamePatterns.intersect`, exactly like the
+  live conflict scan: indexed exact-key lookup first, then an overlap walk of the
+  ACTIVE ledger rows only (path equality + listener overlap, so a different route
+  stays a different route). Same-owner reclaim through a wildcard, and an
+  unrelated wildcard, both still pass.
+
+  NOT verified: the DNS-side and certificate-side of a released hostname; regex
+  rows against a released claim (HostnamePatterns answers literal equality only,
+  by design, so a regex row can still shadow a released glob); and restoring a
+  database snapshot, which rewrites the ledger table itself rather than claiming
+  through the write pipeline.
 - Generated records (ACME challenge records, Velocity forced-hosts, SRV/A rows
   materialized from a mapping) carry owner + source metadata and reconcile or
   delete ONLY their own output. A generated row is never adopted by whoever

@@ -332,13 +332,17 @@ public class SiteDomainResource extends RowResource {
         }
 
         // The QUARANTINE tier, last: a live holder is the more actionable refusal and keeps
-        // naming itself, so this only speaks when the route is genuinely unheld. It is an
-        // INDEXED lookup on the claim key, never another scan. Rows of a site that does not
-        // route are exempt here exactly like they are above -- staging is legal, and the
-        // enable seam re-judges (refuseEnableRouteConflicts), which is what closes the
+        // naming itself, so this only speaks when the route is genuinely unheld. It answers
+        // from an INDEXED lookup on the claim key first, and judges hostname-set overlap
+        // against the active ledger rows only if that let the claim through (a wildcard
+        // swallows a released exact host while spelling a different key -- see
+        // ReleasedClaims). Rows of a site that does not route are exempt here exactly like
+        // they are above -- staging is legal, and the enable seam re-judges
+        // (refuseEnableRouteConflicts), which is what closes the
         // stage-on-a-disabled-site-then-enable two-step.
         if (ownSiteLive) {
-            Row quarantine = ReleasedClaims.refusalFor(RouteClaims.keyOfPendingWrite(row), siteId);
+            Row quarantine = ReleasedClaims.refusalFor(RouteClaims.keyOfPendingWrite(row),
+                matchType, siteId);
             if (quarantine != null) {
                 throw Violations.ofField("hostname", hostname, quarantineViolation(quarantine,
                     "route_quarantined"));
@@ -428,7 +432,8 @@ public class SiteDomainResource extends RowResource {
             // whole mechanism bypassable by a two-step the code above documents as LEGAL:
             // stage the released hostname on a DISABLED site (exempt by design), then
             // enable it. Anchored on 'enabled', like every other refusal on this path.
-            Row quarantine = ReleasedClaims.refusalFor(RouteClaims.keyOf(own), siteId);
+            Row quarantine = ReleasedClaims.refusalFor(RouteClaims.keyOf(own),
+                stringValue(own.get(SiteDomainModel.MATCH_TYPE)), siteId);
             if (quarantine != null) {
                 throw Violations.ofField("enabled", true,
                     quarantineViolation(quarantine, "enable_route_quarantined"));
@@ -436,15 +441,9 @@ public class SiteDomainResource extends RowResource {
         }
     }
 
-    /**
-     * An empty restriction listens everywhere, so it overlaps every other set.
-     * {@code intersection} answers NULL (not empty) for disjoint sets.
-     */
+    /** THE overlap rule lives with the matcher, so the quarantine judges it identically. */
     private static boolean listenersOverlap(@NonNull List<String> first, @NonNull List<String> second) {
-        if (first.isEmpty() || second.isEmpty()) {
-            return true;
-        }
-        return ListenerAddressMatcher.intersection(first, second) != null;
+        return ListenerAddressMatcher.overlap(first, second);
     }
 
     private static @Nullable String stringValue(@Nullable Object value) {
