@@ -3552,6 +3552,88 @@ workload named a FOREIGN instance, which is what gave it away.
 - The live test now asserts the property directly: every workload named in a
   sweep's recorded refusals must be OURS.
 
+STATUS (2026-08-06, inert-mechanism wave): `IncusVmLiveTest` step 7 reported
+`expected ISOLATED, got REACHED` once in seven full-suite runs. It is a REAL
+isolation loss, not a harness artifact, and the reason nothing caught it is that
+in that class the kernel-truth mechanism was INERT.
+
+- ROOT CAUSE, and it is the whole finding: the class enrolled its host through
+  `LiveIncusHost.enrollThroughProduct`, which leaves `ssh_target` null. For an
+  https daemon that makes `IncusKernelIsolation.available()` false, so the
+  driver's start-time `requireKernelIsolation` RETURNED SILENTLY and
+  `VerifyIncusIsolation` reported the host unverifiable and repaired nothing.
+  The VM tier's isolation ran with no kernel verification at any moment. So the
+  answer to "did start-time verification run, did it pass, did the divergence
+  appear after it" is: it never ran. Verification at start is not what was
+  insufficient here -- it was absent.
+- THE DAEMON'S OWN RECORD of the failing run (test log 20260806-081326,
+  08:13:25-08:27:51 CEST) carries exactly three `level=error` lines, and two of
+  them are on that class's own VM `hohenheim-instance-6086423`: at 08:22:56
+  `Failed to stop device device=eth0 err="Failed to remove interface
+  \"tap1e7cfa55\": no such device"`, and at 08:23:26 the same with
+  `device name is empty`. Both are the documented `nicBridged.postStop` early
+  return that skips `removeFilters`. The peer `hohenheim-instance-6086424` came
+  up at 08:23:23, so step 7's probe ran seconds after the second failed
+  teardown. The solo re-run at 08:29 that PASSED carries no such error.
+- BASE RATE at the daemon: 2 of 34 hohenheim VM instances in the retained
+  journal hit that failure (5.9%), against 1 of 7 for the suite -- same order.
+- NOT REPRODUCED ON DEMAND, and that is stated rather than papered over. 14 VM
+  lifecycles under neighbour churn and CPU load with continuous kernel-truth
+  sampling produced 0 natural divergences, and two deliberate triggers (deleting
+  the live tap, and RENAMING it out from under the daemon) did not make incusd
+  log the failure: in both, the following start rebuilt the chains against the
+  new tap correctly. The END STATE remains reproducible on demand and its
+  consequence was measured again (chains dropped: `incus config device get`
+  still returns `hohenheim-isolation`, the ACL still reads back all six
+  rejects, `table bridge incus` names no live tap, and the workload pings).
+- RULED OUT, each by measurement, so a later reader does not re-walk them:
+  a shared-ACL reload stripping a BYSTANDER's chains (0 of 40 bystander losses
+  while 16 of 40 bumps failed outright under neighbour churn); a SUCCESSFUL ACL
+  reload opening a transient hole; the test racing the peer's own filter
+  install (chains land 0.35-0.55s BEFORE the peer's IPv4 becomes visible, 6 of
+  6); a `LiveIdOffsets` id collision; and a broken neighbour poisoning a fresh
+  instance's filter setup.
+- CORRECTED BY THE COUNTERFACTUAL, and this is why the counterfactual is now
+  IN the test: isolation here is EGRESS-only and one-sided, because
+  `IncusNetworkPolicy.nicDevice` sets
+  `security.acls.default.ingress.action=allow`. A NIC left at the daemon's own
+  default-deny ingress kept answering ISOLATED with the sender completely
+  unfiltered -- so a peer probe would have been blind -- while the
+  product-configured one answered REACHED. The hypothesis that the peer's chain
+  protects the peer is FALSE for this product's configuration, and step 7d is
+  what fails if that ingress default ever changes.
+- WHAT LANDED: `IncusVmLiveTest` now enrols the ssh admin lane through the
+  product ceremony, so the host carries the configuration the Phase 8 claim
+  requires and every deploy in the journey runs the real start-time check; step
+  7b probes the daemon host's own bridge address (derived from the NIC's
+  network, never a hardcoded subnet); step 7c asserts KERNEL truth for the live
+  tap; step 7d drops the chains and requires BOTH probes and the verifier to
+  catch it; step 7e repairs through the product's per-instance lever and
+  re-asserts, including that the NIC still reaches the internet.
+- OPEN, stated as open, NOT closed by this wave:
+  1. The lane is OPTIONAL by design (trust-split wave), so an Incus host that
+     declines it has NO isolation verification at all while still accepting
+     tenant workloads. Phase 8's "VMs are the only strong boundary" claim is
+     unbacked on such a host. Making the lane a placement REQUIREMENT for a
+     posture other than `trusted_only` reverses a recorded decision and is a
+     fork for the operator, not a fix to slip in.
+  2. The post-start window is still bounded only by the 5-minute sweep, and the
+     divergence is created ~28s after start by the daemon's own restart. The
+     candidate closure is a listener on the daemon's `/1.0/events` stream
+     (the transport already has `openWebSocket`) re-verifying the named
+     workload within a second of the lifecycle event that can open the hole,
+     with the sweep as the backstop. NOT built here: the trigger was not
+     reproduced on demand, and hardening an unreproduced trigger would retire
+     the investigation instead of closing the bug.
+  3. `VerifyIncusIsolation` treats an instance whose daemon record names no
+     live host interface as an ERROR and leaves it RUNNING (`inspect` refuses,
+     the loop `continue`s). The 08:23:26 line shows that state is reachable.
+     An unreadable HOST is legitimately not evidence of a leak; a RUNNING
+     workload the daemon cannot name an interface for is a different case.
+  4. `VmFramebufferConsoleLiveTest` and `IncusHostLiveTest` do not call
+     `LiveIdOffsets.apply`, so both take `hohenheim-instance-1` and collide
+     with each other under parallel forks.
+
 STATUS (2026-08-06, framebuffer-console wave): the rescue console SHIPPED and both
 of its gate clauses are closed by tests that RAN (CI and live on daystrom).
 
