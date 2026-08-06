@@ -55,7 +55,7 @@ import java.util.regex.Pattern;
 /**
  * Multi-server Docker host inventory. The implicit {@code local} host always
  * exists and cannot be renamed or removed (only its declared public addresses
- * are editable); remote hosts are reached over SSH.
+ * and its posture are editable); remote hosts are reached over SSH.
  * The LIST reads stored host state (health columns + last preflight); the only
  * live daemon contacts are the detail page's overview and the explicit
  * preflight action, both of which persist their outcome.
@@ -697,11 +697,19 @@ public final class ServerResource extends RowResource {
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        // The implicit local host keeps its identity IMMUTABLE (name, target, mode), but
-        // its declared public addresses are legitimately operator-set -- without this
-        // lane the one host every dev install runs on could never carry an A record.
+        // The implicit local host keeps its identity IMMUTABLE (name, target, mode,
+        // runtime), but its declared public addresses AND its posture are legitimately
+        // operator-set. Addresses: without that lane the one host every dev install
+        // runs on could never carry an A record. Posture: instance placement refuses
+        // trusted_only, so a host whose posture cannot be edited can never accept a
+        // tenant workload -- on a single-machine install (the primary deployment
+        // shape) the local row IS the compute host, and this branch used to swallow
+        // the posture silently while the form reported success.
         if (ServerService.LOCAL.equals(existing.get(ServerModel.NAME))) {
             applyAddressValues(existing, coerced);
+            if (coerced.get("posture") instanceof String posture) {
+                existing.set(ServerModel.POSTURE, posture);
+            }
             Models.get(ServerModel.class).save(existing);
             ServerOptions.refresh();
             return;

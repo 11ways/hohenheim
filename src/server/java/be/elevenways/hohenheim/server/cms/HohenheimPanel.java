@@ -106,8 +106,11 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new StackResource(), Role.STACKS);
         addIf(peers, new StackServiceResource(), Role.STACKS);
         addIf(peers, new StackFileResource(), Role.STACKS);
-        // The Docker host inventory serves stacks AND managed databases.
-        addIf(peers, new ServerResource(), Role.STACKS, Role.DATABASES);
+        // The host inventory serves stacks, managed databases AND the instance
+        // tier: instance placement is gated on an ADMITTED host, and admit/
+        // preflight/trust live on this resource -- an instances-only node
+        // without it cannot place anything.
+        addIf(peers, new ServerResource(), Role.STACKS, Role.DATABASES, Role.INSTANCES);
         addIf(peers, new ReconcileFindingResource(), Role.STACKS, Role.DATABASES, Role.INSTANCES);
         addIf(peers, new DnsZoneResource(), Role.DNS);
         addIf(peers, new DnsRecordResource(), Role.DNS);
