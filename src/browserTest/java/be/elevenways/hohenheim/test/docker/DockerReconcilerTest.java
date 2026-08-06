@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
@@ -16,6 +17,9 @@ import be.elevenways.hohenheim.server.docker.DockerReconciler.Bucket;
 import be.elevenways.hohenheim.server.docker.DockerReconciler.Evidence;
 import be.elevenways.hohenheim.server.docker.DockerReconciler.Finding;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
+import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.host.HostPins;
+import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.stack.StackDeployer;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -449,6 +453,60 @@ class DockerReconcilerTest {
             .as("a whole-host publication overlaps a loopback claim").isTrue();
         assertThat(DockerReconciler.stillPublished("", 32768, "udp", published))
             .as("protocol is a first-class discriminator").isFalse();
+    }
+
+    /**
+     * The Docker-tier sweep doubles as that tier's host heartbeat, so it may only report
+     * on hosts it can actually address. An INCUS host has no Docker daemon by
+     * construction; sweeping it turned that structural refusal into a probe FAILURE every
+     * hour, overwriting the host's real last_error -- and its sticky HOST_KEY_CHANGED
+     * quarantine verdict, which only an explicit repin is allowed to clear.
+     */
+    @Test
+    void theDockerSweepNeverProbesOrRestampsAnIncusHost() {
+        Db.run(datasource, () -> {
+            Row incus = Models.get(ServerModel.class).createEmptyRow();
+            incus.set(ServerModel.NAME, "sweep-incus");
+            incus.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+            incus.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
+            // The verdict a contradicted identity leaves behind: sticky by design.
+            incus.set(ServerModel.LAST_ERROR_KIND,
+                HostProbe.FailureKind.HOST_KEY_CHANGED.token);
+            incus.set(ServerModel.LAST_ERROR, "incus tls identity changed");
+            Models.get(ServerModel.class).save(incus);
+            Integer incusId = incus.get(ServerModel.ID);
+
+            // 1. The Docker host inventory names the docker hosts and ONLY those --
+            //    a fix that simply swept nothing would pass everything below.
+            ServerService servers = new ServerService(datasource);
+            assertThat(servers.dockerNames())
+                .as("step 1: the docker host inventory keeps the docker hosts")
+                .contains(ServerService.LOCAL)
+                .doesNotContain("sweep-incus");
+
+            // 2. A full sweep leaves the incus host's stored verdict exactly as it was.
+            Map<String, List<Finding>> swept = DockerReconciler.sweepAll(servers);
+            assertThat(swept.keySet())
+                .as("step 2: the sweep visited the docker host and skipped the incus one")
+                .doesNotContain("sweep-incus");
+
+            Row after = Models.get(ServerModel.class).findById(incusId);
+            assertThat((String) after.get(ServerModel.LAST_ERROR_KIND))
+                .as("step 2: the docker sweep must not restamp an incus host's typed"
+                    + " verdict (this is the quarantine token; only a repin clears it)")
+                .isEqualTo(HostProbe.FailureKind.HOST_KEY_CHANGED.token);
+            assertThat((String) after.get(ServerModel.LAST_ERROR))
+                .as("step 2: the incus host's real last error survives the docker sweep")
+                .isEqualTo("incus tls identity changed");
+            assertThat((Object) after.get(ServerModel.LAST_SEEN_AT))
+                .as("step 2: the docker sweep never claims to have SEEN an incus host")
+                .isNull();
+
+            // 3. The quarantine the token stands for is therefore still in force.
+            assertThat(HostPins.isQuarantined(after, HostTrustSlot.transportOf(after)))
+                .as("step 3: the incus host is still quarantined after the sweep")
+                .isTrue();
+        });
     }
 
     // -- the live daemon, report-only -----------------------------------------

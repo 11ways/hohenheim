@@ -3,8 +3,10 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -13,6 +15,10 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
@@ -33,13 +39,19 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
     private static final String DISK_BUCKET = InstanceDeviceQuota.diskBucketOf("");
     private static final String NIC_BUCKET = InstanceDeviceQuota.nicBucketOf("");
     private static final String NAME_PREFIX = "devq-";
+    private static final String FORM_OWNER = "devq-form-owner";
 
     private Integer instanceId;
+    private Integer quotaRowId;
     private Integer previousDiskCap;
     private Integer previousNicCap;
 
     @AfterEach
     void cleanUp() {
+        if (this.quotaRowId != null) {
+            Models.get(InstanceQuotaModel.class).delete(this.quotaRowId);
+            this.quotaRowId = null;
+        }
         Model devices = Models.get(InstanceDeviceModel.class);
         for (Row row : devices.find().where(InstanceDeviceModel.NAME.startsWith(NAME_PREFIX)).all()) {
             devices.delete(row.get(InstanceDeviceModel.ID));
@@ -204,5 +216,67 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
         Models.get(InstanceDeviceModel.class).delete(nic.get(InstanceDeviceModel.ID));
         assertThat(Quotas.usedOf(NIC_BUCKET))
             .as("step 4: the NIC slot came back").isEqualTo(usedBefore);
+    }
+
+    /**
+     * The per-owner disk/NIC overrides M073 created are reachable by an operator: the
+     * generated admin form must carry every cap column the reserve hooks read, or the
+     * column is enforced-but-unsettable (the silent-success shape -- the form reports
+     * success while dropping the field it never declared).
+     */
+    @Test
+    void perOwnerCapsSubmittedThroughTheAdminFormAreWhatTheReserveHooksRead() throws Exception {
+        Model quotas = Models.get(InstanceQuotaModel.class);
+
+        // 1. Create through the resource form, with both device caps.
+        var created = postForm("/admin/instance-quotas/new",
+            "subjects=" + FORM_OWNER + "&max_instances=3&max_disk_gb=7&max_nics=2");
+        assertThat(created.statusCode())
+            .as("step 1: the quota form accepted the submission").isIn(200, 302, 303);
+
+        Row row = quotas.find().where(InstanceQuotaModel.SUBJECTS.eq(FORM_OWNER)).first();
+        assertThat(row).as("step 1: the override row landed").isNotNull();
+        this.quotaRowId = row.get(InstanceQuotaModel.ID);
+        assertThat((Integer) row.get(InstanceQuotaModel.MAX_DISK_GB))
+            .as("step 1: the submitted disk cap is STORED, not dropped by the form")
+            .isEqualTo(7);
+        assertThat((Integer) row.get(InstanceQuotaModel.MAX_NICS))
+            .as("step 1: the submitted NIC cap is STORED, not dropped by the form")
+            .isEqualTo(2);
+
+        // 2. The enforcement half reads exactly what the operator submitted.
+        assertThat(InstanceDeviceQuota.diskLimitFor(FORM_OWNER))
+            .as("step 2: the disk reserve hook honours the form-written override")
+            .isEqualTo(7);
+        assertThat(InstanceDeviceQuota.nicLimitFor(FORM_OWNER))
+            .as("step 2: the NIC reserve hook honours the form-written override")
+            .isEqualTo(2);
+
+        // 3. An UPDATE to 0 must survive as 0 -- "this owner gets nothing" is a
+        //    different answer from "no override, fall through to the global default".
+        var updated = postForm("/admin/instance-quotas/" + this.quotaRowId,
+            "subjects=" + FORM_OWNER + "&max_instances=3&max_disk_gb=0&max_nics=0");
+        assertThat(updated.statusCode())
+            .as("step 3: the quota form accepted the update").isIn(200, 302, 303);
+        assertThat(InstanceDeviceQuota.diskLimitFor(FORM_OWNER))
+            .as("step 3: an override of 0 stays 0 and does not fall through to the default")
+            .isEqualTo(0);
+        assertThat(InstanceDeviceQuota.nicLimitFor(FORM_OWNER))
+            .as("step 3: the NIC override of 0 stays 0")
+            .isEqualTo(0);
+    }
+
+    private HttpResponse<String> postForm(String path, String body) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + path))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .header("X-Csrf-Token", csrfToken)
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

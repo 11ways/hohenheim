@@ -341,14 +341,16 @@ public final class DockerReconciler {
     // -- sweeping and persistence ---------------------------------------------
 
     /**
-     * Sweep every inventoried server. A server whose daemon cannot be listed keeps
+     * Sweep every inventoried DOCKER server. A server whose daemon cannot be listed keeps
      * its PREVIOUS findings (a sweep that cannot see the truth reports nothing new,
-     * the DockerReclaim rule) and the failure is logged.
+     * the DockerReclaim rule) and the failure is logged. An Incus host is not swept and
+     * is not probed: this sweep doubles as the Docker-tier heartbeat, and a host it
+     * cannot address by construction is not a host it may report on.
      */
     public static @NonNull Map<String, List<Finding>> sweepAll(@NonNull ServerService servers) {
         servers.ensureLocal();
         Map<String, List<Finding>> results = new LinkedHashMap<>();
-        for (String serverName : servers.names()) {
+        for (String serverName : servers.dockerNames()) {
             try {
                 results.put(serverName, sweepServer(serverName, servers.clientFor(serverName)));
                 // The sweep IS a successful daemon contact: the scheduled reconcile
