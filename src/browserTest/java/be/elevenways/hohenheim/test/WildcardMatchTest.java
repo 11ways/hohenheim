@@ -107,13 +107,27 @@ class WildcardMatchTest {
             second, SiteDomainModel.MATCH_WILDCARD);
     }
 
-    /** A regex row is compared by literal equality only; the class documents why. */
+    /**
+     * A regex row is decided against a CONCRETE hostname by running the pattern; against a
+     * glob or another pattern it still answers false, which the class documents as the
+     * residue it deliberately does not fake.
+     */
     @Test
-    void regexRowsAreComparedLiterally() {
+    void regexRowsAreDecidedAgainstConcreteHostnamesOnly() {
         assertThat(HostnamePatterns.intersect("^app\\.example\\.com$", SiteDomainModel.MATCH_REGEX,
-            "app.example.com", SiteDomainModel.MATCH_EXACT)).isFalse();
+            "app.example.com", SiteDomainModel.MATCH_EXACT)).isTrue();
+        assertThat(HostnamePatterns.intersect("app.example.com", SiteDomainModel.MATCH_EXACT,
+            "^app\\.example\\.com$", SiteDomainModel.MATCH_REGEX)).isTrue();
+        assertThat(HostnamePatterns.intersect("^app\\.example\\.com$", SiteDomainModel.MATCH_REGEX,
+            "other.example.com", SiteDomainModel.MATCH_EXACT)).isFalse();
         assertThat(HostnamePatterns.intersect("^app\\.example\\.com$", SiteDomainModel.MATCH_REGEX,
             "^app\\.example\\.com$", SiteDomainModel.MATCH_REGEX)).isTrue();
+        // The residue: regex versus glob is not decidable here and is not guessed.
+        assertThat(HostnamePatterns.intersect("^app\\.example\\.com$", SiteDomainModel.MATCH_REGEX,
+            "*.example.com", SiteDomainModel.MATCH_WILDCARD)).isFalse();
+        // An uncompilable pattern routes nothing, so it matches nothing here either.
+        assertThat(HostnamePatterns.intersect("[invalid", SiteDomainModel.MATCH_REGEX,
+            "app.example.com", SiteDomainModel.MATCH_EXACT)).isFalse();
     }
 
     /** The tier a row routes in ignores match_type when the hostname carries globs. */

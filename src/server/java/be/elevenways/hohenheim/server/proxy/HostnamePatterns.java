@@ -7,6 +7,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Whether two configured hostnames can ever match the SAME request host, and which routing
@@ -46,11 +47,21 @@ public final class HostnamePatterns {
     /**
      * Whether two rows' hostnames can both match one request host.
      *
-     * AIDEV-NOTE: a REGEX row is compared by literal pattern equality only. Deciding
-     * whether an arbitrary regex intersects a glob is not something this layer can answer,
-     * so a regex row can still shadow a glob row across sites; the regex tier is consulted
-     * LAST, which bounds the damage to hosts no exact or wildcard row claims. Narrowing
-     * that is a separate decision, not something to fake here.
+     * AIDEV-NOTE: a REGEX row is decided against a CONCRETE hostname by running the pattern
+     * over it -- that direction is exactly decidable, and it is the one that matters: a
+     * regex row spells a claim key nothing can equal and carries no glob to walk, so leaving
+     * it at literal equality let a regex row seize a released hostname outright (the
+     * "regex is consulted last" bound is empty for a hostname NOTHING claims -- which is
+     * what "released" means). See ReleasedClaimRegexShadowTest, which drives it.
+     *
+     * RESIDUE, deliberately open: regex versus GLOB (and two different regexes) still
+     * answers false. Whether an arbitrary regex intersects a glob is not decidable here and
+     * approximating it would be a guess wearing an authority's clothes. What that leaves
+     * open is a regex row shadowing a WILDCARD row -- so a wildcard released by one tenant
+     * can still be re-entered by another tenant's regex. That residue is bounded by regex
+     * rows being ADMIN-ONLY (TenantWrites.checkDomainWrite refuses any non-exact match type
+     * from a tenant-originated write): both sides of the remaining case have to be authored
+     * by an operator. If regex ever becomes tenant-reachable, this must be closed first.
      */
     public static boolean intersect(@Nullable String hostnameA, @Nullable String matchTypeA,
                                     @Nullable String hostnameB, @Nullable String matchTypeB) {
@@ -62,12 +73,37 @@ public final class HostnamePatterns {
         if (canonicalA.equals(canonicalB)) {
             return true;
         }
-        String kindA = effectiveKind(canonicalA, matchTypeA);
-        String kindB = effectiveKind(canonicalB, matchTypeB);
-        if (SiteDomainModel.MATCH_REGEX.equals(kindA) || SiteDomainModel.MATCH_REGEX.equals(kindB)) {
-            return false;
+        boolean regexA = SiteDomainModel.MATCH_REGEX.equals(effectiveKind(canonicalA, matchTypeA));
+        boolean regexB = SiteDomainModel.MATCH_REGEX.equals(effectiveKind(canonicalB, matchTypeB));
+        if (regexA || regexB) {
+            // Two regexes: identical patterns were already answered above, and pattern
+            // equivalence is the undecidable case.
+            return (regexA != regexB)
+                && regexMatchesHost(regexA ? canonicalA : canonicalB, regexA ? canonicalB : canonicalA);
         }
         return globsIntersect(canonicalA, canonicalB);
+    }
+
+    /**
+     * Whether a regex row would route one CONCRETE hostname.
+     *
+     * AIDEV-NOTE: this deliberately ignores the dispatcher's anti-probe guards
+     * (SiteDispatcher.isSuspiciousRegexHostname, the dot-count ceiling, the dotted
+     * "project" capture). Those only ever REMOVE matches, so ignoring them
+     * over-approximates the pattern's reach and therefore fails CLOSED -- the wrong
+     * direction to be wrong in for a takeover refusal. A pattern that does not compile
+     * routes nothing at all (SiteDispatcher drops it), so it matches nothing here either.
+     */
+    private static boolean regexMatchesHost(@NonNull String pattern, @NonNull String hostname) {
+        if (hostname.isEmpty() || WildcardHostname.isWildcard(hostname)) {
+            return false;
+        }
+        try {
+            Pattern compiled = HostnameRegex.compile(pattern);
+            return compiled != null && compiled.matcher(hostname).matches();
+        } catch (RuntimeException invalid) {
+            return false;
+        }
     }
 
     /**
