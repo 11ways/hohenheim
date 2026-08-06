@@ -3688,6 +3688,50 @@ of its gate clauses are closed by tests that RAN (CI and live on daystrom).
   endpoint was added; an external SPICE client lane can ride the same handler
   shape later if a concrete consumer appears.
 
+STATUS (2026-08-06, native-shape wave): the PRIMARY deployment shape -- hohenheim
+running ON the host it manages, local unix sockets, `NftRunner.Sudo`, no ssh lane
+-- was exercised end to end for the first time, live on daystrom (fresh install,
+104 migrations, instances-only role set). The repeatable path is
+`docs/deploy-native.md`. What it proved and what it broke:
+
+- PROVEN: `IncusKernelIsolation.runnerFor`'s first branch (unix endpoint ->
+  local Sudo) is live: preflight `kernel_isolation_lane: pass` with
+  `ssh_target` empty, and both `VerifyIncusIsolation` and
+  `VerifyDockerIsolation` reported the hosts VERIFIABLE. Both sweeps were
+  proven non-vacuous by deleting the kernel tables while workloads ran: within
+  one cron tick both logged `repaired [...]` and the kernel was re-verified
+  (the Docker-tier leak was demonstrated first: with `inet hohenheim_net`
+  gone, a workload fetched the controller's own `/api/health`). Negative
+  isolation held on both tiers (tenant-range egress dropped, measured with
+  address literals) with `http://1.1.1.1/` as the positive anchor. Note for
+  later probes: Docker's own inter-network isolation ALSO blocks
+  workload-to-workload on this shape, so the attribution probe for OUR policy
+  is workload -> host INPUT, not workload -> workload.
+- BROKEN and fixed 1: `ServerResource` was gated on STACKS|DATABASES, so an
+  instances-only node had NO host-admission surface at all while placement
+  requires an admitted host (HohenheimPanel now gates it on INSTANCES too).
+- BROKEN and fixed 2: the local-row identity guard in `ServerResource
+  .updateRow` swallowed EVERY non-address field silently -- posture included
+  -- while the form reported success, so the one host a single-machine
+  install runs on could never leave `trusted_only` and could therefore never
+  accept a tenant workload. Posture is now operator-editable on the local row
+  (identity stays immutable); ServerAdminTest walks the journey and its
+  counterfactual was run (expected shared_container, got trusted_only).
+- BROKEN and fixed 3: six microcopy strings carried a literal `{{KEY}}`,
+  which `MessageParser` rejects -- rendering ANY form containing those help
+  texts (the whole VM instance page) threw MessageParseException. Escaped as
+  `\{`; `MicrocopyCatalogParsesTest` now parses every shipped message in both
+  locales (counterfactual run: it names the three broken keys verbatim).
+  Three missing `plural` scope variants (instance_snapshot, instance_backup,
+  backup_target) rendered nav labels as the raw key and were added.
+- TWO-CONTROLLERS HAZARD, decided procedurally: a native controller and the
+  workstation's live suite are two controllers over one daemon with COLLIDING
+  `hohenheim-instance-<id>` handles (each numbers from its own database), so
+  each one's sweeps would repair/stop the other's workloads. They run at
+  different times, never concurrently; the daystrom service is left STOPPED
+  and disabled. See deploy-native.md's hazard section; nothing in the product
+  namespaces handles per controller yet.
+
 Phase gate: provision Linux from cloud-init and Windows from a prepared template;
 attach/resize a disk and NIC under quota; enforce the network policy; snapshot;
 export an off-host backup; restore to a new host; use the framebuffer rescue
