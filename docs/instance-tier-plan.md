@@ -4011,6 +4011,57 @@ counts, or live re-run). It was built from CODE, not from the STATUS notes above
      token. Whether a transient probe outcome may clear a TRUST verdict is a
      security-state-machine decision for the host-trust slice.
 
+STATUS (2026-08-06, device-surface wave): two of the six gaps the Proxmox-use
+inventory opened are closed -- device editing is REACHABLE, and the capacity check
+that gates every restore and every migration has its first test.
+
+- DEVICE SURFACE. `InstanceDevices.attachDisk/attachNic/resizeDisk/detach` had NO
+  production caller; the only callers in the repo were `IncusVmLiveTest`, while
+  production reached `reconcile` and `destroyCleanup` alone. Now: a Devices tab on
+  every instance (`InstanceDevicesPage` + `cms/instance-devices.hwk`) plus a
+  nav-hidden `InstanceDeviceResource` with a `ResourceParent` back to that tab and
+  `?instance_id=&type=` prefills -- the InstanceSchedulesPage/InstanceScheduleResource
+  shape verbatim, not a new one -- mirrored onto /manage by
+  `ManageInstanceDeviceResource` plus the matching `RecordSourceRegistry.override`
+  (two derived defaults over one model is the shadowing hazard sites and schedules
+  already hit). API: `GET/POST /api/v1/instances/{id}/devices`, `.../devices/resize`,
+  `.../devices/detach`, projection whitelisted (no `quota_bucket`). NEITHER surface
+  decides authority: both call InstanceDevices, whose every mutator opens with
+  `requireOperationCapability(id, MANAGE)`, and the API keeps the
+  no-existence-oracle rule -- an ungranted instance answers 404 on the device lane
+  too. Detach's confirmation says the volume is deleted instead of "are you sure".
+- FRAMEWORK CHANGE (zenit-cms), because the generic path was WRONG here rather
+  than merely inconvenient. A scoped create/update ran inside a rollback
+  transaction that re-loads the row through the access predicate. For a mutation
+  reaching a DAEMON that rollback removes the ROW and orphans the volume; and on a
+  single-writer engine it cannot run at all -- `Leases.acquire` refuses by name
+  inside an active transaction, so the attach failed with
+  `cms.create_submit.save_failed`. New `Resource.verifiesScopeBeforeMutating()`
+  (default false) lets a resource that refuses out-of-scope callers BEFORE its
+  first write opt out; `InstanceDeviceResource` is its only declarer. Covered on
+  both sides:
+  `ResourcePageEndpointsTest#aResourceVerifyingScopeItselfMutatesOutsideTheRollbackTransaction`
+  (163 RAN in that class) and the hohenheim journey.
+- CAPACITY. `RestoreCapacity.require` is split into `availableBytesOn` (the probe)
+  and `judge` (the headroom arithmetic and both named refusals), so the DECISION is
+  assertable without a daemon while the PROBE is proven against a real one
+  (`RestoreCapacityLiveTest`). DEFECT found by writing the test: the refusal
+  CONSTRUCTION called `ServerModel.nameOf`, which THROWS on an unknown id -- a host
+  row that vanished mid-restore turned a named 422 into a raw
+  IllegalStateException 500, i.e. the refusal path was the one path that could
+  itself fail. Fixed (`hostLabel`). `InstanceMigrationTest` still stubs the
+  `CapacityCheck` seam and should: those journeys are deliberately daemon-free.
+- PLACEMENT: resource-aware scoring is DEFERRED WITH REASONS, recorded in
+  `docs/proxmox-use-inventory.md` item 12. The blocker is an INPUT problem --
+  `ResourceLimits` members are optional and usually absent ("null means
+  unlimited"), so a budget summed over declared limits is zero for the common
+  workload -- and the missing piece is a DECLARED per-kind footprint, which is a
+  product decision, not a placement refactor. Instead of half-building it the
+  chooser's current behaviour is PINNED (`InstancePlacementTest`, written as a
+  characterization and saying so), and the same slice keeps the prepared-image
+  eligibility bug, which outranks the scoring change because it is a wrong
+  eligible SET rather than a wrong score.
+
 Phase gate: provision Linux from cloud-init and Windows from a prepared template;
 attach/resize a disk and NIC under quota; enforce the network policy; snapshot;
 export an off-host backup; restore to a new host; use the framebuffer rescue

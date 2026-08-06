@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
  * through the pinned argv. An UNANSWERABLE probe REFUSES -- a capacity check that
  * silently passes when it cannot measure is a check that cannot fail.
  */
-final class RestoreCapacity {
+public final class RestoreCapacity {
 
     /** Restored bytes must fit with this much slack (extraction working space). */
     private static final double HEADROOM_FACTOR = 1.2;
@@ -40,32 +40,71 @@ final class RestoreCapacity {
      * @throws Violations {@code restore_capacity} (insufficient) or
      *         {@code restore_capacity_unknown} (unmeasurable)
      */
-    static void require(int serverId, long requiredBytes) {
+    public static void require(int serverId, long requiredBytes) {
         if (requiredBytes <= 0) {
             return;
         }
+        judge(serverId, availableBytesOn(serverId), requiredBytes);
+    }
+
+    /**
+     * The PROBE half: what the host's storage says is free right now.
+     *
+     * AIDEV-NOTE: split from {@link #judge} so the decision (headroom arithmetic and
+     * both refusal identities) is exercisable without a daemon, while the probe itself
+     * is proven against the real hosts in RestoreCapacityLiveTest. Do NOT re-inline
+     * them: a capacity check whose arithmetic is only reachable through a live daemon
+     * is a check that never gets asserted, which is how this one went untested for
+     * three phases.
+     *
+     * @throws Violations {@code restore_capacity_unknown} when nothing can be measured
+     */
+    public static long availableBytesOn(int serverId) {
         Row server = Models.get(ServerModel.class).findById(serverId);
         String runtime = server != null ? ServerModel.runtimeOf(server)
             : ServerModel.RUNTIME_DOCKER;
-        long available;
         try {
-            available = ServerModel.RUNTIME_INCUS.equals(runtime)
+            return ServerModel.RUNTIME_INCUS.equals(runtime)
                 ? incusAvailableBytes(serverId)
                 : availableBytes(serverId,
                     new ServerService().clientFor(ServerModel.nameOf(serverId)));
         } catch (IOException | RuntimeException error) {
             throw Violations.ofForm(violation("restore_capacity_unknown")
-                .withArg("server", ServerModel.nameOf(serverId))
+                .withArg("server", hostLabel(serverId))
                 .withArg("reason", error.getMessage() != null
                     ? error.getMessage() : error.toString()));
         }
+    }
+
+    /**
+     * The DECISION half: {@code requiredBytes} must fit in {@code availableBytes} with
+     * the extraction headroom on top.
+     *
+     * @throws Violations {@code restore_capacity} naming the host, the needed figure
+     *         (headroom included) and what is actually free
+     */
+    public static void judge(int serverId, long availableBytes, long requiredBytes) {
         long needed = (long) (requiredBytes * HEADROOM_FACTOR);
-        if (available < needed) {
+        if (availableBytes < needed) {
             throw Violations.ofForm(violation("restore_capacity")
-                .withArg("server", ServerModel.nameOf(serverId))
+                .withArg("server", hostLabel(serverId))
                 .withArg("needed", needed)
-                .withArg("available", available));
+                .withArg("available", availableBytes));
         }
+    }
+
+    /**
+     * The host's name, or a bare id spelling when the row is gone.
+     *
+     * AIDEV-NOTE: never {@code ServerModel.nameOf} here -- that THROWS on an unknown id,
+     * and it used to be called while BUILDING the refusal, so a host row that vanished
+     * mid-restore turned a named 422 refusal into a raw IllegalArgumentException 500.
+     * The refusal path must be the one path that cannot itself fail.
+     */
+    private static @NonNull String hostLabel(int serverId) {
+        Row server = Models.get(ServerModel.class).findById(serverId);
+        String name = server != null ? server.get(ServerModel.NAME) : null;
+        return name != null ? name : "#" + serverId;
     }
 
     /** Free space of the pool the default profile's root device names (or the first pool). */

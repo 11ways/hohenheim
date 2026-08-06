@@ -97,9 +97,9 @@ Owning slice: placement (item 12).
 
 ## 3. Disks, and disk/NIC/device editing
 
-**IMPLEMENTED (mechanism), NO OPERATOR SURFACE.** This is the single largest
-honest gap in the inventory and it is stated first because the plan's own
-Phase 8 gate names "disk/NIC/device editing" explicitly.
+**IMPLEMENTED, mechanism AND surface** (surface added 2026-08-06; this row read
+"NO OPERATOR SURFACE" until then, and the paragraph that said so is kept below as
+the record of what was missing).
 
 The mechanism is real, complete and tested:
 
@@ -120,17 +120,57 @@ The mechanism is real, complete and tested:
   with the isolation ACL read back, and prove destroy removes the volume.
   **Re-run 2026-08-06 for this audit: PASSED, 0 skipped.** **[live]**
 
-**But:** `InstanceDevices.attachDisk` / `attachNic` / `resizeDisk` / `detach`
-have NO production caller. A repo-wide search for callers returns
-`IncusVmLiveTest` and nothing else; production calls only `reconcile` (at deploy)
-and `destroyCleanup` (at destroy). There is no admin resource, no row action, no
-`.hwk` page and no API endpoint that writes an `instance_devices` row. An
-operator or tenant cannot attach a disk or a NIC today. Owning slice: the
-device-editing UI, which the plan already names as remaining after slice 1.
+**What was missing until 2026-08-06:** `InstanceDevices.attachDisk` / `attachNic` /
+`resizeDisk` / `detach` had NO production caller. A repo-wide search for callers
+returned `IncusVmLiveTest` and nothing else; production called only `reconcile`
+(at deploy) and `destroyCleanup` (at destroy). There was no admin resource, no row
+action, no `.hwk` page and no API endpoint that wrote an `instance_devices` row.
+
+**The surface, added in the device-surface wave:**
+
+- **Panel**: a `Devices` tab on every instance (`InstanceDevicesPage`, a
+  `RecordScopedPage` rendering `cms/instance-devices.hwk`) plus a nav-hidden
+  `InstanceDeviceResource` (`RowResource`, `parent()` back to the instance's
+  Devices tab, `createValues` reading `?instance_id=&type=`) -- the SCHEDULES
+  shape, not a second one. Present on `/admin` and, through
+  `ManageInstanceDeviceResource`, on the grant-scoped `/manage` panel.
+- **API**: `GET/POST /api/v1/instances/{id}/devices`, plus `.../devices/resize`
+  and `.../devices/detach` (`InstanceApi.initDeviceLane`). The list projection is
+  a whitelist (`name`, `type`, `size_gb`); `quota_bucket` is absent by name.
+- **Authority is not re-implemented anywhere.** Both surfaces call
+  `InstanceDevices`, whose every mutator opens with
+  `HohenheimAccess.requireOperationCapability(instanceId, MANAGE)`. `PaasApi`'s
+  rule holds: the API's only own check is per-record VISIBILITY, and an instance
+  the caller holds nothing on answers 404 exactly like one that does not exist.
+- **Detach carries a DESTRUCTIVE confirmation naming what it destroys**
+  (`deleteConfirmation()`): "detaching deletes its backing volume at the daemon",
+  not the generic "are you sure".
+
+**Framework change this required** (`zenit-cms`): a scoped create/update used to
+run inside a rollback transaction that re-loads the row through the access
+predicate. That is wrong for a mutation reaching a DAEMON -- a rollback removes
+the row and orphans the volume -- and on a single-writer engine it cannot even
+run: `Leases.acquire` refuses by name inside an active transaction, so the attach
+failed outright. `Resource.verifiesScopeBeforeMutating()` (default false) lets a
+resource that refuses out-of-scope callers BEFORE its first write opt out of the
+wrapper; `InstanceDeviceResource` declares it.
+
+- **[test]** `InstanceDeviceSurfaceTest` -- 3 journeys, all RAN 2026-08-06: the tab
+  attaches/resizes/detaches AT THE FAKE DAEMON (not merely in a row), every refusal
+  lane (capability, quota, daemon) is named and leaves NO device row and an
+  untouched ledger, and the API lane drives the same devices with the
+  no-existence-oracle rule intact.
+
+**Still open in this row:** the root-disk size knob (below), and there is no
+single "migrate this device" or reorder affordance (devices are not ordered).
 
 **Root-disk size knob: GAP.** The VM root disk is inherited from the daemon's
 `default` profile and there is no size field anywhere in `InstanceSpec` or on any
-kind. Growing a guest's root disk is not expressible. Same owning slice.
+kind. Growing a guest's root disk is not expressible. Owning slice: the VM-spec
+slice that would add a size to `InstanceSpec` and a knob to `IncusVmKind`; the
+device surface above deliberately does NOT grow one, because a root disk is not an
+`instance_devices` row and pretending it is would give it the wrong quota, the
+wrong detach semantics and the wrong reconcile.
 
 ## 4. Storage pools: placement and capacity
 
@@ -151,10 +191,28 @@ snapshot restore and cold migration. **[code]** `server/instance/RestoreCapacity
 call sites `InstanceBackups.java:309`, `InstanceSnapshots.java:247`,
 `InstanceMigrations.java:223`.
 
-**GAP, named:** `RestoreCapacity` has NO test. No test class references it and
-neither of its two named refusals is asserted anywhere; `InstanceMigrationTest`
-explicitly stubs it out through the `CapacityCheck` seam. The mechanism is
-believed rather than proven. Owning slice: the placement/capacity slice below.
+**TESTED 2026-08-06** (this row read "GAP, named: RestoreCapacity has NO test"
+until then -- no test class referenced it, neither named refusal was asserted
+anywhere, and `InstanceMigrationTest` stubs it out through the `CapacityCheck`
+seam, which it still does because those journeys are deliberately daemon-free).
+
+`require` is now split into `availableBytesOn` (the probe) and `judge` (the
+headroom arithmetic and both refusals), so the decision is assertable without a
+daemon and the probe is proven against a real one:
+
+- **[test]** `RestoreCapacityTest` -- 2 journeys, both RAN: a payload that fits
+  only WITHOUT the 1.2x headroom is refused (the boundary the constant exists
+  for), the refusal quotes the host and both figures, and an unmeasurable host
+  refuses `restore_capacity_unknown` on BOTH runtime branches rather than passing.
+- **[live]** `RestoreCapacityLiveTest` -- the real pool on daystrom is queried,
+  a kilobyte passes, and a restore the size of the measured free space is refused
+  by name quoting the daemon's own figure.
+
+**Defect found by that test and fixed:** the refusal CONSTRUCTION called
+`ServerModel.nameOf`, which THROWS on an unknown id -- so a host row that vanished
+mid-restore turned a named 422 into a raw `IllegalStateException` 500. The refusal
+path is now the one path that cannot itself fail (`hostLabel`, id spelling
+fallback).
 
 Preflight reports pools as a fact and passes iff at least one pool is `Created`
 (`server/host/IncusPreflight.java:174-190`, covered by `IncusHostLiveTest` step 8).
@@ -431,9 +489,47 @@ and two small ones.
 That is a GAP, not a rejection: the plan's own cross-cutting section promises an
 "admission-time per-host capacity snapshot", and it does not exist. What DOES
 exist is `RestoreCapacity`, a disk-only headroom check on the restore and
-migration paths (see item 4) -- it is not called from the create path. Owning
-slice: the capacity/placement slice, which should land the snapshot, consult it
-in `chooseForBucket`, and give `RestoreCapacity` the test it never got.
+migration paths (see item 4) -- it is not called from the create path.
+
+**DECISION 2026-08-06: resource-aware placement is DEFERRED, deliberately, and it
+is deferred on an input problem rather than on effort.**
+
+1. **The input does not exist in a usable form.** The per-workload figures a host
+   budget would sum are `ResourceLimits`, and that type says in its own docblock
+   that its members are "OPTIONAL, OPERATOR-CONFIGURED" and that "null or
+   non-positive members mean unlimited". Exactly three kinds read it, all through
+   `fromSettings`, and none requires it. So a budget summed over DECLARED limits
+   is zero for the common workload -- a gate whose denominator is usually zero is
+   decoration, and worse, it LOOKS like a gate.
+2. **Making it real is a product decision, not a placement refactor.** It needs a
+   DECLARED per-kind footprint ("what does a game server cost when the operator
+   set no limit?"), which changes what a create form must ask for and what an
+   admission promises. That is a fork for Jelle, not a scoring tweak.
+3. **The reservation would have to be transactional, adjacent to the write, and
+   MOBILE.** Per-host ledger buckets over the core reservation ledger can carry
+   it, but a migration would have to move the charge between host buckets inside
+   the same guarded handoff `InstanceOperationGuard.handoff` already performs, and
+   drain would have to unwind it -- otherwise the budget drifts every drain. "A
+   quota that cannot fail under concurrency is not a quota" is already a recorded
+   lesson here; half of one is worse than none.
+4. **There is a correctness bug on the same slice that outranks the scoring
+   improvement**: the prepared-image constraint (item 2) makes placement CHOOSE a
+   host whose deploy will then refuse by name. That is a wrong ELIGIBLE SET, not a
+   wrong score, and it should land first.
+
+What was done instead of half-building it: the capacity check that DOES exist now
+has its test and one real defect fixed (item 4), and the chooser's actual
+behaviour is pinned so a future resource-aware change has a counterfactual --
+**[test]** `InstancePlacementTest`, 2 journeys, both RAN 2026-08-06: the eligible
+set, the fewest-live-instances score, the lowest-id tie-break, the exclude
+argument, and the dedicated posture's exclusivity (including that the operator's
+own empty-set bucket gets no pass onto a taken dedicated host). That test is
+written as a CHARACTERIZATION and says so: when a declared footprint lands, it is
+the thing that must change with it.
+
+Owning slice, unchanged: the capacity/placement slice -- land the declared
+footprint, the admission-time snapshot, the host-bucket reservation, and the
+prepared-image eligibility fix together.
 
 Quota is a separate axis and IS implemented: per-owner instance counts, disk GB
 and extra-NIC slots over the core reservation ledger, with per-owner overrides
@@ -620,24 +716,29 @@ whoever owns the host trust slice.
 ## Verdict
 
 The inventory is CLOSED: every item the plan enumerates has a decision and
-evidence. Six items are honest gaps or limitations rather than implementations,
-and each names its owning slice:
+evidence.
 
-1. **Device editing has no operator surface** (item 3) -- the mechanism is
-   complete and live-proven, but no human can reach it.
-2. **No root-disk size knob** (item 3).
-3. **Placement is not resource-aware** (item 12) -- it counts instances; the
-   promised capacity snapshot does not exist, and `RestoreCapacity` (the one
-   capacity check that does exist) has no test at all.
-4. **No snapshot retention** (item 7).
-5. **No host-health heartbeat for Incus hosts** (item 13).
-6. **The kernel-truth ssh lane is optional** (item 5) -- a host that declines it
+**Two of the six gaps this document opened are closed** (device-surface wave,
+2026-08-06): device editing HAS an operator surface (item 3, panel + API +
+`InstanceDeviceSurfaceTest`), and `RestoreCapacity` has its test plus a fixed
+defect (item 4). Four remain, each with its owning slice:
+
+1. **No root-disk size knob** (item 3).
+2. **Placement is not resource-aware** (item 12) -- it counts instances. This is
+   now a RECORDED DEFERRAL with reasons rather than an unexamined gap: the
+   per-workload figures a budget would sum are optional and usually absent, so the
+   missing piece is a DECLARED per-kind footprint, which is a product decision.
+   The chooser's current behaviour is pinned by `InstancePlacementTest`.
+3. **No snapshot retention** (item 7).
+4. **No host-health heartbeat for Incus hosts** (item 13).
+5. **The kernel-truth ssh lane is optional** (item 5) -- a host that declines it
    accepts tenant workloads with no isolation verification, which is the one open
    item that directly weakens Phase 8's "VMs are the only strong boundary" claim.
 
-None of these is a hidden gap; all six are now written down with an owner. What
-would still block calling this a general Proxmox replacement, in one sentence
-each: an operator cannot add a disk or a NIC to a VM from the panel; placement
-does not know how big a host is; and clustering, HA, live migration, passthrough
-and ISO install are rejected rather than delivered, which is the right answer for
-the fleet we run and the wrong answer for someone who needs any of them.
+None of these is a hidden gap; all are written down with an owner. What would
+still block calling this a general Proxmox replacement, in one sentence each:
+placement does not know how big a host is; and clustering, HA, live migration,
+passthrough and ISO install are rejected rather than delivered, which is the right
+answer for the fleet we run and the wrong answer for someone who needs any of
+them. "An operator cannot add a disk or a NIC from the panel" was the third
+sentence here and no longer is.
