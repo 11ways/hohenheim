@@ -22,14 +22,23 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public final class InstanceQuotaResource extends RowResource {
 
+    // AIDEV-NOTE: every override column the reserve hooks read must be ON this form.
+    // M073 added max_disk_gb/max_nics and InstanceDeviceQuota.diskLimitFor/nicLimitFor
+    // consult them, but they were absent here for a wave -- so the columns existed,
+    // were enforced, carried form copy, and could not be set by anyone. Adding a cap
+    // column without adding it here is the silent-success shape.
     private final FormSpec formSpec = FormSpec.builder()
         .add(InstanceQuotaModel.SUBJECTS)
         .add(InstanceQuotaModel.MAX_INSTANCES)
+        .add(InstanceQuotaModel.MAX_DISK_GB)
+        .add(InstanceQuotaModel.MAX_NICS)
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(InstanceQuotaModel.SUBJECTS).filterable().build())
         .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_INSTANCES).build())
+        .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_DISK_GB).build())
+        .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_NICS).build())
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_quota"); }

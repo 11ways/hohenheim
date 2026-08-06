@@ -3955,6 +3955,62 @@ Windows Server 2025 guest. Only the Proxmox-use inventory remains.
      placement layer does not yet know about.
   4. The evaluation licence expires. Nothing in the product tracks that.
 
+STATUS (2026-08-06, inventory-closure wave): the LAST open Phase 8 gate clause --
+the checked-in Proxmox-use inventory -- is CLOSED. It lives at
+`docs/proxmox-use-inventory.md`, sixteen items, each with a verdict
+(IMPLEMENTED / IMPLEMENTED-NO-OPERATOR-SURFACE / REJECTED / GAP), its evidence,
+and how that evidence was checked (code read at file:line, test re-run with
+counts, or live re-run). It was built from CODE, not from the STATUS notes above.
+
+- REJECTED, each with reasoning rather than left as an omission: clustering and
+  HA (the "runtime = data on the server record" schema bakes in 1:1
+  runtime-to-host; adopting a cluster is a schema change plus a placement
+  rewrite, and without shared storage plus quorum there is nothing to fail over
+  TO that is not a stale copy); live migration (already recorded, restated with
+  its substitute); PCI/GPU/USB passthrough (the one device class that is NOT
+  safe to hand a hostile tenant -- a passed-through function is DMA-capable);
+  ISO install (template-once/clone-many is the shape we operate); clone-of-a-
+  running-guest (publish-and-provision or export/import already cover it, with
+  the accountability a bare copy lacks); storage-POOL selection (one pool per
+  host, inherited from the default profile, refused rather than guessed); VLANs
+  (per-workload nft rules verified in the KERNEL are stronger for hostile
+  tenants than a trunk whose correctness lives in a switch we do not own); S3
+  backup targets.
+- SIX honest gaps, each named with its owning slice rather than buried: device
+  editing has NO operator surface (the mechanism is complete and live-proven but
+  `attachDisk`/`attachNic`/`resizeDisk`/`detach` have no production caller at
+  all -- only IncusVmLiveTest); no root-disk size knob; placement is NOT
+  resource-aware (it scores by a COUNT of live instance rows -- no CPU, memory
+  or disk figure is consulted, and the promised admission-time capacity snapshot
+  does not exist, while `RestoreCapacity`, the one capacity check that does
+  exist, has NO test and is stubbed out in InstanceMigrationTest); no snapshot
+  retention; no host-health heartbeat for Incus hosts; and the kernel-truth ssh
+  lane is OPTIONAL, which is the one item that directly weakens "VMs are the
+  only strong boundary".
+- LIVE RE-VERIFICATION for this wave, not taken on trust: IncusColdMigrationLiveTest
+  RAN and PASSED (1 test, 0 skipped, 632s, daystrom -> nightstrom) and
+  IncusVmLiveTest RAN and PASSED (1 test, 0 skipped, 94s). IncusWindowsTemplateLiveTest's
+  PASSED (not SKIPPED) verdict was confirmed in its own log, 20260806-164723.
+  Both hosts end at the declared baseline: 0 instances, 0 custom volumes, 0 trust
+  entries, 1 operator key each; daystrom keeps `win2025-core`.
+- TWO DEFECTS FOUND BY THE AUDIT and fixed here, each with a counterfactual:
+  1. `InstanceQuotaResource` never declared `max_disk_gb`/`max_nics`, so the
+     per-owner device caps M073 created -- enforced by the reserve hooks, with
+     label and help copy in both locales -- could not be set by anyone: the form
+     reported success and dropped the field. Counterfactual: "the submitted disk
+     cap is STORED, not dropped by the form ... Expecting actual not to be null".
+  2. `DockerReconciler.sweepAll` iterated EVERY host row and called `clientFor`,
+     which refuses an Incus host by construction; that refusal was recorded as a
+     probe FAILURE, so every Incus host was stamped UNREACHABLE hourly. Because
+     `last_error_kind` is also the sticky QUARANTINE token that only a repin may
+     clear, a host quarantined by a live TLS-pin contradiction had that verdict
+     overwritten within the hour by an unrelated task. Now sweeps
+     `ServerService.dockerNames()`. Counterfactual: `expected: "host_key_changed"
+     but was: "unreachable"`. NOT fixed and named as open: the general shape --
+     ANY weaker `recordFailure`, and `recordSuccess` outright, still clears the
+     token. Whether a transient probe outcome may clear a TRUST verdict is a
+     security-state-machine decision for the host-trust slice.
+
 Phase gate: provision Linux from cloud-init and Windows from a prepared template;
 attach/resize a disk and NIC under quota; enforce the network policy; snapshot;
 export an off-host backup; restore to a new host; use the framebuffer rescue

@@ -136,6 +136,25 @@ public class ServerService extends DatasourceScoped {
         return names;
     }
 
+    /**
+     * Just the names of the hosts that actually run a Docker daemon.
+     *
+     * AIDEV-NOTE: a Docker-tier sweep must iterate THIS, never {@link #names()}. An Incus
+     * host has no Docker daemon at all ({@code transportFor} refuses it by name), so a
+     * sweep over every row turns that refusal into a probe FAILURE and stamps the host
+     * UNREACHABLE -- overwriting the host's real last_error, and its sticky
+     * HOST_KEY_CHANGED quarantine verdict with it.
+     */
+    public List<String> dockerNames() {
+        List<String> names = new ArrayList<>();
+        for (Row row : query(() -> model().find().all())) {
+            if (!ServerModel.isIncus(row)) {
+                names.add(row.get(ServerModel.NAME));
+            }
+        }
+        return names;
+    }
+
     /** A DockerClient for the named server (local socket or remote over SSH). */
     public DockerClient clientFor(String name) {
         Row row = query(() -> model().findByName(name));
