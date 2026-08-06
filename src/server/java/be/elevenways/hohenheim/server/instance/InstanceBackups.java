@@ -124,7 +124,7 @@ public final class InstanceBackups {
                 image = nativeSupport.imageIdentity(resolved.spec());
                 Path export = staging.resolve("instance.tar");
                 long size = nativeSupport.exportBackup(resolved.spec(), export,
-                    InstanceSnapshots.maxArchiveBytes());
+                    InstanceSnapshots.maxArchiveBytes(), false);
                 captured = List.of(new VolumeSnapshotSupport.CapturedVolume(
                     "instance", "/", export, size));
                 payload = BackupManifest.PAYLOAD_INSTANCE_EXPORT;

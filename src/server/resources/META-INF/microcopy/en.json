@@ -4741,6 +4741,22 @@
     "text": "Uncordon",
     "scope": "server"
   },
+  "drain": {
+    "text": "Drain",
+    "scope": "server"
+  },
+  "drain_confirm": {
+    "text": "Every instance on this host will be stopped, moved to another host and started there. Workloads that cannot move are refused by name and stay untouched.",
+    "scope": "server"
+  },
+  "host_drained": {
+    "text": "Host {$name} drained: {$moved} moved, holds none",
+    "scope": "server"
+  },
+  "host_drain_partial": {
+    "text": "Drain of {$name} INCOMPLETE: {$moved} moved, {$refused} refused ({$held})",
+    "scope": "server"
+  },
   "preflight_passed": {
     "text": "Preflight passed on {$name}; the host can be admitted",
     "scope": "server"
@@ -5005,6 +5021,38 @@
     "text": "Instance {$name} is busy ({$status}); wait for the running snapshot or restore to finish",
     "scope": "violations"
   },
+  "migrate_operator_only": {
+    "text": "Migrating an instance between hosts is an operator action",
+    "scope": "violations"
+  },
+  "migrate_same_host": {
+    "text": "Instance {$name} already lives on that host",
+    "scope": "violations"
+  },
+  "migrate_unsupported": {
+    "text": "Instance {$name} runs on a driver without whole-instance export/import; it cannot be migrated",
+    "scope": "violations"
+  },
+  "migrate_devices_present": {
+    "text": "Instance {$name} carries {$count} attached device(s); their volumes do not travel in a whole-instance export, so migrating would silently lose them. Detach the devices first.",
+    "scope": "violations"
+  },
+  "migrate_publication_present": {
+    "text": "Instance {$name} publishes a host port; that claim cannot move with it",
+    "scope": "violations"
+  },
+  "migrate_destination_occupied": {
+    "text": "Host {$server} already runs a foreign workload under the handle of {$name}; refusing the name collision",
+    "scope": "violations"
+  },
+  "instance_migrate_failed": {
+    "text": "Migration of {$name} failed: {$reason}",
+    "scope": "violations"
+  },
+  "drain_requires_cordon": {
+    "text": "Host {$name} must be cordoned before it can be drained",
+    "scope": "violations"
+  },
   "instance_snapshot_failed": {
     "text": "Snapshot of {$name} failed: {$reason}",
     "scope": "violations"
@@ -5129,6 +5177,10 @@
   },
   "restoring": {
     "text": "Restoring",
+    "scope": "instance_status"
+  },
+  "migrating": {
+    "text": "Migrating",
     "scope": "instance_status"
   },
   "uploading": {

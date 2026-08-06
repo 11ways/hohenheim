@@ -77,14 +77,29 @@ public final class InstancePlacement {
      */
     public static int chooseForOwner(@NonNull String packedOwner,
                                      @NonNull String requiredRuntime) {
-        String bucket = InstanceQuota.bucketKeyOf(packedOwner);
+        return chooseForBucket(InstanceQuota.bucketKeyOf(packedOwner), requiredRuntime, null);
+    }
+
+    /**
+     * The chooser over an already-derived quota bucket -- the migration/drain lane,
+     * where the workload's stored {@code QUOTA_BUCKET} is the owner claim and the
+     * host being drained must never be its own destination.
+     *
+     * @param bucket the charged bucket key (a stored {@code InstanceModel.QUOTA_BUCKET})
+     * @param excludeServerId a host that may not be chosen, or null
+     * @throws Violations {@code no_placement_available}
+     */
+    public static int chooseForBucket(@NonNull String bucket,
+                                      @NonNull String requiredRuntime,
+                                      @Nullable Integer excludeServerId) {
         Integer chosen = null;
         long chosenLoad = Long.MAX_VALUE;
 
         for (Row server : Models.get(ServerModel.class).find()
                 .orderBy(ServerModel.ID, SortOrder.ASC).all()) {
             Integer serverId = server.get(ServerModel.ID);
-            if (serverId == null || !ServerModel.runtimeOf(server).equals(requiredRuntime)
+            if (serverId == null || serverId.equals(excludeServerId)
+                    || !ServerModel.runtimeOf(server).equals(requiredRuntime)
                     || !acceptsTenantWorkload(server, bucket)) {
                 continue;
             }

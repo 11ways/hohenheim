@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.docker.SiteReleases;
 import be.elevenways.hohenheim.server.host.HostLeases;
+import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.process.PortAllocator;
 import be.elevenways.hohenheim.server.process.ProcessInfrastructure;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
@@ -180,6 +181,16 @@ public class ServerMain {
         } else {
             roleSkip(HohenheimRoles.Role.STACKS,
                 "stack runtime not started, interrupted-deploy sweep skipped");
+        }
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.INSTANCES)) {
+            // A controller killed mid-migration leaves a record MIGRATING with its
+            // destination pointer set; the settle decides rollback vs completion from
+            // daemon attribution so ownership can never stay split. Virtual thread:
+            // it does live daemon work on up to two hosts per record.
+            JobRunner.startVirtualThread(InstanceMigrations::recoverInterrupted);
+        } else {
+            roleSkip(HohenheimRoles.Role.INSTANCES,
+                "interrupted-migration settle skipped, no instances run here");
         }
         if (HohenheimRoles.enabled(HohenheimRoles.Role.PROXY)) {
             // A restart mid-release leaves a durable operation claiming to be in

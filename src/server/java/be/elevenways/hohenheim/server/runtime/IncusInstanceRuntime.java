@@ -577,11 +577,11 @@ public final class IncusInstanceRuntime
 
     @Override
     public long exportBackup(@NonNull InstanceSpec spec, @NonNull Path destination,
-                             long maxBytes) throws IOException {
+                             long maxBytes, boolean withSnapshots) throws IOException {
         // The daemon-side backup object is a TEMPORARY: the export tarball is the
         // artifact, and leaving the object behind would silently fill the pool.
         String backupName = "hib-" + System.currentTimeMillis();
-        this.incus.createBackup(spec.handle(), backupName);
+        this.incus.createBackup(spec.handle(), backupName, !withSnapshots);
         try {
             return this.incus.exportBackup(spec.handle(), backupName, destination, maxBytes);
         } finally {
@@ -636,6 +636,28 @@ public final class IncusInstanceRuntime
         replaceDefinition(spec.handle(), existing, config,
             this.policy.nicDevice(managedNetworkName(), this.egress));
         verifyIsolated(spec.handle());
+    }
+
+    @Override
+    public @NonNull WorkloadClaim claimOf(@NonNull InstanceSpec spec) throws IOException {
+        OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());
+        if (owner == null) {
+            throw new IOException("InstanceSpec '" + spec.handle() + "' carries no valid"
+                + " owner labels; an attribution question without an owner has no answer");
+        }
+        Map<String, Object> existing;
+        try {
+            existing = this.incus.instance(spec.handle());
+        } catch (IncusClient.ApiException e) {
+            if (e.isNotFound()) {
+                return WorkloadClaim.ABSENT;
+            }
+            throw e;
+        }
+        OwnerLabels.Owner actual = ownerOf(existing);
+        boolean ours = actual != null && actual.model().equals(owner.model())
+            && actual.id().equals(owner.id());
+        return ours ? WorkloadClaim.OURS : WorkloadClaim.FOREIGN;
     }
 
     @Override

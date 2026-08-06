@@ -57,10 +57,13 @@ public interface NativeSnapshotSupport {
      * (crash-consistent, pool-format-independent), written to {@code destination}.
      *
      * @param maxBytes cap on the exported artifact, enforced during the download
+     * @param withSnapshots true carries the daemon-side snapshots inside the tarball
+     *                      (the migration lane, so snapshot records survive the move);
+     *                      false exports the instance only (the backup lane's shape)
      * @return the exported size in bytes
      */
-    long exportBackup(@NonNull InstanceSpec spec, @NonNull Path destination, long maxBytes)
-            throws IOException;
+    long exportBackup(@NonNull InstanceSpec spec, @NonNull Path destination, long maxBytes,
+                      boolean withSnapshots) throws IOException;
 
     /**
      * Import an exported tarball as a NEW stopped instance under {@code spec.handle()}
@@ -69,6 +72,20 @@ public interface NativeSnapshotSupport {
      * guard, so re-attribution is part of this contract, not a caller nicety.
      */
     void importBackup(@NonNull InstanceSpec spec, @NonNull Path archive) throws IOException;
+
+    /**
+     * Who the daemon says the same-named workload belongs to -- the pre-flight every
+     * cross-host move and every recovery deletion runs before touching a workload it
+     * did not just create. FOREIGN is the handle-collision hazard made visible: a
+     * same-named workload another controller owns must never be converged over or
+     * deleted.
+     *
+     * @throws IOException when the daemon cannot be asked (never folds to ABSENT)
+     */
+    @NonNull WorkloadClaim claimOf(@NonNull InstanceSpec spec) throws IOException;
+
+    /** Attribution verdict of a same-named daemon workload. */
+    enum WorkloadClaim { ABSENT, OURS, FOREIGN }
 
     /**
      * The image identity the workload actually runs (for the backup manifest).

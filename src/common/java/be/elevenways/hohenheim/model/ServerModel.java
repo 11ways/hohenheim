@@ -123,10 +123,12 @@ public class ServerModel extends Model {
      * preflight existed. Transitions are operator ACTIONS (admit/cordon), never form
      * fields.
      *
-     * AIDEV-NOTE: no {@code draining} token yet -- drain needs the durable
-     * transfer/stop policy the plan requires and no transfer mechanism exists; a state
-     * that promises emptying while nothing empties would be the reports-success shape.
-     * Cordon (refuse new placement) is the honest subset that exists today.
+     * AIDEV-NOTE: still no {@code draining} token, now DELIBERATELY (superseding the
+     * "no transfer mechanism exists" reasoning -- InstanceMigrations shipped the cold
+     * transfer 2026-08-06). Drain is an OPERATION over a cordoned host, not a state:
+     * it runs synchronously under the operator's action and ends complete or loudly
+     * partial, so a stored token would only be a second authority that could claim
+     * "emptying" while nothing empties.
      */
     public static final EnumField ADMISSION = SCHEMA.addField(EnumField.builder("admission")
         .value(ADMISSION_BLOCKED, v -> v.displayName("Blocked").icon("circle-xmark")

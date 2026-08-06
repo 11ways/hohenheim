@@ -357,8 +357,18 @@ public class IncusClient {
      */
     public void createBackup(@NonNull String name, @NonNull String backup)
             throws IOException {
+        createBackup(name, backup, true);
+    }
+
+    /**
+     * @param instanceOnly false ALSO packs the instance's snapshots into the export
+     *        (the cold-migration lane, so pool-resident snapshots survive the move);
+     *        true is the backup lane's instance-only shape
+     */
+    public void createBackup(@NonNull String name, @NonNull String backup,
+                             boolean instanceOnly) throws IOException {
         waitOperation(asyncOperation("POST", "/1.0/instances/" + name + "/backups",
-            Json.stringify(Map.of("name", backup, "instance_only", true,
+            Json.stringify(Map.of("name", backup, "instance_only", instanceOnly,
                 "optimized_storage", false)), DEFAULT_TIMEOUT_MS), LONG_OP_TIMEOUT_MS);
     }
 
