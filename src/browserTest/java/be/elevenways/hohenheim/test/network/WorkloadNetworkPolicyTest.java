@@ -244,7 +244,7 @@ class WorkloadNetworkPolicyTest {
             assertThatThrownBy(() -> lied.apply(network, Egress.OPEN))
                 .as("step 4: a missing chain is a refusal, never a shrug")
                 .isInstanceOf(IOException.class)
-                .hasMessageContaining("cannot be read back");
+                .hasMessageContaining("does not exist in the kernel");
         }
     }
 

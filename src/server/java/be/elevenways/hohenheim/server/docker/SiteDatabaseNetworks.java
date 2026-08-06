@@ -24,6 +24,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +62,40 @@ public final class SiteDatabaseNetworks {
     /** Link-network handle of one site/database pair. */
     static @NonNull String linkHandle(int siteId, int databaseId) {
         return HANDLE_PREFIX + siteId + "-" + databaseId;
+    }
+
+    /**
+     * Per-server link-network handles of every attachment row whose site currently has
+     * a SERVING release on the same server as the database: the isolation sweep's
+     * inventory of site-database link networks whose kernel chains must exist (a host
+     * reboot erases them while the containers restart).
+     */
+    public static @NonNull Map<Integer, List<String>> liveLinkHandles() {
+        Map<Integer, List<String>> byServer = new LinkedHashMap<>();
+        DatabaseModel databases = Models.get(DatabaseModel.class);
+        for (Row link : Models.get(SiteDatabaseModel.class).find().all()) {
+            Integer siteId = link.get(SiteDatabaseModel.SITE_ID);
+            Integer databaseId = link.get(SiteDatabaseModel.DATABASE_ID);
+            if (siteId == null || databaseId == null) {
+                continue;
+            }
+            Row serving = SiteInstances.ownedServing(siteId);
+            if (serving == null) {
+                continue;   // no release container: the next deploy attaches both sides
+            }
+            Row database = databases.find().where(DatabaseModel.ID.eq(databaseId)).first();
+            if (database == null) {
+                continue;
+            }
+            int serverId = ServerModel.canonicalServerId(serving.get(InstanceModel.SERVER_ID));
+            if (ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID))
+                    != serverId) {
+                continue;   // cross-host pairs are refused at deploy and carry no network
+            }
+            byServer.computeIfAbsent(serverId, key -> new ArrayList<>())
+                .add(linkHandle(siteId, databaseId));
+        }
+        return byServer;
     }
 
     /**

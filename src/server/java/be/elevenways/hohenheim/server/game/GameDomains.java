@@ -38,6 +38,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -83,8 +84,41 @@ public final class GameDomains {
     }
 
     /** Link-network handle of one proxy/backend pair (shared by all their mappings). */
-    static @NonNull String linkHandle(int proxyId, int backendId) {
+    public static @NonNull String linkHandle(int proxyId, int backendId) {
         return "hohenheim-gamelink-" + proxyId + "-" + backendId;
+    }
+
+    /**
+     * Per-server link-network handles of every ENABLED mapping whose proxy instance is
+     * live: the isolation sweep's inventory of game-domain link networks whose kernel
+     * chains must exist (a host reboot erases them while the containers restart).
+     */
+    public static @NonNull Map<Integer, List<String>> liveLinkHandles() {
+        Map<Integer, List<String>> byServer = new LinkedHashMap<>();
+        Set<String> seen = new HashSet<>();
+        InstanceModel instances = Models.get(InstanceModel.class);
+        for (Row mapping : Models.get(GameDomainModel.class).find()
+                .where(GameDomainModel.ENABLED.eq(true)).all()) {
+            Integer proxyId = mapping.get(GameDomainModel.PROXY_INSTANCE_ID);
+            Integer backendId = mapping.get(GameDomainModel.BACKEND_INSTANCE_ID);
+            if (proxyId == null || backendId == null) {
+                continue;
+            }
+            String handle = linkHandle(proxyId, backendId);
+            if (!seen.add(handle)) {
+                continue;
+            }
+            Row proxy = instances.find().where(InstanceModel.ID.eq(proxyId))
+                .where(InstanceModel.DELETED_AT.isNull()).first();
+            if (proxy == null) {
+                continue;
+            }
+            byServer.computeIfAbsent(
+                    ServerModel.canonicalServerId(proxy.get(InstanceModel.SERVER_ID)),
+                    key -> new ArrayList<>())
+                .add(handle);
+        }
+        return byServer;
     }
 
     /**

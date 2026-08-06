@@ -91,7 +91,12 @@ public class StackDeployer {
     // -- naming ---------------------------------------------------------------
 
     public static @NonNull String networkName(@NonNull StackSpec spec) {
-        return "hohenheim-stack-" + spec.name();
+        return networkName(spec.name());
+    }
+
+    /** The per-stack network name from the stack name alone (inventory callers). */
+    public static @NonNull String networkName(@NonNull String stackName) {
+        return "hohenheim-stack-" + stackName;
     }
 
     public static @NonNull String containerName(@NonNull StackSpec spec, @NonNull String service) {

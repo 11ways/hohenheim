@@ -1853,6 +1853,75 @@ block is what the code does; amend the prose, do not code against it.
     them: `ensureNetwork` re-applies on every deploy, including onto an existing owned
     network). A boot/monitor re-apply sweep is the fix; it is a monitor-tick concern
     (`StackRuntime.refreshStatus` is the natural seam), its own slice.
+    SUPERSEDED 2026-08-06 (reboot-sweep wave): the sweep SHIPPED, as `VerifyDockerIsolation`
+    (boot + every 5 minutes, the VerifyIncusIsolation shape) rather than a
+    StackRuntime.refreshStatus hook -- refreshStatus is STACKS-only and record-status-shaped,
+    while the reboot window is a KERNEL concern shared by five inventories (stacks, instances,
+    site releases, managed databases, both link-network families), so one sweep owns them all.
+    What the wave established, in order:
+    - PER-TIER SURVEY, measured on daystrom (real Docker daemon, real reboot), not inherited
+      from the three waves' notes. A DAEMON RESTART is NOT a hole for any tier: kernel
+      nftables state survives it (the table, both chains and every rule still listed by
+      nft afterwards), unless-stopped containers are restarted still-policied,
+      restartless containers stay down. A HOST REBOOT is the
+      hole, for exactly ONE tier's runtime shape: networks and subnets survive, `inet
+      hohenheim_net` is GONE ("No such file or directory", captured), and only
+      unless-stopped containers -- the stack tier's default -- are restarted by the daemon
+      with no code path of ours in the loop. The rebooted stack container fetched HTTP 200
+      from a host-bound service that the policy denies; re-applying the exact production
+      ruleset text turned the same fetch back into a timeout with 1.1.1.1:443 still
+      connecting (the positive anchor). Instances, site releases and managed databases
+      carry restart policy "no" (only StackDeployer sets RestartPolicy at all), so they
+      come back STOPPED and their next start/deploy re-applies -- a finding, not a gap;
+      the sweep covers them anyway because record-says-RUNNING with chains missing is one
+      operator `docker start` from live. Link networks re-apply only inside deploy lanes,
+      but their members are restartless too, so the reboot exposure is the same
+      records-vs-kernel divergence the sweep now bounds. BuildSandbox networks are
+      minutes-lived inside one build and excluded by decision.
+    - MECHANISM: ONE sweep, `VerifyDockerIsolation` (server/task), records-driven inventory
+      per host -- running/starting docker-kind instances via `InstanceService.resolve`
+      (posture/egress read off the kind-built `DockerInstanceRuntime`), enabled stacks
+      (`StackDeployer.EGRESS`), active managed databases (egress NONE), and both link
+      owners' new `liveLinkHandles()` enumerators (`SiteDatabaseNetworks` NONE,
+      `GameDomains` OPEN). Kernel truth rides the new `WorkloadNetworkPolicy.isEnforced`
+      (re-lists both chains through the SAME NftRunner lane the deploy used --
+      `forServer`, never the controller's kernel for a remote host) and repair is the
+      existing verified `apply`. Incus hosts are skipped by name: VerifyIncusIsolation
+      owns them.
+    - REPAIR-FAILURE POLICY, decided per condition: enforcement OFF = report unverifiable,
+      touch nothing (the pre-enforcement decision); kernel UNREADABLE = report UNCONFIRMED,
+      touch nothing (refusing to answer is not evidence of a leak); divergence OBSERVED and
+      re-apply REFUSED = contain -- stacks/instances/databases are STOPPED (stack stop goes
+      through StackDeployer directly, deliberately not the per-stack worker lane: an
+      emergency stop must not queue behind a wedged deploy), link networks are SEVERED by
+      disconnecting their members (both endpoints keep running on their own policied
+      networks; the next deploy re-attaches enforced). Repair runs first, so transient
+      failures cost no availability.
+    - PROVED vs APPROXIMATED: the hole and its close were proven across a REAL host reboot
+      of daystrom (fixture: production ruleset text + unless-stopped container). The
+      product sweep itself was proven in `VerifyDockerIsolationTest` against a real daemon
+      and a real kernel where the reboot's kernel effect is reproduced exactly (delete
+      `table inet hohenheim_net` under running containers): all four tiers repaired by one
+      sweep, kernel read back, metadata BLOCKED by real packets with the open egress still
+      REACHABLE, second tick idempotent; plus the three failure lanes (off/unreadable/
+      unrepairable-stops-the-stack, daemon-verified). NOT proven: the product sweep running
+      on an actually-rebooted host (the JUnit lane cannot reboot its host), and boot-time
+      task scheduling (the framework's bootAndCron contract). Counterfactual: a sweep
+      mutated to claim repair without applying fails both tests verbatim (kernel ruleset
+      empty where the metadata drop is asserted; no refusal on the record).
+    - MANAGED PROCESSES stay a NAMED SEPARATE SLICE, judged again this wave and kept out
+      deliberately: the uid-keyed OUTPUT rule is NOT a clean fit for this sweep's unit (a
+      policied NETWORK) or its vocabulary -- host processes resolve DNS through
+      /etc/resolv.conf, which on real hosts names a PRIVATE-range resolver directly (the
+      dev workstation's is 10.47.0.2; daystrom dodges it only because systemd-resolved's
+      127.0.0.53 loopback stub fronts its 10.47.0.1 upstream), so a bare `meta skuid` deny
+      of TenantNetworkRanges breaks such a host's process-site DNS; the container tiers
+      never faced this because Docker's embedded resolver lives inside the container netns. The slice therefore needs a resolver carve-out
+      decision (which holes to punch and how they track resolv.conf changes) AND a
+      privileged test lane (real uids; `unshare -rn` maps the test user to root, so
+      PrivateNetns cannot honestly exercise skuid matching). Seam unchanged:
+      `SystemUsers.executionBuilder` uids, OUTPUT-hook chain in the same table, or
+      per-process netns.
 - **Already done, do not re-schedule:** `KnownCapabilities`/sensitivity classes
   (zenit core, wired -- Phase 3 only needs to REGISTER the instance vocabulary,
   which is an hour, not a workstream); `RecordGrants` + the grant-scoped

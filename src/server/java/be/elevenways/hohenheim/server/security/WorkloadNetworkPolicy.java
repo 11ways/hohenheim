@@ -180,6 +180,27 @@ public final class WorkloadNetworkPolicy {
     }
 
     /**
+     * KERNEL-truth check for one workload network: whether both chains exist, are hooked,
+     * and carry every rule {@link #apply} would write for the given egress. The answer
+     * comes from re-listing the chains through the runner -- never from bookkeeping --
+     * because a host reboot erases nftables state while Docker networks and
+     * restart-policy containers come back on their own (measured on daystrom
+     * 2026-08-06: after a reboot the unless-stopped container served traffic with
+     * {@code nft list table inet hohenheim_net} answering "No such file or directory").
+     *
+     * @return false when a chain is absent, unhooked, or missing an expected rule
+     * @throws IOException when enforcement is off, or the kernel cannot be READ at all
+     *                     (an unreadable kernel is "unverifiable", never "unenforced")
+     */
+    public boolean isEnforced(@NonNull WorkloadNetwork network, @NonNull Egress egress)
+            throws IOException {
+        requireEnabled(network.name());
+        String key = chainKey(network.name());
+        return chainSatisfies(forwardChain(key), "forward", forwardRules(network, egress))
+            && chainSatisfies(inputChain(key), "input", inputRules(network));
+    }
+
+    /**
      * Remove a workload's chains, VERIFIED absent afterwards; a policy that was never
      * applied is an observed no-op.
      *
@@ -284,17 +305,45 @@ public final class WorkloadNetworkPolicy {
     }
 
     private boolean chainExists(String chain) throws IOException {
+        return readChain(chain) != null;
+    }
+
+    /**
+     * The kernel's own rendering of one chain as normalized lines, or null when the
+     * chain (or the whole table) does not exist.
+     *
+     * @throws IOException when nft fails for any reason other than absence
+     */
+    private @Nullable List<String> readChain(String chain) throws IOException {
         NftRunner.Result listed = this.runner.run(
             List.of("list", "chain", "inet", TABLE, chain), null);
-        if (listed.ok()) {
-            return true;
+        if (!listed.ok()) {
+            if (listed.failureText().contains("No such file or directory")) {
+                return null;   // observed absent (the whole point of a kernel-truth check)
+            }
+            throw new IOException("Could not read back the network policy chain '" + chain
+                + "' (exit " + listed.exitCode() + "): " + listed.failureText());
         }
-        String failure = listed.failureText();
-        if (failure.contains("No such file or directory")) {
-            return false;   // observed absent, which is what the caller wanted
+        List<String> present = new ArrayList<>();
+        for (String line : listed.stdout().split("\n")) {
+            present.add(line.trim().replaceAll("\\s+", " "));
         }
-        throw new IOException("Could not read back the network policy chain '" + chain
-            + "' (exit " + listed.exitCode() + "): " + failure);
+        return present;
+    }
+
+    /** Whether the chain exists, hooks the given hook, and carries every expected rule. */
+    private boolean chainSatisfies(String chain, String hook, List<String> expected)
+            throws IOException {
+        List<String> present = readChain(chain);
+        if (present == null) {
+            return false;
+        }
+        boolean hooked = present.stream().anyMatch(line -> line.startsWith("type filter hook "
+            + hook + " ") && line.contains("policy accept"));
+        if (!hooked) {
+            return false;
+        }
+        return present.containsAll(expected);
     }
 
     /**
@@ -303,31 +352,32 @@ public final class WorkloadNetworkPolicy {
      */
     private void verifyChain(String networkName, String chain, String hook, List<String> expected)
             throws IOException {
-        NftRunner.Result listed = this.runner.run(
-            List.of("list", "chain", "inet", TABLE, chain), null);
-        if (!listed.ok()) {
+        List<String> present;
+        try {
+            present = readChain(chain);
+        } catch (IOException unreadable) {
             throw new IOException("REFUSED to deploy '" + networkName + "': nft accepted the"
-                + " policy but the " + hook + " chain '" + chain + "' cannot be read back"
-                + " (exit " + listed.exitCode() + "): " + listed.failureText());
+                + " policy but the " + hook + " chain '" + chain + "' cannot be read back: "
+                + unreadable.getMessage());
         }
-
-        List<String> present = new ArrayList<>();
-        for (String line : listed.stdout().split("\n")) {
-            present.add(line.trim().replaceAll("\\s+", " "));
+        if (present == null) {
+            throw new IOException("REFUSED to deploy '" + networkName + "': nft accepted the"
+                + " policy but the " + hook + " chain '" + chain + "' does not exist in the"
+                + " kernel. Something on this host is flushing our table.");
         }
         boolean hooked = present.stream().anyMatch(line -> line.startsWith("type filter hook "
             + hook + " ") && line.contains("policy accept"));
         if (!hooked) {
             throw new IOException("REFUSED to deploy '" + networkName + "': chain '" + chain
                 + "' exists but is not hooked into " + hook + "; it would filter nothing."
-                + " Kernel state: " + listed.stdout().trim());
+                + " Kernel state: " + String.join(" | ", present));
         }
         for (String rule : expected) {
             if (!present.contains(rule)) {
                 throw new IOException("REFUSED to deploy '" + networkName + "': nft reported"
                     + " success but the kernel does not carry the rule '" + rule + "' in chain '"
                     + chain + "'. Something on this host is flushing our table. Kernel state: "
-                    + listed.stdout().trim());
+                    + String.join(" | ", present));
             }
         }
     }
