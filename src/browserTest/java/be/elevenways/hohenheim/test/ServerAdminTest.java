@@ -92,6 +92,55 @@ class ServerAdminTest extends HohenheimTestBase {
             .isNotNull();
     }
 
+    /**
+     * A posture submitted through the resource form must LAND, on the implicit LOCAL
+     * host especially: on a single-machine install the local row IS the compute host,
+     * placement refuses trusted_only, and the local-row identity guard used to swallow
+     * the posture silently while the form reported success. Identity stays immutable.
+     */
+    @Test
+    @Order(3)
+    void postureEditThroughTheFormLandsOnTheLocalHost() throws Exception {
+        // 1. Remote hosts: posture rides the ordinary update path.
+        Row edge = Models.get(ServerModel.class).find()
+            .where(ServerModel.NAME.eq("edge-9")).first();
+        assertThat(edge).as("step 1 rides the edge-9 host created in step 2").isNotNull();
+        var edgeUpdate = postForm("/admin/servers/" + edge.get(ServerModel.ID),
+            "name=edge-9&ssh_target=ops%40edge9.example&posture=dedicated");
+        assertThat(edgeUpdate.statusCode()).isIn(200, 302, 303);
+        assertThat((String) Models.get(ServerModel.class)
+            .findById(edge.get(ServerModel.ID)).get(ServerModel.POSTURE))
+            .as("step 1: a remote host's submitted posture is stored")
+            .isEqualTo(ServerModel.POSTURE_DEDICATED);
+
+        // 2. The LOCAL host: the identity guard must not swallow the posture.
+        Row local = Models.get(ServerModel.class).find()
+            .where(ServerModel.NAME.eq("local")).first();
+        assertThat(local).isNotNull();
+        Integer localId = local.get(ServerModel.ID);
+        assertThat((String) local.get(ServerModel.POSTURE))
+            .as("step 2 precondition: the local host still carries the default posture")
+            .isEqualTo(ServerModel.POSTURE_TRUSTED_ONLY);
+
+        var update = postForm("/admin/servers/" + localId,
+            "name=local&ssh_target=evil%40intruder.example&posture=shared_container");
+        assertThat(update.statusCode()).isIn(200, 302, 303);
+
+        Row updated = Models.get(ServerModel.class).findById(localId);
+        assertThat((String) updated.get(ServerModel.POSTURE))
+            .as("step 2: the local host's submitted posture is STORED, not silently"
+                + " dropped (the placement gate reads this column)")
+            .isEqualTo(ServerModel.POSTURE_SHARED_CONTAINER);
+
+        // 3. The identity guard itself still holds: the smuggled ssh_target is ignored.
+        assertThat((String) updated.get(ServerModel.SSH_TARGET))
+            .as("step 3: the local host's identity (ssh_target) stays immutable")
+            .isNull();
+        assertThat((String) updated.get(ServerModel.MODE))
+            .as("step 3: the local host's mode stays local")
+            .isEqualTo("local");
+    }
+
     private HttpResponse<String> postForm(String path, String body) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)
