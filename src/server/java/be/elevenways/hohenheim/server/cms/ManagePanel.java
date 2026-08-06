@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -123,7 +124,8 @@ public final class ManagePanel extends Panel {
             // from-template page are nav-hidden: they are reached THROUGH an instance
             // (or a template) whose own scope already decided the principal may be here.
             new ManageInstanceResource(), new ManageInstanceScheduleResource(),
-            new ManageInstanceScheduleStepResource(), new ManageInstanceSnapshotResource(),
+            new ManageInstanceScheduleStepResource(), new ManageInstanceDeviceResource(),
+            new ManageInstanceSnapshotResource(),
             new ManageInstanceBackupResource(), new ManageInstanceTemplateResource(),
             new InstanceFromTemplatePage());
     }
@@ -217,6 +219,23 @@ public final class ManagePanel extends Panel {
             .search(RecordScheduleModel.NAME)
             .accessCriteria(ManagePanel::recordScheduleScope)
             .build());
+
+        // Instance devices: same two-derived-defaults hazard again, and the widest one
+        // would list every tenant's disk names and sizes to whoever a picker rendered for.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDeviceModel.class)
+            .search(InstanceDeviceModel.NAME)
+            .accessCriteria(ManagePanel::instanceDeviceScope)
+            .build());
+    }
+
+    /** @return null for admins, else the devices of instances the principal manages */
+    static @Nullable Criteria instanceDeviceScope(@NonNull AccessContext ctx) {
+        if (HohenheimAccess.isAdmin(ctx)) {
+            return null;
+        }
+        QueryPredicate predicate = ManageInstanceDeviceResource.decide(ctx).predicate();
+        return predicate != null ? predicate.criteria()
+            : Models.get(InstanceDeviceModel.class).matchNone();
     }
 
     /** @return null for admins, else the schedules of instances the principal manages */

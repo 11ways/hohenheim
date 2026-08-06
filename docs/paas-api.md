@@ -60,6 +60,10 @@ listings additionally require the key to cover site or instance `manage`
 | POST | `/api/v1/instances/{id}/command` | `command=...` to the console |
 | POST | `/api/v1/instances/{id}/backup` / `snapshot` | Capability-gated in the service |
 | POST | `/api/v1/instances` | Create from an approved template (same funnel as the create page) |
+| GET | `/api/v1/instances/{id}/devices` | Attached extra disks and NICs (`name`, `type`, `size_gb`) |
+| POST | `/api/v1/instances/{id}/devices` | Attach: `type=disk\|nic`, `name`, `size_gb` (disks). Quota and capability refusals are named: `disk_quota_reached`, `nic_quota_reached`, `devices_unsupported`, `device_exists`, `device_attach_failed` |
+| POST | `/api/v1/instances/{id}/devices/resize` | `name`, `size_gb`. Block volumes resize STOPPED only -- a running resize returns the daemon's own "In use" inside `device_resize_failed` |
+| POST | `/api/v1/instances/{id}/devices/detach` | `name=...`. DELETES the backing volume; refuses `device_detach_failed` rather than reporting a detach the daemon did not do |
 | GET | `/api/v1/instances/{id}/variables` | Variables; secret VALUES are never returned |
 | POST | `/api/v1/instances/{id}/variables` | `key`, `value`, `kind=plain|secret` (default plain) |
 | POST | `/api/v1/instances/{id}/variables/delete` | `key=...` |
