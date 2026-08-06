@@ -6,8 +6,10 @@ import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -16,6 +18,7 @@ import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -28,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -44,6 +48,11 @@ class StackRuntimeFlowTest {
     private static StackRuntime runtime;
     private static DockerClient docker;
 
+    // The runtime resolves its policy applier through WorkloadNetworkPolicy.forServer,
+    // so the netns fixture is installed as the process-wide override -- without it
+    // every deploy here would (rightly) refuse on a developer machine.
+    private static PrivateNetns netns;
+
     private Integer stackId;
 
     @BeforeAll
@@ -57,9 +66,16 @@ class StackRuntimeFlowTest {
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
         HohenheimTestRuntime.ensureBooted();
+        netns = PrivateNetns.installEnforcing();
 
         docker = new DockerClient();
         runtime = new StackRuntime(docker, datasource);
+    }
+
+    @AfterAll
+    static void tearDown() {
+        PrivateNetns.uninstall(netns);
+        netns = null;
     }
 
     @AfterEach
@@ -76,6 +92,8 @@ class StackRuntimeFlowTest {
 
     private void requireDocker() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        assumeTrue(netns != null,
+            "no private netns: a stack refuses to deploy where its policy cannot be enforced");
         boolean present = false;
         for (Object image : docker.listImages()) {
             Object tags = ((Map<?, ?>) image).get("RepoTags");
@@ -242,6 +260,67 @@ class StackRuntimeFlowTest {
         DockerClient.ExecResult listing = docker.exec(container, List.of("ls", "/data"));
         assertThat(listing.stdout()).as("step 3: the data did not survive the purge")
             .doesNotContain("marker.txt");
+    }
+
+    /**
+     * The refusal travels the PRODUCT lane honestly: a deploy on a host that cannot
+     * enforce the network policy fails the deploy, stamps the stack FAILED, records the
+     * refusal in the deployment log, creates nothing at the daemon -- and the SAME stack
+     * deploys cleanly once the host can enforce (the recovery path an operator takes).
+     */
+    @Test
+    void anUnenforceableHostFailsTheDeployVisiblyAndEnforcementRecoversIt() throws IOException {
+        requireDocker();
+        String stackName = "hhflow-refused-" + Long.toHexString(System.nanoTime());
+        stackId = createStackRecords(stackName, "one");
+        String network = "hohenheim-stack-" + stackName;
+
+        // 1. Enforcement off (the pre-enforcement host): the deploy fails BY NAME.
+        WorkloadNetworkPolicy.overrideForTest(
+            new WorkloadNetworkPolicy(netns.nftRunner(), () -> false));
+        try {
+            IOException refusal = null;
+            try {
+                runtime.deploy(stackId, "unenforceable");
+            } catch (IOException expected) {
+                refusal = expected;
+            }
+            assertThat(refusal).as("step 1: the deploy fails").isNotNull();
+            assertThat(refusal.getMessage())
+                .as("step 1: the refusal names the workload and the cause")
+                .contains("REFUSED to deploy")
+                .contains(network)
+                .contains("security.nftables_enabled");
+
+            // 2. Resulting state: FAILED status, the refusal in the deployment log,
+            //    nothing at the daemon.
+            Db.run(datasource, () -> {
+                Row stack = Models.get(StackModel.class).findById(stackId);
+                assertThat(stack.get(StackModel.STATUS))
+                    .as("step 2: the stack reads failed, not silently active")
+                    .isEqualTo(StackModel.STATUS_FAILED);
+                Row deployment = Models.get(StackDeploymentModel.class).find()
+                    .where(StackDeploymentModel.STACK_ID.eq(stackId)).first();
+                assertThat((String) deployment.get(StackDeploymentModel.LOG))
+                    .as("step 2: the operator can read WHY in the deployment log")
+                    .contains("REFUSED to deploy");
+            });
+            assertThat(docker.findNetworkByName(network))
+                .as("step 2: no network was created").isNull();
+            assertThatThrownBy(() -> docker.inspectContainer(
+                "hohenheim-stack-" + stackName + "-app"))
+                .as("step 2: no container was created")
+                .isInstanceOf(IOException.class);
+        } finally {
+            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
+        }
+
+        // 3. The recovery: the host gains enforcement and the SAME records deploy.
+        runtime.deploy(stackId, "enforced");
+        assertThat(containerRole(stackName)).as("step 3: the stack now runs").isEqualTo("one");
+        assertThat(netns.inHost("nft", "list", "ruleset").stdout())
+            .as("step 3: and its kernel chains exist")
+            .contains(WorkloadNetworkPolicy.forwardChain(WorkloadNetworkPolicy.chainKey(network)));
     }
 
     private boolean volumeExists(String name) throws IOException {

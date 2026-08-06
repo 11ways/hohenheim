@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.docker.DockerReclaim;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -31,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -100,7 +102,7 @@ public class StackRuntime {
                 if (spec == null) {
                     return;
                 }
-                new StackDeployer(clientFor.apply(spec.serverName()), null).stop(spec);
+                deployerFor(spec, null).stop(spec);
                 setStatus(stackId, StackModel.STATUS_STOPPED);
             } catch (Exception e) {
                 Blast.log("STACK: stop failed for stack", stackId, "-", e.getMessage());
@@ -141,7 +143,7 @@ public class StackRuntime {
             if (spec == null) {
                 throw new IOException("Stack " + stackId + " does not exist");
             }
-            new StackDeployer(clientFor.apply(spec.serverName()), null).stop(spec);
+            deployerFor(spec, null).stop(spec);
             setStatus(stackId, StackModel.STATUS_STOPPED);
             return null;
         });
@@ -167,7 +169,7 @@ public class StackRuntime {
             if (spec == null) {
                 return null;
             }
-            new StackDeployer(clientFor.apply(spec.serverName()), null).destroy(spec, removeVolumes);
+            deployerFor(spec, null).destroy(spec, removeVolumes);
             setStatus(stackId, StackModel.STATUS_INACTIVE);
             return null;
         });
@@ -242,7 +244,7 @@ public class StackRuntime {
             if (spec == null) {
                 throw new IOException("Stack " + stackId + " does not exist");
             }
-            return new StackDeployer(clientFor.apply(spec.serverName()), null).countOwnedContainers(spec);
+            return deployerFor(spec, null).countOwnedContainers(spec);
         });
     }
 
@@ -257,7 +259,7 @@ public class StackRuntime {
                     return Map.of();
                 }
                 try {
-                    return new StackDeployer(clientFor.apply(spec.serverName()), null).status(spec);
+                    return deployerFor(spec, null).status(spec);
                 } catch (Exception e) {
                     return Map.of();
                 }
@@ -300,7 +302,7 @@ public class StackRuntime {
             // Even a spec with ZERO services runs the live status: the label sweep can
             // still surface orphaned containers of deleted services, and reading such a
             // stack as "inactive" would unlock renaming and orphan them permanently.
-            states = new StackDeployer(clientFor.apply(spec.serverName()), null).status(spec);
+            states = deployerFor(spec, null).status(spec);
         } catch (Exception e) {
             Blast.log("STACK: status refresh failed for stack", stackId, "-", e.getMessage());
             return previous != null ? previous : StackModel.STATUS_INACTIVE;
@@ -350,7 +352,7 @@ public class StackRuntime {
             if (spec == null) {
                 throw new IOException("Stack " + stackId + " does not exist");
             }
-            StackDeployer deployer = new StackDeployer(clientFor.apply(spec.serverName()), null);
+            StackDeployer deployer = deployerFor(spec, null);
             deployer.destroy(spec, true);
             setStatus(stackId, StackModel.STATUS_INACTIVE);
             return null;
@@ -487,8 +489,7 @@ public class StackRuntime {
                 throw new IOException("Stack " + stackId + " does not exist");
             }
 
-            StackDeployer deployer = new StackDeployer(clientFor.apply(spec.serverName()),
-                line -> log.append(line).append('\n'));
+            StackDeployer deployer = deployerFor(spec, line -> log.append(line).append('\n'));
             deployer.deploy(spec);
 
             String specSnapshot = Zenit.DRY.stringify(spec.toMap());
@@ -514,6 +515,17 @@ public class StackRuntime {
             }
             return e instanceof IOException io ? io : new IOException(failure, e);
         }
+    }
+
+    /**
+     * A deployer whose Docker client AND network-policy applier both target the host
+     * the spec deploys to -- a local applier for a remote daemon would verify rules in
+     * the controller's kernel while the stack runs wide open.
+     */
+    private @NonNull StackDeployer deployerFor(@NonNull StackSpec spec,
+                                               @Nullable Consumer<String> log) {
+        return new StackDeployer(clientFor.apply(spec.serverName()),
+            WorkloadNetworkPolicy.forServer(spec.serverName()), log);
     }
 
     private @Nullable StackSpec currentSpec(int stackId) {

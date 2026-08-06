@@ -4,9 +4,13 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.stack.StackDeployer;
 import be.elevenways.hohenheim.server.stack.StackSpec;
+import be.elevenways.hohenheim.test.network.PrivateNetns;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -21,18 +25,37 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * StackDeployer against a real Docker daemon: network + volumes + dependency
+ * StackDeployer against a real Docker daemon: policied network + volumes + dependency
  * ordering + config file upload + ownership protection + replace + destroy.
- * Skipped when the daemon socket or alpine image is absent.
+ * Skipped when the daemon socket or alpine image is absent. The kernel policy runs
+ * through the PRODUCTION applier against a real nftables in a {@link PrivateNetns},
+ * so a machine that cannot build one skips VISIBLY instead of passing policy-less.
  */
 class StackDeployerTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String TEST_IMAGE = "alpine:latest";
 
+    private static PrivateNetns netns;
+
     private final DockerClient docker = new DockerClient();
     private final List<StackSpec> deployedSpecs = new ArrayList<>();
     private final List<String> strayContainers = new ArrayList<>();
+
+    @BeforeAll
+    static void buildNetns() throws IOException {
+        if (PrivateNetns.available()) {
+            netns = new PrivateNetns();
+        }
+    }
+
+    @AfterAll
+    static void closeNetns() {
+        if (netns != null) {
+            netns.close();
+            netns = null;
+        }
+    }
 
     private static String uniqueStackName() {
         return "hhtest-" + Long.toHexString(System.nanoTime());
@@ -53,12 +76,31 @@ class StackDeployerTest {
     }
 
     private StackDeployer deployer(StringBuilder log) {
-        return new StackDeployer(docker, log == null ? null : line -> log.append(line).append('\n'));
+        return new StackDeployer(docker, netns.enforcingPolicy(),
+            log == null ? null : line -> log.append(line).append('\n'));
     }
 
     private void requireDocker() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         assumeTrue(imagePresent(), TEST_IMAGE + " not present locally");
+        assumeTrue(netns != null,
+            "no private netns: a stack refuses to deploy where its policy cannot be enforced");
+    }
+
+    /** The v4 subnet the daemon actually assigned to a network, from its inspect payload. */
+    private static String subnetOf(Map<String, Object> network) {
+        Object ipam = network.get("IPAM");
+        Object configs = ipam instanceof Map<?, ?> map ? map.get("Config") : null;
+        if (configs instanceof List<?> list) {
+            for (Object entry : list) {
+                if (entry instanceof Map<?, ?> config
+                        && config.get("Subnet") instanceof String subnet
+                        && !subnet.contains(":")) {
+                    return subnet;
+                }
+            }
+        }
+        throw new IllegalStateException("network has no IPv4 subnet: " + network);
     }
 
     private boolean imagePresent() throws IOException {
@@ -75,7 +117,7 @@ class StackDeployerTest {
     void cleanup() {
         for (StackSpec spec : deployedSpecs) {
             try {
-                new StackDeployer(docker, null).destroy(spec, true);
+                new StackDeployer(docker, netns.enforcingPolicy(), null).destroy(spec, true);
             } catch (Exception ignored) {
                 // best effort
             }
@@ -115,6 +157,23 @@ class StackDeployerTest {
         Map<String, Object> networkLabels = (Map<String, Object>) network.get("Labels");
         assertThat(networkLabels).containsEntry(StackDeployer.LABEL_STACK, stackName);
         assertThat((Map<String, Object>) network.get("Containers")).hasSize(2);
+
+        // The kernel carries the deny policy for the network's REAL subnet -- read out
+        // of nftables itself, not out of what we asked the applier to do.
+        String subnet = subnetOf(network);
+        String forwardChain = WorkloadNetworkPolicy.forwardChain(
+            WorkloadNetworkPolicy.chainKey(StackDeployer.networkName(spec)));
+        String forwardRules = netns.inHost("nft", "list", "chain", "inet",
+            WorkloadNetworkPolicy.TABLE, forwardChain).stdout();
+        assertThat(forwardRules).as("the stack's forward chain is hooked")
+            .contains("type filter hook forward");
+        assertThat(forwardRules).as("the metadata deny is in the kernel for the stack subnet")
+            .contains("ip saddr " + subnet + " ip daddr 169.254.0.0/16 drop");
+        assertThat(forwardRules).as("stack services keep their own subnet")
+            .contains("ip saddr " + subnet + " ip daddr " + subnet + " accept");
+        assertThat(forwardRules)
+            .as("egress is DECLARED OPEN: no final saddr-scoped drop in the forward chain")
+            .doesNotContain("ip saddr " + subnet + " drop");
 
         // Volume exists and is owned.
         Map<String, Object> volume = docker.inspectVolume("hohenheim-stack-" + stackName + "-data");
@@ -282,6 +341,97 @@ class StackDeployerTest {
         assertThat(docker.findNetworkByName(StackDeployer.networkName(spec))).isNull();
         assertThatThrownBy(() -> docker.inspectVolume("hohenheim-stack-" + stackName + "-gone"))
             .isInstanceOf(IOException.class);
+
+        // The kernel policy chains die with the network, verified in nftables itself.
+        String key = WorkloadNetworkPolicy.chainKey(StackDeployer.networkName(spec));
+        assertThat(netns.inHost("nft", "list", "ruleset").stdout())
+            .as("destroy removes the stack's kernel chains too")
+            .doesNotContain(WorkloadNetworkPolicy.forwardChain(key))
+            .doesNotContain(WorkloadNetworkPolicy.inputChain(key));
+    }
+
+    /**
+     * The behaviour change of the stack isolation slice, pinned: a host that cannot
+     * enforce the kernel policy refuses the deploy BY NAME before anything exists at
+     * the daemon -- no network, no container, no "log and continue".
+     */
+    @Test
+    void refusesToDeployWhereThePolicyCannotBeEnforced() throws IOException {
+        requireDocker();
+        String stackName = uniqueStackName();
+        StackSpec spec = spec(stackName, false,
+            sleeper("app", List.of(), List.of(), List.of(), null));
+        // Registered for cleanup so a REGRESSED refusal fails loudly without leaking
+        // its accidentally-deployed containers into the daemon.
+        deployedSpecs.add(spec);
+
+        StackDeployer unenforceable = new StackDeployer(docker,
+            new WorkloadNetworkPolicy(netns.nftRunner(), () -> false), null);
+        assertThatThrownBy(() -> unenforceable.deploy(spec))
+            .as("a stack does not start where its policy cannot land")
+            .isInstanceOf(IOException.class)
+            .hasMessageContaining("REFUSED to deploy")
+            .hasMessageContaining(StackDeployer.networkName(spec))
+            .hasMessageContaining("security.nftables_enabled");
+
+        // Resulting STATE: the refusal happened before anything reached the daemon.
+        assertThat(docker.findNetworkByName(StackDeployer.networkName(spec)))
+            .as("no network was created for the refused stack").isNull();
+        assertThatThrownBy(() -> docker.inspectContainer(StackDeployer.containerName(spec, "app")))
+            .as("no container was created for the refused stack")
+            .isInstanceOf(IOException.class);
+    }
+
+    /**
+     * The decided fate of a stack deployed BEFORE enforcement existed on its host:
+     * running containers keep running, the next deploy refuses, stop and destroy stay
+     * available (teardown must never depend on nft being runnable), and destroy skips
+     * the chain removal it cannot perform.
+     */
+    @Test
+    void aPreEnforcementStackStopsAndDestroysButNeverRedeploys() throws IOException {
+        requireDocker();
+        String stackName = uniqueStackName();
+        StackSpec spec = spec(stackName, false,
+            sleeper("app", List.of(), List.of(), List.of(), null));
+        deployedSpecs.add(spec);
+
+        // 1. Deployed while the host enforced (stands in for "deployed before the
+        //    policy existed at all": either way the host later cannot enforce).
+        deployer(null).deploy(spec);
+
+        // 2. Enforcement is gone: a redeploy refuses, and the RUNNING container is
+        //    untouched -- we never kill a workload out-of-band.
+        StackDeployer unenforceable = new StackDeployer(docker,
+            new WorkloadNetworkPolicy(netns.nftRunner(), () -> false), null);
+        assertThatThrownBy(() -> unenforceable.deploy(spec))
+            .as("step 2: the redeploy refuses by name")
+            .isInstanceOf(IOException.class)
+            .hasMessageContaining("REFUSED to deploy")
+            .hasMessageContaining(StackDeployer.networkName(spec));
+        assertThat(unenforceable.status(spec).get("app"))
+            .as("step 2: the pre-enforcement container is still running after the refusal")
+            .isEqualTo("running");
+
+        // 3. Stop still works without enforcement.
+        unenforceable.stop(spec);
+        assertThat(unenforceable.status(spec).get("app"))
+            .as("step 3: stop needs no nft").isEqualTo("stopped");
+
+        // 4. Destroy still works without enforcement: the stack is not undeletable.
+        unenforceable.destroy(spec, true);
+        assertThatThrownBy(() -> docker.inspectContainer(StackDeployer.containerName(spec, "app")))
+            .as("step 4: the container is gone").isInstanceOf(IOException.class);
+        assertThat(docker.findNetworkByName(StackDeployer.networkName(spec)))
+            .as("step 4: the network is gone").isNull();
+
+        // 5. The chains the ENFORCING deploy applied linger (there is no nft to run
+        //    when enforcement is off) -- the decided, explicit residue, not a bug.
+        String key = WorkloadNetworkPolicy.chainKey(StackDeployer.networkName(spec));
+        assertThat(netns.inHost("nft", "list", "ruleset").stdout())
+            .as("step 5: an unenforcing destroy cannot remove kernel chains and says so")
+            .contains(WorkloadNetworkPolicy.forwardChain(key));
+        netns.enforcingPolicy().remove(StackDeployer.networkName(spec));
     }
 
     /**
