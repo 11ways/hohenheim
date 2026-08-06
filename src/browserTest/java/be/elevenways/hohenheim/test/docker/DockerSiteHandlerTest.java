@@ -298,6 +298,16 @@ class DockerSiteHandlerTest {
             } catch (IOException ignored) {
                 // best effort
             }
+            // The REFUSED deploy in step 3 had already re-created the instance's private
+            // network (ensure() runs before the container-collision check), and the hard
+            // delete below skips daemon teardown -- without this removal one /16 leaks
+            // from Docker's default address pool per run, eventually starving every
+            // network-creating test on the machine.
+            try {
+                docker.removeNetwork(containerName + "-net");
+            } catch (IOException ignored) {
+                // best effort
+            }
             // The instance row remains (its container was squatted, not destroyed);
             // retire it without daemon verification. The hard delete needs the system
             // scope -- outside it the attribution guard refuses ANY write to an owned

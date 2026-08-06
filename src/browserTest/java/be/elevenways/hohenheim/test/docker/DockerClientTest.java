@@ -220,8 +220,12 @@ class DockerClientTest {
         String containerId = null;
         String networkId = null;
         try {
+            // The pinned subnet must live OUTSIDE Docker's default address pools
+            // (172.17-172.31 /16s plus a 192.168 range): a parallel live class getting a
+            // dynamic network in 172.29.0.0/16 made the old 172.29.111.0/24 pin fail with
+            // "Pool overlaps with other one on this address space".
             networkId = docker.createNetwork(networkName,
-                Map.of("be.elevenways.hohenheim.test", "true"), "172.29.111.0/24", "172.29.111.1", false);
+                Map.of("be.elevenways.hohenheim.test", "true"), "10.213.111.0/24", "10.213.111.1", false);
             assertThat(networkId).isNotBlank();
 
             Map<String, Object> inspected = docker.inspectNetwork(networkName);
