@@ -58,10 +58,14 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * The PREPARED-TEMPLATE origin end to end against a real Windows Server 2025 guest on a
  * live Incus host: an absent alias refused before the daemon sees a create, a Windows VM
  * provisioned from an operator-published image with Secure Boot ON and no cloud-init
- * lane, the guest-agent capability honoured as an exec refusal, the guest's real boot
- * proven from the HOST (DHCP then RDP), the hypervisor-side framebuffer rescue console,
- * isolation asserted in the host KERNEL with its counterfactual, and destroy with
- * verified reclaim.
+ * lane, the hypervisor-side framebuffer rescue console attached WHILE THE GUEST IS STILL
+ * BOOTING, the guest-agent capability honoured as an exec refusal, the guest's real boot
+ * proven from the HOST (DHCP then RDP), isolation asserted in the host KERNEL with its
+ * counterfactual, and destroy with verified reclaim.
+ *
+ * The console step deliberately precedes the boot wait. A rescue console asserted only
+ * after the guest has booted and taken an address demonstrates nothing about the case it
+ * exists for, so the ORDER is part of the claim.
  *
  * Two gotchas shape the whole class. There is NO incus guest agent for Windows, so
  * {@code incus exec} is impossible here forever: every probe comes from the daemon HOST
@@ -207,7 +211,34 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
                 .isEqualTo(String.valueOf(config.get("volatile.base_image")))
                 .isEqualTo(aliasTarget);
 
-            // 5. THE GUEST-AGENT CAPABILITY IS HONOURED LIVE: an exec-driven install
+            // 5. THE FRAMEBUFFER RESCUE CONSOLE, ATTACHED WHILE WINDOWS IS STILL BOOTING.
+            //    It is asserted HERE, before step 7 waits for a DHCP lease, and the order
+            //    is the claim: a console that only works once the guest has finished
+            //    booting and taken an address proves nothing about the case it exists for.
+            //    Hypervisor-side by construction, and the ONLY way in when a Windows guest
+            //    has no drivers, no network or a failed boot -- exactly what RDP cannot
+            //    observe.
+            RecordGrants.grant("user", userId, InstanceModel.MODEL_ID, id,
+                HohenheimAccess.MANAGE, true);
+            RecordingClient client = new RecordingClient();
+            ws = HttpClient.newHttpClient().newWebSocketBuilder()
+                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionFor(userId))
+                .buildAsync(URI.create("ws://localhost:" + getServerPort()
+                    + "/ws/instance-framebuffer/" + id), client)
+                .join();
+            assertThat(ipv4Of(incus, handle))
+                .as("step 5: the guest has NOT taken an address yet, so this frame cannot"
+                    + " be coming from a booted guest")
+                .isNull();
+            assertThat(client.binaryArrived.await(60, TimeUnit.SECONDS))
+                .as("step 5: a VGA framebuffer frame reaches the granted tenant")
+                .isTrue();
+            byte[] frame = client.lastBinary.get();
+            assertThat(frame).as("step 5: the frame carries bytes").isNotNull().isNotEmpty();
+            assertThat(new String(frame, 1, 3, StandardCharsets.US_ASCII))
+                .as("step 5: and it is a PNG image").isEqualTo("PNG");
+
+            // 6. THE GUEST-AGENT CAPABILITY IS HONOURED LIVE: an exec-driven install
             //    REFUSES BY NAME rather than burning the 600s agent-ready window and
             //    reporting a timeout as if the guest were broken. Driven through the
             //    runtime the KIND ITSELF builds, with the spec the kind produces from
@@ -217,19 +248,19 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             InstanceSpec agentless = kind.specFor(agentlessId, windowsSettings(PREPARED_ALIAS));
             InstallSupport installSupport = (InstallSupport) kind.runtimeFor(HOST);
             assertThat(agentless.guestAgent())
-                .as("step 5: the kind read guest_agent=false off the settings").isFalse();
+                .as("step 6: the kind read guest_agent=false off the settings").isFalse();
             assertThat(catchThrowable(() -> installSupport.runInstall(agentless,
                     agentless.image(), "echo hi", Map.of(), 5_000)))
-                .as("step 5: an agent-less image refuses the exec-driven install by name")
+                .as("step 6: an agent-less image refuses the exec-driven install by name")
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining(agentlessHandle)
                 .hasMessageContaining("guest_agent=false");
             assertThat(remote.instanceInfoOrError(agentlessHandle))
-                .as("step 5: and refused BEFORE create -- no second workload was born to"
+                .as("step 6: and refused BEFORE create -- no second workload was born to"
                     + " be torn down again")
                 .contains("ERROR");
 
-            // 6. THE GUEST REALLY BOOTED, proven ENTIRELY from the host because this
+            // 7. THE GUEST REALLY BOOTED, proven ENTIRELY from the host because this
             //    tier has no exec. A DHCP lease means Windows came up and bound the
             //    injected virtio NIC; RDP accepting a connection is the prepared
             //    template's own DECLARED readiness (RDP pre-enabled).
@@ -241,31 +272,11 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             awaitTrue("the Windows guest accepts RDP on 3389", 600_000,
                 () -> tcpOpen(guestIp[0], 3389));
             assertThat(tcpOpen(guestIp[0], 3389))
-                .as("step 6: the prepared template's RDP is reachable at %s", guestIp[0])
+                .as("step 7: the prepared template's RDP is reachable at %s", guestIp[0])
                 .isTrue();
             // AIDEV-NOTE: RDP is GUEST-side readiness and is NOT a substitute for the
-            // hypervisor-side rescue console -- step 7 covers the case where the guest
+            // hypervisor-side rescue console -- step 5 covers the case where the guest
             // has no drivers/network/boot at all, which RDP cannot observe.
-
-            // 7. THE FRAMEBUFFER RESCUE CONSOLE ATTACHES TO THE WINDOWS GUEST. This is
-            //    hypervisor-side by construction and is the ONLY way in when a Windows
-            //    guest has no drivers, no network or a failed boot -- the exact failure
-            //    modes RDP (step 6) cannot cover.
-            RecordGrants.grant("user", userId, InstanceModel.MODEL_ID, id,
-                HohenheimAccess.MANAGE, true);
-            RecordingClient client = new RecordingClient();
-            ws = HttpClient.newHttpClient().newWebSocketBuilder()
-                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionFor(userId))
-                .buildAsync(URI.create("ws://localhost:" + getServerPort()
-                    + "/ws/instance-framebuffer/" + id), client)
-                .join();
-            assertThat(client.binaryArrived.await(30, TimeUnit.SECONDS))
-                .as("step 7: a VGA framebuffer frame reaches the granted tenant")
-                .isTrue();
-            byte[] frame = client.lastBinary.get();
-            assertThat(frame).as("step 7: the frame carries bytes").isNotNull().isNotEmpty();
-            assertThat(new String(frame, 1, 3, StandardCharsets.US_ASCII))
-                .as("step 7: and it is a PNG image").isEqualTo("PNG");
 
             // 8. ISOLATION IN THE KERNEL on the host it landed on, with its counterfactual
             //    run in place.
