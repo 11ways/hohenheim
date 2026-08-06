@@ -3444,6 +3444,60 @@ workload named a FOREIGN instance, which is what gave it away.
 - The live test now asserts the property directly: every workload named in a
   sweep's recorded refusals must be OURS.
 
+STATUS (2026-08-06, framebuffer-console wave): the rescue console SHIPPED and both
+of its gate clauses are closed by tests that RAN (CI and live on daystrom).
+
+- ARCHITECTURE FINDING that shaped the whole slice, measured live: qemu's SPICE
+  server GLZ-compresses every display image REGARDLESS of the client's declared
+  compression preference (SPICE_MSGC_DISPLAY_PREFERRED_COMPRESSION=OFF was sent
+  and 32x16 tiles still arrived ~1.4KB vs 2KB raw), so a live per-region SPICE
+  display stream requires implementing SPICE's LZ/GLZ/QUIC image codecs in the
+  chain. That is a named follow-up, not this wave. The shipped console is the
+  SNAPSHOT lane: the proxy polls the daemon's own VGA screenshot
+  (`GET /1.0/instances/{name}/console?type=vga`, PNG, change-detected by digest,
+  250ms active / 1s idle) and pushes frames as BINARY websocket frames, while
+  INPUT rides a real live SPICE connection (`SpiceConsole`: REDQ link + RSA-OAEP
+  empty ticket + mini-header, MAIN for the session id, INPUTS for AT-set-1
+  scancodes) over the existing Rfc6455 lane -- never a second websocket client.
+  Keyboard is proven (guest screen changed); mouse is best-effort (frames are
+  carried, but qemu boots in server mouse mode and no mode negotiation is done).
+  Hypervisor-side by construction: the live test attaches BEFORE the agent is up.
+- MECHANISM HOMES: protoblast `WebSocketConnection` gained binary frames (send
+  byte[], Listener.onBinary -- it was text-only by construction); plumage gained
+  `pl-framebuffer`, the protocol-neutral viewer primitive (canvas surface,
+  drawRgba/setFrame/fillRect/copyRect, focus + KeyboardEvent.code/pointer capture
+  into a FramebufferInputSink, and a wsUrl transport mode riding
+  WebSocketConnection: binary frame = encoded snapshot, text frame = status, input
+  out as plain-JSON maps -- pl-terminal's shape, but on the framework socket);
+  hohenheim owns the SPICE/Incus specifics (SpiceConsole, SpiceScancodes,
+  IncusClient.startVgaConsole force=true + vgaScreenshot, VmFramebufferHandler on
+  `/ws/instance-framebuffer/{INSTANCE_ID}`, InstanceFramebufferPage visible/404
+  by kind). No migration: no new columns, capability is the existing MANAGE.
+- AUTHORIZATION is the framework seam end to end: requiresLogin at the handshake,
+  per-record MANAGE in onOpen (1008), `revalidate()` re-checking MANAGE under
+  core's default-on revalidator at TERMINAL_REVALIDATION_INTERVAL_MS. The
+  handler takes a FramebufferSource factory seam so the authorization contract is
+  provable without a daemon.
+- GATE "use the framebuffer rescue console" + "revoke tenant access mid-console":
+  VmFramebufferConsoleLiveTest (daystrom, production endpoint, real socket, real
+  VM): PNG framebuffer frame arrives pre-agent, scancodes ride the live SPICE
+  input channel, then the MANAGE grant is revoked and the OPEN socket closes
+  1008 within two revalidation intervals. VmFramebufferRevocationTest proves the
+  same over a real socket in CI (fake source, 100ms interval), and its
+  counterfactual was run: with revalidate() bypassed the socket is NEVER closed
+  (verbatim: "[a revoked viewer's OPEN console is disconnected, not merely
+  refused later] Expecting value to be true but was false") -- the test observes
+  socket CLOSURE, not a later refusal. The long-carried "0.7 gate test does not
+  exist" note is STALE: ProcessTerminalHandlerTest already walks open-socket ->
+  revoke -> 1008 for the 0.7 terminal (passiveViewerIsClosed1008WithinOne
+  RevalidationInterval and the active variant), re-run green this wave.
+- The plan's interim "raw console websocket for external clients" hatch is
+  MOOT-BY-SHIPPING: the framebuffer console landed in the same wave, and the
+  serial lane (`/ws/instance-console/{id}`, bidirectional /dev/console on the
+  Incus driver) already serves VMs as the text fallback. No separate raw VGA
+  endpoint was added; an external SPICE client lane can ride the same handler
+  shape later if a concrete consumer appears.
+
 Phase gate: provision Linux from cloud-init and Windows from a prepared template;
 attach/resize a disk and NIC under quota; enforce the network policy; snapshot;
 export an off-host backup; restore to a new host; use the framebuffer rescue

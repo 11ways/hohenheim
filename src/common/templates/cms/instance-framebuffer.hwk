@@ -1,0 +1,42 @@
+{#- Framebuffer rescue console for a VM instance: server-captured VGA snapshots
+    stream down as binary frames, keyboard input rides back up. VM kinds only
+    (the tab hides on containers). -#}
+{% declare title: String %}
+{% declare instanceName: String %}
+{% declare instanceId: Integer %}
+{% declare running: Boolean = false %}
+{% declare returnUrl: String = "" %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+    <section class="cms-resource-list-page">
+        <header class="cms-resource-list-header">
+            <h1>{{ instanceName }}</h1>
+        </header>
+
+        {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+        {% if running %}
+            <pl-card>
+                <pl-card-header>
+                    <pl-card-title>{{ t("title", scope: "instance_framebuffer") }}</pl-card-title>
+                    <pl-card-description>{{ t("description", scope: "instance_framebuffer") }}</pl-card-description>
+                </pl-card-header>
+                <pl-card-content>
+                    <pl-framebuffer
+                        interactive={% true %}
+                        wsUrl={% "/ws/instance-framebuffer/" + instanceId %}>
+                    </pl-framebuffer>
+                    <p class="instance-console-hint">{{ t("hint", scope: "instance_framebuffer") }}</p>
+                </pl-card-content>
+            </pl-card>
+        {% else %}
+            <pl-empty-state icon="display">
+                <pl-empty-state-title>{{ t("not_running", scope: "instance_framebuffer") }}</pl-empty-state-title>
+                <pl-empty-state-description>{{ t("not_running_description", scope: "instance_framebuffer") }}</pl-empty-state-description>
+            </pl-empty-state>
+        {% /if %}
+    </section>
+{% /block %}

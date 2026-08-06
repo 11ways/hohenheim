@@ -30,6 +30,7 @@ import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceStatsHandler;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
+import be.elevenways.hohenheim.server.instance.VmFramebufferHandler;
 import be.elevenways.hohenheim.server.cms.CertificateRequestForm;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -929,6 +930,10 @@ public final class HohenheimHandlers {
     private static void initInstanceConsole() {
         HohenheimEndpoints.INSTANCE_CONSOLE.setHandlerFactory(session ->
             new InstanceConsoleHandler(session,
+                session.getParameter(HohenheimEndpoints.INSTANCE_ID)));
+
+        HohenheimEndpoints.VM_FRAMEBUFFER.setHandlerFactory(session ->
+            new VmFramebufferHandler(session,
                 session.getParameter(HohenheimEndpoints.INSTANCE_ID)));
 
         HohenheimEndpoints.INSTANCE_CONSOLE_COMMAND.setHandler(conduit -> {

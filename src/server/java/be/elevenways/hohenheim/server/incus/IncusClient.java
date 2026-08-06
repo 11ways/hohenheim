@@ -184,6 +184,40 @@ public class IncusClient {
         return castMap(operation);
     }
 
+    /**
+     * Start a VGA (SPICE) console operation WITHOUT waiting; the returned operation's
+     * {@code metadata.fds["0"]} secret is the ticket every SPICE channel websocket
+     * links with. {@code force} preempts an existing session (a stale operation would
+     * otherwise refuse a second attach).
+     */
+    public @NonNull Map<String, Object> startVgaConsole(@NonNull String name, boolean force)
+            throws IOException {
+        Http11.Raw raw = this.transport.exchange("POST", "/1.0/instances/" + name + "/console",
+            Json.stringify(Map.of("width", 0, "height", 0, "type", "vga", "force", force)),
+            DEFAULT_TIMEOUT_MS);
+        Map<String, Object> envelope = envelopeOf(raw);
+        Object metadata = envelope.get("metadata");
+        if (!(metadata instanceof Map<?, ?> operation)) {
+            throw new IOException("vga console operation of '" + name + "' carried no metadata");
+        }
+        return castMap(operation);
+    }
+
+    /**
+     * One PNG snapshot of the instance's live VGA framebuffer (the hypervisor-side
+     * screenshot Incus renders from the SPICE surface; works before the guest agent is
+     * up, which is the rescue console's whole point). Returns the raw image bytes.
+     */
+    public byte @NonNull [] vgaScreenshot(@NonNull String name) throws IOException {
+        Http11.Raw raw = this.transport.exchange("GET",
+            "/1.0/instances/" + name + "/console?type=vga", null, DEFAULT_TIMEOUT_MS);
+        if (raw.status() >= 200 && raw.status() < 300) {
+            return raw.body();
+        }
+        envelopeOf(raw);   // throws the typed refusal (e.g. "Instance is not running")
+        throw new IOException("unreachable");
+    }
+
     /** The instance's console log ring buffer (plain text, NOT an envelope). */
     public @NonNull String consoleLog(@NonNull String name) throws IOException {
         Http11.Raw raw = this.transport.exchange("GET", "/1.0/instances/" + name + "/console",
