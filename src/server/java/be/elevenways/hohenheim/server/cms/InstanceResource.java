@@ -156,7 +156,7 @@ public class InstanceResource extends RowResource {
             new InstanceConsolePage(), new InstanceFramebufferPage(),
             new InstanceProvisioningPage(),
             new InstanceFilesPage(), new InstanceStatsPage(),
-            new InstanceSchedulesPage()));
+            new InstanceSchedulesPage(), new InstanceDevicesPage()));
         pages.addAll(this.frameworkSubpages());
         return pages;
     }

@@ -1,0 +1,55 @@
+{#- Devices tab on an instance: its attached disks and extra NICs, linking into the
+    (nav-hidden) device resource forms. -#}
+{% declare title: String %}
+{% declare instanceId: Integer %}
+{% declare instanceName: String %}
+{% declare devices: List %}
+{% declare basePath: String = "/admin" %}
+{% declare canEdit: Boolean = true %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ instanceName }}</h1>
+        {% if canEdit %}
+        <pl-button variant="primary" href={% basePath + "/instance-devices/new?type=disk&instance_id=" + instanceId %} id="add-disk-link">{{ t("add_disk", scope: "instance_device") }}</pl-button>
+        <pl-button href={% basePath + "/instance-devices/new?type=nic&instance_id=" + instanceId %} id="add-nic-link">{{ t("add_nic", scope: "instance_device") }}</pl-button>
+        {% /if %}
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if devices %}
+    <pl-table>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("name", scope: "field") }}</pl-table-head>
+            <pl-table-head>{{ t("type", scope: "instance_device") }}</pl-table-head>
+            <pl-table-head>{{ t("device_size_gb", scope: "field") }}</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each devices as index, device %}
+            <pl-table-row>
+                <pl-table-cell>{% if canEdit %}<a href={% device.get("editUrl") %}>{{ device.get("name") }}</a>{% else %}{{ device.get("name") }}{% /if %}</pl-table-cell>
+                <pl-table-cell>
+                    {% if device.get("disk") == true %}
+                    <pl-badge variant={% "default" %}>{{ t("disk", scope: "instance_device") }}</pl-badge>
+                    {% else %}
+                    <pl-badge variant={% "secondary" %}>{{ t("nic", scope: "instance_device") }}</pl-badge>
+                    {% /if %}
+                </pl-table-cell>
+                <pl-table-cell>{% if device.get("disk") == true %}{{ device.get("sizeGb") }}{% else %}-{% /if %}</pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="hard-drive">
+        <pl-empty-state-title>{{ t("empty", scope: "instance_device") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("empty_description", scope: "instance_device") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+</section>
+{% /block %}

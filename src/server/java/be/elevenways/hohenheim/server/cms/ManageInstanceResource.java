@@ -115,7 +115,7 @@ public final class ManageInstanceResource extends InstanceResource {
             new InstanceConsolePage(), new InstanceFramebufferPage(),
             new InstanceProvisioningPage(),
             new InstanceFilesPage(), new InstanceStatsPage(),
-            new InstanceSchedulesPage()));
+            new InstanceSchedulesPage(), new InstanceDevicesPage()));
         pages.addAll(RecordSubpageRegistry.INSTANCE.contributionsFor(this.model().getModelId()));
         return pages;
     }

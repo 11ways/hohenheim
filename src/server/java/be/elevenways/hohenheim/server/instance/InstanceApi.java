@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -282,6 +283,125 @@ public final class InstanceApi {
                 ApiConduits.ORIGIN);
             return ApiConduits.json(Map.of("id", instanceId, "status", "deleted", "key", key));
         });
+
+        initDeviceLane();
+    }
+
+    /**
+     * Attach, resize and detach over the SAME {@link InstanceDevices} funnel the Devices
+     * tab posts to -- so the quota refusals, the daemon's verbatim "In use", and the
+     * row-reverted-on-daemon-refusal contract are identical on both surfaces, and this
+     * file still makes no authorization decision of its own.
+     */
+    private static void initDeviceLane() {
+        HohenheimEndpoints.API_INSTANCE_DEVICES.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) {
+                return null;
+            }
+            Row row = visibleInstance(conduit, ctx);
+            if (row == null) {
+                return null;
+            }
+            int instanceId = row.get(InstanceModel.ID);
+            return ApiConduits.json(Map.of("id", instanceId,
+                "devices", deviceProjection(new InstanceDevices().rowsFor(instanceId))));
+        });
+
+        HohenheimEndpoints.API_INSTANCE_DEVICE_ATTACH.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) {
+                return null;
+            }
+            Row row = visibleInstance(conduit, ctx);
+            if (row == null) {
+                return null;
+            }
+            int instanceId = row.get(InstanceModel.ID);
+            Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
+            String name = InstanceTemplates.submittedString(form, "name");
+            String type = InstanceTemplates.submittedString(form, "type");
+            try {
+                if (InstanceDeviceModel.TYPE_DISK.equals(type)) {
+                    Integer sizeGb = InstanceTemplates.submittedInteger(form, "size_gb");
+                    // Null (absent or unparseable) reaches the model's own size invariant
+                    // as 0, so "no size" and "size 0" answer with the same named refusal.
+                    new InstanceDevices().attachDisk(instanceId, name,
+                        sizeGb != null ? sizeGb : 0);
+                } else if (InstanceDeviceModel.TYPE_NIC.equals(type)) {
+                    new InstanceDevices().attachNic(instanceId, name);
+                } else {
+                    return ApiConduits.refusal(conduit, Violations.ofField("type", type,
+                        ApiConduits.violationText("device_type_unknown")));
+                }
+            } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            }
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_attached",
+                ApiConduits.ORIGIN);
+            return ApiConduits.json(Map.of("id", instanceId, "status", "attached",
+                "device", name, "type", type));
+        });
+
+        HohenheimEndpoints.API_INSTANCE_DEVICE_RESIZE.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) {
+                return null;
+            }
+            Row row = visibleInstance(conduit, ctx);
+            if (row == null) {
+                return null;
+            }
+            int instanceId = row.get(InstanceModel.ID);
+            Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
+            String name = InstanceTemplates.submittedString(form, "name");
+            Integer sizeGb = InstanceTemplates.submittedInteger(form, "size_gb");
+            try {
+                new InstanceDevices().resizeDisk(instanceId, name,
+                    sizeGb != null ? sizeGb : 0);
+            } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            }
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_resized",
+                ApiConduits.ORIGIN);
+            return ApiConduits.json(Map.of("id", instanceId, "status", "resized",
+                "device", name, "size_gb", sizeGb != null ? sizeGb : 0));
+        });
+
+        HohenheimEndpoints.API_INSTANCE_DEVICE_DETACH.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) {
+                return null;
+            }
+            Row row = visibleInstance(conduit, ctx);
+            if (row == null) {
+                return null;
+            }
+            int instanceId = row.get(InstanceModel.ID);
+            String name = ApiConduits.formValue(conduit, "name");
+            try {
+                new InstanceDevices().detach(instanceId, name);
+            } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            }
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_detached",
+                ApiConduits.ORIGIN);
+            return ApiConduits.json(Map.of("id", instanceId, "status", "detached",
+                "device", name));
+        });
+    }
+
+    /** Whitelist projection, rule 3: the quota bucket and the timestamps stay out. */
+    private static @NonNull List<Map<String, Object>> deviceProjection(@NonNull List<Row> rows) {
+        List<Map<String, Object>> devices = new ArrayList<>();
+        for (Row row : rows) {
+            Map<String, Object> device = new LinkedHashMap<>();
+            device.put("name", row.get(InstanceDeviceModel.NAME));
+            device.put("type", row.get(InstanceDeviceModel.TYPE));
+            device.put("size_gb", row.get(InstanceDeviceModel.SIZE_GB));
+            devices.add(device);
+        }
+        return devices;
     }
 
     // -- visibility -----------------------------------------------------------

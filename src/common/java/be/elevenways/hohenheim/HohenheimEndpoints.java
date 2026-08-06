@@ -693,6 +693,52 @@ public class HohenheimEndpoints {
         .rateLimit(PAAS_WRITE_LIMIT)
         .build();
 
+    public static final Endpoint<Object> API_INSTANCE_DEVICES = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_devices"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("devices").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_DEVICE_ATTACH = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_device_attach"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("devices").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(PAAS_WRITE_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_DEVICE_RESIZE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_device_resize"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("devices").addDelimiter().addStatic("resize").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(PAAS_WRITE_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_DEVICE_DETACH = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_device_detach"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("devices").addDelimiter().addStatic("detach").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(PAAS_WRITE_LIMIT)
+        .build();
+
     public static final Endpoint<Object> API_ENVIRONMENT_VARIABLES = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "api_environment_variables"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)

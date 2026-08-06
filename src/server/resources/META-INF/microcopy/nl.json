@@ -1139,6 +1139,10 @@
     {
       "text": "Deze map is leeg",
       "scope": "instance_files"
+    },
+    {
+      "text": "Geen extra apparaten",
+      "scope": "instance_device"
     }
   ],
   "empty_description": [
@@ -1169,6 +1173,10 @@
     {
       "text": "Voeg geordende stappen toe: elke stap heeft een actie, wachttijd en faalbeleid.",
       "scope": "schedule_step"
+    },
+    {
+      "text": "Koppel een gegevensschijf of een extra netwerkinterface aan deze instantie.",
+      "scope": "instance_device"
     }
   ],
   "engine": [
@@ -2079,6 +2087,10 @@
     {
       "text": "Back-updoelen",
       "scope": "backup_target"
+    },
+    {
+      "text": "Apparaten",
+      "scope": "instance_device"
     }
   ],
   "dashboard": {
@@ -3859,6 +3871,10 @@
     {
       "text": "Type",
       "scope": "template_contents"
+    },
+    {
+      "text": "Type",
+      "scope": "instance_device"
     }
   ],
   "day": {
@@ -6959,5 +6975,41 @@
   "hint": {
     "text": "Klik op het scherm om toetsenbordinvoer op te vangen; invoer gaat naar de VM.",
     "scope": "instance_framebuffer"
+  },
+  "add_disk": {
+    "text": "Schijf aankoppelen",
+    "scope": "instance_device"
+  },
+  "add_nic": {
+    "text": "NIC aankoppelen",
+    "scope": "instance_device"
+  },
+  "detach": {
+    "text": "Afkoppelen",
+    "scope": "instance_device"
+  },
+  "detach_confirm": {
+    "text": "Dit apparaat afkoppelen verwijdert het onderliggende volume op de daemon. De gegevens erop zijn weg en kunnen hier niet hersteld worden.",
+    "scope": "instance_device"
+  },
+  "device_type_unknown": {
+    "text": "'{$type}' is geen apparaattype (disk of nic)",
+    "scope": "violations"
+  },
+  "device_rename_unsupported": {
+    "text": "Een apparaat kan niet hernoemd worden; koppel het af en koppel een nieuw apparaat aan onder de nieuwe naam",
+    "scope": "violations"
+  },
+  "device_retype_unsupported": {
+    "text": "Een apparaat kan niet van type veranderen of naar een andere instantie verhuizen",
+    "scope": "violations"
+  },
+  "device_resize_not_a_disk": {
+    "text": "Alleen een schijf heeft een grootte om te wijzigen",
+    "scope": "violations"
+  },
+  "device_attach_incomplete": {
+    "text": "Het apparaat is niet aangekoppeld en er is geen rij bewaard",
+    "scope": "violations"
   }
 }

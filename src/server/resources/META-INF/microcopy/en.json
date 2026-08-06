@@ -1139,6 +1139,10 @@
     {
       "text": "This directory is empty",
       "scope": "instance_files"
+    },
+    {
+      "text": "No extra devices",
+      "scope": "instance_device"
     }
   ],
   "empty_description": [
@@ -1169,6 +1173,10 @@
     {
       "text": "Add ordered steps: each carries an action, an offset and a failure policy.",
       "scope": "schedule_step"
+    },
+    {
+      "text": "Attach a data disk or an extra network interface to this instance.",
+      "scope": "instance_device"
     }
   ],
   "engine": [
@@ -2083,6 +2091,10 @@
     {
       "text": "Backup targets",
       "scope": "backup_target"
+    },
+    {
+      "text": "Devices",
+      "scope": "instance_device"
     }
   ],
   "dashboard": {
@@ -3863,6 +3875,10 @@
     {
       "text": "Type",
       "scope": "template_contents"
+    },
+    {
+      "text": "Type",
+      "scope": "instance_device"
     }
   ],
   "day": {
@@ -6963,5 +6979,41 @@
   "hint": {
     "text": "Click the screen to capture keyboard input; input is sent to the VM.",
     "scope": "instance_framebuffer"
+  },
+  "add_disk": {
+    "text": "Attach disk",
+    "scope": "instance_device"
+  },
+  "add_nic": {
+    "text": "Attach NIC",
+    "scope": "instance_device"
+  },
+  "detach": {
+    "text": "Detach",
+    "scope": "instance_device"
+  },
+  "detach_confirm": {
+    "text": "Detaching this device deletes its backing volume at the daemon. The data on it is gone and cannot be restored from here.",
+    "scope": "instance_device"
+  },
+  "device_type_unknown": {
+    "text": "'{$type}' is not a device type (disk or nic)",
+    "scope": "violations"
+  },
+  "device_rename_unsupported": {
+    "text": "A device cannot be renamed; detach it and attach one under the new name",
+    "scope": "violations"
+  },
+  "device_retype_unsupported": {
+    "text": "A device cannot change type or move to another instance",
+    "scope": "violations"
+  },
+  "device_resize_not_a_disk": {
+    "text": "Only a disk has a size to change",
+    "scope": "violations"
+  },
+  "device_attach_incomplete": {
+    "text": "The device was not attached and no row was kept",
+    "scope": "violations"
   }
 }
