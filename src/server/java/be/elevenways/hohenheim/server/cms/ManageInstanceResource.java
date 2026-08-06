@@ -112,7 +112,8 @@ public final class ManageInstanceResource extends InstanceResource {
     @Override
     public @NonNull List<RecordScopedPage<Row>> subpages() {
         List<RecordScopedPage<Row>> pages = new ArrayList<>(List.of(
-            new InstanceConsolePage(), new InstanceProvisioningPage(),
+            new InstanceConsolePage(), new InstanceFramebufferPage(),
+            new InstanceProvisioningPage(),
             new InstanceFilesPage(), new InstanceStatsPage(),
             new InstanceSchedulesPage()));
         pages.addAll(RecordSubpageRegistry.INSTANCE.contributionsFor(this.model().getModelId()));

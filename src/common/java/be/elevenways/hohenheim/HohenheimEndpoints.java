@@ -855,6 +855,21 @@ public class HohenheimEndpoints {
         .handler(session -> null) // Placeholder: set in HohenheimHandlers.init(), at the MODULES stage
         .build();
 
+    /**
+     * VM framebuffer rescue console: server-captured VGA snapshots down (binary frames),
+     * keyboard/mouse input up (DRY frames). requiresLogin at the handshake plus the
+     * handler's per-record MANAGE check, revalidated mid-session (revoked = 1008).
+     */
+    public static final WebSocketEndpoint VM_FRAMEBUFFER = WebSocketEndpoint.builder()
+        .identifier(Identifier.of("hohenheim", "vm_framebuffer"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("ws").addDelimiter().addStatic("instance-framebuffer")
+            .addDelimiter().addParameter(INSTANCE_ID).build())
+        .requiresLogin()
+        .revalidateEvery(TERMINAL_REVALIDATION_INTERVAL_MS)
+        .handler(session -> null) // Placeholder: set in HohenheimHandlers.init(), at the MODULES stage
+        .build();
+
     /** One console command line to a running instance (the console tab's form). */
     public static final Endpoint<Object> INSTANCE_CONSOLE_COMMAND = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "instance_console_command"))

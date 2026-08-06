@@ -1619,6 +1619,10 @@
     {
       "text": "Console",
       "scope": "instance_console"
+    },
+    {
+      "text": "Framebufferconsole",
+      "scope": "instance_framebuffer"
     }
   ],
   "description": [
@@ -1637,6 +1641,10 @@
     {
       "text": "Live uitvoer van de workload van deze instantie. Commando's verstuur je met het formulier hieronder.",
       "scope": "instance_console"
+    },
+    {
+      "text": "Live VGA-uitvoer van deze VM, opgevangen aan de hypervisorzijde. Werkt voordat de gastagent actief is.",
+      "scope": "instance_framebuffer"
     }
   ],
   "create_site": {
@@ -5762,6 +5770,10 @@
     {
       "text": "Deze instance draait niet",
       "scope": "instance_stats"
+    },
+    {
+      "text": "VM draait niet",
+      "scope": "instance_framebuffer"
     }
   ],
   "not_running_description": [
@@ -5772,6 +5784,10 @@
     {
       "text": "Live statistieken verschijnen zodra de workload start",
       "scope": "instance_stats"
+    },
+    {
+      "text": "Start de VM om de framebufferconsole te openen.",
+      "scope": "instance_framebuffer"
     }
   ],
   "runs": {
@@ -6829,5 +6845,13 @@
   "ssh_lane_none": {
     "text": "Geen SSH-beheerkanaal. Deze host werkt prima zonder, maar de isolatie van zijn workloads is dan alleen uit de configuratie van de daemon te lezen en blijft ONBEVESTIGD in de kernel. Zet een SSH-doel, scan de hostsleutel en bevestig ze om kernelverificatie aan te zetten.",
     "scope": "server"
+  },
+  "framebuffer": {
+    "text": "Framebuffer",
+    "scope": "instance"
+  },
+  "hint": {
+    "text": "Klik op het scherm om toetsenbordinvoer op te vangen; invoer gaat naar de VM.",
+    "scope": "instance_framebuffer"
   }
 }

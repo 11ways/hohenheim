@@ -1623,6 +1623,10 @@
     {
       "text": "Console",
       "scope": "instance_console"
+    },
+    {
+      "text": "Framebuffer console",
+      "scope": "instance_framebuffer"
     }
   ],
   "description": [
@@ -1641,6 +1645,10 @@
     {
       "text": "Live output of this instance's workload. Commands are sent with the form below.",
       "scope": "instance_console"
+    },
+    {
+      "text": "Live VGA output of this VM, captured hypervisor-side. Works before the guest agent is up.",
+      "scope": "instance_framebuffer"
     }
   ],
   "create_site": {
@@ -5766,6 +5774,10 @@
     {
       "text": "This instance is not running",
       "scope": "instance_stats"
+    },
+    {
+      "text": "VM is not running",
+      "scope": "instance_framebuffer"
     }
   ],
   "not_running_description": [
@@ -5776,6 +5788,10 @@
     {
       "text": "Live statistics appear once the workload starts",
       "scope": "instance_stats"
+    },
+    {
+      "text": "Start the VM to open its framebuffer console.",
+      "scope": "instance_framebuffer"
     }
   ],
   "runs": {
@@ -6833,5 +6849,13 @@
   "ssh_lane_none": {
     "text": "No SSH admin lane. This host runs fine without one, but its workload isolation can only be read from the daemon's own configuration and stays UNCONFIRMED in the kernel. To enable kernel verification, set an SSH target, scan the host key and confirm it.",
     "scope": "server"
+  },
+  "framebuffer": {
+    "text": "Framebuffer",
+    "scope": "instance"
+  },
+  "hint": {
+    "text": "Click the screen to capture keyboard input; input is sent to the VM.",
+    "scope": "instance_framebuffer"
   }
 }
