@@ -24,14 +24,15 @@ final class InstanceOperationGuard {
     private InstanceOperationGuard() {}
 
     /**
-     * Refuse while a snapshot capture or restore protects this instance.
+     * Refuse while a snapshot capture, restore or migration protects this instance.
      *
      * @throws Violations {@code instance_busy}
      */
     static void requireOperable(@NonNull Row row) {
         String status = row.get(InstanceModel.STATUS);
         if (InstanceModel.STATUS_CAPTURING.equals(status)
-                || InstanceModel.STATUS_RESTORING.equals(status)) {
+                || InstanceModel.STATUS_RESTORING.equals(status)
+                || InstanceModel.STATUS_MIGRATING.equals(status)) {
             throw Violations.ofForm(Microcopy.of("instance_busy")
                 .withFilter("scope", "violations")
                 .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)))
@@ -72,6 +73,7 @@ final class InstanceOperationGuard {
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
+            .where(hostScope(serverId))
             .where(Criteria.or(
                 InstanceModel.CLAIM_FENCE.isNull(),
                 InstanceModel.CLAIM_FENCE.lte(fence)))
@@ -100,6 +102,7 @@ final class InstanceOperationGuard {
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
+            .where(hostScope(serverId))
             .where(Criteria.or(
                 InstanceModel.CLAIM_FENCE.isNull(),
                 InstanceModel.CLAIM_FENCE.lte(fence)))
@@ -129,6 +132,7 @@ final class InstanceOperationGuard {
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
+            .where(hostScope(serverId))
             .where(Criteria.or(
                 InstanceModel.CLAIM_FENCE.isNull(),
                 InstanceModel.CLAIM_FENCE.lte(fence)))
@@ -142,5 +146,114 @@ final class InstanceOperationGuard {
                 .withArg("name", String.valueOf(instanceName))
                 .withArg("server", ServerModel.nameOf(serverId)));
         }
+    }
+
+    /**
+     * Open a migration window: the same fenced guard as {@link #stamp}, additionally
+     * recording the destination host. From here until the handoff (or a settle), the
+     * record's own host remains the data authority.
+     *
+     * @throws Violations {@code instance_fenced_out}
+     */
+    static void stampMigrating(@NonNull HostLeases leases, int instanceId, int serverId,
+                               long fence, int targetServerId, @NonNull Object instanceName) {
+        int matched = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(instanceId))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .where(hostScope(serverId))
+            .where(Criteria.or(
+                InstanceModel.CLAIM_FENCE.isNull(),
+                InstanceModel.CLAIM_FENCE.lte(fence)))
+            .assign(InstanceModel.STATUS, InstanceModel.STATUS_MIGRATING)
+            .assign(InstanceModel.MIGRATE_TARGET_ID, targetServerId)
+            .assign(InstanceModel.CLAIM_FENCE, fence)
+            .updateAll();
+        if (matched == 0) {
+            leases.fencedOut(serverId);
+            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
+                .withFilter("scope", "violations")
+                .withArg("name", String.valueOf(instanceName))
+                .withArg("server", ServerModel.nameOf(serverId)));
+        }
+    }
+
+    /**
+     * Close a migration window WITHOUT moving the record: clears the destination
+     * pointer and stamps {@code status} under the source host's fence (the rollback
+     * half of a settle).
+     *
+     * @throws Violations {@code instance_fenced_out}
+     */
+    static void clearMigration(@NonNull HostLeases leases, int instanceId, int serverId,
+                               long fence, @NonNull String status,
+                               @NonNull Object instanceName) {
+        int matched = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(instanceId))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .where(hostScope(serverId))
+            .where(Criteria.or(
+                InstanceModel.CLAIM_FENCE.isNull(),
+                InstanceModel.CLAIM_FENCE.lte(fence)))
+            .assign(InstanceModel.STATUS, status)
+            .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
+            .assign(InstanceModel.CLAIM_FENCE, fence)
+            .updateAll();
+        if (matched == 0) {
+            leases.fencedOut(serverId);
+            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
+                .withFilter("scope", "violations")
+                .withArg("name", String.valueOf(instanceName))
+                .withArg("server", ServerModel.nameOf(serverId)));
+        }
+    }
+
+    /**
+     * THE ownership handoff of a cold migration: one guarded statement that repoints
+     * the record at the destination host, closes the migration window and re-bases
+     * the fence into the destination's lease domain. Guarded on the SOURCE domain
+     * (host + fence) so a stale source controller cannot hand off a record a rival
+     * already owns; from the moment it matches, every further write must come from
+     * the destination host's lease.
+     *
+     * @throws Violations {@code instance_fenced_out}
+     */
+    static void handoff(@NonNull HostLeases leases, int instanceId, int sourceServerId,
+                        long sourceFence, int targetServerId, long targetFence,
+                        @NonNull String status, @NonNull Object instanceName) {
+        int matched = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(instanceId))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .where(hostScope(sourceServerId))
+            .where(Criteria.or(
+                InstanceModel.CLAIM_FENCE.isNull(),
+                InstanceModel.CLAIM_FENCE.lte(sourceFence)))
+            .assign(InstanceModel.SERVER_ID, targetServerId)
+            .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
+            .assign(InstanceModel.STATUS, status)
+            .assign(InstanceModel.CLAIM_FENCE, targetFence)
+            .updateAll();
+        if (matched == 0) {
+            leases.fencedOut(sourceServerId);
+            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
+                .withFilter("scope", "violations")
+                .withArg("name", String.valueOf(instanceName))
+                .withArg("server", ServerModel.nameOf(sourceServerId)));
+        }
+    }
+
+    /**
+     * The record-must-still-be-on-this-host half of every guard. NULL {@code
+     * server_id} is a legal spelling of the local daemon, so the local host matches
+     * both spellings; any other host matches only its own id. This is what makes a
+     * post-handoff write from the OLD host's lease domain match zero rows even
+     * though fences from different domains are numerically incomparable.
+     */
+    private static @NonNull Criteria hostScope(int serverId) {
+        if (serverId == ServerModel.localServerId()) {
+            return Criteria.or(
+                InstanceModel.SERVER_ID.isNull(),
+                InstanceModel.SERVER_ID.eq(serverId));
+        }
+        return InstanceModel.SERVER_ID.eq(serverId);
     }
 }

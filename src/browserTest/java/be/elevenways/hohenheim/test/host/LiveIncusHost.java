@@ -62,23 +62,47 @@ public final class LiveIncusHost {
     private final String fingerprint;
     private final String trustTarget;
 
-    private LiveIncusHost(Properties properties) throws IOException {
-        this.url = require(properties, "url");
-        this.fingerprint = require(properties, "fingerprint");
-        this.trustTarget = require(properties, "trust_target");
+    private LiveIncusHost(String url, String fingerprint, String trustTarget) {
+        this.url = url;
+        this.fingerprint = fingerprint;
+        this.trustTarget = trustTarget;
     }
 
     /** The configured host, or null when no operator enrolled one on this machine. */
     public static LiveIncusHost configured() {
+        return fromConfig("url", "fingerprint", "trust_target", true);
+    }
+
+    /**
+     * The SECOND, deliberately twinned host of a cross-host wave ({@code url_b} /
+     * {@code fingerprint_b} / {@code trust_target_b} in the same file), or null when
+     * the operator enrolled only one -- single-host live tests keep running unchanged
+     * and cross-host ones skip.
+     */
+    public static LiveIncusHost configuredSecondary() {
+        return fromConfig("url_b", "fingerprint_b", "trust_target_b", false);
+    }
+
+    private static LiveIncusHost fromConfig(String urlKey, String fingerprintKey,
+                                            String targetKey, boolean required) {
         if (!Files.isReadable(CONFIG)) {
             return null;
         }
         Properties properties = new Properties();
         try (var in = Files.newInputStream(CONFIG)) {
             properties.load(in);
-            return new LiveIncusHost(properties);
         } catch (IOException e) {
             throw new UncheckedIOException("Unreadable " + CONFIG, e);
+        }
+        if (!required && (properties.getProperty(urlKey) == null
+                || properties.getProperty(urlKey).isBlank())) {
+            return null;
+        }
+        try {
+            return new LiveIncusHost(require(properties, urlKey),
+                require(properties, fingerprintKey), require(properties, targetKey));
+        } catch (IOException e) {
+            throw new UncheckedIOException("Incomplete " + CONFIG, e);
         }
     }
 

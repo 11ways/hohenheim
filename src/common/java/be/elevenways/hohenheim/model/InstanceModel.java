@@ -62,6 +62,14 @@ public class InstanceModel extends Model {
      */
     public static final String STATUS_RESTORING = "restoring";
 
+    /**
+     * {@link #STATUS}: a cold migration is moving this workload to the host named by
+     * {@link #MIGRATE_TARGET_ID}. Protected like capture/restore (deploy and stop
+     * refuse); {@code InstanceMigrations.recoverInterrupted} settles a row left here
+     * by a killed controller.
+     */
+    public static final String STATUS_MIGRATING = "migrating";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     // User data, NOT localized (the plan's explicit call: names are the user's own words).
@@ -109,6 +117,8 @@ public class InstanceModel extends Model {
             .label(Microcopy.of("capturing").withFilter("scope", "instance_status")).color("blue"))
         .value(STATUS_RESTORING, v -> v.displayName("Restoring").icon("clock-rotate-left")
             .label(Microcopy.of("restoring").withFilter("scope", "instance_status")).color("blue"))
+        .value(STATUS_MIGRATING, v -> v.displayName("Migrating").icon("arrow-right-arrow-left")
+            .label(Microcopy.of("migrating").withFilter("scope", "instance_status")).color("blue"))
         .defaultValue(STATUS_CREATED)
         .build());
 
@@ -281,6 +291,16 @@ public class InstanceModel extends Model {
      */
     public static final LongField CLAIM_FENCE = SCHEMA.addField(
         LongField.builder("claim_fence").filterable(false).build());
+
+    /**
+     * The destination host (servers.id) of an in-flight cold migration; null outside
+     * one. Together with {@link #SERVER_ID} this makes an interrupted migration
+     * settleable without a scan: the record's host is the data authority until the
+     * one-statement handoff repoints it, so recovery either rolls the copy on this
+     * host back or completes the handoff -- never both, never neither.
+     */
+    public static final IntegerField MIGRATE_TARGET_ID = SCHEMA.addField(
+        IntegerField.builder().name("migrate_target_id").filterable(false).build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

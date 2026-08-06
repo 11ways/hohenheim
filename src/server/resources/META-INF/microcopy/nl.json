@@ -4737,6 +4737,22 @@
     "text": "Vrijgeven",
     "scope": "server"
   },
+  "drain": {
+    "text": "Leegmaken",
+    "scope": "server"
+  },
+  "drain_confirm": {
+    "text": "Elke instantie op deze host wordt gestopt, naar een andere host verplaatst en daar gestart. Werklasten die niet kunnen verhuizen worden bij naam geweigerd en blijven onaangeroerd.",
+    "scope": "server"
+  },
+  "host_drained": {
+    "text": "Host {$name} leeggemaakt: {$moved} verplaatst, niets meer aanwezig",
+    "scope": "server"
+  },
+  "host_drain_partial": {
+    "text": "Leegmaken van {$name} ONVOLLEDIG: {$moved} verplaatst, {$refused} geweigerd ({$held})",
+    "scope": "server"
+  },
   "preflight_passed": {
     "text": "Preflight geslaagd op {$name}; de host kan toegelaten worden",
     "scope": "server"
@@ -5001,6 +5017,38 @@
     "text": "Instantie {$name} is bezig ({$status}); wacht tot de lopende snapshot of restore klaar is",
     "scope": "violations"
   },
+  "migrate_operator_only": {
+    "text": "Een instantie tussen hosts migreren is een beheerdersactie",
+    "scope": "violations"
+  },
+  "migrate_same_host": {
+    "text": "Instantie {$name} staat al op die host",
+    "scope": "violations"
+  },
+  "migrate_unsupported": {
+    "text": "Instantie {$name} draait op een driver zonder volledige export/import; ze kan niet gemigreerd worden",
+    "scope": "violations"
+  },
+  "migrate_devices_present": {
+    "text": "Instantie {$name} heeft {$count} gekoppelde apparaten; hun volumes reizen niet mee in een volledige export, dus migreren zou ze stilzwijgend verliezen. Koppel de apparaten eerst los.",
+    "scope": "violations"
+  },
+  "migrate_publication_present": {
+    "text": "Instantie {$name} publiceert een hostpoort; die claim kan niet mee verhuizen",
+    "scope": "violations"
+  },
+  "migrate_destination_occupied": {
+    "text": "Host {$server} draait al een vreemde werklast onder de handle van {$name}; de naambotsing wordt geweigerd",
+    "scope": "violations"
+  },
+  "instance_migrate_failed": {
+    "text": "Migratie van {$name} mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "drain_requires_cordon": {
+    "text": "Host {$name} moet eerst afgesloten (cordon) zijn voor hij leeggemaakt kan worden",
+    "scope": "violations"
+  },
   "instance_snapshot_failed": {
     "text": "Snapshot van {$name} mislukt: {$reason}",
     "scope": "violations"
@@ -5125,6 +5173,10 @@
   },
   "restoring": {
     "text": "Bezig met herstel",
+    "scope": "instance_status"
+  },
+  "migrating": {
+    "text": "Bezig met migratie",
     "scope": "instance_status"
   },
   "uploading": {

@@ -237,6 +237,11 @@ public final class InstanceService {
             // verified -- destroy soft-deletes the record, so nothing else would ever
             // release those reservations or reclaim those volumes.
             new InstanceDevices(this).destroyCleanup(resolved, instanceId);
+            // Destroy is the operator's abandon-ship during a migration too (the
+            // ungated-cleanup doctrine): an import already landed on the destination
+            // must not outlive its record as an orphan -- removed when the daemon
+            // still attributes it to this record, and ONLY then.
+            destroyAbandonedMigrationCopy(resolved);
         } catch (IOException e) {
             stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
@@ -265,6 +270,27 @@ public final class InstanceService {
         GameDomains.deleteForInstance(instanceId);
         Blast.log("INSTANCE: destroyed", resolved.spec().handle(),
             "- container removed, volumes kept, record soft-deleted");
+    }
+
+    /** Remove a mid-migration destination copy the daemon attributes to this record. */
+    private static void destroyAbandonedMigrationCopy(@NonNull Resolved resolved) {
+        Integer targetId = resolved.row().get(InstanceModel.MIGRATE_TARGET_ID);
+        if (targetId == null || targetId == resolved.serverId()) {
+            return;
+        }
+        try {
+            InstanceRuntime target = resolved.handler()
+                .runtimeFor(ServerModel.nameOf(targetId));
+            if (target instanceof NativeSnapshotSupport support
+                    && support.claimOf(resolved.spec())
+                        == NativeSnapshotSupport.WorkloadClaim.OURS) {
+                target.destroy(resolved.spec().handle());
+            }
+        } catch (IOException cleanupFailed) {
+            Blast.log("INSTANCE: destroy could not remove the mid-migration copy of",
+                resolved.spec().handle(), "on server", targetId, ":",
+                cleanupFailed.getMessage());
+        }
     }
 
     /** Typed live status straight off the daemon; never throws. */

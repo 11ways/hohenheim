@@ -3732,6 +3732,112 @@ running ON the host it manages, local unix sockets, `NftRunner.Sudo`, no ssh lan
   and disabled. See deploy-native.md's hazard section; nothing in the product
   namespaces handles per controller yet.
 
+STATUS (2026-08-06, cross-host wave): the two Phase 8 gate clauses a single host
+could never prove -- "restore to a new host" and "drain the source host through
+the chosen migration policy" -- are CLOSED, live on two deliberately twinned
+Incus hosts (daystrom 10.47.1.99 + nightstrom 10.47.1.101; identical package
+sets, bridge subnets differ BY DESIGN, the five cached images pre-seeded
+byte-identically on nightstrom before anything was measured).
+
+- POLICY DECISION: COLD migration (stop, whole-instance export, import on the
+  destination, start) is THE migration policy. Live migration is REJECTED for
+  now -- this is the inventory decision the phase body demands, not an
+  omission: incus stateful transfer requires migration.stateful set before
+  start, CRIU for containers and matched CPU flags for VMs, plus a
+  daemon-to-daemon trust relationship the product holds nowhere; the gate's
+  own "restore to a new host" wording implies the cold shape, and drain is an
+  operator maintenance operation where bounded downtime is acceptable.
+- TRANSPORT: the EXISTING NativeSnapshotSupport export/import pair,
+  controller-mediated (daemon A -> controller staging -> daemon B), NOT
+  incus's own cross-host copy. The copy lane would be a second transfer path
+  riding a daemon-to-daemon trust relationship with its own ceremony and
+  columns (the M074 lesson), while export/import already carries
+  re-attribution, the MAC strip and the isolation rejoin, and the controller
+  already holds pinned trust with each daemon separately. Cross-host incus
+  remote trust therefore stays UNCONFIGURED on both hosts, deliberately. The
+  migration export packs snapshots (instance_only=false via the new
+  withSnapshots parameter; the backup lane keeps its instance-only shape), so
+  snapshot records survive the move -- measured: an alpine VM export is ~95MB
+  in ~34s on these hosts.
+- OWNERSHIP DISCIPLINE (the split-ownership killer): instances.server_id stays
+  the SINGLE pointer. M075 adds migrate_target_id; the record's host remains
+  the data authority until the source copy is VERIFIED gone, then ONE guarded
+  statement (InstanceOperationGuard.handoff) repoints the record, closes the
+  window and RE-BASES claim_fence into the destination's lease domain. Every
+  guarded stamp now also matches on server_id (hostScope: NULL is a legal
+  local spelling), so a stale source-domain write after the handoff matches
+  zero rows even though fences from different lease domains are numerically
+  incomparable. STATUS_MIGRATING is a protected status (deploy/stop refuse;
+  destroy stays the ungated abandon-ship and now also removes an
+  already-imported destination copy the daemon attributes to the record).
+- KILLED CONTROLLER: InstanceMigrations.recoverInterrupted (boot, INSTANCES
+  role, beside SiteReleases.recoverInterrupted) settles every mid-migration
+  record from daemon ATTRIBUTION (the new NativeSnapshotSupport.claimOf:
+  ABSENT/OURS/FOREIGN -- the same pre-flight that refuses the known
+  handle-collision hazard at the destination BEFORE importing over it):
+  record's host still holds the workload -> ROLL BACK (delete an OURS
+  destination copy); record's host empty but destination holds OURS ->
+  COMPLETE the handoff (the copies are equal by construction -- the source
+  was stopped before export); neither -> ERROR, loudly; an unreachable daemon
+  DEFERS rather than manufacturing a verdict. Recovery never auto-starts: it
+  restores one truthful owner, an operator restores service.
+- DRAIN is a real product operation: the ServerResource drain row action on a
+  CORDONED host (drain_requires_cordon otherwise -- cordon stays the
+  reversible pause, drain the move; the ServerModel "no draining token" note
+  is superseded in place: drain is an operation, not a stored state) migrates
+  every live instance to a placement-chosen host
+  (InstancePlacement.chooseForBucket over the stored quota bucket, source
+  excluded). A workload that cannot move is REFUSED BY NAME and left exactly
+  as it was -- drain is operator convenience, never authority to stop or
+  destroy a tenant's workload -- and the report/toast ends loudly INCOMPLETE
+  naming the held workloads. Unmovable this wave, each a named refusal:
+  device rows (the whole-instance export does not carry custom volumes; the
+  destination reconcile would attach FRESH EMPTY disks -- the silent-success
+  shape), port publications, non-native drivers (the docker tier).
+- PROVEN LIVE (IncusColdMigrationLiveTest, one 13-step journey, VM kind,
+  daystrom -> nightstrom, PASSED twice back to back): a 512MiB alpine VM
+  running on daystrom with marker data written inside is backed up OFF-HOST
+  (filesystem target), mutated, then daystrom is cordoned and DRAINED -- the
+  report reads moved 1 / refused 0 / host holds none; the record names
+  nightstrom, the VM RUNS there with the post-backup data intact AND its
+  pool-resident snapshot carried along, and daystrom's daemon no longer knows
+  the handle. Isolation on the destination is asserted in the KERNEL:
+  nightstrom's `nft list table bridge incus` names the migrated NIC's live
+  tap (printed into the test output) and IncusKernelIsolation.enforce over
+  the enrolled ssh admin lane agrees; the NEGATIVE (a peer container on
+  nightstrom cannot reach the migrated VM's address) is anchored by the same
+  probe reaching 1.1.1.1. Restore-to-new-host: refused by name onto the
+  still-cordoned daystrom, then lands there after uncordon with the
+  BACKED-UP state (v1, not the migrated v2) -- restoreToNew's serverSpelling
+  parameter finally has a proof and a consumer. The killed controller is
+  simulated live (crash after the destination import, copies on BOTH real
+  daemons, record MIGRATING) and recoverInterrupted rolls back to exactly one
+  owner with the data intact. Both hosts end holding zero instances and zero
+  trust entries.
+- CI (InstanceMigrationTest, in-memory native runtime, 4 journeys, all RAN):
+  the move (data + snapshots + one-direction ownership), the refusal set
+  (same host, devices, non-native driver, FOREIGN destination untouched,
+  MIGRATING blocks deploy/stop), drain reporting (partial then complete), and
+  BOTH crash windows. Counterfactuals run and captured verbatim: source
+  removal disabled -> "[step 3: the source daemon holds NOTHING under the
+  handle (a move that leaves the source copy is the silent-success shape)]
+  Expecting value to be false but was true" (3 of 4 journeys fail); recovery's
+  forward handoff replaced by a window-close -> "[step 4: the handoff is
+  completed onto the destination] expected: 2 but was: 1".
+- SECOND HOST for live tests: LiveIncusHost.configuredSecondary() reads
+  url_b/fingerprint_b/trust_target_b from the same operator file; single-host
+  live classes are untouched and the cross-host class SKIPS (never fails)
+  without them.
+- NOT here, stated as open: a single-instance "migrate to host X" admin
+  surface (drain and the service lane are the wired consumers; an
+  explicit-destination row action is UI sugar over migrateTo); transporting
+  device volumes (refused, never silently emptied); a docker-tier drain
+  (VolumeSnapshotSupport has the pieces, no consumer demanded it); recovery
+  does not restart a previously-running workload (see above); the
+  two-CONTROLLERS handle-collision hazard is unchanged -- claimOf makes this
+  controller refuse a foreign workload instead of converging over it, which
+  narrows the blast radius but does not namespace the handles.
+
 Phase gate: provision Linux from cloud-init and Windows from a prepared template;
 attach/resize a disk and NIC under quota; enforce the network policy; snapshot;
 export an off-host backup; restore to a new host; use the framebuffer rescue

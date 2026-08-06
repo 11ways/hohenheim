@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
+import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -51,6 +52,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Multi-server Docker host inventory. The implicit {@code local} host always
@@ -446,6 +448,7 @@ public final class ServerResource extends RowResource {
         actions.add(this.preflightAction());
         actions.add(this.admitAction());
         actions.add(this.cordonAction());
+        actions.add(this.drainAction());
         actions.add(this.uncordonAction());
         return actions;
     }
@@ -640,6 +643,47 @@ public final class ServerResource extends RowResource {
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("host_cordoned").withFilter("scope", "server")
                         .withArg("name", row.get(ServerModel.NAME)));
+            })
+            .build();
+    }
+
+    /**
+     * Cold-migrate every live instance off a CORDONED host. A workload that cannot
+     * move is refused by name and left untouched; the toast says which -- the drain
+     * is only complete when the host holds none.
+     */
+    private @NonNull RowAction<Row> drainAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "drain_server"))
+            .label(Microcopy.of("drain").withFilter("scope", "server"))
+            .icon(Icon.of("truck-arrow-right"))
+            .style(ActionStyle.DESTRUCTIVE)
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("drain").withFilter("scope", "server"))
+                .body(Microcopy.of("drain_confirm").withFilter("scope", "server"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .build())
+            .visibleFor((row, ctx) ->
+                ServerModel.ADMISSION_CORDONED.equals(row.get(ServerModel.ADMISSION)))
+            .handler((row, ctx) -> {
+                Integer serverId = row.get(ServerModel.ID);
+                InstanceMigrations.DrainReport[] report = new InstanceMigrations.DrainReport[1];
+                ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "drain",
+                    () -> report[0] = new InstanceMigrations().drain(serverId));
+                if (report[0].complete()) {
+                    return CmsActionResult.refreshWithToast(
+                        Microcopy.of("host_drained").withFilter("scope", "server")
+                            .withArg("name", row.get(ServerModel.NAME))
+                            .withArg("moved", report[0].moved().size()));
+                }
+                String held = report[0].refused().stream()
+                    .map(InstanceMigrations.DrainEntry::name)
+                    .collect(Collectors.joining(", "));
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("host_drain_partial").withFilter("scope", "server")
+                        .withArg("name", row.get(ServerModel.NAME))
+                        .withArg("moved", report[0].moved().size())
+                        .withArg("refused", report[0].refused().size())
+                        .withArg("held", held));
             })
             .build();
     }
