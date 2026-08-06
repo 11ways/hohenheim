@@ -3916,9 +3916,26 @@ Windows Server 2025 guest. Only the Proxmox-use inventory remains.
   stops at `Sysprep_Clean_Validate_Opk` and the process is simply gone); run it
   from a scheduled task as SYSTEM instead.
 - PROVEN LIVE: `IncusWindowsTemplateLiveTest` on daystrom against the real
-  `win2025-core` image, through the product funnel end to end. It SKIPS (never
-  fails) when the prepared alias is not published on the host, because the image
-  is an operator fixture this repo cannot mint for itself.
+  `win2025-core` image, through the product funnel end to end -- RAN and passed
+  in 291s. It SKIPS (never fails) when the prepared alias is not published on the
+  host, because the image is an operator fixture this repo cannot mint for
+  itself. Nine steps: the absent-alias refusal against the real image store with
+  the daemon holding nothing afterwards; deploy; the three declared capabilities
+  read back off the daemon (`security.secureboot=true`, NO `cloud-init.user-data`
+  key, owner labels); the fingerprint pin equal to the alias's own target; the
+  framebuffer console attached and a PNG frame received WHILE Windows was still
+  booting; the agent-less exec refusal on a record that was never created;
+  DHCP lease then RDP accepted, both probed from the daemon host; kernel truth
+  plus the drop-the-chains counterfactual plus the repair; destroy with the
+  daemon asked whether the handle is really gone.
+- FIXTURE LEFT IN PLACE, deliberately, and it is the one thing this wave left on
+  a host: `win2025-core` (3.58 GiB) stays published on daystrom so the live test
+  keeps running. daystrom otherwise ends exactly as it started -- 0 instances, 0
+  custom volumes, 0 trust entries, one operator ssh key -- and every build
+  artifact (13 GiB of ISOs) is deleted. `incus image delete win2025-core` returns
+  the host to its 5 cached images and downgrades the test to a SKIP; rebuilding
+  it is docs/prepare-windows-template.md, about an hour unattended. nightstrom
+  was not touched at all.
 - OPEN, stated as open, NOT closed by this wave:
   1. There is NO guest-side egress probe for this tier and there cannot be one:
      isolation here is EGRESS-only and one-sided (the ingress default is allow),
