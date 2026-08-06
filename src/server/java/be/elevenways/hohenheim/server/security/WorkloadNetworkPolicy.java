@@ -45,6 +45,7 @@ public final class WorkloadNetworkPolicy {
     public static final String TABLE = "hohenheim_net";
 
     private final @NonNull NftRunner runner;
+    private final @NonNull NftChains chains;
     private final @NonNull BooleanSupplier enabled;
 
     /**
@@ -65,6 +66,7 @@ public final class WorkloadNetworkPolicy {
 
     public WorkloadNetworkPolicy(@NonNull NftRunner runner, @NonNull BooleanSupplier enabled) {
         this.runner = runner;
+        this.chains = new NftChains(runner, TABLE);
         this.enabled = enabled;
     }
 
@@ -175,8 +177,9 @@ public final class WorkloadNetworkPolicy {
                 + " network policy (exit " + applied.exitCode() + "): " + applied.failureText());
         }
 
-        verifyChain(network.name(), forwardChain(key), "forward", forward);
-        verifyChain(network.name(), inputChain(key), "input", input);
+        String refusal = "REFUSED to deploy '" + network.name() + "'";
+        this.chains.verify(refusal, forwardChain(key), "forward", forward);
+        this.chains.verify(refusal, inputChain(key), "input", input);
     }
 
     /**
@@ -196,8 +199,8 @@ public final class WorkloadNetworkPolicy {
             throws IOException {
         requireEnabled(network.name());
         String key = chainKey(network.name());
-        return chainSatisfies(forwardChain(key), "forward", forwardRules(network, egress))
-            && chainSatisfies(inputChain(key), "input", inputRules(network));
+        return this.chains.satisfies(forwardChain(key), "forward", forwardRules(network, egress))
+            && this.chains.satisfies(inputChain(key), "input", inputRules(network));
     }
 
     /**
@@ -210,21 +213,7 @@ public final class WorkloadNetworkPolicy {
         requireEnabled(networkName);
         String key = chainKey(networkName);
         for (String chain : List.of(forwardChain(key), inputChain(key))) {
-            if (!chainExists(chain)) {
-                continue;
-            }
-            NftRunner.Result removed = this.runner.run(List.of("-f", "-"),
-                "flush chain inet " + TABLE + ' ' + chain + '\n'
-                    + "delete chain inet " + TABLE + ' ' + chain + '\n');
-            if (!removed.ok()) {
-                throw new IOException("Could not remove the network policy chain '" + chain
-                    + "' (exit " + removed.exitCode() + "): " + removed.failureText());
-            }
-            if (chainExists(chain)) {
-                throw new IOException("The network policy chain '" + chain + "' still exists"
-                    + " after nft reported a successful delete; the kernel state of this host"
-                    + " is not what nft says it is.");
-            }
+            this.chains.remove(chain);
         }
     }
 
@@ -304,81 +293,4 @@ public final class WorkloadNetworkPolicy {
         return List.copyOf(rules);
     }
 
-    private boolean chainExists(String chain) throws IOException {
-        return readChain(chain) != null;
-    }
-
-    /**
-     * The kernel's own rendering of one chain as normalized lines, or null when the
-     * chain (or the whole table) does not exist.
-     *
-     * @throws IOException when nft fails for any reason other than absence
-     */
-    private @Nullable List<String> readChain(String chain) throws IOException {
-        NftRunner.Result listed = this.runner.run(
-            List.of("list", "chain", "inet", TABLE, chain), null);
-        if (!listed.ok()) {
-            if (listed.failureText().contains("No such file or directory")) {
-                return null;   // observed absent (the whole point of a kernel-truth check)
-            }
-            throw new IOException("Could not read back the network policy chain '" + chain
-                + "' (exit " + listed.exitCode() + "): " + listed.failureText());
-        }
-        List<String> present = new ArrayList<>();
-        for (String line : listed.stdout().split("\n")) {
-            present.add(line.trim().replaceAll("\\s+", " "));
-        }
-        return present;
-    }
-
-    /** Whether the chain exists, hooks the given hook, and carries every expected rule. */
-    private boolean chainSatisfies(String chain, String hook, List<String> expected)
-            throws IOException {
-        List<String> present = readChain(chain);
-        if (present == null) {
-            return false;
-        }
-        boolean hooked = present.stream().anyMatch(line -> line.startsWith("type filter hook "
-            + hook + " ") && line.contains("policy accept"));
-        if (!hooked) {
-            return false;
-        }
-        return present.containsAll(expected);
-    }
-
-    /**
-     * Re-list one chain and require every rule we applied to be present in the kernel's own
-     * rendering of it.
-     */
-    private void verifyChain(String networkName, String chain, String hook, List<String> expected)
-            throws IOException {
-        List<String> present;
-        try {
-            present = readChain(chain);
-        } catch (IOException unreadable) {
-            throw new IOException("REFUSED to deploy '" + networkName + "': nft accepted the"
-                + " policy but the " + hook + " chain '" + chain + "' cannot be read back: "
-                + unreadable.getMessage());
-        }
-        if (present == null) {
-            throw new IOException("REFUSED to deploy '" + networkName + "': nft accepted the"
-                + " policy but the " + hook + " chain '" + chain + "' does not exist in the"
-                + " kernel. Something on this host is flushing our table.");
-        }
-        boolean hooked = present.stream().anyMatch(line -> line.startsWith("type filter hook "
-            + hook + " ") && line.contains("policy accept"));
-        if (!hooked) {
-            throw new IOException("REFUSED to deploy '" + networkName + "': chain '" + chain
-                + "' exists but is not hooked into " + hook + "; it would filter nothing."
-                + " Kernel state: " + String.join(" | ", present));
-        }
-        for (String rule : expected) {
-            if (!present.contains(rule)) {
-                throw new IOException("REFUSED to deploy '" + networkName + "': nft reported"
-                    + " success but the kernel does not carry the rule '" + rule + "' in chain '"
-                    + chain + "'. Something on this host is flushing our table. Kernel state: "
-                    + String.join(" | ", present));
-            }
-        }
-    }
 }
