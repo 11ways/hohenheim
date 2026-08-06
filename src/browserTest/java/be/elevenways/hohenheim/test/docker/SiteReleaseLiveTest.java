@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
@@ -14,7 +15,6 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -73,7 +73,6 @@ class SiteReleaseLiveTest {
         if (!booted) {
             booted = true;
             ProxyTestSupport.bootRuntime();
-            LiveIdOffsets.apply(HohenheimDatabase.datasource());
         }
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
@@ -180,7 +179,7 @@ class SiteReleaseLiveTest {
             assertThat(retired.get(InstanceModel.ID))
                 .as("step 3: the retired release is the previously-serving instance")
                 .isEqualTo(firstInstanceId);
-            String retiredHandle = "hohenheim-instance-" + firstInstanceId;
+            String retiredHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, firstInstanceId);
             await("step 3: the retired container stops after the drain window",
                 12_000, () -> !isRunning(docker, retiredHandle));
             assertThat(inspectImageOf(docker, retiredHandle))
@@ -330,7 +329,7 @@ class SiteReleaseLiveTest {
             Row candidate = Models.get(InstanceModel.class).findById(candidateId);
             assertThat((Object) candidate.get(InstanceModel.DELETED_AT))
                 .as("step 5: the refused candidate's record is soft-deleted").isNotNull();
-            assertThat(containerExists(docker, "hohenheim-instance-" + candidateId))
+            assertThat(containerExists(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, candidateId)))
                 .as("step 5: the refused candidate's container is gone").isFalse();
             assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, candidateId))
                 .as("step 5: the refused candidate holds no port claim").isEmpty();
@@ -339,7 +338,7 @@ class SiteReleaseLiveTest {
                 .as("step 5: the serving release is the SAME instance").isEqualTo(servingId);
             assertThat(settingsOf(still).get("image"))
                 .as("step 5: still pinned to the good digest").isEqualTo(digestGood);
-            assertThat(isRunning(docker, "hohenheim-instance-" + servingId))
+            assertThat(isRunning(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, servingId)))
                 .as("step 5: and still running at the daemon").isTrue();
         } finally {
             if (hammer != null) {
@@ -412,7 +411,7 @@ class SiteReleaseLiveTest {
                 .as("step 4: the rolled-back release is the pinned v1 digest")
                 .isEqualTo(digest1);
             int backId = servingBack.get(InstanceModel.ID);
-            String backHandle = "hohenheim-instance-" + backId;
+            String backHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, backId);
             assertThat(inspectImageOf(docker, backHandle))
                 .as("step 4: the DAEMON runs exactly the pinned artifact")
                 .isEqualTo(digest1);
@@ -461,7 +460,7 @@ class SiteReleaseLiveTest {
             new DockerSiteRequestHandler(siteId, "rc-site", settingsFor(repo2));
             Row retired = onlyWithRole(siteId, InstanceModel.ROLE_RETIRED);
             int retiredId = retired.get(InstanceModel.ID);
-            assertThat(isRunning(docker, "hohenheim-instance-" + retiredId))
+            assertThat(isRunning(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, retiredId)))
                 .as("step 1: the superseded release is still draining (running)").isTrue();
             Row op = latestOp(siteId);
             assertThat(op.get(ReleaseOperationModel.STATUS))
@@ -494,7 +493,7 @@ class SiteReleaseLiveTest {
             // 3. Recovery settles BOTH: drain finished, candidate destroyed.
             SiteReleases.recoverInterrupted();
 
-            assertThat(isRunning(docker, "hohenheim-instance-" + retiredId))
+            assertThat(isRunning(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, retiredId)))
                 .as("step 3: recovery stopped the draining release at the daemon").isFalse();
             assertThat(reload(op).get(ReleaseOperationModel.STATUS))
                 .as("step 3: the lost drain finishes as SUCCEEDED (the switch had happened)")
@@ -508,7 +507,7 @@ class SiteReleaseLiveTest {
             Row deadCandidate = Models.get(InstanceModel.class).findById(candidateId[0]);
             assertThat((Object) deadCandidate.get(InstanceModel.DELETED_AT))
                 .as("step 3: the orphaned candidate's record died").isNotNull();
-            assertThat(containerExists(docker, "hohenheim-instance-" + candidateId[0]))
+            assertThat(containerExists(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, candidateId[0])))
                 .as("step 3: and its container is gone at the daemon").isFalse();
             assertThat(servingOf(siteId).get(InstanceModel.SETTINGS)).isNotNull();
             assertThat(settingsOf(servingOf(siteId)).get("image"))

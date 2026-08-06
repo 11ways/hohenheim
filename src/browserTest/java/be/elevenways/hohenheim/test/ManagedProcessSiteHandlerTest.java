@@ -186,7 +186,7 @@ class ManagedProcessSiteHandlerTest {
         assertThat(applied).as("step 2: the applier ran, keyed on THIS site's run-as uid")
             .hasSize(1);
         assertThat(applied.get(0))
-            .contains("chain inet hohenheim_net out_uid_4242")
+            .contains("chain inet " + ProcessNetworkPolicy.table() + " out_uid_4242")
             .contains("meta skuid 4242 ip daddr 169.254.0.0/16 drop");
 
         // 3. A site with NO run-as user has no identity to key a policy on, so it keeps

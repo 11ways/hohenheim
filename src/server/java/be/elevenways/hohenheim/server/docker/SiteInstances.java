@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
 import be.elevenways.hohenheim.server.build.BuildQuota;
 import be.elevenways.hohenheim.server.build.BuildRequest;
@@ -350,7 +351,7 @@ public final class SiteInstances {
 
         String buildContext = str(settings.get("build_context"));
         if (!buildContext.isEmpty()) {
-            String tag = "hohenheim-site-" + siteId + ":latest";
+            String tag = ControllerScope.handle(ControllerScope.KIND_SITE, siteId) + ":latest";
             SandboxedBuilds.Result build = new SandboxedBuilds(docker,
                 serverNameFor(settings)).run(new BuildRequest(
                 SiteModel.MODEL_ID, siteId,
@@ -443,7 +444,7 @@ public final class SiteInstances {
     private static @Nullable InstanceStatus reusableStatus(@NonNull DockerClient docker,
                                                            int instanceId,
                                                            @NonNull Map<String, Object> desired) {
-        String handle = "hohenheim-instance-" + instanceId;
+        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
         try {
             Map<String, Object> inspect = docker.inspectContainer(handle);
             Object config = inspect.get("Config");
@@ -473,11 +474,18 @@ public final class SiteInstances {
      * owned instance: the legacy {@code hohenheim-site-N} container (site-labelled) is
      * removed if attributably the site's, and the site-owned ledger claims it held are
      * released -- observed when the removal was verified, parked otherwise.
+     *
+     * AIDEV-NOTE: the handle is CONTROLLER-SCOPED, so a container from before the
+     * namespace existed (bare {@code hohenheim-site-N}) is deliberately NOT looked for
+     * here. It cannot be attributed to any controller, and removing an unattributable
+     * container is exactly what removeIfOwnedBy exists to refuse. Such a container
+     * surfaces through the reconciler instead, as FOREIGN_COLLIDING with the
+     * "pre-namespace" detail, and is an explicit operator removal.
      */
     private static void retireLegacyContainer(@NonNull DockerClient docker, int siteId) {
         try {
             boolean removed = OwnerLabels.removeIfOwnedBy(docker,
-                "hohenheim-site-" + siteId, SiteModel.MODEL_ID, siteId);
+                ControllerScope.handle(ControllerScope.KIND_SITE, siteId), SiteModel.MODEL_ID, siteId);
             if (removed) {
                 PortLedger.releaseOwnerObserved(SiteModel.MODEL_ID, siteId);
                 Blast.log("SITE-RUNTIME: retired the pre-lowering container of site", siteId);

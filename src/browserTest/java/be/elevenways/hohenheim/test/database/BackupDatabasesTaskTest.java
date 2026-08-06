@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -71,7 +72,7 @@ class BackupDatabasesTaskTest {
                 "appuser", "secret123", "appdb", false);
             service.create(ephemeralName, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
                 "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs
-            DockerClient.ExecResult seed = docker.exec("hohenheim-db-" + name,
+            DockerClient.ExecResult seed = docker.exec(ControllerScope.handle(ControllerScope.KIND_DB, name),
                 List.of("psql", "-U", "appuser", "-d", "appdb", "-c", "CREATE TABLE notes (id int);"),
                 List.of("PGPASSWORD=secret123"));
             assertThat(seed.exitCode()).withFailMessage("seed failed: %s", seed.stderr()).isZero();

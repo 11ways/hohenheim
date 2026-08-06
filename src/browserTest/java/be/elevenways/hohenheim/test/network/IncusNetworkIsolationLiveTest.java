@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -7,7 +9,6 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -62,7 +63,11 @@ class IncusNetworkIsolationLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
 
         Db.run(datasource, () -> enrolledFingerprint =
@@ -90,8 +95,8 @@ class IncusNetworkIsolationLiveTest {
             // owners in this codebase's grant model).
             int idA = instanceRecord("net-tenant-a", 7011);
             int idB = instanceRecord("net-tenant-b", 7022);
-            String handleA = "hohenheim-instance-" + idA;
-            String handleB = "hohenheim-instance-" + idB;
+            String handleA = ControllerScope.handle(ControllerScope.KIND_INSTANCE, idA);
+            String handleB = ControllerScope.handle(ControllerScope.KIND_INSTANCE, idB);
 
             try {
                 service.deploy(idA);
@@ -100,7 +105,7 @@ class IncusNetworkIsolationLiveTest {
                 // 1. The shared isolation ACL exists on the daemon and carries the
                 //    tenant-range egress rejects (read at the daemon, not inferred).
                 String aclShow = hostCmd("incus", "network", "acl", "show",
-                    IncusNetworkPolicy.ACL_NAME);
+                    IncusNetworkPolicy.aclName());
                 assertThat(aclShow)
                     .as("step 1: the isolation ACL denies the metadata range and RFC1918")
                     .contains("169.254.0.0/16").contains("10.0.0.0/8").contains("fc00::/7");
@@ -108,7 +113,7 @@ class IncusNetworkIsolationLiveTest {
                 // 2. Each instance's NIC references that ACL (device override took).
                 assertThat(nicAclOf(incus, handleA))
                     .as("step 2: instance A's NIC carries the isolation ACL")
-                    .isEqualTo(IncusNetworkPolicy.ACL_NAME);
+                    .isEqualTo(IncusNetworkPolicy.aclName());
 
                 String v4b = addressOf(handleB, false);
                 String v6b = addressOf(handleB, true);

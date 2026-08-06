@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.ControllerIdentity;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.stack.StackDeployer;
 import be.elevenways.hohenheim.server.util.PortProbe;
@@ -81,6 +83,13 @@ public final class DockerReconciler {
 
         /** @return whether a live record of this model has this natural name (stacks, databases) */
         boolean liveByName(@NonNull Identifier model, @NonNull String name);
+
+        /**
+         * @return the identity token of the controller this classification speaks for; a
+         *         resource carrying any other token belongs to a DIFFERENT controller,
+         *         whatever its record id says
+         */
+        @NonNull String controllerToken();
     }
 
     /**
@@ -112,11 +121,25 @@ public final class DockerReconciler {
      * conventions, then our own NAMING schemes (existing volumes can never be
      * relabelled, so name-based attribution is what keeps a pre-label volume whose
      * record died visible as an orphan), then the hohenheim- prefix as a collision.
+     *
+     * AIDEV-NOTE: the controller check comes BEFORE the record lookup and it must stay
+     * there. A record id only means something inside the database that allocated it, so
+     * asking "is #1 live?" about another controller's resource is asking the wrong
+     * database -- and answering yes is what let one controller treat another's running
+     * workload as its own.
      */
     public static @NonNull Finding classify(@NonNull String kind, @NonNull String name,
                                             @Nullable Map<?, ?> labels, @NonNull Records records) {
         OwnerLabels.Owner owner = OwnerLabels.parse(labels);
         if (owner != null) {
+            if (!records.controllerToken().equals(owner.controller())) {
+                return new Finding(kind, name, Bucket.FOREIGN_COLLIDING, Evidence.OWNER_LABEL,
+                    owner, owner.controller() != null
+                        ? "another hohenheim controller '" + owner.controller() + "' owns this as "
+                            + owner.model() + " #" + owner.id()
+                        : "pre-namespace hohenheim resource (no controller label): its record id"
+                            + " cannot be attributed to any controller");
+            }
             boolean live = records.liveById(owner.model(), owner.id());
             return new Finding(kind, name, live ? Bucket.OWNED : Bucket.ORPHANED,
                 Evidence.OWNER_LABEL, owner, owner.model() + " #" + owner.id());
@@ -142,9 +165,18 @@ public final class DockerReconciler {
             return byName;
         }
 
-        if (name.startsWith("hohenheim-")) {
-            return new Finding(kind, name, Bucket.FOREIGN_COLLIDING, Evidence.NAME, null,
-                "hohenheim-prefixed but matches no naming scheme");
+        if (name.startsWith(ControllerScope.PREFIX + "-")) {
+            ControllerScope.Scoped scoped = ControllerScope.parse(name);
+            String detail;
+            if (scoped == null) {
+                detail = "hohenheim-prefixed but carries no controller namespace"
+                    + " (a pre-namespace resource, or a stranger's)";
+            } else if (!scoped.token().equals(records.controllerToken())) {
+                detail = "minted by another hohenheim controller '" + scoped.token() + "'";
+            } else {
+                detail = "hohenheim-prefixed but matches no naming scheme";
+            }
+            return new Finding(kind, name, Bucket.FOREIGN_COLLIDING, Evidence.NAME, null, detail);
         }
         return new Finding(kind, name, Bucket.FOREIGN_UNRELATED, Evidence.NONE, null, null);
     }
@@ -154,17 +186,28 @@ public final class DockerReconciler {
      * owner labels existed. Sites key on the record id in the name; databases and
      * stacks key on their unique name column.
      *
-     * AIDEV-NOTE: there is deliberately NO {@code hohenheim-instance-} scheme here.
-     * The instance tier was born AFTER the owner labels, so every genuine instance
-     * resource (container AND its volumes) carries them from birth -- a label-less
-     * {@code hohenheim-instance-*} name is by definition not attributably ours and
-     * correctly falls through to FOREIGN_COLLIDING below. Adding a name fallback
-     * would convert "looks like ours" into "is ours" for a tier that never needs it.
+     * AIDEV-NOTE: there is deliberately NO {@code instance} scheme here. The instance
+     * tier was born AFTER the owner labels, so every genuine instance resource
+     * (container AND its volumes) carries them from birth -- a label-less
+     * instance-shaped name is by definition not attributably ours and correctly falls
+     * through to FOREIGN_COLLIDING. Adding a name fallback would convert "looks like
+     * ours" into "is ours" for a tier that never needs it.
+     *
+     * AIDEV-NOTE: name attribution now runs ONLY on names carrying OUR controller token.
+     * A name-keyed scheme reads the record's own name column, which another controller's
+     * database can hold too, so an unscoped or foreign-scoped name is never resolved
+     * against our records; it falls through to the collision bucket instead.
      */
     private static @Nullable Finding classifyByNamingScheme(String kind, String name, Records records) {
-        // hohenheim-site-{id} containers, hohenheim-site-{id}-vol-{mount} volumes.
-        if (name.startsWith("hohenheim-site-")) {
-            String rest = name.substring("hohenheim-site-".length());
+        ControllerScope.Scoped scoped = ControllerScope.parse(name);
+        if (scoped == null || !scoped.token().equals(records.controllerToken())) {
+            return null;
+        }
+        String scheme = ControllerScope.PREFIX + "-" + scoped.token() + "-";
+
+        // {scope}site-{id} containers, {scope}site-{id}-vol-{mount} volumes.
+        if (name.startsWith(scheme + "site-")) {
+            String rest = name.substring((scheme + "site-").length());
             int volMarker = rest.indexOf("-vol-");
             String id = volMarker >= 0 ? rest.substring(0, volMarker) : rest;
             boolean volumeShaped = volMarker >= 0 && KIND_VOLUME.equals(kind);
@@ -172,14 +215,14 @@ public final class DockerReconciler {
             if ((volumeShaped || containerShaped) && id.chars().allMatch(Character::isDigit)
                 && !id.isEmpty()) {
                 return nameFinding(kind, name, records.liveById(SiteModel.MODEL_ID, id),
-                    new OwnerLabels.Owner(SiteModel.MODEL_ID, id));
+                    new OwnerLabels.Owner(SiteModel.MODEL_ID, id, records.controllerToken()));
             }
             return null;   // hohenheim-prefixed, wrong shape -> colliding
         }
 
-        // hohenheim-db-{name} containers, hohenheim-db-{name}-data volumes.
-        if (name.startsWith("hohenheim-db-")) {
-            String rest = name.substring("hohenheim-db-".length());
+        // {scope}db-{name} containers, {scope}db-{name}-data volumes.
+        if (name.startsWith(scheme + "db-")) {
+            String rest = name.substring((scheme + "db-").length());
             if (KIND_VOLUME.equals(kind) && rest.endsWith("-data")) {
                 String dbName = rest.substring(0, rest.length() - "-data".length());
                 return nameFinding(kind, name,
@@ -192,11 +235,11 @@ public final class DockerReconciler {
             return null;
         }
 
-        // hohenheim-stack-{name} networks, hohenheim-stack-{name}-{suffix} containers
+        // {scope}stack-{name} networks, {scope}stack-{name}-{suffix} containers
         // and volumes. The stack name may itself contain dashes, so containers and
         // volumes probe every split point (longest candidate first).
-        if (name.startsWith("hohenheim-stack-")) {
-            String rest = name.substring("hohenheim-stack-".length());
+        if (name.startsWith(scheme + "stack-")) {
+            String rest = name.substring((scheme + "stack-").length());
             if (KIND_NETWORK.equals(kind)) {
                 return nameFinding(kind, name, records.liveByName(StackModel.MODEL_ID, rest), null);
             }
@@ -280,6 +323,11 @@ public final class DockerReconciler {
 
     /** {@link Records} answered by the actual models; site liveness honours soft delete. */
     public static final class ModelRecords implements Records {
+
+        @Override
+        public @NonNull String controllerToken() {
+            return ControllerIdentity.token();
+        }
 
         @Override
         public boolean liveById(@NonNull Identifier model, @NonNull String id) {

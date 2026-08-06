@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.build;
 
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -121,7 +122,7 @@ public final class BuildSandbox {
 
     /** The container name of one build; also its private network's stem. */
     public static @NonNull String handleOf(int buildId) {
-        return "hohenheim-build-" + buildId;
+        return ControllerScope.handle(ControllerScope.KIND_BUILD, buildId);
     }
 
     /**

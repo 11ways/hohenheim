@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -37,7 +38,18 @@ import java.util.function.BooleanSupplier;
  */
 public class NftService {
 
-    static final String TABLE = "hohenheim";
+    /** Base name of the ban table; the live name is namespaced per controller. */
+    static final String TABLE_BASE = "hohenheim";
+
+    /**
+     * The ban table's real name, {@code hohenheim_<controller token>}.
+     *
+     * AIDEV-NOTE: namespaced because this table is FLUSHED wholesale. Two controllers
+     * sharing one kernel would have each other's ban sets wiped by the other's setup().
+     */
+    static String table() {
+        return ControllerScope.nftName(TABLE_BASE);
+    }
     static final String CHAIN = "banned";
     static final String SET_V4 = "banned_v4";
     static final String SET_V6 = "banned_v6";
@@ -70,18 +82,18 @@ public class NftService {
             return;
         }
         String portSet = portSetLiteral(ports);
-        run(List.of("add", "table", "inet", TABLE));
-        run(List.of("add", "chain", "inet", TABLE, CHAIN,
+        run(List.of("add", "table", "inet", table()));
+        run(List.of("add", "chain", "inet", table(), CHAIN,
             "{ type filter hook input priority -10 ; policy accept ; }"));
-        run(List.of("add", "set", "inet", TABLE, SET_V4,
+        run(List.of("add", "set", "inet", table(), SET_V4,
             "{ type ipv4_addr ; flags timeout ; }"));
         // interval: v6 bans are /64 prefixes, and prefix elements need it.
-        run(List.of("add", "set", "inet", TABLE, SET_V6,
+        run(List.of("add", "set", "inet", table(), SET_V6,
             "{ type ipv6_addr ; flags interval, timeout ; }"));
-        run(List.of("flush", "chain", "inet", TABLE, CHAIN));
-        run(List.of("add", "rule", "inet", TABLE, CHAIN,
+        run(List.of("flush", "chain", "inet", table(), CHAIN));
+        run(List.of("add", "rule", "inet", table(), CHAIN,
             "tcp", "dport", portSet, "ip", "saddr", "@" + SET_V4, "drop"));
-        run(List.of("add", "rule", "inet", TABLE, CHAIN,
+        run(List.of("add", "rule", "inet", table(), CHAIN,
             "tcp", "dport", portSet, "ip6", "saddr", "@" + SET_V6, "drop"));
     }
 
@@ -92,7 +104,7 @@ public class NftService {
         if (!isEnabled()) {
             return true;
         }
-        return run(List.of("add", "element", "inet", TABLE, setFor(ip), elementLiteral(ip, ttlSeconds)));
+        return run(List.of("add", "element", "inet", table(), setFor(ip), elementLiteral(ip, ttlSeconds)));
     }
 
     /** Remove a banned IP element (a missing element only logs). */
@@ -100,7 +112,7 @@ public class NftService {
         if (!isEnabled()) {
             return;
         }
-        run(List.of("delete", "element", "inet", TABLE, setFor(ip), "{ " + ip + " }"));
+        run(List.of("delete", "element", "inet", table(), setFor(ip), "{ " + ip + " }"));
     }
 
     /** One active ban for {@link #resync}: ip plus remaining ttl (null = permanent). */
@@ -114,10 +126,10 @@ public class NftService {
         if (!isEnabled()) {
             return;
         }
-        run(List.of("flush", "set", "inet", TABLE, SET_V4));
-        run(List.of("flush", "set", "inet", TABLE, SET_V6));
+        run(List.of("flush", "set", "inet", table(), SET_V4));
+        run(List.of("flush", "set", "inet", table(), SET_V6));
         for (ActiveBan ban : active) {
-            run(List.of("add", "element", "inet", TABLE, setFor(ban.ip()),
+            run(List.of("add", "element", "inet", table(), setFor(ban.ip()),
                 elementLiteral(ban.ip(), ban.ttlSeconds())));
         }
     }

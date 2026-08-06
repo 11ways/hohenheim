@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import org.junit.jupiter.api.BeforeAll;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.security.TenantNetworkRanges;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
@@ -33,6 +35,13 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * passes again) proves the BLOCKED answers measured the policy, not a broken fixture.
  */
 class StackNetworkIsolationTest {
+
+    /** nft table and container names are controller-namespaced, so this needs an identity. */
+    @BeforeAll
+    static void controllerIdentity() {
+        HohenheimTestRuntime.ensureDatasource();
+    }
+
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String TEST_IMAGE = "alpine:latest";
@@ -104,7 +113,7 @@ class StackNetworkIsolationTest {
                     .as("step 3: the stack keeps its own subnet")
                     .contains("ip saddr " + subnet + " ip daddr " + subnet + " accept");
                 String inputChain = netns.inHost("nft", "list", "chain", "inet",
-                    WorkloadNetworkPolicy.TABLE, WorkloadNetworkPolicy.inputChain(key)).stdout();
+                    WorkloadNetworkPolicy.table(), WorkloadNetworkPolicy.inputChain(key)).stdout();
                 assertThat(inputChain)
                     .as("step 3: the input chain denies the stack the host itself")
                     .contains("ip saddr " + subnet + " drop");

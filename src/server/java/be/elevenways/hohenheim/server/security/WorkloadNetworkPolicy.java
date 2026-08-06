@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.runtime.Egress;
@@ -41,8 +42,20 @@ import java.util.function.BooleanSupplier;
  */
 public final class WorkloadNetworkPolicy {
 
-    /** Our own table, NOT NftService's {@code inet hohenheim}: two owners, no shared flush. */
-    public static final String TABLE = "hohenheim_net";
+    /** Our own table base, NOT NftService's: two owners, no shared flush. */
+    public static final String TABLE_BASE = "hohenheim_net";
+
+    /**
+     * This controller's workload table, {@code hohenheim_net_<controller token>}.
+     *
+     * AIDEV-NOTE: per-controller, because teardown DELETES chains in this table by name
+     * and the chain name derives from a Docker network name -- which two controllers used
+     * to mint identically. A shared table also meant one controller's chain removal could
+     * strip another's live workload of its policy.
+     */
+    public static String table() {
+        return ControllerScope.nftName(TABLE_BASE);
+    }
 
     private final @NonNull NftRunner runner;
     private final @NonNull NftChains chains;
@@ -66,7 +79,7 @@ public final class WorkloadNetworkPolicy {
 
     public WorkloadNetworkPolicy(@NonNull NftRunner runner, @NonNull BooleanSupplier enabled) {
         this.runner = runner;
-        this.chains = new NftChains(runner, TABLE);
+        this.chains = new NftChains(runner, WorkloadNetworkPolicy::table);
         this.enabled = enabled;
     }
 
@@ -153,21 +166,21 @@ public final class WorkloadNetworkPolicy {
         List<String> input = inputRules(network);
 
         StringBuilder ruleset = new StringBuilder();
-        ruleset.append("add table inet ").append(TABLE).append('\n');
-        ruleset.append("add chain inet ").append(TABLE).append(' ').append(forwardChain(key))
+        ruleset.append("add table inet ").append(table()).append('\n');
+        ruleset.append("add chain inet ").append(table()).append(' ').append(forwardChain(key))
             .append(" { type filter hook forward priority -10 ; policy accept ; }\n");
-        ruleset.append("add chain inet ").append(TABLE).append(' ').append(inputChain(key))
+        ruleset.append("add chain inet ").append(table()).append(' ').append(inputChain(key))
             .append(" { type filter hook input priority -10 ; policy accept ; }\n");
-        ruleset.append("flush chain inet ").append(TABLE).append(' ').append(forwardChain(key))
+        ruleset.append("flush chain inet ").append(table()).append(' ').append(forwardChain(key))
             .append('\n');
-        ruleset.append("flush chain inet ").append(TABLE).append(' ').append(inputChain(key))
+        ruleset.append("flush chain inet ").append(table()).append(' ').append(inputChain(key))
             .append('\n');
         for (String rule : forward) {
-            ruleset.append("add rule inet ").append(TABLE).append(' ').append(forwardChain(key))
+            ruleset.append("add rule inet ").append(table()).append(' ').append(forwardChain(key))
                 .append(' ').append(rule).append('\n');
         }
         for (String rule : input) {
-            ruleset.append("add rule inet ").append(TABLE).append(' ').append(inputChain(key))
+            ruleset.append("add rule inet ").append(table()).append(' ').append(inputChain(key))
                 .append(' ').append(rule).append('\n');
         }
 

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.game;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.GameDomainModel;
@@ -21,7 +23,6 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.key.IdentifierKey;
@@ -97,13 +98,19 @@ class GameDomainLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        // Unique per-class instance ids => unique daemon handles (no cross-class 409s).
-        LiveIdOffsets.apply(datasource);
-        HohenheimAccess.declareGrantableModels();
-        HohenheimTestRuntime.ensureBooted();
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
+        // The keyring is installed BEFORE the boot: this class's database is now THE
+        // default, so anything the boot encrypts into it must be encrypted with the
+        // keyring the class will later read it back with.
         workRoot = Files.createTempDirectory("hohenheim-game-live-test");
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
             workRoot.resolve("test-keyring.keys")));
+        HohenheimAccess.declareGrantableModels();
+        HohenheimTestRuntime.ensureBooted();
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
             WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
@@ -155,9 +162,9 @@ class GameDomainLiveTest {
             int backendId = templates.createFromTemplate(approve(standInBackendTemplate()),
                 "gamelive-backend", null, Map.of(), null);
             int strangerId = strangerInstance();
-            String proxyHandle = "hohenheim-instance-" + proxyId;
-            String backendHandle = "hohenheim-instance-" + backendId;
-            String strangerHandle = "hohenheim-instance-" + strangerId;
+            String proxyHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, proxyId);
+            String backendHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, backendId);
+            String strangerHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, strangerId);
             String proxySecret = new InstanceVariables().valuesFor(proxyId)
                 .get(GameDomains.PROXY_SECRET_KEY);
             assertThat(proxySecret)
@@ -233,7 +240,7 @@ class GameDomainLiveTest {
                 //    the backend by container name; the backend publishes NO host port
                 //    (Velocity fronts everything); a third, unmapped instance cannot
                 //    reach the backend at all.
-                linkHandle = "hohenheim-gamelink-" + proxyId + "-" + backendId;
+                linkHandle = ControllerScope.handle(ControllerScope.KIND_GAMELINK, proxyId) + "-" + backendId;
                 DockerClient.ExecResult reach = docker.exec(proxyHandle, List.of(
                     "wget", "-T", "3", "-qO-", "http://" + backendHandle + ":80/"));
                 assertThat(reach.exitCode())

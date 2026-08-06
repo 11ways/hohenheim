@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -118,7 +119,7 @@ public final class IncusContainerKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
-        String handle = "hohenheim-instance-" + instanceId;
+        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
         String image = settings.get("image") != null
             ? String.valueOf(settings.get("image")).trim() : "";
         boolean privileged = Boolean.TRUE.equals(settings.get("privileged"));

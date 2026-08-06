@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -11,7 +13,6 @@ import be.elevenways.hohenheim.server.runtime.InstanceFileSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -73,7 +74,11 @@ class InstanceFilesLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         // BEFORE the boot: the capability matrix below grants files.read/files.write, and
         // zenit-auth refuses a grant on an undeclared model -- while declaring one AFTER the
         // CMS contributions drained is itself a hard failure. Same order ServerMain uses.
@@ -116,7 +121,7 @@ class InstanceFilesLiveTest {
             Db.run(datasource, () -> {
                 HostFixtures.admitLocal();
                 int id = instanceRecord("files-journey", volumeSettings());
-                String handle = "hohenheim-instance-" + id;
+                String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
                 handleRef.set(handle);
                 volumeRef.set(handle + "-vol-data");
 

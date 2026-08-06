@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.stack;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackFileModel;
@@ -65,6 +67,11 @@ class StackRuntimeFlowTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
         netns = PrivateNetns.installEnforcing();
 
@@ -149,7 +156,7 @@ class StackRuntimeFlowTest {
     }
 
     private String containerRole(String stackName) throws IOException {
-        DockerClient.ExecResult env = docker.exec("hohenheim-stack-" + stackName + "-app",
+        DockerClient.ExecResult env = docker.exec(ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-app",
             List.of("sh", "-c", "echo $ROLE"));
         return env.stdout().trim();
     }
@@ -175,7 +182,7 @@ class StackRuntimeFlowTest {
         });
 
         // The config file (with secret content) landed in the container.
-        DockerClient.ExecResult config = docker.exec("hohenheim-stack-" + stackName + "-app",
+        DockerClient.ExecResult config = docker.exec(ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-app",
             List.of("cat", "/etc/hhtest/app.conf"));
         assertThat(config.stdout()).contains("super-secret-token");
 
@@ -227,8 +234,8 @@ class StackRuntimeFlowTest {
         requireDocker();
         String stackName = "hhflow-purge-" + Long.toHexString(System.nanoTime());
         stackId = createStackRecords(stackName, "one");
-        String container = "hohenheim-stack-" + stackName + "-app";
-        String volume = "hohenheim-stack-" + stackName + "-data";
+        String container = ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-app";
+        String volume = ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-data";
 
         // 1. Give the service a named volume and deploy.
         Db.run(datasource, () -> {
@@ -273,7 +280,7 @@ class StackRuntimeFlowTest {
         requireDocker();
         String stackName = "hhflow-refused-" + Long.toHexString(System.nanoTime());
         stackId = createStackRecords(stackName, "one");
-        String network = "hohenheim-stack-" + stackName;
+        String network = ControllerScope.handle(ControllerScope.KIND_STACK, stackName);
 
         // 1. Enforcement off (the pre-enforcement host): the deploy fails BY NAME.
         WorkloadNetworkPolicy.overrideForTest(
@@ -308,7 +315,7 @@ class StackRuntimeFlowTest {
             assertThat(docker.findNetworkByName(network))
                 .as("step 2: no network was created").isNull();
             assertThatThrownBy(() -> docker.inspectContainer(
-                "hohenheim-stack-" + stackName + "-app"))
+                ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-app"))
                 .as("step 2: no container was created")
                 .isInstanceOf(IOException.class);
         } finally {

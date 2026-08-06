@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -10,7 +12,6 @@ import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -74,7 +75,11 @@ class IncusColdMigrationLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
 
         Db.run(datasource, () -> {
@@ -123,8 +128,8 @@ class IncusColdMigrationLiveTest {
                 .get(ServerModel.ID);
             int vmId = vmRecord("mig-mover", hostAId);
             int peerId = peerRecord("mig-peer", hostBId);
-            String handle = "hohenheim-instance-" + vmId;
-            String peerHandle = "hohenheim-instance-" + peerId;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, vmId);
+            String peerHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, peerId);
             Integer restoredId = null;
             String restoredHandle = null;
             java.nio.file.Path targetDir;
@@ -264,7 +269,7 @@ class IncusColdMigrationLiveTest {
                                 .isEqualTo("host_not_admitted")));
                 setAdmission(hostAId, ServerModel.ADMISSION_ADMITTED);
                 restoredId = backups.restoreToNew(backupId, "mig-restored", HOST_A);
-                restoredHandle = "hohenheim-instance-" + restoredId;
+                restoredHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, restoredId);
                 Row restored = Models.get(InstanceModel.class).findById(restoredId);
                 assertThat((Object) restored.get(InstanceModel.SERVER_ID))
                     .as("step 10: the restored instance lives on the DIFFERENT host"

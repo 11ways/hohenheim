@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -12,7 +14,6 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -78,7 +79,11 @@ class IncusCommunityAppLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
         Db.run(datasource, () -> enrolledFingerprint =
             remote.enrollThroughProduct(HOST, "hohenheim-live-community"));
@@ -112,7 +117,7 @@ class IncusCommunityAppLiveTest {
 
             int id = new InstanceTemplates().createFromTemplate(template,
                 "community-gotify", null, Map.of(), null);
-            String handle = track("hohenheim-instance-" + id);
+            String handle = track(ControllerScope.handle(ControllerScope.KIND_INSTANCE, id));
             InstanceService service = new InstanceService();
             IncusClient incus = new ServerService().incusClientFor(HOST);
 
@@ -209,7 +214,7 @@ class IncusCommunityAppLiveTest {
 
             int id = new InstanceTemplates().createFromTemplate(template,
                 "community-adguard", null, Map.of(), null);
-            String handle = track("hohenheim-instance-" + id);
+            String handle = track(ControllerScope.handle(ControllerScope.KIND_INSTANCE, id));
             InstanceService service = new InstanceService();
             IncusClient incus = new ServerService().incusClientFor(HOST);
 
@@ -275,7 +280,7 @@ class IncusCommunityAppLiveTest {
 
             int id = new InstanceTemplates().createFromTemplate(template,
                 "community-unknown-helper", null, Map.of(), null);
-            String handle = track("hohenheim-instance-" + id);
+            String handle = track(ControllerScope.handle(ControllerScope.KIND_INSTANCE, id));
 
             try {
                 Throwable failed = catchThrowable(() -> new InstanceInstalls().install(id));

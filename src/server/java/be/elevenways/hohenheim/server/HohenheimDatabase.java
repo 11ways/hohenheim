@@ -43,6 +43,9 @@ public class HohenheimDatabase {
         MigrationRunner runner = new MigrationRunner(datasource);
         acknowledgeRetiredVersions(runner);
         runner.migrate().requireSuccess();
+        // Mint/read the namespace token every daemon resource name carries, so it is in
+        // the boot log before anything can be deployed under it.
+        ControllerIdentity.resolve();
     }
 
     /**

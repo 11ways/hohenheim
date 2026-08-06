@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -68,7 +69,7 @@ class BinaryBackupTest {
         try {
             service.create(name, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
                 "unused", "unused", "unused", true);   // ephemeral: tmpfs
-            redis(docker, "hohenheim-db-" + name, "SET", "foo", "bar");
+            redis(docker, ControllerScope.handle(ControllerScope.KIND_DB, name), "SET", "foo", "bar");
 
             Path dump = service.backupToFile(name, dir, "snap");
             assertThat(dump.getFileName().toString()).endsWith(".rdb");
@@ -94,7 +95,7 @@ class BinaryBackupTest {
 
         DatabaseService service = new DatabaseService(docker, freshDatasource());
         String name = "mongo" + System.nanoTime();
-        String container = "hohenheim-db-" + name;
+        String container = ControllerScope.handle(ControllerScope.KIND_DB, name);
         Path dir = Files.createTempDirectory("hohenheim-mongo-bk");
         try {
             service.create(name, ManagedDatabase.Engine.MONGO, MONGO_IMAGE,
@@ -127,7 +128,7 @@ class BinaryBackupTest {
 
         DatabaseService service = new DatabaseService(docker, freshDatasource());
         String name = "redisrt" + System.nanoTime();
-        String container = "hohenheim-db-" + name;
+        String container = ControllerScope.handle(ControllerScope.KIND_DB, name);
         Path dir = Files.createTempDirectory("hohenheim-redis-rt");
         try {
             service.create(name, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,

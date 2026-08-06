@@ -56,7 +56,18 @@ public final class HohenheimTestRuntime {
         ServerZenitRuntime.init().join();
     }
 
-    private static synchronized void ensureDatasource() {
+    /**
+     * Give a database-free unit test a real control-plane database, and therefore a real
+     * {@code ControllerIdentity}, without booting the whole runtime.
+     *
+     * AIDEV-NOTE: every daemon resource NAME is namespaced by the controller identity,
+     * which lives in the database, so a test that names or labels anything needs one.
+     * There is deliberately no ControllerIdentity test override: a fake token would be a
+     * shared default by another name, which is the hazard the identity exists to remove.
+     * An already-registered default is reused, so this never yanks a live server's
+     * database out from under it.
+     */
+    public static synchronized void ensureDatasource() {
         if (Datasources.getDefault() != null) {
             return;
         }

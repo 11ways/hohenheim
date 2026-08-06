@@ -78,7 +78,7 @@ class Ipv6BanGranularityTest {
         // The row holds the /64 key, the kernel gets the prefix element.
         assertThat((String) ban.get(BanModel.IP)).isEqualTo("2001:db8:aa:bb::/64");
         assertThat(nftCommands).anySatisfy(cmd -> assertThat(cmd)
-            .startsWith("add element inet hohenheim banned_v6 { 2001:db8:aa:bb::/64 timeout "));
+            .startsWith("add element inet " + NftService.table() + " banned_v6 { 2001:db8:aa:bb::/64 timeout "));
 
         // Any address inside the /64 is refused; a neighboring /64 is not.
         assertThat(service.isBanned("2001:db8:aa:bb::17")).isTrue();
@@ -95,7 +95,7 @@ class Ipv6BanGranularityTest {
         service.lift(ban, "test");
         assertThat(service.isBanned("2001:db8:aa:bb::17")).isFalse();
         assertThat(nftCommands).contains(
-            "delete element inet hohenheim banned_v6 { 2001:db8:aa:bb::/64 }");
+            "delete element inet " + NftService.table() + " banned_v6 { 2001:db8:aa:bb::/64 }");
     }
 
     @Test
@@ -104,10 +104,10 @@ class Ipv6BanGranularityTest {
         service.boot();
         service.awaitNftBootForTests();
         assertThat(nftCommands).contains(
-            "add set inet hohenheim banned_v6 { type ipv6_addr ; flags interval, timeout ; }");
+            "add set inet " + NftService.table() + " banned_v6 { type ipv6_addr ; flags interval, timeout ; }");
         // v4 stays a plain address set.
         assertThat(nftCommands).contains(
-            "add set inet hohenheim banned_v4 { type ipv4_addr ; flags timeout ; }");
+            "add set inet " + NftService.table() + " banned_v4 { type ipv4_addr ; flags timeout ; }");
     }
 
     @Test
@@ -131,7 +131,7 @@ class Ipv6BanGranularityTest {
         // Only that ONE row was created for the whole flood.
         assertThat(bans.find().where(BanModel.IP.like("2001:db8:77:88%")).count()).isEqualTo(1);
         assertThat(nftCommands).anySatisfy(cmd -> assertThat(cmd)
-            .startsWith("add element inet hohenheim banned_v6 { 2001:db8:77:88::/64 timeout "));
+            .startsWith("add element inet " + NftService.table() + " banned_v6 { 2001:db8:77:88::/64 timeout "));
 
         // The neighboring /64 is unaffected.
         assertThat(service.isBanned("2001:db8:77:89::1")).isFalse();

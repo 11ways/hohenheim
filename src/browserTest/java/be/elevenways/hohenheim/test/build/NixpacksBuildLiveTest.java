@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.build;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
@@ -11,7 +13,6 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -73,7 +74,11 @@ class NixpacksBuildLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
@@ -122,7 +127,7 @@ class NixpacksBuildLiveTest {
                 SiteInstances.ensureRunning(JOURNEY_SITE_ID, "nixpacks-journey", settings);
             System.out.println("[timing] site build + start: " + seconds(buildStarted) + "s");
             int instanceId = runtime.instanceId();
-            String handle = "hohenheim-instance-" + instanceId;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
             try {
                 // 1. What RUNS answers as a node app: the response carries our nonce AND
                 //    the node runtime's own version string -- a repository of one
@@ -215,7 +220,7 @@ class NixpacksBuildLiveTest {
                 } catch (RuntimeException ignored) {
                     // teardown best effort; the assertions above are the outcome
                 }
-                removeImage(docker, "hohenheim-site-" + JOURNEY_SITE_ID + ":latest");
+                removeImage(docker, ControllerScope.handle(ControllerScope.KIND_SITE, JOURNEY_SITE_ID) + ":latest");
                 Row build = Models.get(BuildOperationModel.class)
                     .latestSuccess(SiteModel.MODEL_ID.toString(), JOURNEY_SITE_ID);
                 if (build != null) {

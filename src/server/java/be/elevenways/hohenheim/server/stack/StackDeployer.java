@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.stack;
 
 import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -96,18 +97,18 @@ public class StackDeployer {
 
     /** The per-stack network name from the stack name alone (inventory callers). */
     public static @NonNull String networkName(@NonNull String stackName) {
-        return "hohenheim-stack-" + stackName;
+        return ControllerScope.handle(ControllerScope.KIND_STACK, stackName);
     }
 
     public static @NonNull String containerName(@NonNull StackSpec spec, @NonNull String service) {
-        return "hohenheim-stack-" + spec.name() + "-" + service;
+        return ControllerScope.handle(ControllerScope.KIND_STACK, spec.name()) + "-" + service;
     }
 
     public static @NonNull String volumeName(@NonNull StackSpec spec, StackSpec.@NonNull MountSpec mount) {
         if (mount.externalName() != null) {
             return mount.externalName();
         }
-        return "hohenheim-stack-" + spec.name() + "-" + mount.name();
+        return ControllerScope.handle(ControllerScope.KIND_STACK, spec.name()) + "-" + mount.name();
     }
 
     // -- deploy ---------------------------------------------------------------

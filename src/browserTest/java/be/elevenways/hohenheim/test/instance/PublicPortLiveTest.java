@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
@@ -11,7 +13,6 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -68,8 +69,11 @@ class PublicPortLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        // Unique per-class instance ids => unique daemon handles (no cross-class 409s).
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
@@ -101,7 +105,7 @@ class PublicPortLiveTest {
             defaults.put("tag", "alpine");
             defaults.put("container_port", 80);
             int quietId = instanceRecord("port-default", defaults);
-            String quietHandle = "hohenheim-instance-" + quietId;
+            String quietHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, quietId);
 
             // ---- the declared public workload --------------------------------------
             Map<String, Object> declared = new LinkedHashMap<>();
@@ -110,7 +114,7 @@ class PublicPortLiveTest {
             declared.put("container_port", 80);
             declared.put("port_exposure", "public");
             int publicId = instanceRecord("port-public", declared);
-            String publicHandle = "hohenheim-instance-" + publicId;
+            String publicHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, publicId);
 
             try {
                 // 1. SAFE DEFAULT: deploy publishes on 127.0.0.1 -- asserted off the
@@ -220,7 +224,7 @@ class PublicPortLiveTest {
             settings.put("port_protocol", "udp");
             settings.put("port_exposure", "public");
             int id = instanceRecord("port-udp", settings);
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             // The responder script rides the config-file staging lane (create -> stage
             // -> start), because the settings command is whitespace-split and cannot
             // carry a shell one-liner itself.
@@ -284,7 +288,7 @@ class PublicPortLiveTest {
             int winnerId = instanceRecord("port-fixed-winner", first);
             Map<String, Object> second = new LinkedHashMap<>(first);
             int loserId = instanceRecord("port-fixed-loser", second);
-            String loserHandle = "hohenheim-instance-" + loserId;
+            String loserHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, loserId);
 
             try {
                 // 1. The first deploy claims and binds the declared fixed port.
@@ -325,7 +329,7 @@ class PublicPortLiveTest {
             } finally {
                 quietDestroy(service, winnerId);
                 quietDestroy(service, loserId);
-                quietRemoveVolume(docker, "hohenheim-instance-" + winnerId);
+                quietRemoveVolume(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, winnerId));
                 quietRemoveVolume(docker, loserHandle);
             }
         });

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -200,7 +201,7 @@ public class ManagedDatabase {
      * stable across re-provisioning, unlike the container's addresses and published port.
      */
     public static String containerHandle(String name) {
-        return "hohenheim-db-" + name;
+        return ControllerScope.handle(ControllerScope.KIND_DB, name);
     }
 
     private final DockerClient docker;
@@ -256,7 +257,7 @@ public class ManagedDatabase {
                                 String user, String password, String database,
                                 boolean ephemeral, ResourceLimits limits,
                                 @Nullable Integer recordId) throws IOException {
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         String volumeName = containerName + "-data";
         String imageRef = (image == null || image.isBlank()) ? engine.defaultImage : image;
 
@@ -304,7 +305,7 @@ public class ManagedDatabase {
 
     /** Live status of a database's container; never throws (see {@link ContainerState}). */
     public LiveStatus status(String name, Engine engine) {
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         Map<String, Object> inspect;
         try {
             inspect = docker.inspectContainer(containerName);
@@ -338,7 +339,7 @@ public class ManagedDatabase {
      * @throws IOException when the daemon cannot confirm container or volume removal
      */
     public void destroy(String name, boolean removeData) throws IOException {
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         try {
             docker.stopContainer(containerName, 10);
         } catch (IOException ignored) {
@@ -378,7 +379,7 @@ public class ManagedDatabase {
      */
     public String backup(String name, Engine engine, String user, String password,
                          String database) throws IOException {
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         DockerClient.ExecResult result = docker.exec(containerName,
             engine.dumpCommand(user, database), engine.dumpEnv(password));
         if (result.exitCode() != 0) {
@@ -409,7 +410,7 @@ public class ManagedDatabase {
     // mount) and mongodump targets /tmp.
     public void backupToFile(String name, Engine engine, String user, String password,
                              String database, Path target) throws IOException {
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         switch (engine) {
             case POSTGRES, MYSQL ->
                 Files.writeString(target, backup(name, engine, user, password, database), StandardCharsets.UTF_8);
@@ -467,7 +468,7 @@ public class ManagedDatabase {
             restoreRedis(name, user, password, database, source);
             return;
         }
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         String fileName = "hohenheim-restore." + engine.dumpExtension();
         // Resolve the restore command first so an unsupported engine fails before any upload.
         List<String> command = engine.restoreCommand(user, password, database, "/tmp/" + fileName);
@@ -506,7 +507,7 @@ public class ManagedDatabase {
             }
         }
 
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         requirePersistentData(containerName, Engine.REDIS.dataPath);
 
         String fileName = "hohenheim-restore.rdb";

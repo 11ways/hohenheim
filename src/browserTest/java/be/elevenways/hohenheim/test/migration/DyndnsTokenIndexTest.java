@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.migration;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.migration.M046_DyndnsTokenIndex;
 import be.elevenways.zenit.common.orm.OrmConstants;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -60,6 +61,11 @@ class DyndnsTokenIndexTest {
         // 2. A normal full migrate really stores an index under that literal name. Before
         //    M046 existed the whole column was unindexed and this row was absent.
         new MigrationRunner(datasource).migrate().requireSuccess();
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         List<Row> stored = datasource.rawQuery(
             "SELECT sql AS def FROM sqlite_master WHERE type = ? AND name = ?", "index", INDEX_NAME);
         assertThat(stored)

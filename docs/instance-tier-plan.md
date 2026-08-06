@@ -3910,6 +3910,8 @@ running ON the host it manages, local unix sockets, `NftRunner.Sudo`, no ssh lan
   different times, never concurrently; the daystrom service is left STOPPED
   and disabled. See deploy-native.md's hazard section; nothing in the product
   namespaces handles per controller yet.
+  SUPERSEDED 2026-08-06 (controller-namespace wave, below): handles ARE namespaced
+  per controller now and the temporal-separation rule is lifted.
 
 STATUS (2026-08-06, cross-host wave): the two Phase 8 gate clauses a single host
 could never prove -- "restore to a new host" and "drain the source host through
@@ -4245,6 +4247,107 @@ access mid-console; and recover from a killed controller without split ownership
 The checked-in Proxmox-use inventory is fully closed before the replacement claim.
 
 ---
+
+STATUS (2026-08-06, controller-namespace wave): the structural fix three earlier
+waves named as owed -- NAMESPACE HANDLES PER CONTROLLER -- LANDED, and the
+temporal-separation rule in docs/deploy-native.md is LIFTED. The hazard was that
+record ids are allocated per DATABASE while daemon names were derived from the id
+alone, so two controllers on one daemon minted identical names for unrelated
+records AND labelled them as the same record -- which is why
+`OwnerLabels.removeIfOwnedBy` could not refuse: the labels genuinely matched.
+
+- IDENTITY: `controller_identity` (M077), one row, minted once by
+  `ControllerIdentity.resolve()` at the end of `HohenheimDatabase.init()`. It
+  lives in the CONTROL-PLANE DATABASE deliberately, because the database is the
+  thing that allocates the ids -- one database is one controller, which is
+  exactly the boundary a second install, a restored copy and each parallel test
+  fork's fresh SQLite already draw. There is NO default, NO settings override and
+  NO fallback constant: an unresolvable identity throws
+  (`ControllerIdentity.unresolvable`) rather than degrading to a shared value,
+  because a shared default is how this hazard existed in the first place. A
+  control-plane restore carries the row, so a restored controller keeps naming
+  and keeps owning its own workloads. The memo is keyed on the resolved
+  DATASOURCE, not pinned per JVM, so two test databases in one JVM stay distinct.
+- SURFACE, with per-resource verdicts (the full set, not just containers).
+  NAMESPACED: instance/site/db/stack/build/preview/dblink/gamelink handles
+  (`ControllerScope.handle`) and everything derived from them (Docker `-net`
+  networks, `-vol-`/`-data` volumes, Incus custom volumes, site and preview image
+  tags); the Incus isolation ACL (`hohenheim-<token>-isolation`) and extra bridge
+  (`hhx-<token>`, short because the kernel ifname limit is 15); both nftables
+  tables (`hohenheim_<token>`, `hohenheim_net_<token>`) and therefore every chain
+  in them; the Incus client-certificate CN, which becomes the daemon-side trust
+  entry name; and the object-key prefix on a shared backup target (`remote_key`
+  is stored data, so already-uploaded backups keep their key and are not
+  orphaned). ALREADY SAFE, verified rather than assumed: preflight probes
+  (nanotime-suffixed), all `createTempFile/Directory` names, everything under the
+  install's own `storage.data_path` (git-repos, previews, snapshot/staging
+  roots), the port ledger's claim key and route claims (per-database bookkeeping;
+  the shared resource there is the host PORT, which the kernel arbitrates by
+  refusing the second bind), host leases, and `ProcessNetworkPolicy`'s
+  `out_uid_<uid>` chain (a host uid is host-global, and the chain now lives in a
+  per-controller table).
+- LABELS: a third owner label, `be.elevenways.hohenheim.owner.controller`.
+  Ownership is now (controller, model, id); `OwnerLabels.isOurs` is the one
+  predicate, `removeIfOwnedBy` and `WorkloadNetworks.ensureForStart` both route
+  through it, and the refusal NAMES both controllers. `DockerReconciler.Records`
+  grew `controllerToken()` so the classifier stays pure, and the controller check
+  runs BEFORE the record lookup: asking "is #1 live?" about another controller's
+  resource is asking the wrong database.
+- EXISTING INSTALLS: measured, not assumed. daystrom, nightstrom and the
+  workstation daemon were inspected before the rename: ZERO containers, ZERO
+  hohenheim networks, ZERO hohenheim volumes, ZERO Incus instances -- only the
+  constant-named `hohenheim-isolation` ACL and daystrom's `hohenheim-extra`
+  bridge, which are recreated on demand. So no running workload could be
+  orphaned by the rename, and no adoption machinery was built for a case that
+  does not exist. A pre-namespace resource that DOES appear is reported, never
+  silently adopted or abandoned: it classifies FOREIGN_COLLIDING with a
+  "pre-namespace" detail (tested), and `SiteInstances.retireLegacyContainer`
+  carries an AIDEV-NOTE saying it deliberately no longer looks for the bare
+  `hohenheim-site-N` name because an unattributable container is exactly what
+  the guard exists to refuse.
+- `LiveIdOffsets` is DELETED. It seeded random high-id marker rows into every
+  live test's database so parallel forks would not collide on handles; each fork
+  is now a distinct CONTROLLER, so the collision it plastered over cannot occur.
+  Its one genuinely load-bearing consumer, `IncusSnapshotBackupLiveTest`'s
+  id-proximity "is this handle from my block?" heuristic, is replaced by an EXACT
+  test (`isOwnHandle`: parse the handle, is the token ours).
+- PROOF: `TwoControllerCollisionLiveTest` -- two migrated databases, two
+  identities, both holding record #1, one real Docker daemon. Both workloads run
+  simultaneously; B's guard refuses A's container naming both tokens while A's
+  container stays RUNNING; B's sweep classifies A's as FOREIGN_COLLIDING and its
+  own as OWNED; B's removal of its own leaves A's running. Two counterfactuals
+  run and captured verbatim: handles minted without the token gave
+  `Expecting actual: "hohenheim-instance-1" not to be equal to:
+  "hohenheim-instance-1"`, and the pre-fix ownership guard gave
+  `[step 4: A's workload is STILL RUNNING -- B never force-removed it] Expecting
+  value to be true but was false` -- the force-removal of a foreign controller's
+  running container, reproduced.
+- TEST-DATABASE STRADDLE, found by the suite and FIXED at the root. Live classes
+  held TWO databases (their own plus the runtime default), and `Db` scoping is
+  THREAD-LOCAL -- so any thread-hopping work resolved the default's token while
+  the records came from the class's database, and a policy read back from a
+  different controller's nft table than it had just written to ("the chain does
+  not exist in the kernel", for a chain that did). Three fixes: 48 classes now
+  register their own datasource as the framework default (ONE database per class);
+  `NftChains` takes a table SUPPLIER so no name is captured at construction (the
+  appliers' static PRODUCTION instances used to resolve an identity at class-load,
+  before any database existed); and `TestDatabases` re-mints the identity after
+  copying its template, because a file copy would otherwise hand several
+  "controllers" one token while their ids both restart at 1.
+- FULL SUITE: 836 browser tests, 0 failed, 0 SKIPPED (the last 10 skips were
+  missing local images -- nginx:alpine, redis:7-alpine, dockcenter/velocity --
+  now pulled, so ContainerHardening, BinaryBackup, GameDomainLive,
+  SiteDatabaseLink, PublicPort and both network-isolation classes RAN). Two
+  latent test defects surfaced only because they now run: HostFencingTest counted
+  containers by (model, id) across the whole daemon and needed
+  `OwnerLabels.isOurs`, and GameDomainLiveTest installed its field-encryption
+  keyring AFTER the boot that writes encrypted rows.
+- OPEN, stated as open: the per-controller SHARED objects (the Incus isolation ACL
+  and the `hhx-<token>` extra bridge) ACCUMULATE on a daemon when controllers are
+  ephemeral. One full live suite left 37 ACLs and 4 bridges on daystrom, one per
+  test class. They are harmless (empty, unreferenced) and were cleaned up by hand,
+  but nothing reaps a departed controller's shared objects; a reaper needs a way to
+  tell "gone" from "temporarily unreachable", which is a decision, not a patch.
 
 ## Cross-cutting foundations (missing from the old plan, needed for public)
 

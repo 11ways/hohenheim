@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import org.junit.jupiter.api.BeforeAll;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -28,6 +31,13 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 class ManagedDatabaseTest {
 
+    /** Names and labels are controller-namespaced, so this needs a real identity. */
+    @BeforeAll
+    static void controllerIdentity() {
+        HohenheimTestRuntime.ensureDatasource();
+    }
+
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
     private static final String PG_IMAGE = "postgres:17-alpine";
     private static final String MYSQL_IMAGE = "mysql:8.0";
@@ -41,7 +51,7 @@ class ManagedDatabaseTest {
 
         ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         String name = "test" + System.nanoTime();
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         try {
             // ephemeral=true -> data dir is a RAM tmpfs mount, so Postgres initdb never
             // fsync-storms the btrfs root (which previously stalled it for minutes).
@@ -94,7 +104,7 @@ class ManagedDatabaseTest {
 
         ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         String name = "foreign" + System.nanoTime();
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         // 1. Plant an UNLABELLED container squatting on the name (what the legacy path
         //    would have force-removed without a second thought).
         docker.createContainer(containerName, Map.of(
@@ -126,7 +136,7 @@ class ManagedDatabaseTest {
 
         ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         String name = "buptest" + System.nanoTime();
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         try {
             databases.provision(name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
                 "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs, no btrfs I/O
@@ -154,7 +164,7 @@ class ManagedDatabaseTest {
 
         ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         String name = "rttest" + System.nanoTime();
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         List<String> env = List.of("PGPASSWORD=secret123");
         try {
             databases.provision(name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
@@ -194,7 +204,7 @@ class ManagedDatabaseTest {
 
         ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         String name = "mytest" + System.nanoTime();
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         List<String> env = List.of("MYSQL_PWD=secret123");
         try {
             databases.provision(name, ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE,

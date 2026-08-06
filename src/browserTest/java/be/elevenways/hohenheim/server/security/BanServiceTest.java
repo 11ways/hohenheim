@@ -78,7 +78,7 @@ class BanServiceTest {
         assertThat(service.isBanned("198.51.100.10")).isTrue();
         assertThat(service.isBanned("198.51.100.11")).isFalse();
         assertThat(nftCommands).contains(
-            "add element inet hohenheim banned_v4 { 198.51.100.10 timeout 3600s }");
+            "add element inet " + NftService.table() + " banned_v4 { 198.51.100.10 timeout 3600s }");
     }
 
     @Test
@@ -96,7 +96,7 @@ class BanServiceTest {
         Row ban = service.createBan("198.51.100.30", null, BanModel.SOURCE_MANUAL, null, null);
         assertThat(ban.get(BanModel.EXPIRES_AT)).isNull();
         assertThat(nftCommands).contains(
-            "add element inet hohenheim banned_v4 { 198.51.100.30 }");
+            "add element inet " + NftService.table() + " banned_v4 { 198.51.100.30 }");
     }
 
     @Test
@@ -114,7 +114,7 @@ class BanServiceTest {
         assertThat(reloaded.get(BanModel.LIFTED_AT)).isNotNull();
         assertThat(reloaded.get(BanModel.LIFTED_BY)).isEqualTo("Test Admin");
         assertThat(nftCommands).contains(
-            "delete element inet hohenheim banned_v4 { 198.51.100.40 }");
+            "delete element inet " + NftService.table() + " banned_v4 { 198.51.100.40 }");
     }
 
     @Test
@@ -239,7 +239,7 @@ class BanServiceTest {
         assertThat(ban).isNotNull();
         assertThat(ban.get(BanModel.REASON)).isEqualTo("reputation test reason");
         assertThat(nftCommands).anySatisfy(cmd ->
-            assertThat(cmd).startsWith("add element inet hohenheim banned_v4 { 198.51.100.90 timeout "));
+            assertThat(cmd).startsWith("add element inet " + NftService.table() + " banned_v4 { 198.51.100.90 timeout "));
     }
 
     @Test
@@ -482,13 +482,13 @@ class BanServiceTest {
         service.awaitNftBootForTests();
 
         assertThat(nftCommands).anySatisfy(cmd ->
-            assertThat(cmd).startsWith("add table inet hohenheim"));
+            assertThat(cmd).startsWith("add table inet " + NftService.table()));
         assertThat(nftCommands).contains(
-            "flush set inet hohenheim banned_v4",
-            "flush set inet hohenheim banned_v6",
-            "add element inet hohenheim banned_v4 { 198.51.100.81 }");
+            "flush set inet " + NftService.table() + " banned_v4",
+            "flush set inet " + NftService.table() + " banned_v6",
+            "add element inet " + NftService.table() + " banned_v4 { 198.51.100.81 }");
         assertThat(nftCommands).anySatisfy(cmd ->
-            assertThat(cmd).startsWith("add element inet hohenheim banned_v4 { 198.51.100.80 timeout "));
+            assertThat(cmd).startsWith("add element inet " + NftService.table() + " banned_v4 { 198.51.100.80 timeout "));
     }
 
     @Test

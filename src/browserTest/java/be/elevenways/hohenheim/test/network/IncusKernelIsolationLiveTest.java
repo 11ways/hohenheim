@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -9,7 +11,6 @@ import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.task.VerifyIncusIsolation;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -78,7 +79,11 @@ class IncusKernelIsolationLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
 
         Db.run(datasource, () -> enrolledFingerprint =
@@ -129,7 +134,7 @@ class IncusKernelIsolationLiveTest {
                 .as("step 1: so kernel truth is UNAVAILABLE, never assumed fine")
                 .isFalse();
             assertThatInspectRefuses(IncusKernelIsolation.forServer(laneless),
-                "hohenheim-instance-0");
+                ControllerScope.handle(ControllerScope.KIND_INSTANCE, 0));
 
             // 2. The operator enrolls the second trust relationship, walking the SAME
             //    ceremony the docker hosts walk (scan, out-of-band compare, confirm) --
@@ -168,8 +173,8 @@ class IncusKernelIsolationLiveTest {
 
             int idA = instanceRecord("kernel-tenant-a", 8011);
             int idB = instanceRecord("kernel-tenant-b", 8022);
-            String handleA = "hohenheim-instance-" + idA;
-            String handleB = "hohenheim-instance-" + idB;
+            String handleA = ControllerScope.handle(ControllerScope.KIND_INSTANCE, idA);
+            String handleB = ControllerScope.handle(ControllerScope.KIND_INSTANCE, idB);
 
             try {
                 service.deploy(idA);
@@ -195,7 +200,7 @@ class IncusKernelIsolationLiveTest {
                 dropChains(handleA);
                 assertThat(nicAclOf(handleA))
                     .as("step 6: the daemon still reports the NIC as fully isolated")
-                    .isEqualTo(IncusNetworkPolicy.ACL_NAME);
+                    .isEqualTo(IncusNetworkPolicy.aclName());
                 assertThat(aclShow())
                     .as("step 6: and the ACL still reads back with every tenant reject")
                     .contains("10.0.0.0/8").contains("169.254.0.0/16").contains("fc00::/7");
@@ -312,7 +317,8 @@ class IncusKernelIsolationLiveTest {
     private static Set<String> blamedHandles(List<String> errors) {
         Set<String> handles = new TreeSet<>();
         for (String error : errors) {
-            Matcher matcher = Pattern.compile("hohenheim-instance-\\d+").matcher(error);
+            Matcher matcher = Pattern.compile(Pattern.quote(
+                ControllerScope.kindPrefix(ControllerScope.KIND_INSTANCE)) + "\\d+").matcher(error);
             while (matcher.find()) {
                 handles.add(matcher.group());
             }
@@ -380,7 +386,7 @@ class IncusKernelIsolationLiveTest {
     }
 
     private static String aclShow() {
-        return hostCmd("incus", "network", "acl", "show", IncusNetworkPolicy.ACL_NAME);
+        return hostCmd("incus", "network", "acl", "show", IncusNetworkPolicy.aclName());
     }
 
     private static String runningState(String handle) {

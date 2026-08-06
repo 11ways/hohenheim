@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.migration;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.hohenheim.migration.M017_CreateServers;
 import be.elevenways.hohenheim.migration.M042_CreateStacks;
@@ -162,6 +163,11 @@ class MigrationIntegrityTest {
 
         // 2. Bring the database fully up to date the normal way.
         new MigrationRunner(datasource).migrate().requireSuccess();
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
 
         // 3. Lose the history rows of every ALTER-only migration while keeping the schema: the
         //    state an operator lands in after restoring a populated database into a fresh install,

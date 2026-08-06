@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
@@ -16,6 +17,8 @@ import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.docker.DockerReconciler.Bucket;
 import be.elevenways.hohenheim.server.docker.DockerReconciler.Evidence;
 import be.elevenways.hohenheim.server.docker.DockerReconciler.Finding;
+import be.elevenways.hohenheim.server.ControllerIdentity;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostPins;
@@ -64,6 +67,11 @@ class DockerReconcilerTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
     }
 
@@ -80,6 +88,30 @@ class DockerReconcilerTest {
         public boolean liveByName(Identifier model, String name) {
             return liveNames.contains(model + "#" + name);
         }
+
+        @Override
+        public String controllerToken() {
+            return ControllerIdentity.token();
+        }
+    }
+
+    /** Another controller's identity token: same daemon, different id space. */
+    private static final String OTHER_CONTROLLER = "zq7m4x1b";
+
+    /** A resource name minted by THIS controller. */
+    private static String ours(String rest) {
+        return ControllerScope.PREFIX + "-" + ControllerIdentity.token() + "-" + rest;
+    }
+
+    /** The same resource name, minted by ANOTHER controller against the same daemon. */
+    private static String theirs(String rest) {
+        return ControllerScope.PREFIX + "-" + OTHER_CONTROLLER + "-" + rest;
+    }
+
+    /** Owner labels as another controller writes them for ITS record. */
+    private static Map<String, String> foreignOwner(Identifier model, Object recordId) {
+        return Map.of(OwnerLabels.MODEL, model.toString(), OwnerLabels.ID,
+            String.valueOf(recordId), OwnerLabels.CONTROLLER, OTHER_CONTROLLER);
     }
 
     private static final FakeRecords RECORDS = new FakeRecords(
@@ -103,7 +135,7 @@ class DockerReconcilerTest {
         assertThat(owned.owner().id()).isEqualTo("7");
 
         // 2. Owner labels whose record is gone -> ORPHANED, still carrying WHO it was.
-        Finding orphan = classify("volume", "hohenheim-site-999-vol-data",
+        Finding orphan = classify("volume", ours("site-999-vol-data"),
             mapOf(OwnerLabels.of(SiteModel.MODEL_ID, 999)));
         assertThat(orphan.bucket()).as("dead owner-labelled resource is ORPHANED")
             .isEqualTo(Bucket.ORPHANED);
@@ -118,7 +150,7 @@ class DockerReconcilerTest {
             .isEqualTo(Bucket.ORPHANED);
 
         // 4. The owner label WINS over a colliding-looking name.
-        Finding labelBeatsName = classify("container", "hohenheim-site-999",
+        Finding labelBeatsName = classify("container", ours("site-999"),
             mapOf(OwnerLabels.of(SiteModel.MODEL_ID, 7)));
         assertThat(labelBeatsName.bucket()).isEqualTo(Bucket.OWNED);
         assertThat(labelBeatsName.evidence()).isEqualTo(Evidence.OWNER_LABEL);
@@ -127,45 +159,45 @@ class DockerReconcilerTest {
     @Test
     void legacyStackLabelsAndNamingSchemesStillAttribute() {
         // 1. Pre-owner-label stack resources carry only the stack-name label.
-        Finding stackOwned = classify("container", "hohenheim-stack-shop-web",
+        Finding stackOwned = classify("container", ours("stack-shop-web"),
             Map.of(StackDeployer.LABEL_STACK, "shop"));
         assertThat(stackOwned.bucket()).as("live stack label is OWNED").isEqualTo(Bucket.OWNED);
         assertThat(stackOwned.evidence()).isEqualTo(Evidence.STACK_LABEL);
 
-        Finding stackOrphan = classify("volume", "hohenheim-stack-dead-data",
+        Finding stackOrphan = classify("volume", ours("stack-dead-data"),
             Map.of(StackDeployer.LABEL_STACK, "dead"));
         assertThat(stackOrphan.bucket()).as("dead stack label is ORPHANED")
             .isEqualTo(Bucket.ORPHANED);
 
         // 2. Unlabelled resources named by OUR schemes resolve through the records:
         //    a live site's volume is owned-by-name (relabels on next recreate)...
-        Finding siteVolume = classify("volume", "hohenheim-site-7-vol-uploads", Map.of());
+        Finding siteVolume = classify("volume", ours("site-7-vol-uploads"), Map.of());
         assertThat(siteVolume.bucket()).as("live site's unlabelled volume is OWNED")
             .isEqualTo(Bucket.OWNED);
         assertThat(siteVolume.evidence()).isEqualTo(Evidence.NAME);
 
         //    ...and a DEAD site's volume is the orphan this whole feature exists for.
-        Finding deadSiteVolume = classify("volume", "hohenheim-site-41-vol-data", Map.of());
+        Finding deadSiteVolume = classify("volume", ours("site-41-vol-data"), Map.of());
         assertThat(deadSiteVolume.bucket())
             .as("unlabelled volume of a deleted site surfaces as ORPHANED")
             .isEqualTo(Bucket.ORPHANED);
         assertThat(deadSiteVolume.evidence()).isEqualTo(Evidence.NAME);
 
         // 3. Database naming: container by name, volume by name + -data suffix.
-        assertThat(classify("container", "hohenheim-db-appdb", Map.of()).bucket())
+        assertThat(classify("container", ours("db-appdb"), Map.of()).bucket())
             .as("live db container by name").isEqualTo(Bucket.OWNED);
-        assertThat(classify("volume", "hohenheim-db-appdb-data", Map.of()).bucket())
+        assertThat(classify("volume", ours("db-appdb-data"), Map.of()).bucket())
             .as("live db volume by name").isEqualTo(Bucket.OWNED);
-        assertThat(classify("volume", "hohenheim-db-gone-data", Map.of()).bucket())
+        assertThat(classify("volume", ours("db-gone-data"), Map.of()).bucket())
             .as("dead db volume is ORPHANED").isEqualTo(Bucket.ORPHANED);
 
         // 4. Stack naming with dashes in the stack name: the longest live candidate
         //    wins ("my-shop" before "my").
-        assertThat(classify("container", "hohenheim-stack-my-shop-web", Map.of()).bucket())
+        assertThat(classify("container", ours("stack-my-shop-web"), Map.of()).bucket())
             .as("dashed stack name resolves").isEqualTo(Bucket.OWNED);
-        assertThat(classify("network", "hohenheim-stack-shop", Map.of()).bucket())
+        assertThat(classify("network", ours("stack-shop"), Map.of()).bucket())
             .as("stack network by name").isEqualTo(Bucket.OWNED);
-        assertThat(classify("volume", "hohenheim-stack-vanished-data", Map.of()).bucket())
+        assertThat(classify("volume", ours("stack-vanished-data"), Map.of()).bucket())
             .as("stack-scheme resource with no live stack is ORPHANED")
             .isEqualTo(Bucket.ORPHANED);
     }
@@ -197,7 +229,7 @@ class DockerReconcilerTest {
         Finding colliding = classify("container", "hohenheim-imposter", Map.of());
         assertThat(colliding.bucket()).as("hohenheim-* junk collides")
             .isEqualTo(Bucket.FOREIGN_COLLIDING);
-        Finding badSiteShape = classify("container", "hohenheim-site-notanumber", Map.of());
+        Finding badSiteShape = classify("container", ours("site-notanumber"), Map.of());
         assertThat(badSiteShape.bucket()).as("site scheme with non-numeric id collides")
             .isEqualTo(Bucket.FOREIGN_COLLIDING);
         assertThat(classify("container", "qq-postgres", Map.of()).bucket())
@@ -207,18 +239,76 @@ class DockerReconcilerTest {
             .isEqualTo(Bucket.FOREIGN_UNRELATED);
     }
 
+    /**
+     * Two controllers, one daemon, the SAME record id: the classifier must answer for
+     * the OTHER controller's resources without ever consulting our records, because a
+     * record id only means something inside the database that allocated it.
+     */
+    @Test
+    void anotherControllersResourcesNeverResolveAgainstOurRecords() {
+        // 1. Control: our own labelled resource for live site #7 is OWNED.
+        Finding mine = classify("container", ours("site-7"),
+            mapOf(OwnerLabels.of(SiteModel.MODEL_ID, 7)));
+        assertThat(mine.bucket())
+            .as("step 1: our own controller's labelled container for a live record is OWNED")
+            .isEqualTo(Bucket.OWNED);
+
+        // 2. ANOTHER controller's labels naming ITS site #7 -- byte-identical model and
+        //    id -- must NOT come back OWNED. This is the exact shape that made
+        //    removeIfOwnedBy unable to refuse another controller's running container.
+        Finding foreign = classify("container", theirs("site-7"),
+            foreignOwner(SiteModel.MODEL_ID, 7));
+        assertThat(foreign.bucket())
+            .as("step 2: another controller's site #7 is a COLLISION, not our record")
+            .isEqualTo(Bucket.FOREIGN_COLLIDING);
+        assertThat(foreign.detail())
+            .as("step 2: the refusal names the controller that actually owns it")
+            .contains(OTHER_CONTROLLER);
+        assertThat(foreign.owner().controller())
+            .as("step 2: the parsed owner carries the foreign controller, not ours")
+            .isEqualTo(OTHER_CONTROLLER);
+
+        // 3. Their NAME alone (unlabelled) must not resolve through our records either:
+        //    site 7 is live HERE, and name attribution would have called it ours.
+        Finding foreignName = classify("volume", theirs("site-7-vol-uploads"), Map.of());
+        assertThat(foreignName.bucket())
+            .as("step 3: another controller's name never resolves against our records")
+            .isEqualTo(Bucket.FOREIGN_COLLIDING);
+        assertThat(foreignName.detail()).contains(OTHER_CONTROLLER);
+
+        // 4. A PRE-NAMESPACE resource (owner labels, no controller label) is attributable
+        //    to no controller at all: reported loudly, never silently adopted or ignored.
+        Finding preNamespace = classify("container", "hohenheim-site-7",
+            Map.of(OwnerLabels.MODEL, SiteModel.MODEL_ID.toString(), OwnerLabels.ID, "7"));
+        assertThat(preNamespace.bucket())
+            .as("step 4: a pre-namespace resource is a collision, not an orphan or ours")
+            .isEqualTo(Bucket.FOREIGN_COLLIDING);
+        assertThat(preNamespace.detail())
+            .as("step 4: the detail says WHY it cannot be attributed")
+            .contains("pre-namespace");
+
+        // 5. And a pre-namespace name with no labels at all says the same thing.
+        Finding preNamespaceName = classify("volume", "hohenheim-site-7-vol-uploads", Map.of());
+        assertThat(preNamespaceName.bucket())
+            .as("step 5: a pre-namespace unlabelled name is a collision")
+            .isEqualTo(Bucket.FOREIGN_COLLIDING);
+        assertThat(preNamespaceName.detail())
+            .as("step 5: named as carrying no controller namespace")
+            .contains("no controller namespace");
+    }
+
     @Test
     void classifyAllReadsRealListingShapes() {
         // Shapes exactly as /containers/json, /volumes and /networks come back.
         List<Object> containers = List.of(Map.of(
-            "Names", List.of("/hohenheim-site-7"),
+            "Names", List.of("/" + ours("site-7")),
             "Labels", mapOf(OwnerLabels.of(SiteModel.MODEL_ID, 7))));
-        List<Object> volumes = List.of(Map.of("Name", "hohenheim-site-41-vol-data"));
+        List<Object> volumes = List.of(Map.of("Name", ours("site-41-vol-data")));
         List<Object> networks = List.of(Map.of("Name", "bridge"));
 
         List<Finding> findings = DockerReconciler.classifyAll(containers, volumes, networks, RECORDS);
         assertThat(findings).hasSize(3);
-        assertThat(findings.get(0).name()).as("leading slash stripped").isEqualTo("hohenheim-site-7");
+        assertThat(findings.get(0).name()).as("leading slash stripped").isEqualTo(ours("site-7"));
         assertThat(findings.get(0).bucket()).isEqualTo(Bucket.OWNED);
         assertThat(findings.get(1).bucket()).as("label-less volume classified by name")
             .isEqualTo(Bucket.ORPHANED);
@@ -245,7 +335,7 @@ class DockerReconcilerTest {
             int id = instance.get(InstanceModel.ID);
             DockerReconciler.Records records = new DockerReconciler.ModelRecords();
 
-            Finding live = DockerReconciler.classify("container", "hohenheim-instance-" + id,
+            Finding live = DockerReconciler.classify("container", ours("instance-" + id),
                 mapOf(OwnerLabels.of(InstanceModel.MODEL_ID, id)),
                 records);
             assertThat(live.bucket())
@@ -258,7 +348,7 @@ class DockerReconcilerTest {
             instance.set(InstanceModel.DELETED_AT,
                 Instant.now());
             Models.get(InstanceModel.class).save(instance);
-            Finding trashed = DockerReconciler.classify("container", "hohenheim-instance-" + id,
+            Finding trashed = DockerReconciler.classify("container", ours("instance-" + id),
                 mapOf(OwnerLabels.of(InstanceModel.MODEL_ID, id)),
                 records);
             assertThat(trashed.bucket())
@@ -269,7 +359,7 @@ class DockerReconcilerTest {
             //    name: the tier was born after the owner labels, so an unlabelled
             //    lookalike is a collision, never adopted-by-name.
             Finding lookalike = DockerReconciler.classify("container",
-                "hohenheim-instance-" + id, Map.of(), records);
+                ours("instance-" + id), Map.of(), records);
             assertThat(lookalike.bucket())
                 .as("step 3: an unlabelled instance-named container is FOREIGN_COLLIDING")
                 .isEqualTo(Bucket.FOREIGN_COLLIDING);
@@ -285,18 +375,18 @@ class DockerReconcilerTest {
         Db.run(datasource, () -> {
             // 1. First sweep of "local": an orphan, a collision, and quiet buckets.
             DockerReconciler.store("local", List.of(
-                new Finding("volume", "hohenheim-site-41-vol-data", Bucket.ORPHANED,
+                new Finding("volume", ours("site-41-vol-data"), Bucket.ORPHANED,
                     Evidence.NAME, null, "no live record"),
                 new Finding("container", "hohenheim-imposter", Bucket.FOREIGN_COLLIDING,
                     Evidence.NAME, null, null),
                 new Finding("container", "serene_poincare", Bucket.FOREIGN_KNOWN,
                     Evidence.FOREIGN_LABEL, null, "org.testcontainers"),
-                new Finding("container", "hohenheim-site-7", Bucket.OWNED,
+                new Finding("container", ours("site-7"), Bucket.OWNED,
                     Evidence.OWNER_LABEL,
-                    new OwnerLabels.Owner(SiteModel.MODEL_ID, "7"), null)));
+                    new OwnerLabels.Owner(SiteModel.MODEL_ID, "7", ControllerIdentity.token()), null)));
             // A second server's findings live independently.
             DockerReconciler.store("edge-1", List.of(
-                new Finding("volume", "hohenheim-db-gone-data", Bucket.ORPHANED,
+                new Finding("volume", ours("db-gone-data"), Bucket.ORPHANED,
                     Evidence.NAME, null, "no live record")));
 
             List<Row> stored = Models.get(ReconcileFindingModel.class).find().all();
@@ -315,9 +405,9 @@ class DockerReconcilerTest {
             // 3. Re-sweeping local REPLACES its findings and clears its attention,
             //    while edge-1's stored truth is untouched.
             DockerReconciler.store("local", List.of(
-                new Finding("container", "hohenheim-site-7", Bucket.OWNED,
+                new Finding("container", ours("site-7"), Bucket.OWNED,
                     Evidence.OWNER_LABEL,
-                    new OwnerLabels.Owner(SiteModel.MODEL_ID, "7"), null)));
+                    new OwnerLabels.Owner(SiteModel.MODEL_ID, "7", ControllerIdentity.token()), null)));
             List<Row> after = Models.get(ReconcileFindingModel.class).find().all();
             assertThat(after).hasSize(2);
             assertThat(after).extracting(row -> row.get(ReconcileFindingModel.SERVER_NAME))
@@ -522,7 +612,11 @@ class DockerReconcilerTest {
         Map<String, Object> spec = new LinkedHashMap<>();
         spec.put("Image", "alpine:latest");
         spec.put("Cmd", List.of("sleep", "60"));
-        spec.put("Labels", OwnerLabels.of(SiteModel.MODEL_ID, 987_654));
+        // AIDEV-NOTE: minted INSIDE this class's datasource scope on purpose. The owner
+        // labels now carry the controller identity, and this class has two databases in
+        // play (its own plus the runtime's default), so labelling outside the scope the
+        // sweep runs in would compare two different controllers' tokens.
+        spec.put("Labels", Db.supply(datasource, () -> OwnerLabels.of(SiteModel.MODEL_ID, 987_654)));
         docker.createContainer(name, spec, ContainerHardening.STRICT);
 
         try {

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
@@ -17,7 +19,6 @@ import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.schedule.InstanceSnapshotAction;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -92,8 +93,11 @@ class IncusSnapshotBackupLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        // Unique per-class instance ids => unique daemon handles across parallel forks.
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
 
         workRoot = Files.createTempDirectory("hohenheim-incus-backup-test");
@@ -148,7 +152,7 @@ class IncusSnapshotBackupLiveTest {
     void nightlyScheduleSnapshotRestoreOffHostBackupAndBothRefusalsOnIncus() {
         Db.run(datasource, () -> {
             int id = instanceRecord("incus-gate");
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             InstanceService service = new InstanceService();
             InstanceSnapshots snapshots = new InstanceSnapshots();
             InstanceBackups backups = new InstanceBackups();
@@ -281,7 +285,7 @@ class IncusSnapshotBackupLiveTest {
                 String operatorBucket = HohenheimAccess.packSubjects(Set.of());
                 long quotaBefore = InstanceQuota.usedBy(operatorBucket);
                 newId = backups.restoreToNew(backupId, "incus-clone", null);
-                newHandle = "hohenheim-instance-" + newId;
+                newHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, newId);
                 assertThat(newId).as("step 7: the new instance has its own id")
                     .isNotEqualTo(id);
                 Row restored = Models.get(InstanceModel.class).findById(newId);
@@ -335,7 +339,7 @@ class IncusSnapshotBackupLiveTest {
                 assertThat(appeared)
                     .as("step 8: no instance appeared at the daemon for the refused"
                         + " restore (appeared: %s)", appeared)
-                    .noneMatch(daemonHandle -> isOwnIdBlock(daemonHandle, id));
+                    .noneMatch(IncusSnapshotBackupLiveTest::isOwnHandle);
 
                 // 9. INTERRUPTED UPLOAD: a store that dies mid-stream leaves a FAILED
                 //    row, no artifact, no staging debris, and the failed row refuses
@@ -463,15 +467,15 @@ class IncusSnapshotBackupLiveTest {
      * destroyed instance 4543113 mid-window). Worse in the other direction: a count is
      * blind by construction -- one of OUR instances appearing while one of theirs
      * vanished leaves the count equal and the step reports success, which is exactly the
-     * failure this gate exists to catch. Handles carry ids and {@link LiveIdOffsets}
-     * gives every class its own random id base, so judging only handles from this class's
-     * block is both race-free and strictly stronger. IncusCommunityAppLiveTest's
-     * own-handles sweep is the same shape.
+     * failure this gate exists to catch. Every handle carries this controller's identity
+     * token, so judging only handles minted by THIS class's database is both race-free
+     * and exact -- no id-proximity heuristic is involved any more.
+     * IncusCommunityAppLiveTest's own-handles sweep is the same shape.
      */
-    private static boolean isOwnIdBlock(String daemonHandle, int ownInstanceId) {
-        Matcher matcher = Pattern.compile("^hohenheim-instance-(\\d+)$").matcher(daemonHandle);
-        return matcher.matches()
-            && Math.abs(Long.parseLong(matcher.group(1)) - ownInstanceId) < 1000L;
+    private static boolean isOwnHandle(String daemonHandle) {
+        ControllerScope.Scoped scoped = ControllerScope.parse(daemonHandle);
+        return scoped != null && scoped.isOurs()
+            && ControllerScope.KIND_INSTANCE.equals(scoped.kind());
     }
 
     private static byte[] read(Path file) {

@@ -120,16 +120,40 @@ workloads ran) within one 5-minute sweep; tenant-range egress blocked and
 `http://1.1.1.1/` reachable from both tiers; product destroy paths left the
 daemons empty.
 
-## HAZARD: never run two controllers against one daemon
+## Two controllers on one daemon: NAMESPACED, no longer a procedural rule
 
-A hohenheim ON this host and a workstation test suite driving the same
-daemons REMOTELY are two controllers over one resource pool. Workload handles
-are `hohenheim-instance-<id>` with ids from each controller's OWN database, so
-two controllers collide on names: each one's isolation sweeps will inspect,
-"repair", or STOP workloads that belong to the other, and a deploy can
-converge onto a same-named foreign workload. Run them at DIFFERENT times:
-stop this service (`systemctl stop hohenheim`) before pointing the
-workstation's live tests (`~/.config/hohenheim-livehost/*.properties`) at
-this machine, and vice versa. This is a procedural rule because nothing in
-the product namespaces workload handles per controller yet; if that ever
-changes, this section is the place to say so.
+Superseded 2026-08-06 (controller-namespace wave). The temporal-separation rule
+that used to live here is LIFTED: a hohenheim ON this host and a workstation
+suite driving the same daemons remotely may now run CONCURRENTLY.
+
+What changed: every name hohenheim writes onto a shared resource pool carries
+this controller's identity token, minted once into its own control-plane
+database (`controller_identity`, M077) -- the same database that allocates the
+record ids. Handles are `hohenheim-<token>-instance-<id>`; the Docker/Incus
+networks, volumes and image tags derive from those handles; the Incus isolation
+ACL is `hohenheim-<token>-isolation`, the extra bridge `hhx-<token>`, and the
+nftables tables `hohenheim_<token>` / `hohenheim_net_<token>`. Docker resources
+additionally carry a third owner label, `be.elevenways.hohenheim.owner.controller`,
+so ownership is decided by (controller, model, id) and never by (model, id)
+alone. Two controllers therefore mint DIFFERENT names for their respective
+record #1, each one's sweeps see only its own workloads, and each one's
+ownership guard REFUSES the other's by name and by label. Proven live on one
+real daemon by `TwoControllerCollisionLiveTest`, counterfactual included.
+
+There is deliberately NO default identity: a controller that cannot read or
+mint its row refuses to name anything rather than falling back to a shared
+value. That fallback is exactly how this hazard existed.
+
+What is still shared, by design, and what it means:
+
+- The HOST PORTS a workload publishes. Two controllers cannot arbitrate a port
+  between them (neither ledger can see the other's), so the second bind simply
+  fails. Loud, at the daemon, not a silent overwrite.
+- Docker's default address pool (~30 user-defined networks per host) is spent
+  by both controllers together.
+- A pre-namespace resource (a bare `hohenheim-instance-N` from before this
+  wave) is attributable to NO controller. It is never adopted and never
+  removed automatically: the reconciler reports it as FOREIGN_COLLIDING with a
+  "pre-namespace" detail, and clearing it is an explicit operator removal.
+  Both daystrom and nightstrom were verified to hold zero such resources when
+  the namespace landed.

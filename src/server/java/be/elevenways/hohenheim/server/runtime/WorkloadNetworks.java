@@ -115,11 +115,15 @@ public final class WorkloadNetworks {
                 + name + "' does not exist, so the container would fall back to no isolation"
                 + " at all. Redeploy the instance.");
         }
-        if (OwnerLabels.parse(existing.get("Labels") instanceof Map<?, ?> labels ? labels : null)
-                == null) {
+        OwnerLabels.Owner owner = OwnerLabels.parse(
+            existing.get("Labels") instanceof Map<?, ?> labels ? labels : null);
+        if (!OwnerLabels.isOurs(owner)) {
             throw new IOException("REFUSED to start '" + handle + "': the network '" + name
-                + "' carries no hohenheim owner labels, so it is not attributably ours and we"
-                + " will not enforce a tenant policy onto a stranger's network.");
+                + "' is not attributably ours (" + (owner == null
+                    ? "no hohenheim owner labels"
+                    : "owned by controller '" + owner.controller() + "'")
+                + "), and we will not enforce a tenant policy onto another controller's or a"
+                + " stranger's network.");
         }
         policy.apply(WorkloadNetwork.fromInspect(docker.inspectNetwork(name)), egress);
     }

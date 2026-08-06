@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.build.BuildQuota;
 import be.elevenways.hohenheim.server.build.BuildRequest;
@@ -178,7 +179,7 @@ public final class PreviewDeployments {
                     checkout.toPath(),
                     str(siteSettings.get("dockerfile")).isEmpty()
                         ? null : str(siteSettings.get("dockerfile")),
-                    "hohenheim-preview-" + previewId + ":latest",
+                    ControllerScope.handle(ControllerScope.KIND_PREVIEW, previewId) + ":latest",
                     EnvVars.toMap(siteSettings.get("build_arguments")),
                     commitSha, null, BuildQuota.fromSettings()));
             if (!build.succeeded() || build.imageId() == null) {

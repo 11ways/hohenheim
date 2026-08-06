@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.protoblast.common.registry.Identifier;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -16,7 +17,17 @@ import java.util.Map;
  * (Identifier.toString() for the model, String.valueOf for the id), because
  * ownership in this product is grant-derived: a labelled resource resolves to an
  * owner through the ONE existing authority (the record's manage-grant subject
- * set), never through a second owner column. Do not add a third spelling.
+ * set), never through a second owner column. Do not add a second spelling of the
+ * OWNER; the third label below is not one -- it names the CONTROLLER, which is the
+ * scope the (model, id) pair is only unique inside.
+ *
+ * AIDEV-NOTE: the controller label is what makes the refusal below possible at all.
+ * Record ids are allocated per DATABASE, so two controllers on one daemon labelled
+ * their respective record #1 identically: not merely same-named, attributably the
+ * SAME RECORD, and removeIfOwnedBy could not refuse because the labels genuinely
+ * matched (observed: one test fork force-removed another's RUNNING container and tore
+ * down its network). ControllerScope namespaces the NAMES so the collision stops
+ * happening; this label is the guard that still answers correctly if it ever does.
  */
 public final class OwnerLabels {
 
@@ -26,14 +37,30 @@ public final class OwnerLabels {
     /** Label carrying the owning record's primary key, stringified. */
     public static final String ID = "be.elevenways.hohenheim.owner.id";
 
-    /** A parsed owner claim: which record of which model created the resource. */
-    public record Owner(@NonNull Identifier model, @NonNull String id) {}
+    /** Label carrying the id-allocating controller's identity token. */
+    public static final String CONTROLLER = "be.elevenways.hohenheim.owner.controller";
+
+    /**
+     * A parsed owner claim: which record of which model, of which controller, created
+     * the resource.
+     *
+     * @param controller null on a pre-namespace resource, which is therefore attributable
+     *                   to no controller and is never a replace target
+     */
+    public record Owner(@NonNull Identifier model, @NonNull String id,
+                        @Nullable String controller) {}
 
     private OwnerLabels() {}
 
-    /** The two owner labels for one record. */
+    /** The three owner labels for one record. */
     public static @NonNull Map<String, String> of(@NonNull Identifier model, @NonNull Object recordId) {
-        return Map.of(MODEL, model.toString(), ID, String.valueOf(recordId));
+        return Map.of(MODEL, model.toString(), ID, String.valueOf(recordId),
+            CONTROLLER, ControllerIdentity.token());
+    }
+
+    /** @return whether an owner claim was made by THIS controller */
+    public static boolean isOurs(@Nullable Owner owner) {
+        return owner != null && ControllerIdentity.token().equals(owner.controller());
     }
 
     /**
@@ -68,12 +95,16 @@ public final class OwnerLabels {
         Object config = inspect.get("Config");
         Owner owner = parse(config instanceof Map<?, ?> c && c.get("Labels") instanceof Map<?, ?> l
             ? l : null);
-        boolean ours = owner != null && recordId != null && owner.model().equals(model)
+        boolean ours = isOurs(owner) && recordId != null && owner.model().equals(model)
             && owner.id().equals(String.valueOf(recordId));
         if (!ours) {
             throw new IOException("REFUSED to remove container '" + containerName + "': it is not"
                 + " attributably ours (" + (owner != null
-                    ? "owned by " + owner.model() + " #" + owner.id()
+                    ? "owned by " + owner.model() + " #" + owner.id() + " of controller "
+                        + (owner.controller() != null
+                            ? "'" + owner.controller() + "', not this controller '"
+                                + ControllerIdentity.token() + "'"
+                            : "(none: a pre-namespace resource)")
                     : "no hohenheim owner labels")
                 + (recordId == null ? "; this caller has no record identity to match" : "")
                 + "). A same-named foreign container is a name collision, not a replace target;"
@@ -84,9 +115,12 @@ public final class OwnerLabels {
     }
 
     /**
-     * @return the owner claim carried by a Docker Labels map, or null when either
-     *         label is absent, blank, or the model is not an explicit {@code ns:path}
-     *         (Identifier.tryParse would silently invent a default namespace)
+     * @return the owner claim carried by a Docker Labels map, or null when either of the
+     *         two REQUIRED labels is absent, blank, or the model is not an explicit
+     *         {@code ns:path} (Identifier.tryParse would silently invent a default
+     *         namespace). A missing controller label parses to a null controller rather
+     *         than to null, so a pre-namespace resource stays visible as ours-shaped and
+     *         is reported instead of vanishing into the unrelated bucket.
      */
     public static @Nullable Owner parse(@Nullable Map<?, ?> labels) {
         if (labels == null) {
@@ -102,6 +136,8 @@ public final class OwnerLabels {
         if (parsed == null) {
             return null;
         }
-        return new Owner(parsed, idText);
+        String controller = labels.get(CONTROLLER) instanceof String text && !text.isBlank()
+            ? text : null;
+        return new Owner(parsed, idText, controller);
     }
 }

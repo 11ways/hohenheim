@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.preview;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DeploymentModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -17,7 +18,6 @@ import be.elevenways.hohenheim.server.preview.PreviewDomains;
 import be.elevenways.hohenheim.server.preview.PreviewQuota;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -68,7 +68,6 @@ class PreviewDeploymentLiveTest {
         if (!booted) {
             booted = true;
             ProxyTestSupport.bootRuntime();
-            LiveIdOffsets.apply(HohenheimDatabase.datasource());
         }
         HohenheimSettings.VALUES.setValue(
             HohenheimSettings.Previews.BASE_DOMAIN, "preview.test");
@@ -246,7 +245,7 @@ class PreviewDeploymentLiveTest {
             (Map<String, Object>) instance.get(InstanceModel.SETTINGS);
         assertThat(String.valueOf(stored.get("image")))
             .as("step 2: the preview runs a digest-pinned build").startsWith("sha256:");
-        String handle = "hohenheim-instance-" + instanceId;
+        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
         assertThat(isRunning(docker, handle))
             .as("step 2: the container runs at the daemon").isTrue();
         Row generatedDomain = generatedDomainOf(previewId);

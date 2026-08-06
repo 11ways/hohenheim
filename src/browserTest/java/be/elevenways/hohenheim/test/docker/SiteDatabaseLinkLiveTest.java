@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -14,7 +15,6 @@ import be.elevenways.hohenheim.server.docker.DockerSiteRequestHandler;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -70,7 +70,6 @@ class SiteDatabaseLinkLiveTest {
         if (!booted) {
             booted = true;
             ProxyTestSupport.bootRuntime();
-            LiveIdOffsets.apply(HohenheimDatabase.datasource());
         }
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
@@ -133,7 +132,7 @@ class SiteDatabaseLinkLiveTest {
             assertThat(first.getUpstream())
                 .as("step 1: the site deploys and serves with a database attached")
                 .isNotNull();
-            String siteHandle = "hohenheim-instance-" + first.getInstanceId();
+            String siteHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, first.getInstanceId());
 
             // 2. The injected environment is container-network shaped: the database's
             //    container hostname and the engine's own port, never 127.0.0.1.
@@ -192,7 +191,7 @@ class SiteDatabaseLinkLiveTest {
             assertThat(detached.getInstanceId())
                 .as("step 5: the detach really produced a NEW release")
                 .isNotEqualTo(first.getInstanceId());
-            String detachedHandle = "hohenheim-instance-" + detached.getInstanceId();
+            String detachedHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, detached.getInstanceId());
             assertThat(containerEnv(docker, detachedHandle))
                 .as("step 5: the new release carries no database variables")
                 .doesNotContainKey("DB_HOST").doesNotContainKey("DATABASE_URL");
@@ -213,7 +212,7 @@ class SiteDatabaseLinkLiveTest {
                 new DockerSiteRequestHandler(SITE_ID, "dblink-site", settingsFor(repo));
             assertThat(both.getUpstream())
                 .as("step 6: the site releases with two attachments").isNotNull();
-            String bothHandle = "hohenheim-instance-" + both.getInstanceId();
+            String bothHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, both.getInstanceId());
             Map<String, String> bothEnv = containerEnv(docker, bothHandle);
             assertThat(bothEnv)
                 .as("step 6: both families are injected")
@@ -258,7 +257,7 @@ class SiteDatabaseLinkLiveTest {
                 .as("step 7: stamped as an ERROR, never a silent success")
                 .isEqualTo(InstanceModel.STATUS_ERROR);
             assertThat(isRunning(docker,
-                    "hohenheim-instance-" + crossServing.get(InstanceModel.ID)))
+                    ControllerScope.handle(ControllerScope.KIND_INSTANCE, crossServing.get(InstanceModel.ID))))
                 .as("step 7: and no workload runs at the daemon for it")
                 .isFalse();
             rowB.set(DatabaseModel.SERVER_ID, ServerModel.localServerId());
@@ -290,7 +289,7 @@ class SiteDatabaseLinkLiveTest {
     /** Mirrors SiteDatabaseNetworks.linkHandle (deliberately re-spelled: the naming
      *  scheme is a public daemon-side contract the sweep and reconciler rely on). */
     private static String linkHandle(int siteId, int databaseId) {
-        return "hohenheim-dblink-" + siteId + "-" + databaseId;
+        return ControllerScope.handle(ControllerScope.KIND_DBLINK, siteId) + "-" + databaseId;
     }
 
     private static Integer databaseId(String name) {

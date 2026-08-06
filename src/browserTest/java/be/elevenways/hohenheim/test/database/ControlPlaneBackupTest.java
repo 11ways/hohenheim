@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
@@ -60,6 +61,11 @@ class ControlPlaneBackupTest {
         FieldEncryption.installKeyring(keyring);
         SqliteDatasource datasource = new SqliteDatasource("jdbc:sqlite:" + dbFile.toAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         Db.run(datasource, () -> {
             KeyringGuard.runPerRegisteredModels();
             Model channels = Models.get(NotificationChannelModel.class);

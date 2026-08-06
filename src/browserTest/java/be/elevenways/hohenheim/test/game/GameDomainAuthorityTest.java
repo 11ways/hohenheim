@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.game;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -251,7 +252,8 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         assertThat(content)
             .as("step 1: forced-hosts maps the hostname onto the backend's link address")
             .contains("\"" + HOST + "\" = [\"backend-" + backendId + "\"]")
-            .contains("backend-" + backendId + " = \"hohenheim-instance-" + backendId + ":25565\"");
+            .contains("backend-" + backendId + " = \""
+                + ControllerScope.handle(ControllerScope.KIND_INSTANCE, backendId) + ":25565\"");
 
         // 2. The generated SRV row exists, attributed to the MAPPING, with the proxy's
         //    PUBLIC pre-allocated port and the hostname as target.

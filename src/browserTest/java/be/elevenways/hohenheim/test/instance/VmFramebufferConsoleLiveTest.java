@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -60,7 +61,7 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
 
         int userId = user("fb-live");
         int instanceId = vmRecord("vm-fb-probe", hostId);
-        String handle = "hohenheim-instance-" + instanceId;
+        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
         RecordGrants.grant("user", userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE, true);
         String token = sessionFor(userId);

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
@@ -8,7 +11,6 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -63,6 +65,11 @@ class InstanceNetworkIsolationTest {
         public boolean liveByName(Identifier model, String name) {
             return false;
         }
+
+        @Override
+        public String controllerToken() {
+            return ControllerIdentity.token();
+        }
     };
 
     private static SqliteDatasource datasource;
@@ -74,8 +81,11 @@ class InstanceNetworkIsolationTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        // Unique per-class instance ids => unique daemon handles (no cross-class 409s).
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
     }
 
@@ -97,8 +107,8 @@ class InstanceNetworkIsolationTest {
                     InstanceService service = new InstanceService();
                     ids[0] = record("net-tenant-a", CLIENT_IMAGE, "sleep 600");
                     ids[1] = record("net-tenant-b", SERVER_IMAGE, null);
-                    String handleA = "hohenheim-instance-" + ids[0];
-                    String handleB = "hohenheim-instance-" + ids[1];
+                    String handleA = ControllerScope.handle(ControllerScope.KIND_INSTANCE, ids[0]);
+                    String handleB = ControllerScope.handle(ControllerScope.KIND_INSTANCE, ids[1]);
 
                     service.deploy(ids[0]);
                     service.deploy(ids[1]);
@@ -165,7 +175,7 @@ class InstanceNetworkIsolationTest {
             } finally {
                 WorkloadNetworkPolicy.overrideForTest(null);
                 for (int id : ids) {
-                    cleanup(docker, "hohenheim-instance-" + id);
+                    cleanup(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, id));
                 }
             }
         }
@@ -192,7 +202,7 @@ class InstanceNetworkIsolationTest {
             Db.run(datasource, () -> {
                 HostFixtures.admitLocal();
                 ids[0] = record("net-refused", CLIENT_IMAGE, "sleep 600");
-                String handle = "hohenheim-instance-" + ids[0];
+                String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, ids[0]);
 
                 // 1. The deploy is refused, naming the reason the operator has to act on.
                 Throwable thrown = catchThrowable(() -> new InstanceService().deploy(ids[0]));
@@ -225,7 +235,7 @@ class InstanceNetworkIsolationTest {
             });
         } finally {
             WorkloadNetworkPolicy.overrideForTest(null);
-            cleanup(docker, "hohenheim-instance-" + ids[0]);
+            cleanup(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, ids[0]));
         }
     }
 

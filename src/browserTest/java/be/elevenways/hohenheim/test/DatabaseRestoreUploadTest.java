@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -58,7 +59,7 @@ class DatabaseRestoreUploadTest extends HohenheimTestBase {
         assumeTrue(imagePresent(docker, POSTGRES_IMAGE), POSTGRES_IMAGE + " not present locally");
 
         String name = "restoreui" + System.nanoTime();
-        String container = "hohenheim-db-" + name;
+        String container = ControllerScope.handle(ControllerScope.KIND_DB, name);
         ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
         DatabaseModel model = Models.get(DatabaseModel.class);
         try {

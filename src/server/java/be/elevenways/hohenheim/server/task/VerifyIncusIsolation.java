@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -143,7 +144,7 @@ public class VerifyIncusIsolation extends ScheduledTask {
         List<String> errors = new ArrayList<>();
         for (Row instance : instances) {
             int id = ((Number) instance.get(InstanceModel.ID)).intValue();
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             boolean diverged;
             try {
                 diverged = !isolation.inspect(handle).enforced();

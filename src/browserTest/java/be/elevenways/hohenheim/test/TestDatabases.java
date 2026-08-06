@@ -1,7 +1,11 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.ControllerIdentityModel;
+import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.zenit.common.orm.datasource.Db;
+import be.elevenways.zenit.common.orm.model.Models;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -47,12 +51,31 @@ public final class TestDatabases {
 
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
+        remintControllerIdentity();
 
         if (template == null) {
             captureTemplate(db);
         }
 
         return db;
+    }
+
+    /**
+     * A copied database must NOT inherit the template's controller identity.
+     *
+     * AIDEV-NOTE: the whole point of the identity is that one database is one controller,
+     * and every daemon resource name is namespaced by it. A file copy would hand several
+     * "controllers" the same token while their record ids both restart at 1 -- exactly
+     * the collision the namespace exists to remove. Dropping the row makes the next
+     * resolve mint a fresh one.
+     */
+    private static void remintControllerIdentity() {
+        Db.run(HohenheimDatabase.datasource(), () ->
+            Models.get(ControllerIdentityModel.class).find().all()
+                .forEach(row -> Models.get(ControllerIdentityModel.class)
+                    .delete(row.get(ControllerIdentityModel.ID))));
+        ControllerIdentity.forgetForTest();
+        ControllerIdentity.resolve();
     }
 
     /**

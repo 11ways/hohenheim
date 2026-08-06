@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -15,7 +16,6 @@ import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -60,8 +60,6 @@ class DockerSiteHandlerTest {
     @BeforeAll
     static void bootRuntime() throws Exception {
         HohenheimTestRuntime.ensureBooted();
-        // Unique per-class instance ids => unique daemon handles across parallel forks.
-        LiveIdOffsets.apply(HohenheimDatabase.datasource());
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
             WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
@@ -98,7 +96,7 @@ class DockerSiteHandlerTest {
             new DockerSiteRequestHandler(siteId, "contract site", settings);
 
         Integer instanceId = handler.getInstanceId();
-        String containerName = "hohenheim-instance-" + instanceId;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
         String volumeName = containerName + "-vol-data";
         try {
             // 1. The site's running release IS an owned instance: the row exists, is
@@ -223,7 +221,7 @@ class DockerSiteHandlerTest {
             "memory_limit_mb", 128,
             "cpu_limit", 0.5
         ));
-        String containerName = "hohenheim-instance-" + handler.getInstanceId();
+        String containerName = ControllerScope.handle(ControllerScope.KIND_INSTANCE, handler.getInstanceId());
         String volumeName = containerName + "-vol-data";
         try {
             Map<String, Object> info = docker.inspectContainer(containerName);
@@ -269,7 +267,7 @@ class DockerSiteHandlerTest {
         DockerSiteRequestHandler first = new DockerSiteRequestHandler(siteId, settings);
         Integer instanceId = first.getInstanceId();
         assertThat(instanceId).as("step 1").isNotNull();
-        String containerName = "hohenheim-instance-" + instanceId;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
         first.destroy();
         try {
             // 2. Remove our stopped container and plant an UNLABELLED squatter on the
@@ -331,7 +329,7 @@ class DockerSiteHandlerTest {
         assumeTrue(netns != null, "no private netns: the build sandbox refuses to run unprotected");
 
         int siteId = 999_002;
-        String builtImage = "hohenheim-site-" + siteId + ":latest";
+        String builtImage = ControllerScope.handle(ControllerScope.KIND_SITE, siteId) + ":latest";
         Path context = Files.createTempDirectory("hohenheim-docker-build");
         Integer instanceId = null;
         try {
@@ -361,7 +359,7 @@ class DockerSiteHandlerTest {
             //    same digest for the same context, so the settings do not change and the
             //    container is not restarted. Without reproducibility every routing reload
             //    would roll every git-sourced site.
-            String containerName = "hohenheim-instance-" + instanceId;
+            String containerName = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
             String runningId = (String) docker.inspectContainer(containerName).get("Id");
             String firstDigest = String.valueOf(stored.get("image"));
             new DockerSiteRequestHandler(siteId, settings);

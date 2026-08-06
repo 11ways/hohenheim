@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -14,7 +16,6 @@ import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -67,8 +68,11 @@ class HostFencingTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        // Unique per-class instance ids => unique daemon handles across parallel forks.
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
@@ -116,7 +120,7 @@ class HostFencingTest {
             record.set(InstanceModel.SETTINGS, settings);
             Models.get(InstanceModel.class).save(record);
             int id = record.get(InstanceModel.ID);
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
 
             // Controller A: the shared JVM front, but a 2s TTL so a stall loses the lease.
             CountDownLatch aStalled = new CountDownLatch(1);
@@ -191,7 +195,10 @@ class HostFencingTest {
                 for (Object entry : docker.listContainers(true)) {
                     if (entry instanceof Map<?, ?> summary
                         && summary.get("Labels") instanceof Map<?, ?> labels
-                        && OwnerLabels.parse(labels) != null
+                        // Scoped to THIS controller: a sibling test class's database
+                        // numbers its instances from 1 too, and only the controller label
+                        // tells the two #1s apart on a shared daemon.
+                        && OwnerLabels.isOurs(OwnerLabels.parse(labels))
                         && OwnerLabels.parse(labels).model().equals(InstanceModel.MODEL_ID)
                         && OwnerLabels.parse(labels).id().equals(String.valueOf(id))) {
                         owned++;

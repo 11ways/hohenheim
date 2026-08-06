@@ -356,8 +356,8 @@ class PreparedImageTest extends HohenheimTestBase {
                 return sync(Map.of("devices", devices));
             }
             if ("GET".equals(method)
-                    && path.equals("/1.0/network-acls/" + IncusNetworkPolicy.ACL_NAME)) {
-                Object stored = this.aclStore.get(IncusNetworkPolicy.ACL_NAME);
+                    && path.equals("/1.0/network-acls/" + IncusNetworkPolicy.aclName())) {
+                Object stored = this.aclStore.get(IncusNetworkPolicy.aclName());
                 return stored == null ? notFound("Network ACL not found") : sync(stored);
             }
             if ("POST".equals(method) && path.equals("/1.0/network-acls")) {
@@ -366,9 +366,9 @@ class PreparedImageTest extends HohenheimTestBase {
                 return sync(body);
             }
             if ("PUT".equals(method)
-                    && path.equals("/1.0/network-acls/" + IncusNetworkPolicy.ACL_NAME)) {
+                    && path.equals("/1.0/network-acls/" + IncusNetworkPolicy.aclName())) {
                 Map<String, Object> body = parse(jsonBody);
-                this.aclStore.put(IncusNetworkPolicy.ACL_NAME, body);
+                this.aclStore.put(IncusNetworkPolicy.aclName(), body);
                 return sync(body);
             }
             if ("GET".equals(method) && path.startsWith("/1.0/images/aliases/")) {
