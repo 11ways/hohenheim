@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
@@ -85,7 +86,7 @@ public final class GameDomains {
 
     /** Link-network handle of one proxy/backend pair (shared by all their mappings). */
     public static @NonNull String linkHandle(int proxyId, int backendId) {
-        return "hohenheim-gamelink-" + proxyId + "-" + backendId;
+        return ControllerScope.handle(ControllerScope.KIND_GAMELINK, proxyId + "-" + backendId);
     }
 
     /**
@@ -427,7 +428,7 @@ public final class GameDomains {
             int backendId = mapping.get(GameDomainModel.BACKEND_INSTANCE_ID);
             Integer port = mapping.get(GameDomainModel.BACKEND_PORT);
             entries.add(new VelocityConfigs.Entry(hostname, backendId,
-                "hohenheim-instance-" + backendId, port != null ? port : 25565));
+                ControllerScope.handle(ControllerScope.KIND_INSTANCE, backendId), port != null ? port : 25565));
         }
 
         Model files = Models.get(InstanceFileModel.class);

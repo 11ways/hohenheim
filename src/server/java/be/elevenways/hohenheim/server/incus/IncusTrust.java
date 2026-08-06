@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.incus;
 
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.security.NftRunner;
@@ -124,7 +125,7 @@ public final class IncusTrust {
             NftRunner.Result result = NftRunner.Sudo.execute(List.of("openssl", "req",
                 "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
                 "-sha384", "-days", "3650", "-nodes",
-                "-subj", "/CN=hohenheim-" + name,
+                "-subj", "/CN=" + ControllerScope.scoped(name),
                 "-keyout", key.toString(), "-out", cert.toString()),
                 null, OPENSSL_TIMEOUT_SECONDS);
             if (!result.ok() || !Files.exists(key) || !Files.exists(cert)) {

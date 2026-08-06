@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
@@ -15,7 +17,6 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -61,8 +62,11 @@ class InstanceTemplateInstallLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        // Unique per-class instance ids => unique daemon handles (no cross-class 409s).
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
@@ -101,7 +105,7 @@ class InstanceTemplateInstallLiveTest {
             int id = new InstanceTemplates().createFromTemplate(template,
                 "template-live", null,
                 Map.of("GREETING", "hello-hohenheim"), null);
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             String volumeName = handle + "-vol-data";
             InstanceService service = new InstanceService();
 

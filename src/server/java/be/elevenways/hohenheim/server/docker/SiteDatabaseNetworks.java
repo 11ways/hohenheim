@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -54,14 +55,12 @@ import java.util.Set;
  */
 public final class SiteDatabaseNetworks {
 
-    private static final String HANDLE_PREFIX = "hohenheim-dblink-";
-
     private SiteDatabaseNetworks() {
     }
 
     /** Link-network handle of one site/database pair. */
     static @NonNull String linkHandle(int siteId, int databaseId) {
-        return HANDLE_PREFIX + siteId + "-" + databaseId;
+        return ControllerScope.handle(ControllerScope.KIND_DBLINK, siteId + "-" + databaseId);
     }
 
     /**
@@ -273,7 +272,7 @@ public final class SiteDatabaseNetworks {
         DockerClient docker = new ServerService().clientFor(serverName);
         DockerInstanceRuntime runtime = new DockerInstanceRuntime(docker,
             WorkloadNetworkPolicy.forServer(serverName));
-        String prefix = HANDLE_PREFIX + siteId + "-";
+        String prefix = ControllerScope.kindPrefix(ControllerScope.KIND_DBLINK) + siteId + "-";
         SiteDatabaseModel links = Models.get(SiteDatabaseModel.class);
         for (String network : linkNetworksOf(docker, prefix)) {
             String handle = network.substring(0,

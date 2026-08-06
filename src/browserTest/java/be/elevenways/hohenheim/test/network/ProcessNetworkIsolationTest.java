@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import org.junit.jupiter.api.BeforeAll;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.ProcessNetworkPolicy;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
@@ -28,6 +30,13 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * the rule is keyed on {@code meta skuid} and matches.
  */
 class ProcessNetworkIsolationTest {
+
+    /** nft table and container names are controller-namespaced, so this needs an identity. */
+    @BeforeAll
+    static void controllerIdentity() {
+        HohenheimTestRuntime.ensureDatasource();
+    }
+
 
     /** The site's run-as uid: the identity the OUTPUT rules are keyed on. */
     private static final int SITE_UID = 4242;
@@ -89,7 +98,7 @@ class ProcessNetworkIsolationTest {
 
             String chain = ProcessNetworkPolicy.outputChain(SITE_UID);
             NftRunner.Result listed = netns.asRoot("nft", "list", "chain", "inet",
-                ProcessNetworkPolicy.TABLE, chain);
+                ProcessNetworkPolicy.table(), chain);
             assertThat(listed.ok()).as("step 2: the kernel lists the chain we just applied")
                 .isTrue();
             assertThat(listed.stdout().replaceAll("\\s+", " "))
@@ -202,7 +211,7 @@ class ProcessNetworkIsolationTest {
                 .isEqualTo("BLOCKED");
 
             // 2. The reboot/flush shape: the whole table gone under running children.
-            netns.setup("nft", "delete", "table", "inet", ProcessNetworkPolicy.TABLE);
+            netns.setup("nft", "delete", "table", "inet", ProcessNetworkPolicy.table());
             assertThat(netns.probe(SITE_UID, METADATA, PORT))
                 .as("step 2: with the table flushed the escape is back")
                 .isEqualTo("REACHABLE");
@@ -220,7 +229,7 @@ class ProcessNetworkIsolationTest {
             NftRunner readOnly = readOnlyRunner(netns);
             ProcessNetworkPolicy refusing = new ProcessNetworkPolicy(readOnly, () -> true,
                 resolvConf);
-            netns.setup("nft", "delete", "table", "inet", ProcessNetworkPolicy.TABLE);
+            netns.setup("nft", "delete", "table", "inet", ProcessNetworkPolicy.table());
             VerifyWorkloadIsolation.HostOutcome third =
                 VerifyWorkloadIsolation.sweepProcesses(subjects, refusing);
             assertThat(third).isNotNull();
@@ -272,7 +281,7 @@ class ProcessNetworkIsolationTest {
                 .hasMessageContaining("security.nftables_enabled is off");
 
             NftRunner.Result listed = netns.asRoot("nft", "list", "chain", "inet",
-                ProcessNetworkPolicy.TABLE, ProcessNetworkPolicy.outputChain(SITE_UID));
+                ProcessNetworkPolicy.table(), ProcessNetworkPolicy.outputChain(SITE_UID));
             assertThat(listed.ok())
                 .as("step 2: nothing was applied to the kernel by the refused call")
                 .isFalse();

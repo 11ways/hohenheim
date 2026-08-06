@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import org.junit.jupiter.api.BeforeAll;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.WorkloadNetwork;
@@ -27,6 +29,13 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * again after it is removed, so a passing AFTER cannot be an artefact of a broken fixture.
  */
 class WorkloadNetworkPolicyTest {
+
+    /** nft table and container names are controller-namespaced, so this needs an identity. */
+    @BeforeAll
+    static void controllerIdentity() {
+        HohenheimTestRuntime.ensureDatasource();
+    }
+
 
     private static final String TENANT_SUBNET = "172.31.5.0/24";
     private static final String TENANT_GATEWAY = "172.31.5.1";
@@ -102,7 +111,7 @@ class WorkloadNetworkPolicyTest {
 
             // 3. The kernel carries the rules, in a chain that is actually hooked.
             String ruleset = netns.inHost("nft", "list", "table", "inet",
-                WorkloadNetworkPolicy.TABLE).stdout();
+                WorkloadNetworkPolicy.table()).stdout();
             assertThat(ruleset).as("step 3: the forward chain is hooked into forward")
                 .contains("type filter hook forward");
             assertThat(ruleset).as("step 3: the metadata deny is in the kernel, not just in our JSON")
@@ -113,7 +122,7 @@ class WorkloadNetworkPolicyTest {
             // 4. Re-applying is idempotent: same rules, still exactly one copy of each.
             policy.apply(network, Egress.OPEN);
             String reapplied = netns.inHost("nft", "list", "table", "inet",
-                WorkloadNetworkPolicy.TABLE).stdout();
+                WorkloadNetworkPolicy.table()).stdout();
             assertThat(occurrences(reapplied,
                 "ip saddr " + TENANT_SUBNET + " ip daddr 169.254.0.0/16 drop"))
                 .as("step 4: re-apply replaces the chain rather than appending a second copy")
@@ -125,7 +134,7 @@ class WorkloadNetworkPolicyTest {
             //    step 2 measured the policy and not a broken fixture.
             policy.remove(network.name());
             assertThat(netns.inHost("nft", "list", "table", "inet",
-                WorkloadNetworkPolicy.TABLE).stdout())
+                WorkloadNetworkPolicy.table()).stdout())
                 .as("step 5: the chains are gone from the kernel")
                 .doesNotContain("fwd_hohenheim_instance_1_net");
             assertThat(netns.probe(tenant, METADATA, PEER_PORT))
@@ -174,7 +183,7 @@ class WorkloadNetworkPolicyTest {
                 .as("step 2: declared-closed egress blocks the internet")
                 .isEqualTo("BLOCKED");
             assertThat(netns.inHost("nft", "list", "table", "inet",
-                WorkloadNetworkPolicy.TABLE).stdout())
+                WorkloadNetworkPolicy.table()).stdout())
                 .as("step 2: the kernel carries the egress drop, not just our intent")
                 .contains("ip saddr " + TENANT_SUBNET + " drop");
 
@@ -216,7 +225,7 @@ class WorkloadNetworkPolicyTest {
                 .hasMessageContaining("security.nftables_enabled");
             assertThat(netns.inHost("nft", "list", "ruleset").stdout())
                 .as("step 1: the kernel has no table at all after the refusal")
-                .doesNotContain(WorkloadNetworkPolicy.TABLE);
+                .doesNotContain(WorkloadNetworkPolicy.table());
 
             // 2. A real apply lands.
             WorkloadNetworkPolicy policy = new WorkloadNetworkPolicy(netns.nftRunner(), () -> true);
@@ -240,7 +249,7 @@ class WorkloadNetworkPolicyTest {
                 .hasMessageContaining("172.31.6.0/24");
 
             // 4. A chain that vanished between apply and verify is caught the same way.
-            netns.inHost("nft", "delete", "table", "inet", WorkloadNetworkPolicy.TABLE);
+            netns.inHost("nft", "delete", "table", "inet", WorkloadNetworkPolicy.table());
             assertThatThrownBy(() -> lied.apply(network, Egress.OPEN))
                 .as("step 4: a missing chain is a refusal, never a shrug")
                 .isInstanceOf(IOException.class)

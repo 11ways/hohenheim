@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import be.elevenways.hohenheim.server.util.Http11;
@@ -23,6 +25,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * tampered ACL in place.
  */
 class IncusNetworkPolicyAclTest {
+
+    /** Names and labels are controller-namespaced, so this needs a real identity. */
+    @BeforeAll
+    static void controllerIdentity() {
+        HohenheimTestRuntime.ensureDatasource();
+    }
+
 
     /**
      * One journey across the equality boundary: the exact daemon read-back shape is
@@ -186,14 +195,14 @@ class IncusNetworkPolicyAclTest {
                 .append("\",\"destination\":\"").append(rule.get("destination"))
                 .append("\",\"state\":\"").append(rule.get("state")).append("\"}");
         }
-        return "{\"name\":\"" + IncusNetworkPolicy.ACL_NAME + "\",\"egress\":["
+        return "{\"name\":\"" + IncusNetworkPolicy.aclName() + "\",\"egress\":["
             + rules + "],\"ingress\":[]}";
     }
 
     private static Map<String, Object> readBack(List<Map<String, Object>> egress,
                                                 List<Map<String, Object>> ingress) {
         Map<String, Object> acl = new LinkedHashMap<>();
-        acl.put("name", IncusNetworkPolicy.ACL_NAME);
+        acl.put("name", IncusNetworkPolicy.aclName());
         acl.put("egress", egress);
         acl.put("ingress", ingress);
         return acl;

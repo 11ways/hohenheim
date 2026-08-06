@@ -82,7 +82,10 @@ import java.util.function.BooleanSupplier;
 public final class ProcessNetworkPolicy {
 
     /** The same table the network-keyed policy owns: one table, per-workload base chains. */
-    public static final String TABLE = WorkloadNetworkPolicy.TABLE;
+    /** Same table as the workload policy: one owner per controller, two rule families. */
+    public static String table() {
+        return WorkloadNetworkPolicy.table();
+    }
 
     /** The DNS port the resolver carve-out is scoped to; nothing else is punched through. */
     private static final int DNS_PORT = 53;
@@ -106,7 +109,7 @@ public final class ProcessNetworkPolicy {
     public ProcessNetworkPolicy(@NonNull NftRunner runner, @NonNull BooleanSupplier enabled,
                                 @NonNull Path resolvConf) {
         this.runner = runner;
-        this.chains = new NftChains(runner, TABLE);
+        this.chains = new NftChains(runner, ProcessNetworkPolicy::table);
         this.enabled = enabled;
         this.resolvConf = resolvConf;
     }
@@ -166,12 +169,12 @@ public final class ProcessNetworkPolicy {
         List<String> rules = outputRules(uid, resolvers());
 
         StringBuilder ruleset = new StringBuilder();
-        ruleset.append("add table inet ").append(TABLE).append('\n');
-        ruleset.append("add chain inet ").append(TABLE).append(' ').append(chain)
+        ruleset.append("add table inet ").append(table()).append('\n');
+        ruleset.append("add chain inet ").append(table()).append(' ').append(chain)
             .append(" { type filter hook output priority -10 ; policy accept ; }\n");
-        ruleset.append("flush chain inet ").append(TABLE).append(' ').append(chain).append('\n');
+        ruleset.append("flush chain inet ").append(table()).append(' ').append(chain).append('\n');
         for (String rule : rules) {
-            ruleset.append("add rule inet ").append(TABLE).append(' ').append(chain)
+            ruleset.append("add rule inet ").append(table()).append(' ').append(chain)
                 .append(' ').append(rule).append('\n');
         }
 

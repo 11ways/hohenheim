@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -70,7 +72,7 @@ class DatabaseServiceTest {
         DatabaseService service = new DatabaseService(docker, datasource);
 
         String name = "svc" + System.nanoTime();
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         try {
             ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
                 PG_IMAGE, "appuser", "secret123", "appdb",
@@ -218,7 +220,7 @@ class DatabaseServiceTest {
         DatabaseService broken = new DatabaseService(unreachable, datasource);
 
         String name = "c6destroy" + System.nanoTime();
-        String containerName = "hohenheim-db-" + name;
+        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         try {
             // 1. Provision for real; the record owns a ledger claim.
             ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
@@ -312,6 +314,9 @@ class DatabaseServiceTest {
         db.deleteOnExit();
         SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(ds).migrate().requireSuccess();
+        // The container NAME is derived from the controller identity in THIS database, so
+        // it must be the one every unscoped call resolves to as well.
+        Datasources.register(Datasources.DEFAULT, ds);
         HohenheimTestRuntime.ensureBooted();
         return ds;
     }

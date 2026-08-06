@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -12,7 +14,6 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -63,8 +64,11 @@ class InstanceRuntimeLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        // Unique per-class instance ids => unique daemon handles (no cross-class 409s).
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
@@ -110,7 +114,7 @@ class InstanceRuntimeLiveTest {
             settings.put("container_port", 8080);
             settings.put("volumes", Map.of("data", "/data"));
             int id = instanceRecord("live-journey", settings);
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             String volumeName = handle + "-vol-data";
             InstanceService service = new InstanceService();
             Map<String, String> ownerLabels = OwnerLabels.of(InstanceModel.MODEL_ID, id);
@@ -210,7 +214,7 @@ class InstanceRuntimeLiveTest {
             HostFixtures.admitLocal();
             int id = instanceRecord("collision-victim", new LinkedHashMap<>(
                 Map.of("image", "alpine", "command", "sleep 300")));
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             try {
                 // 1. A stranger already holds the name, with NO owner labels.
                 Map<String, Object> spec = new LinkedHashMap<>();

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.stack;
 
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -44,6 +46,8 @@ class StackDeployerTest {
 
     @BeforeAll
     static void buildNetns() throws IOException {
+        // Container, network and volume names are controller-namespaced.
+        HohenheimTestRuntime.ensureDatasource();
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
         }
@@ -164,7 +168,7 @@ class StackDeployerTest {
         String forwardChain = WorkloadNetworkPolicy.forwardChain(
             WorkloadNetworkPolicy.chainKey(StackDeployer.networkName(spec)));
         String forwardRules = netns.inHost("nft", "list", "chain", "inet",
-            WorkloadNetworkPolicy.TABLE, forwardChain).stdout();
+            WorkloadNetworkPolicy.table(), forwardChain).stdout();
         assertThat(forwardRules).as("the stack's forward chain is hooked")
             .contains("type filter hook forward");
         assertThat(forwardRules).as("the metadata deny is in the kernel for the stack subnet")
@@ -176,7 +180,7 @@ class StackDeployerTest {
             .doesNotContain("ip saddr " + subnet + " drop");
 
         // Volume exists and is owned.
-        Map<String, Object> volume = docker.inspectVolume("hohenheim-stack-" + stackName + "-data");
+        Map<String, Object> volume = docker.inspectVolume(ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-data");
         assertThat((Map<String, Object>) volume.get("Labels"))
             .containsEntry(StackDeployer.LABEL_STACK, stackName);
 
@@ -240,7 +244,7 @@ class StackDeployerTest {
         assertThat(containerOwner.model()).isEqualTo(StackModel.MODEL_ID);
         assertThat(containerOwner.id()).isEqualTo(String.valueOf(stackRecordId));
 
-        Map<String, Object> volume = docker.inspectVolume("hohenheim-stack-" + stackName + "-data");
+        Map<String, Object> volume = docker.inspectVolume(ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-data");
         OwnerLabels.Owner volumeOwner = OwnerLabels.parse((Map<?, ?>) volume.get("Labels"));
         assertThat(volumeOwner).as("volume carries the owner pair from birth").isNotNull();
         assertThat(volumeOwner.id()).isEqualTo(String.valueOf(stackRecordId));
@@ -256,7 +260,7 @@ class StackDeployerTest {
         String containerName = StackDeployer.containerName(spec, "app");
         assertThatThrownBy(() -> docker.inspectContainer(containerName))
             .as("container removed by destroy").isInstanceOf(IOException.class);
-        assertThatThrownBy(() -> docker.inspectVolume("hohenheim-stack-" + stackName + "-data"))
+        assertThatThrownBy(() -> docker.inspectVolume(ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-data"))
             .as("owned volume removed by destroy").isInstanceOf(IOException.class);
 
         // 3. Ownership matching did NOT widen: a same-named container carrying ONLY
@@ -339,7 +343,7 @@ class StackDeployerTest {
         assertThatThrownBy(() -> docker.inspectContainer(StackDeployer.containerName(spec, "app")))
             .isInstanceOf(IOException.class);
         assertThat(docker.findNetworkByName(StackDeployer.networkName(spec))).isNull();
-        assertThatThrownBy(() -> docker.inspectVolume("hohenheim-stack-" + stackName + "-gone"))
+        assertThatThrownBy(() -> docker.inspectVolume(ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-gone"))
             .isInstanceOf(IOException.class);
 
         // The kernel policy chains die with the network, verified in nftables itself.

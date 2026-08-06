@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
@@ -18,7 +20,6 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -78,8 +79,11 @@ class InstanceSnapshotBackupLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        // Unique per-class instance ids => unique daemon handles (no cross-class 409s).
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
 
         workRoot = Files.createTempDirectory("hohenheim-backup-test");
@@ -170,7 +174,7 @@ class InstanceSnapshotBackupLiveTest {
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
             int id = instanceRecord("snapshot-journey", alpineSettings());
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             InstanceService service = new InstanceService();
             InstanceSnapshots snapshots = new InstanceSnapshots();
             try {
@@ -269,7 +273,7 @@ class InstanceSnapshotBackupLiveTest {
                 .assign(InstanceModel.BACKUP_TARGET_ID,
                     (Integer) targetRow.get(BackupTargetModel.ID))
                 .updateAll();
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             InstanceService service = new InstanceService();
             InstanceBackups backups = new InstanceBackups();
             String operatorBucket = HohenheimAccess.packSubjects(Set.of());
@@ -299,7 +303,7 @@ class InstanceSnapshotBackupLiveTest {
                 // 3. Restore to a NEW instance.
                 long quotaBefore = InstanceQuota.usedBy(operatorBucket);
                 newId = backups.restoreToNew(backupId, "backup-clone", null);
-                newHandle = "hohenheim-instance-" + newId;
+                newHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, newId);
                 assertThat(newId).as("step 3: the new instance has its own id")
                     .isNotEqualTo(id);
                 Row restored = Models.get(InstanceModel.class).findById(newId);
@@ -411,7 +415,7 @@ class InstanceSnapshotBackupLiveTest {
             };
 
             int id = instanceRecord("interrupted-backup", alpineSettings());
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             InstanceService service = new InstanceService();
             InstanceBackups backups = new InstanceBackups();
             try {

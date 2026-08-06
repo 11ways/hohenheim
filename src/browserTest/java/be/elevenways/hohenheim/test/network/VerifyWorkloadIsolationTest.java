@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -24,7 +26,6 @@ import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.server.stack.StackSpec;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -89,7 +90,11 @@ class VerifyWorkloadIsolationTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
         netns = PrivateNetns.installEnforcing();
         docker = new DockerClient();
@@ -133,7 +138,7 @@ class VerifyWorkloadIsolationTest {
                 int instanceId = instanceRecord("vrfy-site-release");
                 cleanupInstance[0] = instanceId;
                 new InstanceService().deploy(instanceId);
-                String instanceHandle = "hohenheim-instance-" + instanceId;
+                String instanceHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
                 int fakeSiteId = 800000 + instanceId;
                 // The attribution columns are guarded: only the system scope may stamp
                 // a row as site-generated, so the fixture goes through that same lane.
@@ -160,7 +165,7 @@ class VerifyWorkloadIsolationTest {
                 link.set(SiteDatabaseModel.DATABASE_ID, databaseId);
                 link.set(SiteDatabaseModel.ENV_PREFIX, "DB");
                 Models.get(SiteDatabaseModel.class).save(link);
-                String linkHandle = "hohenheim-dblink-" + fakeSiteId + "-" + databaseId;
+                String linkHandle = ControllerScope.handle(ControllerScope.KIND_DBLINK, fakeSiteId) + "-" + databaseId;
                 DockerInstanceRuntime runtime = new DockerInstanceRuntime(
                     docker, netns.enforcingPolicy());
                 io(() -> runtime.ensureLinkNetwork(linkHandle,
@@ -190,9 +195,9 @@ class VerifyWorkloadIsolationTest {
 
                 // 3. THE REBOOT EFFECT, exactly as measured on daystrom: kernel state
                 //    gone, Docker state (networks, containers) untouched.
-                io(() -> netns.setup("nft", "delete", "table", "inet", "hohenheim_net"));
+                io(() -> netns.setup("nft", "delete", "table", "inet", WorkloadNetworkPolicy.table()));
                 NftRunner.Result gone = netns.inHost("nft", "list", "table", "inet",
-                    "hohenheim_net");
+                    WorkloadNetworkPolicy.table());
                 assertThat(gone.ok())
                     .as("step 3: the policy table is gone, the daystrom post-reboot state")
                     .isFalse();
@@ -292,7 +297,7 @@ class VerifyWorkloadIsolationTest {
                 String container = StackDeployer.containerName(spec(stackId), "app");
 
                 // 1. Divergence: the stack's chains are gone (the reboot state).
-                io(() -> netns.setup("nft", "delete", "table", "inet", "hohenheim_net"));
+                io(() -> netns.setup("nft", "delete", "table", "inet", WorkloadNetworkPolicy.table()));
 
                 // 2. Enforcement OFF: the sweep reports the host unverifiable ON THE
                 //    RECORD and stops nothing -- the pre-enforcement decision.

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -12,7 +14,6 @@ import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -68,8 +69,11 @@ class IncusInstanceRuntimeLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        // Unique per-class instance ids => unique daemon handles across parallel forks.
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
 
         // The REAL enrollment path, product code end to end: identity, pin, confirm,
@@ -124,7 +128,7 @@ class IncusInstanceRuntimeLiveTest {
             settings.put("memory_limit_mb", 128);
             settings.put("environment_variables", Map.of("HOHENHEIM_MARK", "live-proof"));
             int id = instanceRecord("incus-journey", settings);
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             InstanceService service = new InstanceService();
             IncusClient incus = new ServerService().incusClientFor(HOST);
             Map<String, String> ownerLabels = OwnerLabels.of(InstanceModel.MODEL_ID, id);
@@ -231,7 +235,7 @@ class IncusInstanceRuntimeLiveTest {
         Db.run(datasource, () -> {
             int id = instanceRecord("incus-collision", new LinkedHashMap<>(
                 Map.of("image", IMAGE, "memory_limit_mb", 128)));
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             IncusClient incus = new ServerService().incusClientFor(HOST);
             try {
                 // 1. A stranger already holds the name, with NO owner labels.

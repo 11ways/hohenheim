@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -13,6 +15,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * gate. No real nft/sudo anywhere.
  */
 class NftServiceTest {
+
+    /** Names and labels are controller-namespaced, so this needs a real identity. */
+    @BeforeAll
+    static void controllerIdentity() {
+        HohenheimTestRuntime.ensureDatasource();
+    }
+
 
     /** Records every nft argv and answers success. */
     private static final class RecordingRunner implements NftRunner {
@@ -38,13 +47,13 @@ class NftServiceTest {
         nft.setup(List.of(80, 443));
 
         assertThat(runner.commands).containsExactly(
-            "add table inet hohenheim",
-            "add chain inet hohenheim banned { type filter hook input priority -10 ; policy accept ; }",
-            "add set inet hohenheim banned_v4 { type ipv4_addr ; flags timeout ; }",
-            "add set inet hohenheim banned_v6 { type ipv6_addr ; flags interval, timeout ; }",
-            "flush chain inet hohenheim banned",
-            "add rule inet hohenheim banned tcp dport { 80, 443 } ip saddr @banned_v4 drop",
-            "add rule inet hohenheim banned tcp dport { 80, 443 } ip6 saddr @banned_v6 drop");
+            "add table inet " + NftService.table(),
+            "add chain inet " + NftService.table() + " banned { type filter hook input priority -10 ; policy accept ; }",
+            "add set inet " + NftService.table() + " banned_v4 { type ipv4_addr ; flags timeout ; }",
+            "add set inet " + NftService.table() + " banned_v6 { type ipv6_addr ; flags interval, timeout ; }",
+            "flush chain inet " + NftService.table() + " banned",
+            "add rule inet " + NftService.table() + " banned tcp dport { 80, 443 } ip saddr @banned_v4 drop",
+            "add rule inet " + NftService.table() + " banned tcp dport { 80, 443 } ip6 saddr @banned_v6 drop");
     }
 
     @Test
@@ -52,7 +61,7 @@ class NftServiceTest {
         NftService nft = enabledService();
         nft.addBan("203.0.113.9", 86400L);
         assertThat(runner.commands).containsExactly(
-            "add element inet hohenheim banned_v4 { 203.0.113.9 timeout 86400s }");
+            "add element inet " + NftService.table() + " banned_v4 { 203.0.113.9 timeout 86400s }");
     }
 
     @Test
@@ -60,7 +69,7 @@ class NftServiceTest {
         NftService nft = enabledService();
         nft.addBan("203.0.113.9", null);
         assertThat(runner.commands).containsExactly(
-            "add element inet hohenheim banned_v4 { 203.0.113.9 }");
+            "add element inet " + NftService.table() + " banned_v4 { 203.0.113.9 }");
     }
 
     @Test
@@ -70,8 +79,8 @@ class NftServiceTest {
         nft.addBan("2001:db8::/64", 60L);
         nft.removeBan("2001:db8::/64");
         assertThat(runner.commands).containsExactly(
-            "add element inet hohenheim banned_v6 { 2001:db8::/64 timeout 60s }",
-            "delete element inet hohenheim banned_v6 { 2001:db8::/64 }");
+            "add element inet " + NftService.table() + " banned_v6 { 2001:db8::/64 timeout 60s }",
+            "delete element inet " + NftService.table() + " banned_v6 { 2001:db8::/64 }");
     }
 
     @Test
@@ -79,7 +88,7 @@ class NftServiceTest {
         NftService nft = enabledService();
         nft.removeBan("203.0.113.9");
         assertThat(runner.commands).containsExactly(
-            "delete element inet hohenheim banned_v4 { 203.0.113.9 }");
+            "delete element inet " + NftService.table() + " banned_v4 { 203.0.113.9 }");
     }
 
     @Test
@@ -91,11 +100,11 @@ class NftServiceTest {
             new NftService.ActiveBan("2001:db8::/64", 60L)));
 
         assertThat(runner.commands).containsExactly(
-            "flush set inet hohenheim banned_v4",
-            "flush set inet hohenheim banned_v6",
-            "add element inet hohenheim banned_v4 { 203.0.113.1 timeout 3600s }",
-            "add element inet hohenheim banned_v4 { 203.0.113.2 }",
-            "add element inet hohenheim banned_v6 { 2001:db8::/64 timeout 60s }");
+            "flush set inet " + NftService.table() + " banned_v4",
+            "flush set inet " + NftService.table() + " banned_v6",
+            "add element inet " + NftService.table() + " banned_v4 { 203.0.113.1 timeout 3600s }",
+            "add element inet " + NftService.table() + " banned_v4 { 203.0.113.2 }",
+            "add element inet " + NftService.table() + " banned_v6 { 2001:db8::/64 timeout 60s }");
     }
 
     @Test

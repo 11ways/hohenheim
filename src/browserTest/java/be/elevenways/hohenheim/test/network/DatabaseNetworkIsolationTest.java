@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -7,7 +9,6 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
@@ -52,7 +53,11 @@ class DatabaseNetworkIsolationTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
         netns = PrivateNetns.installEnforcing();
     }
@@ -67,8 +72,8 @@ class DatabaseNetworkIsolationTest {
 
         String a = "dbnet-a-" + System.nanoTime();
         String b = "dbnet-b-" + System.nanoTime();
-        String handleA = "hohenheim-db-" + a;
-        String handleB = "hohenheim-db-" + b;
+        String handleA = ControllerScope.handle(ControllerScope.KIND_DB, a);
+        String handleB = ControllerScope.handle(ControllerScope.KIND_DB, b);
         try {
             Db.run(datasource, () -> {
                 DatabaseService service = new DatabaseService(docker, datasource);

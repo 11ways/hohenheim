@@ -6,6 +6,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * THE kernel-truth half of every isolation policy: read one base chain back out of
@@ -32,9 +33,18 @@ import java.util.List;
 final class NftChains {
 
     private final @NonNull NftRunner runner;
-    private final @NonNull String table;
+    private final @NonNull Supplier<String> table;
 
-    NftChains(@NonNull NftRunner runner, @NonNull String table) {
+    /**
+     * AIDEV-NOTE: the table is a SUPPLIER, never a captured string. Table names carry the
+     * controller identity token, which resolves through the CURRENT datasource -- so
+     * capturing it at construction let a policy object built under one datasource read
+     * back from a different controller's table than the one it had just written to, and
+     * report "the chain does not exist in the kernel" for a chain that did. It also made
+     * the appliers' static PRODUCTION instances resolve an identity at class-load, before
+     * any database existed. Resolve at every use, never once.
+     */
+    NftChains(@NonNull NftRunner runner, @NonNull Supplier<String> table) {
         this.runner = runner;
         this.table = table;
     }
@@ -47,7 +57,7 @@ final class NftChains {
      */
     @Nullable List<String> read(@NonNull String chain) throws IOException {
         NftRunner.Result listed = this.runner.run(
-            List.of("list", "chain", "inet", this.table, chain), null);
+            List.of("list", "chain", "inet", this.table.get(), chain), null);
         if (!listed.ok()) {
             if (listed.failureText().contains("No such file or directory")) {
                 return null;   // observed absent (the whole point of a kernel-truth check)
@@ -120,8 +130,8 @@ final class NftChains {
             return;
         }
         NftRunner.Result removed = this.runner.run(List.of("-f", "-"),
-            "flush chain inet " + this.table + ' ' + chain + '\n'
-                + "delete chain inet " + this.table + ' ' + chain + '\n');
+            "flush chain inet " + this.table.get() + ' ' + chain + '\n'
+                + "delete chain inet " + this.table.get() + ' ' + chain + '\n');
         if (!removed.ok()) {
             throw new IOException("Could not remove the network policy chain '" + chain
                 + "' (exit " + removed.exitCode() + "): " + removed.failureText());

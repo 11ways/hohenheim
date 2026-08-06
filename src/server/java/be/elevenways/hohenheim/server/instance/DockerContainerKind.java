@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -173,7 +174,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
-        String handle = "hohenheim-instance-" + instanceId;
+        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
         String image = str(settings.get("image"));
         String tag = str(settings.get("tag"));
         String imageRef = tag.isEmpty() || image.contains(":") ? image : image + ":" + tag;

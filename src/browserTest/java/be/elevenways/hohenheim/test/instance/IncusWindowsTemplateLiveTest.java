@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
@@ -16,7 +17,6 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstallSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -107,7 +107,6 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
         // database also restarts at 1, and both forks would mint "hohenheim-instance-1"
         // on the SAME live daemon. VmFramebufferConsoleLiveTest omits this call and can
         // collide; this class does not repeat that.
-        LiveIdOffsets.apply(HohenheimDatabase.datasource());
 
         enrolledFingerprint = remote.enrollThroughProduct(HOST, "hohenheim-live-win");
         remote.enrollSshLaneThroughProduct(HOST);
@@ -149,9 +148,9 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
         int absentId = windowsRecord("win-absent-alias", hostId, "no-such-prepared-alias");
         int id = windowsRecord("win-prepared", hostId, PREPARED_ALIAS);
         int agentlessId = windowsRecord("win-agentless", hostId, PREPARED_ALIAS);
-        String absentHandle = "hohenheim-instance-" + absentId;
-        String handle = "hohenheim-instance-" + id;
-        String agentlessHandle = "hohenheim-instance-" + agentlessId;
+        String absentHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, absentId);
+        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
+        String agentlessHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, agentlessId);
         int userId = user("win-live");
         WebSocket ws = null;
 
@@ -290,8 +289,8 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             Map<?, ?> nic = (Map<?, ?>) ((Map<?, ?>) definition.get("devices")).get("eth0");
             assertThat(nic.get("security.acls"))
                 .as("step 8: the Windows VM's NIC carries the shared isolation ACL")
-                .isEqualTo(IncusNetworkPolicy.ACL_NAME);
-            assertThat(remote.query("/1.0/network-acls/" + IncusNetworkPolicy.ACL_NAME))
+                .isEqualTo(IncusNetworkPolicy.aclName());
+            assertThat(remote.query("/1.0/network-acls/" + IncusNetworkPolicy.aclName()))
                 .as("step 8: the daemon's ACL rejects the private and metadata ranges")
                 .contains("10.0.0.0/8").contains("169.254.0.0/16")
                 .contains("192.168.0.0/16").contains("fc00::/7");
@@ -316,7 +315,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             assertThat(String.valueOf(instanceOf(incus, handle).get("devices")))
                 .as("step 8b: while the daemon's own config STILL claims isolation -- the"
                     + " divergence this mechanism exists for")
-                .contains(IncusNetworkPolicy.ACL_NAME);
+                .contains(IncusNetworkPolicy.aclName());
 
             // 8c. Repaired through the product's own per-instance lever.
             enforceKernel(kernel, handle);

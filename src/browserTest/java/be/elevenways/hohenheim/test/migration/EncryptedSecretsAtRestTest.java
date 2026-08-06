@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.migration;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsPeerModel;
@@ -72,6 +73,11 @@ class EncryptedSecretsAtRestTest {
         // 1. A fresh install migrates cleanly, including M047's (empty) heal and
         //    zenit's keyring marker table.
         new MigrationRunner(datasource).migrate().requireSuccess();
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM sqlite_master"
                 + " WHERE type = 'table' AND name = 'zenit_encryption_keyring'"))
             .as("step 1: zenit's M001 marker table is created by a hohenheim migrate,"

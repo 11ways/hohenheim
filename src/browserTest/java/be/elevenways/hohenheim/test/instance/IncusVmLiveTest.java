@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
@@ -19,7 +21,6 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -89,8 +90,11 @@ class IncusVmLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        // Unique per-class instance ids => unique daemon handles across parallel forks.
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
 
         Db.run(datasource, () -> {
@@ -148,11 +152,11 @@ class IncusVmLiveTest {
             Row template = Models.get(InstanceTemplateModel.class).findById(templateId);
             int id = new InstanceTemplates().createFromTemplate(template, "vm-journey",
                 hostId, Map.of("MARK", "vm-live-proof"), null);
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             String volumeName = handle + "-data";
 
             int peerId = peerRecord(hostId);
-            String peerHandle = "hohenheim-instance-" + peerId;
+            String peerHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, peerId);
 
             try {
                 Map<String, String> variables = new InstanceVariables().valuesFor(id);
@@ -203,8 +207,8 @@ class IncusVmLiveTest {
                 Map<?, ?> nic = (Map<?, ?>) ((Map<?, ?>) definition.get("devices")).get("eth0");
                 assertThat(nic.get("security.acls"))
                     .as("step 4: the VM's NIC carries the isolation ACL")
-                    .isEqualTo(IncusNetworkPolicy.ACL_NAME);
-                String acl = query("/1.0/network-acls/" + IncusNetworkPolicy.ACL_NAME);
+                    .isEqualTo(IncusNetworkPolicy.aclName());
+                String acl = query("/1.0/network-acls/" + IncusNetworkPolicy.aclName());
                 assertThat(acl)
                     .as("step 4: the daemon's ACL rejects the private+metadata ranges")
                     .contains("10.0.0.0/8").contains("169.254.0.0/16")
@@ -316,7 +320,7 @@ class IncusVmLiveTest {
                 assertThat(String.valueOf(instanceOf(incus, handle).get("devices")))
                     .as("step 7d: while the daemon's own config still claims isolation --"
                         + " the divergence this whole mechanism exists for")
-                    .contains(IncusNetworkPolicy.ACL_NAME);
+                    .contains(IncusNetworkPolicy.aclName());
 
                 // 7e. Repaired through the product's own per-instance lever, and the
                 //     boundary is measurably back on both probes.
@@ -395,10 +399,10 @@ class IncusVmLiveTest {
                     .as("step 11: the extra NIC device exists at the daemon").isNotNull();
                 assertThat(extraNic.get("security.acls"))
                     .as("step 11: and it carries the isolation ACL -- no hole")
-                    .isEqualTo(IncusNetworkPolicy.ACL_NAME);
+                    .isEqualTo(IncusNetworkPolicy.aclName());
                 assertThat(extraNic.get("network"))
                     .as("step 11: on the managed secondary bridge")
-                    .isEqualTo(IncusNetworkPolicy.EXTRA_NETWORK);
+                    .isEqualTo(IncusNetworkPolicy.extraNetwork());
                 assertThat(Quotas.usedOf(nicBucket))
                     .as("step 11: the NIC slot is counted").isEqualTo(nicUsedBefore + 1);
                 Throwable secondNic = catchThrowable(() -> devices.attachNic(id, "extrb"));

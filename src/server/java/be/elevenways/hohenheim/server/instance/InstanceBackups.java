@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
@@ -171,7 +172,11 @@ public final class InstanceBackups {
         }
 
         // -- archive + upload phase (workload already back up) ------------------
-        String key = "instance-" + instanceId + "/" + stamp + ".hib";
+        // AIDEV-NOTE: the controller token leads the object key because a backup TARGET is
+        // shared infrastructure too: two controllers whose instance #1 backed up in the same
+        // second would otherwise write the same object. Existing rows keep their stored key
+        // (remote_key is data, not a derivation), so nothing already uploaded is orphaned.
+        String key = ControllerIdentity.token() + "/instance-" + instanceId + "/" + stamp + ".hib";
         Row backup = Models.get(InstanceBackupModel.class).createEmptyRow();
         backup.set(InstanceBackupModel.INSTANCE_ID, instanceId);
         backup.set(InstanceBackupModel.TARGET_ID, targetId);

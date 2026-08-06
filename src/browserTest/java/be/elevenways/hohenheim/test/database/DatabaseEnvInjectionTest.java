@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
@@ -148,17 +149,18 @@ class DatabaseEnvInjectionTest {
         Map<String, String> env = DatabaseEnvInjection.envForSite(siteId,
             row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, 5544),
             DatabaseEnvInjection.Style.CONTAINER_NETWORK);
-        String pgUrl = "postgres://appuser:s3cret@hohenheim-db-containerdb:5432/appdb";
+        String pgUrl = "postgres://appuser:s3cret@"
+            + ControllerScope.handle(ControllerScope.KIND_DB, "containerdb") + ":5432/appdb";
         assertThat(env).as("step 1: host is the database's container hostname")
-            .containsEntry("DB_HOST", "hohenheim-db-containerdb");
+            .containsEntry("DB_HOST", ControllerScope.handle(ControllerScope.KIND_DB, "containerdb"));
         assertThat(env).as("step 1: port is the engine's native port, never the published one")
             .containsEntry("DB_PORT", "5432");
         assertThat(env).as("step 1: the primary URL carries the same address")
             .containsEntry("DATABASE_URL", pgUrl).containsEntry("DB_URL", pgUrl);
         assertThat(env).as("step 1: the second family follows its engine's port")
-            .containsEntry("CACHE_HOST", "hohenheim-db-containercache")
+            .containsEntry("CACHE_HOST", ControllerScope.handle(ControllerScope.KIND_DB, "containercache"))
             .containsEntry("CACHE_PORT", "6379")
-            .containsEntry("CACHE_URL", "redis://:s3cret@hohenheim-db-containercache:6379");
+            .containsEntry("CACHE_URL", "redis://:s3cret@" + ControllerScope.handle(ControllerScope.KIND_DB, "containercache") + ":6379");
         assertThat(env.values()).as("step 1: no variable smuggles a loopback address in")
             .noneMatch(value -> value.contains("127.0.0.1"));
 
@@ -169,7 +171,7 @@ class DatabaseEnvInjectionTest {
             row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, null),
             DatabaseEnvInjection.Style.CONTAINER_NETWORK);
         assertThat(unpublished).as("step 2: container style needs no published port")
-            .containsEntry("DB_HOST", "hohenheim-db-containerdb");
+            .containsEntry("DB_HOST", ControllerScope.handle(ControllerScope.KIND_DB, "containerdb"));
         assertThat(DatabaseEnvInjection.envForSite(siteId,
             row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, null)))
             .as("step 2: the loopback style still refuses a portless container").isEmpty();

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.backup;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
@@ -14,7 +16,6 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.host.LiveRemoteHost;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -86,7 +87,11 @@ class LiveOffHostBackupTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
 
         workRoot = Files.createTempDirectory("hohenheim-offhost-backup");
@@ -197,7 +202,7 @@ class LiveOffHostBackupTest {
                 .assign(InstanceModel.BACKUP_TARGET_ID,
                     (Integer) targetRow.get(BackupTargetModel.ID))
                 .updateAll();
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             InstanceService service = new InstanceService();
             InstanceBackups backups = new InstanceBackups();
             Integer newId = null;
@@ -252,7 +257,7 @@ class LiveOffHostBackupTest {
                 // 6. Restore to a NEW instance, reading the bytes back from the other
                 //    machine and re-verifying them before anything is created.
                 newId = backups.restoreToNew(backupId, "offhost-clone", null);
-                newHandle = "hohenheim-instance-" + newId;
+                newHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, newId);
                 assertThat(newId).as("step 6: the restore produced a NEW instance")
                     .isNotEqualTo(id);
                 Row restored = Models.get(InstanceModel.class).findById(newId);

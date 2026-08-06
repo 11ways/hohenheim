@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -8,7 +10,6 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -52,8 +53,11 @@ class InstanceConsoleLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        // Unique per-class instance ids => unique daemon handles (no cross-class 409s).
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
@@ -161,7 +165,7 @@ class InstanceConsoleLiveTest {
             InstanceConsoles.overrideTimingsForTest(60_000L, null);
             int templateId = templateRecord("console-journey", "SERVER READY", "exit");
             int id = instanceRecord("console-journey", templateId, InstanceModel.CRASH_RESTART);
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             InstanceService service = new InstanceService();
             try {
                 // 1. Deploy: the readiness matcher is armed, so the record says STARTING
@@ -264,7 +268,7 @@ class InstanceConsoleLiveTest {
             InstanceConsoles.overrideTimingsForTest(3_000L, null);
             int templateId = templateRecord("never-ready", "THIS LINE NEVER APPEARS", null);
             int id = instanceRecord("never-ready", templateId, InstanceModel.CRASH_NONE);
-            String handle = "hohenheim-instance-" + id;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
             InstanceService service = new InstanceService();
             try {
                 // 1. Deploy: starting, container up, line never printed.

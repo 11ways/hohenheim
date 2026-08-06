@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.build;
 
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -15,7 +17,6 @@ import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -69,7 +70,11 @@ class SandboxedBuildLiveTest {
         db.deleteOnExit();
         datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        LiveIdOffsets.apply(datasource);
+        // ONE database per test class: the controller identity (and therefore every
+        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
+        // is thread-local -- so a second, unregistered database would hand any
+        // thread-hopping work a different controller's token than the records came from.
+        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();
@@ -280,7 +285,7 @@ class SandboxedBuildLiveTest {
             SiteInstances.SiteRuntime runtime =
                 SiteInstances.ensureRunning(JOURNEY_SITE_ID, "build-journey", settings);
             int instanceId = runtime.instanceId();
-            String handle = "hohenheim-instance-" + instanceId;
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
             try {
                 // 1. The site's release is pinned to a DIGEST, not to the tag the build
                 //    also applied -- a tag is a mutable pointer and cannot be an identity.
@@ -323,7 +328,7 @@ class SandboxedBuildLiveTest {
                 // 4. THE tag counterfactual: move the human-facing tag onto a different
                 //    image and redeploy. A tag-pinned release would now run alpine; the
                 //    digest-pinned one still runs what was built.
-                tag(docker, "alpine:latest", "hohenheim-site-" + JOURNEY_SITE_ID, "latest");
+                tag(docker, "alpine:latest", ControllerScope.handle(ControllerScope.KIND_SITE, JOURNEY_SITE_ID), "latest");
                 new InstanceService().deploy(instanceId);
                 Map<String, Object> after = inspect(docker, handle);
                 assertThat(String.valueOf(after.get("Image")))
@@ -337,7 +342,7 @@ class SandboxedBuildLiveTest {
                 } catch (RuntimeException ignored) {
                     // teardown best effort; the assertions above are the outcome
                 }
-                removeImage(docker, "hohenheim-site-" + JOURNEY_SITE_ID + ":latest");
+                removeImage(docker, ControllerScope.handle(ControllerScope.KIND_SITE, JOURNEY_SITE_ID) + ":latest");
                 Row build = Models.get(BuildOperationModel.class)
                     .latestSuccess(SiteModel.MODEL_ID.toString(), JOURNEY_SITE_ID);
                 if (build != null) {

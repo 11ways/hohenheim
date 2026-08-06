@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.security.TenantNetworkRanges;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -41,8 +42,17 @@ import java.util.Map;
  */
 public final class IncusNetworkPolicy {
 
-    /** The one shared isolation ACL every tenant instance's NIC references. */
-    public static final String ACL_NAME = "hohenheim-isolation";
+    /**
+     * The isolation ACL every tenant instance's NIC of THIS controller references.
+     *
+     * AIDEV-NOTE: one per controller, not one per daemon. Its rule set is identical for
+     * every controller, but its LIFECYCLE is not: removeIsolation deletes it, and a
+     * shared object would let one controller strip the ACL every other controller's live
+     * NICs reference.
+     */
+    public static @NonNull String aclName() {
+        return ControllerScope.scoped("isolation");
+    }
 
     /** The NIC every managed system container attaches (the default profile's device). */
     public static final String NIC = "eth0";
@@ -52,9 +62,12 @@ public final class IncusNetworkPolicy {
      * instance's primary network ("Instance DNS name conflict", observed live), so
      * additional NICs land on this hohenheim-owned bridge -- created once with the
      * daemon's own auto-assigned subnets and NAT, and every NIC on it carries the same
-     * isolation ACL as the primary. 15 chars exactly: the kernel ifname limit.
+     * isolation ACL as the primary. The kernel ifname limit is 15 characters, which is
+     * why this one name is {@code hhx-<token>} (12) rather than the usual scoped shape.
      */
-    public static final String EXTRA_NETWORK = "hohenheim-extra";
+    public static @NonNull String extraNetwork() {
+        return ControllerScope.shortScoped("hhx");
+    }
 
     private final @NonNull IncusClient incus;
 
@@ -71,9 +84,9 @@ public final class IncusNetworkPolicy {
      */
     public void ensureIsolationAcl() throws IOException {
         List<Map<String, Object>> wantEgress = isolationEgressRules();
-        Map<String, Object> existing = this.incus.networkAcl(ACL_NAME);
+        Map<String, Object> existing = this.incus.networkAcl(aclName());
         Map<String, Object> definition = new LinkedHashMap<>();
-        definition.put("name", ACL_NAME);
+        definition.put("name", aclName());
         definition.put("description", "hohenheim tenant isolation: deny host, metadata and"
             + " every private range; the internet and DNS stay reachable");
         definition.put("egress", wantEgress);
@@ -105,13 +118,13 @@ public final class IncusNetworkPolicy {
                 }
             }
         } else if (!carriesExactly(existing, wantEgress)) {
-            this.incus.updateNetworkAcl(ACL_NAME, definition);
+            this.incus.updateNetworkAcl(aclName(), definition);
         }
 
-        Map<String, Object> readBack = this.incus.networkAcl(ACL_NAME);
+        Map<String, Object> readBack = this.incus.networkAcl(aclName());
         if (readBack == null) {
             throw new IOException("REFUSED to isolate on this Incus host: the daemon accepted"
-                + " the '" + ACL_NAME + "' ACL but it does not read back. Its network-ACL"
+                + " the '" + aclName() + "' ACL but it does not read back. Its network-ACL"
                 + " support is not enforcing what it reports.");
         }
         List<String> present = destinationsOf(readBack.get("egress"));
@@ -136,7 +149,7 @@ public final class IncusNetworkPolicy {
         Map<String, Object> device = new LinkedHashMap<>();
         device.put("type", "nic");
         device.put("network", inheritedNetwork);
-        device.put("security.acls", ACL_NAME);
+        device.put("security.acls", aclName());
         // The DEFAULT actions decide what a packet not named by a rule does. Ingress stays
         // allow (an inbound connection's reply leg is handled by the reject rules being
         // egress-only). Egress is allow for OPEN (the internet), drop for NONE.
@@ -164,9 +177,9 @@ public final class IncusNetworkPolicy {
                 + " carries no isolation config, so the container would share the bridge with"
                 + " every other tenant. The daemon did not apply the device override.");
         }
-        if (!ACL_NAME.equals(String.valueOf(nic.get("security.acls")))) {
+        if (!aclName().equals(String.valueOf(nic.get("security.acls")))) {
             throw new IOException("REFUSED to run '" + handle + "': its '" + NIC + "' device"
-                + " does not reference the '" + ACL_NAME + "' ACL (security.acls="
+                + " does not reference the '" + aclName() + "' ACL (security.acls="
                 + nic.get("security.acls") + "). The isolation the deploy verified is gone.");
         }
         String wantAction = egress == Egress.NONE ? "drop" : "allow";
@@ -185,10 +198,10 @@ public final class IncusNetworkPolicy {
      * @throws IOException when the daemon refuses or the network reads back unusable
      */
     public void ensureExtraNetwork() throws IOException {
-        Map<String, Object> existing = this.incus.network(EXTRA_NETWORK);
+        Map<String, Object> existing = this.incus.network(extraNetwork());
         if (existing == null) {
             Map<String, Object> definition = new LinkedHashMap<>();
-            definition.put("name", EXTRA_NETWORK);
+            definition.put("name", extraNetwork());
             definition.put("type", "bridge");
             definition.put("description",
                 "hohenheim extra-NIC bridge (isolation ACL rides every NIC)");
@@ -197,20 +210,20 @@ public final class IncusNetworkPolicy {
             definition.put("config", Map.of());
             this.incus.createNetwork(definition);
         }
-        Map<String, Object> readBack = this.incus.network(EXTRA_NETWORK);
+        Map<String, Object> readBack = this.incus.network(extraNetwork());
         boolean managed = readBack != null && Boolean.TRUE.equals(readBack.get("managed"));
         String ipv4 = readBack != null && readBack.get("config") instanceof Map<?, ?> config
             && config.get("ipv4.address") instanceof String address ? address : null;
         if (!managed || ipv4 == null || ipv4.isBlank() || "none".equals(ipv4)) {
             throw new IOException("REFUSED to attach an extra NIC on this Incus host: the '"
-                + EXTRA_NETWORK + "' bridge does not read back as a managed network with an"
+                + extraNetwork() + "' bridge does not read back as a managed network with an"
                 + " IPv4 subnet (managed=" + managed + ", ipv4.address=" + ipv4 + ").");
         }
     }
 
     /** The device map of one EXTRA NIC on the shared secondary bridge, ACL attached. */
     public @NonNull Map<String, Object> extraNicDevice(@NonNull Egress egress) {
-        return nicDevice(EXTRA_NETWORK, egress);
+        return nicDevice(extraNetwork(), egress);
     }
 
     /**
@@ -232,9 +245,9 @@ public final class IncusNetworkPolicy {
                     || !"nic".equals(String.valueOf(device.get("type")))) {
                 continue;
             }
-            if (!ACL_NAME.equals(String.valueOf(device.get("security.acls")))) {
+            if (!aclName().equals(String.valueOf(device.get("security.acls")))) {
                 throw new IOException("REFUSED to run '" + handle + "': its extra NIC '"
-                    + name + "' does not reference the '" + ACL_NAME + "' ACL"
+                    + name + "' does not reference the '" + aclName() + "' ACL"
                     + " (security.acls=" + device.get("security.acls") + "). An extra NIC"
                     + " without the isolation ACL is a hole in the tenant boundary.");
             }
@@ -251,7 +264,7 @@ public final class IncusNetworkPolicy {
     /** Remove the shared ACL; only safe once no instance references it (teardown/tests). */
     public void removeIsolationAcl() throws IOException {
         try {
-            this.incus.deleteNetworkAcl(ACL_NAME);
+            this.incus.deleteNetworkAcl(aclName());
         } catch (IncusClient.ApiException e) {
             if (!e.isNotFound()) {
                 throw e;
@@ -296,7 +309,7 @@ public final class IncusNetworkPolicy {
 
     private static void requirePresent(List<String> present, String range) throws IOException {
         if (!present.contains(range)) {
-            throw new IOException("REFUSED to isolate on this Incus host: the '" + ACL_NAME
+            throw new IOException("REFUSED to isolate on this Incus host: the '" + aclName()
                 + "' ACL read back without the egress reject to '" + range + "'. Something"
                 + " on this host rewrote it. Present destinations: " + present);
         }

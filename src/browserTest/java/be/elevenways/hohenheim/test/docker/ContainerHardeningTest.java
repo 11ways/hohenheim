@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -17,7 +18,6 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.stack.StackDeployer;
 import be.elevenways.hohenheim.server.stack.StackSpec;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.LiveIdOffsets;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -87,8 +87,6 @@ class ContainerHardeningTest {
     @BeforeAll
     static void bootRuntime() throws IOException {
         HohenheimTestRuntime.ensureBooted();
-        // Unique per-class instance ids => unique daemon handles across parallel forks.
-        LiveIdOffsets.apply(HohenheimDatabase.datasource());
         if (PrivateNetns.available()) {
             classNetns = new PrivateNetns();
             WorkloadNetworkPolicy.overrideForTest(classNetns.enforcingPolicy());
@@ -147,7 +145,7 @@ class ContainerHardeningTest {
         try {
             assertThat(site.getInstanceId())
                 .as("step 2: the site runtime went through the contract").isNotNull();
-            assertKernelState(docker, "hohenheim-instance-" + site.getInstanceId(),
+            assertKernelState(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, site.getInstanceId()),
                 "step 2: docker site", SERVICE_CAPS, pids);
         } finally {
             SiteInstances.destroyFor(siteId);
@@ -160,7 +158,7 @@ class ContainerHardeningTest {
         try {
             databases.provision(dbName, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
                 "appuser", "secret123", "appdb", true, ResourceLimits.none(), 999_103);
-            assertKernelState(docker, "hohenheim-db-" + dbName, "step 3: managed database",
+            assertKernelState(docker, ControllerScope.handle(ControllerScope.KIND_DB, dbName), "step 3: managed database",
                 SERVICE_CAPS, pids);
         } finally {
             databases.destroy(dbName, true);
@@ -215,7 +213,7 @@ class ContainerHardeningTest {
             "image", "postgres", "tag", "17-alpine",
             "environment_variables", Map.of("POSTGRES_PASSWORD", "hardening-probe"),
             "volumes", Map.of("data", "/var/lib/postgresql/data")));
-        String volume = "hohenheim-instance-" + instanceId + "-vol-data";
+        String volume = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId) + "-vol-data";
         PrivateNetns netns = new PrivateNetns();
         DockerInstanceRuntime runtime = new DockerInstanceRuntime(docker, netns.enforcingPolicy());
         String handle = runtime.create(spec);

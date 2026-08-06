@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -91,7 +92,7 @@ public final class VmFramebufferHandler implements WebSocketHandler {
         }
         Integer id = this.instanceId;
         String serverName = ServerModel.nameOf(instance.get(InstanceModel.SERVER_ID));
-        String handle = "hohenheim-instance-" + id;
+        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
         FramebufferSource opened;
         try {
             opened = this.sourceFactory.open(id, serverName, handle);
