@@ -74,6 +74,16 @@ public final class DockerInstanceRuntime
         this.egress = egress;
     }
 
+    /** The KIND-declared network posture this runtime was built with. */
+    public @NonNull NetworkPosture posture() {
+        return this.posture;
+    }
+
+    /** The KIND-declared egress posture this runtime materializes into the policy. */
+    public @NonNull Egress egress() {
+        return this.egress;
+    }
+
     @Override
     public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
         if (spec.cloudInitUserData() != null && !spec.cloudInitUserData().isBlank()) {

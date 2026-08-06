@@ -1,0 +1,419 @@
+package be.elevenways.hohenheim.server.task;
+
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.SiteDatabaseNetworks;
+import be.elevenways.hohenheim.server.game.GameDomains;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
+import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.hohenheim.server.runtime.NetworkPosture;
+import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
+import be.elevenways.hohenheim.server.security.WorkloadNetwork;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.stack.StackDeployer;
+import be.elevenways.hohenheim.server.stack.StackSpec;
+import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.task.ScheduleDeclaration;
+import be.elevenways.zenit.common.task.ScheduledTask;
+import be.elevenways.zenit.common.task.TaskContext;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * The reconciler that closes the Docker tiers' reboot window: every policied workload
+ * network (instances, site releases, managed databases, stacks, link networks) is
+ * re-checked against the daemon host's ACTUAL nftables, repaired through the verified
+ * applier, and CONTAINED when the repair does not take.
+ *
+ * AIDEV-NOTE: why a SWEEP and not only re-apply at start. Measured on daystrom
+ * 2026-08-06 (real host reboot): Docker networks and their subnets survive a reboot,
+ * nftables rules do not, and an unless-stopped container -- every stack service's
+ * default -- is restarted by the DAEMON at boot, through no code path of ours. The
+ * rebooted host served real HTTP from a stack container to a host-bound service while
+ * {@code nft list table inet hohenheim_net} answered "No such file or directory".
+ * Instances, site releases and managed databases carry NO restart policy, so they come
+ * back stopped and re-apply on their next deploy/start -- but a sweep still covers them:
+ * records saying RUNNING with chains missing is the same divergence one operator
+ * {@code docker start} away from being live. A daemon restart alone does NOT open the
+ * window (kernel state survives; also measured). Boot + five minutes, the
+ * {@link VerifyIncusIsolation} shape: the window becomes bounded and self-closing
+ * instead of lasting until the next deploy.
+ *
+ * AIDEV-NOTE: decided 2026-08-06 -- what happens when repair fails, per condition:
+ * a host with enforcement OFF is reported unverifiable and nothing is stopped (the
+ * pre-enforcement decision: deploy refuses, running workloads keep working); a kernel
+ * that cannot be READ is reported unverifiable and nothing is stopped (refusing to
+ * answer is not evidence of a leak, the Incus rule); only a workload whose divergence
+ * is OBSERVED and whose re-apply is REFUSED is contained -- stacks and instances and
+ * databases are stopped, link networks are severed by disconnecting their members
+ * (both endpoints keep running on their own policied networks; the next deploy
+ * re-attaches with the policy enforced). Repair runs first, so a transient failure
+ * costs no availability; what is at stake otherwise is every other tenant on the host.
+ */
+public class VerifyDockerIsolation extends ScheduledTask {
+
+    public static final String STATIC_DESCRIPTION =
+        "Verify Docker workload isolation in the host kernel";
+
+    /** One host's outcome; every list names workloads, never a bare count. */
+    public record HostOutcome(@NonNull String server, boolean verifiable,
+                              @NonNull List<String> enforced, @NonNull List<String> repaired,
+                              @NonNull List<String> contained, @NonNull List<String> errors) {
+    }
+
+    /** The escalation for one workload whose policy is diverged AND unrepairable. */
+    private interface Containment {
+        @NonNull String contain() throws Exception;
+    }
+
+    /** One policied network the kernel must carry, with its declared egress. */
+    private record Expected(@NonNull String network, @NonNull Egress egress,
+                            @NonNull String workload, @NonNull Containment containment) {
+    }
+
+    @Override
+    public @NonNull VerifyDockerIsolation newTask() {
+        return new VerifyDockerIsolation();
+    }
+
+    @Override
+    public @NonNull List<ScheduleDeclaration> schedules() {
+        // Boot included: the reboot IS the trigger this sweep exists for, and the
+        // daemon restarts unless-stopped containers before our controller is up.
+        return HohenheimRoles.schedulesWhen(
+            List.of(ScheduleDeclaration.bootAndCron("*/5 * * * *")),
+            HohenheimRoles.Role.INSTANCES, HohenheimRoles.Role.STACKS,
+            HohenheimRoles.Role.DATABASES, HohenheimRoles.Role.PROXY);
+    }
+
+    @Override
+    public @NonNull String description() {
+        return STATIC_DESCRIPTION;
+    }
+
+    @Override
+    public void executor(TaskContext ctx) {
+        for (HostOutcome outcome : sweep()) {
+            if (!outcome.verifiable()) {
+                Blast.log("DOCKER ISOLATION:", outcome.server(),
+                    "cannot be kernel-verified; its workloads' isolation is UNCONFIRMED:",
+                    outcome.errors());
+                continue;
+            }
+            if (!outcome.repaired().isEmpty() || !outcome.contained().isEmpty()
+                    || !outcome.errors().isEmpty()) {
+                Blast.log("DOCKER ISOLATION:", outcome.server(), "- enforced",
+                    outcome.enforced().size(), ", repaired", outcome.repaired(),
+                    ", CONTAINED", outcome.contained(), ", errors", outcome.errors());
+            }
+        }
+    }
+
+    /** Sweep every Docker host that carries policied workloads; the executor reports. */
+    public static @NonNull List<HostOutcome> sweep() {
+        Map<Integer, List<Expected>> inventory = new LinkedHashMap<>();
+        Map<Integer, List<String>> inventoryErrors = new LinkedHashMap<>();
+        collectInstances(inventory, inventoryErrors);
+        collectStacks(inventory);
+        collectDatabases(inventory);
+        collectLinks(inventory);
+
+        List<HostOutcome> outcomes = new ArrayList<>();
+        for (Integer serverId : allKeys(inventory, inventoryErrors)) {
+            Row server = Models.get(ServerModel.class).findById(serverId);
+            if (server != null && ServerModel.isIncus(server)) {
+                continue;   // the Incus tier has its own kernel-truth sweep
+            }
+            outcomes.add(sweepHost(serverId,
+                inventory.getOrDefault(serverId, List.of()),
+                inventoryErrors.getOrDefault(serverId, List.of())));
+        }
+        return List.copyOf(outcomes);
+    }
+
+    // -- one host ---------------------------------------------------------------
+
+    private static @NonNull HostOutcome sweepHost(int serverId, @NonNull List<Expected> expected,
+                                                  @NonNull List<String> inventoryErrors) {
+        String name = ServerModel.nameOf(serverId);
+        WorkloadNetworkPolicy policy = WorkloadNetworkPolicy.forServer(name);
+        if (!policy.isEnabled()) {
+            // The pre-enforcement decision: deploys refuse, running workloads keep
+            // working, and the sweep says ON THE RECORD that it cannot verify them.
+            List<String> errors = new ArrayList<>(inventoryErrors);
+            errors.add("per-workload enforcement is off (security.nftables_enabled); "
+                + expected.size() + " workload network(s) can be neither verified nor repaired");
+            return new HostOutcome(name, false, List.of(), List.of(), List.of(),
+                List.copyOf(errors));
+        }
+        DockerClient docker;
+        try {
+            docker = new ServerService().clientFor(name);
+        } catch (RuntimeException unreachable) {
+            List<String> errors = new ArrayList<>(inventoryErrors);
+            errors.add("no Docker client for this host: " + unreachable.getMessage());
+            return new HostOutcome(name, false, List.of(), List.of(), List.of(),
+                List.copyOf(errors));
+        }
+
+        List<String> enforced = new ArrayList<>();
+        List<String> repaired = new ArrayList<>();
+        List<String> contained = new ArrayList<>();
+        List<String> errors = new ArrayList<>(inventoryErrors);
+        for (Expected item : expected) {
+            WorkloadNetwork network;
+            try {
+                if (docker.findNetworkByName(item.network()) == null) {
+                    // No network at the daemon: nothing is attached to it, so there is
+                    // nothing to protect; the next deploy recreates it WITH its policy.
+                    continue;
+                }
+                network = WorkloadNetwork.fromInspect(docker.inspectNetwork(item.network()));
+            } catch (IOException | RuntimeException daemonBroken) {
+                errors.add(item.workload() + ": daemon state unreadable, isolation"
+                    + " UNCONFIRMED: " + daemonBroken.getMessage());
+                continue;
+            }
+            boolean enforcedNow;
+            try {
+                enforcedNow = policy.isEnforced(network, item.egress());
+            } catch (IOException unreadable) {
+                // An unreadable kernel is "unverifiable", never "unenforced": nothing
+                // is contained on a host that merely refuses to answer.
+                errors.add(item.workload() + ": kernel unreadable, isolation"
+                    + " UNCONFIRMED: " + unreadable.getMessage());
+                continue;
+            }
+            if (enforcedNow) {
+                enforced.add(item.workload());
+                continue;
+            }
+            try {
+                policy.apply(network, item.egress());
+                repaired.add(item.workload());
+            } catch (IOException unrepairable) {
+                // The declared refusal: observed diverged and unrepairable means the
+                // workload does not stay reachable.
+                errors.add(item.workload() + ": " + unrepairable.getMessage());
+                try {
+                    contained.add(item.containment().contain());
+                } catch (Exception containFailed) {
+                    errors.add(item.workload() + ": containment failed: "
+                        + containFailed.getMessage());
+                }
+            }
+        }
+        return new HostOutcome(name, true, List.copyOf(enforced), List.copyOf(repaired),
+            List.copyOf(contained), List.copyOf(errors));
+    }
+
+    // -- inventory ----------------------------------------------------------------
+
+    /**
+     * Docker-kind instance rows whose record claims a live workload (running OR
+     * starting), site release containers included. Site-generated rows are the PROXY
+     * role's; everything else is the INSTANCES role's.
+     */
+    private static void collectInstances(@NonNull Map<Integer, List<Expected>> inventory,
+                                         @NonNull Map<Integer, List<String>> errors) {
+        boolean instancesRole = HohenheimRoles.enabled(HohenheimRoles.Role.INSTANCES);
+        boolean proxyRole = HohenheimRoles.enabled(HohenheimRoles.Role.PROXY);
+        if (!instancesRole && !proxyRole) {
+            return;
+        }
+        for (Row row : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.DELETED_AT.isNull())
+                .where(InstanceModel.STATUS.in(
+                    InstanceModel.STATUS_RUNNING, InstanceModel.STATUS_STARTING))
+                .all()) {
+            Integer id = row.get(InstanceModel.ID);
+            boolean forSite = SiteModel.MODEL_ID.toString()
+                .equals(row.get(InstanceModel.GENERATED_FOR_MODEL));
+            if (forSite ? !proxyRole : !instancesRole) {
+                continue;
+            }
+            InstanceKindHandler handler = InstanceKinds.getHandler(
+                row.get(InstanceModel.KIND));
+            if (handler == null
+                    || !ServerModel.RUNTIME_DOCKER.equals(handler.requiredRuntime())) {
+                continue;   // unknown kinds fail their own lanes; Incus has its own sweep
+            }
+            int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
+            InstanceService.Resolved resolved;
+            try {
+                resolved = new InstanceService().resolve(id);
+            } catch (RuntimeException unresolvable) {
+                errors.computeIfAbsent(serverId, key -> new ArrayList<>())
+                    .add("instance " + id + " cannot be resolved, isolation UNCONFIRMED: "
+                        + unresolvable.getMessage());
+                continue;
+            }
+            if (!(resolved.runtime() instanceof DockerInstanceRuntime runtime)
+                    || runtime.posture() != NetworkPosture.PRIVATE) {
+                continue;   // a SHARED_BRIDGE kind declared no per-workload network
+            }
+            String handle = resolved.spec().handle();
+            inventory.computeIfAbsent(serverId, key -> new ArrayList<>()).add(new Expected(
+                WorkloadNetworks.networkName(handle), runtime.egress(), handle,
+                () -> {
+                    new InstanceService().stop(id);
+                    return "stopped instance " + handle;
+                }));
+        }
+    }
+
+    /** Every enabled stack's per-stack network, {@link StackDeployer#EGRESS} declared. */
+    private static void collectStacks(@NonNull Map<Integer, List<Expected>> inventory) {
+        if (!HohenheimRoles.enabled(HohenheimRoles.Role.STACKS)) {
+            return;
+        }
+        for (Row stack : Models.get(StackModel.class).find()
+                .where(StackModel.ENABLED.eq(true)).all()) {
+            Integer stackId = stack.get(StackModel.ID);
+            String stackName = stack.get(StackModel.NAME);
+            if (stackId == null || stackName == null || stackName.isBlank()) {
+                continue;
+            }
+            int serverId = ServerModel.canonicalServerId(stack.get(StackModel.SERVER_ID));
+            inventory.computeIfAbsent(serverId, key -> new ArrayList<>()).add(new Expected(
+                StackDeployer.networkName(stackName), StackDeployer.EGRESS,
+                "stack '" + stackName + "'",
+                () -> containStack(stackId, stackName, serverId)));
+        }
+    }
+
+    /** Every active managed database's private network, egress NONE by declaration. */
+    private static void collectDatabases(@NonNull Map<Integer, List<Expected>> inventory) {
+        if (!HohenheimRoles.enabled(HohenheimRoles.Role.DATABASES)) {
+            return;
+        }
+        for (Row database : Models.get(DatabaseModel.class).find()
+                .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_ACTIVE)).all()) {
+            String dbName = database.get(DatabaseModel.NAME);
+            if (dbName == null || dbName.isBlank()) {
+                continue;
+            }
+            String handle = ManagedDatabase.containerHandle(dbName);
+            int serverId = ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID));
+            inventory.computeIfAbsent(serverId, key -> new ArrayList<>()).add(new Expected(
+                WorkloadNetworks.networkName(handle), Egress.NONE, handle,
+                () -> {
+                    new ServerService().clientFor(ServerModel.nameOf(serverId))
+                        .stopContainer(handle, 10);
+                    return "stopped database container " + handle;
+                }));
+        }
+    }
+
+    /**
+     * Link networks of both owners: site-to-database pairs (egress NONE, the database's
+     * declaration must not widen through a second interface) and game-domain
+     * proxy-to-backend pairs (egress OPEN, the proxy lane's declaration).
+     */
+    private static void collectLinks(@NonNull Map<Integer, List<Expected>> inventory) {
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.PROXY)) {
+            addLinks(inventory, SiteDatabaseNetworks.liveLinkHandles(), Egress.NONE);
+        }
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.INSTANCES)) {
+            addLinks(inventory, GameDomains.liveLinkHandles(), Egress.OPEN);
+        }
+    }
+
+    private static void addLinks(@NonNull Map<Integer, List<Expected>> inventory,
+                                 @NonNull Map<Integer, List<String>> handlesByServer,
+                                 @NonNull Egress egress) {
+        for (Map.Entry<Integer, List<String>> entry : handlesByServer.entrySet()) {
+            int serverId = entry.getKey();
+            for (String handle : entry.getValue()) {
+                String network = WorkloadNetworks.networkName(handle);
+                inventory.computeIfAbsent(serverId, key -> new ArrayList<>()).add(new Expected(
+                    network, egress, "link " + handle,
+                    () -> severLink(serverId, network)));
+            }
+        }
+    }
+
+    // -- containment ---------------------------------------------------------------
+
+    /**
+     * Stop every container of the stack and stamp the record STOPPED.
+     *
+     * AIDEV-NOTE: deliberately NOT through StackRuntime's per-stack worker lane. The
+     * worker executes on its own thread outside the sweep's datasource scope, and an
+     * emergency stop must not queue behind a wedged deploy on the very host whose
+     * kernel just refused a repair. The race this opens (a concurrent deploy recreating
+     * containers) is benign: a deploy re-applies the verified policy before any
+     * service starts, which is a better outcome than the stop.
+     */
+    private static @NonNull String containStack(int stackId, @NonNull String stackName,
+                                                int serverId) throws IOException {
+        Row stack = Models.get(StackModel.class).findById(stackId);
+        if (stack == null) {
+            return "stack '" + stackName + "' is already gone";
+        }
+        StackSpec spec = StackSpec.fromRecordsUnordered(stack);
+        String serverName = ServerModel.nameOf(serverId);
+        new StackDeployer(new ServerService().clientFor(serverName),
+            WorkloadNetworkPolicy.forServer(serverName), null).stop(spec);
+        Models.get(StackModel.class).find()
+            .where(StackModel.ID.eq(stackId))
+            .assign(StackModel.STATUS, StackModel.STATUS_STOPPED)
+            .updateAll();
+        return "stopped stack '" + stackName + "'";
+    }
+
+    /**
+     * Disconnect every member of an unrepairable link network: no member then holds an
+     * address in the unpoliced subnet, both endpoints keep running on their own
+     * (verified) networks, and the next deploy re-attaches with the policy enforced.
+     */
+    private static @NonNull String severLink(int serverId, @NonNull String network)
+            throws IOException {
+        DockerClient docker = new ServerService().clientFor(ServerModel.nameOf(serverId));
+        Map<String, Object> inspect = docker.inspectNetwork(network);
+        List<String> members = new ArrayList<>();
+        if (inspect.get("Containers") instanceof Map<?, ?> attached) {
+            for (Object value : attached.values()) {
+                if (value instanceof Map<?, ?> member
+                        && member.get("Name") instanceof String memberName
+                        && !memberName.isEmpty()) {
+                    members.add(memberName);
+                }
+            }
+        }
+        for (String member : members) {
+            docker.disconnectContainerFromNetwork(network, member, true);
+        }
+        return "severed link network '" + network + "' (disconnected " + members + ")";
+    }
+
+    // -- helpers ---------------------------------------------------------------------
+
+    private static @NonNull List<Integer> allKeys(@NonNull Map<Integer, List<Expected>> inventory,
+                                                  @NonNull Map<Integer, List<String>> errors) {
+        List<Integer> keys = new ArrayList<>(inventory.keySet());
+        for (Integer key : errors.keySet()) {
+            if (!keys.contains(key)) {
+                keys.add(key);
+            }
+        }
+        return keys;
+    }
+}
