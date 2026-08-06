@@ -2,12 +2,17 @@ package be.elevenways.hohenheim.test.preview;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
+import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.preview.PreviewDomains;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -235,6 +240,115 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         PreviewDeployments.destroy(healthyId, "operator");
         assertThat(schedulesOf(healthyId))
             .as("step 6: teardown removed the armed schedule").isEmpty();
+    }
+
+    /**
+     * The generated preview hostname is a REAL claim, driven end to end: reclaiming a
+     * preview ledgers its hostname under the SITE's owner, a stranger is quarantined out of
+     * it, and the same owner's next preview retakes it.
+     *
+     * DECISION (2026-08-06): previews are quarantined, NOT exempted, even though the
+     * hostname sits under a base domain we host and so carries no dangling third-party
+     * CNAME. The reason is that the release path is the ordinary domain-row delete and the
+     * claim path is the ordinary domain-row write -- exempting them would need a carve-out
+     * in the write pipeline, and a quarantine with a hole shaped like "generated rows" is
+     * worse than the small cost of a same-owner reclaim that is allowed anyway. What the
+     * window actually costs a stranger is a slug+ref collision inside 30 days.
+     */
+    @Test
+    void aReclaimedPreviewHostnameIsQuarantinedAgainstAnotherOwner() throws Exception {
+        Integer savedWindow = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS);
+        HohenheimSettings.VALUES.setValue(
+            HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, 30);
+        var domains = Models.get(SiteDomainModel.class);
+        var sites = Models.get(SiteModel.class);
+        String hostname = "prev-mech--quarantine-ref.preview.test";
+        try {
+            // 1. The preview's site belongs to a TENANT, so the ledger has an owner to
+            //    record that is not the operator's empty set.
+            int owner = tenantUser("preview-owner@test");
+            RecordGrants.grant("user", owner, SiteModel.MODEL_ID, siteId,
+                HohenheimAccess.MANAGE, true);
+
+            // 2. A preview mints its hostname through the ordinary domain write pipeline.
+            Row preview = newPreviewRow("quarantine-ref", hostname, null);
+            int previewId = preview.get(PreviewDeploymentModel.ID);
+            GeneratedRows.as(new GeneratedRows.Attribution(PreviewDomains.SOURCE,
+                PreviewDeploymentModel.MODEL_ID.toString(), previewId), () -> {
+                    Row generated = domains.createEmptyRow();
+                    generated.set(SiteDomainModel.SITE_ID, siteId);
+                    generated.set(SiteDomainModel.HOSTNAME, hostname);
+                    generated.set(SiteDomainModel.MATCH_TYPE, "exact");
+                    domains.save(generated);
+                });
+            assertThat((String) generatedDomainOf(previewId).get(SiteDomainModel.LIVE_ROUTE_KEY))
+                .as("step 2: the generated row holds a real live route claim").isNotNull();
+
+            // 3. Reclaiming the preview ledgers the release -- with the owner INTACT. A
+            //    ledger row carrying an empty subject set reads as operator-owned and
+            //    quarantines nobody, which no status-only assertion would notice.
+            PreviewDeployments.destroy(previewId, "operator");
+            Row ledgered = Models.get(ReleasedRouteClaimModel.class).find()
+                .where(ReleasedRouteClaimModel.HOSTNAME.eq(hostname)).first();
+            assertThat(ledgered)
+                .as("step 3: the reclaimed preview hostname is ledgered").isNotNull();
+            assertThat((String) ledgered.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
+                .as("step 3: under the site's owner, not an empty operator set")
+                .isEqualTo("user:" + owner);
+
+            // 4. A stranger's site cannot take the freed preview hostname.
+            Row raider = sites.createEmptyRow();
+            raider.set(SiteModel.NAME, "Preview Raider");
+            raider.set(SiteModel.SLUG, "prev-raider");
+            raider.set(SiteModel.SITE_TYPE, "hohenheim:static");
+            raider.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+            raider.set(SiteModel.STATUS, "active");
+            raider.set(SiteModel.ENABLED, true);
+            sites.save(raider);
+            RecordGrants.grant("user", tenantUser("preview-raider@test"), SiteModel.MODEL_ID,
+                raider.get(SiteModel.ID), HohenheimAccess.MANAGE, true);
+            Row seize = domains.createEmptyRow();
+            seize.set(SiteDomainModel.SITE_ID, raider.get(SiteModel.ID));
+            seize.set(SiteDomainModel.HOSTNAME, hostname);
+            seize.set(SiteDomainModel.MATCH_TYPE, "exact");
+            assertThat(catchThrowable(() -> domains.save(seize)))
+                .as("step 4: a stranger is refused the freed preview hostname")
+                .isInstanceOf(Violations.class);
+            assertThat(domains.find().where(SiteDomainModel.HOSTNAME.eq(hostname)).all())
+                .as("step 4: and nothing was written").isEmpty();
+
+            // 5. The SAME owner's next preview takes it straight back -- step 4 was the
+            //    quarantine, not a preview that can never be redeployed.
+            Row again = newPreviewRow("quarantine-ref-2", hostname, null);
+            int againId = again.get(PreviewDeploymentModel.ID);
+            GeneratedRows.as(new GeneratedRows.Attribution(PreviewDomains.SOURCE,
+                PreviewDeploymentModel.MODEL_ID.toString(), againId), () -> {
+                    Row generated = domains.createEmptyRow();
+                    generated.set(SiteDomainModel.SITE_ID, siteId);
+                    generated.set(SiteDomainModel.HOSTNAME, hostname);
+                    generated.set(SiteDomainModel.MATCH_TYPE, "exact");
+                    domains.save(generated);
+                });
+            assertThat((String) generatedDomainOf(againId).get(SiteDomainModel.LIVE_ROUTE_KEY))
+                .as("step 5: the same owner redeploys onto its own hostname").isNotNull();
+            PreviewDeployments.destroy(againId, "operator");
+        } finally {
+            HohenheimSettings.VALUES.setValue(
+                HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, savedWindow);
+        }
+    }
+
+    /** A user holding manage on a site, so the ledger records a tenant and not the operator. */
+    private static int tenantUser(String email) {
+        Row user = AuthModels.users().createEmptyRow();
+        user.set(UserModel.EMAIL, email);
+        user.set(UserModel.DISPLAY_NAME, email);
+        user.set(UserModel.ENABLED, true);
+        user.set(UserModel.CREATED_AT, Instant.now());
+        user.set(UserModel.UPDATED_AT, Instant.now());
+        AuthModels.users().save(user);
+        return user.get(UserModel.ID);
     }
 
     /**

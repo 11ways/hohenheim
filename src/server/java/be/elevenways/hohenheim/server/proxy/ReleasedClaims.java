@@ -80,7 +80,9 @@ public final class ReleasedClaims {
         if (key == null || siteId == null) {
             return;
         }
-        record(key, String.valueOf(domain.get(SiteDomainModel.HOSTNAME)), siteId);
+        Object matchType = domain.get(SiteDomainModel.MATCH_TYPE);
+        record(key, String.valueOf(domain.get(SiteDomainModel.HOSTNAME)),
+            matchType != null ? String.valueOf(matchType) : null, siteId);
     }
 
     /** Record the release of every claim currently held by one site's domain rows. */
@@ -121,7 +123,8 @@ public final class ReleasedClaims {
      * Write one ledger row, unless an ACTIVE quarantine already covers the key -- the
      * first release inside a window is the authoritative one.
      */
-    private static void record(@NonNull String key, @NonNull String hostname, int siteId) {
+    private static void record(@NonNull String key, @NonNull String hostname,
+                               @Nullable String matchType, int siteId) {
         if (windowDays() <= 0) {
             // Quarantine disabled: recording releases nobody will ever read is not free,
             // and a re-enabled window must not suddenly quarantine on stale history.
@@ -135,6 +138,9 @@ public final class ReleasedClaims {
         Row row = ledger.createEmptyRow();
         row.set(ReleasedRouteClaimModel.CLAIM_KEY, key);
         row.set(ReleasedRouteClaimModel.HOSTNAME, hostname);
+        // The claim key omits match type on purpose, so the ledger has to carry it: a
+        // released regex is otherwise indistinguishable from a hostname that looks like one.
+        row.set(ReleasedRouteClaimModel.MATCH_TYPE, matchType);
         row.set(ReleasedRouteClaimModel.FORMER_SITE_ID, siteId);
         // Unreadable grants become an UNMATCHABLE owner marker, never an empty set: an
         // empty set reads as "operator-owned" and would hand the hostname to anyone.
@@ -156,8 +162,16 @@ public final class ReleasedClaims {
      * it does not refuse does the overlap tier walk the ACTIVE ledger rows (bounded by the
      * window, and far smaller than the site/domain scans that already ran).
      *
-     * @param matchType the pending row's match type; the RELEASED side describes itself,
-     *                  its stored hostname being canonical (HostnamePatterns.effectiveKind)
+     * AIDEV-NOTE: the set question includes the REGEX tier. A regex row spells a claim key
+     * nothing can equal and carries no glob to walk, and for a released hostname "the regex
+     * tier is consulted last" bounds nothing -- last is first when no other tier claims the
+     * host. Both directions are decided by running the pattern over the concrete hostname
+     * (HostnamePatterns.intersect), which is why the ledger stores the released row's match
+     * type: the claim key deliberately does not carry one.
+     *
+     * @param matchType the pending row's match type; the RELEASED side is described by its
+     *                  own stored match type, falling back to its hostname's shape for rows
+     *                  ledgered before M076
      * @return the ledger row refusing this claim, or null when the claim is allowed
      */
     public static @Nullable Row refusalFor(@NonNull String claimKey, @Nullable String matchType,
@@ -218,7 +232,8 @@ public final class ReleasedClaims {
             if (!Objects.equals(path, RouteClaims.pathOf(releasedKey))
                 || !ListenerAddressMatcher.overlap(listeners, RouteClaims.listenersOf(releasedKey))
                 || !HostnamePatterns.intersect(hostname, matchType,
-                    RouteClaims.hostnameOf(releasedKey), null)) {
+                    RouteClaims.hostnameOf(releasedKey),
+                    claim.get(ReleasedRouteClaimModel.MATCH_TYPE))) {
                 continue;
             }
             if (!allows(claim, claimant)) {

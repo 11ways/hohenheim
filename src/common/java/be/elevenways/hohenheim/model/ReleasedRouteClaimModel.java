@@ -46,6 +46,19 @@ public class ReleasedRouteClaimModel extends Model {
             .label(HohenheimFormCopy.label("hostname"))
             .build());
 
+    /**
+     * The released row's match type, because {@link #CLAIM_KEY} deliberately does not carry
+     * one (RouteClaims.keyOf omits it: an exact and a wildcard row on one literal hostname
+     * are ONE contested route). Without this column a released REGEX claim reads back as an
+     * exact hostname that happens to look like a pattern, matches nothing, and the next
+     * tenant carves a host straight out of the space -- see HostnamePatterns.intersect.
+     * Null on rows written before M076, which are then judged on the hostname alone.
+     */
+    public static final StringField MATCH_TYPE = SCHEMA.addField(
+        StringField.builder().name("match_type")
+            .label(HohenheimFormCopy.label("match_type"))
+            .build());
+
     /** The site that held the claim; kept for the operator's override decision, may be gone. */
     public static final IntegerField FORMER_SITE_ID = SCHEMA.addField(
         IntegerField.builder().name("former_site_id")

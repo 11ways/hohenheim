@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -280,6 +281,66 @@ class DevTunnelTest {
         String[] response = proxyGet("shared." + BASE, "/");
         assertThat(response[0]).contains("200");
         assertThat(response[1]).isEqualTo("from B");
+    }
+
+    /**
+     * Dev-tunnel names are DELIBERATELY exempt from the released-claim quarantine, and this
+     * pins the reason rather than the intention: a claimed name never becomes a route claim
+     * at all. It is resolved per request against the in-memory lease registry under ONE
+     * admin-authored wildcard row, so there is no claim key to release, nothing to ledger
+     * and nothing for the quarantine to read.
+     *
+     * DECISION (2026-08-06): leaving it that way is correct for the threat the quarantine
+     * exists for. Subdomain takeover needs a pointer from a zone we do NOT host; every dev
+     * label resolves through the namespace's own wildcard, which one operator authored and
+     * which IS quarantined normally when released. And every claimant of a namespace holds
+     * the same per-site registration token, so they are one trust unit already -- the
+     * handover this test performs is the documented "newest dev server wins", not a
+     * cross-tenant seizure. If dev namespaces ever gain per-developer credentials, the name
+     * becomes a delegable claim and this exemption has to be revisited.
+     */
+    @Test
+    void devTunnelNamesNeverBecomeRouteClaimsSoTheQuarantineCannotApply() throws Exception {
+        var domains = Models.get(SiteDomainModel.class);
+        var ledger = Models.get(ReleasedRouteClaimModel.class);
+        long domainRowsBefore = domains.find().count();
+        long ledgerRowsBefore = ledger.find().count();
+
+        // 1. One developer claims a name and is served on it.
+        HttpServer first = startTarget("from the first dev".getBytes(StandardCharsets.UTF_8), null);
+        DevTunnelClient owner = register("handover", TOKEN, first.getAddress().getPort());
+        awaitRegistered(owner);
+        assertThat(proxyGet("handover." + BASE, "/")[1])
+            .as("step 1: the claimed name is served").isEqualTo("from the first dev");
+
+        // 2. The claim wrote NO domain row and NO ledger row: there is no claim key here
+        //    for a quarantine to be about.
+        assertThat(domains.find().count())
+            .as("step 2: claiming a dev name writes no site_domains row")
+            .isEqualTo(domainRowsBefore);
+        assertThat(domains.find().where(SiteDomainModel.HOSTNAME.eq("handover." + BASE)).all())
+            .as("step 2: specifically none for the claimed name").isEmpty();
+
+        // 3. The developer goes away and a DIFFERENT one takes the same name. It is served
+        //    immediately -- no quarantine, by design, and nothing is ledgered by the
+        //    handover either.
+        owner.stop();
+        HttpServer second = startTarget("from the next dev".getBytes(StandardCharsets.UTF_8), null);
+        DevTunnelClient successor = register("handover", TOKEN, second.getAddress().getPort());
+        awaitRegistered(successor);
+        assertThat(proxyGet("handover." + BASE, "/")[1])
+            .as("step 3: the next developer takes the name straight over")
+            .isEqualTo("from the next dev");
+        assertThat(ledger.find().count())
+            .as("step 3: and the handover ledgered nothing").isEqualTo(ledgerRowsBefore);
+
+        // 4. The namespace's own wildcard row, by contrast, IS an ordinary route claim --
+        //    that is the row the quarantine covers when a dev namespace is torn down.
+        Row wildcard = domains.find()
+            .where(SiteDomainModel.HOSTNAME.eq("*." + BASE)).first();
+        assertThat(wildcard).as("step 4: the namespace wildcard is a real domain row").isNotNull();
+        assertThat((String) wildcard.get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 4: holding a real live route claim").isNotNull();
     }
 
     @Test

@@ -1587,6 +1587,69 @@ past. It is small if Phase 1 is done right: it is a consumer, not a mechanism.
   by design, so a regex row can still shadow a released glob); and restoring a
   database snapshot, which rewrites the ledger table itself rather than claiming
   through the write pipeline.
+
+  VERIFIED 2026-08-06 (second pass) -- the regex shadow above WAS live and is closed;
+  the three generated-hostname paths are driven and each has a verdict. Supersedes the
+  "regex rows" clause of the NOT-verified list directly above.
+
+  THE REGEX BYPASS, exploitable and driven: "the regex tier is consulted LAST, which
+  bounds the damage to hosts no exact or wildcard row claims" was not a bound at all
+  for a RELEASED hostname -- nothing claiming it is exactly what released means, so
+  last is FIRST. `ReleasedClaimRegexShadowTest` drives it through a real ProxyServer
+  with the window at 0: the victim's exact row serves the host, the site is deleted, a
+  stranger's regex row is accepted, and the same Host header then reaches the raider's
+  upstream. FIXED in the mechanism, not the consumer: `HostnamePatterns.intersect` now
+  decides regex-versus-CONCRETE-hostname by running the pattern (exactly decidable,
+  and the live conflict scan gets it too), and the ledger carries the released row's
+  `match_type` (M076) because `RouteClaims.keyOf` deliberately omits one -- without it
+  a released regex read back as an exact hostname that merely looked like a pattern
+  and matched nothing. Counterfactualled independently: reverting the intersect branch
+  fails step 2 ("Expecting actual not to be null" -- the save SUCCEEDED), reverting
+  only the ledger column fails step 3 while step 2 still passes, so both halves are
+  load-bearing on their own.
+
+  RESIDUE, named and open: regex-versus-GLOB is not decidable in this layer and
+  answers false, so a released WILDCARD space can still be re-entered by a regex row.
+  Admin-only status IS load-bearing to that being acceptable: `TenantWrites` refuses
+  any non-exact match type on a tenant-originated write, so both sides of the
+  remaining case must be operator-authored. If regex (or wildcard) ever becomes
+  tenant-reachable this must be closed BEFORE that ships; the AIDEV-NOTE sits on the
+  refusal in TenantWrites so whoever widens it trips over the dependency.
+
+  GENERATED HOSTNAMES, per path:
+   - PREVIEW deployments: QUARANTINED, driven end to end
+     (`PreviewMechanicsTest.aReclaimedPreviewHostnameIsQuarantinedAgainstAnotherOwner`).
+     The generated row rides the ordinary domain write pipeline, reclaim ledgers the
+     release with the SITE's owner set intact (asserted, not assumed), a stranger is
+     refused and the same owner redeploys onto it. DECIDED to quarantine rather than
+     exempt even though a preview hostname sits under a base domain we host: exempting
+     it would need a "generated rows" carve-out in the write pipeline, and the only
+     cost of keeping it is a slug+ref collision by a stranger inside the window.
+   - GAME domains: quarantined by INHERITANCE, and they mint no hostname at all
+     (`GameDomainAuthorityTest.aGameMappingCannotIntroduceAHostname...`). A
+     `game_domains` row REFERENCES an exact `site_domains` row (`requireDomain`
+     refuses a missing row and any non-exact match type); its generated output is DNS
+     SRV/A rows and Velocity forced-hosts, never a hostname. The quarantine therefore
+     judges the underlying domain row once, on its own write -- which the test drives.
+   - DEV TUNNEL: DELIBERATELY EXEMPT, and structurally so
+     (`DevTunnelTest.devTunnelNamesNeverBecomeRouteClaimsSoTheQuarantineCannotApply`).
+     A dev label is resolved per request against the in-memory `DevLeases` registry
+     under ONE admin-authored wildcard row: claiming a name writes no `site_domains`
+     row and no ledger row, so there is no claim key to release. Correct for the
+     threat: takeover needs a pointer from a zone we do NOT host, every dev label
+     resolves through the namespace's own wildcard (which IS quarantined normally when
+     released), and all claimants of a namespace share one registration token, so they
+     are a single trust unit -- the handover is the documented "newest dev server
+     wins". REVISIT if dev namespaces ever gain per-developer credentials.
+
+  Both refusals were counterfactualled by stubbing `ReleasedClaims.refusalFor` to
+  null: the preview and game tests fail on the exact step, the dev-tunnel test does
+  not move (it asserts an absence), so no other enforcer covers for the quarantine.
+
+  STILL NOT verified: the DNS-side and certificate-side of a released hostname;
+  database-snapshot restore, which rewrites the ledger table itself rather than
+  claiming through the write pipeline; and the regex-versus-glob residue above, which
+  is open BY DECISION rather than unexercised.
 - Generated records (ACME challenge records, Velocity forced-hosts, SRV/A rows
   materialized from a mapping) carry owner + source metadata and reconcile or
   delete ONLY their own output. A generated row is never adopted by whoever

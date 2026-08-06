@@ -1225,6 +1225,111 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
             .as("step 5: an unrelated wildcard is claimed normally").isNotNull();
     }
 
+    /**
+     * The REGEX tier of the same takeover, in both directions. A regex row spells a claim
+     * key nothing else can equal and carries no glob for the set comparison to walk, so it
+     * used to slip past the quarantine entirely -- and for a RELEASED hostname the "regex is
+     * consulted last" bound is empty, because nothing claims it. ReleasedClaimRegexShadowTest
+     * drives the routing half that makes this a takeover rather than a bookkeeping slip.
+     */
+    @Test
+    void aRegexRowCannotShadowAReleasedHostnameInEitherDirection() {
+        Model siteModel = Models.get(SiteModel.class);
+        Model domainModel = Models.get(SiteDomainModel.class);
+
+        // 1. Tenant A releases an EXACT hostname, and on a second site a REGEX space.
+        String exactHost = "shop.regexzone-a.test";
+        String regexSpace = "^(shop|www)\\.regexzone-b\\.test$";
+        Row exactSite = site("Regexzone Exact", "regexzone-exact", true);
+        int tenantA = tenantOf(exactSite, "regexzone-a@test");
+        domain(exactSite, exactHost);
+        Row regexSite = site("Regexzone Regex", "regexzone-regex", true);
+        grantManage(regexSite, tenantA);
+        domain(regexSite, regexSpace, SiteDomainModel.MATCH_REGEX, null);
+        new SiteResource().deleteRow(siteModel.findById(exactSite.get(SiteModel.ID)),
+            AccessContext.anonymous());
+        new SiteResource().deleteRow(siteModel.findById(regexSite.get(SiteModel.ID)),
+            AccessContext.anonymous());
+        Row exactLedger = quarantineOn(exactHost);
+        assertThat(exactLedger).as("step 1: the exact release is ledgered").isNotNull();
+        assertThat((String) exactLedger.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
+            .as("step 1: with the TENANT as former owner, not an empty operator set")
+            .isEqualTo("user:" + tenantA);
+        Row regexLedger = Models.get(ReleasedRouteClaimModel.class).find()
+            .where(ReleasedRouteClaimModel.CLAIM_KEY.eq(
+                RouteClaims.keyOf(regexSpace, SiteDomainModel.MATCH_REGEX, null, null)))
+            .orderBy(ReleasedRouteClaimModel.ID, SortOrder.DESC).first();
+        assertThat(regexLedger).as("step 1: and so is the regex release").isNotNull();
+        assertThat((String) regexLedger.get(ReleasedRouteClaimModel.MATCH_TYPE))
+            .as("step 1: the ledger REMEMBERS it was a regex -- the claim key cannot tell a "
+                + "pattern apart from a hostname that merely looks like one")
+            .isEqualTo(SiteDomainModel.MATCH_REGEX);
+
+        // 2. Direction one: a stranger claims the released exact host as a REGEX row.
+        Row raider = site("Regexzone Raider", "regexzone-raider", true);
+        tenantOf(raider, "regexzone-raider@test");
+        Row shadow = claimRow(raider, "^shop\\.regexzone-a\\.test$");
+        shadow.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_REGEX);
+        assertThat(catchThrowable(() -> domainModel.save(shadow)))
+            .as("step 2: a regex row matching a released hostname is refused")
+            .isInstanceOfSatisfying(Violations.class, violations ->
+                assertThat(hasViolation(violations, "hostname", "route_quarantined"))
+                    .as("step 2: with the quarantine refusal, not some other 422").isTrue());
+        assertThat(domainModel.find()
+                .where(SiteDomainModel.HOSTNAME.eq("^shop\\.regexzone-a\\.test$")).all())
+            .as("step 2: and the refused row was not written at all").isEmpty();
+
+        // 3. Direction two: a stranger carves one exact host out of the released regex
+        //    space. The exact tier is consulted FIRST, so this is the sharper half.
+        assertThat(catchThrowable(() -> domainModel.save(claimRow(raider, "www.regexzone-b.test"))))
+            .as("step 3: an exact host inside a released regex space is refused too")
+            .isInstanceOfSatisfying(Violations.class, violations ->
+                assertThat(hasViolation(violations, "hostname", "route_quarantined"))
+                    .as("step 3: with the quarantine refusal").isTrue());
+        assertThat(storedClaimsOn("www.regexzone-b.test"))
+            .as("step 3: and it claimed nothing").isEqualTo(0);
+
+        // 4. The ENABLE seam: staging the shadow on a disabled site and going live is the
+        //    documented two-step around the write path, and it is closed here too.
+        Row stager = site("Regexzone Stager", "regexzone-stager", false);
+        tenantOf(stager, "regexzone-stager@test");
+        Row staged = claimRow(stager, "^shop\\.regexzone-a\\.test$");
+        staged.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_REGEX);
+        domainModel.save(staged);
+        Row goingLive = siteModel.findById(stager.get(SiteModel.ID));
+        goingLive.set(SiteModel.ENABLED, true);
+        assertThat(catchThrowable(() -> siteModel.save(goingLive)))
+            .as("step 4: enabling the staged regex shadow is refused")
+            .isInstanceOfSatisfying(Violations.class, violations ->
+                assertThat(hasViolation(violations, "enabled", "enable_route_quarantined"))
+                    .as("step 4: with the enable-anchored quarantine refusal").isTrue());
+        assertThat((Boolean) siteModel.findById(stager.get(SiteModel.ID)).get(SiteModel.ENABLED))
+            .as("step 4: the refused enable left the site disabled").isFalse();
+
+        // 5. Not a blanket refusal of regex rows: the former owner takes its own space back
+        //    through a pattern, a host the released pattern does NOT match is free, and an
+        //    unrelated pattern is claimed normally.
+        Row reclaim = site("Regexzone Reclaim", "regexzone-reclaim", true);
+        grantManage(reclaim, tenantA);
+        Row own = claimRow(reclaim, "^shop\\.regexzone-a\\.test$");
+        own.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_REGEX);
+        domainModel.save(own);
+        assertThat((String) domainModel.findById(own.get(SiteDomainModel.ID))
+                .get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 5: the former owner's own regex re-claim is allowed").isNotNull();
+        Row outside = claimRow(raider, "mail.regexzone-b.test");
+        domainModel.save(outside);
+        assertThat((String) domainModel.findById(outside.get(SiteDomainModel.ID))
+                .get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 5: a hostname outside the released pattern is claimed normally").isNotNull();
+        Row unrelated = claimRow(raider, "^api\\.regexzone-free\\.test$");
+        unrelated.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_REGEX);
+        domainModel.save(unrelated);
+        assertThat((String) domainModel.findById(unrelated.get(SiteDomainModel.ID))
+                .get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 5: an unrelated regex row still claims its route").isNotNull();
+    }
+
     /** An unsaved exact-match domain row claiming a hostname for a site. */
     private static Row claimRow(Row site, String hostname) {
         Row row = Models.get(SiteDomainModel.class).createEmptyRow();

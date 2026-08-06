@@ -217,6 +217,13 @@ public final class TenantWrites {
 
         // An unbounded hostname set is not a delegable claim: a tenant wildcard swallows
         // every name under it and a regex can spell anything at all.
+        //
+        // AIDEV-NOTE: this refusal is LOAD-BEARING for the released-claim quarantine's one
+        // stated residue. HostnamePatterns.intersect decides regex-versus-concrete-hostname
+        // exactly, but regex-versus-GLOB is undecidable there and answers false -- so a
+        // released WILDCARD space can still be re-entered by a regex row. That residue is
+        // acceptable only because BOTH sides then have to be operator-authored, which is
+        // what this line guarantees. Widening the tenant match-type set reopens it.
         Object matchType = effective(row, stored, SiteDomainModel.MATCH_TYPE);
         if (matchType != null && !SiteDomainModel.MATCH_EXACT.equals(matchType)) {
             throw Violations.ofField(SiteDomainModel.MATCH_TYPE.getName(), matchType,

@@ -46,6 +46,9 @@ public class ReleasedClaimResource extends RowResource {
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(ReleasedRouteClaimModel.HOSTNAME).filterable().build())
+        // A released hostname is unreadable without its kind: "^(shop|www)\.x\.test$" is a
+        // pattern, not a host, and the quarantine judges the two differently.
+        .column(ColumnSpec.fromField(ReleasedRouteClaimModel.MATCH_TYPE).build())
         .column(ColumnSpec.fromField(ReleasedRouteClaimModel.FORMER_SITE_ID)
             .relation(RelationPick.of(ReleasedRouteClaimModel.FORMER_SITE_ID,
                 SiteModel.MODEL_ID).build()).build())

@@ -2,7 +2,9 @@ package be.elevenways.hohenheim.test.game;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.GameDomainModel;
+import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -439,6 +441,78 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
                 .as("admin page " + path + " renders")
                 .isEqualTo(200);
         }
+    }
+
+    /**
+     * A game mapping MINTS no hostname: it binds to an existing exact site_domain row, so
+     * the released-claim quarantine judges it once, on that row's own write. Driven because
+     * "structurally guarded by the same write hook" is a claim, not a verification.
+     */
+    @Test
+    @Order(6)
+    void aGameMappingCannotIntroduceAHostnameAndInheritsTheDomainRowsQuarantine() {
+        Integer savedWindow = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS);
+        try {
+            aGameMappingInheritsTheDomainRowsQuarantine();
+        } finally {
+            HohenheimSettings.VALUES.setValue(
+                HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, savedWindow);
+        }
+    }
+
+    private void aGameMappingInheritsTheDomainRowsQuarantine() {
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, 30);
+        String released = "arena.gamedomain.test";
+        var domains = Models.get(SiteDomainModel.class);
+        var sites = Models.get(SiteModel.class);
+
+        // 1. A TENANT-owned site serves the hostname and then abandons the row.
+        Row victimSite = sites.createEmptyRow();
+        victimSite.set(SiteModel.NAME, "Arena site");
+        victimSite.set(SiteModel.SLUG, "arena-site");
+        victimSite.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        victimSite.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        victimSite.set(SiteModel.STATUS, "active");
+        victimSite.set(SiteModel.ENABLED, true);
+        sites.save(victimSite);
+        int victimSiteId = victimSite.get(SiteModel.ID);
+        int arenaTenant = user("tenant-arena@gamedomain.test");
+        RecordGrants.grant("user", arenaTenant, SiteModel.MODEL_ID, victimSiteId,
+            HohenheimAccess.MANAGE, true);
+        Row victimDomain = domains.createEmptyRow();
+        victimDomain.set(SiteDomainModel.SITE_ID, victimSiteId);
+        victimDomain.set(SiteDomainModel.HOSTNAME, released);
+        victimDomain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domains.save(victimDomain);
+        domains.delete(victimDomain.get(SiteDomainModel.ID));
+        Row ledgered = Models.get(ReleasedRouteClaimModel.class).find()
+            .where(ReleasedRouteClaimModel.HOSTNAME.eq(released)).first();
+        assertThat(ledgered).as("step 1: abandoning the domain row is ledgered").isNotNull();
+        assertThat((String) ledgered.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
+            .as("step 1: under the TENANT, not an empty operator set")
+            .isEqualTo("user:" + arenaTenant);
+
+        // 2. The game tier owns no hostname of its own: a mapping can only point at a
+        //    site_domain row, and pointing at one that does not exist is refused by name.
+        Row danglingMapping = mappingRow(999_999, backendId, proxyId);
+        AccessContext actor = contextFor(
+            new UserPrincipal(tenantInstancesId, "Tenant Instances"));
+        assertThat(catchThrowable(() -> GameDomains.applyAuthorized(actor, danglingMapping)))
+            .as("step 2: a mapping cannot conjure the hostname it serves")
+            .isInstanceOf(Violations.class);
+
+        // 3. So the ONLY way to serve the released hostname through the game tier is to
+        //    create the site_domain row first -- and the quarantine refuses that.
+        Row seize = domains.createEmptyRow();
+        seize.set(SiteDomainModel.SITE_ID, siteId);
+        seize.set(SiteDomainModel.HOSTNAME, released);
+        seize.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        assertThat(catchThrowable(() -> domains.save(seize)))
+            .as("step 3: another owner's site cannot re-claim the released game hostname")
+            .isInstanceOf(Violations.class);
+        assertThat(domains.find().where(SiteDomainModel.HOSTNAME.eq(released)).all())
+            .as("step 3: and no domain row for it exists to hang a mapping on").isEmpty();
     }
 
     @Test
