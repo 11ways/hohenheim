@@ -132,18 +132,34 @@ public final class IncusInstanceRuntime
         }
 
         Map<String, Object> config = new LinkedHashMap<>();
-        // Includes security.secureboot=false for a VM: the images: VM builds are not
-        // Secure Boot signed and the first launch fails naming exactly that (verified
-        // live on daystrom).
+        // Includes security.secureboot for a VM: the spec's OWN declaration (default
+        // false, since catalog VM builds are not Secure Boot signed and the first launch
+        // fails naming exactly that, verified live on daystrom); a prepared image may
+        // declare true.
         applyManagedConfig(spec, config);
 
         // Pin honesty: an ABSENT workload with a recorded resolved fingerprint is
         // recreated from THAT image, never by re-resolving the mutable alias.
         Map<String, Object> source = new LinkedHashMap<>();
         source.put("type", "image");
-        source.put("protocol", "simplestreams");
-        source.put("server", IMAGE_SERVER);
-        if (spec.imageFingerprint() != null && !spec.imageFingerprint().isBlank()) {
+        boolean pinned = spec.imageFingerprint() != null && !spec.imageFingerprint().isBlank();
+        if (spec.imageOrigin() == ImageOrigin.PREPARED) {
+            // No protocol/server: the daemon resolves this in its OWN image store, never
+            // fetched from anywhere. An unpinned alias is verified to EXIST there before
+            // the daemon ever sees a create -- without this preflight, the daemon's own
+            // refusal for a missing local alias reads as a generic create failure and the
+            // operator has no idea the alias is simply absent.
+            if (!pinned && this.incus.imageFingerprintForAlias(spec.image()) == null) {
+                throw new IOException("Prepared image alias '" + spec.image() + "' does not"
+                    + " exist on server '" + (this.serverName != null ? this.serverName
+                    : "(unnamed)") + "'; a prepared image is published into the daemon's own"
+                    + " image store by an operator and is never fetched.");
+            }
+        } else {
+            source.put("protocol", "simplestreams");
+            source.put("server", IMAGE_SERVER);
+        }
+        if (pinned) {
             source.put("fingerprint", spec.imageFingerprint());
         } else {
             source.put("alias", spec.image());
@@ -188,9 +204,12 @@ public final class IncusInstanceRuntime
     private void applyManagedConfig(@NonNull InstanceSpec spec,
                                     @NonNull Map<String, Object> config) {
         if (this.type == IncusWorkloadType.VIRTUAL_MACHINE) {
-            // Managed key: a converge re-asserts it, so an operator edit that re-enabled
-            // Secure Boot cannot brick the next boot silently.
-            config.put("security.secureboot", "false");
+            // Managed key: a converge re-asserts it, so an operator edit that drifted
+            // from the image's DECLARATION cannot brick the next boot silently. The
+            // value is the spec's declaration, not an inference: catalog Linux images are
+            // unsigned and need it false, a prepared image (e.g. Microsoft-signed Windows
+            // media) can genuinely need it true.
+            config.put("security.secureboot", String.valueOf(spec.secureBoot()));
         }
         spec.ownerLabels().forEach((key, value) -> config.put(USER_PREFIX + key, value));
         spec.env().forEach((name, value) -> config.put("environment." + name, value));
@@ -463,6 +482,16 @@ public final class IncusInstanceRuntime
                 + " instance's own rootfs; a separate install image ('" + installImage
                 + "') cannot be honoured. Leave the template's install image empty.");
         }
+        // The readiness wait exists to ride out a real guest agent's bring-up; an
+        // agent-less image would never answer it, so burning the full
+        // execReadyTimeoutMs and reporting a timeout would misreport an absent
+        // capability as a broken guest. Refuse by name, and refuse BEFORE create so a
+        // workload is never born just to be torn down again.
+        if (!spec.guestAgent()) {
+            throw new IOException("Instance '" + spec.handle() + "' declares no guest"
+                + " agent (guest_agent=false); its image cannot run an exec-driven"
+                + " install");
+        }
         create(spec);
         boolean started = false;
         try {
@@ -493,6 +522,10 @@ public final class IncusInstanceRuntime
         if (!status(spec.handle()).running()) {
             throw new IOException("Instance '" + spec.handle() + "' is not running;"
                 + " the in-place app update runs inside the live system");
+        }
+        if (!spec.guestAgent()) {
+            throw new IOException("Instance '" + spec.handle() + "' declares no guest agent"
+                + " (guest_agent=false); its image cannot run an exec-driven app update");
         }
         IncusClient.ExecResult result = this.incus.exec(spec.handle(),
             List.of("bash", "-ec", script), env, timeoutMs);

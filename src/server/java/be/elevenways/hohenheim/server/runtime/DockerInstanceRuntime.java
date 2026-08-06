@@ -93,6 +93,15 @@ public final class DockerInstanceRuntime
                 + " declared for '" + spec.handle() + "'; cloud-init provisioning is an"
                 + " incus capability");
         }
+        if (spec.imageOrigin() == ImageOrigin.PREPARED) {
+            // The honest refusal, same shape as the cloud-init one: Docker has no image
+            // store of the prepared kind, so treating the alias as a docker image
+            // reference would silently pull the WRONG thing instead of the operator's
+            // prepared image.
+            throw new IOException("The docker driver has no prepared-template image store;"
+                + " '" + spec.handle() + "' declares image_origin=prepared, which is an"
+                + " incus capability");
+        }
         // Replace only a leftover container the daemon attributes to THIS record; a
         // same-named foreign container is a loud refusal, never a force-remove.
         OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());

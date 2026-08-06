@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.hohenheim.server.runtime.ImageOrigin;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -62,26 +63,33 @@ public final class InstanceImagePolicy {
         Object kind = effective(row, stored, InstanceModel.KIND.getName());
         String image = imageOf(effective(row, stored, InstanceModel.SETTINGS.getName()), "image");
         String tag = imageOf(effective(row, stored, InstanceModel.SETTINGS.getName()), "tag");
+        // Absent origin is CATALOG on both sides -- this is the pre-existing default
+        // (InstanceSpec's convenience constructor), so an approved template authored
+        // before image_origin existed keeps authorising exactly what it always did.
+        String origin = originOf(effective(row, stored, InstanceModel.SETTINGS.getName()));
 
         if (stored != null) {
             boolean unchanged = Objects.equals(templateId, stored.get(InstanceModel.TEMPLATE_ID))
                 && Objects.equals(kind, stored.get(InstanceModel.KIND))
                 && Objects.equals(image, imageOf(stored.get(InstanceModel.SETTINGS), "image"))
-                && Objects.equals(tag, imageOf(stored.get(InstanceModel.SETTINGS), "tag"));
+                && Objects.equals(tag, imageOf(stored.get(InstanceModel.SETTINGS), "tag"))
+                && Objects.equals(origin, originOf(stored.get(InstanceModel.SETTINGS)));
             if (unchanged) {
                 return;   // the write never touched an image fact; not this gate's business
             }
         }
 
         // Path 1: the instance rides a template. The template must exist, be APPROVED,
-        // and declare exactly this kind and image -- adopting an approved template's
-        // image verbatim is the allowed tenant operation.
+        // and declare exactly this kind, image AND origin -- a prepared alias namespace
+        // is entirely operator-controlled, so an approved CATALOG template must never
+        // authorise a same-named PREPARED alias (or vice versa).
         if (templateId instanceof Integer id) {
             Row template = Models.get(InstanceTemplateModel.class).findById(id);
             if (template != null && template.get(InstanceTemplateModel.APPROVED_AT) != null
                     && Objects.equals(kind, template.get(InstanceTemplateModel.KIND))
                     && Objects.equals(image, imageOf(template.get(InstanceTemplateModel.SETTINGS), "image"))
-                    && Objects.equals(tag, imageOf(template.get(InstanceTemplateModel.SETTINGS), "tag"))) {
+                    && Objects.equals(tag, imageOf(template.get(InstanceTemplateModel.SETTINGS), "tag"))
+                    && Objects.equals(origin, originOf(template.get(InstanceTemplateModel.SETTINGS)))) {
                 return;
             }
         }
@@ -115,6 +123,12 @@ public final class InstanceImagePolicy {
             return value.isEmpty() ? null : value;
         }
         return null;
+    }
+
+    /** The declared {@code image_origin} key, defaulting to catalog like {@link ImageOrigin}. */
+    private static @NonNull String originOf(@Nullable Object settings) {
+        String key = imageOf(settings, "image_origin");
+        return key == null ? ImageOrigin.CATALOG.key() : key;
     }
 
     private static @Nullable Row storedOf(@NonNull Row row) {

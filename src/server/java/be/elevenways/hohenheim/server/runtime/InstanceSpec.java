@@ -33,6 +33,15 @@ import java.util.Map;
  * @param imageFingerprint the record's pinned resolved image identity, or null when none
  *                      is recorded yet; a fingerprint-resolving driver recreates an
  *                      ABSENT workload from this pin instead of the mutable alias
+ * @param imageOrigin   where the image comes from: the public catalog (fetched by alias)
+ *                      or a prepared image an operator already published into the
+ *                      daemon's own store (never fetched)
+ * @param secureBoot    whether the image DECLARES it requires Secure Boot; a catalog
+ *                      Linux image never does (unsigned), a prepared image legitimately
+ *                      can (e.g. Microsoft-signed media)
+ * @param guestAgent    whether the image carries a guest agent capable of exec; false
+ *                      makes an exec-driven operation refuse by name instead of waiting
+ *                      out the ready timeout and reporting a false timeout
  */
 public record InstanceSpec(@NonNull String handle,
                            @NonNull String image,
@@ -44,9 +53,12 @@ public record InstanceSpec(@NonNull String handle,
                            ContainerHardening.@NonNull Profile hardening,
                            @NonNull Map<String, String> ownerLabels,
                            @Nullable String cloudInitUserData,
-                           @Nullable String imageFingerprint) {
+                           @Nullable String imageFingerprint,
+                           @NonNull ImageOrigin imageOrigin,
+                           boolean secureBoot,
+                           boolean guestAgent) {
 
-    /** The pre-VM shape: no cloud-init, no pinned fingerprint. */
+    /** The pre-VM shape: no cloud-init, no pinned fingerprint, catalog origin, no agent claim. */
     public InstanceSpec(@NonNull String handle,
                         @NonNull String image,
                         @Nullable List<String> command,
@@ -57,7 +69,7 @@ public record InstanceSpec(@NonNull String handle,
                         ContainerHardening.@NonNull Profile hardening,
                         @NonNull Map<String, String> ownerLabels) {
         this(handle, image, command, env, volumes, publication, limits, hardening,
-            ownerLabels, null, null);
+            ownerLabels, null, null, ImageOrigin.CATALOG, false, true);
     }
 
     /** A copy whose publication carries the host port the pre-allocation step claimed. */
@@ -68,13 +80,15 @@ public record InstanceSpec(@NonNull String handle,
         }
         return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
             this.publication.withPreallocatedPort(hostPort), this.limits, this.hardening,
-            this.ownerLabels, this.cloudInitUserData, this.imageFingerprint);
+            this.ownerLabels, this.cloudInitUserData, this.imageFingerprint, this.imageOrigin,
+            this.secureBoot, this.guestAgent);
     }
 
     /** A copy carrying the record's pinned resolved image identity. */
     public @NonNull InstanceSpec withImageFingerprint(@Nullable String fingerprint) {
         return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
             this.publication, this.limits, this.hardening, this.ownerLabels,
-            this.cloudInitUserData, fingerprint);
+            this.cloudInitUserData, fingerprint, this.imageOrigin, this.secureBoot,
+            this.guestAgent);
     }
 }

@@ -3468,6 +3468,10 @@ the layer we can close it. What was established, in order:
   Proxmox-use inventory, and any admin/tenant UI for device editing (the
   mechanism's wired consumers are deploy-reconcile + destroy-cleanup + the
   service lane).
+  SUPERSEDED 2026-08-06: of that list only the closed Proxmox-use inventory
+  and the device-editing UI remain -- the framebuffer console landed in the
+  framebuffer-console wave, drain/cold migration in the cross-host wave, and
+  Windows prepared templates in the prepared-template wave below.
 
 STATUS (2026-08-05, trust-split wave): the remote-host gap the kernel-truth wave
 left OPEN is closed, and the isolation sweep now verifies daystrom through the
@@ -3837,6 +3841,102 @@ byte-identically on nightstrom before anything was measured).
   two-CONTROLLERS handle-collision hazard is unchanged -- claimOf makes this
   controller refuse a foreign workload instead of converging over it, which
   narrows the blast radius but does not namespace the handles.
+
+STATUS (2026-08-06, prepared-template wave): the last unblocked gate clause --
+"Windows from a prepared template" -- is CLOSED, live on daystrom against a real
+Windows Server 2025 guest. Only the Proxmox-use inventory remains.
+
+- MECHANISM, and it is deliberately NOT Windows-shaped: `ImageOrigin`
+  (server/runtime, beside `Egress`) declares CATALOG -- the public simplestreams
+  catalog, the default, producing a byte-identical source map to before -- or
+  PREPARED, meaning the image is already in the TARGET DAEMON's own store and is
+  never fetched. Everything a prepared image needs that a cloud-init Linux guest
+  does not is a DECLARED capability on `IncusVmKind`, following the
+  `attachRequiresRunning()` precedent: `image_origin`, `secure_boot`,
+  `guest_agent`. No code path anywhere reads "windows"; Windows is one instance
+  of the category, not a branch.
+- SECURE BOOT was exactly the trap the phase body warned about, and the warning
+  was right. The VM kind HARDCODED `security.secureboot=false` because catalog
+  Linux builds are unsigned; Microsoft-signed Windows media boots WITH Secure
+  Boot on and the whole template was built that way. The key stays MANAGED
+  (re-asserted on every converge, so operator drift cannot brick a boot
+  silently) -- only its VALUE became the image's own declaration. MEASURED, not
+  assumed: no TPM was attached and none is needed, because Windows Server 2025
+  has no TPM requirement (Windows 11 client does).
+- GUEST AGENT: there is no incus guest agent for Windows, so `incus exec` is
+  impossible against this tier forever, not temporarily. `guest_agent=false`
+  makes `runInstall` and `runAppUpdate` REFUSE BY NAME instead of burning the
+  600s `execReadyTimeoutMs` and reporting a timeout as if the guest were broken;
+  `runInstall` refuses BEFORE `create`, so no workload is born just to be torn
+  down. `execWhenReady` has exactly ONE caller (`runInstall`), so a plain deploy
+  never waited on the agent and an agent-less VM deploys unchanged -- that was
+  checked rather than assumed.
+- PREFLIGHT, the anti-silent-success guard: a PREPARED alias absent from the
+  target daemon is refused by name before the daemon is asked to create
+  anything. Without it the daemon answers a generic create failure and the
+  operator cannot tell that the alias is simply not published ON THAT HOST --
+  which is the common case, since publishing is per daemon. `IncusClient` gained
+  exactly one image endpoint for this (`imageFingerprintForAlias`); it had NO
+  /1.0/images surface at all.
+- AUTHORISATION HOLE CLOSED IN PASSING: `InstanceImagePolicy` matched an
+  approved template on kind+image+tag only, so an approved CATALOG template
+  authorised a same-named PREPARED alias and vice versa. A prepared alias
+  namespace is entirely operator-controlled, so those are different objects.
+  Origin is now part of the match; an absent origin reads as catalog on both
+  sides, so templates approved before this exist keep authorising exactly what
+  they always did.
+- OPERATOR STEP, and it is deliberately NOT product: the plan says no in-panel
+  OS install initially, so the product accepts the finished image and
+  `docs/prepare-windows-template.md` is the reproducible procedure, written the
+  way `docs/deploy-native.md` was. It carries the four findings that each cost a
+  boot cycle to establish, so nobody re-walks them: (1) the repacked media stops
+  at "Press any key to boot from CD" and TIMES OUT to PXE -- swap the El Torito
+  image for the `efisys_noprompt.bin` the media already ships, in place, since
+  re-mastering is not available; (2) `<DiskConfiguration>` makes Server 2025's
+  redesigned Setup fail instantly with `0x80070002 - 0x40030` before it writes a
+  partition table -- partition with `RunSynchronous` + `diskpart` instead; (3) a
+  Windows ISO is UDF-primary (`install.wim` is 5.27 GB), so `xorriso` adds
+  `autounattend.xml` to the ISO 9660/Joliet trees where Windows cannot see it,
+  and discards the boot record doing so -- use a second CD; (4) only a device
+  carrying `boot.priority` is in the firmware's boot order, so give the DISK the
+  higher priority and let the firmware fall through to the CD while the disk is
+  blank. RULED OUT and recorded as such: the second CD-ROM device itself, the
+  `<ProductKey>` element, the `Microsoft-Windows-TerminalServices-*` components,
+  and `/IMAGE/NAME` (Setup DISPLAYS "Standard Evaluation" while the WIM's name
+  is "SERVERSTANDARDCORE", so `/IMAGE/INDEX` is the safer spelling, but it was
+  not the cause).
+- FEASIBILITY, with the numbers, because "it did not fit" was a legitimate
+  outcome: it fits. Windows Server 2025 Standard Evaluation (Server Core, build
+  26100) installed unattended on daystrom (3 vCPU, 3907 MB RAM, 40 GiB btrfs
+  pool) in 22 minutes into a 24 GiB disk with 2560 MiB RAM; sysprep /generalize
+  took 13 minutes; `incus publish` produced a 3.58 GiB zstd image in 56 seconds;
+  a clone reached RDP-ready in 4 minutes on 2048 MiB. A Desktop Experience
+  install was never attempted and is NOT claimed. TRAP for anyone repeating the
+  sysprep step: sysprep launched over WinRM dies SILENTLY mid-validate (the log
+  stops at `Sysprep_Clean_Validate_Opk` and the process is simply gone); run it
+  from a scheduled task as SYSTEM instead.
+- PROVEN LIVE: `IncusWindowsTemplateLiveTest` on daystrom against the real
+  `win2025-core` image, through the product funnel end to end. It SKIPS (never
+  fails) when the prepared alias is not published on the host, because the image
+  is an operator fixture this repo cannot mint for itself.
+- OPEN, stated as open, NOT closed by this wave:
+  1. There is NO guest-side egress probe for this tier and there cannot be one:
+     isolation here is EGRESS-only and one-sided (the ingress default is allow),
+     and every existing VM-tier egress probe pings FROM the guest, which needs
+     the agent this tier declares absent. Kernel truth is precisely the layer
+     that does not need the guest, and it is what the live test asserts and
+     breaks and repairs. But "the Windows guest cannot reach a tenant peer" is
+     verified in the KERNEL, not observed from inside the guest.
+  2. Nothing writes into a Windows guest. Per-instance configuration would need
+     cloudbase-init in the prepared image consuming the existing
+     `cloud-init.user-data` the driver already writes; that combination is
+     UNTESTED and is not claimed to work.
+  3. The image is per DAEMON. `win2025-core` was published on daystrom only, so
+     a Windows workload cannot currently be cold-migrated or drained onto
+     nightstrom -- the destination would be refused by the new preflight, by
+     name, which is the correct failure but is a real placement constraint the
+     placement layer does not yet know about.
+  4. The evaluation licence expires. Nothing in the product tracks that.
 
 Phase gate: provision Linux from cloud-init and Windows from a prepared template;
 attach/resize a disk and NIC under quota; enforce the network policy; snapshot;
