@@ -17,9 +17,10 @@ public enum NetworkPosture {
     /**
      * The daemon's shared default bridge, no per-workload network and no nft
      * requirement. Since the isolation wave no KIND declares this any more; it
-     * survives only as the operator-declared posture of a pre-isolation STACK record
-     * (stamped by migration, flipped deliberately in the operator-only stack form)
-     * and as what test fixtures declare when they exercise non-network behaviour.
+     * survives only as what record-less test/preview callers declare when they
+     * exercise non-network behaviour. Stacks are not an exception either: their
+     * per-stack network carries the same verified policy ({@code StackDeployer}),
+     * they just do not route through this enum.
      */
     SHARED_BRIDGE
 }

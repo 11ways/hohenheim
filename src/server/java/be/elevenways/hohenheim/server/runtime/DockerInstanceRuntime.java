@@ -38,9 +38,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * enforce the network policy (see {@link WorkloadNetworkPolicy}). That refusal is the
  * whole point: a workload that starts unprotected can reach the host, the cloud
  * metadata service and every other container on the daemon. Since the isolation wave
- * that covers instances, Docker sites and managed databases alike; the only remaining
- * SHARED_BRIDGE author is a stack record whose operator explicitly declared that
- * posture (the pre-isolation stacks a migration stamped, see StackModel).
+ * that covers instances, Docker sites, managed databases and stacks alike (stacks
+ * through StackDeployer's own network, not this runtime); the only remaining
+ * SHARED_BRIDGE authors are record-less test/preview callers.
  */
 public final class DockerInstanceRuntime
         implements InstanceRuntime, VolumeSnapshotSupport, FileStagingSupport, InstallSupport,

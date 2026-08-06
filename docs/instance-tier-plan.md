@@ -1820,6 +1820,39 @@ block is what the code does; amend the prose, do not code against it.
     unreachable with a positive anchor). Per-TENANT
     grouping (one network per packed manage-subject set rather than per workload) and a
     per-workload egress ALLOWLIST (beyond the OPEN/NONE binary) remain future tightenings.
+    SUPERSEDED 2026-08-06 (second wave, same day): the STACK half LANDED too --
+    `StackDeployer` now takes a `WorkloadNetworkPolicy` (routed `forServer(spec.serverName())`
+    by `StackRuntime.deployerFor`), `ensureNetwork` refuses FIRST (`requireEnabled` before
+    anything reaches the daemon) and applies the verified deny to the per-stack network on
+    EVERY deploy, adopted networks included (adoption must never opt a stack out of the
+    denies); egress is DECLARED `Egress.OPEN` at the tier (`StackDeployer.EGRESS`, AIDEV-NOTE
+    with the reasoning: operator-authored compose content legitimately calls out; the denies
+    still hold). Destroy removes the chains; when enforcement is OFF it skips them by
+    DECISION so a pre-enforcement stack stays deletable (deploy refuses, stop/status/destroy
+    keep working -- pinned by `aPreEnforcementStackStopsAndDestroysButNeverRedeploys`).
+    Tests: `StackDeployerTest` (class netns; kernel read-back of the real subnet's chains,
+    refusal-with-clean-daemon-state, pre-enforcement journey), `StackRuntimeFlowTest`
+    (product lane: FAILED status + refusal in the deployment log + recovery once enforcing),
+    `StackNetworkIsolationTest` (REAL packets against the exact chains a REAL deploy applied:
+    metadata + host BLOCKED, same-subnet sibling + public REACHABLE, remove-policy
+    counterfactual). Stale-claim fix in passing: `NetworkPosture`/`DockerInstanceRuntime`
+    docs claimed a migration-stamped per-stack SHARED_BRIDGE posture that was NEVER built;
+    corrected -- no per-record posture exists and none is needed (no live installs).
+    NAMED, still open, different mechanism required: MANAGED PROCESSES (host-process sites)
+    are the remaining tier that can reach the metadata service and host-local services. The
+    tenant-network model genuinely cannot cover them -- they live in the host's own netns, so
+    there is no subnet to key saddr on and locally-originated traffic never traverses the
+    forward hook. A fix is an OUTPUT-hook policy keyed on the per-site run-as uid
+    (`meta skuid` against the same `TenantNetworkRanges`) or per-process network namespaces;
+    either is its own slice, not a StackDeployer variant.
+    Also named 2026-08-06: the REBOOT re-apply gap for STACKS specifically. Docker networks
+    survive a reboot, nft chains do not; instances re-apply on `start`, managed-database
+    containers carry no restart policy (down after a reboot until re-provisioned, which
+    re-applies), but stack services default to `unless-stopped`, so after a host reboot the
+    daemon restarts them WITHOUT their chains until the next deploy (a redeploy DOES restore
+    them: `ensureNetwork` re-applies on every deploy, including onto an existing owned
+    network). A boot/monitor re-apply sweep is the fix; it is a monitor-tick concern
+    (`StackRuntime.refreshStatus` is the natural seam), its own slice.
 - **Already done, do not re-schedule:** `KnownCapabilities`/sensitivity classes
   (zenit core, wired -- Phase 3 only needs to REGISTER the instance vocabulary,
   which is an hour, not a workstream); `RecordGrants` + the grant-scoped

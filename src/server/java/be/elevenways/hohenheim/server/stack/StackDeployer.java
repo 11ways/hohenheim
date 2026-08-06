@@ -5,6 +5,9 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.hohenheim.server.security.WorkloadNetwork;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -23,10 +26,13 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
- * Executes a {@link StackSpec} against one Docker daemon: network, volumes, then
- * services in dependency order with condition gating. Everything it creates carries
+ * Executes a {@link StackSpec} against one Docker daemon: policied network, volumes,
+ * then services in dependency order with condition gating. Everything it creates carries
  * ownership labels; same-named resources WITHOUT our labels are refused unless the
  * spec opts into adoption, so a deploy can never destroy someone else's container.
+ * The per-stack network carries the verified {@link WorkloadNetworkPolicy} kernel deny
+ * (metadata range, host, other tenants' RFC1918 space) like every other tier, so a
+ * deploy REFUSES on a host that cannot enforce it.
  */
 public class StackDeployer {
 
@@ -49,16 +55,36 @@ public class StackDeployer {
      */
     public static final ContainerHardening.Profile HARDENING = ContainerHardening.SERVICE;
 
+    /**
+     * The DECLARED egress posture of every stack service.
+     *
+     * AIDEV-NOTE: OPEN, decided 2026-08-06. A stack is operator-authored compose-shaped
+     * content whose services legitimately open outbound connections (package installs at
+     * entrypoint, upstream APIs, webhooks); blanket NONE would break those, and the
+     * managed-database precedent for NONE (an engine has no legitimate outbound traffic)
+     * does not hold here. The tenant-range denies still apply under OPEN -- metadata,
+     * host and other tenants stay unreachable. Tier-level like {@link #HARDENING}: a
+     * per-stack egress choice would need a model field an OPERATOR flips, never a
+     * default that silently widens.
+     */
+    public static final Egress EGRESS = Egress.OPEN;
+
     private static final int STOP_GRACE_SECONDS = 10;
     private static final long CONDITION_POLL_MS = 500;
     private static final long STARTED_WAIT_CAP_MS = 30_000;
     private static final long HEALTHY_WAIT_BASE_MS = 120_000;
 
     private final DockerClient docker;
+    private final WorkloadNetworkPolicy policy;
     private final Consumer<String> log;
 
-    public StackDeployer(@NonNull DockerClient docker, @Nullable Consumer<String> log) {
+    /** @param policy the applier bound to the host the {@code docker} client points at
+     *                ({@code WorkloadNetworkPolicy.forServer}), never a local default
+     *                for a remote daemon */
+    public StackDeployer(@NonNull DockerClient docker, @NonNull WorkloadNetworkPolicy policy,
+                         @Nullable Consumer<String> log) {
         this.docker = docker;
+        this.policy = policy;
         this.log = log != null ? log : line -> {};
     }
 
@@ -223,14 +249,39 @@ public class StackDeployer {
             Map<String, Object> network = entry instanceof Map<?, ?> ? (Map<String, Object>) entry : null;
             if (network != null && isOwned(labelsOf(network), spec)) {
                 String name = String.valueOf(network.get("Name"));
+                removePolicyChains(name);
                 log.accept("Removing network " + name);
                 docker.removeNetwork(name);
             }
         }
+        // An ADOPTED network is not owned and stays, but the kernel chains WE applied to
+        // it go with the stack that declared them (an already-removed policy is an
+        // observed no-op, so the owned case above never double-fails here).
+        removePolicyChains(networkName(spec));
 
         if (removeVolumes) {
             removeOwnedVolumes(spec);
         }
+    }
+
+    /**
+     * Remove a network's kernel policy chains, unless enforcement is off on this host.
+     *
+     * AIDEV-NOTE: the decided fate of a stack that was deployed BEFORE enforcement (or
+     * on a host whose enforcement was later switched off): deploy REFUSES by name,
+     * stop/status keep working, and destroy still tears the stack down -- teardown must
+     * never depend on nft being runnable, or such a stack becomes undeletable (the
+     * fromRecordsUnordered principle). With enforcement off there is no nft to run;
+     * chains applied before a switch-off linger until reboot or re-enable, and they only
+     * ever DROP traffic from this stack's now-gone subnet, so lingering is safe.
+     */
+    private void removePolicyChains(String networkName) throws IOException {
+        if (!policy.isEnabled()) {
+            log.accept("Skipping kernel policy removal for " + networkName
+                + ": enforcement is off on this host, so there is no nft to run");
+            return;
+        }
+        policy.remove(networkName);
     }
 
     /**
@@ -294,24 +345,46 @@ public class StackDeployer {
 
     private void ensureNetwork(StackSpec spec) throws IOException {
         String name = networkName(spec);
+        // Loudest, cheapest refusal first: nothing reaches the daemon on a host that
+        // cannot enforce the kernel policy (the WorkloadNetworks.ensure ordering).
+        policy.requireEnabled(name);
+
         Map<String, Object> existing = docker.findNetworkByName(name);
-        if (existing != null) {
-            if (isOwned(labelsOf(existing), spec)) {
-                return;
+        boolean created = false;
+        if (existing == null) {
+            log.accept("Creating network " + name);
+            docker.createNetwork(name, ownershipLabels(spec, null), spec.subnet(), null, false);
+            created = true;
+        } else if (!isOwned(labelsOf(existing), spec)) {
+            if (!spec.adoptResources()) {
+                throw new IOException("Network '" + name + "' exists but is not owned by this"
+                    + " stack; enable resource adoption to reuse it");
             }
-            if (spec.adoptResources()) {
-                // AIDEV-NOTE: adoption deliberately does NOT relabel networks or volumes, so
-                // they stay un-owned: every later deploy re-logs "Adopting", and destroy leaves
-                // them alone. We never remove what we did not create. Containers differ -- they
-                // are RECREATED on deploy and so come back carrying our labels.
-                log.accept("Adopting existing network " + name);
-                return;
-            }
-            throw new IOException("Network '" + name + "' exists but is not owned by this stack;"
-                + " enable resource adoption to reuse it");
+            // AIDEV-NOTE: adoption deliberately does NOT relabel networks or volumes, so
+            // they stay un-owned: every later deploy re-logs "Adopting", and destroy leaves
+            // them alone. We never remove what we did not create. Containers differ -- they
+            // are RECREATED on deploy and so come back carrying our labels.
+            log.accept("Adopting existing network " + name);
         }
-        log.accept("Creating network " + name);
-        docker.createNetwork(name, ownershipLabels(spec, null), spec.subnet(), null, false);
+
+        // The kernel deny policy is applied and VERIFIED before any service container
+        // exists on the network, on EVERY deploy (idempotent; a redeploy after a host
+        // reboot restores the chains the reboot dropped). Adopted networks included:
+        // adoption reuses a bridge, it must never opt the stack out of the denies.
+        try {
+            policy.apply(WorkloadNetwork.fromInspect(docker.inspectNetwork(name)), EGRESS);
+        } catch (IOException e) {
+            if (created) {
+                // An unenforced network of ours is debris, not a resource: remove what
+                // this call made rather than leaving a usable unprotected network behind.
+                try {
+                    docker.removeNetwork(name);
+                } catch (IOException ignored) {
+                    // the throw below is the outcome; a stuck network is the reconciler's
+                }
+            }
+            throw e;
+        }
     }
 
     private void ensureVolumes(StackSpec spec) throws IOException {

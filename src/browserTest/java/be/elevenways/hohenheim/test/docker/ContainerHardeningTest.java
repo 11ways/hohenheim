@@ -172,7 +172,10 @@ class ContainerHardeningTest {
             StackSpec.topologicallySorted(List.of(new StackSpec.ServiceSpec("app", TEST_IMAGE,
                 List.of("sleep", "600"), Map.of(), List.of(), List.of(), List.of(), List.of(),
                 null, 1, 3, 3, 0, "no", null, null))));
-        StackDeployer deployer = new StackDeployer(docker, null);
+        // The class-wide netns override backs forServer here, exactly like the database
+        // step above: a stack now refuses to deploy where its policy cannot be enforced.
+        StackDeployer deployer = new StackDeployer(docker,
+            WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), null);
         try {
             deployer.deploy(stack);
             assertKernelState(docker, StackDeployer.containerName(stack, "app"),

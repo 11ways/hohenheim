@@ -9,7 +9,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 
 /**
- * A managed multi-container Docker stack: one private bridge network, named volumes,
+ * A managed multi-container Docker stack: one private policied bridge network, named volumes,
  * and an ordered set of services (see {@link StackServiceModel}). The record is the
  * DESIRED state; deploys are explicit (never save-triggered) and live state is read
  * from Docker on demand. Everything the deployer creates carries hohenheim ownership
