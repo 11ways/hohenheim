@@ -43,8 +43,10 @@ public final class SiteProcessesPage implements RecordScopedPage<Row>, TerminalC
 
     @Override
     public boolean visibleFor(@NonNull Row site) {
+        // Host-process types only: a Docker site supports env injection too since the
+        // isolation wave, but its runtime is a container, not a spawned process table.
         SiteTypeInfo type = SiteTypes.getHandler(site.get(SiteModel.SITE_TYPE));
-        return type != null && type.supportsEnvInjection();
+        return type != null && type.supportsEnvInjection() && !type.containerRuntime();
     }
 
     @Override

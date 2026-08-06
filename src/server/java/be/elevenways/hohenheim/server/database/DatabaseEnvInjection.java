@@ -32,19 +32,37 @@ public final class DatabaseEnvInjection {
         ManagedDatabase.@NonNull LiveStatus resolve(@NonNull Row databaseRow);
     }
 
+    /**
+     * The address shape the consuming runtime can actually reach: host processes dial the
+     * database's published loopback port; a Docker site container sits on its own private
+     * network where 127.0.0.1 is ITSELF, so it gets the database's container hostname on
+     * the shared link network and the engine's native port instead (SiteDatabaseNetworks
+     * joins the pair before the container starts).
+     */
+    public enum Style {
+        PUBLISHED_LOOPBACK,
+        CONTAINER_NETWORK
+    }
+
     private DatabaseEnvInjection() {
     }
 
     /** Injected environment for a site using live Docker state; empty when nothing is attached. */
     public static @NonNull Map<String, String> envForSite(int siteId) {
-        return envForSite(siteId, null);
+        return envForSite(siteId, null, Style.PUBLISHED_LOOPBACK);
+    }
+
+    /** {@link #envForSite(int, LiveResolver, Style)} in the host-process (loopback) style. */
+    public static @NonNull Map<String, String> envForSite(int siteId, @Nullable LiveResolver resolver) {
+        return envForSite(siteId, resolver, Style.PUBLISHED_LOOPBACK);
     }
 
     /**
      * Injected environment for a site. Fail-soft by design: a spawn must never die on
      * injection plumbing, so any resolution error degrades to "no variables" with a log.
      */
-    public static @NonNull Map<String, String> envForSite(int siteId, @Nullable LiveResolver resolver) {
+    public static @NonNull Map<String, String> envForSite(int siteId, @Nullable LiveResolver resolver,
+                                                          @NonNull Style style) {
         try {
             SiteDatabaseModel links = Models.get(SiteDatabaseModel.class);
             DatabaseModel databases = Models.get(DatabaseModel.class);
@@ -64,7 +82,7 @@ public final class DatabaseEnvInjection {
                 Row database = databases.find()
                     .where(DatabaseModel.ID.eq(link.get(SiteDatabaseModel.DATABASE_ID)))
                     .first();
-                appendLink(env, siteId, link, database, live, primary);
+                appendLink(env, siteId, link, database, live, primary, style);
                 primary = false;
             }
             return env;
@@ -75,7 +93,8 @@ public final class DatabaseEnvInjection {
     }
 
     private static void appendLink(Map<String, String> env, int siteId, Row link,
-                                   @Nullable Row database, LiveResolver live, boolean primary) {
+                                   @Nullable Row database, LiveResolver live, boolean primary,
+                                   Style style) {
         Integer databaseId = link.get(SiteDatabaseModel.DATABASE_ID);
         if (database == null) {
             unresolved(siteId, databaseId, null, "record_missing");
@@ -87,7 +106,11 @@ public final class DatabaseEnvInjection {
             return;
         }
         ManagedDatabase.LiveStatus status = live.resolve(database);
-        if (!status.running() || status.port() == null) {
+        // The container-network style needs no published port (it dials the engine's own
+        // port over the link network), but the engine must still actually be running:
+        // credentials for a dead database are the silent-success shape, not a favour.
+        if (!status.running()
+                || (style == Style.PUBLISHED_LOOPBACK && status.port() == null)) {
             unresolved(siteId, databaseId, name, "container_not_running");
             return;
         }
@@ -99,8 +122,11 @@ public final class DatabaseEnvInjection {
             unresolved(siteId, databaseId, name, "unknown_engine");
             return;
         }
+        String host = style == Style.CONTAINER_NETWORK
+            ? ManagedDatabase.containerHandle(name) : "127.0.0.1";
+        int port = style == Style.CONTAINER_NETWORK ? engine.port : status.port();
         String prefix = normalizedPrefix(link.get(SiteDatabaseModel.ENV_PREFIX));
-        env.putAll(vars(engine, "127.0.0.1", status.port(), database.get(DatabaseModel.DB_USER),
+        env.putAll(vars(engine, host, port, database.get(DatabaseModel.DB_USER),
             database.get(DatabaseModel.DB_PASSWORD), database.get(DatabaseModel.DB_NAME),
             prefix, primary));
     }

@@ -97,12 +97,13 @@ class SiteDatabaseAdminTest extends HohenheimTestBase {
         return row.get(DatabaseModel.ID);
     }
 
-    /** Attach, render the tab, then every refusal (docker, remote, duplicate prefix, duplicate pair, delete guard). */
+    /** Attach, render the tab, then every refusal (no-workload type, remote, server mismatch, duplicate prefix, duplicate pair, delete guard). */
     @Test
     @Order(1)
     void attachmentJourneyWithEveryRefusal() throws Exception {
         Integer nodeSiteId = site("linkable", "hohenheim:node");
         Integer dockerSiteId = site("dockerized", "hohenheim:docker");
+        Integer staticSiteId = site("staticky", "hohenheim:static");
         Integer localDbId = database("linkdb", "local");
         Integer remoteDbId = database("remotedb", "db-host-2");
 
@@ -124,17 +125,35 @@ class SiteDatabaseAdminTest extends HohenheimTestBase {
         assertThat(body).contains("DATABASE_URL");
         assertThat(page.locator("#attach-database-link").count()).isEqualTo(1);
 
-        // visibleFor gates the tab AND 404s the route for container-backed sites.
-        var tab = get("/admin/sites/" + dockerSiteId + "/page/databases");
-        assertThat(tab.statusCode()).isEqualTo(404);
+        // visibleFor gates the tab: 404 only for types that run no workload at all.
+        // Docker sites are attachable since the isolation wave (container-network
+        // injection), so their tab renders.
+        var staticTab = get("/admin/sites/" + staticSiteId + "/page/databases");
+        assertThat(staticTab.statusCode()).isEqualTo(404);
+        var dockerTab = get("/admin/sites/" + dockerSiteId + "/page/databases");
+        assertThat(dockerTab.statusCode()).isEqualTo(200);
 
         // The refusal rerenders the form with the ACTUAL reason (persist-stage
         // Violations reach the browser since the pipeline honors them).
-        var docker = postForm("/admin/site-databases/new",
+        var noWorkload = postForm("/admin/site-databases/new",
+            "site_id=" + staticSiteId + "&database_id=" + localDbId + "&env_prefix=DB");
+        assertThat(noWorkload.statusCode()).isEqualTo(200);
+        assertThat(noWorkload.body()).contains("cannot receive database credentials");
+        assertThat(Models.get(SiteDatabaseModel.class).findBySiteId(staticSiteId)).isEmpty();
+
+        // A Docker site attaches a SAME-SERVER database: accepted and persisted.
+        var dockerAttach = postForm("/admin/site-databases/new",
             "site_id=" + dockerSiteId + "&database_id=" + localDbId + "&env_prefix=DB");
-        assertThat(docker.statusCode()).isEqualTo(200);
-        assertThat(docker.body()).contains("cannot receive database credentials");
-        assertThat(Models.get(SiteDatabaseModel.class).findBySiteId(dockerSiteId)).isEmpty();
+        assertThat(dockerAttach.statusCode()).isIn(200, 302, 303);
+        assertThat(Models.get(SiteDatabaseModel.class).findBySiteId(dockerSiteId)).hasSize(1);
+
+        // A Docker site + a database on a DIFFERENT server: the cross-host refusal
+        // names both servers -- a link network cannot span daemons.
+        var mismatch = postForm("/admin/site-databases/new",
+            "site_id=" + dockerSiteId + "&database_id=" + remoteDbId + "&env_prefix=FAR");
+        assertThat(mismatch.statusCode()).isEqualTo(200);
+        assertThat(mismatch.body()).contains("db-host-2").contains("link network");
+        assertThat(Models.get(SiteDatabaseModel.class).findBySiteId(dockerSiteId)).hasSize(1);
 
         // Each refusal carries its specific message, args resolved ({$server}, {$prefix}).
         var remote = postForm("/admin/site-databases/new",

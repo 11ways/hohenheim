@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -27,12 +29,19 @@ import java.util.Set;
  */
 public final class ProxyReloadHooks {
 
+    // SiteDatabaseModel and DatabaseModel are here because Docker sites converge their
+    // injected database environment and link-network joins through a RELEASE, and only a
+    // reload drives convergence: an attach/detach or a database status flip
+    // (provisioning -> active) changes the source fingerprint, and the reload's rebuild
+    // is what picks that up. Unchanged sites hit the fingerprint fast lane and reuse.
     private static final Set<Identifier> ROUTING_MODELS = Set.of(
         SiteModel.MODEL_ID,
         SiteDomainModel.MODEL_ID,
         CertificateModel.MODEL_ID,
         AccessListModel.MODEL_ID,
-        SiteAuthProviderModel.MODEL_ID);
+        SiteAuthProviderModel.MODEL_ID,
+        SiteDatabaseModel.MODEL_ID,
+        DatabaseModel.MODEL_ID);
 
     private static volatile boolean installed = false;
     private static final ThreadLocal<Set<Datasource>> PENDING = ThreadLocal.withInitial(

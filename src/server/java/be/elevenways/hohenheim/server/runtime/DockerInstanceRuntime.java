@@ -144,11 +144,13 @@ public final class DockerInstanceRuntime
 
     @Override
     public @NonNull String ensureLinkNetwork(@NonNull String linkHandle,
-                                             @NonNull Map<String, String> ownerLabels)
+                                             @NonNull Map<String, String> ownerLabels,
+                                             @NonNull Egress egress)
             throws IOException {
         // The SAME create-verify-or-refuse path as a per-instance network: a link network
-        // whose kernel policy cannot land never exists to be attached to.
-        return WorkloadNetworks.ensure(this.docker, this.policy, linkHandle, ownerLabels, this.egress);
+        // whose kernel policy cannot land never exists to be attached to. The egress is
+        // the CALLER'S declaration for the link lane, not this runtime's kind egress.
+        return WorkloadNetworks.ensure(this.docker, this.policy, linkHandle, ownerLabels, egress);
     }
 
     @Override

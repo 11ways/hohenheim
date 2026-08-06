@@ -1,11 +1,14 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
+import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -89,7 +92,39 @@ public final class SiteReleases {
         });
         StringBuilder text = new StringBuilder("site:").append(siteId);
         appendCanonical(text, canonical);
+        appendDatabaseLinks(text, siteId);
         return sha256(text.toString());
+    }
+
+    /**
+     * Fold the site's database attachments into the source identity: an attach, a
+     * detach, a prefix change, a credential re-provision or a status flip must all read
+     * as "the release would change" -- the injected environment and the link-network
+     * joins only converge through a release, and the fast reuse lane would otherwise
+     * skip them forever on an unchanged image.
+     */
+    private static void appendDatabaseLinks(StringBuilder text, int siteId) {
+        List<Row> links = Models.get(SiteDatabaseModel.class).findBySiteId(siteId);
+        if (links.isEmpty()) {
+            return;
+        }
+        DatabaseModel databases = Models.get(DatabaseModel.class);
+        text.append("|dblinks:");
+        for (Row link : links) {
+            text.append(link.get(SiteDatabaseModel.ID)).append(':')
+                .append(link.get(SiteDatabaseModel.DATABASE_ID)).append(':')
+                .append(DatabaseEnvInjection.normalizedPrefix(
+                    link.get(SiteDatabaseModel.ENV_PREFIX)))
+                .append(':');
+            Row database = databases.find()
+                .where(DatabaseModel.ID.eq(link.get(SiteDatabaseModel.DATABASE_ID)))
+                .first();
+            if (database != null) {
+                text.append(database.get(DatabaseModel.STATUS)).append(':')
+                    .append(database.get(DatabaseModel.UPDATED_AT));
+            }
+            text.append(';');
+        }
     }
 
     private static void appendCanonical(StringBuilder text, Object value) {
@@ -439,6 +474,14 @@ public final class SiteReleases {
         }
         reclaimOlderRetired(siteId, retiredId, op);
         pruneArtifactsQuietly(siteId, servingImage, op);
+        // Detached databases lose their link network HERE, after the switch and once the
+        // superseded release stopped: disconnecting a still-serving container would
+        // re-allocate its published port under the proxy.
+        try {
+            SiteDatabaseNetworks.sweepFor(siteId, false);
+        } catch (RuntimeException e) {
+            step(op, "WARNING: database link-network sweep failed: " + reasonOf(e));
+        }
         finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null, "release complete");
     }
 

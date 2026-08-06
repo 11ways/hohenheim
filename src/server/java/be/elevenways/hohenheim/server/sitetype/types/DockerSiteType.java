@@ -119,6 +119,18 @@ public class DockerSiteType implements SiteTypeHandler {
         return SETTINGS_SCHEMA;
     }
 
+    /**
+     * Since the isolation wave a Docker site CAN receive database credentials: its
+     * release container joins each attached database's link network before start
+     * (SiteDatabaseNetworks) and the injected variables carry the container-network
+     * address style (DatabaseEnvInjection.Style.CONTAINER_NETWORK), never 127.0.0.1.
+     */
+    @Override
+    public boolean supportsEnvInjection() { return true; }
+
+    @Override
+    public boolean containerRuntime() { return true; }
+
     @Override
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
         Map<String, Object> resolved = new java.util.LinkedHashMap<>(settings);

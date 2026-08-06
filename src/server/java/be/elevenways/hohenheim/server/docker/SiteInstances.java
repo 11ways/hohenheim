@@ -27,9 +27,11 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -228,6 +230,11 @@ public final class SiteInstances {
         if (owned.isEmpty()) {
             return;
         }
+        // Captured BEFORE the destroys soft-delete the rows the derivation reads.
+        Set<Integer> servers = new LinkedHashSet<>();
+        for (Row instance : owned) {
+            servers.add(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)));
+        }
         try {
             inScope(siteId, () -> {
                 for (Row instance : owned) {
@@ -235,6 +242,9 @@ public final class SiteInstances {
                 }
                 return null;
             });
+            // Every release container is gone, so the site's database link networks have
+            // no serving member left to disconnect: remove them all, verified.
+            SiteDatabaseNetworks.sweepFor(siteId, true, servers);
             // The workload is gone, so nothing holds the site's build artifacts any more.
             // Without this they dangle forever: the per-build prune skips whatever a
             // container was still using at the time, and a deleted site never builds
@@ -393,9 +403,13 @@ public final class SiteInstances {
         }
 
         // Injected database variables first, operator-authored ones override (the same
-        // last-wins order the pre-lowering handler used; still resolves empty for Docker
-        // sites until they move onto user-defined networks -- see SiteContainerKind).
-        Map<String, String> env = new LinkedHashMap<>(DatabaseEnvInjection.envForSite(siteId));
+        // last-wins order the pre-lowering handler used). CONTAINER_NETWORK style: the
+        // release container joins each attached database's link network before start
+        // (SiteDatabaseNetworks, on the InstanceService.deploy seam) and dials the
+        // database by container hostname on the engine's own port -- 127.0.0.1 inside
+        // the container is the container itself, never the host.
+        Map<String, String> env = new LinkedHashMap<>(DatabaseEnvInjection.envForSite(siteId,
+            null, DatabaseEnvInjection.Style.CONTAINER_NETWORK));
         env.putAll(EnvVars.toMap(settings.get("environment_variables")));
         if (!env.isEmpty()) {
             desired.put("environment_variables", env);

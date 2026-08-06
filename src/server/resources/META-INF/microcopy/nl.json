@@ -35,6 +35,10 @@
     "text": "Een databank is verplicht",
     "scope": "violations"
   },
+  "database_server_mismatch": {
+    "text": "Databank '{$name}' draait op server '{$server}' terwijl deze site op server '{$site_server}' draait: een Docker-site bereikt haar databank via een linknetwerk, dat enkel bestaat wanneer beide op dezelfde server draaien",
+    "scope": "violations"
+  },
   "hostname_required": {
     "text": "Hostnaam is verplicht",
     "scope": "violations"
@@ -96,7 +100,7 @@
     "scope": "violations"
   },
   "site_type_no_injection": {
-    "text": "Sites van type '{$type}' kunnen geen databankgegevens ontvangen: enkel host-procestypes (Node.js, Alchemy, Command, Java / Zenit) kunnen een beheerde databank bereiken",
+    "text": "Sites van type '{$type}' kunnen geen databankgegevens ontvangen: enkel sitetypes die een workload draaien (hostprocessen of een Docker-container) kunnen een beheerde databank bereiken",
     "scope": "violations"
   },
   "tls_passthrough_backend_certificate": {

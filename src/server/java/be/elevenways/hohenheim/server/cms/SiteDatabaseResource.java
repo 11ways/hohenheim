@@ -100,9 +100,11 @@ public final class SiteDatabaseResource extends RowResource {
 
     /**
      * Reachability is enforced HERE, at link time, so injection never emits credentials
-     * the site's runtime cannot connect to: the site type must run host processes
-     * (docker-site containers can't reach a 127.0.0.1-published port) and the database
-     * must live on the local server (it publishes on its own host's loopback only).
+     * the site's runtime cannot connect to. Host-process types need the database on the
+     * LOCAL server (they dial its 127.0.0.1-published port on the controller host);
+     * the Docker site type needs it on the SITE'S OWN server (its release container
+     * joins the database's link network there -- cross-host links do not exist and are
+     * refused by name, here and again on the deploy path).
      */
     private void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
         Integer siteId = intOf(coerced.get("site_id"),
@@ -133,12 +135,23 @@ public final class SiteDatabaseResource extends RowResource {
             throw Violations.ofField("database_id", databaseId,
                 CmsSupport.violationText("database_missing"));
         }
-        Integer serverId = database.get(DatabaseModel.SERVER_ID);
-        if (serverId != null && serverId != ServerModel.localServerId()) {
+        int databaseServer = ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID));
+        if (typeInfo.containerRuntime()) {
+            // Docker site: the container joins the database's link network, which only
+            // exists on the daemon both workloads share.
+            int siteServer = siteServerId(site);
+            if (databaseServer != siteServer) {
+                throw Violations.ofField("database_id", databaseId,
+                    CmsSupport.violationText("database_server_mismatch")
+                        .withArg("name", database.get(DatabaseModel.NAME))
+                        .withArg("server", ServerModel.nameOf(databaseServer))
+                        .withArg("site_server", ServerModel.nameOf(siteServer)));
+            }
+        } else if (databaseServer != ServerModel.localServerId()) {
             throw Violations.ofField("database_id", databaseId,
                 CmsSupport.violationText("database_remote")
                     .withArg("name", database.get(DatabaseModel.NAME))
-                    .withArg("server", ServerModel.nameOf(serverId)));
+                    .withArg("server", ServerModel.nameOf(databaseServer)));
         }
 
         String prefix = prefixOf(coerced, existing);
@@ -161,6 +174,13 @@ public final class SiteDatabaseResource extends RowResource {
                     CmsSupport.violationText("prefix_taken").withArg("prefix", prefix.toUpperCase(Locale.ROOT)));
             }
         }
+    }
+
+    /** The canonical server id the site's settings resolve to (local when unset). */
+    private static int siteServerId(@NonNull Row site) {
+        Object settings = site.get(SiteModel.SETTINGS);
+        Object server = settings instanceof Map<?, ?> map ? map.get("server") : null;
+        return ServerModel.canonicalServerId(server);
     }
 
     private static @NonNull String prefixOf(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
