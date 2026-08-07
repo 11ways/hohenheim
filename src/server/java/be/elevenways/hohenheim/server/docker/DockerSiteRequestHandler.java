@@ -83,6 +83,13 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
         forwarder.forwardTo(new UpstreamTarget(target, false));
     }
 
+    /**
+     * AIDEV-NOTE: a workload-dead container is DEGRADED, not DOWN, and routing is
+     * deliberately left alone. The kernel killed a process inside the cgroup; the
+     * entrypoint (and possibly the app) may still be answering, so blackholing live
+     * traffic on that evidence would swap one false report for a worse one. The
+     * operator gets told; the requests keep flowing.
+     */
     @Override
     public SiteHealth getHealth() {
         Integer id = this.instanceId;
@@ -90,8 +97,10 @@ public class DockerSiteRequestHandler implements SiteRequestHandler {
             return SiteHealth.DOWN;
         }
         InstanceStatus status = SiteInstances.liveStatus(this.siteId);
-        return status != null && status.state() == ContainerState.RUNNING
-            ? SiteHealth.UP : SiteHealth.DOWN;
+        if (status == null || status.state() != ContainerState.RUNNING) {
+            return SiteHealth.DOWN;
+        }
+        return status.workloadDead() ? SiteHealth.DEGRADED : SiteHealth.UP;
     }
 
     /**

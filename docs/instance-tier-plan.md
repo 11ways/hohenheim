@@ -4297,6 +4297,25 @@ counts, or live re-run). It was built from CODE, not from the STATUS notes above
   instead of imitating it. Device editing also has its operator surface
   (commit c01c1c3). Three remain: no root-disk size knob, no snapshot retention,
   no Incus host-health heartbeat.
+
+  STATUS 2026-08-07 (later, liveness wave): the instance tier now answers a
+  SECOND question beside `ContainerState` -- `WorkloadLiveness`
+  (SERVING / WORKLOAD_DEAD / UNKNOWN) on `InstanceStatus`. A workload killed by
+  the cgroup OOM killer as a CHILD of the entrypoint leaves the container
+  `running`, so every tier reported it healthy while it refused connections;
+  commit d6a9bf6 made that rarer by right-sizing the engine caps, it did not
+  make the report honest. The Docker driver reads `State.OOMKilled` (runc's
+  cgroup-v2 watcher fires on `oom_kill`, never on `max`, so reclaim PRESSURE is
+  still healthy) at no extra daemon call; the Incus driver REFUSES BY NAME with
+  UNKNOWN, because Incus 7.3's instance state exposes no OOM counter at all.
+  Wired consumers: the databases attention item, `DockerSiteRequestHandler`
+  health (DEGRADED, deliberately NOT a routing change), and site-container
+  reuse (an OOM-killed container is redeployed, never reused).
+  Proven by WorkloadLivenessLiveTest and DatabaseWorkloadLivenessLiveTest
+  against a real daemon, with the pressure anchor as a first-class step.
+  STILL OPEN: an Incus-side liveness signal (would cost a per-poll exec of
+  `cat /sys/fs/cgroup/memory.events` in every instance), and no notification --
+  the dashboard attention item is the whole operator lane today.
 - LIVE RE-VERIFICATION for this wave, not taken on trust: IncusColdMigrationLiveTest
   RAN and PASSED (1 test, 0 skipped, 632s, daystrom -> nightstrom) and
   IncusVmLiveTest RAN and PASSED (1 test, 0 skipped, 94s). IncusWindowsTemplateLiveTest's

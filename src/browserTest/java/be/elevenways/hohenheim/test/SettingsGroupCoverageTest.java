@@ -2,8 +2,12 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
+import be.elevenways.zenit.server.setting.DryFileSource;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,7 +38,10 @@ class SettingsGroupCoverageTest {
         // Preview deployments (git-provider wave).
         "previews",
         // Per-host memory capacity (resource-aware placement wave).
-        "capacity");
+        "capacity",
+        // Incus daemon/controller knobs. Drifted out of this pin the same way as
+        // "stacks", "files", "builds" and "releases" before it; caught 2026-08-07.
+        "incus");
 
     @Test
     void everyDeclaredSettingsGroupIsGuaranteedBeforeValuesLoad() {
@@ -54,5 +61,47 @@ class SettingsGroupCoverageTest {
         assertThat(HohenheimSettings.HOHENHEIM.getChildGroups().keySet())
             .as("step 3: forcing a definition registers the group, it does not just name it")
             .containsAll(DECLARED_GROUPS);
+    }
+
+    /**
+     * {@code settings/hohenheim.dry} is gitignored (2026-08-07), so a fresh clone boots
+     * without it. Absence must be the normal case, and what is left must be the
+     * PRODUCTION shape -- which is why nothing from the previously-tracked file needed
+     * moving into {@code settings/default.dry}.
+     */
+    @Test
+    void anAbsentSettingsFileLeavesTheProductionDefaults() throws IOException {
+        // 1. The file the loader reads is the gitignored one, not a second spelling.
+        assertThat(HohenheimSettingsFiles.settingsFile().toString())
+            .as("step 1: the loader reads settings/hohenheim.dry")
+            .isEqualTo("settings/hohenheim.dry");
+
+        // 2. A missing file is not a failure: an empty snapshot, no throw. A boot that
+        //    died on the absent file would have made gitignoring it a bad trade.
+        Path absent = Path.of("settings/hohenheim.dry.absent-on-purpose");
+        assertThat(Files.exists(absent))
+            .as("step 2: the probe path must really not exist").isFalse();
+        assertThat(new DryFileSource(absent).snapshot())
+            .as("step 2: an absent settings source loads as empty").isEmpty();
+
+        // 3. And the code defaults ARE the production shape: 80/443 with Let's Encrypt
+        //    on. The tracked file only ever held a developer's overrides of these three
+        //    (8080 and letsencrypt off), so there was no default to relocate.
+        assertThat(HohenheimSettings.Proxy.HTTP_PORT.getDefaultValue())
+            .as("step 3: the HTTP default is the public port").isEqualTo(80);
+        assertThat(HohenheimSettings.Proxy.HTTPS_PORT.getDefaultValue())
+            .as("step 3: the HTTPS default is the public port").isEqualTo(443);
+        assertThat(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED.getDefaultValue())
+            .as("step 3: certificates are automatic by default").isTrue();
+
+        // 4. And the file stays UNTRACKED. It holds per-deployment values and, per its
+        //    own .example, the proxy trust keys -- tracking it means either a
+        //    permanently dirty worktree on every deployment or a secret in git.
+        Path gitignore = Path.of(".gitignore");
+        assertThat(Files.exists(gitignore))
+            .as("step 4: the repo root is the working directory").isTrue();
+        assertThat(Files.readString(gitignore).lines().map(String::trim).toList())
+            .as("step 4: settings/hohenheim.dry is gitignored, like settings/local.dry")
+            .contains("settings/hohenheim.dry", "settings/local.dry");
     }
 }

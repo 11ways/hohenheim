@@ -78,7 +78,7 @@ VERIFIED ON DISK 2026-08-07 in this worktree:
 
 ```
 settings/default.dry              (tracked)
-settings/hohenheim.dry            (tracked)
+settings/hohenheim.dry            (gitignored since 2026-08-07)
 settings/local.dry                (gitignored, 0600)
 settings/field-encryption.keys    (0600, gitignored)
 ```
@@ -104,14 +104,24 @@ An honest next step is separating the keyring's directory from the settings
 directory (the setting already exists; only the DEFAULT co-locates them) -- but
 that is a deployment decision, not a code change, and it is not made here.
 
-### Flagged, not fixed
+### Flagged 2026-08-02, RESOLVED 2026-08-07
 
-`settings/hohenheim.dry` is TRACKED IN GIT while
+`settings/hohenheim.dry` was TRACKED IN GIT while
 `settings/hohenheim.dry.example` documents `trusted_proxy_keys` as belonging in
-it. Only `settings/local.dry` is gitignored. The tracked file currently holds
-nothing secret (verified: proxy port and one ssl toggle), but the convention
-invites a committed secret. Decide whether the secret-bearing keys belong only
-in `local.dry`, or gitignore `hohenheim.dry` too.
+it. It is now gitignored, matching `local.dry`: `git rm --cached` kept every
+existing working copy in place, and the `.example` stays the template.
+
+Nothing moved to `settings/default.dry`, because nothing in the tracked file was
+a default: the tracked content was `proxy.http_port: 8080` and
+`ssl.letsencrypt_enabled: false`, while `HohenheimSettings` already declares 80,
+443 and Let's-Encrypt-on in code. The tracked file held only a developer's
+overrides of the production defaults, and `default.dry` is the ZENIT settings
+file anyway -- `HohenheimSettingsFiles.load()` reads only `hohenheim.dry` plus
+`HOHENHEIM__*` env, so a `proxy.*` key placed in `default.dry` would be ignored.
+
+A missing file is not a boot failure: `DryFileSource.snapshot()` treats absence
+as the normal case (empty map plus a `settings.source_missing` slog event), and
+every declared setting falls back to its code default.
 
 ## Status 2026-08-02: the encryption wave LANDED
 

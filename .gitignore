@@ -17,9 +17,14 @@ public/cms.css
 # Database (plus SQLite -wal/-shm sidecars and hand-made backups)
 *.db*
 
-# Per-developer settings overrides (proxy port, TLS toggles, ...)
-# Checked-in template: settings/local.dry.example
+# Per-deployment / per-developer settings overrides. BOTH are per-host: local.dry
+# pins the admin listener port, hohenheim.dry pins the public proxy ports, the TLS
+# toggle, the roles this node runs and the proxy trust keys. Committing either means
+# either a permanently dirty worktree on every deployment or someone's host
+# configuration (and, for hohenheim.dry, a SECRET) landing in git.
+# Checked-in templates: settings/local.dry.example, settings/hohenheim.dry.example
 settings/local.dry
+settings/hohenheim.dry
 
 # Field-encryption keyring: auto-generated on first use (also by a local test
 # run), holds the keys for every .encrypted() column. Never commit it.

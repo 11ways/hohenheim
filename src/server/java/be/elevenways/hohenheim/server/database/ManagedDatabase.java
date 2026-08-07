@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
@@ -283,10 +284,29 @@ public class ManagedDatabase {
     public record Connection(Engine engine, String host, int port,
                              String user, String password, String database) {}
 
-    /** Live container state for a managed database, plus the published host port when running. */
-    public record LiveStatus(ContainerState state, Integer port) {
+    /**
+     * Live container state for a managed database, plus the published host port when
+     * running and whether the ENGINE inside that container is still alive.
+     *
+     * AIDEV-NOTE: {@code running()} deliberately still means "the container runs". The
+     * OOM case is a second question ({@link WorkloadLiveness}) precisely because a
+     * container whose engine was OOM-killed answers "running" to every daemon while
+     * refusing every connection -- that gap is what {@link #workloadDead()} names.
+     */
+    public record LiveStatus(ContainerState state, Integer port, WorkloadLiveness liveness) {
+
+        public LiveStatus(ContainerState state, Integer port) {
+            this(state, port, state == ContainerState.RUNNING
+                ? WorkloadLiveness.SERVING : WorkloadLiveness.UNKNOWN);
+        }
+
         public boolean running() {
             return state == ContainerState.RUNNING;
+        }
+
+        /** The container runs but the kernel killed the engine inside it. */
+        public boolean workloadDead() {
+            return running() && liveness == WorkloadLiveness.WORKLOAD_DEAD;
         }
     }
 

@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -273,7 +274,27 @@ public final class InstanceSnapshots {
         if (wasRunning) {
             TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
         }
+        recordRestore(instanceId, "snapshot #" + snapshotId);
         Blast.log("SNAPSHOT: restored snapshot", snapshotId, "onto instance", instanceId);
+    }
+
+    /** The activity action an in-place snapshot restore is recorded under. */
+    public static final String ACTIVITY_RESTORE_ACTION = "restored_snapshot";
+
+    /**
+     * Record the restore on the INSTANCE record.
+     *
+     * AIDEV-NOTE: explicit, and in the authority rather than the CMS row action, because
+     * an in-place restore is a REPLACE that destroys everything written since the
+     * snapshot and writes its whole state through InstanceOperationGuard.stamp -- an
+     * updateAll, which fires no write hooks. The ActivityLog.withAction wrapper that used
+     * to be the only "accountability" here recorded literally nothing (withAction renames
+     * hook-written rows; there were none), the same silent-success shape as the
+     * OrphanActions claim.
+     */
+    private static void recordRestore(int instanceId, String detail) {
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId,
+            ACTIVITY_RESTORE_ACTION, detail);
     }
 
     /**
@@ -325,6 +346,7 @@ public final class InstanceSnapshots {
         if (wasRunning) {
             TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
         }
+        recordRestore(instanceId, "native snapshot " + nativeName);
         Blast.log("SNAPSHOT: restored native snapshot", nativeName, "onto instance", instanceId);
     }
 

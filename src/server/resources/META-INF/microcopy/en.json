@@ -1049,6 +1049,10 @@
     "text": "Attached database {$name} is not running",
     "scope": "attention_detail"
   },
+  "database_workload_dead": {
+    "text": "Attached database {$name} runs, but its engine was killed for running out of memory",
+    "scope": "attention_detail"
+  },
   "database_status": {
     "text": "Attached database {$name} is {$status}",
     "scope": "attention_detail"
@@ -4859,6 +4863,10 @@
   },
   "orphan_not_orphaned": {
     "text": "{$name} is not an orphaned resource",
+    "scope": "violations"
+  },
+  "orphan_server_unknown": {
+    "text": "Host {$name} has no record; the finding is stale and the removal cannot be attributed",
     "scope": "violations"
   },
   "orphan_volume_refused": {
