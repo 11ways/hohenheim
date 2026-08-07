@@ -25,7 +25,22 @@ Reverse proxy / app manager. Starts and supervises backend processes (node, stat
 
 ## Build and run
 
-Use `zenit-dev` for all build/test/run cycles. Do not invoke `./gradlew` directly.
+Use `zenit-dev` for all build/test/run cycles. Do not invoke `./gradlew` directly
+(a harness hook refuses it; do not work around the hook).
+
+- Prefer the zenit-dev MCP tools (`zd_build`, `zd_test`, `zd_verified`,
+  `zd_test_log`, `zd_status`, `zd_wait`): they return the verdict as DATA.
+  Never judge success from output text, and never pipe `zenit-dev` through
+  `tail`/`grep` -- the pipe replaces the load-bearing exit code.
+- Before running any test, check `zd_verified` / `zenit-dev verified`: a green
+  receipt at the current worktree fingerprint IS the verification, including one
+  produced by another agent. `reused: true` in a result IS a pass; bypass only
+  with `--repeat <mode> --reason "..."` when investigating flakiness or
+  environment drift.
+- "attached to j-..." means an equivalent run is already executing and this one
+  shares its result; never kill or re-issue it.
+- verdict PASSED_BUT_STALE means sources changed mid-run: the result proves the
+  tree the run STARTED from. Finish edits, then run once.
 
 ## Architecture notes
 
