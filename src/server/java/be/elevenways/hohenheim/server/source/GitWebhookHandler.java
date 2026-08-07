@@ -46,6 +46,9 @@ public class GitWebhookHandler {
     private static final HttpString X_GITHUB_EVENT = new HttpString("X-GitHub-Event");
     private static final HttpString X_GITLAB_EVENT = new HttpString("X-Gitlab-Event");
 
+    /** The {@code X-Gitlab-Event} value of a Merge Request Hook (spaces and all). */
+    private static final String GITLAB_MERGE_REQUEST_EVENT = "Merge Request Hook";
+
     /** One constant refusal for everything short of a verified signature. */
     private static final String REFUSAL_BODY = "{\"error\":\"not found\"}";
 
@@ -148,7 +151,7 @@ public class GitWebhookHandler {
         }
 
         if (isPullRequestEvent(event)) {
-            handlePullRequest(exchange, claimed, site, sourceSettings, payload);
+            handlePullRequest(exchange, claimed, site, sourceSettings, payload, event);
             return;
         }
 
@@ -210,54 +213,125 @@ public class GitWebhookHandler {
     // -- pull request -> preview ----------------------------------------------
 
     private static void handlePullRequest(HttpServerExchange exchange, Row claimed, Row site,
-                                          Map<String, Object> sourceSettings, Object payload) {
+                                          Map<String, Object> sourceSettings, Object payload,
+                                          @Nullable String event) {
         if (!Boolean.TRUE.equals(sourceSettings.get("previews_enabled"))) {
             WebhookDeliveries.stampAction(claimed, "ignored_previews_disabled");
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"previews disabled\"}");
             return;
         }
-        if (!(payload instanceof Map<?, ?> map)
-                || !(map.get("pull_request") instanceof Map<?, ?> pr)
-                || !(pr.get("head") instanceof Map<?, ?> head)) {
+        PreviewEvent previewEvent = previewEventOf(event, payload);
+        if (previewEvent == null) {
             WebhookDeliveries.stampAction(claimed, "ignored_malformed_pr");
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"unrecognized payload\"}");
             return;
         }
-        String action = str(map.get("action"));
-        String ref = str(head.get("ref"));
-        String sha = str(head.get("sha"));
-        Integer prNumber = pr.get("number") instanceof Number number ? number.intValue() : null;
-        int siteId = site.get(SiteModel.ID);
-        if (ref.isEmpty()) {
-            WebhookDeliveries.stampAction(claimed, "ignored_malformed_pr");
-            sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"no head ref\"}");
-            return;
-        }
 
+        int siteId = site.get(SiteModel.ID);
+        String ref = previewEvent.ref();
         Datasource datasource = Db.current();
-        switch (action) {
-            case "opened", "reopened", "synchronize" -> {
+        switch (previewEvent.intent()) {
+            case DEPLOY -> {
                 // The build takes minutes; the provider expects an answer in seconds.
                 JobRunner.startVirtualThread(() -> withScope(datasource, () ->
                     be.elevenways.hohenheim.server.preview.PreviewDeployments
-                        .deployQuietly(siteId, ref, sha, prNumber)));
+                        .deployQuietly(siteId, ref, previewEvent.sha(), previewEvent.number())));
                 WebhookDeliveries.stampAction(claimed, "preview_queued");
                 ActivityLog.record(Models.get(SiteModel.class), siteId,
                     "preview_triggered", "webhook:" + ref);
                 sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
             }
-            case "closed" -> {
+            case TEARDOWN -> {
                 JobRunner.startVirtualThread(() -> withScope(datasource, () ->
                     be.elevenways.hohenheim.server.preview.PreviewDeployments
                         .destroyForRefQuietly(siteId, ref, "pr_closed")));
                 WebhookDeliveries.stampAction(claimed, "preview_teardown_queued");
                 sendJson(exchange, 200, "{\"status\":\"preview_teardown_queued\"}");
             }
-            default -> {
+            case IGNORE -> {
                 WebhookDeliveries.stampAction(claimed, "ignored_pr_action");
                 sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"action\"}");
             }
         }
+    }
+
+    /** What a change-request event asks the preview lane for, provider-neutral. */
+    enum PreviewIntent { DEPLOY, TEARDOWN, IGNORE }
+
+    /** One change-request event lowered onto the preview lane's vocabulary. */
+    record PreviewEvent(@NonNull PreviewIntent intent, @NonNull String ref,
+                        @NonNull String sha, @Nullable Integer number) {
+    }
+
+    /**
+     * Lower a provider's change-request event onto the preview lifecycle.
+     *
+     * The two providers agree on nothing but the concept: GitHub nests the branch and
+     * sha under {@code pull_request.head} and names its actions
+     * opened/reopened/synchronize/closed; GitLab puts them in
+     * {@code object_attributes} ({@code source_branch}, {@code last_commit.id},
+     * {@code iid}) and names them open/reopen/update/close/merge. Mapping by shape
+     * rather than by header would be a guess -- the header decides which reader runs,
+     * and the reader knows its own provider's names.
+     *
+     * @return null when the payload is not a recognizable change request; an IGNORE
+     *         intent when it is one whose action the preview lane does not act on
+     */
+    static @Nullable PreviewEvent previewEventOf(@Nullable String event, @Nullable Object payload) {
+        if (!(payload instanceof Map<?, ?> map)) {
+            return null;
+        }
+        return GITLAB_MERGE_REQUEST_EVENT.equals(event)
+            ? gitlabMergeRequest(map) : githubPullRequest(map);
+    }
+
+    private static @Nullable PreviewEvent githubPullRequest(@NonNull Map<?, ?> map) {
+        if (!(map.get("pull_request") instanceof Map<?, ?> pr)
+                || !(pr.get("head") instanceof Map<?, ?> head)) {
+            return null;
+        }
+        String ref = str(head.get("ref"));
+        if (ref.isEmpty()) {
+            return null;
+        }
+        PreviewIntent intent = switch (str(map.get("action"))) {
+            case "opened", "reopened", "synchronize" -> PreviewIntent.DEPLOY;
+            case "closed" -> PreviewIntent.TEARDOWN;
+            default -> PreviewIntent.IGNORE;
+        };
+        return new PreviewEvent(intent, ref, str(head.get("sha")),
+            pr.get("number") instanceof Number number ? number.intValue() : null);
+    }
+
+    /**
+     * AIDEV-NOTE: {@code update} is NOT GitHub's {@code synchronize}. GitLab fires it for
+     * title, description, label, assignee and milestone edits as well as for new commits,
+     * and only the commit case carries {@code oldrev} (the source branch's previous head).
+     * Redeploying on every {@code update} would rebuild a preview each time somebody
+     * retitled the merge request. A {@code merge} is a teardown like {@code close}: the
+     * branch is gone either way, and GitHub reaches the same place through {@code closed}.
+     * The MR number is {@code iid}, the per-project one humans see -- {@code id} is the
+     * instance-wide row id and would name previews after a number nobody recognizes.
+     */
+    private static @Nullable PreviewEvent gitlabMergeRequest(@NonNull Map<?, ?> map) {
+        if (!(map.get("object_attributes") instanceof Map<?, ?> attributes)) {
+            return null;
+        }
+        String ref = str(attributes.get("source_branch"));
+        if (ref.isEmpty()) {
+            return null;
+        }
+        PreviewIntent intent = switch (str(attributes.get("action"))) {
+            case "open", "reopen" -> PreviewIntent.DEPLOY;
+            case "update" -> str(attributes.get("oldrev")).isEmpty()
+                ? PreviewIntent.IGNORE : PreviewIntent.DEPLOY;
+            case "close", "merge" -> PreviewIntent.TEARDOWN;
+            default -> PreviewIntent.IGNORE;
+        };
+        String sha = attributes.get("last_commit") instanceof Map<?, ?> commit
+            ? str(commit.get("id")) : "";
+        return new PreviewEvent(intent, ref, sha,
+            attributes.get("iid") instanceof Number number ? number.intValue() : null);
     }
 
     // -- verification and parsing ---------------------------------------------
@@ -309,8 +383,13 @@ public class GitWebhookHandler {
         return gitlab != null && !gitlab.isBlank() ? gitlab.trim() : null;
     }
 
+    /**
+     * The change-request events that drive previews. GitLab's Merge Request Hook is the
+     * same lifecycle under another name, so it routes to the same handler -- a GitLab
+     * repository used to get pushes but silently no previews at all.
+     */
     private static boolean isPullRequestEvent(@Nullable String event) {
-        return "pull_request".equals(event);
+        return "pull_request".equals(event) || GITLAB_MERGE_REQUEST_EVENT.equals(event);
     }
 
     private static @Nullable Object parsePayload(String body) {

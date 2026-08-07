@@ -1,11 +1,14 @@
 package be.elevenways.hohenheim.server.project;
 
 import be.elevenways.hohenheim.model.EnvironmentModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
@@ -16,6 +19,8 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -143,8 +148,74 @@ public final class Projects {
         GrantService.createDirectGrant("group", groupId, membershipPermissionOf(project), true);
     }
 
-    /** Every project the user is a member of (direct or through nested groups). */
-    public static @NonNull List<Row> projectsOf(int userId) {
+    /**
+     * THE project-visibility policy every listing surface routes through: an admin sees
+     * every project, everyone else the projects they are a MEMBER of -- but a
+     * scope-narrowed API key sees none unless its scopes cover the vocabulary
+     * project-owned records answer to.
+     *
+     * AIDEV-NOTE: membership is grant-derived, NOT a record capability, so the capability
+     * walk -- the one place zenit-auth applies a key's scope narrowing -- never runs for a
+     * membership listing. Without coversOwnedVocabulary below, a key narrowed to an
+     * unrelated scope still enumerates its owner's projects: authority it was never
+     * granted. This lived as three separate derivations (the PaaS API, the from-template
+     * pick, and every future surface); two of them were unguarded. It is ONE derivation
+     * now precisely so the next surface cannot forget.
+     */
+    public static @NonNull List<Row> visibleTo(@NonNull AccessContext ctx) {
+        if (HohenheimAccess.isAdmin(ctx)) {
+            return Models.get(ProjectModel.class).find()
+                .orderBy(ProjectModel.ID, SortOrder.ASC).all();
+        }
+        Long principalId = ctx.principalId();
+        if (principalId == null || ctx.isAnonymous() || !coversOwnedVocabulary(ctx)) {
+            return List.of();
+        }
+        return projectsOf(principalId.intValue());
+    }
+
+    /**
+     * The criteria face of {@link #visibleTo}, for query-scoped surfaces.
+     *
+     * @return null for admins (no extra constraint), else a criteria over exactly the
+     *         ids {@link #visibleTo} enumerates -- never a second derivation
+     */
+    public static @Nullable Criteria visibleScope(@NonNull AccessContext ctx) {
+        if (HohenheimAccess.isAdmin(ctx)) {
+            return null;
+        }
+        Set<Integer> ids = new LinkedHashSet<>();
+        for (Row project : visibleTo(ctx)) {
+            Integer id = project.get(ProjectModel.ID);
+            if (id != null) {
+                ids.add(id);
+            }
+        }
+        // NEVER ID.in(empty), which some backends reject or widen.
+        return ids.isEmpty() ? Models.get(ProjectModel.class).matchNone() : ProjectModel.ID.in(ids);
+    }
+
+    /**
+     * Whether the principal's credential covers the vocabulary every project-owned record
+     * answers to. Only API keys carry scopes; a session principal is unnarrowed.
+     */
+    private static boolean coversOwnedVocabulary(@NonNull AccessContext ctx) {
+        if (!(ctx.principal() instanceof ApiKeyPrincipal key)) {
+            return true;
+        }
+        return key.coversCapability(SiteModel.MODEL_ID, HohenheimAccess.MANAGE)
+            || key.coversCapability(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE);
+    }
+
+    /**
+     * Every project the user is a member of (direct or through nested groups).
+     *
+     * AIDEV-NOTE: package-private ON PURPOSE. This is the raw membership walk, with no
+     * credential narrowing on it; the only supported entry point for a listing surface
+     * is {@link #visibleTo}. Widening this back to public re-opens the hole by making
+     * the unguarded derivation reachable again.
+     */
+    static @NonNull List<Row> projectsOf(int userId) {
         Set<Integer> groupIds = new LinkedHashSet<>();
         for (PermissionResolver.Subject expanded
                 : PermissionResolver.expandSubjects("user", userId)) {
@@ -159,18 +230,27 @@ public final class Projects {
             .where(ProjectModel.GROUP_ID.in(groupIds)).all();
     }
 
-    /** Direct member user ids of a project (nested group members not expanded). */
-    public static @NonNull Set<Integer> directMemberUserIds(@NonNull Row project) {
-        Set<Integer> ids = new LinkedHashSet<>();
+    /** One direct membership of a project: the subject the positive grant names. */
+    public record Member(@NonNull String subjectType, int subjectId) {
+    }
+
+    /**
+     * The DIRECT members of a project: every subject holding a positive membership grant,
+     * users and nested groups alike (a group's own members are not expanded -- they reach
+     * the project through the resolver's walk, not through a row here).
+     */
+    public static @NonNull List<Member> directMembersOf(@NonNull Row project) {
+        List<Member> members = new ArrayList<>();
         for (Row grant : AuthModels.grants().find()
                 .where(GrantModel.PERMISSION.eq(membershipPermissionOf(project)))
-                .and(GrantModel.SUBJECT_TYPE.eq("user"))
                 .all()) {
-            if (Boolean.TRUE.equals(grant.get(GrantModel.VALUE))) {
-                ids.add(grant.get(GrantModel.SUBJECT_ID));
+            String type = grant.get(GrantModel.SUBJECT_TYPE);
+            Integer id = grant.get(GrantModel.SUBJECT_ID);
+            if (Boolean.TRUE.equals(grant.get(GrantModel.VALUE)) && type != null && id != null) {
+                members.add(new Member(type, id));
             }
         }
-        return ids;
+        return members;
     }
 
     // -- ownership moves ------------------------------------------------------

@@ -31,7 +31,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * Membership itself is edited through the zenit-auth grant surfaces (a project IS a
  * permission group) -- a second member editor here would be two UIs over one record.
  */
-public final class ProjectResource extends RowResource {
+public class ProjectResource extends RowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(ProjectModel.NAME)
@@ -65,7 +65,7 @@ public final class ProjectResource extends RowResource {
         Integer groupId = row.get(ProjectModel.GROUP_ID);
         switch (column.name()) {
             case "members":
-                return groupId == null ? 0 : Projects.directMemberUserIds(row).size();
+                return groupId == null ? 0 : Projects.directMembersOf(row).size();
             case "owned_sites":
                 return groupId == null ? 0 : ownedCount(groupId, SiteModel.MODEL_ID);
             case "owned_instances":

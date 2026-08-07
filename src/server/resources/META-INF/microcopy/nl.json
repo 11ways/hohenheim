@@ -7127,5 +7127,17 @@
   "controller_objects_reaped": {
     "text": "{$name}: {$removed} gedeeld(e) object(en) van vertrokken controllers verwijderd, {$refused} geweigerd",
     "scope": "server"
+  },
+  "singular": {
+    "text": "Project",
+    "scope": "project"
+  },
+  "member": {
+    "text": "Lid",
+    "scope": "project"
+  },
+  "member_kind": {
+    "text": "Soort",
+    "scope": "project"
   }
 }
