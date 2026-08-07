@@ -227,6 +227,18 @@ public class InstanceModel extends Model {
         StringField.builder().name("quota_bucket").filterable(false).build());
 
     /**
+     * The memory (MB) booked for this workload on its HOST's capacity bucket, stamped by
+     * InstanceCapacity at the write that took it.
+     *
+     * AIDEV-NOTE: the same stamp-and-release-the-stamp discipline as QUOTA_BUCKET, for the
+     * same reason: settings change, and a release recomputed from the CURRENT settings
+     * would hand back a different number than was taken and drift the host budget every
+     * edit. A migration moves this charge between host buckets rather than re-deriving it.
+     */
+    public static final IntegerField CAPACITY_MB = SCHEMA.addField(
+        IntegerField.builder().name("capacity_mb").filterable(false).build());
+
+    /**
      * The RESOLVED image identity the workload actually runs (incus: the image
      * fingerprint behind {@code volatile.base_image}), recorded at deploy. A mutable
      * alias is not a deployment identity: recreating an absent workload uses this pin,

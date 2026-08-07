@@ -575,5 +575,11 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
                 new ContainerHardening.Profile("fake", List.of()),
                 OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
         }
+
+        /** Test kinds declare a footprint like any other: the interface has no default. */
+        @Override
+        public int defaultFootprintMb() {
+            return 128;
+        }
     }
 }

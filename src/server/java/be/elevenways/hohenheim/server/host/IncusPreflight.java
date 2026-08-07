@@ -146,6 +146,7 @@ public final class IncusPreflight {
             facts.put("project", stringOf(environment.get("project")));
             facts.put("driver", stringOf(environment.get("driver")));
             facts.put("auth", stringOf(server.get("auth")));
+            recordResources(client, facts, checks);
             checks.add(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true,
                 "Incus " + facts.get("incus_version") + " reachable (API "
                     + facts.get("api_version") + ")"));
@@ -157,6 +158,46 @@ public final class IncusPreflight {
                 outcome.kind().token + ": " + outcome.detail()));
             return null;
         }
+    }
+
+    /**
+     * The host's measured CPU count and total memory, under the SAME fact names the Docker
+     * battery stores them.
+     *
+     * AIDEV-NOTE: {@code mem_total} is no longer a display fact -- InstanceCapacity reads
+     * it back as the denominator of every placement decision on this host, and the Incus
+     * battery simply never recorded it (only ServerService's live summary probe did, in
+     * memory). A host whose resources cannot be read gets a REQUIRED failing check rather
+     * than a missing fact, because a silently absent budget is the zero-denominator gate
+     * this whole seam exists to remove; placement skips such a host by name either way,
+     * and the operator should see the reason on the preflight report, not only at create.
+     */
+    private static void recordResources(IncusClient client, Map<String, Object> facts,
+                                        List<HostPreflight.Check> checks) {
+        try {
+            Map<String, Object> resources = client.resources();
+            if (resources.get("cpu") instanceof Map<?, ?> cpu
+                    && cpu.get("total") instanceof Number total) {
+                facts.put("ncpu", total.intValue());
+            }
+            if (resources.get("memory") instanceof Map<?, ?> memory
+                    && memory.get("total") instanceof Number total) {
+                facts.put("mem_total", total.longValue());
+            }
+        } catch (IOException | RuntimeException unreadable) {
+            checks.add(new HostPreflight.Check("resources", HostPreflight.STATUS_FAIL, true,
+                "the daemon's resource inventory could not be read, so this host has no"
+                    + " memory budget to place against: " + unreadable.getMessage()));
+            return;
+        }
+        boolean measured = facts.get("mem_total") instanceof Number bytes
+            && bytes.longValue() > 0;
+        checks.add(new HostPreflight.Check("resources",
+            measured ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, true,
+            measured ? "host reports " + facts.get("ncpu") + " CPUs and "
+                    + facts.get("mem_total") + " bytes of memory"
+                : "the daemon reported no total memory, so this host has no memory budget"
+                    + " to place against"));
     }
 
     /**

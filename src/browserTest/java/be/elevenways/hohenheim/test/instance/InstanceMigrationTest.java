@@ -109,7 +109,9 @@ class InstanceMigrationTest {
             new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
             new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
                 HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
-            Map.of(), true, Instant.now(), null));
+            // mem_total is what the capacity budget is read from: an admitted host
+            // always carries it in production, and placement skips one that does not.
+            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));
         DAEMONS.putIfAbsent(name, new ConcurrentHashMap<>());
         return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
     }
@@ -667,6 +669,12 @@ class InstanceMigrationTest {
                 new ContainerHardening.Profile("fake", List.of()),
                 OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
         }
+
+        /** Test kinds declare a footprint like any other: the interface has no default. */
+        @Override
+        public int defaultFootprintMb() {
+            return 128;
+        }
     }
 
     /** A kind whose runtime has NO native export/import: the migrate_unsupported lane. */
@@ -745,6 +753,12 @@ class InstanceMigrationTest {
                 Map.of(), Map.of(), null, ResourceLimits.none(),
                 new ContainerHardening.Profile("fake", List.of()),
                 OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+        }
+
+        /** Test kinds declare a footprint like any other: the interface has no default. */
+        @Override
+        public int defaultFootprintMb() {
+            return 128;
         }
     }
 }

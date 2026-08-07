@@ -128,8 +128,23 @@ public final class IncusContainerKind implements InstanceKindHandler {
         // devices are a later mechanism) -- each absence is structural, not an omission.
         return new InstanceSpec(handle, image, null,
             EnvVars.toMap(settings.get("environment_variables")), Map.of(), null,
-            ResourceLimits.fromSettings(settings),
+            ResourceLimits.fromSettings(settings, defaultFootprintMb()),
             privileged ? PRIVILEGED : UNPRIVILEGED,
             OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+    }
+
+    /** A system container shares the host kernel: its floor is its userland, not a guest OS. */
+    @Override
+    public int defaultFootprintMb() {
+        return 512;
+    }
+
+    @Override
+    public void requirePlaceableOn(@NonNull String serverName,
+                                   @NonNull Map<String, Object> settings) {
+        // The image-origin setting is a VM-form field today, but the rule is the DRIVER's
+        // and it answers for whatever the settings declare -- keeping the two kinds on one
+        // call means a prepared container alias needs no second gate later.
+        IncusVmKind.requirePreparedImageOn(serverName, settings, IncusWorkloadType.CONTAINER);
     }
 }

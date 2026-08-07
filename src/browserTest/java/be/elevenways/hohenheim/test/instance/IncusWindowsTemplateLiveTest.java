@@ -138,9 +138,17 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
         IncusClient incus = new ServerService().incusClientFor(HOST);
         InstanceService service = new InstanceService();
 
-        int absentId = windowsRecord("win-absent-alias", hostId, "no-such-prepared-alias");
+        // AIDEV-NOTE: only ONE of these three ever runs; the other two exist to carry
+        // settings (an absent alias refused before create, an agent-less spec built but
+        // never deployed). They are sized small ON PURPOSE, because host capacity is
+        // booked on a record's EXISTENCE rather than on its running state -- a stopped
+        // guest can be started without asking anyone, so a control plane that only booked
+        // running workloads would happily accept guests it then could not start. Three
+        // 2 GB records on this 3907 MB host is real over-subscription and the ledger
+        // refuses it correctly (observed: host_capacity_reached needed=2048 free=1280).
+        int absentId = windowsRecord("win-absent-alias", hostId, "no-such-prepared-alias", 512);
         int id = windowsRecord("win-prepared", hostId, PREPARED_ALIAS);
-        int agentlessId = windowsRecord("win-agentless", hostId, PREPARED_ALIAS);
+        int agentlessId = windowsRecord("win-agentless", hostId, PREPARED_ALIAS, 512);
         String absentHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, absentId);
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
         String agentlessHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, agentlessId);
@@ -237,7 +245,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             //    these settings. Its own record, never deployed, so the
             //    refusal-before-create claim is measurable.
             IncusVmKind kind = new IncusVmKind();
-            InstanceSpec agentless = kind.specFor(agentlessId, windowsSettings(PREPARED_ALIAS));
+            InstanceSpec agentless = kind.specFor(agentlessId, windowsSettings(PREPARED_ALIAS, 512));
             InstallSupport installSupport = (InstallSupport) kind.runtimeFor(HOST);
             assertThat(agentless.guestAgent())
                 .as("step 6: the kind read guest_agent=false off the settings").isFalse();
@@ -371,21 +379,33 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
     }
 
     private static Map<String, Object> windowsSettings(String alias) {
+        return windowsSettings(alias, 2048);
+    }
+
+    /**
+     * @param memoryMb what this record is BOOKED at on the host's memory budget, which is
+     *        also the cap the daemon applies
+     */
+    private static Map<String, Object> windowsSettings(String alias, int memoryMb) {
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("image", alias);
         settings.put("image_origin", "prepared");
         settings.put("secure_boot", true);
         settings.put("guest_agent", false);
-        settings.put("memory_limit_mb", 2048);
+        settings.put("memory_limit_mb", memoryMb);
         return settings;
     }
 
     private static int windowsRecord(String name, int hostId, String alias) {
+        return windowsRecord(name, hostId, alias, 2048);
+    }
+
+    private static int windowsRecord(String name, int hostId, String alias, int memoryMb) {
         Model instances = Models.get(InstanceModel.class);
         Row row = instances.createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, IncusVmKind.ID.toString());
-        row.set(InstanceModel.SETTINGS, windowsSettings(alias));
+        row.set(InstanceModel.SETTINGS, windowsSettings(alias, memoryMb));
         row.set(InstanceModel.SERVER_ID, hostId);
         instances.save(row);
         return row.get(InstanceModel.ID);

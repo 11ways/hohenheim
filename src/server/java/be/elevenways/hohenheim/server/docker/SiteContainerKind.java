@@ -176,8 +176,18 @@ public final class SiteContainerKind implements InstanceKindHandler {
 
         return new InstanceSpec(handle, imageRef, cmd,
             EnvVars.toMap(settings.get("environment_variables")), volumes,
-            publication, ResourceLimits.fromSettings(settings), HARDENING,
-            OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+            publication, ResourceLimits.fromSettings(settings, defaultFootprintMb()),
+            HARDENING, OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+    }
+
+    /**
+     * A site's lowered release container. It books like any other workload even though it
+     * is operator-authored and skips the admission gate -- capacity is physics, not
+     * authorization, and a host full of sites is full for tenants too.
+     */
+    @Override
+    public int defaultFootprintMb() {
+        return 512;
     }
 
     private static String str(Object value) {

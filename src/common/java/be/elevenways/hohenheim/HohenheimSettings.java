@@ -719,6 +719,47 @@ public class HohenheimSettings {
             .build();
     }
 
+    // --- Per-HOST memory capacity (the placement side of the same ledger) ---
+    public abstract class Capacity {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("capacity")
+            .label("Host capacity")
+            .describe("How much workload memory each host is allowed to carry; placement "
+                + "skips a host with no headroom or no recent reading, and the reservation "
+                + "ledger enforces the budget at write time")
+            .icon("memory");
+
+        public static final SettingDefinition<Integer> HOST_MEMORY_RESERVE_MB = GROUP
+            .buildSetting("host_memory_reserve_mb", Integer.class)
+            .defaultValue(768)
+            .label("Host memory reserve (MB)")
+            .description("Memory subtracted from a host's measured total before any "
+                + "workload may be booked against it -- the kernel, the container/VM "
+                + "daemon and page cache live here. Raise it on a host that also runs "
+                + "something else")
+            .build();
+
+        public static final SettingDefinition<Double> MEMORY_OVERCOMMIT_RATIO = GROUP
+            .buildSetting("memory_overcommit_ratio", Double.class)
+            .defaultValue(1.0)
+            .label("Memory overcommit ratio")
+            .description("Multiplies the bookable memory after the reserve. 1.0 books no "
+                + "more than the host physically has. Above 1.0 is a DELIBERATE operator "
+                + "bet that workloads will not all use their declared memory at once; the "
+                + "kernel OOM killer, not this controller, settles that bet")
+            .build();
+
+        public static final SettingDefinition<Integer> FACTS_MAX_AGE_HOURS = GROUP
+            .buildSetting("facts_max_age_hours", Integer.class)
+            .defaultValue(168)
+            .label("Capacity reading maximum age (hours)")
+            .description("How old a host's stored preflight memory reading may be before "
+                + "it stops counting as a budget. Past this, placement will not choose "
+                + "the host and says by name that it needs a preflight; workloads already "
+                + "on it are untouched. 0 or less removes the bound -- an explicit choice "
+                + "to place against a reading of any age")
+            .build();
+    }
+
     // --- Instance networking (public game-port pre-allocation) ---
     public abstract class Instances {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("instances")

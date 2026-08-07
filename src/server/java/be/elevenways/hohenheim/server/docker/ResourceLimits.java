@@ -35,6 +35,32 @@ public record ResourceLimits(@Nullable Integer memoryMb, @Nullable Double cpus) 
             asDouble(settings.get("cpu_limit")));
     }
 
+    /**
+     * The instance-tier reading: an absent or non-positive {@code memory_limit_mb} falls
+     * back to the KIND's declared footprint instead of meaning "unlimited".
+     *
+     * AIDEV-NOTE: this is the half that makes the host-capacity ledger honest rather than
+     * advisory. InstanceCapacity books exactly {@link #memoryMb()} as read here, and this
+     * is the value the driver stamps as the cgroup / VM memory cap -- so a workload
+     * physically cannot exceed its own booking. Never charge through this and cap through
+     * the plain {@link #fromSettings(Map)}: that is the zero-denominator gate all over
+     * again, just with a nicer number in it. CPU is deliberately NOT defaulted -- it is
+     * timeshared, nothing is booked against it, and a surprise CPU cap would throttle
+     * workloads for a budget that does not exist.
+     */
+    public static ResourceLimits fromSettings(Map<String, Object> settings,
+                                              int defaultMemoryMb) {
+        Integer declared = asInteger(settings.get("memory_limit_mb"));
+        return new ResourceLimits(
+            declared != null && declared > 0 ? declared : defaultMemoryMb,
+            asDouble(settings.get("cpu_limit")));
+    }
+
+    /** The memory this configuration is booked and capped at (MB). */
+    public int bookedMemoryMb() {
+        return this.memoryMb != null && this.memoryMb > 0 ? this.memoryMb : 0;
+    }
+
     /** Stamp Docker HostConfig entries (Memory bytes, NanoCpus) for the active caps. */
     public void applyTo(Map<String, Object> hostConfig) {
         if (memoryMb != null && memoryMb > 0) {

@@ -24,8 +24,10 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -170,8 +172,55 @@ public final class IncusVmKind implements InstanceKindHandler {
         // volumes (attached disks are instance_devices rows), no port publication
         // (a VM is an addressable system) -- each absence is structural.
         return new InstanceSpec(handle, image, null, Map.of(), Map.of(), null,
-            ResourceLimits.fromSettings(settings), VM,
+            ResourceLimits.fromSettings(settings, defaultFootprintMb()), VM,
             OwnerLabels.of(InstanceModel.MODEL_ID, instanceId), cloudInit, null,
             imageOrigin, secureBoot, guestAgent);
+    }
+
+    /**
+     * A VM boots its own kernel, firmware and page cache before the guest's workload gets
+     * anything, so its floor is a whole multiple of a container's. This is also the number
+     * Incus itself defaults an unconfigured VM to, which keeps the booking and what the
+     * hypervisor actually hands out the same figure.
+     */
+    @Override
+    public int defaultFootprintMb() {
+        return 1024;
+    }
+
+    @Override
+    public void requirePlaceableOn(@NonNull String serverName,
+                                   @NonNull Map<String, Object> settings) {
+        requirePreparedImageOn(serverName, settings, IncusWorkloadType.VIRTUAL_MACHINE);
+    }
+
+    /**
+     * Ask the DRIVER's own prepared-image rule whether this host could run these settings.
+     *
+     * AIDEV-NOTE: shared by both Incus kinds and it calls
+     * IncusInstanceRuntime.requirePreparedImagePresent -- the same method create() calls.
+     * A second implementation of "is the alias there" living in the chooser is exactly the
+     * drift that let placement pick a host whose deploy then refused by name.
+     */
+    static void requirePreparedImageOn(@NonNull String serverName,
+                                       @NonNull Map<String, Object> settings,
+                                       @NonNull IncusWorkloadType type) {
+        ImageOrigin origin = ImageOrigin.fromKey(
+            settings.get("image_origin") instanceof String key ? key : null);
+        if (origin != ImageOrigin.PREPARED) {
+            return;
+        }
+        String image = settings.get("image") != null
+            ? String.valueOf(settings.get("image")).trim() : "";
+        try {
+            new IncusInstanceRuntime(new ServerService().incusClientFor(serverName),
+                Egress.OPEN, type, serverName)
+                .requirePreparedImagePresent(image, origin, false);
+        } catch (IOException absent) {
+            throw Violations.ofForm(Microcopy.of("host_prepared_image_missing")
+                .withFilter("scope", "violations")
+                .withArg("name", serverName)
+                .withArg("image", image));
+        }
     }
 }

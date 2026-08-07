@@ -108,7 +108,8 @@ public final class InstanceMigrations {
         Resolved resolved = this.instances.resolve(instanceId);
         String bucket = resolved.row().get(InstanceModel.QUOTA_BUCKET);
         int target = InstancePlacement.chooseForBucket(bucket == null ? "" : bucket,
-            resolved.handler().requiredRuntime(), resolved.serverId());
+            InstancePlacement.Workload.of(resolved.handler(), resolved.row()),
+            resolved.serverId());
         migrateTo(instanceId, target);
         return target;
     }

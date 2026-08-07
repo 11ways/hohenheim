@@ -116,11 +116,13 @@ class IncusInstanceRuntimeLiveTest {
             //    which no admitted host exists in this database.
             Row host = Models.get(ServerModel.class).findByName(HOST);
             int hostId = host.get(ServerModel.ID);
-            assertThat(InstancePlacement.forActor(null, null, ServerModel.RUNTIME_INCUS))
+            assertThat(InstancePlacement.forActor(null, null,
+                    InstancePlacement.Workload.forRuntime(ServerModel.RUNTIME_INCUS)))
                 .as("step 0: the incus runtime places on the admitted incus host")
                 .isEqualTo(hostId);
             assertThat(catchThrowable(() ->
-                    InstancePlacement.chooseForOwner("", ServerModel.RUNTIME_DOCKER)))
+                    InstancePlacement.chooseForOwner("",
+                        InstancePlacement.Workload.forRuntime(ServerModel.RUNTIME_DOCKER))))
                 .as("step 0: the docker runtime cannot land on it")
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->

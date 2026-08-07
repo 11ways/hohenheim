@@ -5041,6 +5041,18 @@
     "text": "Host '{$name}' has no PROVEN kernel-truth lane: its last preflight did not transact on the daemon host's nftables; run preflight again and fix the kernel_isolation_lane check",
     "scope": "violations"
   },
+  "host_capacity_reached": {
+    "text": "Host '{$name}' has no room for this workload: it needs {$needed} MB and only {$free} MB of its memory budget is free. Choose a smaller memory limit, free a workload, or admit another host",
+    "scope": "violations"
+  },
+  "host_capacity_unproven": {
+    "text": "Host '{$name}' has no recent memory reading, so nothing can be placed on it: run preflight on this host, which records the total memory every placement is judged against",
+    "scope": "violations"
+  },
+  "host_prepared_image_missing": {
+    "text": "Host '{$name}' does not carry the prepared image '{$image}': publish it into that host's image store, or pick a host that already has it",
+    "scope": "violations"
+  },
   "host_not_ssh": {
     "text": "Host '{$name}' is not reached over SSH, so it cannot hold backups; use a filesystem target for the controller's own disk",
     "scope": "violations"
@@ -6098,6 +6110,10 @@
   },
   "no_placement_available": {
     "text": "No admitted host currently accepts this workload",
+    "scope": "violations"
+  },
+  "no_placement_capacity": {
+    "text": "Every host that accepts this workload is out of memory: it needs {$needed} MB and the emptiest one has {$free} MB free. Free a workload or admit another host",
     "scope": "violations"
   },
   "instance_create_not_permitted": {
