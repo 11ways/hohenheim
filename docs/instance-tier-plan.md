@@ -4589,6 +4589,44 @@ beside `defaultImage`/`port`/`dataPath`, mysql and mongo at 768. Redis (9 MiB)
 and postgres (72 MiB) KEEP 512: an idle measurement can prove a cap too small,
 never justify lowering one that must also survive query load.
 
+SUPERSEDED 2026-08-07 (footprint re-measurement wave). The block above is right
+about the mechanism and WRONG about the numbers, and `EngineMemoryCeilingTest`
+failing at clean HEAD is what surfaced it. A peak read at a cap the workload is
+PINNED AGAINST is not a peak -- it is the cap. The 620/531 MiB figures were read
+at 512, where both engines were clipped, so 768 was still marginal. Re-measured
+through the product funnel at several caps per engine, `memory.peak` is redis
+18 MiB, postgres 117 MiB, mysql 596 MiB, mongo 835 MiB. At 768 mongo peaked at
+768 MiB EXACTLY (100% of its own ceiling) and mysql at 654 MiB (85%). MYSQL is
+now 1024 and MONGO 1280; redis and postgres keep 512.
+
+The peak is bounded, not cap-following: mongo measured the same 835 MiB at a 1024
+cap and at a 1280 cap, so the headroom rule terminates. On the 3907 MB hosts, 1280
+and 1024 both book three mongos, so the raised number costs nothing in practice.
+
+DECISION on what the test asserts, which two waves disagreed about. The
+`memory.events` "max" assertion is REMOVED and replaced by headroom (`memory.peak`
+at or under four fifths of the cap). Reasoning: "max" counts reclaim invocations,
+and the liveness wave proved reclaim is not a kill; worse, it is not even stable
+for a FIXED adequate cap -- one and the same mongo at 768 reported max=0 on a warm
+host and max=570 in the test lane, because whichever cgroup first faults the image's
+pages is charged for them. It was an assertion about the HOST. `memory.peak` is
+bounded by the cap by construction, so a peak near the cap is direct evidence the
+demand was clipped -- the pre-kill state, and the thing the footprint actually has
+to buy. The test now runs all FOUR engines, which is how mysql's 85% was caught.
+
+STATUS (2026-08-07, accountability trace): the two `ActivityLog.withAction` wrappers
+the previous wave flagged but did not trace are resolved. `InstanceBackupResource`'s
+`restore_backup` is GENUINE -- `restoreToNew` ends in a real `InstanceModel.save()`,
+so a create hook fires inside and there is a row for the name to rename. `ServerResource`'s
+`drain` recorded NOTHING: a migration writes its whole state through
+`InstanceOperationGuard.stampMigrating`/`handoff`, which are set-based `updateAll` calls
+that fire no write hooks, so the wrapper renamed rows that did not exist -- the same shape
+as `InstanceSnapshots.restore` before it. The wrapper is deleted and replaced by explicit
+records in the AUTHORITY, not the row action: each completed move writes a `migrated` row
+on its INSTANCE naming both hosts, and a drain writes a `drained` row on the HOST -- on
+both outcomes, because an incomplete drain must be as answerable as a complete one.
+Pinned by `InstanceMigrationTest` step 2b.
+
 STATUS (2026-08-07, trust-state-machine wave): the two coupled host-trust defects
 the Proxmox-use inventory left open are CLOSED. Both were instances of "a step
 does less than it claims and reports success".

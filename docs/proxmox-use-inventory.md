@@ -341,6 +341,30 @@ Owning slice: the retention machinery that already exists for backups, extended
 to snapshots. **Also:** every snapshot test needs a live daemon; there is no
 daemon-free test of `InstanceSnapshots.create/restore/delete`.
 
+**SUPERSEDED 2026-08-07 (retention wave): CLOSED.** `hohenheim.backup.snapshot_retention`
+(default 7) is the same count-based rule the backup lane runs, applied in the same
+place: `InstanceSnapshots.pruneForRetention` runs when a capture COMPLETES, on both
+the native and the volume lane, so a scheduled snapshot prunes itself and there is no
+second sweeper. Ordered by row ID rather than `created_at`, because a native snapshot
+name is stamped to the second and two captures inside one second would otherwise be
+sorted arbitrarily. A prune that cannot reach the daemon KEEPS the row (`delete`
+already refuses to delete a record whose payload survives) and the next capture
+retries. 0 keeps everything.
+
+**Defect found while building it and fixed:** the native snapshot name was
+`"hib-" + <timestamp to the second>` with nothing instance- or row-unique in it, so two
+captures of one instance inside the same second asked the daemon for the SAME snapshot
+name -- the second either fails or aliases the first, after which retention deleting one
+row's payload takes the other row's snapshot with it. The row is now saved first and its
+id is part of the name.
+
+**And the daemon-free test gap above is closed too:** `InstanceSnapshotRetentionTest` is
+the first `InstanceSnapshots` coverage that needs no daemon, over the shared
+`FakeNativeDaemons` fixture (extracted from `InstanceMigrationTest`, which now uses it
+too -- the fake kinds register into the ONE global registry, so two private copies would
+have collided). It asserts the payload at the fake daemon, not only the row, keeps the
+positive anchor (the newest three SURVIVE) and pins that a retention of 0 prunes nothing.
+
 ## 8. Off-host backup and restore
 
 **IMPLEMENTED, including restore to a DIFFERENT host.**
@@ -731,6 +755,36 @@ fixed; the missing half is that Incus hosts still have no positive heartbeat.
 Owning slice: a host-health task, or an Incus-side equivalent of the reconcile
 sweep.
 
+**SUPERSEDED 2026-08-07 (heartbeat wave): CLOSED, and with no new task.** The Incus-side
+equivalent of the reconcile sweep already existed and was throwing its answer away:
+`ReapIncusControllers` runs every 15 minutes over every inventoried Incus host, addresses
+the daemon and writes a presence stamp -- a completed round trip, i.e. exactly a probe --
+and reported it only to the log. It now records the outcome on the host record through the
+same `HostProbe.recordSuccess`/`recordFailure` the Docker reconcile uses, so an Incus host
+has a positive heartbeat at a BETTER cadence than a Docker host's hourly one.
+
+Deliberately NOT overloaded: the on-daemon presence ACL. That object answers "is this
+CONTROLLER alive" for peer controllers reading the same daemon; "is this HOST reachable"
+is a different question with a different reader (the admin surface and the allocator).
+What is reused is the round trip, not the object.
+
+Success is recorded only after the daemon actually answered (stamp written, objects
+listed), never off a client object that merely constructed. The scope stays
+`ServerModel.isIncus`, and the AIDEV-NOTE at the recording site says why: this is the
+mirror image of Finding 2 below, where a sweep iterating EVERY host row recorded a
+structural non-answer as a probe verdict. Neither sweep may ever widen to the other
+runtime's hosts.
+
+- **[test]** `DockerReconcilerTest#theDockerSweepNeverProbesOrRestampsAnIncusHost`
+  step 4, daemon-free: the incus sweep replaces the stale verdict with its own typed one
+  and never stamps `last_seen_at` for a host that did not answer, with the quarantine
+  surviving. **The first form of this assertion was VACUOUS** -- `isNotNull()` on a column
+  step 2 had already written passed with the recording removed entirely -- and it is now
+  asserted as a CHANGE.
+- **[live]** `IncusReaperLiveTest` step 7 against daystrom: the POSITIVE anchor, which
+  only a real daemon can give -- `last_seen_at` is stamped and a pre-planted stale failure
+  verdict is cleared. Counterfactual verified in both directions.
+
 ## 14. Clustering and HA
 
 **REJECTED. Standalone daemons only.**
@@ -883,16 +937,31 @@ refused connection are still different writers. Pinned by
 The inventory is CLOSED: every item the plan enumerates has a decision and
 evidence.
 
-**Four of the six gaps this document opened are closed.** Device-surface wave,
+**Five of the six gaps this document opened are closed** (four as of 2026-08-06/07,
+plus snapshot retention and the Incus heartbeat in the 2026-08-07 retention/heartbeat
+wave). Device-surface wave,
 2026-08-06: device editing HAS an operator surface (item 3, panel + API +
 `InstanceDeviceSurfaceTest`), and `RestoreCapacity` has its test plus a fixed
 defect (item 4). Trust-state-machine wave, 2026-08-07: the optional kernel-truth
 lane (item 5) is now an admission REQUIREMENT. Capacity wave, 2026-08-07:
 placement is resource-aware (item 12). Three remain, each with its owning slice:
 
-1. **No root-disk size knob** (item 3).
-2. **No snapshot retention** (item 7).
-3. **No host-health heartbeat for Incus hosts** (item 13).
+1. **No root-disk size knob** (item 3) -- **STILL OPEN, assessed 2026-08-07 and
+   deliberately not started.** It is a VM-spec slice, not a cleanup: a size on
+   `InstanceSpec`, a knob on `IncusVmKind`, the daemon-side root device override at
+   create AND a stopped-only grow path, a REFUSAL BY NAME on the Docker tier (which
+   cannot express a per-container root quota at all, and must not accept a number it
+   would ignore -- that is precisely why the community-scripts wave dropped `var_disk`
+   by name), plus its interaction with `InstanceDeviceQuota.diskLimitFor`, which today
+   counts only attached `instance_devices`. Half of that is a paper knob, which is worse
+   than the visible gap.
+2. ~~**No snapshot retention** (item 7)~~ -- CLOSED 2026-08-07: `snapshot_retention`
+   prunes on capture through the backup lane's own rule, plus a native-snapshot name
+   collision fixed and the first daemon-free `InstanceSnapshots` test. See the
+   superseding block under item 7.
+3. ~~**No host-health heartbeat for Incus hosts** (item 13)~~ -- CLOSED 2026-08-07: the
+   existing 15-minute Incus sweep records its probe outcome on the host record; no new
+   task. See the superseding block under item 13.
 4. ~~**The kernel-truth ssh lane is optional** (item 5)~~ -- CLOSED 2026-08-07:
    verification is an admission requirement for any tenant-accepting posture,
    proven at preflight and refused by name at admit and placement. See the
