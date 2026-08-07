@@ -9,6 +9,10 @@
 {% declare stopCommand: String = "" %}
 {% declare commandError: String = "" %}
 {% declare returnUrl: String = "" %}
+{% declare storedLogs: List %}
+{% declare selectedLogText: String = "" %}
+{% declare selectedLogTitle: String = "" %}
+{% declare basePath: String = "/admin" %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -53,6 +57,50 @@
                 <pl-empty-state-title>{{ t("not_running", scope: "instance_console") }}</pl-empty-state-title>
                 <pl-empty-state-description>{{ t("not_running_description", scope: "instance_console") }}</pl-empty-state-description>
             </pl-empty-state>
+        {% /if %}
+
+        <pl-card>
+            <pl-card-header>
+                <pl-card-title>{{ t("stored_logs", scope: "instance_console") }}</pl-card-title>
+                <pl-card-description>{{ t("stored_logs_description", scope: "instance_console") }}</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                {% if storedLogs %}
+                <pl-table>
+                    <pl-table-header><pl-table-row>
+                        <pl-table-head>{{ t("captured", scope: "instance_console") }}</pl-table-head>
+                        <pl-table-head>{{ t("lines", scope: "instance_console") }}</pl-table-head>
+                        <pl-table-head>{{ t("workload", scope: "instance_console") }}</pl-table-head>
+                    </pl-table-row></pl-table-header>
+                    <pl-table-body>
+                        {% each storedLogs as index, log %}
+                        <pl-table-row>
+                            <pl-table-cell><a href={% basePath + "/instances/" + instanceId + "/page/console?log=" + log.get("id") %}>{{ log.get("createdAt") }}</a></pl-table-cell>
+                            <pl-table-cell>{{ log.get("lineCount") }}</pl-table-cell>
+                            <pl-table-cell>{{ log.get("handle") }}</pl-table-cell>
+                        </pl-table-row>
+                        {% /each %}
+                    </pl-table-body>
+                </pl-table>
+                {% else %}
+                <p>{{ t("no_logs", scope: "instance_console") }}</p>
+                {% /if %}
+            </pl-card-content>
+        </pl-card>
+
+        {% if selectedLogText != "" %}
+        <pl-card>
+            <pl-card-header>
+                <pl-card-title>{{ t("stored_log", scope: "instance_console", title: selectedLogTitle) }}</pl-card-title>
+            </pl-card-header>
+            <pl-card-content>
+                {#- Redacted at ingest, but still the workload's stdout VERBATIM, and a
+                    tenant dictates what a workload prints. It is TEXT: {{ }} builds a
+                    text node, so nothing in it can ever become markup. Never render it
+                    as HTML. -#}
+                <div class="hh-proclog-content">{{ selectedLogText }}</div>
+            </pl-card-content>
+        </pl-card>
         {% /if %}
     </section>
 {% /block %}

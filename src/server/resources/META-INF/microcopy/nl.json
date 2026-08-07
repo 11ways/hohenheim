@@ -969,10 +969,16 @@
       "scope": "instance_from_template"
     }
   ],
-  "captured": {
-    "text": "Opgenomen",
-    "scope": "site_processes"
-  },
+  "captured": [
+    {
+      "text": "Opgenomen",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Vastgelegd",
+      "scope": "instance_console"
+    }
+  ],
   "certificate": [
     {
       "text": "Certificaat",
@@ -1279,10 +1285,16 @@
     "text": "Laatste uitvoering mislukt",
     "scope": "attention_detail"
   },
-  "lines": {
-    "text": "Regels",
-    "scope": "site_processes"
-  },
+  "lines": [
+    {
+      "text": "Regels",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Regels",
+      "scope": "instance_console"
+    }
+  ],
   "match_type": [
     {
       "text": "Overeenkomsttype",
@@ -1307,10 +1319,16 @@
       "scope": "instance_stats"
     }
   ],
-  "no_logs": {
-    "text": "Nog geen opgeslagen logs.",
-    "scope": "site_processes"
-  },
+  "no_logs": [
+    {
+      "text": "Nog geen opgeslagen logs.",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Nog geen bewaarde console-uitvoer.",
+      "scope": "instance_console"
+    }
+  ],
   "none": [
     {
       "text": "Geen",
@@ -1539,14 +1557,26 @@
       "scope": "stack_deployments"
     }
   ],
-  "stored_log": {
-    "text": "Opgeslagen log {$title}",
-    "scope": "site_processes"
-  },
-  "stored_logs": {
-    "text": "Opgeslagen proceslogs",
-    "scope": "site_processes"
-  },
+  "stored_log": [
+    {
+      "text": "Opgeslagen log {$title}",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Console-uitvoer van {$title}",
+      "scope": "instance_console"
+    }
+  ],
+  "stored_logs": [
+    {
+      "text": "Opgeslagen proceslogs",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Bewaarde consolelogs",
+      "scope": "instance_console"
+    }
+  ],
   "task": {
     "text": "Taak {$name}",
     "scope": "attention_title"
@@ -7203,5 +7233,13 @@
   "exec_failed": {
     "text": "Kon de opdracht in {$name} niet uitvoeren: {$reason}",
     "scope": "violations"
+  },
+  "stored_logs_description": {
+    "text": "Console-uitvoer die van eerdere runs van deze instantie bewaard is.",
+    "scope": "instance_console"
+  },
+  "workload": {
+    "text": "Workload",
+    "scope": "instance_console"
   }
 }

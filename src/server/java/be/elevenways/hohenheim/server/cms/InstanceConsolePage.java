@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -14,8 +15,11 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -47,6 +51,7 @@ public final class InstanceConsolePage implements RecordScopedPage<Row>, Termina
 
         String error = conduit.getQueryParam("error");
         Map<String, Object> vars = new HashMap<>();
+        this.addStoredLogs(conduit, vars, instanceId);
         vars.put("title", instance.get(InstanceModel.NAME));
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("instanceId", instanceId);
@@ -58,5 +63,49 @@ public final class InstanceConsolePage implements RecordScopedPage<Row>, Termina
         vars.put("returnUrl", ReturnTarget.capture(conduit));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-console"), vars);
+    }
+
+    /**
+     * The persisted console episodes of this instance, and the one {@code ?log=<id>}
+     * selects. Retention without a reader would be storage for nobody, so the history the
+     * sweeper prunes is the history this tab renders.
+     */
+    private void addStoredLogs(@NonNull Conduit conduit, @NonNull Map<String, Object> vars,
+                               @Nullable Integer instanceId) {
+        List<Map<String, Object>> logs = new ArrayList<>();
+        InstanceLogModel model = Models.get(InstanceLogModel.class);
+        if (instanceId != null) {
+            for (Row log : model.findByInstanceId(instanceId, 50)) {
+                Map<String, Object> entry = new HashMap<>();
+                entry.put("id", log.get(InstanceLogModel.ID));
+                entry.put("handle", String.valueOf((Object) log.get(InstanceLogModel.HANDLE)));
+                entry.put("lineCount", log.get(InstanceLogModel.LINE_COUNT));
+                entry.put("createdAt", String.valueOf((Object) log.get(InstanceLogModel.CREATED_AT)));
+                logs.add(entry);
+            }
+        }
+        vars.put("storedLogs", logs);
+
+        String selected = conduit.getQueryParam("log");
+        String text = "";
+        String title = "";
+        if (selected != null && !selected.isBlank() && instanceId != null) {
+            try {
+                Row log = model.findById(Integer.parseInt(selected));
+                // Ownership guard: a log id belonging to another instance must not render.
+                if (log != null && instanceId.equals(log.get(InstanceLogModel.INSTANCE_ID))) {
+                    // Already redacted at ingest, and still the workload's stdout VERBATIM:
+                    // it leaves here as TEXT and the template renders it as a text node.
+                    String stored = log.get(InstanceLogModel.LOG_TEXT);
+                    text = stored != null ? stored : "";
+                    title = String.valueOf((Object) log.get(InstanceLogModel.CREATED_AT));
+                }
+            } catch (NumberFormatException ignored) {
+                // Bad id: render the page with no selection.
+            }
+        }
+        vars.put("selectedLogText", text);
+        vars.put("selectedLogTitle", title);
+        vars.put("basePath", CmsSupport.panelBase(conduit));
     }
 }

@@ -356,6 +356,14 @@ public final class InstanceConsoles {
         }
     }
 
+    /** Test seam: write the live episode's history row now instead of at the interval. */
+    public static void flushLogNow(int instanceId) {
+        InstanceConsoleSession session = peek(instanceId);
+        if (session != null) {
+            session.flushLogNow();
+        }
+    }
+
     /** Close and forget an instance's session (destroy, redeploy replacement). */
     static void closeSession(int instanceId) {
         InstanceConsoleSession session = SESSIONS.remove(instanceId);
@@ -395,6 +403,7 @@ public final class InstanceConsoles {
         InstanceConsoleSession session = new InstanceConsoleSession(instanceId,
             resolved.spec().handle(), console, stopCommand,
             ConsoleRedaction.redactorFor(instanceId),
+            InstanceConsoleLogs.sinkFor(instanceId, resolved.spec().handle(), datasource),
             (endedSession, termination, detail) -> handleStreamEnd(endedSession, instanceId,
                 serverId, name, support, leases, datasource, termination, detail));
         SESSIONS.put(instanceId, session);

@@ -20,7 +20,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * on a virtual thread, keeps a bounded replay ring, fans chunks out to listeners (the
  * admin WebSocket), assembles lines for the readiness matcher, and records the stop
  * observations that suppress crash detection. Lifecycle is owned by
- * {@link InstanceConsoles}; this class never writes the database.
+ * {@link InstanceConsoles}. The only database write it performs is flushing its own ring
+ * through the {@link InstanceConsoleLogs.Sink} the hub hands it -- status writes stay with
+ * the hub, which owns the fence.
  *
  * AIDEV-NOTE: REDACTION IS AT INGEST. Every byte the driver produces passes through the
  * session's {@link ConsoleRedaction.Redactor} before it touches the ring, the line matcher,
@@ -37,6 +39,9 @@ final class InstanceConsoleSession {
     /** A console line longer than this is matched in slices; nothing accumulates past it. */
     private static final int LINE_CAP = 8 * 1024;
 
+    /** How often the ring is written down; the proclog cadence, for the same reason. */
+    private static final long FLUSH_INTERVAL_MS = 30_000;
+
     interface ExitListener {
         /** Runs once, on the pump thread, after the stream terminated. */
         void onStreamEnd(@NonNull InstanceConsoleSession session,
@@ -49,6 +54,9 @@ final class InstanceConsoleSession {
     private final @Nullable String stopCommand;
     private final @NonNull ExitListener exitListener;
     private final ConsoleRedaction.@NonNull Redactor redactor;
+    private final InstanceConsoleLogs.@Nullable Sink logSink;
+
+    private volatile long lastFlushAt;
 
     private final StringBuilder ring = new StringBuilder();
     private final StringBuilder currentLine = new StringBuilder();
@@ -69,6 +77,7 @@ final class InstanceConsoleSession {
                            ConsoleStreamSupport.@NonNull Console console,
                            @Nullable String stopCommand,
                            ConsoleRedaction.@NonNull Redactor redactor,
+                           InstanceConsoleLogs.@Nullable Sink logSink,
                            @NonNull ExitListener exitListener) {
         this.instanceId = instanceId;
         this.handle = handle;
@@ -76,6 +85,8 @@ final class InstanceConsoleSession {
         this.stopCommand = stopCommand == null || stopCommand.isBlank()
             ? null : stopCommand.trim();
         this.redactor = redactor;
+        this.logSink = logSink;
+        this.lastFlushAt = System.currentTimeMillis();
         this.exitListener = exitListener;
         JobRunner.startVirtualThread(this::pump);
     }
@@ -111,6 +122,9 @@ final class InstanceConsoleSession {
         // Whatever the redactor was holding back as a possible secret prefix turned out not
         // to be one; it is ordinary output and must not be swallowed.
         this.deliver(this.redactor.flush());
+        // The episode is over: write it down once more, unthrottled, so the last output
+        // before an exit is in the history rather than only in a ring about to be dropped.
+        this.persistLog();
         this.ended.countDown();
         ConsoleStream.Termination termination = stream.termination();
         try {
@@ -145,6 +159,28 @@ final class InstanceConsoleSession {
         if (matched != null) {
             matched.run();
         }
+        if (System.currentTimeMillis() - this.lastFlushAt >= FLUSH_INTERVAL_MS) {
+            this.persistLog();
+        }
+    }
+
+    /** Write the (already redacted) ring into this episode's row; no-op without a sink. */
+    private void persistLog() {
+        InstanceConsoleLogs.Sink sink = this.logSink;
+        if (sink == null) {
+            return;
+        }
+        this.lastFlushAt = System.currentTimeMillis();
+        String text;
+        synchronized (this) {
+            text = this.ring.toString();
+        }
+        sink.flush(text);
+    }
+
+    /** Test seam: write the episode down right now instead of waiting for the interval. */
+    void flushLogNow() {
+        this.persistLog();
     }
 
     /** Assemble lines and run the readiness matcher; returns the action to fire, once. */
