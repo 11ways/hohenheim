@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.ProcessConfinement;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.common.Zenit;
@@ -102,10 +103,83 @@ class SystemUsersTest {
 
         assertThat(builder.command())
             .containsExactly("/usr/bin/setsid", "--wait", "--", "/usr/bin/sudo", "-n",
-                "--preserve-env", "-u", "#4242", "-g", "#4243", "--", "node", "server.js")
+                "--preserve-env", "-u", "#4242", "-g", "#4243", "--",
+                "/usr/bin/prlimit", "--nproc=" + ProcessConfinement.pidsLimit(), "--",
+                "/usr/bin/setpriv", "--no-new-privs", "--", "node", "server.js")
             .noneMatch(argument -> argument.contains("argv-secret-value"))
             .noneMatch(argument -> argument.startsWith("DATABASE_PASSWORD="));
         assertThat(builder.environment()).containsEntry("DATABASE_PASSWORD", "argv-secret-value");
+    }
+
+    /**
+     * The hardening floor, read back OUT OF THE KERNEL rather than off the command line:
+     * every spawned child runs with no_new_privs, so a setuid or file-capability binary
+     * inside a site's own tree cannot hand it privileges back. This is the host-process
+     * spelling of the {@code no-new-privileges} ContainerHardening stamps on containers.
+     */
+    @Test
+    void everySpawnedChildRunsWithNoNewPrivileges() throws Exception {
+        // 1. Positive anchor: the spawn path works at all and the child can report.
+        ProcessBuilder builder = SystemUsers.executionBuilder(null,
+            SystemUsers.safeEnvironment(System.getProperty("java.io.tmpdir")),
+            List.of("/usr/bin/setpriv", "--dump"), false);
+        Process process = builder.redirectErrorStream(true).start();
+        String dump = new String(process.getInputStream().readAllBytes());
+        assertThat(process.waitFor()).as("step 1: the child must run").isZero();
+        assertThat(dump).as("step 1: setpriv --dump must report the child's own state")
+            .contains("uid:");
+
+        // 2. The kernel's own no_new_privs bit is SET for the child.
+        assertThat(dump.lines().map(String::trim).toList())
+            .as("step 2: the child must carry the kernel's no_new_privs bit")
+            .contains("no_new_privs: 1");
+
+        // 3. Counter-anchor: a child spawned WITHOUT this path does not have it, so
+        //    step 2 measured the floor and not a machine that sets it for everything.
+        Process bare = new ProcessBuilder("/usr/bin/setpriv", "--dump")
+            .redirectErrorStream(true).start();
+        String bareDump = new String(bare.getInputStream().readAllBytes());
+        bare.waitFor();
+        assertThat(bareDump.lines().map(String::trim).toList())
+            .as("step 3: an unmanaged process on this host does NOT have the bit")
+            .contains("no_new_privs: 0");
+    }
+
+    /**
+     * RLIMIT_NPROC is per REAL UID, so it is applied only where the uid is exclusive to
+     * one site -- applying it to the daemon's own identity would cap the CONTROL PLANE's
+     * process table.
+     */
+    @Test
+    void theProcessCapIsNotAppliedToTheDaemonsSharedIdentity() {
+        assertThat(SystemUsers.executionBuilder(null, Map.of(),
+                List.of("node", "server.js"), false).command())
+            .as("no dedicated user means no per-uid process cap")
+            .doesNotContain("/usr/bin/prlimit")
+            .containsSequence("/usr/bin/setpriv", "--no-new-privs", "--", "node", "server.js");
+
+        assertThat(SystemUsers.executionBuilder(
+                new SystemUsers.RunAsUser("site", 4242, 4243, "/srv/site"), Map.of(),
+                List.of("node", "server.js"), false).command())
+            .as("a dedicated user gets the per-uid process cap")
+            .contains("/usr/bin/prlimit");
+    }
+
+    /** A confinement prefix wraps the spawn OUTSIDE the privilege drop, never inside it. */
+    @Test
+    void theConfinementScopeWrapsTheSpawnOutsideTheDrop() {
+        List<String> command = SystemUsers.executionBuilder(
+            new SystemUsers.RunAsUser("site", 4242, 4243, "/srv/site"), Map.of(),
+            List.of("node", "server.js"), true,
+            List.of("/usr/bin/systemd-run", "--scope", "--")).command();
+
+        assertThat(command.indexOf("/usr/bin/systemd-run"))
+            .as("the cgroup scope is created by the daemon's identity, before sudo")
+            .isGreaterThan(command.indexOf("/usr/bin/setsid"))
+            .isLessThan(command.indexOf("/usr/bin/sudo"));
+        assertThat(command.indexOf("/usr/bin/setpriv"))
+            .as("no_new_privs must land AFTER sudo, or the setuid sudo binary itself fails")
+            .isGreaterThan(command.indexOf("/usr/bin/sudo"));
     }
 
     @Test

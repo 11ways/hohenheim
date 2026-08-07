@@ -255,7 +255,7 @@ public final class WorkloadIdentity {
     }
 
     /** The daemon's real uid from /proc/self/status, or null when unreadable (non-Linux). */
-    static @Nullable Integer daemonUid() {
+    public static @Nullable Integer daemonUid() {
         try {
             for (String line : Files.readAllLines(Path.of("/proc/self/status"))) {
                 if (line.startsWith("Uid:")) {

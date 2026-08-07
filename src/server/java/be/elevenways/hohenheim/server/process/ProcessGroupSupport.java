@@ -108,6 +108,29 @@ public final class ProcessGroupSupport {
         }
     }
 
+    /**
+     * Signal ONE pid rather than a process group, through the workload's own identity.
+     *
+     * AIDEV-NOTE: the reaper's lane. A controller that is not root cannot signal another
+     * uid's process at all, and an orphan has no Process object to destroy() -- but the
+     * site's own uid may always signal its own processes, and sudo-to-that-uid is a grant
+     * this tier already needs to spawn at all. Nothing new is asked for.
+     */
+    public static SignalResult signalPid(SystemUsers.@Nullable RunAsUser runAs, long pid,
+                                         Signal signal) {
+        HelperResult result = runHelper(runAs, List.of("/usr/bin/kill", "-" + signal,
+            "--", String.valueOf(pid)));
+        if (result.exitCode() == 0) {
+            return SignalResult.DELIVERED;
+        }
+        if (noSuchProcess(result.output())) {
+            return SignalResult.GROUP_ABSENT;
+        }
+        Blast.log("PROCESS: pid signal helper failed for pid", pid,
+            "signal=" + signal, "exit=" + result.exitCode(), result.output());
+        return SignalResult.FAILED;
+    }
+
     private static SignalResult signalProcessGroup(SystemUsers.@Nullable RunAsUser runAs,
                                                    long processGroupId, Signal signal) {
         HelperResult result = runHelper(runAs, List.of("/usr/bin/kill", "-" + signal,

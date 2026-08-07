@@ -47,6 +47,14 @@ public class ManagedProcess {
     // survives the startup grace; closed on exit/destroy.
     private volatile UpstreamConnection connection;
 
+    // Host memory (MB) booked for this child by ProcessCapacity, claimed back exactly
+    // once. AIDEV-NOTE: getAndSet(0) rather than a plain field because destroy() releases
+    // the resources of a child it just killed AND that child's own exit callback still
+    // fires -- a double release would slog quota drift and hand the host budget memory
+    // twice, which is how a "full" host quietly stops being one.
+    private final java.util.concurrent.atomic.AtomicInteger bookedMemoryMb =
+        new java.util.concurrent.atomic.AtomicInteger();
+
     // Database row id of this process's proclog entry (set by the first periodic flush,
     // reused by later flushes and the exit persist as an UPSERT key).
     private volatile Integer proclogRowId;
@@ -107,6 +115,12 @@ public class ManagedProcess {
 
     public UpstreamConnection connection() { return connection; }
     public void setConnection(UpstreamConnection connection) { this.connection = connection; }
+
+    public int bookedMemoryMb() { return bookedMemoryMb.get(); }
+    public void setBookedMemoryMb(int megabytes) { bookedMemoryMb.set(megabytes); }
+
+    /** Claim this child's host-memory booking for release; every later call answers 0. */
+    public int takeBooking() { return bookedMemoryMb.getAndSet(0); }
 
     public Integer proclogRowId() { return proclogRowId; }
     public void setProclogRowId(Integer proclogRowId) { this.proclogRowId = proclogRowId; }

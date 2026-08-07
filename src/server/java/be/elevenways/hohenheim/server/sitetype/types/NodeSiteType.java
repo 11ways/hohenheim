@@ -100,6 +100,20 @@ public class NodeSiteType implements SiteTypeHandler {
         BooleanField.builder("use_ports").defaultValue(false)
             .label(HohenheimFormCopy.label("use_ports")).help(HohenheimFormCopy.help("use_ports")).build());
 
+    // Optional per-CHILD cgroup caps (blank = unbounded and unbooked).
+    // AIDEV-NOTE: declaring memory_limit_mb is what puts this site's children on the
+    // host's memory budget -- each child is booked at exactly this number and capped at
+    // it (ProcessConfinement + ProcessCapacity), so a site with N children books N times
+    // it. A host that cannot enforce a cgroup cap REFUSES the site rather than booking a
+    // paper limit; leaving it blank keeps the pre-2026-08-07 unbounded, unbooked shape.
+    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(
+        IntegerField.builder().name("memory_limit_mb").label(HohenheimFormCopy.label("memory_limit"))
+            .help(HohenheimFormCopy.help("memory_limit")).build());
+
+    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
+        DoubleField.builder().name("cpu_limit").label(HohenheimFormCopy.label("cpu_limit"))
+            .help(HohenheimFormCopy.help("cpu_limit")).build());
+
     @Override
     public Identifier typeId() { return ID; }
 

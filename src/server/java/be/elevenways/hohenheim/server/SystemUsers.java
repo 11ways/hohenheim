@@ -65,6 +65,37 @@ public final class SystemUsers {
                                                    Map<String, String> environment,
                                                    List<String> command,
                                                    boolean newSession) {
+        return executionBuilder(runAs, environment, command, newSession, List.of());
+    }
+
+    /**
+     * The same builder with a CONFINEMENT prefix (a cgroup scope, see
+     * {@link ProcessConfinement#scopePrefix}) wrapped around the spawn.
+     *
+     * AIDEV-NOTE: the layer order is load-bearing in both directions and is the whole
+     * hardening floor of the host-process tier. OUTSIDE the privilege drop: setsid (the
+     * session leader must not be sudo's child, see below) and the cgroup scope (created by
+     * the DAEMON's identity -- the site uid has no manager to ask). INSIDE it:
+     * {@code prlimit --nproc} and {@code setpriv --no-new-privs}, and they may not move
+     * out. no_new_privs set BEFORE sudo would make the setuid-root sudo binary fail
+     * outright, and RLIMIT_NPROC is counted per REAL UID, so setting it while the daemon's
+     * own uid is still in force would cap the CONTROL PLANE's process table -- the same
+     * shape of mistake as keying an isolation rule on the daemon's identity. That is also
+     * why {@code --nproc} is applied ONLY when a dedicated run-as user exists: without one
+     * the child IS the daemon's uid and the limit would be shared with the controller.
+     *
+     * AIDEV-NOTE: the capability BOUNDING SET is deliberately not dropped here even though
+     * {@code setpriv --bounding-set} exists. Dropping it needs CAP_SETPCAP, which the
+     * process no longer has once sudo has dropped to an unprivileged uid, and doing it
+     * before the drop would need sudo-to-root instead of sudo-to-uid (a far wider grant).
+     * no_new_privs closes the lane the bounding set protects: an unprivileged child cannot
+     * gain capabilities through a setuid or file-capability exec at all.
+     */
+    public static ProcessBuilder executionBuilder(@Nullable RunAsUser runAs,
+                                                   Map<String, String> environment,
+                                                   List<String> command,
+                                                   boolean newSession,
+                                                   List<String> confinementPrefix) {
         List<String> result = new ArrayList<>();
         if (newSession) {
             // Keep the session leader outside sudo: sudo may fork a command monitor, but
@@ -73,6 +104,7 @@ public final class SystemUsers {
             result.add("--wait");
             result.add("--");
         }
+        result.addAll(confinementPrefix);
         if (runAs != null) {
             result.add("/usr/bin/sudo");
             result.add("-n");
@@ -86,7 +118,15 @@ public final class SystemUsers {
                 result.add("#" + runAs.gid());
             }
             result.add("--");
+            // Per-UID process cap: meaningful only because WorkloadIdentity makes the site
+            // uid exclusive, and never applied to the daemon's own shared identity.
+            result.add("/usr/bin/prlimit");
+            result.add("--nproc=" + ProcessConfinement.pidsLimit());
+            result.add("--");
         }
+        result.add("/usr/bin/setpriv");
+        result.add("--no-new-privs");
+        result.add("--");
         result.addAll(command);
         ProcessBuilder builder = new ProcessBuilder(result);
         setEnvironment(builder, environment);

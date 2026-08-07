@@ -79,6 +79,10 @@ public final class SiteProcessesPage implements RecordScopedPage<Row>, TerminalC
             }
         }
         vars.put("isManaged", managed);
+        // A process-control action that could not run says so HERE; the handlers redirect
+        // back with ?error= rather than reloading the page as though the action worked.
+        String error = conduit.getQueryParam("error");
+        vars.put("error", error != null ? error : "");
         vars.put("processes", processes);
 
         // Stored proclog history; ?log=<id> renders one stored log inline.

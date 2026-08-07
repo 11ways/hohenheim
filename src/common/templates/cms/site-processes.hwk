@@ -11,6 +11,7 @@
 {% declare selectedLogTitle: String = "" %}
 {% declare basePath: String = "/admin" %}
 {% declare returnUrl: String = "" %}
+{% declare error: String = "" %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -22,6 +23,8 @@
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
 
     {% if isManaged %}
     <pl-card>

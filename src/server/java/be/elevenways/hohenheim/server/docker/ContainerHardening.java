@@ -15,13 +15,20 @@ import java.util.Map;
  * THE isolation policy every container hohenheim creates is stamped with, applied
  * inside {@link DockerClient#createContainer} so no call site can omit it.
  *
- * AIDEV-NOTE: this is a POLICY, not a caller option, and the shape enforces that.
- * The four container authorities (stacks, Docker sites, managed databases, instances)
- * pass a {@link Profile} to createContainer; they cannot pass "none", they cannot
- * hand-add a capability, and they cannot set any of the {@link #ESCAPE_KEYS} -- a spec
- * carrying one is REFUSED, so a later feature cannot quietly reintroduce
- * {@code Privileged}. A fifth authority added later reaches the same funnel or it
- * reaches no daemon at all. ResourceLimits is the caller-supplied half (cgroup caps
+ * AIDEV-NOTE: this is a POLICY, not a caller option, and the shape enforces that. Every
+ * authority that creates a container passes a {@link Profile} to createContainer; they
+ * cannot pass "none", they cannot hand-add a capability, and they cannot set any of the
+ * {@link #ESCAPE_KEYS} -- a spec carrying one is REFUSED, so a later feature cannot
+ * quietly reintroduce {@code Privileged}. A NEW authority added later reaches the same
+ * funnel or it reaches no daemon at all.
+ *
+ * AIDEV-NOTE: this note used to enumerate "the four container authorities (stacks, Docker
+ * sites, managed databases, instances)", and after three lowerings that count is wrong in a
+ * way a future reader would act on. Stacks, Docker sites and managed databases all OWN
+ * instances now, so the instance runtime is the single container authority for workloads;
+ * what remains beside it is {@code BuildSandbox} (the build lane, which also passes the
+ * tighter pids cap) and {@code HostPreflight} (the throwaway probe container). Place a new
+ * authority against THAT map, not against a count. ResourceLimits is the caller-supplied half (cgroup caps
  * the operator configures per workload); this is the half the operator does not get
  * to weaken.
  *
@@ -35,8 +42,13 @@ import java.util.Map;
  * ({@code be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy}), which as of the
  * 2026-08-06 waves covers every Docker tier: instances, stacks, Docker site releases and
  * managed databases each get their own network with the tenant-range denies applied and
- * read-back-verified. The one tier the model still cannot cover is host-process sites,
- * which live in the host's own netns; that is a named separate slice.
+ * read-back-verified. Host-process sites live in the host's own netns and cannot be given a
+ * per-workload NETWORK, which is why they carry a uid-keyed nft policy instead
+ * ({@code ProcessNetworkPolicy}); as of 2026-08-07 they are no longer a hardening hole
+ * either -- {@code SystemUsers.executionBuilder} gives every spawn the same floor this
+ * class stamps on a container (no-new-privileges plus a process cap, as
+ * {@code setpriv --no-new-privs} and RLIMIT_NPROC/TasksMax), and a declared memory limit is
+ * a real cgroup scope ({@code ProcessConfinement}) or a refusal.
  */
 public final class ContainerHardening {
 

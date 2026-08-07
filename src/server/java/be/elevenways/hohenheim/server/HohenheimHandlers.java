@@ -825,10 +825,16 @@ public final class HohenheimHandlers {
             if (refusedSiteAccess(conduit, siteId)) {
                 return null;
             }
-            managedHandler(siteId).ifPresent(managed -> {
-                managed.startProcess();
-                ActivityLog.record(Models.get(SiteModel.class), siteId, "started_process", null);
-            });
+            ManagedProcessSiteHandler managed = SiteHandlers.managedProcess(siteId);
+            if (managed == null) {
+                return redirectUntyped(withError(processesPageUrl(conduit, siteId),
+                    noManagedHandlerReason(siteId)));
+            }
+            if (managed.startProcess() == null) {
+                return redirectUntyped(withError(processesPageUrl(conduit, siteId),
+                    "The process did not start; check this site's process log."));
+            }
+            ActivityLog.record(Models.get(SiteModel.class), siteId, "started_process", null);
             return redirectUntyped(processesPageUrl(conduit, siteId));
         });
 
@@ -838,13 +844,18 @@ public final class HohenheimHandlers {
             if (refusedSiteAccess(conduit, siteId)) {
                 return null;
             }
-            managedHandler(siteId).ifPresent(managed -> {
-                ManagedProcess proc = managed.getProcess(pid);
-                if (proc != null) {
-                    proc.kill();
-                    ActivityLog.record(Models.get(SiteModel.class), siteId, "killed_process", "PID " + pid);
-                }
-            });
+            ManagedProcessSiteHandler managed = SiteHandlers.managedProcess(siteId);
+            if (managed == null) {
+                return redirectUntyped(withError(processesPageUrl(conduit, siteId),
+                    noManagedHandlerReason(siteId)));
+            }
+            ManagedProcess proc = managed.getProcess(pid);
+            if (proc == null) {
+                return redirectUntyped(withError(processesPageUrl(conduit, siteId),
+                    "Process " + pid + " is no longer running."));
+            }
+            proc.kill();
+            ActivityLog.record(Models.get(SiteModel.class), siteId, "killed_process", "PID " + pid);
             return redirectUntyped(processesPageUrl(conduit, siteId));
         });
 
@@ -854,15 +865,46 @@ public final class HohenheimHandlers {
             if (refusedSiteAccess(conduit, siteId)) {
                 return null;
             }
-            managedHandler(siteId).ifPresent(managed -> {
-                ManagedProcess proc = managed.getProcess(pid);
-                if (proc != null) {
-                    proc.setIsolated(!proc.isIsolated());
-                    ActivityLog.record(Models.get(SiteModel.class), siteId, "isolated_process", "PID " + pid);
-                }
-            });
+            ManagedProcessSiteHandler managed = SiteHandlers.managedProcess(siteId);
+            if (managed == null) {
+                return redirectUntyped(withError(processesPageUrl(conduit, siteId),
+                    noManagedHandlerReason(siteId)));
+            }
+            ManagedProcess proc = managed.getProcess(pid);
+            if (proc == null) {
+                return redirectUntyped(withError(processesPageUrl(conduit, siteId),
+                    "Process " + pid + " is no longer running."));
+            }
+            proc.setIsolated(!proc.isIsolated());
+            ActivityLog.record(Models.get(SiteModel.class), siteId, "isolated_process", "PID " + pid);
             return redirectUntyped(processesPageUrl(conduit, siteId));
         });
+    }
+
+    /**
+     * Why a process-control action could not run: no live handler for the site.
+     *
+     * AIDEV-NOTE: this whole branch used to be {@code ifPresent(...)}, which turned every
+     * such action into a plain page reload after doing NOTHING -- the textbook
+     * silent-success shape. There are exactly two ways to have no handler and the operator
+     * can act on both, so both are named: the node's processes role is off (the site is
+     * served by another node, or this one is a control-plane-only node), or the site
+     * faulted at construction and is serving a {@code FaultedSiteHandler} 503 whose reason
+     * is on the site's own page.
+     */
+    private static String noManagedHandlerReason(Integer siteId) {
+        if (!HohenheimRoles.enabled(HohenheimRoles.Role.PROCESSES)) {
+            return "This node does not run managed processes (roles.processes is off),"
+                + " so it has no process to act on for this site.";
+        }
+        return "This site has no running process handler; it is either disabled or failed"
+            + " to start. Check the site's status for the reason.";
+    }
+
+    /** Append an {@code error=} the processes page renders verbatim. */
+    private static String withError(String url, String message) {
+        return url + (url.contains("?") ? "&" : "?") + "error="
+            + URLEncoder.encode(message, StandardCharsets.UTF_8);
     }
 
     /**

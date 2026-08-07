@@ -623,6 +623,20 @@ public class HohenheimSettings {
                 + "tenant manages are ALWAYS required to have a dedicated user, regardless of "
                 + "this setting")
             .build();
+
+        // AIDEV-NOTE: the host-process twin of security.container_pids_limit, and a
+        // SEPARATE setting rather than a reuse of it: that one caps one container's own
+        // pid cgroup, this one caps a site UID whose children are counted by the kernel
+        // against the whole host's process table. They are the same number by default and
+        // are tuned for different reasons.
+        public static final SettingDefinition<Integer> PIDS_LIMIT = GROUP
+            .buildSetting("pids_limit", Integer.class)
+            .defaultValue(512)
+            .description("Maximum number of processes one managed site's child may have "
+                + "(TasksMax on its cgroup scope, plus RLIMIT_NPROC on its dedicated "
+                + "system user). A fork bomb in a site's code then exhausts its own budget "
+                + "instead of the host's process table. 0 or less falls back to the default")
+            .build();
     }
 
     // --- Proteus SSO (optional; password login is always available) ---
