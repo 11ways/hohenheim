@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.stack;
 import be.elevenways.hohenheim.server.stack.StackSpec;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -73,10 +74,49 @@ class StackSpecTest {
             "always", 512, 1.5, List.of("NET_RAW", "IPC_LOCK"));
         StackSpec.ServiceSpec db = service("db", List.of());
 
-        StackSpec original = new StackSpec(42, "mystack", "local", "172.30.9.0/24",
+        StackSpec original = new StackSpec(42, "mystack", "local",
             "ghcr.io", "robot", "s3cret", StackSpec.topologicallySorted(List.of(rich, db)));
 
         StackSpec revived = StackSpec.fromMap(original.toMap());
         assertThat(revived).isEqualTo(original);
+    }
+
+    /**
+     * A stored snapshot outlives the record shape it was written from: rollback re-deploys
+     * a spec serialized by an older build. Dropping a field must therefore DEGRADE, never
+     * throw -- see M084_DropStackSubnet.
+     */
+    @Test
+    void revivesASnapshotWrittenBeforeAFieldWasDropped() {
+        StackSpec current = new StackSpec(9, "legacy", "local", null, null, null,
+            List.of(service("only", List.of())));
+
+        // 1. Positive anchor: a snapshot written by THIS build round-trips exactly, and
+        //    carries no trace of the dropped column.
+        Map<String, Object> fresh = current.toMap();
+        assertThat(fresh)
+            .as("step 1: the dropped field is not written into new snapshots")
+            .doesNotContainKey("subnet");
+        assertThat(StackSpec.fromMap(fresh))
+            .as("step 1: a current snapshot round-trips")
+            .isEqualTo(current);
+
+        // 2. An OLD snapshot -- the exact shape a pre-M084 build stored, subnet included --
+        //    revives without throwing, and the surviving fields survive intact.
+        Map<String, Object> old = new LinkedHashMap<>(fresh);
+        old.put("subnet", "172.30.9.0/24");
+        StackSpec revived = StackSpec.fromMap(old);
+        assertThat(revived)
+            .as("step 2: an old snapshot degrades to the current shape rather than throwing")
+            .isEqualTo(current);
+
+        // 3. The degradation is not blank-tolerance luck: a whole family of retired keys
+        //    is ignored the same way, because reviving is key-driven and never exhaustive.
+        Map<String, Object> older = new LinkedHashMap<>(old);
+        older.put("adopt_resources", true);
+        older.put("some_future_retired_field", List.of("x", "y"));
+        assertThat(StackSpec.fromMap(older))
+            .as("step 3: any retired key is ignored, not rejected")
+            .isEqualTo(current);
     }
 }

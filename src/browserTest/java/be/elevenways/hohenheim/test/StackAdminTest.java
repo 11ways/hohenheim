@@ -62,26 +62,13 @@ class StackAdminTest extends HohenheimTestBase {
 
         var response = postForm("/admin/stacks/new",
             "name=admin-test-stack&enabled=false&enabled=true&server_id="
-            + ServerModel.localServerId() + "&subnet=172.31.9.0/24");
+            + ServerModel.localServerId());
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row stack = Models.get(StackModel.class).find()
             .where(StackModel.NAME.eq("admin-test-stack")).first();
         assertThat(stack).isNotNull();
         stackId = stack.get(StackModel.ID);
-    }
-
-    @Test
-    @Order(2)
-    void malformedSubnetIsRefused() throws Exception {
-        postForm("/admin/stacks/new",
-            "name=bad-subnet-stack&enabled=false&enabled=true&server_id="
-            + ServerModel.localServerId() + "&subnet=not-a-cidr");
-
-        assertThat(Models.get(StackModel.class).find()
-            .where(StackModel.NAME.eq("bad-subnet-stack")).count())
-            .as("a malformed subnet must fail the form, not the deploy worker")
-            .isEqualTo(0);
     }
 
     /** The service form's RelationPick needs a registered record source for the stack model. */

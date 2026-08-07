@@ -27,7 +27,6 @@ public record StackSpec(
     int stackId,
     @NonNull String name,
     @NonNull String serverName,
-    @Nullable String subnet,
     @Nullable String registryServer,
     @Nullable String registryUser,
     @Nullable String registryPassword,
@@ -100,7 +99,6 @@ public record StackSpec(
             stackId,
             stack.get(StackModel.NAME),
             ServerModel.nameOf(stack.get(StackModel.SERVER_ID)),
-            blankToNull(stack.get(StackModel.SUBNET)),
             blankToNull(stack.get(StackModel.REGISTRY_SERVER)),
             blankToNull(stack.get(StackModel.REGISTRY_USER)),
             blankToNull(stack.get(StackModel.REGISTRY_PASSWORD)),
@@ -253,7 +251,6 @@ public record StackSpec(
         root.put("stack_id", stackId);
         root.put("name", name);
         root.put("server_name", serverName);
-        root.put("subnet", subnet);
         root.put("registry_server", registryServer);
         root.put("registry_user", registryUser);
         root.put("registry_password", registryPassword);
@@ -323,6 +320,15 @@ public record StackSpec(
         return root;
     }
 
+    /**
+     * Revive a stored snapshot, which may predate the current record shape.
+     *
+     * AIDEV-NOTE: reviving is KEY-DRIVEN, never positional or exhaustive, and that is
+     * what makes dropping a field safe: a snapshot written before M084 still carries
+     * {@code "subnet"} and is simply not asked for it, so an old rollback deserializes
+     * instead of throwing. Any field REMOVED from this record must keep that property --
+     * never switch this to a strict/unknown-key-rejecting read.
+     */
     @SuppressWarnings("unchecked")
     public static @NonNull StackSpec fromMap(@NonNull Map<String, Object> root) {
         List<ServiceSpec> services = new ArrayList<>();
@@ -404,7 +410,6 @@ public record StackSpec(
             intOr(root.get("stack_id"), 0),
             stringOr(root.get("name"), ""),
             stringOr(root.get("server_name"), "local"),
-            blankToNull(root.get("subnet")),
             blankToNull(root.get("registry_server")),
             blankToNull(root.get("registry_user")),
             blankToNull(root.get("registry_password")),

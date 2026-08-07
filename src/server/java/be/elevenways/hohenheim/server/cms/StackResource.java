@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.docker.DockerReclaim;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
 import be.elevenways.protoblast.common.Blast;
@@ -56,7 +55,6 @@ public class StackResource extends RowResource {
         .add(StackModel.NAME)
         .add(StackModel.ENABLED)
         .add(RelationPick.of(StackModel.SERVER_ID, ServerModel.MODEL_ID).build())
-        .add(StackModel.SUBNET)
         .add(StackModel.REGISTRY_SERVER)
         .add(StackModel.REGISTRY_USER)
         .add(StackModel.REGISTRY_PASSWORD)
@@ -133,15 +131,6 @@ public class StackResource extends RowResource {
             && (existing == null || !duplicate.get(StackModel.ID).equals(existing.get(StackModel.ID)))) {
             throw Violations.ofField("name", name, CmsSupport.violationText("stack_name_taken"));
         }
-        String subnet = trimmedValue(coerced.get("subnet"));
-        if (coerced.containsKey("subnet")) {
-            coerced.put("subnet", subnet);
-        }
-        if (!subnet.isEmpty() && !isCidr(subnet)) {
-            // Without this the mistake only surfaces inside the deploy worker, as a failed
-            // deployment record rather than a form violation next to the offending input.
-            throw Violations.ofField("subnet", subnet, CmsSupport.violationText("subnet_format"));
-        }
         if (existing != null && !name.equals(existing.get(StackModel.NAME))) {
             // The name is embedded in every ownership label, container, network and volume
             // name: renaming a stack with LIVE resources would orphan ALL of them (deploy,
@@ -172,32 +161,6 @@ public class StackResource extends RowResource {
 
     private static @NonNull String trimmedValue(@Nullable Object value) {
         return value != null ? String.valueOf(value).trim() : "";
-    }
-
-    /**
-     * A CIDR Docker's network driver accepts: an IP literal (v4 or v6, parsed by the
-     * shared {@link IpLiterals} authority) plus a prefix length valid for its family.
-     */
-    private static boolean isCidr(@NonNull String value) {
-        int slash = value.indexOf('/');
-        if (slash < 0) {
-            return false;
-        }
-        byte[] address = IpLiterals.parse(value.substring(0, slash));
-        if (address == null) {
-            return false;
-        }
-        String prefixText = value.substring(slash + 1);
-        // Digits only: Integer.parseInt would accept "+24", which Docker refuses.
-        if (prefixText.isEmpty() || !prefixText.chars().allMatch(Character::isDigit)) {
-            return false;
-        }
-        try {
-            int prefix = Integer.parseInt(prefixText);
-            return prefix >= 0 && prefix <= address.length * 8;
-        } catch (NumberFormatException notANumber) {
-            return false;
-        }
     }
 
     @Override
