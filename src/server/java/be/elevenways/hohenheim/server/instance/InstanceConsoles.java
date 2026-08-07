@@ -26,6 +26,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * THE console hub of the instance tier: at most one live console session per instance,
@@ -250,12 +251,37 @@ public final class InstanceConsoles {
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
         }
         try {
-            return support.consoleTail(resolved.spec().handle(), lines);
+            // The one-shot read bypasses the session, so it carries its own redaction --
+            // otherwise the automation API would be the wider door the WebSocket is not.
+            return ConsoleRedaction.redactWhole(
+                support.consoleTail(resolved.spec().handle(), lines), instanceId);
         } catch (IOException e) {
             throw Violations.ofForm(Microcopy.of("logs_unavailable")
                 .withFilter("scope", "violations")
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
         }
+    }
+
+    /**
+     * Attach a viewer to an instance's console: ensures the session, replays its ring and
+     * then follows live. The SAME funnel for the WebSocket handler and for anything else
+     * that wants console output, so what a viewer sees is defined in exactly one place --
+     * redacted text off the session ring, never the driver's raw stream.
+     *
+     * @return the detach handle; closing it twice is a no-op
+     * @throws Violations {@code console_unsupported}, {@code console_not_running}
+     */
+    public static @NonNull Subscription subscribe(int instanceId,
+                                                  @NonNull Consumer<String> viewer) {
+        InstanceConsoleSession session = ensureSession(instanceId);
+        session.subscribe(viewer);
+        return () -> session.unsubscribe(viewer);
+    }
+
+    /** Detach handle for {@link #subscribe}. */
+    @FunctionalInterface
+    public interface Subscription extends AutoCloseable {
+        @Override void close();
     }
 
     /** The live session of an instance, or null. */
@@ -317,6 +343,19 @@ public final class InstanceConsoles {
         }
     }
 
+    /**
+     * Declare a value secret on an instance whose console is ALREADY streaming: without
+     * this, a variable written while an operator watches would ride the open session in the
+     * clear until the next attach. Called from the variable write funnel, never by a caller
+     * that merely happens to hold a secret string.
+     */
+    public static void registerSecret(int instanceId, @Nullable String value) {
+        InstanceConsoleSession session = peek(instanceId);
+        if (session != null && value != null) {
+            session.addSecret(value);
+        }
+    }
+
     /** Close and forget an instance's session (destroy, redeploy replacement). */
     static void closeSession(int instanceId) {
         InstanceConsoleSession session = SESSIONS.remove(instanceId);
@@ -350,8 +389,12 @@ public final class InstanceConsoles {
         }
         int serverId = resolved.serverId();
         Object name = resolved.row().get(InstanceModel.NAME);
+        // Built HERE, under the caller's Db scope: the pump thread must never have to read
+        // the variable table itself, and an unreadable table must fail loudly at open
+        // rather than silently stream a secret later.
         InstanceConsoleSession session = new InstanceConsoleSession(instanceId,
             resolved.spec().handle(), console, stopCommand,
+            ConsoleRedaction.redactorFor(instanceId),
             (endedSession, termination, detail) -> handleStreamEnd(endedSession, instanceId,
                 serverId, name, support, leases, datasource, termination, detail));
         SESSIONS.put(instanceId, session);

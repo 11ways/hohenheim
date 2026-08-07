@@ -21,8 +21,7 @@ public final class InstanceConsoleHandler implements WebSocketHandler {
     private final WebSocketSession session;
     private final @Nullable Integer instanceId;
     private volatile boolean active = true;
-    private @Nullable InstanceConsoleSession console;
-    private @Nullable Consumer<String> listener;
+    private InstanceConsoles.@Nullable Subscription subscription;
 
     public InstanceConsoleHandler(WebSocketSession session, @Nullable Integer instanceId) {
         this.session = session;
@@ -41,25 +40,22 @@ public final class InstanceConsoleHandler implements WebSocketHandler {
             this.session.close(1008, "forbidden");
             return;
         }
-        InstanceConsoleSession console;
-        try {
-            console = InstanceConsoles.ensureSession(this.instanceId);
-        } catch (Violations refused) {
-            this.active = false;
-            this.session.sendText("\r\n[" + refused.getMessage() + "]\r\n");
-            this.session.close();
-            return;
-        }
-        this.console = console;
         Consumer<String> listener = chunk -> {
             if (this.active && this.session.isOpen()) {
                 // \n alone leaves the terminal cursor mid-line; ghostty wants \r\n.
                 this.session.sendText(chunk.replace("\n", "\r\n"));
             }
         };
-        this.listener = listener;
-        // subscribe() replays the session ring, then attaches -- no gap, no double.
-        console.subscribe(listener);
+        try {
+            // The hub's subscribe replays the session ring, then attaches -- no gap, no
+            // double -- and the ring it replays is already redacted.
+            this.subscription = InstanceConsoles.subscribe(this.instanceId, listener);
+        } catch (Violations refused) {
+            this.active = false;
+            this.session.sendText("\r\n[" + refused.getMessage() + "]\r\n");
+            this.session.close();
+            return;
+        }
         Blast.log("CONSOLE: viewer connected to instance", this.instanceId);
     }
 
@@ -75,11 +71,10 @@ public final class InstanceConsoleHandler implements WebSocketHandler {
     @Override
     public void onClose(int code, String reason) {
         this.active = false;
-        Consumer<String> listener = this.listener;
-        InstanceConsoleSession console = this.console;
-        this.listener = null;
-        if (console != null && listener != null) {
-            console.unsubscribe(listener);
+        InstanceConsoles.Subscription subscription = this.subscription;
+        this.subscription = null;
+        if (subscription != null) {
+            subscription.close();
         }
         Blast.log("CONSOLE: viewer disconnected from instance", this.instanceId);
     }
