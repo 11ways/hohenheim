@@ -66,8 +66,12 @@ public final class IncusNetworkPolicy {
      * why this one name is {@code hhx-<token>} (12) rather than the usual scoped shape.
      */
     public static @NonNull String extraNetwork() {
-        return ControllerScope.shortScoped("hhx");
+        return ControllerScope.shortScoped(EXTRA_NETWORK_PREFIX);
     }
+
+    /** The short product marker {@link #extraNetwork()} is minted from; also what
+     *  {@link IncusReaper} parses a foreign controller's bridge back out of. */
+    public static final String EXTRA_NETWORK_PREFIX = "hhx";
 
     private final @NonNull IncusClient incus;
 

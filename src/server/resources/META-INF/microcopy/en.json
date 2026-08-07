@@ -7089,5 +7089,17 @@
   "device_attach_incomplete": {
     "text": "The device was not attached and no row was kept",
     "scope": "violations"
+  },
+  "reap_controller_objects": {
+    "text": "Reap other controllers' objects",
+    "scope": "server"
+  },
+  "reap_controller_objects_confirm": {
+    "text": "Removes the isolation ACL, extra-NIC bridge and presence marker that OTHER hohenheim controllers left on this Incus daemon -- including objects whose controller left no presence stamp at all, which the scheduled sweep never touches. Objects this controller owns are never candidates, and the daemon itself refuses to remove one a workload still references.",
+    "scope": "server"
+  },
+  "controller_objects_reaped": {
+    "text": "{$name}: removed {$removed} shared object(s) of departed controllers, refused {$refused}",
+    "scope": "server"
   }
 }
