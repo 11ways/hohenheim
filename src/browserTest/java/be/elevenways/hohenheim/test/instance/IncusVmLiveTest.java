@@ -457,6 +457,135 @@ class IncusVmLiveTest {
         });
     }
 
+    /**
+     * The ROOT disk knob against real iron: the size the product declares is the size
+     * the hypervisor gives the guest, growing works only while stopped, and shrinking is
+     * refused. Its own instance rather than a step in the journey above, because that
+     * journey pins the disk-GB cap to exactly its attached disk's headroom and a root
+     * charge would move the arithmetic under it.
+     *
+     * AIDEV-NOTE: the assertion that matters is the GUEST'S OWN block device size, read
+     * from /sys/block/sda/size inside the VM. The daemon's own read-backs are NOT
+     * independent evidence here: measured 2026-08-07 on Incus 7.3 + btrfs, growing a
+     * RUNNING VM's root device updates the config and does nothing, and from then on
+     * GET /1.0/instances/x, its /state disk.root.total AND `storage volume info` all
+     * echo the config value while the backing file stays at the old size. Everything the
+     * API can tell you agrees with itself and is wrong; only the guest disagrees.
+     */
+    @Test
+    void aDeclaredRootDiskIsTheSizeTheGuestActuallyGets() {
+        Db.run(datasource, () -> {
+            Row host = Models.get(ServerModel.class).findByName(HOST);
+            int hostId = host.get(ServerModel.ID);
+            IncusClient incus = new ServerService().incusClientFor(HOST);
+            InstanceService service = new InstanceService();
+
+            String diskBucket = InstanceDeviceQuota.diskBucketOf("");
+            long diskUsedBefore = Quotas.usedOf(diskBucket);
+
+            // 1. A VM record DECLARING a 6 GB root (the image's own volume is 4 GiB,
+            //    which the daemon refuses to go under -- a real constraint, not ours).
+            Row row = Models.get(InstanceModel.class).createEmptyRow();
+            row.set(InstanceModel.NAME, "vm-root-disk");
+            row.set(InstanceModel.KIND, "hohenheim:incus_vm");
+            row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of(
+                "image", VM_IMAGE, "memory_limit_mb", 512, "root_disk_gb", 6)));
+            row.set(InstanceModel.SERVER_ID, hostId);
+            Models.get(InstanceModel.class).save(row);
+            int id = row.get(InstanceModel.ID);
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
+
+            assertThat(Quotas.usedOf(diskBucket))
+                .as("step 1: the declared root disk charged the owner's disk cap")
+                .isEqualTo(diskUsedBefore + 6);
+
+            try {
+                // 2. Deployed, the DAEMON holds a root device at the declared size.
+                assertThat(service.deploy(id).state())
+                    .as("step 2: the VM runs").isEqualTo(ContainerState.RUNNING);
+                Map<?, ?> rootDevice = (Map<?, ?>) ((Map<?, ?>) instanceOf(incus, handle)
+                    .get("devices")).get("root");
+                assertThat(rootDevice)
+                    .as("step 2: the daemon holds an explicit root device").isNotNull();
+                assertThat(rootDevice.get("size"))
+                    .as("step 2: at the declared size").isEqualTo("6GiB");
+
+                // 3. THE ONLY INDEPENDENT CHECK: the GUEST's own block device is 6 GiB.
+                //    /sys/block/sda/size is in 512-byte sectors.
+                awaitTrue("VM agent up", 600_000, () ->
+                    execQuietly(handle, "cat /sys/block/sda/size").trim().matches("\\d+"));
+                assertThat(Long.parseLong(exec(handle, "cat /sys/block/sda/size").trim()) * 512L)
+                    .as("step 3: the guest really sees a 6 GiB disk -- the hypervisor"
+                        + " enforced it, not our bookkeeping")
+                    .isEqualTo(6L * 1024 * 1024 * 1024);
+
+                // 4. Growing while RUNNING is OUR refusal, by name, BEFORE the daemon
+                //    gets a chance to accept it and do nothing (the measured trap).
+                Row growing = Models.get(InstanceModel.class).findById(id);
+                growing.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of(
+                    "image", VM_IMAGE, "memory_limit_mb", 512, "root_disk_gb", 8)));
+                Models.get(InstanceModel.class).save(growing);
+                assertThat(catchThrowable(() -> service.deploy(id)))
+                    .as("step 4: a running root grow is refused, naming the reason")
+                    .isInstanceOfSatisfying(Violations.class, refused ->
+                        assertThat(refused.all()).anySatisfy(violation -> {
+                            assertThat(violation.message().key())
+                                .isEqualTo("instance_deploy_failed");
+                            assertThat(String.valueOf(violation.message().args().get("reason")))
+                                .as("step 4: and the reason names the stopped-only rule")
+                                .contains("STOPPED");
+                        }));
+                assertThat(Long.parseLong(exec(handle, "cat /sys/block/sda/size").trim()) * 512L)
+                    .as("step 4: and the guest's disk is untouched by the refusal")
+                    .isEqualTo(6L * 1024 * 1024 * 1024);
+
+                // 5. Stopped, the SAME deploy lands -- and the guest sees the new size.
+                service.stop(id);
+                assertThat(service.deploy(id).state())
+                    .as("step 5: the stopped grow deploys").isEqualTo(ContainerState.RUNNING);
+                Map<?, ?> grownDevice = (Map<?, ?>) ((Map<?, ?>) instanceOf(incus, handle)
+                    .get("devices")).get("root");
+                assertThat(grownDevice.get("size"))
+                    .as("step 5: the daemon declares 8GiB").isEqualTo("8GiB");
+                awaitTrue("guest sees the grown disk", 600_000, () ->
+                    execQuietly(handle, "cat /sys/block/sda/size").trim().matches("\\d+"));
+                assertThat(Long.parseLong(exec(handle, "cat /sys/block/sda/size").trim()) * 512L)
+                    .as("step 5: and the GUEST really got the extra 2 GiB")
+                    .isEqualTo(8L * 1024 * 1024 * 1024);
+                assertThat(Quotas.usedOf(diskBucket))
+                    .as("step 5: the grow charged only the 2 GB delta")
+                    .isEqualTo(diskUsedBefore + 8);
+
+                // 6. Shrinking is refused at the WRITE, by name -- the storage the
+                //    daemon already handed out cannot be given back, so neither can the
+                //    reservation. The daemon is untouched and still holds 8GiB.
+                service.stop(id);
+                Row shrinking = Models.get(InstanceModel.class).findById(id);
+                shrinking.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of(
+                    "image", VM_IMAGE, "memory_limit_mb", 512, "root_disk_gb", 5)));
+                assertThat(violationKeyOf(catchThrowable(() ->
+                    Models.get(InstanceModel.class).save(shrinking))))
+                    .as("step 6: a shrink is refused by name")
+                    .isEqualTo("root_disk_shrink");
+                assertThat(((Map<?, ?>) ((Map<?, ?>) instanceOf(incus, handle)
+                        .get("devices")).get("root")).get("size"))
+                    .as("step 6: and the daemon still holds 8GiB")
+                    .isEqualTo("8GiB");
+                assertThat(Quotas.usedOf(diskBucket))
+                    .as("step 6: the refused shrink released nothing")
+                    .isEqualTo(diskUsedBefore + 8);
+
+                // 7. Destroy releases the root-disk reservation like any other.
+                service.destroy(id);
+                assertThat(Quotas.usedOf(diskBucket))
+                    .as("step 7: destroying handed the root disk's 8 GB back")
+                    .isEqualTo(diskUsedBefore);
+            } finally {
+                remote.forceDelete(handle);
+            }
+        });
+    }
+
     // -- fixtures -------------------------------------------------------------
 
     private static int vmTemplate() {

@@ -49,6 +49,12 @@ import java.util.Map;
  *                      deliver one refuses by name; it must never silently fall back to
  *                      a persistent volume, because "ephemeral" is then a lie that
  *                      leaves tenant data on disk.
+ * @param rootDiskGb    the DECLARED size of the workload's own root disk in GB, or null
+ *                      to inherit whatever the image and the daemon's default profile
+ *                      give it. A driver that cannot express a per-workload root quota
+ *                      refuses BY NAME (the cloud-init shape): accepting a number it
+ *                      would ignore is a paper limit, which is worse than the gap,
+ *                      because it reports success while enforcing nothing.
  */
 public record InstanceSpec(@NonNull String handle,
                            @NonNull String image,
@@ -64,7 +70,8 @@ public record InstanceSpec(@NonNull String handle,
                            @NonNull ImageOrigin imageOrigin,
                            boolean secureBoot,
                            boolean guestAgent,
-                           @NonNull Map<String, Long> tmpfs) {
+                           @NonNull Map<String, Long> tmpfs,
+                           @Nullable Integer rootDiskGb) {
 
     /** The pre-VM shape: no cloud-init, no pinned fingerprint, catalog origin, no agent claim. */
     public InstanceSpec(@NonNull String handle,
@@ -77,7 +84,7 @@ public record InstanceSpec(@NonNull String handle,
                         ContainerHardening.@NonNull Profile hardening,
                         @NonNull Map<String, String> ownerLabels) {
         this(handle, image, command, env, volumes, publication, limits, hardening,
-            ownerLabels, null, null, ImageOrigin.CATALOG, false, true, Map.of());
+            ownerLabels, null, null, ImageOrigin.CATALOG, false, true, Map.of(), null);
     }
 
     /** The pre-tmpfs shape: everything declared, no RAM-backed scratch mount. */
@@ -97,7 +104,28 @@ public record InstanceSpec(@NonNull String handle,
                         boolean guestAgent) {
         this(handle, image, command, env, volumes, publication, limits, hardening,
             ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
-            guestAgent, Map.of());
+            guestAgent, Map.of(), null);
+    }
+
+    /** The pre-root-disk shape: everything declared, root inherited from the image. */
+    public InstanceSpec(@NonNull String handle,
+                        @NonNull String image,
+                        @Nullable List<String> command,
+                        @NonNull Map<String, String> env,
+                        @NonNull Map<String, String> volumes,
+                        @Nullable PortPublication publication,
+                        @NonNull ResourceLimits limits,
+                        ContainerHardening.@NonNull Profile hardening,
+                        @NonNull Map<String, String> ownerLabels,
+                        @Nullable String cloudInitUserData,
+                        @Nullable String imageFingerprint,
+                        @NonNull ImageOrigin imageOrigin,
+                        boolean secureBoot,
+                        boolean guestAgent,
+                        @NonNull Map<String, Long> tmpfs) {
+        this(handle, image, command, env, volumes, publication, limits, hardening,
+            ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
+            guestAgent, tmpfs, null);
     }
 
     /** A copy whose publication carries the host port the pre-allocation step claimed. */
@@ -109,7 +137,7 @@ public record InstanceSpec(@NonNull String handle,
         return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
             this.publication.withPreallocatedPort(hostPort), this.limits, this.hardening,
             this.ownerLabels, this.cloudInitUserData, this.imageFingerprint, this.imageOrigin,
-            this.secureBoot, this.guestAgent, this.tmpfs);
+            this.secureBoot, this.guestAgent, this.tmpfs, this.rootDiskGb);
     }
 
     /** A copy carrying the record's pinned resolved image identity. */
@@ -117,6 +145,6 @@ public record InstanceSpec(@NonNull String handle,
         return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
             this.publication, this.limits, this.hardening, this.ownerLabels,
             this.cloudInitUserData, fingerprint, this.imageOrigin, this.secureBoot,
-            this.guestAgent, this.tmpfs);
+            this.guestAgent, this.tmpfs, this.rootDiskGb);
     }
 }

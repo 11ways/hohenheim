@@ -6864,6 +6864,28 @@
     "text": "NIC",
     "scope": "instance_device"
   },
+  "root_disk_gb": [
+    {
+      "text": "Root disk",
+      "scope": "field"
+    },
+    {
+      "text": "Size of the workload's own root disk in GB. Leave blank to inherit the image size. It can only grow, and only while the workload is stopped.",
+      "scope": "help"
+    }
+  ],
+  "root_disk_shrink": {
+    "text": "A root disk can only grow; it currently holds {$current} GB",
+    "scope": "violations"
+  },
+  "root_disk_invalid": {
+    "text": "The root disk size must be a whole number of GB, at least 1",
+    "scope": "violations"
+  },
+  "root_disk_unsupported": {
+    "text": "Instances of kind {$kind} cannot have a root disk size: their runtime enforces no per-workload root quota",
+    "scope": "violations"
+  },
   "disk_quota_reached": {
     "text": "Disk quota reached: {$used} of {$limit} GB in use",
     "scope": "violations"

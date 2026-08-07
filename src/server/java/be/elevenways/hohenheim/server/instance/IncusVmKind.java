@@ -91,6 +91,13 @@ public final class IncusVmKind implements InstanceKindHandler {
             .help(HohenheimFormCopy.help("cpu_limit")).build());
 
     /**
+     * The guest's own root disk in GB; blank inherits the image's size. A VM root is a
+     * real block volume, so this is enforced by the hypervisor, not advisory -- and it
+     * can only ever GROW (see {@link RootDisk} for the measurements).
+     */
+    public static final IntegerField ROOT_DISK_GB = RootDisk.addTo(SETTINGS_SCHEMA);
+
+    /**
      * The closed set of image origins. The keys come from {@link ImageOrigin} itself --
      * a second spelling of "catalog"/"prepared" here would be a parallel vocabulary the
      * driver and the form could drift apart on.
@@ -182,7 +189,8 @@ public final class IncusVmKind implements InstanceKindHandler {
         return new InstanceSpec(handle, image, null, Map.of(), Map.of(), null,
             ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)), VM,
             OwnerLabels.of(InstanceModel.MODEL_ID, instanceId), cloudInit, null,
-            imageOrigin, secureBoot, guestAgent);
+            imageOrigin, secureBoot, guestAgent, Map.of(),
+            RootDisk.declaredGb(settings));
     }
 
     /**

@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.hohenheim.server.runtime.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
@@ -68,6 +69,13 @@ public final class IncusContainerKind implements InstanceKindHandler {
     public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
         DoubleField.builder().name("cpu_limit").label(HohenheimFormCopy.label("cpu_limit"))
             .help(HohenheimFormCopy.help("cpu_limit")).build());
+
+    /**
+     * The container's own rootfs cap in GB; blank inherits the pool default. On btrfs
+     * this is a qgroup limit -- real, but invisible to {@code df} inside the guest (see
+     * {@link RootDisk}).
+     */
+    public static final IntegerField ROOT_DISK_GB = RootDisk.addTo(SETTINGS_SCHEMA);
 
     /**
      * ADMIN-DECLARED escape hatch, unprivileged is the default: a privileged system
@@ -130,7 +138,9 @@ public final class IncusContainerKind implements InstanceKindHandler {
             EnvVars.toMap(settings.get("environment_variables")), Map.of(), null,
             ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
             privileged ? PRIVILEGED : UNPRIVILEGED,
-            OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+            OwnerLabels.of(InstanceModel.MODEL_ID, instanceId), null, null,
+            ImageOrigin.CATALOG, false, true,
+            Map.of(), RootDisk.declaredGb(settings));
     }
 
     /** A system container shares the host kernel: its floor is its userland, not a guest OS. */

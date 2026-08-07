@@ -239,6 +239,18 @@ public class InstanceModel extends Model {
         IntegerField.builder().name("capacity_mb").filterable(false).build());
 
     /**
+     * The owner disk-GB bucket this workload's ROOT disk reservation was charged to,
+     * stamped by InstanceRootDiskQuota at the write that took it.
+     *
+     * AIDEV-NOTE: only the BUCKET is stamped, not the amount -- unlike CAPACITY_MB. The
+     * charged amount IS {@code settings.root_disk_gb}, and every write reconciles the
+     * delta between the stored and the staged value, so the two cannot drift apart. The
+     * bucket can: grants move ownership without touching the row.
+     */
+    public static final StringField ROOT_DISK_BUCKET = SCHEMA.addField(
+        StringField.builder().name("root_disk_bucket").filterable(false).build());
+
+    /**
      * The RESOLVED image identity the workload actually runs (incus: the image
      * fingerprint behind {@code volatile.base_image}), recorded at deploy. A mutable
      * alias is not a deployment identity: recreating an absent workload uses this pin,

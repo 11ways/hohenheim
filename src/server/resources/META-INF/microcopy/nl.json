@@ -6860,6 +6860,28 @@
     "text": "NIC",
     "scope": "instance_device"
   },
+  "root_disk_gb": [
+    {
+      "text": "Rootschijf",
+      "scope": "field"
+    },
+    {
+      "text": "Grootte van de eigen rootschijf van de workload in GB. Laat leeg om de grootte van de image over te nemen. Ze kan enkel groeien, en enkel wanneer de workload gestopt is.",
+      "scope": "help"
+    }
+  ],
+  "root_disk_shrink": {
+    "text": "Een rootschijf kan enkel groeien; ze bevat momenteel {$current} GB",
+    "scope": "violations"
+  },
+  "root_disk_invalid": {
+    "text": "De grootte van de rootschijf moet een geheel aantal GB zijn, minstens 1",
+    "scope": "violations"
+  },
+  "root_disk_unsupported": {
+    "text": "Instanties van soort {$kind} kunnen geen rootschijfgrootte hebben: hun runtime dwingt geen root-quotum per workload af",
+    "scope": "violations"
+  },
   "disk_quota_reached": {
     "text": "Schijfquotum bereikt: {$used} van {$limit} GB in gebruik",
     "scope": "violations"
