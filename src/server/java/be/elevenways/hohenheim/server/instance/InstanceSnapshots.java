@@ -17,6 +17,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -29,6 +30,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -137,6 +139,7 @@ public final class InstanceSnapshots {
             TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
         }
         Blast.log("SNAPSHOT: captured instance", instanceId, "into", directory.toString());
+        pruneForRetention(instanceId);
         return snapshot.get(InstanceSnapshotModel.ID);
     }
 
@@ -156,11 +159,18 @@ public final class InstanceSnapshots {
         InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
             fence, InstanceModel.STATUS_CAPTURING, resolved.row().get(InstanceModel.NAME));
 
-        String nativeName = "hib-" + STAMP.format(Instant.now());
         Row snapshot = Models.get(InstanceSnapshotModel.class).createEmptyRow();
         snapshot.set(InstanceSnapshotModel.INSTANCE_ID, instanceId);
         snapshot.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED);
         snapshot.set(InstanceSnapshotModel.NOTE, note);
+        Models.get(InstanceSnapshotModel.class).save(snapshot);
+        // AIDEV-NOTE: the row id is part of the daemon-side name, and it has to be: the
+        // stamp resolves to the SECOND, so two captures of one instance inside the same
+        // second used to ask the daemon for the SAME snapshot name -- the second either
+        // fails or aliases the first, and then retention deleting one row's payload takes
+        // the other row's snapshot with it. That is why the row is saved first.
+        String nativeName = "hib-" + STAMP.format(Instant.now())
+            + "-" + snapshot.get(InstanceSnapshotModel.ID);
         snapshot.set(InstanceSnapshotModel.NATIVE_NAME, nativeName);
         Models.get(InstanceSnapshotModel.class).save(snapshot);
         try {
@@ -177,6 +187,7 @@ public final class InstanceSnapshots {
         InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
             fence, prior, resolved.row().get(InstanceModel.NAME));
         Blast.log("SNAPSHOT: captured native snapshot", nativeName, "of instance", instanceId);
+        pruneForRetention(instanceId);
         return snapshot.get(InstanceSnapshotModel.ID);
     }
 
@@ -348,6 +359,45 @@ public final class InstanceSnapshots {
         }
         recordRestore(instanceId, "native snapshot " + nativeName);
         Blast.log("SNAPSHOT: restored native snapshot", nativeName, "onto instance", instanceId);
+    }
+
+    /**
+     * Count-based retention: keep the newest N COMPLETE snapshots of this instance and
+     * remove the rest, payload included. Runs when a capture completes -- the same place
+     * and the same rule as {@code InstanceBackups.pruneForRetention}, deliberately, so
+     * there is ONE retention discipline rather than a second sweeper.
+     *
+     * AIDEV-NOTE: a prune that cannot reach the daemon must not delete the row -- that is
+     * exactly what {@link #delete} refuses to do, and its Violations is caught here so a
+     * single unreachable payload cannot fail the CAPTURE that just succeeded. The row
+     * stays and the next completed capture tries again. FAILED rows are never counted and
+     * never pruned: they hold no payload and they are the evidence of what went wrong.
+     *
+     * AIDEV-NOTE: ordered by ID, not by created_at as the backup lane is. A native
+     * snapshot's name is stamped to the SECOND, so two captures inside one second carry
+     * the same created_at and a timestamp sort would pick between them arbitrarily --
+     * which snapshot survives must not be arbitrary.
+     */
+    public void pruneForRetention(int instanceId) {
+        Integer retention = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Backup.SNAPSHOT_RETENTION);
+        if (retention == null || retention <= 0) {
+            return;
+        }
+        List<Row> complete = Models.get(InstanceSnapshotModel.class).find()
+            .where(InstanceSnapshotModel.INSTANCE_ID.eq(instanceId))
+            .where(InstanceSnapshotModel.STATUS.eq(InstanceSnapshotModel.STATUS_COMPLETE))
+            .orderBy(InstanceSnapshotModel.ID, SortOrder.DESC)
+            .all();
+        for (int i = retention; i < complete.size(); i++) {
+            Object id = complete.get(i).get(InstanceSnapshotModel.ID);
+            try {
+                delete((Integer) id);
+            } catch (Violations pruneFailed) {
+                Blast.log("SNAPSHOT: retention could not remove snapshot", id,
+                    "- kept for a later sweep");
+            }
+        }
     }
 
     /** Remove a snapshot's payload (controller files or the daemon-side snapshot) and its row. */

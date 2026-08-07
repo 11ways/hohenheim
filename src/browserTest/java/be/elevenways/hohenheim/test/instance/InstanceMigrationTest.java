@@ -22,11 +22,14 @@ import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -45,7 +48,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -62,10 +64,6 @@ class InstanceMigrationTest {
     private static int alphaId;
     private static int betaId;
 
-    /** name -> handle -> workload; the two "daemons". */
-    private static final Map<String, Map<String, FakeWorkload>> DAEMONS =
-        new ConcurrentHashMap<>();
-
     @BeforeAll
     static void setUp() throws Exception {
         File db = File.createTempFile("hohenheim-migration-test", ".db");
@@ -79,8 +77,7 @@ class InstanceMigrationTest {
         // thread-hopping work a different controller's token than the records came from.
         Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
-        FakeNativeKind.register();
-        FakeVolumeKind.register();
+        FakeNativeDaemons.register();
         Db.run(datasource, () -> {
             alphaId = incusHost("mig-alpha");
             betaId = incusHost("mig-beta");
@@ -112,7 +109,6 @@ class InstanceMigrationTest {
             // mem_total is what the capacity budget is read from: an admitted host
             // always carries it in production, and placement skips one that does not.
             Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));
-        DAEMONS.putIfAbsent(name, new ConcurrentHashMap<>());
         return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
     }
 
@@ -140,12 +136,12 @@ class InstanceMigrationTest {
         }, (serverId, bytes) -> {});
     }
 
-    private static Map<String, FakeWorkload> daemonOf(int serverId) {
-        return DAEMONS.get(ServerModel.nameOf(serverId));
+    private static Map<String, FakeNativeDaemons.FakeWorkload> daemonOf(int serverId) {
+        return FakeNativeDaemons.daemonOf(serverId);
     }
 
     private static String handleOf(int instanceId) {
-        return "fake-instance-" + instanceId;
+        return FakeNativeDaemons.handleOf(instanceId);
     }
 
     /** Every workload on this daemon whose handle belongs to THIS test's records. */
@@ -164,14 +160,14 @@ class InstanceMigrationTest {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
             InstanceMigrations migrations = migrations();
-            int id = instanceRecord("mover", alphaId, FakeNativeKind.ID.toString());
+            int id = instanceRecord("mover", alphaId, FakeNativeDaemons.FakeNativeKind.ID.toString());
             String handle = handleOf(id);
 
             // 1. Deploy on alpha and give the workload distinguishable state.
             assertThat(service.deploy(id).state())
                 .as("step 1: the workload deploys and runs on the source host")
                 .isEqualTo(ContainerState.RUNNING);
-            FakeWorkload source = daemonOf(alphaId).get(handle);
+            FakeNativeDaemons.FakeWorkload source = daemonOf(alphaId).get(handle);
             source.data.put("marker", "v1");
             source.snapshots.add("nightly-1");
 
@@ -193,7 +189,7 @@ class InstanceMigrationTest {
                 .as("step 3: the source daemon holds NOTHING under the handle"
                     + " (a move that leaves the source copy is the silent-success shape)")
                 .isFalse();
-            FakeWorkload moved = daemonOf(betaId).get(handle);
+            FakeNativeDaemons.FakeWorkload moved = daemonOf(betaId).get(handle);
             assertThat(moved).as("step 3: the destination daemon holds it").isNotNull();
             assertThat(moved.running).as("step 3: and it runs").isTrue();
             assertThat(moved.data.get("marker"))
@@ -220,7 +216,7 @@ class InstanceMigrationTest {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
             InstanceMigrations migrations = migrations();
-            int id = instanceRecord("refusals", alphaId, FakeNativeKind.ID.toString());
+            int id = instanceRecord("refusals", alphaId, FakeNativeDaemons.FakeNativeKind.ID.toString());
             String handle = handleOf(id);
             service.deploy(id);
 
@@ -250,14 +246,14 @@ class InstanceMigrationTest {
 
             // 3. A driver without whole-instance export/import refuses by name.
             int volumeKind = instanceRecord("no-native", alphaId,
-                FakeVolumeKind.ID.toString());
+                FakeNativeDaemons.FakeVolumeKind.ID.toString());
             assertRefusal(() -> migrations.migrateTo(volumeKind, betaId),
                 "migrate_unsupported",
                 "step 3: a non-native driver cannot migrate");
 
             // 4. A FOREIGN same-named workload on the destination is the handle-
             //    collision hazard: refused, never converged over or deleted.
-            FakeWorkload stranger = new FakeWorkload();
+            FakeNativeDaemons.FakeWorkload stranger = new FakeNativeDaemons.FakeWorkload();
             stranger.ownerModel = InstanceModel.MODEL_ID;
             stranger.ownerId = "999999999";
             stranger.data.put("theirs", "untouchable");
@@ -290,7 +286,7 @@ class InstanceMigrationTest {
     @Test
     void killedControllerSettlesBothCrashWindowsWithoutSplitOwnership() {
         Db.run(datasource, () -> {
-            int id = instanceRecord("crasher", alphaId, FakeNativeKind.ID.toString());
+            int id = instanceRecord("crasher", alphaId, FakeNativeDaemons.FakeNativeKind.ID.toString());
             String handle = handleOf(id);
             new InstanceService().deploy(id);
             daemonOf(alphaId).get(handle).data.put("marker", "precious");
@@ -373,9 +369,9 @@ class InstanceMigrationTest {
             InstanceService service = new InstanceService();
             InstanceMigrations migrations = migrations();
             int gammaId = incusHost("mig-gamma");
-            int movable1 = instanceRecord("drain-a", gammaId, FakeNativeKind.ID.toString());
-            int movable2 = instanceRecord("drain-b", gammaId, FakeNativeKind.ID.toString());
-            int held = instanceRecord("drain-held", gammaId, FakeNativeKind.ID.toString());
+            int movable1 = instanceRecord("drain-a", gammaId, FakeNativeDaemons.FakeNativeKind.ID.toString());
+            int movable2 = instanceRecord("drain-b", gammaId, FakeNativeDaemons.FakeNativeKind.ID.toString());
+            int held = instanceRecord("drain-held", gammaId, FakeNativeDaemons.FakeNativeKind.ID.toString());
             List<Integer> ids = List.of(movable1, movable2, held);
             service.deploy(movable1);
             service.deploy(movable2);
@@ -428,6 +424,40 @@ class InstanceMigrationTest {
                     .isNotEqualTo(gammaId);
             }
 
+            // 2b. The drain is ACCOUNTABLE, and that cannot ride on the model hooks:
+            //     every write a migration makes is a fenced updateAll, which fires none.
+            //     So each MOVED workload carries its own row naming both hosts, and the
+            //     host carries one for the drain -- an INCOMPLETE drain included.
+            assertThat(ActivityLog.isInstalled())
+                .as("step 2b: the activity log must be installed or this proves nothing")
+                .isTrue();
+            String gammaName = ServerModel.nameOf(gammaId);
+            for (int id : List.of(movable1, movable2)) {
+                Row moveRow = Models.get(ActivityModel.class).find()
+                    .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
+                    .where(ActivityModel.RECORD_ID.eq(String.valueOf(id)))
+                    .where(ActivityModel.ACTION.eq(InstanceMigrations.ACTIVITY_MIGRATE_ACTION))
+                    .orderBy(ActivityModel.ID, SortOrder.DESC).first();
+                assertThat(moveRow)
+                    .as("step 2b: the move of instance %s is recorded on its own record", id)
+                    .isNotNull();
+                assertThat((String) moveRow.get(ActivityModel.DETAIL))
+                    .withFailMessage("step 2b: the record must name where the workload came"
+                        + " FROM; detail was '%s'", moveRow.get(ActivityModel.DETAIL))
+                    .contains(gammaName);
+            }
+            Row drainRow = Models.get(ActivityModel.class).find()
+                .where(ActivityModel.MODEL.eq(ServerModel.MODEL_ID.toString()))
+                .where(ActivityModel.RECORD_ID.eq(String.valueOf(gammaId)))
+                .where(ActivityModel.ACTION.eq(InstanceMigrations.ACTIVITY_DRAIN_ACTION))
+                .orderBy(ActivityModel.ID, SortOrder.DESC).first();
+            assertThat(drainRow)
+                .as("step 2b: the drain itself is recorded on the host record").isNotNull();
+            assertThat((String) drainRow.get(ActivityModel.DETAIL))
+                .withFailMessage("step 2b: an incomplete drain must SAY it left something"
+                    + " behind; detail was '%s'", drainRow.get(ActivityModel.DETAIL))
+                .contains("refused 1").contains("INCOMPLETE");
+
             // 3. Detach the device and drain again: the host ends holding NONE.
             Models.get(InstanceDeviceModel.class).find()
                 .where(InstanceDeviceModel.ID.eq(device.get(InstanceDeviceModel.ID)))
@@ -455,310 +485,4 @@ class InstanceMigrationTest {
                     assertThat(violation.message().key()).isEqualTo(key)));
     }
 
-    // -- the in-memory native runtime ------------------------------------------
-
-    private static final class FakeWorkload {
-        final Map<String, String> data = new LinkedHashMap<>();
-        final List<String> snapshots = new ArrayList<>();
-        boolean running;
-        Identifier ownerModel;
-        String ownerId;
-    }
-
-    private static final class FakeNativeRuntime
-            implements InstanceRuntime, NativeSnapshotSupport {
-
-        private final Map<String, FakeWorkload> daemon;
-
-        FakeNativeRuntime(String serverName) {
-            this.daemon = DAEMONS.computeIfAbsent(serverName,
-                name -> new ConcurrentHashMap<>());
-        }
-
-        private static OwnerLabels.Owner ownerOf(InstanceSpec spec) throws IOException {
-            OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());
-            if (owner == null) {
-                throw new IOException("spec without owner labels");
-            }
-            return owner;
-        }
-
-        @Override
-        public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
-            OwnerLabels.Owner owner = ownerOf(spec);
-            FakeWorkload existing = this.daemon.get(spec.handle());
-            if (existing != null) {
-                if (!owner.model().equals(existing.ownerModel)
-                        || !owner.id().equals(existing.ownerId)) {
-                    throw new IOException("REFUSED: foreign workload under " + spec.handle());
-                }
-                return spec.handle();   // converge keeps state
-            }
-            FakeWorkload workload = new FakeWorkload();
-            workload.ownerModel = owner.model();
-            workload.ownerId = owner.id();
-            this.daemon.put(spec.handle(), workload);
-            return spec.handle();
-        }
-
-        @Override
-        public void start(@NonNull String handle) throws IOException {
-            require(handle).running = true;
-        }
-
-        @Override
-        public void stop(@NonNull String handle, int graceSeconds) throws IOException {
-            require(handle).running = false;
-        }
-
-        @Override
-        public void destroy(@NonNull String handle) {
-            this.daemon.remove(handle);
-        }
-
-        @Override
-        public @NonNull InstanceStatus status(@NonNull String handle) {
-            FakeWorkload workload = this.daemon.get(handle);
-            if (workload == null) {
-                return new InstanceStatus(ContainerState.ABSENT, null);
-            }
-            return new InstanceStatus(workload.running
-                ? ContainerState.RUNNING : ContainerState.STOPPED, null);
-        }
-
-        private @NonNull FakeWorkload require(String handle) throws IOException {
-            FakeWorkload workload = this.daemon.get(handle);
-            if (workload == null) {
-                throw new IOException("no workload " + handle);
-            }
-            return workload;
-        }
-
-        // -- NativeSnapshotSupport --------------------------------------------
-
-        @Override
-        public void createSnapshot(@NonNull InstanceSpec spec, @NonNull String name)
-                throws IOException {
-            require(spec.handle()).snapshots.add(name);
-        }
-
-        @Override
-        public boolean snapshotExists(@NonNull InstanceSpec spec, @NonNull String name)
-                throws IOException {
-            return require(spec.handle()).snapshots.contains(name);
-        }
-
-        @Override
-        public void restoreSnapshot(@NonNull InstanceSpec spec, @NonNull String name) {
-        }
-
-        @Override
-        public void deleteSnapshot(@NonNull InstanceSpec spec, @NonNull String name)
-                throws IOException {
-            require(spec.handle()).snapshots.remove(name);
-        }
-
-        @Override
-        public long exportBackup(@NonNull InstanceSpec spec, @NonNull Path destination,
-                                 long maxBytes, boolean withSnapshots) throws IOException {
-            FakeWorkload workload = require(spec.handle());
-            StringBuilder text = new StringBuilder();
-            workload.data.forEach((key, value) ->
-                text.append("data ").append(key).append('=').append(value).append('\n'));
-            if (withSnapshots) {
-                workload.snapshots.forEach(snapshot ->
-                    text.append("snapshot ").append(snapshot).append('\n'));
-            }
-            Files.writeString(destination, text.toString());
-            return Files.size(destination);
-        }
-
-        @Override
-        public void importBackup(@NonNull InstanceSpec spec, @NonNull Path archive)
-                throws IOException {
-            if (this.daemon.containsKey(spec.handle())) {
-                throw new IOException("already exists: " + spec.handle());
-            }
-            OwnerLabels.Owner owner = ownerOf(spec);
-            FakeWorkload workload = new FakeWorkload();
-            workload.ownerModel = owner.model();
-            workload.ownerId = owner.id();
-            for (String line : Files.readAllLines(archive)) {
-                if (line.startsWith("data ")) {
-                    String[] pair = line.substring(5).split("=", 2);
-                    workload.data.put(pair[0], pair.length > 1 ? pair[1] : "");
-                } else if (line.startsWith("snapshot ")) {
-                    workload.snapshots.add(line.substring(9));
-                }
-            }
-            this.daemon.put(spec.handle(), workload);
-        }
-
-        @Override
-        public @NonNull WorkloadClaim claimOf(@NonNull InstanceSpec spec) throws IOException {
-            FakeWorkload workload = this.daemon.get(spec.handle());
-            if (workload == null) {
-                return WorkloadClaim.ABSENT;
-            }
-            OwnerLabels.Owner owner = ownerOf(spec);
-            return owner.model().equals(workload.ownerModel)
-                && owner.id().equals(workload.ownerId)
-                ? WorkloadClaim.OURS : WorkloadClaim.FOREIGN;
-        }
-
-        @Override
-        public @NonNull ImageIdentity imageIdentity(@NonNull InstanceSpec spec) {
-            return new ImageIdentity(spec.image(), "fake-fingerprint");
-        }
-    }
-
-    /** The migratable fake kind: native export/import over the in-memory daemons. */
-    private static final class FakeNativeKind implements InstanceKindHandler {
-
-        static final Identifier ID = Identifier.of("hohenheim", "fake_native");
-        static final Schema SETTINGS_SCHEMA = new Schema();
-        static final StringField IMAGE = SETTINGS_SCHEMA.addField(
-            StringField.builder().name("image").build());
-        private static boolean registered;
-
-        static void register() {
-            if (!registered) {
-                registered = true;
-                InstanceKinds.register(new FakeNativeKind());
-                InstanceKinds.register(new FakeVolumeKind());
-            }
-        }
-
-        @Override
-        public @NonNull Identifier typeId() { return ID; }
-
-        @Override
-        public @NonNull String getDisplayName() { return "Fake native"; }
-
-        @Override
-        public @NonNull Microcopy getLabel() {
-            return Microcopy.of("fake_native").withFilter("scope", "instance_kind");
-        }
-
-        @Override
-        public String getDescription() { return "in-memory native test kind"; }
-
-        @Override
-        public Icon getIcon() { return Icon.of("flask"); }
-
-        @Override
-        public String getColor() { return "gray"; }
-
-        @Override
-        public Schema getSchema() { return SETTINGS_SCHEMA; }
-
-        @Override
-        public @NonNull String requiredRuntime() { return ServerModel.RUNTIME_INCUS; }
-
-        @Override
-        public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
-            return new FakeNativeRuntime(serverName);
-        }
-
-        @Override
-        public @NonNull InstanceSpec specFor(int instanceId,
-                                             @NonNull Map<String, Object> settings) {
-            return new InstanceSpec("fake-instance-" + instanceId,
-                String.valueOf(settings.getOrDefault("image", "fake/image")), null,
-                Map.of(), Map.of(), null, ResourceLimits.none(),
-                new ContainerHardening.Profile("fake", List.of()),
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
-        }
-
-        /** Test kinds declare a footprint like any other: the interface has no default. */
-        @Override
-        public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
-            return 128;
-        }
-    }
-
-    /** A kind whose runtime has NO native export/import: the migrate_unsupported lane. */
-    private static final class FakeVolumeKind implements InstanceKindHandler {
-
-        static final Identifier ID = Identifier.of("hohenheim", "fake_volume_only");
-
-        static void register() {
-            FakeNativeKind.register();
-        }
-
-        @Override
-        public @NonNull Identifier typeId() { return ID; }
-
-        @Override
-        public @NonNull String getDisplayName() { return "Fake volume-only"; }
-
-        @Override
-        public @NonNull Microcopy getLabel() {
-            return Microcopy.of("fake_volume_only").withFilter("scope", "instance_kind");
-        }
-
-        @Override
-        public String getDescription() { return "in-memory non-native test kind"; }
-
-        @Override
-        public Icon getIcon() { return Icon.of("flask"); }
-
-        @Override
-        public String getColor() { return "gray"; }
-
-        @Override
-        public Schema getSchema() { return FakeNativeKind.SETTINGS_SCHEMA; }
-
-        @Override
-        public @NonNull String requiredRuntime() { return ServerModel.RUNTIME_INCUS; }
-
-        @Override
-        public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
-            // Same daemon map, but WITHOUT NativeSnapshotSupport on the type.
-            FakeNativeRuntime inner = new FakeNativeRuntime(serverName);
-            return new InstanceRuntime() {
-                @Override
-                public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
-                    return inner.create(spec);
-                }
-
-                @Override
-                public void start(@NonNull String handle) throws IOException {
-                    inner.start(handle);
-                }
-
-                @Override
-                public void stop(@NonNull String handle, int graceSeconds)
-                        throws IOException {
-                    inner.stop(handle, graceSeconds);
-                }
-
-                @Override
-                public void destroy(@NonNull String handle) throws IOException {
-                    inner.destroy(handle);
-                }
-
-                @Override
-                public @NonNull InstanceStatus status(@NonNull String handle) {
-                    return inner.status(handle);
-                }
-            };
-        }
-
-        @Override
-        public @NonNull InstanceSpec specFor(int instanceId,
-                                             @NonNull Map<String, Object> settings) {
-            return new InstanceSpec("fake-instance-" + instanceId,
-                String.valueOf(settings.getOrDefault("image", "fake/image")), null,
-                Map.of(), Map.of(), null, ResourceLimits.none(),
-                new ContainerHardening.Profile("fake", List.of()),
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
-        }
-
-        /** Test kinds declare a footprint like any other: the interface has no default. */
-        @Override
-        public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
-            return 128;
-        }
-    }
 }
