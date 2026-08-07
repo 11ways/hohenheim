@@ -4085,26 +4085,6 @@
       "scope": "help"
     }
   ],
-  "stack_subnet": [
-    {
-      "text": "Subnet",
-      "scope": "field"
-    },
-    {
-      "text": "Optional CIDR for the stack's private network, e.g. 172.30.0.0/24. Leave blank to let Docker pick.",
-      "scope": "help"
-    }
-  ],
-  "stack_adopt": [
-    {
-      "text": "Adopt existing resources",
-      "scope": "field"
-    },
-    {
-      "text": "Allow the deploy to reuse or replace same-named containers, networks and volumes that hohenheim does not own. Off = refuse, which protects unrelated workloads.",
-      "scope": "help"
-    }
-  ],
   "registry_server": [
     {
       "text": "Registry server",
@@ -4417,10 +4397,6 @@
   },
   "stack_rename_unverifiable": {
     "text": "Cannot verify the stack has no containers left (Docker is unreachable); rename refused",
-    "scope": "violations"
-  },
-  "subnet_format": {
-    "text": "Use a CIDR such as 172.30.7.0/24",
     "scope": "violations"
   },
   "mount_name_format": {

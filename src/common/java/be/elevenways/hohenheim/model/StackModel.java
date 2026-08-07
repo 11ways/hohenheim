@@ -58,11 +58,6 @@ public class StackModel extends Model {
         .help(HohenheimFormCopy.help("server"))
         .build());
 
-    public static final StringField SUBNET = SCHEMA.addField(StringField.builder().name("subnet")
-        .label(HohenheimFormCopy.label("stack_subnet"))
-        .help(HohenheimFormCopy.help("stack_subnet"))
-        .build());
-
     public static final StringField REGISTRY_SERVER = SCHEMA.addField(StringField.builder().name("registry_server")
         .label(HohenheimFormCopy.label("registry_server"))
         .help(HohenheimFormCopy.help("registry_server"))

@@ -4081,26 +4081,6 @@
       "scope": "help"
     }
   ],
-  "stack_subnet": [
-    {
-      "text": "Subnet",
-      "scope": "field"
-    },
-    {
-      "text": "Optionele CIDR voor het prive-netwerk van de stack, bv. 172.30.0.0/24. Laat leeg om Docker te laten kiezen.",
-      "scope": "help"
-    }
-  ],
-  "stack_adopt": [
-    {
-      "text": "Bestaande resources adopteren",
-      "scope": "field"
-    },
-    {
-      "text": "Laat de deploy containers, netwerken en volumes met dezelfde naam hergebruiken of vervangen die niet van hohenheim zijn. Uit = weigeren, wat andere workloads beschermt.",
-      "scope": "help"
-    }
-  ],
   "registry_server": [
     {
       "text": "Registry-server",
@@ -4413,10 +4393,6 @@
   },
   "stack_rename_unverifiable": {
     "text": "Kan niet controleren of de stack geen containers meer heeft (Docker is onbereikbaar); hernoemen geweigerd",
-    "scope": "violations"
-  },
-  "subnet_format": {
-    "text": "Gebruik een CIDR zoals 172.30.7.0/24",
     "scope": "violations"
   },
   "mount_name_format": {
