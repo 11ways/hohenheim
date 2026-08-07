@@ -21,6 +21,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * admin WebSocket), assembles lines for the readiness matcher, and records the stop
  * observations that suppress crash detection. Lifecycle is owned by
  * {@link InstanceConsoles}; this class never writes the database.
+ *
+ * AIDEV-NOTE: REDACTION IS AT INGEST. Every byte the driver produces passes through the
+ * session's {@link ConsoleRedaction.Redactor} before it touches the ring, the line matcher,
+ * a viewer or the persisted log -- so raw output exists in exactly one place (a local
+ * variable in {@link #pump()}) and no copy of a secret survives behind it. Redacting per
+ * consumer instead would mean keeping the raw text and trusting every future reader, which
+ * is the leak rather than the fix.
  */
 final class InstanceConsoleSession {
 
@@ -41,6 +48,7 @@ final class InstanceConsoleSession {
     private final ConsoleStreamSupport.@NonNull Console console;
     private final @Nullable String stopCommand;
     private final @NonNull ExitListener exitListener;
+    private final ConsoleRedaction.@NonNull Redactor redactor;
 
     private final StringBuilder ring = new StringBuilder();
     private final StringBuilder currentLine = new StringBuilder();
@@ -60,14 +68,21 @@ final class InstanceConsoleSession {
     InstanceConsoleSession(int instanceId, @NonNull String handle,
                            ConsoleStreamSupport.@NonNull Console console,
                            @Nullable String stopCommand,
+                           ConsoleRedaction.@NonNull Redactor redactor,
                            @NonNull ExitListener exitListener) {
         this.instanceId = instanceId;
         this.handle = handle;
         this.console = console;
         this.stopCommand = stopCommand == null || stopCommand.isBlank()
             ? null : stopCommand.trim();
+        this.redactor = redactor;
         this.exitListener = exitListener;
         JobRunner.startVirtualThread(this::pump);
+    }
+
+    /** Teach the live redactor a value declared secret after this session opened. */
+    void addSecret(@NonNull String secret) {
+        this.redactor.addSecret(secret);
     }
 
     int instanceId() {
@@ -91,8 +106,11 @@ final class InstanceConsoleSession {
         ConsoleStream stream = this.console.stream();
         ConsoleStream.Chunk chunk;
         while ((chunk = stream.next()) != null) {
-            this.deliver(new String(chunk.data(), StandardCharsets.UTF_8));
+            this.deliver(this.redactor.feed(new String(chunk.data(), StandardCharsets.UTF_8)));
         }
+        // Whatever the redactor was holding back as a possible secret prefix turned out not
+        // to be one; it is ordinary output and must not be swallowed.
+        this.deliver(this.redactor.flush());
         this.ended.countDown();
         ConsoleStream.Termination termination = stream.termination();
         try {
@@ -104,7 +122,11 @@ final class InstanceConsoleSession {
         }
     }
 
+    /** Fan out ALREADY-REDACTED text; every caller passes it through the redactor first. */
     private void deliver(@NonNull String text) {
+        if (text.isEmpty()) {
+            return;
+        }
         Runnable matched = null;
         synchronized (this) {
             this.ring.append(text);
@@ -170,8 +192,12 @@ final class InstanceConsoleSession {
         if (text.isEmpty()) {
             return;
         }
+        // The backlog is a COMPLETE text of its own, so it gets its own one-shot redaction
+        // rather than the streaming buffer -- feeding it through the live redactor would
+        // interleave it with the running stream's held-back tail.
+        String safe = ConsoleRedaction.redactWhole(text, this.redactor);
         synchronized (this) {
-            this.ring.insert(0, text);
+            this.ring.insert(0, safe);
             if (this.ring.length() > RING_CAP) {
                 this.ring.delete(0, this.ring.length() - RING_CAP);
             }

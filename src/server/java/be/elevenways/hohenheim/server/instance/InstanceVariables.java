@@ -62,6 +62,7 @@ public final class InstanceVariables {
             if (handler.isSecretValue()) {
                 row.set(InstanceVariableModel.KIND, InstanceVariableModel.KIND_SECRET);
                 row.set(InstanceVariableModel.SECRET_VALUE, value);
+                InstanceConsoles.registerSecret(instanceId, value);
             } else {
                 row.set(InstanceVariableModel.KIND, InstanceVariableModel.KIND_PLAIN);
                 row.set(InstanceVariableModel.PLAIN_VALUE, value);
@@ -107,6 +108,10 @@ public final class InstanceVariables {
             ? InstanceVariableModel.KIND_SECRET : InstanceVariableModel.KIND_PLAIN);
         if (secret) {
             row.set(InstanceVariableModel.SECRET_VALUE, value);
+            if (instanceId != null) {
+                // A secret written while a console streams must start being redacted NOW.
+                InstanceConsoles.registerSecret(instanceId, value);
+            }
         } else {
             row.set(InstanceVariableModel.PLAIN_VALUE, value);
         }
