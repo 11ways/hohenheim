@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -31,17 +32,16 @@ public final class HostnamePatterns {
      * The tier a row actually routes in, which is NOT simply its match_type: a hostname
      * carrying glob characters routes as a wildcard whatever the column says.
      *
+     * AIDEV-NOTE: the decision itself moved to {@link SiteDomainModel#effectiveMatchType}
+     * (common) so the model's own write-time syntax check and the tenant refusal ask the
+     * SAME question the dispatcher answers -- a second copy on the server side is exactly
+     * how the column and the routed tier drifted apart. This stays as the routing-side
+     * name every proxy caller already spells.
+     *
      * @return one of the {@code SiteDomainModel.MATCH_*} constants
      */
     public static @NonNull String effectiveKind(@Nullable String hostname, @Nullable String matchType) {
-        if (SiteDomainModel.MATCH_REGEX.equals(matchType)) {
-            return SiteDomainModel.MATCH_REGEX;
-        }
-        if (SiteDomainModel.MATCH_WILDCARD.equals(matchType)
-                || (hostname != null && WildcardHostname.isWildcard(hostname))) {
-            return SiteDomainModel.MATCH_WILDCARD;
-        }
-        return SiteDomainModel.MATCH_EXACT;
+        return SiteDomainModel.effectiveMatchType(hostname, matchType);
     }
 
     /**
@@ -127,7 +127,9 @@ public final class HostnamePatterns {
         if (pattern == null || pattern.isEmpty() || requestedName == null) {
             return false;
         }
-        String requested = BlastString.lower(requestedName.trim());
+        // The REQUESTED side is folded exactly like a stored hostname (canonicalHostname):
+        // an ACME SAN or a DNS name arriving with the root dot is the same name without it.
+        String requested = Hostnames.stripTrailingDots(BlastString.lower(requestedName.trim()));
         if (requested.isEmpty()) {
             return false;
         }

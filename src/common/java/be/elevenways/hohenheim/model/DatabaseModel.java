@@ -2,7 +2,9 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -96,7 +98,51 @@ public class DatabaseModel extends Model {
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
+    /**
+     * Whether a name is one Docker will accept as an object name -- which is also, and not
+     * by coincidence, exactly one filesystem path SEGMENT.
+     *
+     * AIDEV-NOTE: this column had no validator at all while BackupDatabases resolves it
+     * straight onto the backup root ({@code backupRoot.resolve(db.name())}), and
+     * {@code Path.resolve} with a {@code ../} argument walks OUT of the root -- so the dump
+     * and the retention prune (which deletes every file past the newest N in that
+     * directory) both landed wherever the name pointed. The rule is Docker's own
+     * {@code [a-zA-Z0-9][a-zA-Z0-9_.-]*}: no separator can occur, so no traversal can be
+     * spelled, and the name stays usable as a container handle. Admin-reachable only today
+     * (the databases panel is HohenheimPanel, not /manage), which is why this is a
+     * containment fix rather than a tenant-boundary one.
+     */
+    public static boolean isValidName(String name) {
+        if (name == null || name.isEmpty() || name.length() > MAX_NAME_LENGTH) {
+            return false;
+        }
+        for (int i = 0; i < name.length(); i++) {
+            char character = name.charAt(i);
+            boolean alphanumeric = (character >= 'a' && character <= 'z')
+                || (character >= 'A' && character <= 'Z')
+                || (character >= '0' && character <= '9');
+            if (!alphanumeric && (i == 0 || (character != '_' && character != '.' && character != '-'))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Docker's object-name ceiling, and generous for a directory name. */
+    private static final int MAX_NAME_LENGTH = 64;
+
     static {
+        SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row == null || !row.has(NAME.getName())) {
+                return;
+            }
+            Object name = row.get(NAME.getName());
+            if (name != null && !isValidName(String.valueOf(name))) {
+                throw Violations.ofField(NAME.getName(), name,
+                    Microcopy.of("database_name_invalid").withFilter("scope", "violations"));
+            }
+        });
         // A managed database always has a concrete host; default the FK at create time
         // so no consumer ever re-invents a "blank means local" spelling.
         SCHEMA.addBeforeValidateHook(context -> {

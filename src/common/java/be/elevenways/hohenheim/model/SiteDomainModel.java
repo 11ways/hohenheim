@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -30,15 +31,81 @@ public class SiteDomainModel extends Model {
 
     /**
      * THE stored/canonical hostname form, shared by the beforeValidate hook, the
-     * route-identity check and the dispatcher: trimmed, lowercased except for regex
-     * sources (patterns are case-sensitive).
+     * route-identity check and the dispatcher: trimmed, lowercased and stripped of the FQDN
+     * root dot, except for regex sources (patterns are case-sensitive, and a trailing
+     * {@code .} is a metacharacter there rather than the root label).
+     *
+     * AIDEV-NOTE: the root-dot fold is load-bearing, not cosmetic. Without it
+     * {@code victim.test.} and {@code victim.test} spelled two claim keys that
+     * {@link be.elevenways.hohenheim.server.proxy.HostnamePatterns} could not intersect
+     * either (a trailing empty label matches nothing), so both the conflict scan and the
+     * release quarantine let a second tenant claim the dotted spelling of a name the first
+     * one serves -- and TLS then answered it with the FIRST tenant's certificate, because
+     * SNI cannot carry the dot at all. Fold here and the two spellings are one claim
+     * everywhere at once.
      */
     public static @Nullable String canonicalHostname(@Nullable String hostname, @Nullable String matchType) {
         if (hostname == null) {
             return null;
         }
         String trimmed = hostname.trim();
-        return MATCH_REGEX.equals(matchType) ? trimmed : BlastString.lower(trimmed);
+        return MATCH_REGEX.equals(matchType)
+            ? trimmed : Hostnames.stripTrailingDots(BlastString.lower(trimmed));
+    }
+
+    /**
+     * THE routing tier a row lands in, which is NOT simply its {@link #MATCH_TYPE} column:
+     * a hostname carrying glob characters routes as a wildcard whatever the column says.
+     *
+     * AIDEV-NOTE: every consumer that asks "what tier is this row" must come here --
+     * the dispatcher's route-table build, the write-time overlap scan, the certificate
+     * coverage walk and the tenant refusal. A policy that reasons about the COLUMN while a
+     * consumer derives the same fact from the CONTENT is the bug shape this repo keeps
+     * paying for: {@code TenantWrites} refused {@code match_type=wildcard} and happily
+     * stored {@code hostname=*.victim.test, match_type=exact}, which the dispatcher then
+     * routed as a wildcard and {@code HostnameAuthority} read as authority over every
+     * sibling name under the victim's domain.
+     *
+     * @return one of the {@code MATCH_*} constants
+     */
+    public static @NonNull String effectiveMatchType(@Nullable String hostname,
+                                                     @Nullable String matchType) {
+        if (MATCH_REGEX.equals(matchType)) {
+            return MATCH_REGEX;
+        }
+        if (MATCH_WILDCARD.equals(matchType) || Hostnames.hasGlobCharacters(hostname)) {
+            return MATCH_WILDCARD;
+        }
+        return MATCH_EXACT;
+    }
+
+    /**
+     * Refuse a hostname whose SPELLING is not a name of the tier it will route in.
+     *
+     * AIDEV-NOTE: judged on the EFFECTIVE tier, so a glob-shaped hostname is held to the
+     * glob grammar even when its column says exact -- refusing it as an invalid exact name
+     * would be the column-versus-content split all over again. Absence is deliberately not
+     * a syntax question: an empty hostname is answered by SiteDomainResource's
+     * {@code hostname_required}, which is the refusal an operator can act on.
+     *
+     * @throws Violations anchored on the hostname field
+     */
+    public static void validateHostnameSyntax(@Nullable String hostname, @Nullable String matchType) {
+        if (hostname == null || hostname.isBlank()) {
+            return;
+        }
+        String tier = effectiveMatchType(hostname, matchType);
+        boolean valid = switch (tier) {
+            // A regex source is not a name, so the only thing decidable about it here is
+            // that it can occupy one field of a route tuple. A pattern that does not
+            // compile routes nothing (SiteDispatcher drops it).
+            case MATCH_REGEX -> Hostnames.isSingleLine(hostname);
+            case MATCH_WILDCARD -> Hostnames.isValidGlob(hostname);
+            default -> Hostnames.isValidLabelSequence(hostname);
+        };
+        if (!valid) {
+            throw violation(HOSTNAME.getName(), hostname, "hostname_invalid");
+        }
     }
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
@@ -147,8 +214,21 @@ public class SiteDomainModel extends Model {
             Row row = context.getRow();
             if (row == null) return;
             String hostname = (String) effective(row, HOSTNAME);
+            String matchType = (String) effective(row, MATCH_TYPE);
             if (hostname != null) {
-                row.set(HOSTNAME, canonicalHostname(hostname, (String) effective(row, MATCH_TYPE)));
+                String canonical = canonicalHostname(hostname, matchType);
+                row.set(HOSTNAME, canonical);
+                validateHostnameSyntax(canonical, matchType);
+                // AIDEV-NOTE: the COLUMN is normalized to the tier the row actually routes
+                // in, so the two can never disagree in storage at all. Validating the tier
+                // without writing it back would leave a glob-under-exact row storable by an
+                // operator, and a whole set of consumers read this column RAW to decide
+                // real things -- CertificateRequestPage and ManagePanel gate certificate
+                // orders on `MATCH_EXACT.equals(column)`, SiteDeploymentsPage queries on it,
+                // TlsPassthroughRoutes builds SNI routes from it. Each of those would have
+                // to re-derive the tier, which is exactly the duplication that produced the
+                // takeover. One write here makes every raw reader correct by construction.
+                row.set(MATCH_TYPE, effectiveMatchType(canonical, matchType));
             }
             Integer siteId = (Integer) effective(row, SITE_ID);
             Row site = siteId != null ? Models.get(SiteModel.class).findById(siteId) : null;

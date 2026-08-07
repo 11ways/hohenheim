@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.tls;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -35,7 +36,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -425,18 +425,16 @@ public class AcmeService {
     // Hostname validation
     // -----------------------------------------------------------------------
 
-    private static final Pattern HOSTNAME_LABEL =
-        Pattern.compile("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?");
-
-    /** RFC-1123 hostname check for HTTP-01, which cannot validate wildcards. */
+    /**
+     * RFC-1123 hostname check for HTTP-01, which cannot validate wildcards.
+     *
+     * AIDEV-NOTE: the body moved to {@link Hostnames}, the ONE syntax authority, because
+     * this used to be the only such check in the repo and it was wired to the
+     * certificate-request handler alone -- the site-domain write path stored whatever it
+     * was given. Keep this as the ACME-facing name; do not re-inline a second grammar here.
+     */
     public static boolean isValidHostname(String hostname) {
-        if (hostname == null) return false;
-        String h = hostname.trim().toLowerCase(Locale.ROOT);
-        if (h.isEmpty() || h.length() > 253 || !h.contains(".")) return false;
-        for (String label : h.split("\\.", -1)) {
-            if (!HOSTNAME_LABEL.matcher(label).matches()) return false;
-        }
-        return true;
+        return Hostnames.isValidHostname(hostname);
     }
 
     /** @return the subset of hostnames that fail {@link #isValidHostname} */

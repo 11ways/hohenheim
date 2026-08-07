@@ -224,8 +224,22 @@ public final class TenantWrites {
         // released WILDCARD space can still be re-entered by a regex row. That residue is
         // acceptable only because BOTH sides then have to be operator-authored, which is
         // what this line guarantees. Widening the tenant match-type set reopens it.
+        //
+        // AIDEV-NOTE: judged on the EFFECTIVE tier, never on the match_type COLUMN. Testing
+        // the column alone was a refusal that did less than it claimed: a tenant submitting
+        // hostname=*.victim.test with match_type=exact passed it, the row stored exactly as
+        // submitted, and SiteDispatcher then routed it in the WILDCARD tier (it reads the
+        // hostname's shape) while HostnameAuthority.covers read it as the sole covering row
+        // for every name under victim.test -- which requireRecordAuthority below turns into
+        // permission to write DNS inside the victim's zone. Neither the conflict scan nor
+        // the quarantine caught it, because "*." is one-or-more labels and so does not
+        // intersect the apex the victim actually holds.
         Object matchType = effective(row, stored, SiteDomainModel.MATCH_TYPE);
-        if (matchType != null && !SiteDomainModel.MATCH_EXACT.equals(matchType)) {
+        Object hostnameValue = effective(row, stored, SiteDomainModel.HOSTNAME);
+        String tier = SiteDomainModel.effectiveMatchType(
+            hostnameValue != null ? String.valueOf(hostnameValue) : null,
+            matchType != null ? String.valueOf(matchType) : null);
+        if (!SiteDomainModel.MATCH_EXACT.equals(tier)) {
             throw Violations.ofField(SiteDomainModel.MATCH_TYPE.getName(), matchType,
                 CmsSupport.violationText("tenant_match_type_exact"));
         }
