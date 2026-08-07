@@ -24,22 +24,47 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * The engine memory ceiling, end to end on a real daemon: a managed MONGO provisioned
- * through the product funnel gets its ENGINE's declared footprint as a cgroup cap, never
- * once runs against that cap while starting, and then serves.
+ * Every engine's DECLARED memory footprint, end to end on a real daemon: a database
+ * provisioned through the product funnel gets its engine's footprint as the cgroup cap,
+ * runs its whole init with a fifth of that cap still spare, is never OOM-killed, and
+ * then serves a value back.
  *
- * AIDEV-NOTE: this test exists because the previous flat 512 MB footprint was BELOW
- * mongo's and mysql's measured startup peak. Because charge == cap, that number is also
- * the cgroup ceiling, so those engines spent their whole init pinned against it,
- * reclaiming hundreds of times, and survived only while host reclaim kept up. Under the
- * parallel browserTest lane it did not: the cgroup OOM killer took mongod (a CHILD of the
- * entrypoint script during init, so the container stayed UP and looked healthy) and the
- * next client connection got "MongoNetworkError: connect ECONNREFUSED". Step 2 is the
- * assertion that encodes that defect -- a cap merely being "big enough not to crash
- * today" is exactly the state that flaked, so the test demands the engine never touched
- * its ceiling at all.
+ * AIDEV-NOTE: the assertion here is HEADROOM ({@code memory.peak} against the cap), and
+ * two earlier waves disagreed about what to assert instead. Read this before changing it.
+ *
+ * The flake it defends against is real and was observed twice: at a cap below its peak an
+ * engine spends its whole init pinned against the ceiling, and under the parallel
+ * browserTest lane the cgroup OOM killer takes the engine process (a CHILD of the
+ * entrypoint script, so the container stays UP and looks healthy) and the next connection
+ * gets ECONNREFUSED. The first attempt at pinning that asserted {@code memory.events}
+ * "max" was zero. That assertion is WRONG twice over: "max" counts reclaim invocations,
+ * and reclaim is not a kill (a busy-but-alive workload churning page cache reports
+ * thousands); and empirically it is not even stable for a FIXED adequate cap -- measured
+ * 2026-08-07, one and the same mongo at 768 MB reported max=0 on a warm host and max=570
+ * in the test lane, because whichever cgroup first faults the image's pages is charged
+ * for them. It was an assertion about the host, not about the cap.
+ *
+ * {@code memory.peak} cannot say that, because it is bounded by the cap BY CONSTRUCTION:
+ * a peak that approaches the cap is direct evidence the engine's demand was clipped, which
+ * is exactly the pre-kill state. So the cap must be big enough that the peak stays well
+ * under it, and {@link #HEADROOM_NUMERATOR}/{@link #HEADROOM_DENOMINATOR} is how much
+ * "well under" the product declares.
+ *
+ * The obvious objection to a percentage-of-cap gate is that a cgroup fills opportunistically
+ * with reclaimable page cache, so the peak might just follow whatever cap it is given and
+ * the gate would never terminate. Measured, it does not: mongo peaked at the same 835 MiB
+ * through this funnel at a 1024 MB cap and at a 1280 MB cap. Re-measure before assuming
+ * that of a new engine.
  */
 class EngineMemoryCeilingTest {
+
+    /**
+     * A declared footprint must leave at least a fifth of itself spare at the measured
+     * peak -- a startup measurement never observes query load, so a cap the engine runs
+     * flush against at rest has nothing left for the work it exists to do.
+     */
+    private static final long HEADROOM_NUMERATOR = 4;
+    private static final long HEADROOM_DENOMINATOR = 5;
 
     private static PrivateNetns netns;
 
@@ -57,60 +82,108 @@ class EngineMemoryCeilingTest {
     }
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
-    private static final String MONGO_IMAGE = "mongo:7";
+    private static final String USER = "appuser";
+    private static final String PASSWORD = "secret123";
+    private static final String DATABASE = "appdb";
+
+    /** Runs one round trip inside the started engine and returns the VALUE it printed. */
+    private interface ServeCheck {
+        String serve(DockerClient docker, String container) throws IOException;
+    }
 
     @Test
-    void mongoRunsUnderItsOwnEngineFootprintAndNeverHitsTheCeiling() throws IOException {
+    void postgresRunsUnderItsOwnEngineFootprintWithHeadroomToSpare() throws IOException {
+        journey(ManagedDatabase.Engine.POSTGRES, "postgres:17-alpine", "42",
+            (docker, container) -> value(docker, container,
+                List.of("psql", "-U", USER, "-d", DATABASE, "-tAc", "select 42"),
+                List.of("PGPASSWORD=" + PASSWORD)));
+    }
+
+    @Test
+    void redisRunsUnderItsOwnEngineFootprintWithHeadroomToSpare() throws IOException {
+        journey(ManagedDatabase.Engine.REDIS, "redis:7-alpine", "42", (docker, container) -> {
+            List<String> auth = List.of("REDISCLI_AUTH=" + PASSWORD);
+            value(docker, container, List.of("redis-cli", "-p", "6379", "set", "ceiling", "42"), auth);
+            return value(docker, container, List.of("redis-cli", "-p", "6379", "get", "ceiling"), auth);
+        });
+    }
+
+    @Test
+    void mysqlRunsUnderItsOwnEngineFootprintWithHeadroomToSpare() throws IOException {
+        journey(ManagedDatabase.Engine.MYSQL, "mysql:8.0", "42",
+            (docker, container) -> value(docker, container,
+                List.of("mysql", "-u", USER, "-D", DATABASE, "-N", "-B", "-e", "select 42"),
+                List.of("MYSQL_PWD=" + PASSWORD)));
+    }
+
+    @Test
+    void mongoRunsUnderItsOwnEngineFootprintWithHeadroomToSpare() throws IOException {
+        journey(ManagedDatabase.Engine.MONGO, "mongo:7", "1", (docker, container) -> {
+            mongo(docker, container, "db.getSiblingDB('appdb').ceiling.insertOne({ x: 42 })");
+            return mongo(docker, container,
+                "db.getSiblingDB('appdb').ceiling.countDocuments({ x: 42 })");
+        });
+    }
+
+    /**
+     * The whole journey for one engine: provision through the real funnel with no
+     * {@code memory_limit_mb}, then judge the cap the daemon applied, the pressure the
+     * engine's own cgroup recorded reaching readiness, and whether it serves.
+     */
+    private void journey(ManagedDatabase.Engine engine, String image, String expectedValue,
+                         ServeCheck serve) throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, MONGO_IMAGE), MONGO_IMAGE + " not present locally");
+        assumeTrue(imagePresent(docker, image), image + " not present locally");
 
         DatabaseService service = new DatabaseService(freshDatasource());
-        String name = "mongomem" + System.nanoTime();
+        String name = engine.token() + "mem" + System.nanoTime();
         try {
             // The real funnel, with no memory_limit_mb: the kind's per-engine default is
-            // what the daemon must end up applying.
-            service.create(name, ManagedDatabase.Engine.MONGO, MONGO_IMAGE,
-                "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs
+            // what the daemon must end up applying. Ephemeral, so the data dir is a tmpfs
+            // charged to the same cgroup -- the conservative shape.
+            service.create(name, engine, image, USER, PASSWORD, DATABASE, true);
             String container = EngineHandles.of(name);
 
-            // 1. The DAEMON's own view of the cgroup cap is the engine's declared
-            //    footprint, not the flat 512 MB every kind used to book.
-            long expected = (long) ManagedDatabase.Engine.MONGO.footprintMb() * 1024 * 1024;
+            // 1. The DAEMON's own view of the cgroup cap is this engine's declared
+            //    footprint, not a flat number every kind shares.
+            long cap = (long) engine.footprintMb() * 1024 * 1024;
             Map<?, ?> hostConfig = (Map<?, ?>) docker.inspectContainer(container).get("HostConfig");
             assertThat(((Number) hostConfig.get("Memory")).longValue())
-                .withFailMessage("step 1: HostConfig.Memory is %s, expected mongo's declared"
-                    + " footprint of %s MB (%s bytes)", hostConfig.get("Memory"),
-                    ManagedDatabase.Engine.MONGO.footprintMb(), expected)
-                .isEqualTo(expected);
+                .withFailMessage("step 1 (%s): HostConfig.Memory is %s, expected the engine's"
+                    + " declared footprint of %s MB (%s bytes)", engine, hostConfig.get("Memory"),
+                    engine.footprintMb(), cap)
+                .isEqualTo(cap);
 
-            // 2. The product's readiness gate has already returned by now, so the whole of
-            //    the engine's init is behind us: its cgroup must never have reached the
-            //    ceiling (max) and nothing in it may have been OOM-killed (oom_kill).
-            //    Scoped to THIS container's own cgroup -- /sys/fs/cgroup inside a
-            //    container is its own cgroup namespace, never a daemon-wide reading.
+            // 2. The product's readiness gate has already returned, so the whole of the
+            //    engine's init is behind us: nothing in its cgroup may have been OOM-killed.
+            //    Scoped to THIS container's own cgroup -- /sys/fs/cgroup inside a container
+            //    is its own cgroup namespace, never a daemon-wide reading.
             Map<String, Long> events = memoryEvents(docker, container);
             assertThat(events.get("oom_kill"))
-                .withFailMessage("step 2: mongo's cgroup OOM-killed %s process(es) at a %s MB"
-                    + " cap -- memory.events was %s", events.get("oom_kill"),
-                    ManagedDatabase.Engine.MONGO.footprintMb(), events)
-                .isZero();
-            assertThat(events.get("max"))
-                .withFailMessage("step 2: mongo ran against its %s MB ceiling %s time(s) while"
-                    + " starting -- it only survives while host reclaim keeps up, which is the"
-                    + " ECONNREFUSED flake; memory.events was %s",
-                    ManagedDatabase.Engine.MONGO.footprintMb(), events.get("max"), events)
+                .withFailMessage("step 2 (%s): the engine's cgroup OOM-killed %s process(es) at"
+                    + " its %s MB cap -- memory.events was %s", engine, events.get("oom_kill"),
+                    engine.footprintMb(), events)
                 .isZero();
 
-            // 3. The engine SERVES under that cap: assert the returned VALUE, never an exit
+            // 3. And it got there with headroom. memory.peak cannot exceed the cap, so a
+            //    peak near it means demand was CLIPPED, which is the pre-kill state.
+            long peak = memoryPeak(docker, container);
+            assertThat(peak)
+                .withFailMessage("step 3 (%s): the engine peaked at %s MiB of its own %s MB"
+                    + " footprint (%s%%) -- a cap it runs flush against at rest has nothing"
+                    + " left for query load, and is the ECONNREFUSED flake; declare a bigger"
+                    + " footprint or prove the engine needs less", engine, peak / 1024 / 1024,
+                    engine.footprintMb(), peak * 100 / cap)
+                .isLessThanOrEqualTo(cap * HEADROOM_NUMERATOR / HEADROOM_DENOMINATOR);
+
+            // 4. The engine SERVES under that cap: assert the returned VALUE, never an exit
             //    code (a client can exit 0 while printing a refusal).
-            mongo(docker, container, "db.getSiblingDB('appdb').ceiling.insertOne({ x: 42 })");
-            String count = mongo(docker, container,
-                "db.getSiblingDB('appdb').ceiling.countDocuments({ x: 42 })");
-            assertThat(count)
-                .withFailMessage("step 3: mongo did not serve the inserted document back;"
-                    + " countDocuments printed '%s'", count)
-                .isEqualTo("1");
+            String served = serve.serve(docker, container);
+            assertThat(served)
+                .withFailMessage("step 4 (%s): the engine did not serve the expected value back;"
+                    + " it printed '%s'", engine, served)
+                .isEqualTo(expectedValue);
         } finally {
             try {
                 service.destroy(name, true);
@@ -123,31 +196,47 @@ class EngineMemoryCeilingTest {
     /** The container's OWN {@code memory.events} counters, read from inside its cgroup namespace. */
     private static Map<String, Long> memoryEvents(DockerClient docker, String container)
             throws IOException {
-        DockerClient.ExecResult result =
-            docker.exec(container, List.of("cat", "/sys/fs/cgroup/memory.events"));
-        assertThat(result.exitCode())
-            .withFailMessage("could not read memory.events: %s", result.stderr()).isZero();
+        String text = read(docker, container, "/sys/fs/cgroup/memory.events");
         Map<String, Long> events = new LinkedHashMap<>();
-        for (String line : result.stdout().split("\n")) {
+        for (String line : text.split("\n")) {
             String[] parts = line.trim().split("\\s+");
             if (parts.length == 2) {
                 events.put(parts[0], Long.parseLong(parts[1]));
             }
         }
         // A cgroup v2 memory controller always publishes both; their absence means we read
-        // something else entirely and every assertion below would be vacuous.
+        // something else entirely and every assertion on it would be vacuous.
         assertThat(events).containsKeys("max", "oom_kill");
         return events;
     }
 
-    /** @return the trimmed VALUE mongosh printed, so no caller can assert on an exit code alone */
-    private static String mongo(DockerClient docker, String container, String eval) throws IOException {
-        DockerClient.ExecResult result = docker.exec(container, List.of(
-            "mongosh", "--username", "appuser", "--password", "secret123",
-            "--authenticationDatabase", "admin", "--quiet", "--eval", eval));
+    /** The container's OWN high-water mark in bytes, which the kernel bounds by the cap. */
+    private static long memoryPeak(DockerClient docker, String container) throws IOException {
+        return Long.parseLong(read(docker, container, "/sys/fs/cgroup/memory.peak").trim());
+    }
+
+    /** @throws AssertionError when the file cannot be read, so no reading is silently skipped */
+    private static String read(DockerClient docker, String container, String path)
+            throws IOException {
+        DockerClient.ExecResult result = docker.exec(container, List.of("cat", path));
         assertThat(result.exitCode())
-            .withFailMessage("mongo eval failed: %s", result.stderr()).isZero();
+            .withFailMessage("could not read %s: %s", path, result.stderr()).isZero();
+        return result.stdout();
+    }
+
+    /** @return the trimmed VALUE the client printed, so no caller can assert on an exit code alone */
+    private static String value(DockerClient docker, String container, List<String> command,
+                                List<String> env) throws IOException {
+        DockerClient.ExecResult result = docker.exec(container, command, env);
+        assertThat(result.exitCode())
+            .withFailMessage("client failed: %s", result.stderr()).isZero();
         return result.stdout().trim();
+    }
+
+    private static String mongo(DockerClient docker, String container, String eval) throws IOException {
+        return value(docker, container, List.of(
+            "mongosh", "--username", USER, "--password", PASSWORD,
+            "--authenticationDatabase", "admin", "--quiet", "--eval", eval), List.of());
     }
 
     private static SqliteDatasource freshDatasource() throws IOException {

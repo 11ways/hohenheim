@@ -42,9 +42,9 @@ public class ManagedDatabase {
     /** Supported engines with their default image, port, data path, footprint, and env mapping. */
     public enum Engine {
         POSTGRES("postgres:17-alpine", 5432, "/var/lib/postgresql/data", 512),
-        MYSQL("mysql:8.0", 3306, "/var/lib/mysql", 768),
+        MYSQL("mysql:8.0", 3306, "/var/lib/mysql", 1024),
         REDIS("redis:7-alpine", 6379, "/data", 512),
-        MONGO("mongo:7", 27017, "/data/db", 768);
+        MONGO("mongo:7", 27017, "/data/db", 1280);
 
         final String defaultImage;
         final int port;
@@ -63,23 +63,32 @@ public class ManagedDatabase {
          * books and, because charge == cap, the cgroup ceiling the daemon applies when
          * the operator declares no {@code memory_limit_mb}.
          *
-         * Measured 2026-08-07 against the real Docker daemon under the product's exact
-         * shape (image, tmpfs data path, the cap applied, the product's own readiness
-         * probe polling from inside the same cgroup): peak cgroup usage was redis 9 MiB,
-         * postgres 72 MiB, mysql 620 MiB, mongo 531 MiB. At a 512 MB cap mysql and mongo
-         * never got their peak: they sat pinned against the ceiling for the whole of
-         * init (memory.events "max" fired 698 and 421 times) and survived only while
-         * host reclaim kept up -- under parallel forks it did not, the cgroup OOM killer
-         * took mongod (a child of the entrypoint, so the container stayed up) and the
-         * next connection got ECONNREFUSED.
+         * Re-measured 2026-08-07 through the product's own funnel, reading the engine
+         * cgroup's {@code memory.peak} at several caps each: redis 18 MiB, postgres
+         * 117 MiB, mysql 596 MiB, mongo 835 MiB. Each declared footprint leaves its
+         * engine at least a fifth of it spare at that peak, which is what
+         * {@code EngineMemoryCeilingTest} pins per engine.
          *
-         * AIDEV-NOTE: THE RULE these numbers follow. A measured startup+idle peak can
-         * PROVE a cap is too small -- raising it is then proven-necessary. It can never
-         * justify LOWERING a cap that must also survive QUERY load, which no startup
-         * measurement observes. So redis (9 MiB) and postgres (72 MiB) keep their 512
-         * despite measuring far below it, while mysql and mongo go to 768. These are
-         * measurements with a date, not assumptions; an operator who knows better has
-         * the {@code memory_limit_mb} setting as the escape hatch.
+         * AIDEV-NOTE: THE RULE these numbers follow, and the mistake that produced the
+         * previous ones. A peak read at a cap the workload is PINNED AGAINST is not a
+         * peak -- it IS the cap. The 768 MB this table declared for mysql and mongo came
+         * from peaks measured at 512, where both were clipped, so the numbers it recorded
+         * (620 and 531 MiB) were too low and 768 was still marginal: mongo really wants
+         * 835 MiB and ran flush against 768, which is the ECONNREFUSED flake all over
+         * again. The peak is bounded, not cap-following -- mongo measured the same 835 MiB
+         * at a 1024 cap and at a 1280 cap -- so the headroom rule terminates rather than
+         * chasing the ceiling upwards. A measured peak can PROVE a cap is too small; it can
+         * never justify LOWERING a cap that must also survive QUERY load, which no startup
+         * measurement observes, so redis (18 MiB) and postgres (117 MiB) keep their 512.
+         * These are measurements with a date, not assumptions; an operator who knows better
+         * has the {@code memory_limit_mb} setting as the escape hatch.
+         *
+         * AIDEV-NOTE: the ephemeral (tmpfs) shape is what these numbers cover, and its
+         * data directory is charged to the SAME cgroup -- ~300 MiB of mongo's 835 is the
+         * tmpfs itself. So is the readiness probe: {@code awaitReady} execs a client at
+         * 2 Hz INSIDE the container, and a mongosh is a Node process. A persistent
+         * database keeps its data in page cache the kernel can drop, so booking the
+         * ephemeral shape is the conservative direction.
          */
         public int footprintMb() {
             return this.footprintMb;
