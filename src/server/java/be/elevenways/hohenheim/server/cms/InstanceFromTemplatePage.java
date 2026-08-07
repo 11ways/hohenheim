@@ -135,16 +135,13 @@ public final class InstanceFromTemplatePage extends PanelPage {
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-from-template"), vars);
     }
 
-    /** The projects the actor may create into: all for admins, memberships otherwise. */
+    /**
+     * The projects the actor may create into. THE one visibility policy, never a local
+     * copy: this pick used to derive memberships itself, which meant a scope-narrowed
+     * API key rendering this page still saw its owner's projects.
+     */
     private static @NonNull List<Row> selectableProjects(@NonNull AccessContext ctx) {
-        if (HohenheimAccess.isAdmin(ctx)) {
-            return Models.get(ProjectModel.class).find().all();
-        }
-        Long principalId = ctx.principalId();
-        if (principalId == null || ctx.isAnonymous()) {
-            return List.of();
-        }
-        return Projects.projectsOf(principalId.intValue());
+        return Projects.visibleTo(ctx);
     }
 
     /** The ?template= row, or null when absent/malformed/missing. */

@@ -47,9 +47,11 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
     private static int proxyPort;
     private static Integer siteAId;
     private static Integer siteBId;
+    private static Integer siteCId;
 
     private static final String SECRET_A = "hook-secret-a-777";
     private static final String SECRET_B = "hook-secret-b-888";
+    private static final String SECRET_C = "hook-secret-c-999";
 
     @BeforeAll
     static void initSitesAndProxy() throws Exception {
@@ -64,6 +66,11 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
 
         siteAId = makeGitSite("Hook Site A", "hook-a", SECRET_A, "acme/repo-a", "hook-a.test");
         siteBId = makeGitSite("Hook Site B", "hook-b", SECRET_B, "acme/repo-b", "hook-b.test");
+        // Site C is the previews-OPTED-IN site. Its static type makes the preview engine
+        // refuse by type the moment the background job starts, so the mapping is observed
+        // through the stamped delivery action and nothing is ever built.
+        siteCId = makeGitSite("Hook Site C", "hook-c", SECRET_C, "acme/repo-c", "hook-c.test");
+        enablePreviews(siteCId);
 
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
@@ -243,6 +250,112 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
             .hasSize(1);
     }
 
+    /**
+     * GitLab's Merge Request Hook drives the SAME preview lifecycle GitHub's
+     * pull_request does. A GitLab repository used to get pushes and silently no
+     * previews at all, because only the literal event name "pull_request" was mapped.
+     *
+     * Observed through the STAMPED delivery action, which is the handler's own record of
+     * which lane a delivery reached; the preview machinery itself is proven elsewhere and
+     * refuses this static site by type, so nothing is built here.
+     */
+    @Test
+    @org.junit.jupiter.api.Order(7)
+    void gitlabMergeRequestEventsDriveTheSamePreviewLifecycleGithubPullRequestsDo()
+            throws Exception {
+        // 1. open: a GitLab MR reaches the preview lane at all -- this is the whole
+        //    defect. Its absence used to fall through to the PUSH handler.
+        assertThat(mergeRequestAction("open", null))
+            .as("step 1: an opened merge request queues a preview")
+            .isEqualTo("preview_queued");
+
+        // 2. reopen is the same intent under GitLab's spelling of "reopened".
+        assertThat(mergeRequestAction("reopen", null))
+            .as("step 2: a reopened merge request queues a preview")
+            .isEqualTo("preview_queued");
+
+        // 3. update is NOT GitHub's synchronize: GitLab fires it for retitles, labels and
+        //    assignees too, and only a source-branch head move carries oldrev. Without
+        //    that discrimination every cosmetic edit would rebuild the preview.
+        assertThat(mergeRequestAction("update", null))
+            .as("step 3: an update carrying no new head is ignored")
+            .isEqualTo("ignored_pr_action");
+        assertThat(mergeRequestAction("update", "beef0000"))
+            .as("step 3: an update that moved the head queues a preview")
+            .isEqualTo("preview_queued");
+
+        // 4. Both end states tear the preview down: GitHub only ever says "closed", while
+        //    GitLab distinguishes close from merge.
+        assertThat(mergeRequestAction("close", null))
+            .as("step 4: a closed merge request queues a teardown")
+            .isEqualTo("preview_teardown_queued");
+        assertThat(mergeRequestAction("merge", null))
+            .as("step 4: a merged one does too")
+            .isEqualTo("preview_teardown_queued");
+
+        // 5. An action outside the lifecycle is acknowledged and does nothing.
+        assertThat(mergeRequestAction("approved", null))
+            .as("step 5: an approval is not a deployment trigger")
+            .isEqualTo("ignored_pr_action");
+
+        // 6. A Merge Request Hook without object_attributes is malformed, not "ignored
+        //    action": the two stamps must stay distinguishable in the ledger.
+        String malformedUuid = UUID.randomUUID().toString();
+        String malformed = "{\"object_kind\":\"merge_request\","
+            + "\"project\":{\"path_with_namespace\":\"acme/repo-c\"}}";
+        post("/api/webhooks/git/hook-c", malformed,
+            "X-Gitlab-Event: Merge Request Hook",
+            "X-Gitlab-Event-UUID: " + malformedUuid,
+            "X-Gitlab-Token: " + SECRET_C);
+        assertThat(stampedAction("gl:" + malformedUuid))
+            .as("step 6: a shapeless merge request payload is malformed, not ignored")
+            .isEqualTo("ignored_malformed_pr");
+
+        // 7. CROSS-PROVIDER ANCHOR: the GitHub lane still reaches the same place on the
+        //    same site, so steps 1-6 are a mapping that was ADDED, not one that replaced.
+        String githubUuid = UUID.randomUUID().toString();
+        String githubBody = "{\"action\":\"opened\","
+            + "\"repository\":{\"full_name\":\"acme/repo-c\"},"
+            + "\"pull_request\":{\"number\":9,\"head\":{\"ref\":\"feature-gh\","
+            + "\"sha\":\"cafe9999\"}}}";
+        post("/api/webhooks/git/hook-c", githubBody,
+            "X-GitHub-Event: pull_request", "X-GitHub-Delivery: " + githubUuid,
+            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, githubBody));
+        assertThat(stampedAction("gh:" + githubUuid))
+            .as("step 7: GitHub pull requests still queue previews on the same site")
+            .isEqualTo("preview_queued");
+    }
+
+    /**
+     * Deliver one GitLab Merge Request Hook and report what the handler stamped.
+     *
+     * @param oldrev the source branch's previous head, or null for an update that
+     *               carried no new commits
+     */
+    private static String mergeRequestAction(String action, String oldrev) throws Exception {
+        String uuid = UUID.randomUUID().toString();
+        String body = "{\"object_kind\":\"merge_request\","
+            + "\"project\":{\"path_with_namespace\":\"acme/repo-c\"},"
+            + "\"object_attributes\":{\"iid\":42,\"source_branch\":\"feature-gl\","
+            + "\"target_branch\":\"main\",\"action\":\"" + action + "\","
+            + (oldrev == null ? "" : "\"oldrev\":\"" + oldrev + "\",")
+            + "\"last_commit\":{\"id\":\"cafe7777\"}}}";
+        post("/api/webhooks/git/hook-c", body,
+            "X-Gitlab-Event: Merge Request Hook",
+            "X-Gitlab-Event-UUID: " + uuid,
+            "X-Gitlab-Token: " + SECRET_C);
+        return stampedAction("gl:" + uuid);
+    }
+
+    /** The delivery's recorded outcome; the claim is written before the handler acts. */
+    private static String stampedAction(String deliveryKey) throws Exception {
+        await("delivery " + deliveryKey + " is stamped", () -> {
+            List<Row> rows = deliveryRowsOf(siteCId, deliveryKey);
+            return !rows.isEmpty() && rows.get(0).get(WebhookDeliveryModel.ACTION) != null;
+        });
+        return deliveryRowsOf(siteCId, deliveryKey).get(0).get(WebhookDeliveryModel.ACTION);
+    }
+
     // -- fixtures -------------------------------------------------------------
 
     private static Integer makeGitSite(String name, String slug, String secret,
@@ -273,6 +386,17 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         domain.set(SiteDomainModel.MATCH_TYPE, "exact");
         domainModel.save(domain);
         return site.get(SiteModel.ID);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void enablePreviews(Integer siteId) {
+        var siteModel = Models.get(SiteModel.class);
+        Row site = siteModel.findById(siteId);
+        Map<String, Object> settings = new LinkedHashMap<>(
+            (Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS));
+        settings.put("previews_enabled", true);
+        site.set(SiteModel.SOURCE_SETTINGS, settings);
+        siteModel.save(site);
     }
 
     private static String pushPayload(String repository, String ref, String sha) {

@@ -3471,6 +3471,29 @@ network, quota, ownership, secret and durable-operation mechanisms.
   self-service project surface (admin resources + the from-template project
   pick only), sites/databases environment attribution (instances only),
   preview deployments.
+
+  TENANT SURFACE LANDED 2026-08-07 (re-verify, do not assume), READ-ONLY BY
+  DECISION. `/manage` gains two peers: `ManageProjectResource` (a subclass of
+  the admin `ProjectResource`, so the derived columns -- members, owned sites/
+  instances, quota -- are one definition) and `ManageProjectMemberResource` (a
+  store-backed `Resource<T>` over the membership GRANTS, `applyTableView` for
+  list/sort/filter/page). Nothing is writable: every membership change is a
+  `group.<slug>` grant write governed by `GrantAdministration`, which demands
+  the non-delegable `auth.grants.manage` and refuses self-edits, so add /
+  remove / leave could only ever refuse -- a delegation surface nobody
+  designed. Membership stays edited in the zenit-auth grant editors. Rename
+  stays admin because `ProjectGuards` mirrors the name onto the auth group.
+  Eligibility: project membership JOINED the `/manage` disjunction, or a
+  member of a project owning nothing would be 403'd out of the panel that now
+  projects it (counterfactual-proven: 403 without it). Visibility is now ONE
+  policy, `Projects.visibleTo`/`visibleScope`; `projectsOf` went
+  package-private so the unguarded walk is unreachable. That consolidation
+  closed a REAL hole: the API-lane key-scope guard existed only on the API
+  lane, while `InstanceFromTemplatePage.selectableProjects` derived
+  memberships itself. A `ProjectModel` RecordSource override was added for the
+  two-derived-defaults shadowing hazard the other `/manage` models already
+  carry. STILL NOT HERE: environments have no tenant surface, and per-project
+  quotas for builds/releases remain unbuilt.
 - GitHub/GitLab-compatible provider installation, repository/branch selection,
   signed webhooks and deployment status reporting. Preview deployments have
   bounded lifetime/quota, isolated variables and deterministic generated-domain
@@ -3526,6 +3549,26 @@ network, quota, ownership, secret and durable-operation mechanisms.
   over the base domain is THE model; generated rows are LE-excluded), remote-
   server previews (loopback probe/serve assumes the local daemon), preview
   webhooks for process/static site types.
+
+  GITLAB MERGE REQUESTS MAPPED 2026-08-07 (re-verify, do not assume). The
+  preview lane recognized only the literal event name `pull_request`, so a
+  GitLab repository got pushes and silently no previews. Worse than that, and
+  only visible under the counterfactual: an unmapped Merge Request Hook FELL
+  THROUGH to the push handler, where a payload with no `ref` skips the branch
+  check -- so every merge-request event on an auto-deploy site queued a
+  PRODUCTION deploy (observed stamp `deploy_queued`). Events are now lowered
+  onto a provider-neutral `PreviewEvent` by the event HEADER (never by payload
+  shape): GitLab open/reopen -> deploy, close/merge -> teardown, and `update`
+  -> deploy ONLY when `oldrev` is present, because GitLab fires `update` for
+  retitles, labels and assignees too and is not GitHub's `synchronize`. The
+  branch is `object_attributes.source_branch`, the sha `last_commit.id`, the
+  number `iid` (never `id`). Replay retention was also fixed here: the ledger
+  kept the newest 200 deliveries per site, which made replay protection a
+  function of TRAFFIC; it is now a 30-day window, which is the unit replay
+  protection is actually measured in. STILL NOT HERE: fork merge requests are
+  treated like any other (we would try to build a ref we do not have, and
+  building an untrusted fork is a policy decision, not a mapping one) -- it is
+  the same hole GitHub's lane has, and it wants ONE cross-provider answer.
 - Health-gated zero-downtime release: create candidate, probe, atomically switch
   routing, drain old release, retain rollback target, then reclaim. Failed health
   never replaces the serving release. Rollback is one durable operation over a

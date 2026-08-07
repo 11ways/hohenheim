@@ -6,11 +6,13 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.dns.DnsNames;
+import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -106,7 +108,11 @@ public final class ManagePanel extends Panel {
             // in hand. Every model this panel projects belongs in this disjunction.
             AccessContext ctx = RecordSourceGate.accessContextOf(conduit);
             return !HohenheimAccess.managedSiteIds(ctx).isEmpty()
-                || !HohenheimAccess.instanceIdsWith(ctx, HohenheimAccess.MANAGE).isEmpty();
+                || !HohenheimAccess.instanceIdsWith(ctx, HohenheimAccess.MANAGE).isEmpty()
+                // PROJECTS join the disjunction for the reason stated above: a member of
+                // a project that owns nothing yet holds no site or instance grant, and
+                // would be 403'd out of the panel that now projects their project.
+                || !Projects.visibleTo(ctx).isEmpty();
         }
 
         @Override
@@ -127,7 +133,11 @@ public final class ManagePanel extends Panel {
             new ManageInstanceScheduleStepResource(), new ManageInstanceDeviceResource(),
             new ManageInstanceSnapshotResource(),
             new ManageInstanceBackupResource(), new ManageInstanceTemplateResource(),
-            new InstanceFromTemplatePage());
+            new InstanceFromTemplatePage(),
+            // The project tier's tenant projection: which projects the principal is a
+            // MEMBER of, and who else is in them. Both read-only -- see
+            // ManageProjectResource for why a membership editor here could only refuse.
+            new ManageProjectResource(), new ManageProjectMemberResource());
     }
 
     /**
@@ -218,6 +228,15 @@ public final class ManagePanel extends Panel {
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(RecordScheduleModel.class)
             .search(RecordScheduleModel.NAME)
             .accessCriteria(ManagePanel::recordScheduleScope)
+            .build());
+
+        // Projects: the SAME two-derived-defaults hazard, now that ManageProjectResource
+        // exposes the model beside the admin ProjectResource -- and the widest of the two
+        // would name every tenant's projects to whoever a picker rendered for. The scope
+        // is THE visibility policy, so a picker and the resource can never disagree.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(ProjectModel.class)
+            .search(ProjectModel.NAME)
+            .accessCriteria(Projects::visibleScope)
             .build());
 
         // Instance devices: same two-derived-defaults hazard again, and the widest one

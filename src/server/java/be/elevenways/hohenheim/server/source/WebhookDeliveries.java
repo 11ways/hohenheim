@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -18,8 +19,21 @@ import java.util.List;
  */
 final class WebhookDeliveries {
 
-    /** Accepted deliveries kept per site; older rows are pruned on new claims. */
-    private static final int KEEP_PER_SITE = 200;
+    /**
+     * How long a claim is honoured. The ledger's whole job is refusing a REPLAY, so
+     * retention has to be measured in the units replay protection is measured in: time.
+     *
+     * AIDEV-NOTE: this was a bare "keep the newest 200 per site" cap, which quietly made
+     * the guarantee a function of TRAFFIC -- a site taking 200 deliveries in an afternoon
+     * lost replay protection for that morning's, and re-delivering one redeployed. Rows
+     * are now only prunable once they are older than every provider's retry horizon
+     * (GitHub, GitLab and Gitea all give up within hours). There is deliberately no
+     * count cap any more: a second knob that can shorten this window is the defect.
+     */
+    private static final Duration RETAIN = Duration.ofDays(30);
+
+    /** Rows removed per claim; pruning is amortized, never one huge delete. */
+    private static final int PRUNE_BATCH = 1000;
 
     private WebhookDeliveries() {
     }
@@ -71,9 +85,9 @@ final class WebhookDeliveries {
         try {
             List<Row> stale = model.find()
                 .where(WebhookDeliveryModel.SITE_ID.eq(siteId))
-                .orderBy(WebhookDeliveryModel.ID, SortOrder.DESC)
-                .offset(KEEP_PER_SITE)
-                .limit(1000)
+                .where(WebhookDeliveryModel.RECEIVED_AT.lt(Instant.now().minus(RETAIN)))
+                .orderBy(WebhookDeliveryModel.ID, SortOrder.ASC)
+                .limit(PRUNE_BATCH)
                 .all();
             for (Row old : stale) {
                 model.delete(old.get(WebhookDeliveryModel.ID));

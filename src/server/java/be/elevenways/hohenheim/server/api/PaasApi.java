@@ -75,7 +75,7 @@ public final class PaasApi {
                 return null;
             }
             List<Map<String, Object>> projects = new ArrayList<>();
-            for (Row project : visibleProjects(conduit, ctx)) {
+            for (Row project : Projects.visibleTo(ctx)) {
                 projects.add(projectProjection(project));
             }
             return ApiConduits.json(Map.of("projects", projects));
@@ -87,7 +87,7 @@ public final class PaasApi {
                 return null;
             }
             Integer projectId = conduit.getParameter(HohenheimEndpoints.PROJECT_ID);
-            for (Row project : visibleProjects(conduit, ctx)) {
+            for (Row project : Projects.visibleTo(ctx)) {
                 if (project.get(ProjectModel.ID).equals(projectId)) {
                     return ApiConduits.json(projectProjection(project));
                 }
@@ -95,36 +95,6 @@ public final class PaasApi {
             conduit.notFound();
             return null;
         });
-    }
-
-    /**
-     * The projects this key may see: admins all of them, members their own -- but ONLY
-     * when the key's scopes cover the PaaS record vocabulary.
-     *
-     * AIDEV-NOTE: project membership is grant-derived, not a record capability, so the
-     * capability walk (where zenit-auth applies scope narrowing) never runs for a plain
-     * membership listing. Without the coversCapability check below, a key narrowed to
-     * an unrelated scope would still enumerate its owner's projects -- authority it was
-     * never granted. Site/instance manage IS the vocabulary every project-owned record
-     * answers to, so covering either is the honest condition for seeing the grouping.
-     */
-    private static @NonNull List<Row> visibleProjects(@NonNull Conduit conduit,
-                                                      @NonNull AccessContext ctx) {
-        if (HohenheimAccess.isAdmin(ctx)) {
-            return Models.get(ProjectModel.class).find()
-                .orderBy(ProjectModel.ID, SortOrder.ASC).all();
-        }
-        if (!coversPaasVocabulary(conduit)) {
-            return List.of();
-        }
-        Long principalId = ctx.principalId();
-        return principalId == null ? List.of() : Projects.projectsOf(principalId.intValue());
-    }
-
-    private static boolean coversPaasVocabulary(@NonNull Conduit conduit) {
-        return conduit.getAttribute(ConduitAttributes.PRINCIPAL) instanceof ApiKeyPrincipal key
-            && (key.coversCapability(SiteModel.MODEL_ID, HohenheimAccess.MANAGE)
-                || key.coversCapability(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE));
     }
 
     private static @NonNull Map<String, Object> projectProjection(@NonNull Row project) {

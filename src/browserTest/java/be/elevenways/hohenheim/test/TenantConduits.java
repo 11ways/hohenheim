@@ -37,6 +37,14 @@ public final class TenantConduits {
         RouteScope.run(stub(principal), body);
     }
 
+    /**
+     * The same synthetic carrier, handed out instead of run inside: for a policy that
+     * takes an AccessContext rather than a scope ({@code AccessContext.of(conduit)}).
+     */
+    public static Conduit stubFor(@Nullable Principal principal) {
+        return stub(principal);
+    }
+
     private static Conduit stub(@Nullable Principal principal) {
         Map<IdentifierKey<?>, Object> attributes = new HashMap<>();
         if (principal != null) {

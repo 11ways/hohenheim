@@ -7131,5 +7131,17 @@
   "controller_objects_reaped": {
     "text": "{$name}: removed {$removed} shared object(s) of departed controllers, refused {$refused}",
     "scope": "server"
+  },
+  "singular": {
+    "text": "Project",
+    "scope": "project"
+  },
+  "member": {
+    "text": "Member",
+    "scope": "project"
+  },
+  "member_kind": {
+    "text": "Kind",
+    "scope": "project"
   }
 }
