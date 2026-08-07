@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
-import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.docker.SiteDatabaseNetworks;
@@ -144,7 +143,6 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
         Map<Integer, List<String>> inventoryErrors = new LinkedHashMap<>();
         collectInstances(inventory, inventoryErrors);
         collectStacks(inventory);
-        collectDatabases(inventory);
         collectLinks(inventory);
 
         List<HostOutcome> outcomes = new ArrayList<>();
@@ -347,14 +345,16 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
 
     /**
      * Docker-kind instance rows whose record claims a live workload (running OR
-     * starting), site release containers included. Site-generated rows are the PROXY
-     * role's; everything else is the INSTANCES role's.
+     * starting), site release containers and managed-database engines included. The
+     * declared egress comes from the KIND's own driver, so a database engine's
+     * {@link Egress#NONE} is enforced here with no per-tier collector.
      */
     private static void collectInstances(@NonNull Map<Integer, List<Expected>> inventory,
                                          @NonNull Map<Integer, List<String>> errors) {
         boolean instancesRole = HohenheimRoles.enabled(HohenheimRoles.Role.INSTANCES);
         boolean proxyRole = HohenheimRoles.enabled(HohenheimRoles.Role.PROXY);
-        if (!instancesRole && !proxyRole) {
+        boolean databasesRole = HohenheimRoles.enabled(HohenheimRoles.Role.DATABASES);
+        if (!instancesRole && !proxyRole && !databasesRole) {
             return;
         }
         for (Row row : Models.get(InstanceModel.class).find()
@@ -363,9 +363,20 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
                     InstanceModel.STATUS_RUNNING, InstanceModel.STATUS_STARTING))
                 .all()) {
             Integer id = row.get(InstanceModel.ID);
-            boolean forSite = SiteModel.MODEL_ID.toString()
-                .equals(row.get(InstanceModel.GENERATED_FOR_MODEL));
-            if (forSite ? !proxyRole : !instancesRole) {
+            // An owned instance answers to the role of the tier that OWNS it: a site
+            // release is the PROXY role's, a managed database's engine is the DATABASES
+            // role's (which is what its own bespoke collector used to key on before the
+            // database tier lowered onto this contract), everything else is INSTANCES'.
+            String owner = row.get(InstanceModel.GENERATED_FOR_MODEL);
+            boolean allowed;
+            if (SiteModel.MODEL_ID.toString().equals(owner)) {
+                allowed = proxyRole;
+            } else if (DatabaseModel.MODEL_ID.toString().equals(owner)) {
+                allowed = databasesRole;
+            } else {
+                allowed = instancesRole;
+            }
+            if (!allowed) {
                 continue;
             }
             InstanceKindHandler handler = InstanceKinds.getHandler(
@@ -415,29 +426,6 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
                 StackDeployer.networkName(stackName), StackDeployer.EGRESS,
                 "stack '" + stackName + "'",
                 () -> containStack(stackId, stackName, serverId)));
-        }
-    }
-
-    /** Every active managed database's private network, egress NONE by declaration. */
-    private static void collectDatabases(@NonNull Map<Integer, List<Expected>> inventory) {
-        if (!HohenheimRoles.enabled(HohenheimRoles.Role.DATABASES)) {
-            return;
-        }
-        for (Row database : Models.get(DatabaseModel.class).find()
-                .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_ACTIVE)).all()) {
-            String dbName = database.get(DatabaseModel.NAME);
-            if (dbName == null || dbName.isBlank()) {
-                continue;
-            }
-            String handle = ManagedDatabase.containerHandle(dbName);
-            int serverId = ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID));
-            inventory.computeIfAbsent(serverId, key -> new ArrayList<>()).add(new Expected(
-                WorkloadNetworks.networkName(handle), Egress.NONE, handle,
-                () -> {
-                    new ServerService().clientFor(ServerModel.nameOf(serverId))
-                        .stopContainer(handle, 10);
-                    return "stopped database container " + handle;
-                }));
         }
     }
 

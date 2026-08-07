@@ -1,15 +1,12 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.server.runtime.ContainerState;
-import be.elevenways.hohenheim.server.runtime.NetworkPosture;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.docker.SiteDatabaseNetworks;
+import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -21,15 +18,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Function;
 
 /**
- * Lifecycle entry point for managed databases: ties the persisted {@link DatabaseModel} record
- * (desired config) to the container operations in {@link ManagedDatabase} (live data). Backup
- * and restore resolve the engine and credentials from the record, so callers pass only a name.
+ * Lifecycle entry point for managed databases: ties the persisted {@link DatabaseModel}
+ * record (desired config) to the RUNTIME, which since the Phase 7 database wave is an
+ * owned instance driven by {@link DatabaseInstances} rather than a container this class
+ * asks the daemon about directly. Backup and restore resolve the engine, credentials and
+ * container handle from the record, so callers still pass only a name.
  *
  * @author  Jelle De Loecker
  * @since   0.1.0
@@ -50,26 +47,37 @@ public class DatabaseService extends DatasourceScoped {
         return thread;
     });
 
-    // Resolves the ManagedDatabase for a database's target server (server name -> client). In
-    // production this routes through ServerService (local socket or remote SSH); tests inject a
-    // single fixed client.
-    private final Function<String, ManagedDatabase> managedFor;
-
     public DatabaseService() {
         super(null);
-        ServerService servers = new ServerService();
-        // The production path always declares PRIVATE: a record-backed database gets its
-        // own policied network or does not provision, and the nft lane targets the
-        // kernel of the server the container lands on.
-        this.managedFor = serverName -> new ManagedDatabase(servers.clientFor(serverName),
-            WorkloadNetworkPolicy.forServer(serverName), NetworkPosture.PRIVATE);
     }
 
-    public DatabaseService(DockerClient docker, Datasource datasource) {
+    /**
+     * Tests: an isolated datasource. There is deliberately NO injectable Docker client any
+     * more -- the runtime is resolved by {@code DatabaseContainerKind.runtimeFor} through
+     * the host inventory, and a second client-resolution path here would be a way for a
+     * test to exercise a daemon the production lane would never talk to.
+     */
+    public DatabaseService(Datasource datasource) {
         super(datasource);
-        ManagedDatabase fixed = new ManagedDatabase(docker,
-            WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.PRIVATE);
-        this.managedFor = serverName -> fixed;   // tests: a single host regardless of server name
+    }
+
+    /** The engine-operations client for a database record's target host. */
+    private ManagedDatabase managedFor(String serverName) {
+        return new ManagedDatabase(new ServerService().clientFor(serverName));
+    }
+
+    /**
+     * THE engine container handle of a record, or a named failure: every exec-driven
+     * operation (backup, restore) needs the owned instance to exist.
+     */
+    private String handleOf(Row row) throws IOException {
+        Integer recordId = row.get(DatabaseModel.ID);
+        String handle = recordId == null ? null : query(() -> DatabaseInstances.handleOf(recordId));
+        if (handle == null) {
+            throw new IOException("Managed database '" + row.get(DatabaseModel.NAME)
+                + "' owns no engine instance yet; provision it before running this operation");
+        }
+        return handle;
     }
 
     private static DatabaseModel model() {
@@ -96,21 +104,19 @@ public class DatabaseService extends DatasourceScoped {
 
     /**
      * Synchronous create with optional container resource caps. The record is persisted
-     * as "provisioning" BEFORE the container exists (matching the async path), so the
-     * container and volume can be born carrying the record's owner labels; a failed
-     * provision leaves a "failed" record rather than nothing.
+     * as "provisioning" BEFORE the engine instance exists (matching the async path), so
+     * the instance is born attributed to it; a failed provision leaves a "failed" record
+     * rather than nothing.
      */
     public ManagedDatabase.Connection create(String name, ManagedDatabase.Engine engine, String image,
                                              String user, String password, String database,
                                              boolean ephemeral, String serverName,
                                              ResourceLimits limits) throws IOException {
-        Integer recordId = upsertRecord(name, engine, image, user, password, database, ephemeral,
+        upsertRecord(name, engine, image, user, password, database, ephemeral,
             serverName, limits, STATUS_PROVISIONING);
         try {
-            ManagedDatabase.Connection connection = managedFor.apply(serverName)
-                .provision(name, engine, image, user, password, database, ephemeral, limits, recordId);
-            connection = withLinksReattached(name, recordId, serverName, connection);
-            recordPublishedPort(recordId, serverName, connection);
+            ManagedDatabase.Connection connection = provisionRuntime(name, engine, user,
+                password, database, limits);
             setStatus(name, STATUS_ACTIVE);
             return connection;
         } catch (IOException e) {
@@ -120,25 +126,52 @@ public class DatabaseService extends DatasourceScoped {
     }
 
     /**
-     * Provisioning REPLACES the container, so the fresh one must rejoin the link
-     * networks of every Docker site attached to this record -- and joining a running
-     * container re-allocates its published port, so the port is re-observed AFTER the
-     * joins and the returned connection carries the final number.
+     * Converge the record's owned engine instance and hand back its connection details.
+     *
+     * A deploy REPLACES the container, so the fresh one must rejoin the link networks of
+     * every Docker site attached to this record -- and joining a running container
+     * re-allocates its published port, so the port is re-observed AFTER the joins and
+     * the returned connection carries the final number.
      */
-    private ManagedDatabase.Connection withLinksReattached(String name, Integer recordId,
-                                                           String serverName,
-                                                           ManagedDatabase.Connection connection) {
-        if (recordId == null || !SiteDatabaseNetworks.reattachForDatabase(recordId)) {
-            return connection;
+    private ManagedDatabase.Connection provisionRuntime(String name, ManagedDatabase.Engine engine,
+                                                        String user, String password,
+                                                        String database, ResourceLimits limits)
+            throws IOException {
+        Row row = require(name);
+        Integer recordId = row.get(DatabaseModel.ID);
+        int port = scoped(() -> DatabaseInstances.deploy(row, limits));
+        if (recordId != null && query(() -> SiteDatabaseNetworks.reattachForDatabase(recordId))) {
+            ManagedDatabase.LiveStatus fresh = query(() -> DatabaseInstances.liveStatus(recordId));
+            if (fresh.running() && fresh.port() != null) {
+                port = fresh.port();
+            }
         }
-        ManagedDatabase.LiveStatus fresh = managedFor.apply(serverName)
-            .status(name, connection.engine());
-        if (fresh.running() && fresh.port() != null
-                && !fresh.port().equals(connection.port())) {
-            return new ManagedDatabase.Connection(connection.engine(), connection.host(),
-                fresh.port(), connection.user(), connection.password(), connection.database());
+        return new ManagedDatabase.Connection(engine, "127.0.0.1", port, user, password, database);
+    }
+
+    /** {@link #query} for a body that fails the way the daemon work inside it fails. */
+    private <T> T scoped(ThrowingSupplier<T> body) throws IOException {
+        Object[] result = new Object[1];
+        IOException[] failure = new IOException[1];
+        exec(() -> {
+            try {
+                result[0] = body.get();
+            } catch (IOException e) {
+                failure[0] = e;
+            }
+        });
+        if (failure[0] != null) {
+            throw failure[0];
         }
-        return connection;
+        @SuppressWarnings("unchecked")
+        T value = (T) result[0];
+        return value;
+    }
+
+    /** A datasource-scoped body that may fail the way a daemon operation fails. */
+    @FunctionalInterface
+    private interface ThrowingSupplier<T> {
+        T get() throws IOException;
     }
 
     /** Provision asynchronously on the local host; see the server-aware overload. */
@@ -163,41 +196,17 @@ public class DatabaseService extends DatasourceScoped {
     public void createAsync(String name, ManagedDatabase.Engine engine, String image,
                             String user, String password, String database, boolean ephemeral,
                             String serverName, ResourceLimits limits) {
-        Integer recordId = upsertRecord(name, engine, image, user, password, database, ephemeral,
+        upsertRecord(name, engine, image, user, password, database, ephemeral,
             serverName, limits, STATUS_PROVISIONING);
         PROVISION_EXECUTOR.submit(() -> {
             try {
-                ManagedDatabase.Connection connection = managedFor.apply(serverName)
-                    .provision(name, engine, image, user, password, database, ephemeral, limits,
-                        recordId);
-                connection = withLinksReattached(name, recordId, serverName, connection);
-                recordPublishedPort(recordId, serverName, connection);
+                provisionRuntime(name, engine, user, password, database, limits);
                 setStatus(name, STATUS_ACTIVE);
             } catch (Exception e) {
                 setStatus(name, STATUS_FAILED);
                 Blast.log("DB: provisioning failed for", name, "-", e.getMessage());
             }
         });
-    }
-
-    /**
-     * Record-after: the container published on an ephemeral host port, so the ledger
-     * learns which port this database record now holds. The RELEASE side is the model's
-     * remove hooks (DatabaseModel), not this class -- deleting the record through the
-     * admin panel must free the port too, and only a hook sees every delete path.
-     *
-     * AIDEV-NOTE: TCP-only by construction, not by omission -- ManagedDatabase reads the
-     * port back through DockerClient.publishedPort, which looks up "{port}/tcp" and can
-     * see nothing else. No supported engine publishes UDP; one that did would need the
-     * declared pre-allocation mode (instance-tier-plan fork 2), never a silent tcp row.
-     */
-    private void recordPublishedPort(Integer recordId, String serverName,
-                                     ManagedDatabase.Connection connection) {
-        if (recordId == null) {
-            return;
-        }
-        exec(() -> PortLedger.recordObserved(ServerModel.canonicalServerId(serverName),
-            connection.host(), connection.port(), "tcp", DatabaseModel.MODEL_ID, recordId, null));
     }
 
     /** @return the persisted record's id, so provisioning can label its resources */
@@ -211,7 +220,7 @@ public class DatabaseService extends DatasourceScoped {
                 row = model.createEmptyRow();
                 row.set(DatabaseModel.NAME, name);
             }
-            row.set(DatabaseModel.ENGINE, engine.name().toLowerCase(Locale.ROOT));
+            row.set(DatabaseModel.ENGINE, engine.token());
             row.set(DatabaseModel.IMAGE, image);
             row.set(DatabaseModel.DB_USER, user);
             row.set(DatabaseModel.DB_PASSWORD, password);
@@ -272,7 +281,7 @@ public class DatabaseService extends DatasourceScoped {
         String image = row.get(DatabaseModel.IMAGE);
         return new Detail(
             row.get(DatabaseModel.NAME),
-            engine.name().toLowerCase(Locale.ROOT),
+            engine.token(),
             image != null ? image : "",
             row.get(DatabaseModel.DB_NAME),
             row.get(DatabaseModel.DB_USER),
@@ -294,7 +303,7 @@ public class DatabaseService extends DatasourceScoped {
             String image = row.get(DatabaseModel.IMAGE);
             result.add(new Summary(
                 row.get(DatabaseModel.NAME),
-                engine.name().toLowerCase(Locale.ROOT),
+                engine.token(),
                 image != null ? image : "",
                 row.get(DatabaseModel.DB_NAME),
                 row.get(DatabaseModel.DB_USER),
@@ -309,11 +318,16 @@ public class DatabaseService extends DatasourceScoped {
         return result;
     }
 
-    // Live status on the record's target host; never throws. A host we cannot even build
-    // a client for is UNREACHABLE, never "not running" -- absent and unreachable stay distinct.
+    // Live status of the record's OWNED engine instance; never throws. A host we cannot
+    // even build a client for is UNREACHABLE, never "not running" -- absent and
+    // unreachable stay distinct.
     private ManagedDatabase.LiveStatus liveStatus(Row row, ManagedDatabase.Engine engine) {
+        Integer recordId = row.get(DatabaseModel.ID);
+        if (recordId == null) {
+            return new ManagedDatabase.LiveStatus(ContainerState.ABSENT, null);
+        }
         try {
-            return managedFor.apply(serverOf(row)).status(row.get(DatabaseModel.NAME), engine);
+            return query(() -> DatabaseInstances.liveStatus(recordId));
         } catch (Exception e) {
             return new ManagedDatabase.LiveStatus(ContainerState.UNREACHABLE, null);
         }
@@ -347,7 +361,7 @@ public class DatabaseService extends DatasourceScoped {
         ManagedDatabase.Engine engine = engineOf(row);
         Files.createDirectories(directory);
         Path target = directory.resolve(baseName + "." + engine.dumpExtension());
-        managedFor.apply(serverOf(row)).backupToFile(name, engine,
+        managedFor(serverOf(row)).backupToFile(handleOf(row), engine,
             row.get(DatabaseModel.DB_USER), row.get(DatabaseModel.DB_PASSWORD),
             row.get(DatabaseModel.DB_NAME), target);
         return target;
@@ -367,7 +381,7 @@ public class DatabaseService extends DatasourceScoped {
         Path directory = Files.createTempDirectory("hohenheim-backup");
         Path dump = directory.resolve(name + "." + engine.dumpExtension());
         try {
-            managedFor.apply(serverOf(row)).backupToFile(name, engine,
+            managedFor(serverOf(row)).backupToFile(handleOf(row), engine,
                 row.get(DatabaseModel.DB_USER), row.get(DatabaseModel.DB_PASSWORD),
                 row.get(DatabaseModel.DB_NAME), dump);
             return new BackupDownload(dump.getFileName().toString(), engine.dumpContentType(),
@@ -384,40 +398,40 @@ public class DatabaseService extends DatasourceScoped {
         String user = row.get(DatabaseModel.DB_USER);
         String password = row.get(DatabaseModel.DB_PASSWORD);
         String database = row.get(DatabaseModel.DB_NAME);
-        managedFor.apply(serverOf(row)).restoreFromFile(name, engineOf(row), user, password, database, source);
+        managedFor(serverOf(row)).restoreFromFile(handleOf(row), engineOf(row), user, password,
+            database, source);
     }
 
     /**
-     * Stop + remove the container (optionally its data volume) and delete the record --
-     * but ONLY when the teardown was verified. A destroy that cannot confirm its
-     * teardown keeps the record (it holds the only copy of {@code db_password}), flips
-     * its status to {@code destroy_failed}, parks the port claim in {@code releasing},
-     * and throws; deleting the record then requires an explicit retry or the recorded
-     * force-destroy action. Silent "success" while the container keeps running was this
-     * codebase's worst instance of a step doing less than it claims.
+     * Verified end of life: the owned engine instance is destroyed through
+     * {@link InstanceService} (container removed or observed absent, ledger claims
+     * released fully, instance row soft-deleted), the data volume follows when asked,
+     * and only then is the record deleted. A destroy that cannot confirm its teardown
+     * keeps the record (it holds the only copy of {@code db_password}), flips its status
+     * to {@code destroy_failed} and throws; deleting the record then requires an
+     * explicit retry or the recorded force-destroy action. Silent "success" while the
+     * container keeps running was this codebase's worst instance of a step doing less
+     * than it claims.
      *
-     * @throws IOException when the daemon could not confirm container/volume removal
+     * AIDEV-NOTE: the port claim is the INSTANCE's since the lowering, and a refused
+     * destroy leaves it exactly as InstanceService left it -- parked releasing when the
+     * daemon was asked and could not confirm, still HELD when the host could not be
+     * addressed at all. Both keep a rival from taking the port; neither is a deletion.
+     *
+     * @throws IOException when the teardown could not be confirmed
      */
     public void destroy(String name, boolean removeData) throws IOException {
         Row row = query(() -> model().findByName(name));
         if (row != null) {
-            Integer recordId = row.get(DatabaseModel.ID);
             try {
-                managedFor.apply(serverOf(row)).destroy(name, removeData);
-            } catch (IOException e) {
-                exec(() -> {
-                    if (recordId != null) {
-                        PortLedger.releaseOwner(DatabaseModel.MODEL_ID, recordId);
-                    }
-                    setStatus(name, STATUS_DESTROY_FAILED);
+                scoped(() -> {
+                    DatabaseInstances.destroyFor(row, removeData);
+                    return null;
                 });
+            } catch (IOException e) {
+                setStatus(name, STATUS_DESTROY_FAILED);
                 throw new IOException("Destroy of '" + name + "' could not verify its teardown"
-                    + " (record kept, port claim parked as releasing): " + e.getMessage(), e);
-            }
-            // Teardown verified (2xx/404 from the daemon): the port is an observed-free
-            // fact, so the claim may be deleted before the record goes.
-            if (recordId != null) {
-                exec(() -> PortLedger.releaseOwnerObserved(DatabaseModel.MODEL_ID, recordId));
+                    + " (record kept): " + e.getMessage(), e);
             }
         }
         exec(() -> model().find().where(DatabaseModel.NAME.eq(name)).delete());
@@ -426,12 +440,27 @@ public class DatabaseService extends DatasourceScoped {
     /**
      * The recorded escape hatch for a genuinely unreachable host: delete the record
      * WITHOUT verifying any teardown. The container and volume may survive on the host
-     * (the reconciler will report them as orphans once it can see the host again), and
-     * the record's port claims are parked in {@code releasing} by the model's remove
-     * hooks. Never the default path -- callers must have an explicit operator decision.
+     * (the reconciler will report them as orphans once it can see the host again).
+     * Never the default path -- callers must have an explicit operator decision.
+     *
+     * AIDEV-NOTE: the OWNED ENGINE INSTANCE has to be abandoned here explicitly. The
+     * database record is hard-deleted, so nothing would ever reach the instance row
+     * again: it would stay live forever, holding its port claim, its capacity booking
+     * and its instance-quota slot, attributed to a record that no longer exists. The
+     * abandon is a SOFT delete through save() precisely so those releases (which ride
+     * the deleted_at transition hooks) actually fire -- the ledger claim is PARKED
+     * rather than deleted, because a container we could not confirm may still hold the
+     * port.
      */
     public void forceDestroyRecord(String name) {
-        exec(() -> model().find().where(DatabaseModel.NAME.eq(name)).delete());
+        exec(() -> {
+            Row row = model().findByName(name);
+            Integer recordId = row == null ? null : row.get(DatabaseModel.ID);
+            if (recordId != null) {
+                DatabaseInstances.abandonInstance(recordId);
+            }
+            model().find().where(DatabaseModel.NAME.eq(name)).delete();
+        });
     }
 
     private Row require(String name) throws IOException {
@@ -443,7 +472,6 @@ public class DatabaseService extends DatasourceScoped {
     }
 
     private static ManagedDatabase.Engine engineOf(Row row) {
-        String engine = row.get(DatabaseModel.ENGINE);
-        return ManagedDatabase.Engine.valueOf(engine.toUpperCase(Locale.ROOT));
+        return ManagedDatabase.engineOf(row);
     }
 }

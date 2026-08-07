@@ -3310,6 +3310,87 @@ network, quota, ownership, secret and durable-operation mechanisms.
   produces images and will make docker-the-runtime the default anyway).
   Projects/environments (open decision 7) meet this at the attribution
   columns: a project tier would OWN instances the same way, no schema change.
+
+  SECOND TIER LOWERED 2026-08-07 -- MANAGED DATABASES (re-verify, do not
+  assume). A managed database's engine IS an owned
+  `hohenheim:database_container` instance (`DatabaseContainerKind` +
+  `DatabaseInstances`), attributed to the DatabaseModel record through the same
+  GeneratedRows discipline the site tier uses. DELETED, not wrapped:
+  `ManagedDatabase.provision` (all three overloads), `buildSpec`, `status`,
+  `destroy` and `containerHandle` -- a second, weaker copy of the instance
+  tier's create/start/verify/teardown with no fence, no host lease, no capacity
+  booking and no reconciler classification; also DELETED
+  `VerifyWorkloadIsolation.collectDatabases`, because the isolation sweep now
+  reaches a database engine through the instance lane and reads its declared
+  egress off the KIND. What the tier gained for free: fenced outcome writes,
+  the host lease, the port ledger record-after claim under the INSTANCE owner
+  (with the `releasing` park), host capacity booking (charge == cap), host
+  placement, the reconciler, `InstanceService`'s verified destroy, and
+  `InstanceOperationGuard`.
+
+  The four named obstacles, resolved: (1) the engine READINESS probe stayed a
+  PRODUCT-tier concern rather than becoming a kind/driver one -- the site
+  precedent puts the HTTP health gate in `SiteReleases`, not in
+  `InstanceService`, and the instance contract answers "is the workload
+  running", never "can this engine serve queries" (`ManagedDatabase.awaitReady`
+  is the product-tier gate `DatabaseInstances.deploy` calls after the deploy
+  returns). (2) NAME-keyed vs id-keyed: the CONTAINER is id-keyed like every
+  instance, and the DATA VOLUME stays name-keyed
+  (`hohenheim-{token}-db-{name}-data`) BY DECISION -- the instance row is the
+  runtime, the volume is the data, and the data outlives any particular runtime
+  row. That is also what makes the migration non-destructive: a pre-lowering
+  database's existing volume is the one the lowered instance mounts. (3)
+  `DatabaseEnvInjection` resolves the address from the owned instance's handle
+  and SKIPS (`no_engine_instance`) when there is none, instead of guessing a
+  name. (4) restore/backup keep exec'ing inside the container; they now take a
+  HANDLE instead of a record name, because naming the container is the instance
+  tier's job.
+
+  Two contract EXTENSIONS were needed, both declared, neither settings-reachable:
+  `InstanceSpec.tmpfs` (RAM-backed, size-capped, discardable scratch mounts --
+  what an ephemeral database's data directory is; the incus driver refuses one
+  by name rather than silently landing "ephemeral" data on a storage pool), and
+  `InstanceKindHandler.generatedOnly()` (the declaration that replaced the
+  hard-coded `site_container` name in the write hook; `OwnedInstances` now holds
+  the guard, the scope and the owned-row lookups once for every owning tier).
+  Engine PASSWORDS ride the instance-variable SECRET lane (encrypted column,
+  merged into the container env at deploy) -- putting them in `instances.settings`
+  would have been a second plaintext copy of a credential the database record
+  itself stores encrypted.
+
+  MIGRATION (binding property "no data migration may lose a running workload"):
+  `DatabaseInstances.adoptExisting`, run on the DATABASES role at boot. Every
+  database record without an owned instance gets one and is re-deployed onto its
+  EXISTING data volume; the pre-lowering `db-{name}` container is retired with
+  the `SiteInstances.retireLegacyContainer` discipline (removed only when the
+  daemon still attributes it to that record, never force-removed) and its
+  record-owned ledger claims are released observed / parked. Idempotent, so it is
+  a fast no-op once adopted, and a host that cannot answer leaves the record for
+  the next pass. Empirically, the developer daemon and dev database carried ZERO
+  managed-database containers, volumes and records at the time of the change.
+
+  STILL NOT LOWERED, and DEFERRED DELIBERATELY: STACK SERVICES and MANAGED
+  PROCESSES. Stacks: `StackDeployer` keys FIVE behaviours (isOwned, prune,
+  destroy, removeOwnedVolumes, adoption) on `LABEL_STACK` = the stack NAME, and
+  owns compose-shaped semantics the instance contract has no home for --
+  `depends_on` ordering with condition gating (`awaitDependencies`), one shared
+  per-stack network carrying per-service DNS ALIASES (`Aliases: [service]`),
+  and verbatim re-deploy of adoption/rollback snapshots. An instance is
+  single-workload and single-primary-network by construction, so lowering stacks
+  means answering where multi-service ordering and shared-network DNS live
+  FIRST; open decision 5 said revisit after real use and that has not happened.
+  Processes: they are not containers at all -- `SystemUsers.executionBuilder`
+  spawns a host process under setsid+sudo -u #uid, and `InstanceSpec` requires a
+  non-empty `image` (`InstanceService.resolve` refuses a blank one by name),
+  owner LABELS a driver must stamp at create, a `ContainerHardening.Profile` and
+  a network posture -- a host process has none of those, and its isolation is a
+  run-as-uid nft OUTPUT rule, not a network namespace. Forcing it would mean
+  making four required components of the contract optional, which is the rename
+  trap in reverse. The stated path stands and is now cheaper: the builders wave
+  landed, so a process site type can produce an IMAGE and become an ordinary
+  container instance. Lowering the host-process runtime itself is NOT
+  recommended without first deciding whether the contract should grow a
+  process-shaped driver at all.
 - Sandboxed builders run outside the control-plane trust domain with their own
   CPU/memory/disk/time/PID quotas, restricted network, short-lived source and
   registry credentials, no tenant runtime secrets, and immutable artifact

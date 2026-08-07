@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -72,15 +73,19 @@ class DatabaseNetworkIsolationTest {
 
         String a = "dbnet-a-" + System.nanoTime();
         String b = "dbnet-b-" + System.nanoTime();
-        String handleA = ControllerScope.handle(ControllerScope.KIND_DB, a);
-        String handleB = ControllerScope.handle(ControllerScope.KIND_DB, b);
+        String[] handles = new String[2];
         try {
             Db.run(datasource, () -> {
-                DatabaseService service = new DatabaseService(docker, datasource);
+                DatabaseService service = new DatabaseService(datasource);
                 io(() -> service.create(a, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
                     "unused", "unused", "unused", true, ServerModel.MODE_LOCAL));
                 io(() -> service.create(b, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
                     "unused", "unused", "unused", true, ServerModel.MODE_LOCAL));
+                // The engine handle comes from the OWNED INSTANCE since the lowering.
+                String handleA = EngineHandles.of(a);
+                String handleB = EngineHandles.of(b);
+                handles[0] = handleA;
+                handles[1] = handleB;
 
                 // 1. Each database sits on exactly its OWN network, never the shared bridge.
                 assertThat(networkNamesOf(docker, handleA))
@@ -120,8 +125,8 @@ class DatabaseNetworkIsolationTest {
                 io(() -> service.destroy(b, true));
             });
         } finally {
-            cleanup(docker, handleA);
-            cleanup(docker, handleB);
+            cleanup(docker, handles[0]);
+            cleanup(docker, handles[1]);
         }
     }
 
@@ -147,10 +152,17 @@ class DatabaseNetworkIsolationTest {
         throw new IllegalStateException("container " + handle + " has no address");
     }
 
+    /**
+     * Reachability asserted on the SERVER'S OWN REPLY, never on nc's exit code: busybox
+     * nc can exit 0 on a connect that timed out, which would make the isolation half of
+     * this test pass for the wrong reason. A redis server answers PING with {@code +PONG}
+     * or, unauthenticated, with {@code -NOAUTH Authentication required.}
+     */
     private static boolean connects(DockerClient docker, String handle, String address, int port) {
-        return io(() -> docker.exec(handle,
-            List.of("sh", "-c", "nc -w 2 " + address + " " + port + " </dev/null")))
-            .exitCode() == 0;
+        DockerClient.ExecResult result = io(() -> docker.exec(handle, List.of("sh", "-c",
+            "printf 'PING\\r\\nQUIT\\r\\n' | nc -w 2 " + address + " " + port)));
+        String reply = result.stdout() + result.stderr();
+        return reply.contains("PONG") || reply.contains("NOAUTH");
     }
 
     private static boolean imagePresent(DockerClient docker, String image) throws IOException {

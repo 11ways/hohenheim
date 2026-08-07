@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerSiteRequestHandler;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
@@ -111,8 +112,6 @@ class SiteDatabaseLinkLiveTest {
         DatabaseService service = new DatabaseService();
         String dbA = "sitelink-a-" + System.nanoTime();
         String dbB = "sitelink-b-" + System.nanoTime();
-        String handleA = ManagedDatabase.containerHandle(dbA);
-        String handleB = ManagedDatabase.containerHandle(dbB);
         String repo = "hohenheim-dblink-img-" + System.nanoTime();
         String digest = TestImages.loadHttpServer(docker, repo + ":latest", "dblink-site");
         Integer linkAId = null;
@@ -123,6 +122,9 @@ class SiteDatabaseLinkLiveTest {
             service.create(dbB, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
                 "unused", "decoypw", "0", true, ServerModel.MODE_LOCAL);
             Integer idA = databaseId(dbA);
+            // Engine handles come from the OWNED INSTANCES since the lowering.
+            String handleA = EngineHandles.of(dbA);
+            String handleB = EngineHandles.of(dbB);
             Integer idB = databaseId(dbB);
 
             // 1. Attach database A and deploy the site: the release deploys healthy.
@@ -352,12 +354,23 @@ class SiteDatabaseLinkLiveTest {
         }
     }
 
-    /** TCP connect probe from inside a container (the DatabaseNetworkIsolationTest shape). */
+    /**
+     * TCP reachability probe from inside a container, asserted on the SERVER'S OWN REPLY.
+     *
+     * AIDEV-NOTE: this used to be {@code nc -w 2 ... exitCode() == 0}, which is exactly
+     * the shape a negative control must never have -- busybox nc can exit 0 on a connect
+     * that timed out under load, so "unreachable" would read as "reachable" for the wrong
+     * reason (and the sibling redisAnswers already knew the rule: assert CONTENT). A redis
+     * server on the other end answers PING with {@code +PONG} or, unauthenticated, with
+     * {@code -NOAUTH Authentication required.}; nothing else produces either string.
+     */
     private static boolean connects(DockerClient docker, String handle, String address, int port)
             throws IOException {
-        return docker.exec(handle,
-            List.of("/bin/sh", "-c", "/bin/busybox nc -w 2 " + address + " " + port + " </dev/null"),
-            List.of()).exitCode() == 0;
+        DockerClient.ExecResult result = docker.exec(handle, List.of("/bin/sh", "-c",
+            "printf 'PING\\r\\nQUIT\\r\\n' | /bin/busybox nc -w 2 " + address + " " + port),
+            List.of());
+        String reply = result.stdout() + result.stderr();
+        return reply.contains("PONG") || reply.contains("NOAUTH");
     }
 
     /** A container's IP on one specific network. */

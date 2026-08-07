@@ -6288,8 +6288,20 @@
     "text": "Site container",
     "scope": "instance_kind"
   },
-  "site_container_site_managed": {
-    "text": "This kind is a site's running release; manage it through the site itself",
+  "database_container": {
+    "text": "Database container",
+    "scope": "instance_kind"
+  },
+  "database_engine_unknown": {
+    "text": "Unknown database engine {$engine}",
+    "scope": "violations"
+  },
+  "instance_host_unreachable": {
+    "text": "Host {$name} cannot be addressed: {$reason}",
+    "scope": "violations"
+  },
+  "instance_kind_owner_managed": {
+    "text": "{$kind} instances are managed by the record that owns them, not created here",
     "scope": "violations"
   },
   "instance_generated_readonly": {

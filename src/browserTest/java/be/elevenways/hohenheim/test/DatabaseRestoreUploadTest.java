@@ -1,12 +1,11 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
-import be.elevenways.hohenheim.server.runtime.NetworkPosture;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
+import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -59,22 +58,19 @@ class DatabaseRestoreUploadTest extends HohenheimTestBase {
         assumeTrue(imagePresent(docker, POSTGRES_IMAGE), POSTGRES_IMAGE + " not present locally");
 
         String name = "restoreui" + System.nanoTime();
-        String container = ControllerScope.handle(ControllerScope.KIND_DB, name);
-        ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
+        DatabaseService databases = new DatabaseService();
         DatabaseModel model = Models.get(DatabaseModel.class);
+        PrivateNetns netns = PrivateNetns.installEnforcing();
+        assumeTrue(netns != null,
+            "no private netns: a record-backed database refuses without an enforceable policy");
         try {
-            // A live container plus the app-side record the restore handler resolves it by.
-            databases.provision(name, ManagedDatabase.Engine.POSTGRES, POSTGRES_IMAGE,
+            // The record AND its owned engine instance in one call; the restore handler
+            // resolves the container from the record's owned instance.
+            databases.create(name, ManagedDatabase.Engine.POSTGRES, POSTGRES_IMAGE,
                 "appuser", "secret123", "appdb", true);
-            Row row = model.createEmptyRow();
-            row.set(DatabaseModel.NAME, name);
-            row.set(DatabaseModel.ENGINE, "postgres");
-            row.set(DatabaseModel.IMAGE, POSTGRES_IMAGE);
-            row.set(DatabaseModel.DB_USER, "appuser");
-            row.set(DatabaseModel.DB_PASSWORD, "secret123");
-            row.set(DatabaseModel.DB_NAME, "appdb");
-            row.set(DatabaseModel.EPHEMERAL, true);
-            model.save(row);
+            Row row = model.findByName(name);
+            String container = DatabaseInstances.handleOf(row.get(DatabaseModel.ID));
+            assertThat(container).as("the database owns an engine instance").isNotNull();
 
             String dump = "CREATE TABLE things (x integer);\nINSERT INTO things VALUES (7);\n";
             HttpResponse<String> response = postMultipartFile(
@@ -89,12 +85,13 @@ class DatabaseRestoreUploadTest extends HohenheimTestBase {
             assertThat(result.exitCode()).withFailMessage("psql failed: %s", result.stderr()).isZero();
             assertThat(result.stdout().trim()).isEqualTo("7");   // dump landed in the live database
         } finally {
-            model.find().where(DatabaseModel.NAME.eq(name)).delete();
             try {
                 databases.destroy(name, true);
             } catch (IOException ignored) {
                 // best effort
             }
+            model.find().where(DatabaseModel.NAME.eq(name)).delete();
+            PrivateNetns.uninstall(netns);
         }
     }
 

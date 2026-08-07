@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.build.BuildRequest;
 import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
@@ -73,32 +74,20 @@ public final class SiteInstances {
     }
 
     /**
-     * Install the ownership funnel on the instance write pipeline (MODULES stage): the
-     * GeneratedRows attribution guard, plus the refusal that keeps {@code site_container}
-     * a site-authored kind -- outside the system scope the kind cannot be written at all,
-     * so the admin instance form cannot become a second authority over site runtimes.
+     * Install the ownership funnel on the instance write pipeline (MODULES stage).
+     *
+     * AIDEV-NOTE: the mechanics moved to {@link OwnedInstances} when the database tier
+     * lowered onto the same contract -- the guard, the generated-only kind refusal and
+     * the scope are shared by every owning tier. What kept {@code site_container}
+     * unwritable from the admin form is now {@code SiteContainerKind.generatedOnly()},
+     * a declaration on the kind rather than a name in a hook.
      */
     public static synchronized void install() {
         if (installed) {
             return;
         }
         installed = true;
-        GeneratedRows.installGuards(InstanceModel.SCHEMA, InstanceModel.class,
-            new GeneratedRows.Columns(InstanceModel.GENERATED_BY,
-                InstanceModel.GENERATED_FOR_MODEL, InstanceModel.GENERATED_FOR_ID,
-                InstanceModel.GENERATED_AT),
-            "instance_generated_readonly", "instance_generated_attribution");
-        InstanceModel.SCHEMA.addBeforeValidateHook(context -> {
-            Row row = context.getRow();
-            if (row == null || GeneratedRows.inSystemScope()) {
-                return;
-            }
-            if (SiteContainerKind.ID.toString().equals(row.get(InstanceModel.KIND))) {
-                throw Violations.ofField(InstanceModel.KIND.getName(),
-                    row.get(InstanceModel.KIND),
-                    Microcopy.of("site_container_site_managed").withFilter("scope", "violations"));
-            }
-        });
+        OwnedInstances.install();
     }
 
     /** The outcome of one convergence pass: the owned instance and its live status. */
@@ -295,40 +284,17 @@ public final class SiteInstances {
 
     /** Every live release of the site, whatever its role, newest first. */
     static @NonNull List<Row> ownedInstances(int siteId) {
-        return Models.get(InstanceModel.class).find()
-            .where(InstanceModel.GENERATED_FOR_MODEL.eq(SiteModel.MODEL_ID.toString()))
-            .where(InstanceModel.GENERATED_FOR_ID.eq(siteId))
-            .where(InstanceModel.DELETED_AT.isNull())
-            .orderBy(InstanceModel.ID, SortOrder.DESC)
-            .all();
-    }
-
-    private interface ScopedWork<T> {
-        T run() throws Exception;
+        return OwnedInstances.ownedBy(SiteModel.MODEL_ID, siteId);
     }
 
     /** {@link #inScope} for callers with no checked exceptions to surface. */
     static void inScopeUnchecked(int siteId, @NonNull Runnable work) {
-        try {
-            inScope(siteId, () -> {
-                work.run();
-                return null;
-            });
-        } catch (RuntimeException | Error unchecked) {
-            throw unchecked;
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
+        OwnedInstances.inScopeUnchecked(SOURCE, SiteModel.MODEL_ID, siteId, work);
     }
 
     /** Run {@code work} inside the site's GeneratedRows attribution scope. */
-    private static <T> T inScope(int siteId, ScopedWork<T> work) throws Exception {
-        Object[] result = new Object[1];
-        GeneratedRows.as(new GeneratedRows.Attribution(SOURCE,
-            SiteModel.MODEL_ID.toString(), siteId), () -> result[0] = work.run());
-        @SuppressWarnings("unchecked")
-        T value = (T) result[0];
-        return value;
+    private static <T> T inScope(int siteId, OwnedInstances.ScopedWork<T> work) throws Exception {
+        return OwnedInstances.inScope(SOURCE, SiteModel.MODEL_ID, siteId, work);
     }
 
     /**

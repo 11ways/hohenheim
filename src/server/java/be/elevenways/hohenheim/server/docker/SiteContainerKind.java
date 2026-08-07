@@ -146,6 +146,10 @@ public final class SiteContainerKind implements InstanceKindHandler {
     @Override
     public boolean tenantAuthored() { return false; }
 
+    /** Written exclusively by {@link SiteInstances} inside the site's system scope. */
+    @Override
+    public boolean generatedOnly() { return true; }
+
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
         return new DockerInstanceRuntime(new ServerService().clientFor(serverName),

@@ -6284,8 +6284,20 @@
     "text": "Sitecontainer",
     "scope": "instance_kind"
   },
-  "site_container_site_managed": {
-    "text": "Dit type is de draaiende release van een site; beheer het via de site zelf",
+  "database_container": {
+    "text": "Databasecontainer",
+    "scope": "instance_kind"
+  },
+  "database_engine_unknown": {
+    "text": "Onbekende database-engine {$engine}",
+    "scope": "violations"
+  },
+  "instance_host_unreachable": {
+    "text": "Host {$name} is niet bereikbaar: {$reason}",
+    "scope": "violations"
+  },
+  "instance_kind_owner_managed": {
+    "text": "{$kind}-instances worden beheerd door het record dat ze bezit, niet hier aangemaakt",
     "scope": "violations"
   },
   "instance_generated_readonly": {

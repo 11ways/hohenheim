@@ -102,6 +102,14 @@ public final class IncusInstanceRuntime
             throw new IOException("InstanceSpec '" + spec.handle() + "' carries no valid owner"
                 + " labels; an unattributable instance container is forbidden by design");
         }
+        if (!spec.tmpfs().isEmpty()) {
+            // The honest refusal, the cloud-init shape in reverse: silently dropping a
+            // DECLARED discardable mount would land the workload's "ephemeral" data on
+            // the host's storage pool, which is the opposite of what was declared.
+            throw new IOException("The incus driver cannot deliver the RAM-backed scratch"
+                + " mounts declared for '" + spec.handle() + "' (" + spec.tmpfs().keySet()
+                + "); tmpfs mounts are a docker capability");
+        }
         // The shared isolation ACL, VERIFIED in the daemon, BEFORE any instance is created
         // on it -- an Incus host whose ACL support does not really enforce refuses here,
         // never at the point where a tenant container is already running unisolated.

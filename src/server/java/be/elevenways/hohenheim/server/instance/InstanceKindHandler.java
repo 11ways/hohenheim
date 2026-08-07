@@ -42,6 +42,23 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     }
 
     /**
+     * Whether records of this kind may ONLY be written by the owning product tier, inside
+     * its {@code GeneratedRows} system scope. A generated-only kind cannot be created,
+     * edited or re-kinded from the standalone instance form or API at all, which is what
+     * keeps the admin instance surface from becoming a second authority over a site's
+     * release container or a managed database's engine.
+     *
+     * AIDEV-NOTE: this is a DECLARATION on the kind, not an if-chain in the write hook.
+     * The hook that enforces it ({@code OwnedInstances.install}) names no kind, so a new
+     * owned kind is one line here and is protected from the moment it registers -- the
+     * previous shape hard-coded {@code site_container} in the hook and would have needed
+     * editing for every tier the lowering reaches.
+     */
+    default boolean generatedOnly() {
+        return false;
+    }
+
+    /**
      * The host runtime ({@code ServerModel.RUNTIME_*}) records of this kind run on.
      * Placement only offers matching hosts, and a mismatched deploy refuses at client
      * construction -- a Docker kind can never land on an Incus daemon or vice versa.

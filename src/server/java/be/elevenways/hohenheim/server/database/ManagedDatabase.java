@@ -2,44 +2,36 @@ package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
-import be.elevenways.hohenheim.server.runtime.Egress;
-import be.elevenways.hohenheim.server.runtime.NetworkPosture;
-import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * Provisions database engines as managed Docker containers (Phase 3). Each database
- * runs in its own container with a named volume for persistence and an ephemeral
- * 127.0.0.1 published port; connection details are returned to the caller.
+ * The ENGINE half of the managed-database tier: the engine vocabulary (image, port, data
+ * path, hardening, ready/dump/restore commands) and the operations that run a client
+ * INSIDE an already-running engine container -- readiness probe, backup, restore.
  *
- * AIDEV-NOTE: since the isolation wave a record-backed database container lives on its
- * OWN policied network ({@link NetworkPosture#PRIVATE} with {@link Egress#NONE}: an
- * engine has no legitimate outbound-initiated traffic, so an exfiltrating one finds the
- * door closed) and provisioning REFUSES on a host that cannot enforce the policy. The
- * declared posture arrives through the constructor -- DatabaseService, the production
- * path, always declares PRIVATE; only record-less test/preview callers may declare
- * SHARED_BRIDGE, and PRIVATE without a record id is refused because an unlabelled
- * network could never be attributed or reconciled. A pre-isolation container on the
- * shared bridge migrates the moment it is next re-provisioned (provision replaces the
- * container; the named data volume carries the data across). Host-process sites keep
- * reaching the engine over the 127.0.0.1 published port; Docker sites join the
- * database's network instead (see SiteInstances).
+ * AIDEV-NOTE: this class no longer owns a lifecycle. Provisioning, status and teardown
+ * lowered onto the canonical runtime-resource contract in the Phase 7 database wave: a
+ * database's engine IS an owned {@code hohenheim:database_container} instance driven by
+ * {@link DatabaseInstances} through {@code InstanceService}. What used to be
+ * {@code provision}/{@code status}/{@code destroy} here was a SECOND, weaker copy of the
+ * instance tier's create-start-verify-teardown discipline -- no fence, no host lease, no
+ * capacity booking, no reconciler classification -- and it was deleted rather than
+ * wrapped. Every method left takes a container HANDLE, because naming the container is
+ * the instance tier's job now.
  *
  * @author  Jelle De Loecker
  * @since   0.1.0
@@ -63,6 +55,16 @@ public class ManagedDatabase {
             this.dataPath = dataPath;
         }
 
+        /** The lowercase token this engine is stored as ({@link DatabaseModel#ENGINE}). */
+        public String token() {
+            return BlastString.lower(name());
+        }
+
+        /** The engine's own port INSIDE the container. */
+        public int port() {
+            return this.port;
+        }
+
         /**
          * This engine's DECLARED container isolation profile.
          *
@@ -77,31 +79,67 @@ public class ManagedDatabase {
             };
         }
 
-        Map<String, String> env(String user, String password, String database) {
-            return switch (this) {
-                case POSTGRES -> Map.of(
-                    "POSTGRES_USER", user,
-                    "POSTGRES_PASSWORD", password,
-                    "POSTGRES_DB", database);
-                case MYSQL -> Map.of(
-                    "MYSQL_ROOT_PASSWORD", password,
-                    "MYSQL_DATABASE", database,
-                    "MYSQL_USER", user,
-                    "MYSQL_PASSWORD", password);
-                case MONGO -> Map.of(
-                    "MONGO_INITDB_ROOT_USERNAME", user,
-                    "MONGO_INITDB_ROOT_PASSWORD", password,
-                    "MONGO_INITDB_DATABASE", database);
-                case REDIS -> Map.of();   // redis takes its password via containerCommand
-            };
+        /**
+         * The NON-SECRET half of the engine's initialization environment: what may live
+         * in the instance settings JSON in the clear.
+         */
+        public @NonNull Map<String, String> env(@Nullable String user, @Nullable String database) {
+            String safeUser = user == null ? "" : user;
+            String safeDatabase = database == null ? "" : database;
+            Map<String, String> env = new LinkedHashMap<>();
+            switch (this) {
+                case POSTGRES -> {
+                    env.put("POSTGRES_USER", safeUser);
+                    env.put("POSTGRES_DB", safeDatabase);
+                }
+                case MYSQL -> {
+                    env.put("MYSQL_DATABASE", safeDatabase);
+                    env.put("MYSQL_USER", safeUser);
+                }
+                case MONGO -> {
+                    env.put("MONGO_INITDB_ROOT_USERNAME", safeUser);
+                    env.put("MONGO_INITDB_DATABASE", safeDatabase);
+                }
+                case REDIS -> {
+                    // redis takes its password through containerCommandTemplate()
+                }
+            }
+            return env;
         }
 
-        /** Container command override, or null to keep the image's default. */
-        @Nullable List<String> containerCommand(String password) {
-            if (this == REDIS && password != null && !password.isBlank()) {
-                return List.of("redis-server", "--requirepass", password);
+        /**
+         * The PASSWORD-BEARING half of the engine's environment, written to the instance
+         * through the encrypted secret-variable lane and merged into the container
+         * environment at deploy -- never into the settings JSON.
+         *
+         * AIDEV-NOTE: Redis declares {@code REDIS_PASSWORD} even though the engine
+         * ignores that variable: the value is consumed by the {@code {{REDIS_PASSWORD}}}
+         * placeholder in {@link #containerCommandTemplate()}, which is the only
+         * substitution lane a secret can reach. The key is deliberately NOT
+         * {@code REDISCLI_AUTH} -- an ambient auth variable would make a bare
+         * {@code redis-cli ping} inside the container succeed and turn every
+         * authentication negative control vacuous.
+         */
+        public @NonNull Map<String, String> secretEnv(@NonNull String password) {
+            Map<String, String> env = new LinkedHashMap<>();
+            switch (this) {
+                case POSTGRES -> env.put("POSTGRES_PASSWORD", password);
+                case MYSQL -> {
+                    env.put("MYSQL_ROOT_PASSWORD", password);
+                    env.put("MYSQL_PASSWORD", password);
+                }
+                case MONGO -> env.put("MONGO_INITDB_ROOT_PASSWORD", password);
+                case REDIS -> env.put("REDIS_PASSWORD", password);
             }
-            return null;
+            return env;
+        }
+
+        /**
+         * Container command override with {@code {{KEY}}} placeholders resolved against
+         * the instance's variables, or null to keep the image's default.
+         */
+        public @Nullable String containerCommandTemplate() {
+            return this == REDIS ? "redis-server --requirepass {{REDIS_PASSWORD}}" : null;
         }
 
         /** The tool + args that dump this engine to stdout as text (SQL). */
@@ -178,123 +216,34 @@ public class ManagedDatabase {
         }
 
         /** Env for {@link #readyCommand} (auth where the probe requires it). */
-        List<String> readyEnv(String password) {
+        public List<String> readyEnv(String password) {
             return switch (this) {
                 case MYSQL -> List.of("MYSQL_PWD=" + password);
-                // redis-cli exits non-zero on a NOAUTH error reply, so the probe only
-                // passes once the authenticated server is really up.
                 case REDIS -> password != null && !password.isBlank()
                     ? List.of("REDISCLI_AUTH=" + password) : List.of();
                 default -> List.of();
             };
         }
 
+        /**
+         * The STDOUT text a successful readiness probe must contain, or null when this
+         * engine's probe reports honestly through its exit code alone.
+         *
+         * AIDEV-NOTE: redis is the trap this exists for. {@code redis-cli} exits ZERO
+         * while printing {@code NOAUTH Authentication required.} to stdout, so an
+         * exit-code-only probe passes against a server that answered nothing -- and the
+         * old docblock here claimed the opposite ("redis-cli exits non-zero on a NOAUTH
+         * error reply"). Measured against redis:7-alpine, it does not. The probe now
+         * demands the POSITIVE anchor {@code PONG}.
+         */
+        @Nullable String readyStdoutContains() {
+            return this == REDIS ? "PONG" : null;
+        }
     }
 
     /** Connection details for a provisioned database. */
     public record Connection(Engine engine, String host, int port,
                              String user, String password, String database) {}
-
-    /**
-     * THE container handle of a managed database, and (via Docker's embedded DNS on any
-     * shared user-defined network) the hostname a joined container reaches it under --
-     * stable across re-provisioning, unlike the container's addresses and published port.
-     */
-    public static String containerHandle(String name) {
-        return ControllerScope.handle(ControllerScope.KIND_DB, name);
-    }
-
-    private final DockerClient docker;
-    private final WorkloadNetworkPolicy policy;
-    private final NetworkPosture posture;
-
-    /**
-     * @param policy  the applier bound to the host the {@code docker} client points at
-     * @param posture PRIVATE for every record-backed database; SHARED_BRIDGE is only for
-     *                record-less test/preview provisioning
-     */
-    public ManagedDatabase(DockerClient docker, WorkloadNetworkPolicy policy,
-                           NetworkPosture posture) {
-        this.docker = docker;
-        this.policy = policy;
-        this.posture = posture;
-    }
-
-    /**
-     * Provision (or re-provision) a database container and block until its port accepts
-     * connections.
-     *
-     * @param name      stable database name (container + volume are derived from it)
-     * @param engine    database engine
-     * @param image     image override, or null for the engine default
-     * @param user      application user
-     * @param password  application password
-     * @param database  initial database name
-     * @param ephemeral when true the data directory is a RAM-backed tmpfs mount (fast, no host
-     *                  disk I/O, discarded with the container) instead of a persistent named
-     *                  volume -- suited to tests, CI, and preview environments
-     */
-    public Connection provision(String name, Engine engine, String image,
-                                String user, String password, String database,
-                                boolean ephemeral) throws IOException {
-        return provision(name, engine, image, user, password, database, ephemeral,
-            ResourceLimits.none(), null);
-    }
-
-    /** Provision with optional container resource caps. */
-    public Connection provision(String name, Engine engine, String image,
-                                String user, String password, String database,
-                                boolean ephemeral, ResourceLimits limits) throws IOException {
-        return provision(name, engine, image, user, password, database, ephemeral, limits, null);
-    }
-
-    /**
-     * Provision with the owning {@link DatabaseModel} record id: the container and its
-     * data volume then carry the {@link OwnerLabels} pair so the reconciler can
-     * attribute them. Null (record-less callers: tests, previews) labels nothing.
-     */
-    public Connection provision(String name, Engine engine, String image,
-                                String user, String password, String database,
-                                boolean ephemeral, ResourceLimits limits,
-                                @Nullable Integer recordId) throws IOException {
-        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
-        String volumeName = containerName + "-data";
-        String imageRef = (image == null || image.isBlank()) ? engine.defaultImage : image;
-
-        Map<String, String> owner = recordId != null
-            ? OwnerLabels.of(DatabaseModel.MODEL_ID, recordId) : null;
-
-        // Network AND verified kernel policy FIRST: an unenforceable host must never
-        // reach the point where an image is pulled, let alone a container created.
-        String network = null;
-        if (this.posture == NetworkPosture.PRIVATE) {
-            if (owner == null) {
-                throw new IOException("REFUSED to provision '" + name + "' on a private"
-                    + " network without a database record: the network could never be"
-                    + " attributed or reconciled. Record-less callers declare SHARED_BRIDGE.");
-            }
-            network = WorkloadNetworks.ensure(this.docker, this.policy, containerName, owner,
-                Egress.NONE);
-        }
-
-        docker.ensureImage(imageRef, null);
-
-        // Replace a prior container for this database ONLY when the daemon attributes it
-        // to this record (a persistent named volume keeps the data); a same-named foreign
-        // or unattributable container is a loud refusal, never a force-remove.
-        OwnerLabels.removeIfOwnedBy(docker, containerName, DatabaseModel.MODEL_ID, recordId);
-
-        String id = docker.createContainer(containerName,
-            buildSpec(engine, imageRef, volumeName, engine.env(user, password, database),
-                engine.containerCommand(password), ephemeral, limits, owner, network),
-            engine.hardening());
-        docker.startContainer(id);
-
-        waitForReady(id, engine, user, password, database, 60_000);
-        int hostPort = docker.publishedPort(id, engine.port);
-
-        return new Connection(engine, "127.0.0.1", hostPort, user, password, database);
-    }
 
     /** Live container state for a managed database, plus the published host port when running. */
     public record LiveStatus(ContainerState state, Integer port) {
@@ -303,87 +252,38 @@ public class ManagedDatabase {
         }
     }
 
-    /** Live status of a database's container; never throws (see {@link ContainerState}). */
-    public LiveStatus status(String name, Engine engine) {
-        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
-        Map<String, Object> inspect;
-        try {
-            inspect = docker.inspectContainer(containerName);
-        } catch (DockerClient.ApiException e) {
-            return new LiveStatus(e.isNotFound()
-                ? ContainerState.ABSENT : ContainerState.UNREACHABLE, null);
-        } catch (IOException e) {
-            return new LiveStatus(ContainerState.UNREACHABLE, null);
-        }
-        Object state = inspect.get("State");
-        boolean running = state instanceof Map<?, ?> s && Boolean.TRUE.equals(s.get("Running"));
-        if (!running) {
-            return new LiveStatus(ContainerState.STOPPED, null);
-        }
-        Integer port = null;
-        try {
-            port = docker.publishedPort(containerName, engine.port);
-        } catch (IOException ignored) {
-            // not published yet / not ready
-        }
-        return new LiveStatus(ContainerState.RUNNING, port);
-    }
-
     /**
-     * Stop and remove the database container and (optionally) its data volume, VERIFIED:
-     * every step either gets the daemon's confirmation (2xx or 404 = observed gone) or
-     * this throws. A destroy that cannot verify its teardown must not report success --
-     * the caller keeps the record (and the only copy of {@code db_password}) and retries
-     * or force-destroys explicitly.
+     * The engine a database record declares.
      *
-     * @throws IOException when the daemon cannot confirm container or volume removal
+     * @throws IllegalArgumentException when the stored token names no known engine
      */
-    public void destroy(String name, boolean removeData) throws IOException {
-        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
-        try {
-            docker.stopContainer(containerName, 10);
-        } catch (IOException ignored) {
-            // stop is a courtesy; the force-remove below is the authority
-        }
-        try {
-            docker.removeContainer(containerName, true);
-        } catch (DockerClient.ApiException e) {
-            if (!e.isNotFound()) {
-                throw e;
-            }
-        }
-        if (removeData) {
-            try {
-                docker.removeVolume(containerName + "-data", true);
-            } catch (DockerClient.ApiException e) {
-                if (!e.isNotFound()) {
-                    throw e;
-                }
-            }
-        }
-        // The private network and its kernel chains die with the workload, VERIFIED
-        // (absent network = observed no-op, so a pre-isolation database on the shared
-        // bridge destroys cleanly too).
-        if (this.posture == NetworkPosture.PRIVATE) {
-            WorkloadNetworks.teardown(docker, this.policy, containerName);
-        }
+    public static @NonNull Engine engineOf(@NonNull Row database) {
+        return Engine.valueOf(BlastString.upper(
+            String.valueOf((Object) database.get(DatabaseModel.ENGINE))));
+    }
+
+    private final DockerClient docker;
+
+    /** @param docker a client aimed at the host the engine container runs on */
+    public ManagedDatabase(DockerClient docker) {
+        this.docker = docker;
     }
 
     /**
-     * Back up a provisioned database by running the engine's dump tool inside its container,
+     * Back up a running database by running the engine's dump tool inside its container,
      * returning the dump as text (SQL for Postgres/MySQL). The whole dump is held in memory;
      * a streaming-to-file variant is a follow-up for large databases.
      *
+     * @param handle the engine container's handle (the instance handle)
      * @throws IOException                   if the dump command exits non-zero
      * @throws UnsupportedOperationException if the engine has no text dump (Redis/Mongo)
      */
-    public String backup(String name, Engine engine, String user, String password,
+    public String backup(String handle, Engine engine, String user, String password,
                          String database) throws IOException {
-        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
-        DockerClient.ExecResult result = docker.exec(containerName,
+        DockerClient.ExecResult result = docker.exec(handle,
             engine.dumpCommand(user, database), engine.dumpEnv(password));
         if (result.exitCode() != 0) {
-            throw new IOException("Database backup of '" + name + "' failed (exit "
+            throw new IOException("Database backup of '" + handle + "' failed (exit "
                 + result.exitCode() + "): " + result.stderr().trim());
         }
         return result.stdout();
@@ -408,67 +308,66 @@ public class ManagedDatabase {
     // mount: the Docker archive API (getArchiveFile) cannot read files inside a tmpfs (or
     // volume) mount. So redis dumps via `--rdb /tmp/...` (not SAVE, which writes to the /data
     // mount) and mongodump targets /tmp.
-    public void backupToFile(String name, Engine engine, String user, String password,
+    public void backupToFile(String handle, Engine engine, String user, String password,
                              String database, Path target) throws IOException {
-        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         switch (engine) {
             case POSTGRES, MYSQL ->
-                Files.writeString(target, backup(name, engine, user, password, database), StandardCharsets.UTF_8);
+                Files.writeString(target, backup(handle, engine, user, password, database),
+                    StandardCharsets.UTF_8);
             case REDIS -> {
                 String rdbPath = "/tmp/hohenheim-dump.rdb";
-                DockerClient.ExecResult save = docker.exec(containerName,
+                DockerClient.ExecResult save = docker.exec(handle,
                     List.of("redis-cli", "--rdb", rdbPath), engine.readyEnv(password));
                 if (save.exitCode() != 0) {
-                    throw new IOException("redis dump failed for '" + name + "': " + save.stderr().trim());
+                    throw new IOException("redis dump failed for '" + handle + "': " + save.stderr().trim());
                 }
-                Files.write(target, docker.getArchiveFile(containerName, rdbPath, maxDumpBytes()));
+                Files.write(target, docker.getArchiveFile(handle, rdbPath, maxDumpBytes()));
             }
             case MONGO -> {
                 String archivePath = "/tmp/hohenheim-dump.archive";
-                DockerClient.ExecResult dump = docker.exec(containerName, List.of("mongodump",
+                DockerClient.ExecResult dump = docker.exec(handle, List.of("mongodump",
                     "--username", user, "--password", password, "--authenticationDatabase", "admin",
                     "--db", database, "--archive=" + archivePath));
                 if (dump.exitCode() != 0) {
-                    throw new IOException("mongodump failed for '" + name + "': " + dump.stderr().trim());
+                    throw new IOException("mongodump failed for '" + handle + "': " + dump.stderr().trim());
                 }
-                Files.write(target, docker.getArchiveFile(containerName, archivePath, maxDumpBytes()));
+                Files.write(target, docker.getArchiveFile(handle, archivePath, maxDumpBytes()));
             }
         }
     }
 
     /**
-     * Restore a text dump into a provisioned database: upload it into the container and load it
+     * Restore a text dump into a running database: upload it into the container and load it
      * with the engine's client. The dump must match the engine (e.g. {@code pg_dump} output for
      * Postgres). Restoring into a non-empty database may conflict; restore into a fresh one.
      *
      * @throws IOException if the upload or load command fails
      */
-    public void restore(String name, Engine engine, String user, String password,
+    public void restore(String handle, Engine engine, String user, String password,
                         String database, String dump) throws IOException {
         Path tempFile = Files.createTempFile("hohenheim-restore", "." + engine.dumpExtension());
         try {
             Files.writeString(tempFile, dump, StandardCharsets.UTF_8);
-            restoreFromFile(name, engine, user, password, database, tempFile);
+            restoreFromFile(handle, engine, user, password, database, tempFile);
         } finally {
             Files.deleteIfExists(tempFile);
         }
     }
 
     /**
-     * Restore a dump file into a provisioned database: push it into the container and load it with
+     * Restore a dump file into a running database: push it into the container and load it with
      * the engine's client (binary-safe, so it handles SQL text and the Mongo archive alike).
      * Redis is restored by swapping its RDB and restarting the container.
      *
      * @throws UnsupportedOperationException for an ephemeral Redis (its tmpfs data dir is wiped
      *                                       by the restart the restore requires)
      */
-    public void restoreFromFile(String name, Engine engine, String user, String password,
+    public void restoreFromFile(String handle, Engine engine, String user, String password,
                                 String database, Path source) throws IOException {
         if (engine == Engine.REDIS) {
-            restoreRedis(name, user, password, database, source);
+            restoreRedis(handle, user, password, database, source);
             return;
         }
-        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
         String fileName = "hohenheim-restore." + engine.dumpExtension();
         // Resolve the restore command first so an unsupported engine fails before any upload.
         List<String> command = engine.restoreCommand(user, password, database, "/tmp/" + fileName);
@@ -476,11 +375,11 @@ public class ManagedDatabase {
         Path tempDir = Files.createTempDirectory("hohenheim-restore");
         try {
             Files.copy(source, tempDir.resolve(fileName));
-            docker.putArchiveFromDirectory(containerName, "/tmp", tempDir);
+            docker.putArchiveFromDirectory(handle, "/tmp", tempDir);
 
-            DockerClient.ExecResult result = docker.exec(containerName, command, engine.dumpEnv(password));
+            DockerClient.ExecResult result = docker.exec(handle, command, engine.dumpEnv(password));
             if (result.exitCode() != 0) {
-                throw new IOException("Database restore of '" + name + "' failed (exit "
+                throw new IOException("Database restore of '" + handle + "' failed (exit "
                     + result.exitCode() + "): " + result.stderr().trim());
             }
         } finally {
@@ -497,7 +396,7 @@ public class ManagedDatabase {
     // and the server is restarted around it: SHUTDOWN NOSAVE stops the container without saving
     // over the new file, and the restart loads it. A scheduled bgsave between the copy and the
     // shutdown could still overwrite it; that window is milliseconds and a retry recovers.
-    private void restoreRedis(String name, String user, String password, String database,
+    private void restoreRedis(String handle, String user, String password, String database,
                               Path source) throws IOException {
         byte[] header = new byte[REDIS_RDB_MAGIC.length()];
         try (var in = Files.newInputStream(source)) {
@@ -507,39 +406,38 @@ public class ManagedDatabase {
             }
         }
 
-        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
-        requirePersistentData(containerName, Engine.REDIS.dataPath);
+        requirePersistentData(handle, Engine.REDIS.dataPath);
 
         String fileName = "hohenheim-restore.rdb";
         Path tempDir = Files.createTempDirectory("hohenheim-restore");
         try {
             Files.copy(source, tempDir.resolve(fileName));
-            docker.putArchiveFromDirectory(containerName, "/tmp", tempDir);
+            docker.putArchiveFromDirectory(handle, "/tmp", tempDir);
         } finally {
             Files.deleteIfExists(tempDir.resolve(fileName));
             Files.deleteIfExists(tempDir);
         }
 
         // "dump.rdb" in the data dir is the stock image's dbfilename/dir.
-        DockerClient.ExecResult copy = docker.exec(containerName,
+        DockerClient.ExecResult copy = docker.exec(handle,
             List.of("cp", "/tmp/" + fileName, Engine.REDIS.dataPath + "/dump.rdb"));
         if (copy.exitCode() != 0) {
-            throw new IOException("redis restore of '" + name + "' failed copying the RDB into place: "
+            throw new IOException("redis restore of '" + handle + "' failed copying the RDB into place: "
                 + copy.stderr().trim());
         }
 
         // The server exits without replying, so the exec result is unreliable; the stopped-state
         // poll below is the real confirmation.
-        docker.exec(containerName, List.of("redis-cli", "SHUTDOWN", "NOSAVE"),
+        docker.exec(handle, List.of("redis-cli", "SHUTDOWN", "NOSAVE"),
             Engine.REDIS.readyEnv(password));
-        waitForStopped(containerName, 10_000);
-        docker.startContainer(containerName);
-        waitForReady(containerName, Engine.REDIS, user, password, database, 60_000);
+        waitForStopped(handle, 10_000);
+        docker.startContainer(handle);
+        awaitReady(docker, handle, Engine.REDIS, user, password, database, 60_000);
     }
 
     /** Reject restore-by-restart when the data dir is a tmpfs mount (wiped on restart). */
-    private void requirePersistentData(String containerName, String dataPath) throws IOException {
-        Object mounts = docker.inspectContainer(containerName).get("Mounts");
+    private void requirePersistentData(String handle, String dataPath) throws IOException {
+        Object mounts = docker.inspectContainer(handle).get("Mounts");
         if (mounts instanceof List<?> list) {
             for (Object mount : list) {
                 if (mount instanceof Map<?, ?> m && dataPath.equals(m.get("Destination"))) {
@@ -555,10 +453,10 @@ public class ManagedDatabase {
             "redis restore needs a persistent data volume; none is mounted at " + dataPath);
     }
 
-    private void waitForStopped(String containerName, long timeoutMillis) throws IOException {
+    private void waitForStopped(String handle, long timeoutMillis) throws IOException {
         long deadline = System.currentTimeMillis() + timeoutMillis;
         while (System.currentTimeMillis() < deadline) {
-            Object state = docker.inspectContainer(containerName).get("State");
+            Object state = docker.inspectContainer(handle).get("State");
             if (state instanceof Map<?, ?> s && !Boolean.TRUE.equals(s.get("Running"))) {
                 return;
             }
@@ -566,81 +464,40 @@ public class ManagedDatabase {
                 Thread.sleep(200);
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
-                throw new IOException("Interrupted waiting for '" + containerName + "' to stop");
+                throw new IOException("Interrupted waiting for '" + handle + "' to stop");
             }
         }
-        throw new IOException("Timed out waiting for '" + containerName + "' to stop for restore");
+        throw new IOException("Timed out waiting for '" + handle + "' to stop for restore");
     }
 
-    /** Size cap for an ephemeral (tmpfs) data mount: 1 GiB -- generous for tests and small
-     *  preview databases, while bounding RAM use (tmpfs only consumes RAM for live data). */
-    private static final long EPHEMERAL_DATA_SIZE_BYTES = 1024L * 1024 * 1024;
-
-    private static Map<String, Object> buildSpec(Engine engine, String imageRef, String volumeName,
-                                                 Map<String, String> env, @Nullable List<String> command,
-                                                 boolean ephemeral, ResourceLimits limits,
-                                                 @Nullable Map<String, String> ownerLabels,
-                                                 @Nullable String network) {
-        String portKey = engine.port + "/tcp";
-        List<String> envList = new ArrayList<>();
-        env.forEach((key, value) -> envList.add(key + "=" + value));
-
-        // Ephemeral data lives in a RAM-backed tmpfs mount: no host disk I/O at all (no btrfs
-        // fsync storms from initdb), freed when the container is removed. Persistent data lives
-        // in a named volume that survives re-provisioning; VolumeOptions.Labels stamp the owner
-        // onto it at BIRTH, because Docker never relabels an existing volume.
-        Map<String, Object> dataMount;
-        if (ephemeral) {
-            dataMount = Map.of("Type", "tmpfs", "Target", engine.dataPath,
-                "TmpfsOptions", Map.of("SizeBytes", EPHEMERAL_DATA_SIZE_BYTES));
-        } else if (ownerLabels != null) {
-            dataMount = Map.of("Type", "volume", "Source", volumeName, "Target", engine.dataPath,
-                "VolumeOptions", Map.of("Labels", ownerLabels));
-        } else {
-            dataMount = Map.of("Type", "volume", "Source", volumeName, "Target", engine.dataPath);
-        }
-
-        Map<String, Object> spec = new LinkedHashMap<>();
-        spec.put("Image", imageRef);
-        if (ownerLabels != null) {
-            spec.put("Labels", ownerLabels);
-        }
-        if (!envList.isEmpty()) {
-            spec.put("Env", envList);
-        }
-        if (command != null) {
-            spec.put("Cmd", command);
-        }
-        spec.put("ExposedPorts", Map.of(portKey, Map.of()));
-        // AIDEV-NOTE: attached in the CREATE body, never with a connect call afterwards
-        // (a post-hoc connect leaves the container on the default bridge in between).
-        // A null network is the SHARED_BRIDGE test posture: nothing is attached.
-        if (network != null) {
-            spec.put("NetworkingConfig", Map.of("EndpointsConfig", Map.of(network, Map.of())));
-        }
-        Map<String, Object> hostConfig = new LinkedHashMap<>();
-        if (network != null) {
-            hostConfig.put("NetworkMode", network);
-        }
-        hostConfig.put("PortBindings", Map.of(portKey, List.of(Map.of("HostIp", "127.0.0.1", "HostPort", ""))));
-        hostConfig.put("Mounts", List.of(dataMount));
-        limits.applyTo(hostConfig);
-        spec.put("HostConfig", hostConfig);
-        return spec;
-    }
-
-    // AIDEV-NOTE: A docker-published port accepts connections via docker-proxy the instant the
-    // container starts, well before the DB can serve queries -- so we probe the engine itself
-    // (over TCP, inside the container) until it reports ready.
-    private void waitForReady(String containerId, Engine engine, String user, String password,
-                             String database, long timeoutMillis) throws IOException {
+    /**
+     * Block until the ENGINE reports it can serve queries, probing inside the container.
+     *
+     * AIDEV-NOTE: a docker-published port accepts connections via docker-proxy the instant
+     * the container starts, well before the engine can serve anything -- so the probe runs
+     * the engine's own client over TCP inside the container, and (where the engine's client
+     * lies with its exit code) demands a POSITIVE anchor in stdout as well. This is a
+     * PRODUCT-tier gate on purpose: the instance contract answers "is the workload
+     * running", never "can this engine serve queries" -- the same split that keeps the site
+     * tier's HTTP health probe in SiteReleases rather than in InstanceService.
+     *
+     * @throws IOException naming the engine when it never became ready
+     */
+    public static void awaitReady(DockerClient docker, String handle, Engine engine, String user,
+                                  String password, String database, long timeoutMillis)
+            throws IOException {
         long deadline = System.currentTimeMillis() + timeoutMillis;
         List<String> command = engine.readyCommand(user, password, database);
         List<String> env = engine.readyEnv(password);
+        String anchor = engine.readyStdoutContains();
+        String lastOutput = null;
         IOException last = null;
         while (System.currentTimeMillis() < deadline) {
             try {
-                if (docker.exec(containerId, command, env).exitCode() == 0) {
+                DockerClient.ExecResult probe = docker.exec(handle, command, env);
+                lastOutput = probe.stdout();
+                if (probe.exitCode() == 0
+                        && (anchor == null || probe.stdout().contains(anchor))) {
                     return;   // engine reports ready
                 }
             } catch (IOException e) {
@@ -654,6 +511,8 @@ public class ManagedDatabase {
             }
         }
         throw new IOException("Timed out waiting for " + engine + " '" + database + "' to become ready"
-            + (last != null ? " (" + last.getMessage() + ")" : ""));
+            + (last != null ? " (" + last.getMessage() + ")" : "")
+            + (lastOutput != null && !lastOutput.isBlank()
+                ? " [last probe output: " + lastOutput.trim() + "]" : ""));
     }
 }

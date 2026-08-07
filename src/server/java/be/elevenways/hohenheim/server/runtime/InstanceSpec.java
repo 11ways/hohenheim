@@ -42,6 +42,13 @@ import java.util.Map;
  * @param guestAgent    whether the image carries a guest agent capable of exec; false
  *                      makes an exec-driven operation refuse by name instead of waiting
  *                      out the ready timeout and reporting a false timeout
+ * @param tmpfs         RAM-backed scratch mounts: container path to size cap in bytes.
+ *                      DECLARED discardable storage -- the content dies with the
+ *                      workload and never reaches host disk, which is what an ephemeral
+ *                      managed database's data directory is. A driver that cannot
+ *                      deliver one refuses by name; it must never silently fall back to
+ *                      a persistent volume, because "ephemeral" is then a lie that
+ *                      leaves tenant data on disk.
  */
 public record InstanceSpec(@NonNull String handle,
                            @NonNull String image,
@@ -56,7 +63,8 @@ public record InstanceSpec(@NonNull String handle,
                            @Nullable String imageFingerprint,
                            @NonNull ImageOrigin imageOrigin,
                            boolean secureBoot,
-                           boolean guestAgent) {
+                           boolean guestAgent,
+                           @NonNull Map<String, Long> tmpfs) {
 
     /** The pre-VM shape: no cloud-init, no pinned fingerprint, catalog origin, no agent claim. */
     public InstanceSpec(@NonNull String handle,
@@ -69,7 +77,27 @@ public record InstanceSpec(@NonNull String handle,
                         ContainerHardening.@NonNull Profile hardening,
                         @NonNull Map<String, String> ownerLabels) {
         this(handle, image, command, env, volumes, publication, limits, hardening,
-            ownerLabels, null, null, ImageOrigin.CATALOG, false, true);
+            ownerLabels, null, null, ImageOrigin.CATALOG, false, true, Map.of());
+    }
+
+    /** The pre-tmpfs shape: everything declared, no RAM-backed scratch mount. */
+    public InstanceSpec(@NonNull String handle,
+                        @NonNull String image,
+                        @Nullable List<String> command,
+                        @NonNull Map<String, String> env,
+                        @NonNull Map<String, String> volumes,
+                        @Nullable PortPublication publication,
+                        @NonNull ResourceLimits limits,
+                        ContainerHardening.@NonNull Profile hardening,
+                        @NonNull Map<String, String> ownerLabels,
+                        @Nullable String cloudInitUserData,
+                        @Nullable String imageFingerprint,
+                        @NonNull ImageOrigin imageOrigin,
+                        boolean secureBoot,
+                        boolean guestAgent) {
+        this(handle, image, command, env, volumes, publication, limits, hardening,
+            ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
+            guestAgent, Map.of());
     }
 
     /** A copy whose publication carries the host port the pre-allocation step claimed. */
@@ -81,7 +109,7 @@ public record InstanceSpec(@NonNull String handle,
         return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
             this.publication.withPreallocatedPort(hostPort), this.limits, this.hardening,
             this.ownerLabels, this.cloudInitUserData, this.imageFingerprint, this.imageOrigin,
-            this.secureBoot, this.guestAgent);
+            this.secureBoot, this.guestAgent, this.tmpfs);
     }
 
     /** A copy carrying the record's pinned resolved image identity. */
@@ -89,6 +117,6 @@ public record InstanceSpec(@NonNull String handle,
         return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
             this.publication, this.limits, this.hardening, this.ownerLabels,
             this.cloudInitUserData, fingerprint, this.imageOrigin, this.secureBoot,
-            this.guestAgent);
+            this.guestAgent, this.tmpfs);
     }
 }

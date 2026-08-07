@@ -220,7 +220,10 @@ public final class DockerReconciler {
             return null;   // hohenheim-prefixed, wrong shape -> colliding
         }
 
-        // {scope}db-{name} containers, {scope}db-{name}-data volumes.
+        // {scope}db-{name} containers (PRE-LOWERING leftovers only -- a database's engine
+        // is an instance since Phase 7 and carries owner labels from birth) and
+        // {scope}db-{name}-data volumes, which are STILL the live naming: the data volume
+        // stays keyed to the database record's name so it outlives any runtime row.
         if (name.startsWith(scheme + "db-")) {
             String rest = name.substring((scheme + "db-").length());
             if (KIND_VOLUME.equals(kind) && rest.endsWith("-data")) {
