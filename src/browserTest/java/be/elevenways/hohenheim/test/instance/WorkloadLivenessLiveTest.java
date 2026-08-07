@@ -126,8 +126,23 @@ class WorkloadLivenessLiveTest {
                 //    WITHOUT killing anything: memory.events "max" counts reclaim, which
                 //    is survivable and normal, and a status that read "max" would now
                 //    report this healthy workload as dead.
+                //
+                // AIDEV-NOTE: the ballast MUST be written with oflag=direct, and dd's
+                // stderr must NOT be suppressed. Buffered writing was the anchor's
+                // original technique and it raced the OOM killer: a buffered write
+                // accumulates DIRTY page cache, which is unreclaimable until writeback
+                // completes, so the cgroup could hit its ceiling with nothing to reclaim
+                // and the kernel killed dd itself -- measured 1 run in 6 on this host,
+                // giving the pressure-only anchor an oom_kill it asserts against.
+                // O_DIRECT bypasses the page cache on the write, so the only memory this
+                // step charges is dd's single 1 MB buffer; the two buffered READS that
+                // follow are what generate the reclaim, and CLEAN page cache is always
+                // reclaimable, so the read phase cannot be killed. 12/12 kill-free after
+                // the change, each run adding ~1670 to "max". Suppressing dd's stderr is
+                // what made the original failure report an empty stderr and say nothing
+                // about why; an O_DIRECT-less filesystem must be able to name itself.
                 DockerClient.ExecResult pressure = docker.exec(handle, List.of("sh", "-c",
-                    "dd if=/dev/zero of=/tmp/ballast bs=1M count=256 2>/dev/null"
+                    "dd if=/dev/zero of=/tmp/ballast bs=1M count=256 oflag=direct"
                         + " && cat /tmp/ballast > /dev/null"
                         + " && cat /tmp/ballast > /dev/null && echo pressure-survived"));
                 assertThat(pressure.stdout().trim())
