@@ -14,7 +14,9 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.stack.StackDeployer;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.stack.StackInstances;
+import be.elevenways.hohenheim.server.stack.StackServiceKind;
 import be.elevenways.zenit.common.edit.Array;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldOption;
@@ -117,11 +119,7 @@ public class StackServiceResource extends RowResource {
                                       @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, null);
-        try {
-            return super.persistRow(values, accessContext);
-        } catch (PortLedger.PortConflict conflict) {
-            throw asViolation(conflict);
-        }
+        return super.persistRow(values, accessContext);
     }
 
     @Override
@@ -129,27 +127,7 @@ public class StackServiceResource extends RowResource {
                           @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, existing);
-        try {
-            super.updateRow(existing, values, accessContext);
-        } catch (PortLedger.PortConflict conflict) {
-            throw asViolation(conflict);
-        }
-    }
-
-    /**
-     * The ledger's unique-index backstop caught a claim the friendly pre-write read did
-     * not see; the save transaction already rolled the row back, so the outcome is the
-     * same refusal, just form-level instead of per-port.
-     *
-     * AIDEV-NOTE: its own microcopy key on purpose. The two refusals are otherwise
-     * indistinguishable in the rendered form -- which made a test that "proved" the
-     * friendly read still pass with that read deleted. Distinct copy is both the honest
-     * operator message (this one means someone else claimed it just now) and the only
-     * way a test can tell which arbiter answered.
-     */
-    static @NonNull Violations asViolation(PortLedger.@NonNull PortConflict conflict) {
-        return Violations.ofForm(CmsSupport.violationText("port_held_race")
-            .withArg("holder", conflict.getHolder()));
+        super.updateRow(existing, values, accessContext);
     }
 
     /**
@@ -169,6 +147,15 @@ public class StackServiceResource extends RowResource {
             refuseWhenDependedUpon(stackId, serviceId, name);
         }
         if (serviceId != null) {
+            // The owned instance must die WITH the record: InstanceService.destroy
+            // soft-deletes, so no remove hook fires and nothing else would ever take the
+            // workload down. Refusing here beats leaving a running container behind a
+            // deleted record -- the next deploy's prune is the SECOND line, not the first.
+            try {
+                StackInstances.destroyFor(serviceId);
+            } catch (java.io.IOException undeletable) {
+                throw Violations.ofForm(CmsSupport.violationText("stack_destroy_failed"));
+            }
             Models.get(StackFileModel.class).find()
                 .where(StackFileModel.STACK_SERVICE_ID.eq(serviceId)).delete();
         }
@@ -303,10 +290,12 @@ public class StackServiceResource extends RowResource {
      * recording authority (other stacks, and -- as they migrate in -- docker sites,
      * managed databases and managed processes), not just sibling stack rows.
      *
-     * AIDEV-NOTE: this read is the FRIENDLY refusal (field-pathed, names the holder).
-     * Exclusivity itself is the ledger's unique claim-key index, enforced inside the
-     * service save's write transaction (StackServiceModel afterSave -> PortLedger);
-     * SQLite's serialized write transactions keep this read honest against rivals.
+     * AIDEV-NOTE: this read is the FRIENDLY refusal (field-pathed, names the holder) and
+     * ONLY that -- it is advisory, not the arbiter. Since the stack tier lowered onto the
+     * instance runtime contract, exclusivity is decided where every other tier decides it:
+     * at DEPLOY, by the ledger's unique claim-key index, under the service's owned
+     * INSTANCE as the owner. That is why the own-holder exemption below asks about the
+     * instance and not about the service record.
      */
     private static void validatePorts(@NonNull Map<String, Object> coerced, int stackId,
                                       @Nullable Integer existingId) {
@@ -342,15 +331,60 @@ public class StackServiceResource extends RowResource {
                 throw Violations.ofField("ports." + index + ".host_port", host,
                     CmsSupport.violationText("host_port_taken"));
             }
+            // Sibling DECLARATIONS on the same host, which the ledger cannot see yet:
+            // since the lowering a claim exists only from the DEPLOY, so two services can
+            // be authored with the same host port and only collide much later. This is a
+            // record-level uniqueness check (the duplicate-name shape), not a second
+            // arbiter -- the ledger still decides at deploy.
+            String declaredBy = declaringSibling(serverId, existingId,
+                PortLedger.claimKeyOf(serverId, port.get("host_ip"), host, port.get("protocol")));
+            if (declaredBy != null) {
+                throw Violations.ofField("ports." + index + ".host_port", host,
+                    CmsSupport.violationText("port_held").withArg("holder", declaredBy));
+            }
             Row holder = PortLedger.holderOf(
                 PortLedger.claimKeyOf(serverId, port.get("host_ip"), host, port.get("protocol")));
-            if (holder != null
-                && !PortLedger.isOwnedBy(holder, StackServiceModel.MODEL_ID, existingId)) {
+            Row ownInstance = existingId != null ? StackInstances.owned(existingId) : null;
+            if (holder != null && !(ownInstance != null && PortLedger.isOwnedBy(holder,
+                    InstanceModel.MODEL_ID, ownInstance.get(InstanceModel.ID)))) {
                 throw Violations.ofField("ports." + index + ".host_port", host,
                     CmsSupport.violationText("port_held")
                         .withArg("holder", PortLedger.describeHolder(holder)));
             }
         }
+    }
+
+    /**
+     * The name of another stack service on the same host that already DECLARES this
+     * claim key, or null.
+     *
+     * @return "stack/service", which is what the operator has to go and change
+     */
+    private static @Nullable String declaringSibling(int serverId, @Nullable Integer existingId,
+                                                     @NonNull String claimKey) {
+        StackModel stacks = Models.get(StackModel.class);
+        for (Row stack : stacks.find().all()) {
+            Integer stackServer = stack.get(StackModel.SERVER_ID);
+            if ((stackServer != null ? stackServer : ServerModel.localServerId()) != serverId) {
+                continue;
+            }
+            for (Row service : Models.get(StackServiceModel.class)
+                    .findByStackId(stack.get(StackModel.ID))) {
+                if (service.get(StackServiceModel.ID).equals(existingId)) {
+                    continue;
+                }
+                for (Row port : service.getRecords(StackServiceModel.PORTS)) {
+                    Integer host = port.get(StackServiceModel.PORT_HOST);
+                    if (host != null && claimKey.equals(PortLedger.claimKeyOf(serverId,
+                            port.get(StackServiceModel.PORT_HOST_IP), host,
+                            port.get(StackServiceModel.PORT_PROTOCOL)))) {
+                        return stack.get(StackModel.NAME) + "/"
+                            + service.get(StackServiceModel.NAME);
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /** A dependency naming no sibling service can never be satisfied at deploy time. */
@@ -406,7 +440,7 @@ public class StackServiceResource extends RowResource {
             names.add(String.valueOf(entry));
         }
         try {
-            ContainerHardening.declaring(StackDeployer.HARDENING, "this service", names);
+            ContainerHardening.declaring(StackServiceKind.HARDENING, "this service", names);
         } catch (IllegalArgumentException notDeclarable) {
             throw Violations.ofField("capabilities", names,
                 CmsSupport.violationText("capability_not_declarable")

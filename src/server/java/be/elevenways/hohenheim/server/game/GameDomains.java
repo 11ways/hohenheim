@@ -361,7 +361,7 @@ public final class GameDomains {
             String handle = linkHandle(proxyId, backendId);
             links.ensureLinkNetwork(handle, OwnerLabels.of(InstanceModel.MODEL_ID, backendId),
                 Egress.OPEN);
-            links.connectToLinkNetwork(handle, resolved.spec().handle());
+            links.connectToLinkNetwork(handle, resolved.spec().handle(), List.of());
         }
     }
 
@@ -708,10 +708,10 @@ public final class GameDomains {
             links.ensureLinkNetwork(handle, OwnerLabels.of(InstanceModel.MODEL_ID, backendId),
                 Egress.OPEN);
             if (proxyState != ContainerState.ABSENT) {
-                links.connectToLinkNetwork(handle, proxy.spec().handle());
+                links.connectToLinkNetwork(handle, proxy.spec().handle(), List.of());
             }
             if (backendState != ContainerState.ABSENT) {
-                links.connectToLinkNetwork(handle, backend.spec().handle());
+                links.connectToLinkNetwork(handle, backend.spec().handle(), List.of());
             }
         } catch (IOException e) {
             throw Violations.ofForm(CmsSupport.violationText("game_link_failed")

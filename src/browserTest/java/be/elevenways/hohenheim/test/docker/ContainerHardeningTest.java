@@ -19,8 +19,14 @@ import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.stack.StackDeployer;
-import be.elevenways.hohenheim.server.stack.StackSpec;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.server.stack.StackInstances;
+import be.elevenways.hohenheim.server.stack.StackRuntime;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.zenit.common.orm.datasource.Db;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import org.junit.jupiter.api.AfterAll;
@@ -180,23 +186,63 @@ class ContainerHardeningTest {
             }
         }
 
-        // 4. STACKS -- operator-authored, declares SERVICE at the tier.
-        StackSpec stack = new StackSpec(0, "hhhard" + Long.toHexString(System.nanoTime()),
-            "local", null, false, null, null, null,
-            StackSpec.topologicallySorted(List.of(new StackSpec.ServiceSpec("app", TEST_IMAGE,
-                List.of("sleep", "600"), Map.of(), List.of(), List.of(), List.of(), List.of(),
-                null, 1, 3, 3, 0, "no", null, null, List.of()))));
-        // The class-wide netns override backs forServer here, exactly like the database
-        // step above: a stack now refuses to deploy where its policy cannot be enforced.
-        StackDeployer deployer = new StackDeployer(docker,
-            WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), null);
+        // 4. STACKS -- operator-authored, declares SERVICE at the tier. Since the
+        //    Phase 7 lowering a service IS an owned instance, so this deploys from
+        //    RECORDS through StackRuntime, exactly like the product surface does.
+        StackRuntime stacks = new StackRuntime(docker, Datasources.getDefault());
+        int[] stackIds = stackRecords("hhhard" + Long.toHexString(System.nanoTime()),
+            Map.of("app", List.of()));
         try {
-            deployer.deploy(stack);
-            assertKernelState(docker, StackDeployer.containerName(stack, "app"),
+            stacks.deploy(stackIds[0], "hardening test");
+            assertKernelState(docker, stackContainer(stackIds[1]),
                 "step 4: stack service", SERVICE_CAPS, pids);
         } finally {
-            deployer.destroy(stack, true);
+            stacks.destroy(stackIds[0], true);
         }
+    }
+
+    /**
+     * Stack + service records for the hardening journeys; the returned array is
+     * {@code [stackId, serviceId...]} in declaration order.
+     */
+    private static int[] stackRecords(String stackName, Map<String, List<String>> services) {
+        int[] ids = new int[services.size() + 1];
+        Db.run(Datasources.getDefault(), () -> {
+            StackModel stackModel = Models.get(StackModel.class);
+            Row stack = stackModel.createEmptyRow();
+            stack.set(StackModel.NAME, stackName);
+            stack.set(StackModel.ENABLED, true);
+            stack.set(StackModel.SERVER_ID, ServerModel.localServerId());
+            stackModel.save(stack);
+            ids[0] = stack.get(StackModel.ID);
+
+            StackServiceModel serviceModel = Models.get(StackServiceModel.class);
+            int index = 1;
+            for (Map.Entry<String, List<String>> entry : services.entrySet()) {
+                Row service = serviceModel.createEmptyRow();
+                service.set(StackServiceModel.STACK_ID, ids[0]);
+                service.set(StackServiceModel.NAME, entry.getKey());
+                service.set(StackServiceModel.ENABLED, true);
+                service.set(StackServiceModel.IMAGE, TEST_IMAGE);
+                service.set(StackServiceModel.COMMAND, List.of("sleep", "600"));
+                service.set(StackServiceModel.RESTART_POLICY, "no");
+                service.set(StackServiceModel.CAPABILITIES, entry.getValue());
+                serviceModel.save(service);
+                ids[index++] = service.get(StackServiceModel.ID);
+            }
+        });
+        return ids;
+    }
+
+    /** THE daemon-side container name of a stack service, through its owned instance. */
+    private static String stackContainer(int serviceId) {
+        Integer[] instanceId = new Integer[1];
+        Db.run(Datasources.getDefault(), () -> {
+            Row instance = StackInstances.owned(serviceId);
+            instanceId[0] = instance == null ? null : instance.get(InstanceModel.ID);
+        });
+        assertThat(instanceId[0]).as("service %s owns an instance", serviceId).isNotNull();
+        return ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId[0]);
     }
 
     /**
@@ -379,30 +425,28 @@ class ContainerHardeningTest {
         int pids = ContainerHardening.pidsLimit();
 
         String stackName = "hhcap" + Long.toHexString(System.nanoTime());
-        StackSpec stack = new StackSpec(0, stackName, "local", null, false, null, null, null,
-            StackSpec.topologicallySorted(List.of(
-                stackService("plain", List.of()),
-                // Lowercase and CAP_-prefixed on purpose: compose-shaped content spells
-                // capabilities both ways and the funnel normalizes rather than refusing.
-                stackService("raw", List.of("cap_net_raw")))));
-        StackDeployer deployer = new StackDeployer(docker,
-            WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), null);
+        StackRuntime stacks = new StackRuntime(docker, Datasources.getDefault());
+        // Lowercase and CAP_-prefixed on purpose: compose-shaped content spells
+        // capabilities both ways and the funnel normalizes rather than refusing.
+        Map<String, List<String>> declared = new LinkedHashMap<>();
+        declared.put("plain", List.of());
+        declared.put("raw", List.of("cap_net_raw"));
+        int[] ids = stackRecords(stackName, declared);
         try {
-            deployer.deploy(stack);
+            stacks.deploy(ids[0], "capability test");
 
             // 1. THE NEGATIVE ANCHOR: the undeclaring sibling is still exactly SERVICE.
-            assertKernelState(docker, StackDeployer.containerName(stack, "plain"),
+            assertKernelState(docker, stackContainer(ids[1]),
                 "step 1: undeclaring sibling", SERVICE_CAPS, pids);
 
             // 2. THE POSITIVE ANCHOR: the declaring service has SERVICE plus NET_RAW and
             //    nothing else, read out of pid 1's bounding set inside the container.
-            assertKernelState(docker, StackDeployer.containerName(stack, "raw"),
+            assertKernelState(docker, stackContainer(ids[2]),
                 "step 2: declaring service", SERVICE_CAPS | NET_RAW, pids);
 
             // 3. Everything the declaration may NOT move is still in place on the
             //    declaring container: drop-ALL, no-new-privileges, never privileged.
-            Map<?, ?> hostConfig = hostConfigOf(docker,
-                StackDeployer.containerName(stack, "raw"));
+            Map<?, ?> hostConfig = hostConfigOf(docker, stackContainer(ids[2]));
             assertThat(hostConfig.get("CapDrop"))
                 .as("step 3: a declaration never weakens the drop-ALL base")
                 .isEqualTo(List.of("ALL"));
@@ -410,7 +454,7 @@ class ContainerHardeningTest {
                 .as("step 3: no-new-privileges survives a declaration")
                 .contains("no-new-privileges");
         } finally {
-            deployer.destroy(stack, true);
+            stacks.destroy(ids[0], true);
         }
 
         // 4. THE REFUSAL. Every capability the brief names as a container escape is
@@ -420,25 +464,26 @@ class ContainerHardeningTest {
                 "SYS_MODULE", "NET_ADMIN", "MKNOD", "SETFCAP", "CAP_SYS_RAWIO",
                 "TOTALLY_MADE_UP")) {
             String refusedStack = "hhcapno" + Long.toHexString(System.nanoTime());
-            StackSpec refused = new StackSpec(0, refusedStack, "local", null, false,
-                null, null, null,
-                List.of(stackService("app", List.of(escape))));
-            StackDeployer refusingDeployer = new StackDeployer(docker,
-                WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), null);
-            Throwable thrown = catchThrowable(() -> refusingDeployer.deploy(refused));
+            int[] refusedIds = stackRecords(refusedStack, Map.of("app", List.of(escape)));
+            Throwable thrown = catchThrowable(() -> stacks.deploy(refusedIds[0], "refusal"));
             try {
+                // The product lane wraps every deploy failure as IOException (it is what
+                // the deployment log and the admin surface read); the CONTENT is the
+                // hardening funnel's own named refusal, which is the assertion that
+                // matters and the one that would notice a silently-accepted capability.
                 assertThat(thrown)
                     .withFailMessage("step 4: declaring %s deployed instead of being"
                         + " refused", escape)
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(IOException.class);
                 assertThat(thrown.getMessage())
                     .as("step 4: the refusal names the capability")
+                    .contains("REFUSED capability")
                     .contains(ContainerHardening.normalizeCapability(escape));
 
-                // 4b. And the daemon never got one: scoped to THIS stack's own container
-                //     name, never a daemon-wide count (four forks share this daemon).
-                assertThat(containerExists(docker,
-                        StackDeployer.containerName(refused, "app")))
+                // 4b. And the daemon never got one: scoped to THIS service's own
+                //     container name, never a daemon-wide count (four forks share this
+                //     daemon).
+                assertThat(containerExists(docker, stackContainer(refusedIds[1])))
                     .withFailMessage("step 4: a container was created for a refused"
                         + " capability declaration (%s)", escape)
                     .isFalse();
@@ -446,16 +491,9 @@ class ContainerHardeningTest {
                 // The teardown must survive a FAILING assertion: the counterfactual run
                 // that proves this refusal real DOES create the container, and without
                 // this it stays on the daemon for the next run to inherit (observed).
-                refusingDeployer.destroy(refused, true);
+                stacks.destroy(refusedIds[0], true);
             }
         }
-    }
-
-    /** One sleeping stack service with a declared capability set. */
-    private static StackSpec.ServiceSpec stackService(String name, List<String> capabilities) {
-        return new StackSpec.ServiceSpec(name, TEST_IMAGE, List.of("sleep", "600"),
-            Map.of(), List.of(), List.of(), List.of(), List.of(),
-            null, 1, 3, 3, 0, "no", null, null, capabilities);
     }
 
     /** Whether ONE named container exists on the daemon right now. */

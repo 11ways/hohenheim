@@ -205,35 +205,22 @@ public class StackServiceModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
     static {
-        // Declared host ports are exclusive whole-host resources: every save diff-syncs
-        // this service's claims in the port ledger (inside the save's transaction, see
-        // save() below), and every delete path releases them.
-        SCHEMA.addAfterSaveHook(context -> {
-            Row row = context.getRow();
-            Integer serviceId = row != null ? row.get(ID) : null;
-            if (serviceId != null) {
-                PortLedger.syncStackService(serviceId);
-            }
-        });
-        // AIDEV-NOTE: remove hooks fire ONCE for the whole delete with a CRITERIA-only
-        // context (getRow() is null) -- for delete(id), criteria deletes and deleteAll
-        // alike. The doomed ids must therefore be read in the BEFORE hook and released
-        // in the AFTER hook; an afterRemove-only hook reading getRow() releases nothing.
+        // AIDEV-NOTE: a service's declared host ports are claimed by the DEPLOY, not by
+        // the save -- since the stack tier lowered onto the instance runtime contract the
+        // claim belongs to the service's owned INSTANCE (claim-before-create, verified
+        // against the daemon's own binding afterwards, parked on a `releasing` transition).
+        // The save-time diff-sync that used to live here was a SECOND owner for the same
+        // physical port, written with no daemon evidence at all. The resource keeps its
+        // friendly pre-write ledger READ; the ledger's unique index is still the arbiter,
+        // one layer down at deploy.
+        //
+        // Remove hooks fire ONCE for the whole delete with a CRITERIA-only context
+        // (getRow() is null) -- for delete(id), criteria deletes and deleteAll alike. The
+        // doomed ids are therefore read in the BEFORE hook and released in the AFTER hook;
+        // an afterRemove-only hook reading getRow() releases nothing. This stays so a
+        // pre-lowering service's leftover claims are released when its row goes.
         SCHEMA.addBeforeRemoveHook(PortLedger::captureDoomedOwners);
         SCHEMA.addAfterRemoveHook(PortLedger::releaseDoomedOwners);
-    }
-
-    /**
-     * Every service save is ONE write transaction: the row write and the port-claim
-     * sync (afterSave hook) commit or fail together, so a refused claim also rolls the
-     * service row back -- the SiteDomainModel/RouteClaims shape. SQLite's serialized
-     * write transactions make the resource's friendly pre-write ledger read race-free.
-     */
-    @Override
-    public Row save(Row row) {
-        Row[] result = new Row[1];
-        this.requireDatasource().withTransaction(tx -> result[0] = super.save(row));
-        return result[0];
     }
 
     /** All services of a stack, declaration order by id. */

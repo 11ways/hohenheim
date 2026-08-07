@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -22,8 +21,8 @@ import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetwork;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
-import be.elevenways.hohenheim.server.stack.StackDeployer;
-import be.elevenways.hohenheim.server.stack.StackSpec;
+import be.elevenways.hohenheim.server.stack.StackInstances;
+import be.elevenways.hohenheim.server.stack.StackServiceKind;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -142,7 +141,6 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
         Map<Integer, List<Expected>> inventory = new LinkedHashMap<>();
         Map<Integer, List<String>> inventoryErrors = new LinkedHashMap<>();
         collectInstances(inventory, inventoryErrors);
-        collectStacks(inventory);
         collectLinks(inventory);
 
         List<HostOutcome> outcomes = new ArrayList<>();
@@ -409,26 +407,6 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
         }
     }
 
-    /** Every enabled stack's per-stack network, {@link StackDeployer#EGRESS} declared. */
-    private static void collectStacks(@NonNull Map<Integer, List<Expected>> inventory) {
-        if (!HohenheimRoles.enabled(HohenheimRoles.Role.STACKS)) {
-            return;
-        }
-        for (Row stack : Models.get(StackModel.class).find()
-                .where(StackModel.ENABLED.eq(true)).all()) {
-            Integer stackId = stack.get(StackModel.ID);
-            String stackName = stack.get(StackModel.NAME);
-            if (stackId == null || stackName == null || stackName.isBlank()) {
-                continue;
-            }
-            int serverId = ServerModel.canonicalServerId(stack.get(StackModel.SERVER_ID));
-            inventory.computeIfAbsent(serverId, key -> new ArrayList<>()).add(new Expected(
-                StackDeployer.networkName(stackName), StackDeployer.EGRESS,
-                "stack '" + stackName + "'",
-                () -> containStack(stackId, stackName, serverId)));
-        }
-    }
-
     /**
      * Link networks of both owners: site-to-database pairs (egress NONE, the database's
      * declaration must not widen through a second interface) and game-domain
@@ -440,6 +418,12 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
         }
         if (HohenheimRoles.enabled(HohenheimRoles.Role.INSTANCES)) {
             addLinks(inventory, GameDomains.liveLinkHandles(), Egress.OPEN);
+        }
+        // A lowered stack's shared network IS a link network, so it needs no lane of its
+        // own: the per-service workload networks ride collectInstances, and severing this
+        // one leaves every service running on its own (verified) network.
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.STACKS)) {
+            addLinks(inventory, StackInstances.liveLinkHandles(), StackServiceKind.EGRESS);
         }
     }
 
@@ -458,33 +442,6 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
     }
 
     // -- containment ---------------------------------------------------------------
-
-    /**
-     * Stop every container of the stack and stamp the record STOPPED.
-     *
-     * AIDEV-NOTE: deliberately NOT through StackRuntime's per-stack worker lane. The
-     * worker executes on its own thread outside the sweep's datasource scope, and an
-     * emergency stop must not queue behind a wedged deploy on the very host whose
-     * kernel just refused a repair. The race this opens (a concurrent deploy recreating
-     * containers) is benign: a deploy re-applies the verified policy before any
-     * service starts, which is a better outcome than the stop.
-     */
-    private static @NonNull String containStack(int stackId, @NonNull String stackName,
-                                                int serverId) throws IOException {
-        Row stack = Models.get(StackModel.class).findById(stackId);
-        if (stack == null) {
-            return "stack '" + stackName + "' is already gone";
-        }
-        StackSpec spec = StackSpec.fromRecordsUnordered(stack);
-        String serverName = ServerModel.nameOf(serverId);
-        new StackDeployer(new ServerService().clientFor(serverName),
-            WorkloadNetworkPolicy.forServer(serverName), null).stop(spec);
-        Models.get(StackModel.class).find()
-            .where(StackModel.ID.eq(stackId))
-            .assign(StackModel.STATUS, StackModel.STATUS_STOPPED)
-            .updateAll();
-        return "stopped stack '" + stackName + "'";
-    }
 
     /**
      * Disconnect every member of an unrepairable link network: no member then holds an

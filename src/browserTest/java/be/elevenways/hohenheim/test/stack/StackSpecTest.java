@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class StackSpecTest {
 
     private static StackSpec.ServiceSpec service(String name, List<StackSpec.DependsSpec> depends) {
-        return new StackSpec.ServiceSpec(name, "alpine:latest", List.of(), Map.of(),
+        return new StackSpec.ServiceSpec(name.hashCode() & 0xffff, name, "alpine:latest", List.of(), Map.of(),
             List.of(), List.of(), depends, List.of(),
             null, 10, 5, 5, 0, "unless-stopped", null, null, List.of());
     }
@@ -60,7 +60,7 @@ class StackSpecTest {
     @Test
     void snapshotMapRoundTripsLosslessly() {
         StackSpec.ServiceSpec rich = new StackSpec.ServiceSpec(
-            "web", "nginx:1.27", List.of("nginx", "-g", "daemon off;"),
+            77, "web", "nginx:1.27", List.of("nginx", "-g", "daemon off;"),
             Map.of("MODE", "prod"),
             List.of(new StackSpec.MountSpec("volume", "data", "/var/lib/data", null),
                 new StackSpec.MountSpec("tmpfs", "scratch", "/tmp/scratch", null),
@@ -73,7 +73,7 @@ class StackSpecTest {
             "always", 512, 1.5, List.of("NET_RAW", "IPC_LOCK"));
         StackSpec.ServiceSpec db = service("db", List.of());
 
-        StackSpec original = new StackSpec(42, "mystack", "local", "172.30.9.0/24", true,
+        StackSpec original = new StackSpec(42, "mystack", "local", "172.30.9.0/24",
             "ghcr.io", "robot", "s3cret", StackSpec.topologicallySorted(List.of(rich, db)));
 
         StackSpec revived = StackSpec.fromMap(original.toMap());

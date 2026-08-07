@@ -17,7 +17,11 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The control-plane half of instance port publications: the pre-allocation strategy's
@@ -50,18 +54,52 @@ final class PortPublications {
     static @NonNull InstanceSpec ensureClaimed(InstanceService.@NonNull Resolved resolved,
                                                int instanceId) {
         InstanceSpec spec = resolved.spec();
-        PortPublication publication = spec.publication();
-        if (publication == null || !publication.requiresPreallocation()) {
+        boolean anyPreallocated = false;
+        for (PortPublication publication : spec.publications()) {
+            anyPreallocated |= publication.requiresPreallocation();
+        }
+        if (!anyPreallocated) {
             // The declaration no longer wants a reservation; end any leftover one the
             // OBSERVED way (the reconciler deletes each row once it sees the port free).
             PortLedger.parkPreallocatedClaims(InstanceModel.MODEL_ID, instanceId);
             return spec;
         }
+        // The reusable-claim scan below matches ONE publication against the owner's
+        // existing reservations, so a multi-publication spec resolves them in declaration
+        // order and each claim is consumed at most once (two publications of the same
+        // shape must never both resolve to the same reserved number).
+        List<PortPublication> claimed = new ArrayList<>();
+        Set<Integer> consumed = new HashSet<>();
+        List<Row> existing = PortLedger.preallocatedClaimsOf(InstanceModel.MODEL_ID, instanceId);
+        for (PortPublication publication : spec.publications()) {
+            claimed.add(publication.requiresPreallocation()
+                ? claimOne(resolved, instanceId, publication, existing, consumed)
+                : publication);
+        }
+        // Reservations no publication resolved to end OBSERVED, never silently deleted.
+        for (Row claim : existing) {
+            Integer id = claim.get(PortAllocationModel.ID);
+            if (id != null && !consumed.contains(id)) {
+                PortLedger.parkClaim(claim);
+            }
+        }
+        return spec.withPreallocatedPorts(claimed);
+    }
 
+    /** Resolve ONE pre-allocation-shaped publication to a held claim. */
+    private static @NonNull PortPublication claimOne(InstanceService.@NonNull Resolved resolved,
+                                                     int instanceId,
+                                                     @NonNull PortPublication publication,
+                                                     @NonNull List<Row> existing,
+                                                     @NonNull Set<Integer> consumed) {
         String bind = publication.ledgerBindAddress();
         String protocol = publication.protocol();
         Row reusable = null;
-        for (Row claim : PortLedger.preallocatedClaimsOf(InstanceModel.MODEL_ID, instanceId)) {
+        for (Row claim : existing) {
+            Integer id = claim.get(PortAllocationModel.ID);
+            if (id == null || consumed.contains(id)) {
+                continue;
+            }
             Integer port = claim.get(PortAllocationModel.PORT);
             boolean matches = reusable == null
                 && Objects.equals(claim.get(PortAllocationModel.SERVER_ID), resolved.serverId())
@@ -71,10 +109,7 @@ final class PortPublications {
                     || publication.declaredHostPort().equals(port));
             if (matches) {
                 reusable = claim;
-            } else {
-                // The declaration changed shape (protocol, exposure, host, fixed port):
-                // the old reservation ends observed, never silently deleted.
-                PortLedger.parkClaim(claim);
+                consumed.add(id);
             }
         }
         if (reusable != null) {
@@ -82,14 +117,14 @@ final class PortPublications {
             // Re-claim (replaces the own row, flipping a releasing park back to held).
             PortLedger.claimPreallocated(resolved.serverId(), bind, port, protocol,
                 InstanceModel.MODEL_ID, instanceId, null);
-            return spec.withPreallocatedPort(port);
+            return publication.withPreallocatedPort(port);
         }
 
         boolean localHost = isLocalServer(resolved.serverId());
         if (publication.declaredHostPort() != null) {
             int port = publication.declaredHostPort();
             claimOrRefuse(resolved.serverId(), bind, port, protocol, instanceId, localHost);
-            return spec.withPreallocatedPort(port);
+            return publication.withPreallocatedPort(port);
         }
 
         int first = windowFirst();
@@ -113,7 +148,7 @@ final class PortPublications {
             } catch (PortLedger.PortConflict lost) {
                 continue;   // a rival writer took it between the read and the insert
             }
-            return spec.withPreallocatedPort(port);
+            return publication.withPreallocatedPort(port);
         }
         throw Violations.ofForm(violationText("port_window_exhausted")
             .withArg("first", first)
@@ -131,19 +166,32 @@ final class PortPublications {
     static void verifyPublished(InstanceService.@NonNull Resolved resolved,
                                 @NonNull InstanceSpec spec, @NonNull InstanceStatus status)
             throws IOException {
-        PortPublication publication = spec.publication();
-        if (publication == null) {
-            return;
+        // EVERY declared publication is verified, not just the first: a spec that binds
+        // two ports and gets one is a half-published workload reporting success.
+        for (PortPublication publication : spec.publications()) {
+            verifyOne(resolved, spec, status, publication);
         }
+    }
+
+    private static void verifyOne(InstanceService.@NonNull Resolved resolved,
+                                  @NonNull InstanceSpec spec, @NonNull InstanceStatus status,
+                                  @NonNull PortPublication publication) throws IOException {
+        // A single-publication spec reads the FIRST binding, exactly as before: a status
+        // synthesized without container-port identity (fakes, reused releases) has none to
+        // match on, and demanding one would refuse deploys that were fine for two waves.
+        InstanceStatus.PublishedPort observed = spec.publications().size() == 1
+            ? (status.publishedPorts().isEmpty() ? null : status.publishedPorts().get(0))
+            : status.publishedFor(publication.containerPort(), publication.protocol());
+
         String failure = null;
-        if (status.publishedPort() == null) {
+        if (observed == null) {
             failure = "the daemon reports NO published host port";
         } else if (publication.preallocatedPort() != null
-                && !publication.preallocatedPort().equals(status.publishedPort())) {
-            failure = "the daemon bound host port " + status.publishedPort()
+                && publication.preallocatedPort() != observed.hostPort()) {
+            failure = "the daemon bound host port " + observed.hostPort()
                 + " instead of the pre-allocated " + publication.preallocatedPort();
-        } else if (!bindMatches(publication, status.publishedBind())) {
-            failure = "the daemon bound address '" + status.publishedBind()
+        } else if (!bindMatches(publication, observed.bind())) {
+            failure = "the daemon bound address '" + observed.bind()
                 + "' instead of the declared "
                 + (publication.publicExposure() ? "public (0.0.0.0)" : "loopback (127.0.0.1)")
                 + " exposure";

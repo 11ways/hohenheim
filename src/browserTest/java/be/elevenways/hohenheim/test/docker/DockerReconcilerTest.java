@@ -24,7 +24,7 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.task.ReapIncusControllers;
-import be.elevenways.hohenheim.server.stack.StackDeployer;
+import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -161,12 +161,12 @@ class DockerReconcilerTest {
     void legacyStackLabelsAndNamingSchemesStillAttribute() {
         // 1. Pre-owner-label stack resources carry only the stack-name label.
         Finding stackOwned = classify("container", ours("stack-shop-web"),
-            Map.of(StackDeployer.LABEL_STACK, "shop"));
+            Map.of(StackInstances.LEGACY_LABEL_STACK, "shop"));
         assertThat(stackOwned.bucket()).as("live stack label is OWNED").isEqualTo(Bucket.OWNED);
         assertThat(stackOwned.evidence()).isEqualTo(Evidence.STACK_LABEL);
 
         Finding stackOrphan = classify("volume", ours("stack-dead-data"),
-            Map.of(StackDeployer.LABEL_STACK, "dead"));
+            Map.of(StackInstances.LEGACY_LABEL_STACK, "dead"));
         assertThat(stackOrphan.bucket()).as("dead stack label is ORPHANED")
             .isEqualTo(Bucket.ORPHANED);
 

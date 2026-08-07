@@ -1,14 +1,30 @@
 package be.elevenways.hohenheim.test.network;
 
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import org.junit.jupiter.api.BeforeAll;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.TenantNetworkRanges;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
-import be.elevenways.hohenheim.server.stack.StackDeployer;
-import be.elevenways.hohenheim.server.stack.StackSpec;
+import be.elevenways.hohenheim.server.stack.StackInstances;
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.stack.StackRuntime;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.zenit.common.orm.datasource.Db;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.server.orm.SqliteDatasource;
+import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
+import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
+import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,11 +36,13 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The stack tier's isolation with REAL packets against the EXACT chains a REAL deploy
- * applied: a stack is deployed through the production {@link StackDeployer} onto a real
+ * applied: a stack is deployed from RECORDS through {@link StackRuntime} onto a real
  * daemon, the kernel of the enforcing "host" (a private netns) is read back, and then a
- * namespace impersonating a stack service -- an address inside the stack network's REAL
- * subnet, routed through those very chains -- throws packets at the denied and allowed
- * destinations.
+ * namespace impersonating a stack service -- an address inside the SHARED stack network's
+ * REAL subnet, routed through those very chains -- throws packets at the denied and
+ * allowed destinations. Since the Phase 7 lowering that shared network is a policied LINK
+ * network owned by the stack record, and each service ALSO has its own workload network;
+ * this test pins the shared one, which is the lane siblings actually talk over.
  *
  * AIDEV-NOTE: two positive anchors on purpose. The Docker-layer one (service alias ping
  * between the two real containers) proves the per-stack network still does its job; the
@@ -36,10 +54,27 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 class StackNetworkIsolationTest {
 
+    private static SqliteDatasource datasource;
+    private static PrivateNetns installed;
+
     /** nft table and container names are controller-namespaced, so this needs an identity. */
     @BeforeAll
-    static void controllerIdentity() {
-        HohenheimTestRuntime.ensureDatasource();
+    static void bootRecords() throws Exception {
+        FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
+            Files.createTempDirectory("hh-stackiso-enc").resolve("keys.dry")));
+        File db = File.createTempFile("hohenheim-stackiso-test", ".db");
+        db.delete();
+        db.deleteOnExit();
+        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
+        new MigrationRunner(datasource).migrate().requireSuccess();
+        Datasources.register(Datasources.DEFAULT, datasource);
+        HohenheimTestRuntime.ensureBooted();
+    }
+
+    @AfterAll
+    static void unwireNetns() {
+        PrivateNetns.uninstall(installed);
+        installed = null;
     }
 
 
@@ -67,29 +102,52 @@ class StackNetworkIsolationTest {
         assumeTrue(PrivateNetns.available(),
             "unshare/nsenter/nft/ip/python3 unavailable: cannot build a private netns");
 
-        try (PrivateNetns netns = new PrivateNetns()) {
-            String stackName = "hhiso-" + Long.toHexString(System.nanoTime());
-            StackSpec spec = new StackSpec(0, stackName, "local", null, false, null, null, null,
-                StackSpec.topologicallySorted(List.of(sleeper("web"), sleeper("db"))));
-            StackDeployer deployer = new StackDeployer(docker, netns.enforcingPolicy(), null);
-            try {
-                deployer.deploy(spec);
-                String networkName = StackDeployer.networkName(spec);
+        PrivateNetns netns = PrivateNetns.installEnforcing();
+        installed = netns;
+        String stackName = "hhiso-" + Long.toHexString(System.nanoTime());
+        StackRuntime runtime = new StackRuntime(docker, datasource);
+        int[] ids = new int[3];
+        Db.run(datasource, () -> {
+            StackModel stacks = Models.get(StackModel.class);
+            Row stack = stacks.createEmptyRow();
+            stack.set(StackModel.NAME, stackName);
+            stack.set(StackModel.ENABLED, true);
+            stack.set(StackModel.SERVER_ID, ServerModel.localServerId());
+            stacks.save(stack);
+            ids[0] = stack.get(StackModel.ID);
+            StackServiceModel services = Models.get(StackServiceModel.class);
+            int index = 1;
+            for (String name : List.of("web", "db")) {
+                Row service = services.createEmptyRow();
+                service.set(StackServiceModel.STACK_ID, ids[0]);
+                service.set(StackServiceModel.NAME, name);
+                service.set(StackServiceModel.ENABLED, true);
+                service.set(StackServiceModel.IMAGE, TEST_IMAGE);
+                service.set(StackServiceModel.COMMAND, List.of("sleep", "600"));
+                service.set(StackServiceModel.RESTART_POLICY, "no");
+                services.save(service);
+                ids[index++] = service.get(StackServiceModel.ID);
+            }
+        });
+        try {
+            runtime.deploy(ids[0], "isolation test");
+            String networkName = WorkloadNetworks.networkName(
+                StackInstances.networkHandle(stackName));
 
-                // 1. docker network inspect: both services sit on the stack network,
-                //    and the subnet the daemon REALLY assigned is what everything
-                //    below keys on.
+                // 1. docker network inspect: both services sit on the SHARED stack
+                //    network, and the subnet the daemon REALLY assigned is what
+                //    everything below keys on.
                 Map<String, Object> network = docker.inspectNetwork(networkName);
                 assertThat(asMap(network.get("Containers")))
-                    .as("step 1: both stack services are attached to the stack network")
+                    .as("step 1: both stack services are attached to the shared network")
                     .hasSize(2);
                 String subnet = subnetOf(network);
                 String gateway = gatewayOf(network);
 
                 // 2. Docker-layer positive anchor: the services reach each other by
-                //    alias on that network -- the entire point of a per-stack network.
-                DockerClient.ExecResult alias = docker.exec(
-                    StackDeployer.containerName(spec, "web"),
+                //    COMPOSE SERVICE NAME on that network -- the alias the lowering
+                //    carries through as an endpoint alias on the link network.
+                DockerClient.ExecResult alias = docker.exec(containerOf(ids[1]),
                     List.of("ping", "-c", "1", "-W", "2", "db"));
                 assertThat(alias.exitCode())
                     .as("step 2: stack services still reach each other by alias: %s%s",
@@ -147,22 +205,27 @@ class StackNetworkIsolationTest {
                 assertThat(netns.probe(service, METADATA, PEER_PORT))
                     .as("step 5: without the policy the metadata service is reachable again")
                     .isEqualTo("REACHABLE");
-            } finally {
-                try {
-                    deployer.destroy(spec, true);
-                } catch (IOException ignored) {
-                    // best effort; the assertions above are the outcome
-                }
+        } finally {
+            try {
+                runtime.destroy(ids[0], true);
+            } catch (IOException ignored) {
+                // best effort; the assertions above are the outcome
             }
         }
     }
 
-    // -- fixture ---------------------------------------------------------------
-
-    private static StackSpec.ServiceSpec sleeper(String name) {
-        return new StackSpec.ServiceSpec(name, TEST_IMAGE, List.of("sleep", "600"), Map.of(),
-            List.of(), List.of(), List.of(), List.of(), null, 1, 3, 3, 0, "no", null, null, List.of());
+    /** THE daemon-side container name of a service, through its owned instance. */
+    private static String containerOf(int serviceId) {
+        Integer[] instanceId = new Integer[1];
+        Db.run(datasource, () -> {
+            Row instance = StackInstances.owned(serviceId);
+            instanceId[0] = instance == null ? null : instance.get(InstanceModel.ID);
+        });
+        assertThat(instanceId[0]).as("service %s owns an instance", serviceId).isNotNull();
+        return ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId[0]);
     }
+
+    // -- fixture ---------------------------------------------------------------
 
     /**
      * A routed topology whose forward path IS the enforcing kernel: the "service" and

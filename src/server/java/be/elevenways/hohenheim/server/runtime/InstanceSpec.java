@@ -18,10 +18,13 @@ import java.util.Map;
  * @param command       command override, or null to keep the image's default
  * @param env           environment variables (name to value, ordered)
  * @param volumes       persistent named volumes: volume name to container path
- * @param publication   the declared port publication, or null for none. Loopback/tcp
+ * @param publications  the declared port publications, empty for none. Loopback/tcp
  *                      publishes an ephemeral host port recorded AFTER start
  *                      (record-after); UDP, public exposure and fixed host ports ride
- *                      the pre-allocation strategy (see {@link PortPublication}).
+ *                      the pre-allocation strategy (see {@link PortPublication}). A
+ *                      workload may declare SEVERAL (a web service on 80 and 443 is the
+ *                      ordinary case); this is a property of one workload and says
+ *                      nothing about any other instance.
  * @param limits        cgroup resource caps
  * @param hardening     the kind's DECLARED capability profile; a required component so a
  *                      new kind cannot inherit isolation by accident (see
@@ -49,6 +52,9 @@ import java.util.Map;
  *                      deliver one refuses by name; it must never silently fall back to
  *                      a persistent volume, because "ephemeral" is then a lie that
  *                      leaves tenant data on disk.
+ * @param healthCheck   the DECLARED in-workload health probe, or null when the workload
+ *                      declares none; a driver that cannot run one refuses BY NAME rather
+ *                      than creating a workload whose declared health nobody evaluates
  * @param rootDiskGb    the DECLARED size of the workload's own root disk in GB, or null
  *                      to inherit whatever the image and the daemon's default profile
  *                      give it. A driver that cannot express a per-workload root quota
@@ -61,7 +67,7 @@ public record InstanceSpec(@NonNull String handle,
                            @Nullable List<String> command,
                            @NonNull Map<String, String> env,
                            @NonNull Map<String, String> volumes,
-                           @Nullable PortPublication publication,
+                           @NonNull List<PortPublication> publications,
                            @NonNull ResourceLimits limits,
                            ContainerHardening.@NonNull Profile hardening,
                            @NonNull Map<String, String> ownerLabels,
@@ -71,6 +77,7 @@ public record InstanceSpec(@NonNull String handle,
                            boolean secureBoot,
                            boolean guestAgent,
                            @NonNull Map<String, Long> tmpfs,
+                           @Nullable HealthCheck healthCheck,
                            @Nullable Integer rootDiskGb) {
 
     /** The pre-VM shape: no cloud-init, no pinned fingerprint, catalog origin, no agent claim. */
@@ -83,8 +90,8 @@ public record InstanceSpec(@NonNull String handle,
                         @NonNull ResourceLimits limits,
                         ContainerHardening.@NonNull Profile hardening,
                         @NonNull Map<String, String> ownerLabels) {
-        this(handle, image, command, env, volumes, publication, limits, hardening,
-            ownerLabels, null, null, ImageOrigin.CATALOG, false, true, Map.of(), null);
+        this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
+            ownerLabels, null, null, ImageOrigin.CATALOG, false, true, Map.of(), null, null);
     }
 
     /** The pre-tmpfs shape: everything declared, no RAM-backed scratch mount. */
@@ -102,9 +109,9 @@ public record InstanceSpec(@NonNull String handle,
                         @NonNull ImageOrigin imageOrigin,
                         boolean secureBoot,
                         boolean guestAgent) {
-        this(handle, image, command, env, volumes, publication, limits, hardening,
+        this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
             ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
-            guestAgent, Map.of(), null);
+            guestAgent, Map.of(), null, null);
     }
 
     /** The pre-root-disk shape: everything declared, root inherited from the image. */
@@ -123,28 +130,70 @@ public record InstanceSpec(@NonNull String handle,
                         boolean secureBoot,
                         boolean guestAgent,
                         @NonNull Map<String, Long> tmpfs) {
-        this(handle, image, command, env, volumes, publication, limits, hardening,
+        this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
             ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
-            guestAgent, tmpfs, null);
+            guestAgent, tmpfs, null, null);
     }
 
-    /** A copy whose publication carries the host port the pre-allocation step claimed. */
-    public @NonNull InstanceSpec withPreallocatedPort(int hostPort) {
-        if (this.publication == null) {
-            throw new IllegalStateException(
-                "Spec '" + this.handle + "' declares no publication to pre-allocate for");
+    /** The pre-healthcheck shape: everything declared, no runtime-evaluated health gate. */
+    public InstanceSpec(@NonNull String handle,
+                        @NonNull String image,
+                        @Nullable List<String> command,
+                        @NonNull Map<String, String> env,
+                        @NonNull Map<String, String> volumes,
+                        @Nullable PortPublication publication,
+                        @NonNull ResourceLimits limits,
+                        ContainerHardening.@NonNull Profile hardening,
+                        @NonNull Map<String, String> ownerLabels,
+                        @Nullable String cloudInitUserData,
+                        @Nullable String imageFingerprint,
+                        @NonNull ImageOrigin imageOrigin,
+                        boolean secureBoot,
+                        boolean guestAgent,
+                        @NonNull Map<String, Long> tmpfs,
+                        @Nullable Integer rootDiskGb) {
+        this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
+            ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
+            guestAgent, tmpfs, null, rootDiskGb);
+    }
+
+    /**
+     * The FIRST declared publication, or null -- the single-publication reading every
+     * one-port tier already had. Derived from {@link #publications()}, which stays the
+     * one source of truth; there is no second place a publication can be declared.
+     */
+    public @Nullable PortPublication publication() {
+        return this.publications.isEmpty() ? null : this.publications.get(0);
+    }
+
+    /**
+     * A copy whose publications carry the host ports the pre-allocation step claimed,
+     * positionally (the list order is the declaration order and never changes).
+     *
+     * @throws IllegalStateException when the sizes disagree -- a spec created from a
+     *         mismatched claim list would bind ports nobody reserved
+     */
+    public @NonNull InstanceSpec withPreallocatedPorts(@NonNull List<PortPublication> claimed) {
+        if (claimed.size() != this.publications.size()) {
+            throw new IllegalStateException("Spec '" + this.handle + "' declares "
+                + this.publications.size() + " publications but " + claimed.size()
+                + " were claimed");
         }
         return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
-            this.publication.withPreallocatedPort(hostPort), this.limits, this.hardening,
+            List.copyOf(claimed), this.limits, this.hardening,
             this.ownerLabels, this.cloudInitUserData, this.imageFingerprint, this.imageOrigin,
-            this.secureBoot, this.guestAgent, this.tmpfs, this.rootDiskGb);
+            this.secureBoot, this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb);
     }
 
     /** A copy carrying the record's pinned resolved image identity. */
     public @NonNull InstanceSpec withImageFingerprint(@Nullable String fingerprint) {
         return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
-            this.publication, this.limits, this.hardening, this.ownerLabels,
+            this.publications, this.limits, this.hardening, this.ownerLabels,
             this.cloudInitUserData, fingerprint, this.imageOrigin, this.secureBoot,
-            this.guestAgent, this.tmpfs, this.rootDiskGb);
+            this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb);
+    }
+
+    private static @NonNull List<PortPublication> listOf(@Nullable PortPublication one) {
+        return one == null ? List.of() : List.of(one);
     }
 }

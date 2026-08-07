@@ -223,7 +223,21 @@ public final class WorkloadNetworkPolicy {
      * @throws IOException when nft refuses, or a chain survives the delete
      */
     public void remove(@NonNull String networkName) throws IOException {
-        requireEnabled(networkName);
+        // AIDEV-NOTE: removal deliberately does NOT requireEnabled, and that is a
+        // correctness property, not a convenience. Teardown must never depend on nft
+        // being runnable, or a workload deployed while the host enforced becomes
+        // UNDELETABLE the moment enforcement is switched off (or the host loses
+        // passwordless sudo): destroy walks through here, so the refusal propagated all
+        // the way up to "you cannot delete this record". With enforcement off there is no
+        // nft to run and nothing to remove; chains applied before a switch-off linger
+        // until reboot or re-enable, and they only ever DROP traffic from a now-gone
+        // subnet, so lingering is safe. Found 2026-08-07 while lowering the stack tier:
+        // the deleted StackDeployer carried a per-tier workaround for exactly this, which
+        // means every OTHER tier (instances, sites, databases, previews, builds) had the
+        // bug and no workaround.
+        if (!isEnabled()) {
+            return;
+        }
         String key = chainKey(networkName);
         for (String chain : List.of(forwardChain(key), inputChain(key))) {
             this.chains.remove(chain);

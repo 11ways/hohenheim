@@ -265,138 +265,16 @@ class PortLedgerTest {
         });
     }
 
-    /**
-     * The stacks consumer end to end at the MODEL tier: saving a service syncs its
-     * declared claims, editing diff-syncs, a contested save is refused AND rolled back,
-     * moving the stack re-keys, deleting releases.
-     */
-    @Test
-    void stackServiceSavesSyncEditReKeyAndReleaseLedgerClaims() {
-        Db.run(datasource, () -> {
-            int localId = ServerModel.localServerId();
-
-            Row stack = Models.get(StackModel.class).createEmptyRow();
-            stack.set(StackModel.NAME, "ledgerflow");
-            Models.get(StackModel.class).save(stack);
-            Integer stackId = stack.get(StackModel.ID);
-            assertThat(stack.get(StackModel.SERVER_ID))
-                .as("step 0: a stack without an explicit host defaults to the local FK")
-                .isEqualTo(localId);
-
-            // 1. Saving a service with a declared host port claims it.
-            Row service = Models.get(StackServiceModel.class).createEmptyRow();
-            service.set(StackServiceModel.STACK_ID, stackId);
-            service.set(StackServiceModel.NAME, "web");
-            service.set(StackServiceModel.ENABLED, true);
-            service.set(StackServiceModel.IMAGE, "alpine:latest");
-            service.setRecords(StackServiceModel.PORTS, List.of(port(80, 8310, "tcp", "")));
-            Models.get(StackServiceModel.class).save(service);
-            Integer serviceId = service.get(StackServiceModel.ID);
-            String firstKey = PortLedger.claimKeyOf(localId, "", 8310, "tcp");
-            assertThat(PortLedger.holderOf(firstKey))
-                .as("step 1: the declared port is claimed in the ledger").isNotNull();
-
-            // 2. A SECOND service declaring the same port is refused by the ledger's
-            //    backstop and its row is rolled back with the failed claim.
-            Row rival = Models.get(StackServiceModel.class).createEmptyRow();
-            rival.set(StackServiceModel.STACK_ID, stackId);
-            rival.set(StackServiceModel.NAME, "rival");
-            rival.set(StackServiceModel.ENABLED, true);
-            rival.set(StackServiceModel.IMAGE, "alpine:latest");
-            rival.setRecords(StackServiceModel.PORTS, List.of(port(81, 8310, "tcp", "0.0.0.0")));
-            assertThatThrownBy(() -> Models.get(StackServiceModel.class).save(rival))
-                .as("step 2: the contested save is a named conflict")
-                .isInstanceOf(PortLedger.PortConflict.class)
-                .hasMessageContaining("web");
-            assertThat(Models.get(StackServiceModel.class).find()
-                .where(StackServiceModel.NAME.eq("rival")).count())
-                .as("step 2: the refused service row did not survive the rollback")
-                .isEqualTo(0);
-
-            // 3. Editing the ports diff-syncs: the un-declared claim is PARKED (the
-            //    previous deploy may still bind it -- nothing observed it free), the
-            //    newly declared one is held.
-            Row reloaded = Models.get(StackServiceModel.class).findById(serviceId);
-            reloaded.setRecords(StackServiceModel.PORTS, List.of(port(80, 8311, "udp", "")));
-            Models.get(StackServiceModel.class).save(reloaded);
-            Row abandoned = PortLedger.holderOf(firstKey);
-            assertThat(abandoned)
-                .as("step 3: the abandoned tcp claim survives as releasing").isNotNull();
-            assertThat(PortLedger.isReleasing(abandoned))
-                .as("step 3: the abandoned tcp claim is parked, not held").isTrue();
-            assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8311, "udp")))
-                .as("step 3: the udp claim is held (protocol is a first-class value)")
-                .isNotNull();
-            // ...and re-declaring the parked port flips it straight back to held.
-            reloaded = Models.get(StackServiceModel.class).findById(serviceId);
-            reloaded.setRecords(StackServiceModel.PORTS,
-                List.of(port(80, 8310, "tcp", ""), port(80, 8311, "udp", "")));
-            Models.get(StackServiceModel.class).save(reloaded);
-            assertThat(PortLedger.isReleasing(PortLedger.holderOf(firstKey)))
-                .as("step 3: a re-declared parked claim is held again").isFalse();
-            reloaded = Models.get(StackServiceModel.class).findById(serviceId);
-            reloaded.setRecords(StackServiceModel.PORTS, List.of(port(80, 8311, "udp", "")));
-            Models.get(StackServiceModel.class).save(reloaded);
-            PortLedger.releaseObserved(PortLedger.holderOf(firstKey));   // observed free
-
-            // 4. Moving the stack to another host claims on that host and parks the
-            //    old host's claim (the old deploy is torn down by the runtime, but the
-            //    ledger saw no observation).
-            Row edge = Models.get(ServerModel.class).createEmptyRow();
-            edge.set(ServerModel.NAME, "ledger-edge");
-            edge.set(ServerModel.MODE, ServerModel.MODE_SSH);
-            Models.get(ServerModel.class).save(edge);
-            Row movedStack = Models.get(StackModel.class).findById(stackId);
-            movedStack.set(StackModel.SERVER_ID, edge.get(ServerModel.ID));
-            Models.get(StackModel.class).save(movedStack);
-            Row leftBehind = PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8311, "udp"));
-            assertThat(leftBehind)
-                .as("step 4: the local host's claim survives as releasing").isNotNull();
-            assertThat(PortLedger.isReleasing(leftBehind))
-                .as("step 4: the local host's claim is parked").isTrue();
-            assertThat(PortLedger.holderOf(
-                    PortLedger.claimKeyOf(edge.get(ServerModel.ID), "", 8311, "udp")))
-                .as("step 4: the new host holds it").isNotNull();
-
-            // 5. Deleting the service parks every claim it held; nothing is deleted
-            //    without observation, and the rows still name their (dead) owner.
-            Models.get(StackServiceModel.class).delete(serviceId);
-            List<Row> parked = Models.get(PortAllocationModel.class).find()
-                .where(PortAllocationModel.OWNER_MODEL.eq(StackServiceModel.MODEL_ID.toString()))
-                .and(PortAllocationModel.OWNER_ID.eq(serviceId)).all();
-            assertThat(parked)
-                .as("step 5: the deleted service's claims survive").isNotEmpty();
-            assertThat(parked).allSatisfy(claim ->
-                assertThat(PortLedger.isReleasing(claim))
-                    .as("step 5: every surviving claim is parked in releasing").isTrue());
-
-            // 6. Removing a HOST parks its claims too -- a servers row vanishing frees
-            //    nothing on the physical machine (and there is no FK delete action).
-            Row edgeClaim = PortLedger.holderOf(
-                PortLedger.claimKeyOf(edge.get(ServerModel.ID), "", 8311, "udp"));
-            assertThat(PortLedger.isReleasing(edgeClaim))
-                .as("step 6 precondition: the edge host's claim is parked (service died)")
-                .isTrue();
-            PortLedger.claim(edge.get(ServerModel.ID), "", 8312, "tcp", null, null, "edge held");
-            // 6a. While the moved stack still references the host, removal REFUSES --
-            //     the M056 ownership invariant (the FK is documentation, this is the
-            //     enforcement).
-            assertThat(catchThrowable(() ->
-                    Models.get(ServerModel.class).delete(edge.get(ServerModel.ID))))
-                .as("step 6a: host removal refuses while a stack references it")
-                .isInstanceOf(Violations.class);
-            Models.get(StackModel.class).delete(stackId);
-            Models.get(ServerModel.class).delete(edge.get(ServerModel.ID));
-            Row afterHostRemoval = Models.get(PortAllocationModel.class).find()
-                .where(PortAllocationModel.SERVER_ID.eq(edge.get(ServerModel.ID)))
-                .and(PortAllocationModel.PORT.eq(8312))
-                .first();
-            assertThat(afterHostRemoval)
-                .as("step 6: the removed host's held claim survives").isNotNull();
-            assertThat(PortLedger.isReleasing(afterHostRemoval))
-                .as("step 6: the removed host's claim is parked in releasing").isTrue();
-        });
-    }
+    // AIDEV-NOTE: the stacks consumer's MODEL-tier journey lived here until the Phase 7
+    // stack lowering (2026-08-07) deleted its subject. A stack service no longer claims
+    // its declared host ports when the ROW is saved -- since the tier lowered onto the
+    // instance runtime contract the claim belongs to the service's owned INSTANCE and is
+    // made claim-before-create by the DEPLOY, then verified against the daemon's own
+    // binding. The replacement journey is StackInstancesTest
+    // #loweredServicesGainTheLedgerClaimAndTheCapacityCap, which asserts the claim, its
+    // owner, the daemon binding, the contested-port refusal and the release on destroy.
+    // What stays exercised here is the remove-hook pairing (captureDoomedOwners /
+    // releaseDoomedOwners), which still releases a PRE-lowering service's leftover claims.
 
     /**
      * The instance tier's remove hooks: deleting an instance record must PARK its port

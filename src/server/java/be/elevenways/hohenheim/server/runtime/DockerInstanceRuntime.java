@@ -186,15 +186,20 @@ public final class DockerInstanceRuntime
     }
 
     @Override
-    public void connectToLinkNetwork(@NonNull String linkHandle, @NonNull String containerHandle)
-            throws IOException {
+    public void connectToLinkNetwork(@NonNull String linkHandle, @NonNull String containerHandle,
+                                     @NonNull List<String> aliases) throws IOException {
         String network = WorkloadNetworks.networkName(linkHandle);
         for (String member : linkMembers(network)) {
             if (member.equals(containerHandle)) {
+                // Already a member: Docker sets endpoint aliases at CONNECT time only, so
+                // re-declaring them here would need a disconnect -- which re-allocates the
+                // member's published host port. A membership change that must revise
+                // aliases therefore goes through a recreate, which is what every deploy is.
                 return;
             }
         }
-        this.docker.connectContainerToNetwork(network, containerHandle, null);
+        this.docker.connectContainerToNetwork(network, containerHandle,
+            aliases.isEmpty() ? null : List.copyOf(aliases));
     }
 
     @Override
@@ -248,9 +253,8 @@ public final class DockerInstanceRuntime
         if (!running) {
             return new InstanceStatus(ContainerState.STOPPED, null);
         }
-        Object[] binding = firstPublishedBinding(inspect);
-        return new InstanceStatus(ContainerState.RUNNING,
-            (Integer) binding[0], (String) binding[1], liveness(state));
+        return new InstanceStatus(ContainerState.RUNNING, publishedBindings(inspect),
+            liveness(state), health(state));
     }
 
     /**
@@ -267,6 +271,24 @@ public final class DockerInstanceRuntime
     private static @NonNull WorkloadLiveness liveness(Object state) {
         return state instanceof Map<?, ?> s && Boolean.TRUE.equals(s.get("OOMKilled"))
             ? WorkloadLiveness.WORKLOAD_DEAD : WorkloadLiveness.SERVING;
+    }
+
+    /**
+     * The daemon's verdict on the container's DECLARED healthcheck. A container created
+     * without one carries no {@code State.Health} at all, which is NONE -- deliberately
+     * not HEALTHY, so a dependency gated on health can never pass on a service that
+     * declares no check.
+     */
+    private static InstanceStatus.@NonNull HealthState health(Object state) {
+        if (!(state instanceof Map<?, ?> s) || !(s.get("Health") instanceof Map<?, ?> health)) {
+            return InstanceStatus.HealthState.NONE;
+        }
+        return switch (String.valueOf(health.get("Status"))) {
+            case "healthy" -> InstanceStatus.HealthState.HEALTHY;
+            case "unhealthy" -> InstanceStatus.HealthState.UNHEALTHY;
+            case "starting" -> InstanceStatus.HealthState.STARTING;
+            default -> InstanceStatus.HealthState.NONE;
+        };
     }
 
     // -- VolumeSnapshotSupport ------------------------------------------------
@@ -815,27 +837,36 @@ public final class DockerInstanceRuntime
      * (our specs publish at most one port). The bind address is the DAEMON'S report
      * ({@code HostIp}), which is what the exposure verification asserts against.
      */
-    private static Object[] firstPublishedBinding(Map<String, Object> inspect) {
+    private static @NonNull List<InstanceStatus.PublishedPort> publishedBindings(
+            Map<String, Object> inspect) {
         Object ports = inspect.get("NetworkSettings") instanceof Map<?, ?> ns
             ? ns.get("Ports") : null;
         if (!(ports instanceof Map<?, ?> portMap)) {
-            return new Object[] {null, null};
+            return List.of();
         }
-        for (Object bindings : portMap.values()) {
-            if (bindings instanceof List<?> list && !list.isEmpty()
-                    && list.get(0) instanceof Map<?, ?> binding
-                    && binding.get("HostPort") != null) {
-                try {
-                    return new Object[] {
-                        Integer.parseInt(binding.get("HostPort").toString()),
-                        binding.get("HostIp") != null
-                            ? binding.get("HostIp").toString() : null};
-                } catch (NumberFormatException ignored) {
-                    return new Object[] {null, null};
-                }
+        List<InstanceStatus.PublishedPort> published = new ArrayList<>();
+        for (Map.Entry<?, ?> entry : portMap.entrySet()) {
+            // The key is "<containerPort>/<protocol>" -- the identity that lets a
+            // multi-publication spec verify each declaration against ITS OWN binding
+            // instead of against whichever one the daemon happened to list first.
+            String[] key = String.valueOf(entry.getKey()).split("/", 2);
+            if (!(entry.getValue() instanceof List<?> list) || list.isEmpty()
+                    || !(list.get(0) instanceof Map<?, ?> binding)
+                    || binding.get("HostPort") == null) {
+                continue;
+            }
+            try {
+                published.add(new InstanceStatus.PublishedPort(Integer.parseInt(key[0]),
+                    key.length > 1 ? key[1] : PortPublication.TCP,
+                    Integer.parseInt(binding.get("HostPort").toString()),
+                    binding.get("HostIp") != null ? binding.get("HostIp").toString() : null));
+            } catch (NumberFormatException notANumber) {
+                // A binding we cannot read is not a binding we report: the publication
+                // verification then refuses the deploy rather than trusting a guess.
+                continue;
             }
         }
-        return new Object[] {null, null};
+        return List.copyOf(published);
     }
 
     private static Map<String, Object> buildSpec(InstanceSpec spec, String network) {
@@ -870,8 +901,9 @@ public final class DockerInstanceRuntime
         if (network != null) {
             hostConfig.put("NetworkMode", network);
         }
-        PortPublication publication = spec.publication();
-        if (publication != null) {
+        Map<String, Object> exposed = new LinkedHashMap<>();
+        Map<String, Object> bindings = new LinkedHashMap<>();
+        for (PortPublication publication : spec.publications()) {
             // AIDEV-NOTE: a pre-allocation-shaped publication without a claimed port is a
             // HARD refusal, never a silent fall-back to an ephemeral bind -- an ephemeral
             // public port moves under the DNS rows pointing at it, and an ephemeral UDP
@@ -887,10 +919,23 @@ public final class DockerInstanceRuntime
             String portKey = publication.containerPort() + "/" + publication.protocol();
             String hostPort = publication.preallocatedPort() != null
                 ? String.valueOf(publication.preallocatedPort()) : "";
-            containerSpec.put("ExposedPorts", Map.of(portKey, Map.of()));
-            hostConfig.put("PortBindings", Map.of(portKey,
-                List.of(Map.of("HostIp", publication.hostBindAddress(),
-                    "HostPort", hostPort))));
+            exposed.put(portKey, Map.of());
+            bindings.put(portKey, List.of(Map.of("HostIp", publication.hostBindAddress(),
+                "HostPort", hostPort)));
+        }
+        if (!exposed.isEmpty()) {
+            containerSpec.put("ExposedPorts", exposed);
+            hostConfig.put("PortBindings", bindings);
+        }
+
+        if (spec.healthCheck() != null) {
+            HealthCheck health = spec.healthCheck();
+            containerSpec.put("Healthcheck", Map.of(
+                "Test", List.of("CMD-SHELL", health.command()),
+                "Interval", health.intervalNanos(),
+                "Timeout", health.timeoutNanos(),
+                "Retries", health.retries(),
+                "StartPeriod", health.startPeriodNanos()));
         }
 
         // Named volumes carry the owner labels via VolumeOptions at BIRTH -- Docker never

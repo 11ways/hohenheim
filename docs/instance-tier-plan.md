@@ -3410,8 +3410,106 @@ network, quota, ownership, secret and durable-operation mechanisms.
   the next pass. Empirically, the developer daemon and dev database carried ZERO
   managed-database containers, volumes and records at the time of the change.
 
-  STILL NOT LOWERED, and DEFERRED DELIBERATELY: STACK SERVICES and MANAGED
-  PROCESSES. Stacks: `StackDeployer` keys FIVE behaviours (isOwned, prune,
+  THIRD TIER LOWERED 2026-08-07 -- STACK SERVICES (re-verify, do not assume).
+  The deferral immediately below is SUPERSEDED for stacks; it stands unchanged
+  for managed processes. Every ENABLED stack service IS an owned
+  `hohenheim:stack_service` instance (`StackServiceKind` + `StackInstances`),
+  attributed to the STACK SERVICE record through the same GeneratedRows
+  discipline. DELETED, not wrapped: the whole of `StackDeployer` (745 lines) --
+  its network/volume/container creation, its adoption and replace semantics, its
+  label-keyed prune/destroy/status and its `awaitDependencies` -- plus
+  `PortLedger.syncStackService`/`syncStack` and the model hooks that drove them,
+  `VerifyWorkloadIsolation.collectStacks`/`containStack`, and
+  `StackModel.adopt_resources` (M083: the lowering left it with nothing to mean,
+  and a settings checkbox that silently does nothing is the paper-limit defect).
+
+  THE FORK, decided: **a stack is N instances plus an orchestrator that owns
+  ordering** (candidate 2). Rejected: widening the contract with ordering
+  dependencies and network memberships (candidate 1) -- every other tier would
+  carry fields only one tier uses, and the contract would stop being
+  single-workload, which is the property that makes it simple; and permanent
+  duplication (candidate 3) -- the duplication was not theoretical, the tier was
+  missing capacity booking ENTIRELY (a host could be overcommitted by stacks
+  invisibly), its port claims were written at row SAVE with no daemon evidence
+  and no `releasing` park, and it had no fence, no host lease and no verified
+  destroy.
+
+  The obstacle the deferring wave named -- "where do multi-service ordering and
+  shared-network DNS live?" -- resolved WITHOUT widening the contract, because
+  the two halves have different homes:
+
+  - **Shared-network DNS: the mechanism already existed.** A per-stack network
+    is a LINK network (`LinkNetworkSupport`, which the game-domain and
+    site-database lanes have used since their waves), owned by the STACK record,
+    carrying the same verified kernel policy, joined between container create
+    and start on the SAME `InstanceService.deploy` seam the other two use. The
+    only extension needed was an `aliases` argument on
+    `connectToLinkNetwork` -- `DockerClient.connectContainerToNetwork` already
+    took them. An alias is scoped to ONE link network, so it can never make a
+    workload resolvable to anything not connected to it. Each service ALSO keeps
+    its own private per-workload network, so the lowering ends with MORE
+    isolation than the single shared bridge it replaced.
+  - **Ordering stayed in the PRODUCT tier** (`StackRuntime`), which is the
+    database tier's precedent applied: an instance answers "is this workload
+    running/healthy"; "may this workload start yet" is a statement about OTHER
+    RECORDS, exactly like `ManagedDatabase.awaitReady`.
+
+  Three contract EXTENSIONS were needed, all single-WORKLOAD properties that say
+  nothing about any other instance, none settings-reachable: `InstanceSpec`
+  gained a LIST of `publications` (a web service on 80 and 443 is the ordinary
+  case; `publication()` stays as the derived first-one reading, so no tier has a
+  second place to declare a port), a declared `HealthCheck` the RUNTIME evaluates
+  (with `InstanceStatus.health`, whose NONE is deliberately not HEALTHY -- a gate
+  that reads an undeclared check as passing always passes; the incus driver
+  refuses one BY NAME), and `InstanceStatus.publishedPorts` so each declared
+  publication is verified against ITS OWN daemon binding rather than whichever
+  one the daemon listed first. Compose `restart_policy` needed no extension: it
+  maps onto the instance tier's `crash_policy`, which is strictly better (flap
+  protection, and it re-runs the whole fenced deploy).
+
+  What the tier gained for FREE: fenced outcome writes, the host lease, host
+  capacity booking (charge == cap; 512 MB per service, the site-container
+  number), the port ledger's claim-BEFORE-create with its `releasing` park and
+  its after-start verification against the daemon's own binding, host placement,
+  the reconciler's instance classification, `InstanceService`'s verified destroy,
+  `InstanceOperationGuard`, the instance file-staging lane (stack files sync onto
+  `instance_files` FROM THE SPEC, which is what keeps rollback honest),
+  `WorkloadLiveness`, and backups/snapshots.
+
+  MIGRATION (binding property "no data migration may lose a running workload"):
+  `StackInstances.adoptExisting`, run on the STACKS role at boot. Every enabled
+  stack owning no instances is re-deployed under the contract onto its EXISTING
+  stack-scoped volumes; each pre-lowering `hohenheim-{token}-stack-{stack}-{svc}`
+  container is retired with the `SiteInstances.retireLegacyContainer`
+  discipline (removed only where the daemon still attributes it to that stack
+  record, never force-removed) and the pre-lowering shared network is retired
+  only once every service owns an instance. Idempotent; a host that cannot answer
+  leaves the stack for the next pass. Empirically, the developer daemon and dev
+  database carried ZERO stacks, stack services, stack containers and port claims
+  at the time of the change.
+
+  TWO CORE DEFECTS found and fixed in the mechanism, both of which every other
+  tier had too:
+  - `WorkloadNetworkPolicy.remove` required enforcement, so a workload deployed
+    while a host enforced became UNDELETABLE the moment enforcement was switched
+    off -- destroy walks through it. `StackDeployer` carried a per-TIER
+    workaround for exactly this, which means instances, sites, databases,
+    previews and builds all had the bug and no workaround. Removal is now a
+    no-op when enforcement is off (there is no nft to run), which is the
+    "teardown must never depend on nft being runnable" rule stated once.
+  - A capability declaration outside the allow-list threw from `specFor`, which
+    runs on EVERY resolve -- stop, status and DESTROY included -- so an illegal
+    row made its service undeletable. The resolved spec now degrades to the bare
+    tier baseline (it can only ever NARROW) and the REFUSAL moved to the two
+    places that are about AUTHORING a declaration: the resource form and
+    `StackInstances.deploy`, both calling one `hardeningFor`.
+
+  KNOWN NARROWING, declared: a publication bind address that is neither the
+  whole host nor loopback is refused BY NAME (`PortPublication` expresses exactly
+  those two exposures); the pre-lowering deployer passed any `HostIp` through.
+
+  STILL NOT LOWERED, and DEFERRED DELIBERATELY: ~~STACK SERVICES and~~ MANAGED
+  PROCESSES. ~~Stacks: `StackDeployer` keys FIVE behaviours (isOwned, prune,
   destroy, removeOwnedVolumes, adoption) on `LABEL_STACK` = the stack NAME, and
   owns compose-shaped semantics the instance contract has no home for --
   `depends_on` ordering with condition gating (`awaitDependencies`), one shared
@@ -3419,7 +3517,8 @@ network, quota, ownership, secret and durable-operation mechanisms.
   and verbatim re-deploy of adoption/rollback snapshots. An instance is
   single-workload and single-primary-network by construction, so lowering stacks
   means answering where multi-service ordering and shared-network DNS live
-  FIRST; open decision 5 said revisit after real use and that has not happened.
+  FIRST; open decision 5 said revisit after real use and that has not happened.~~
+  **SUPERSEDED 2026-08-07, see the third-tier block above.**
   Processes: they are not containers at all -- `SystemUsers.executionBuilder`
   spawns a host process under setsid+sudo -u #uid, and `InstanceSpec` requires a
   non-empty `image` (`InstanceService.resolve` refuses a blank one by name),
