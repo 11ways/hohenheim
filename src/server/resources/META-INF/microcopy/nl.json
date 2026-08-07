@@ -1,4 +1,8 @@
 {
+  "capability_not_declarable": {
+    "text": "Alleen deze capabilities kunnen gedeclareerd worden: {$capabilities}",
+    "scope": "violations"
+  },
   "cert_fields_required": {
     "text": "Naam, certificaat en private sleutel zijn verplicht",
     "scope": "violations"
@@ -4063,6 +4067,10 @@
     "text": "Netto",
     "scope": "spamservice_reputation"
   },
+  "capabilities": {
+    "text": "Capabilities",
+    "scope": "field"
+  },
   "command": [
     {
       "text": "Commando",
@@ -4203,6 +4211,10 @@
   },
   "service_image": {
     "text": "Vastgepinde image-referentie, bv. netbirdio/netbird-server:1.2.3.",
+    "scope": "help"
+  },
+  "service_capabilities": {
+    "text": "Extra Linux-capabilities die deze image nodig heeft om te starten. Al de rest blijft geschrapt.",
     "scope": "help"
   },
   "service_command": {

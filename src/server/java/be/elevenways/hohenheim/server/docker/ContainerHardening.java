@@ -1,9 +1,12 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,11 +31,12 @@ import java.util.Map;
  * directory as root, then drop to a service user). Nobody decided tenants are trusted.
  * The tenant-vs-operator boundary lives in the parts of this class that no profile can
  * move -- drop-ALL as the base, no-new-privileges, the pids cap and the structural
- * refusals -- plus the per-workload network policy, which since 2026-08-03 exists for the
- * INSTANCE tier only ({@code be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy},
- * wired through DockerInstanceRuntime). Stacks, Docker sites and managed databases still
- * share the default bridge and reach each other, the host and the metadata address; they
- * are operator-authored, which is a stated posture, not an accident.
+ * refusals -- plus the per-workload network policy
+ * ({@code be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy}), which as of the
+ * 2026-08-06 waves covers every Docker tier: instances, stacks, Docker site releases and
+ * managed databases each get their own network with the tenant-range denies applied and
+ * read-back-verified. The one tier the model still cannot cover is host-process sites,
+ * which live in the host's own netns; that is a named separate slice.
  */
 public final class ContainerHardening {
 
@@ -71,14 +75,80 @@ public final class ContainerHardening {
      * lets postgres come up on a FIRST boot and report "accepting connections", and
      * then the container dies on the next restart -- a silent-success shape, do not
      * "tighten" this without re-running the restart case. It is still far below the
-     * Docker default: NET_RAW (ARP/DNS spoofing on the bridge the container sits on --
-     * still the SHARED default bridge for sites, databases and stacks; an instance has its
-     * own network, and note that dropping NET_RAW never blocked an ordinary connect() to a
-     * neighbour, which is what the network policy is for), SETPCAP, SETFCAP, MKNOD,
+     * Docker default: NET_RAW (ARP/DNS spoofing on the bridge the container sits on;
+     * every Docker tier now has its own network, and note that dropping NET_RAW never
+     * blocked an ordinary connect() to a neighbour, which is what the network policy is
+     * for -- a service that genuinely needs it declares it, see {@link #DECLARABLE}),
+     * SETPCAP, SETFCAP, MKNOD,
      * SYS_CHROOT, AUDIT_WRITE, KILL and NET_BIND_SERVICE are all gone.
      */
     public static final Profile SERVICE = new Profile("service",
         List.of("CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"));
+
+    /**
+     * THE closed set of capabilities an OPERATOR-authored workload may declare on top of
+     * {@link #SERVICE}, each with the reason it is on the list.
+     *
+     * AIDEV-NOTE: an ALLOW-list, never a deny-list, and never open-ended. The input is
+     * compose-shaped content, and "CapAdd takes whatever string you type" is a privilege
+     * escalation surface, not a feature -- {@code SYS_ADMIN}, {@code SYS_PTRACE},
+     * {@code DAC_READ_SEARCH} and {@code SYS_MODULE} are container escapes in practice, and
+     * a deny-list of today's known-bad names would silently admit tomorrow's. Declaring one
+     * of these is an IMAGE-SHAPE statement exactly like declaring a {@link Profile} is (see
+     * the class note): it says what the published image needs to start, and it does NOT
+     * move the tenant boundary, which is the structural refusals, the pids cap and the
+     * per-workload network policy -- none of which any declaration can touch.
+     *
+     * AIDEV-NOTE: what is deliberately NOT here, with the reason, because these are the
+     * ones an operator will ask for. {@code NET_ADMIN} would let a service reconfigure its
+     * own interface address, and the workload network policy's accept rules are keyed on
+     * the workload SUBNET -- a service that can give itself an address is a service that
+     * can leave its own policy's scope. {@code SYS_NICE} grants SCHED_FIFO, which is not
+     * bounded by the cpu cgroup quota, so one spinning real-time thread is a host DoS.
+     * {@code MKNOD} is only harmless while the device cgroup stays restrictive, and this
+     * class refuses {@code DeviceCgroupRules} rather than verifying it. {@code SETPCAP} and
+     * {@code SETFCAP} exist to move capabilities around, which is the thing being bounded.
+     * {@code NET_BIND_SERVICE} is not refused for danger but for pointlessness: Docker sets
+     * {@code net.ipv4.ip_unprivileged_port_start=0} in every container, so it grants
+     * nothing and a knob nobody can observe is theater.
+     */
+    public static final Map<String, String> DECLARABLE = orderedMap(
+        "NET_RAW", "raw and packet sockets: ping, traceroute and DHCP clients in an"
+            + " entrypoint. It is in Docker's own default set, and hohenheim's tenant-range"
+            + " denies are DESTINATION-keyed, so a spoofed source address does not reach"
+            + " anything a well-behaved one could not.",
+        "IPC_LOCK", "mlock: database engines and secret-handling processes pin pages so"
+            + " they never reach swap. The memory cgroup cap still bounds how much.",
+        "SYS_CHROOT", "chroot: privilege-separating daemons (sshd, some entrypoints) call"
+            + " it at startup. Without CAP_SYS_ADMIN there is no mount to escape through,"
+            + " and it is in Docker's own default set.",
+        "KILL", "signal a process owned by another uid: multi-uid supervisors (s6-overlay,"
+            + " supervisord) need it to stop their children. Bounded by the pid namespace.",
+        "AUDIT_WRITE", "write audit records: login/su in several base images refuse to run"
+            + " without it. In Docker's own default set.");
+
+    /**
+     * Refusal reasons for capabilities an operator is likely to reach for, so the error
+     * teaches instead of only saying no; anything else falls back to naming the allow-list.
+     */
+    private static final Map<String, String> REFUSAL_REASONS = Map.of(
+        "SYS_ADMIN", "it is the container escape -- mount, pivot_root and the cgroup"
+            + " filesystem are all one call away",
+        "SYS_PTRACE", "it reads and writes the memory of any process in the namespace,"
+            + " including one that still holds credentials",
+        "SYS_MODULE", "it loads kernel modules, which is host root by definition",
+        "DAC_READ_SEARCH", "it grants open_by_handle_at, which reaches files outside the"
+            + " container's own filesystem",
+        "NET_ADMIN", "it lets the workload change its own address, and the network policy"
+            + " that isolates it is keyed on the subnet that address belongs to",
+        "SYS_NICE", "SCHED_FIFO is not bounded by the cpu cgroup quota, so it is a host"
+            + " denial of service",
+        "MKNOD", "it is only harmless while the device cgroup stays restrictive, and this"
+            + " policy refuses DeviceCgroupRules rather than verifying it",
+        "SETFCAP", "moving capabilities around is exactly what this policy bounds",
+        "SETPCAP", "moving capabilities around is exactly what this policy bounds",
+        "NET_BIND_SERVICE", "it grants nothing here: Docker sets"
+            + " net.ipv4.ip_unprivileged_port_start=0 in every container");
 
     /** Fallback pids cap when the setting is unreadable; also the setting's default. */
     public static final int DEFAULT_PIDS_LIMIT = 512;
@@ -122,6 +192,64 @@ public final class ContainerHardening {
     private static final String JOIN_CONTAINER = "container:";
 
     private ContainerHardening() {}
+
+    /** Insertion-ordered map literal; {@link Map#of} would scramble the declared order. */
+    private static Map<String, String> orderedMap(String... pairs) {
+        Map<String, String> map = new LinkedHashMap<>();
+        for (int index = 0; index < pairs.length; index += 2) {
+            map.put(pairs[index], pairs[index + 1]);
+        }
+        return Collections.unmodifiableMap(map);
+    }
+
+    /**
+     * Build the profile a workload actually runs with from a BASE profile plus the
+     * capabilities its author declared, refusing anything outside {@link #DECLARABLE}.
+     *
+     * <p>AIDEV-NOTE: this is the whole per-service capability mechanism, and it lives here
+     * rather than in the deployer on purpose -- {@code CapAdd} is an {@link #ESCAPE_KEYS}
+     * entry, so a caller has never been able to append one, and the only way to get a
+     * capability is to come through a {@link Profile}. Making the declaration a profile
+     * FACTORY keeps that true: the validation cannot be skipped by constructing a Profile
+     * directly, because a Profile carrying an undeclarable capability is exactly what this
+     * refuses to produce, and every four-authority call site already passes a Profile.
+     *
+     * @param base       the tier's image-shape profile, normally {@link #SERVICE}
+     * @param name       what to call the derived profile (the workload, for diagnostics)
+     * @param declared   capability names as authored; case and a {@code CAP_} prefix are
+     *                   normalized, blanks are dropped, duplicates collapse
+     * @return the base profile itself when nothing extra is declared
+     * @throws IllegalArgumentException naming the capability and the reason it is refused
+     */
+    public static @NonNull Profile declaring(@NonNull Profile base, @NonNull String name,
+                                             @NonNull List<String> declared) {
+        List<String> capabilities = new ArrayList<>(base.capabilities());
+        for (String raw : declared) {
+            String capability = normalizeCapability(raw);
+            if (capability.isEmpty()) {
+                continue;
+            }
+            if (!DECLARABLE.containsKey(capability) && !capabilities.contains(capability)) {
+                throw new IllegalArgumentException("REFUSED capability '" + capability
+                    + "' declared by '" + name + "': "
+                    + REFUSAL_REASONS.getOrDefault(capability,
+                        "it is not on the declarable allow-list")
+                    + ". Declarable capabilities are " + DECLARABLE.keySet()
+                    + "; everything else stays dropped.");
+            }
+            if (!capabilities.contains(capability)) {
+                capabilities.add(capability);
+            }
+        }
+        return capabilities.size() == base.capabilities().size()
+            ? base : new Profile(name, List.copyOf(capabilities));
+    }
+
+    /** {@code cap_net_raw}, {@code NET_RAW} and {@code CAP_NET_RAW} are the same thing. */
+    public static @NonNull String normalizeCapability(@NonNull String raw) {
+        String capability = BlastString.upper(raw.trim());
+        return capability.startsWith("CAP_") ? capability.substring(4) : capability;
+    }
 
     /**
      * Stamp the baseline onto a container spec, refusing one that already carries an

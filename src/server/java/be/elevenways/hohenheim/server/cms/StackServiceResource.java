@@ -13,9 +13,15 @@ import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.hohenheim.server.docker.ContainerHardening;
+import be.elevenways.hohenheim.server.stack.StackDeployer;
+import be.elevenways.zenit.common.edit.Array;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
+import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
+import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -46,6 +52,14 @@ public class StackServiceResource extends RowResource {
         .add(StackServiceModel.IMAGE)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(StackServiceModel.COMMAND))
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(StackServiceModel.ENVIRONMENT))
+        // A CLOSED multi-select over the allow-list, not free text: the set of
+        // capabilities a service may declare is enumerated in ContainerHardening, and the
+        // form offers exactly that set with each entry's reason as its label help.
+        .add(Array.of(StackServiceModel.CAPABILITIES,
+                StringField.builder().name("capability").build())
+            .tags()
+            .options(OptionSource.of(capabilityOptions()))
+            .build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(StackServiceModel.MOUNTS))
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(StackServiceModel.PORTS))
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(StackServiceModel.DEPENDS_ON))
@@ -197,6 +211,7 @@ public class StackServiceResource extends RowResource {
         validatePorts(coerced, stackId, existingId);
         validateDependsOn(coerced, name, siblings, existingId);
         validateHealth(coerced);
+        validateCapabilities(coerced);
 
         // Renaming or disabling must not strand siblings' dependencies: their
         // depends_on still names this service, and the next deploy would fail
@@ -373,6 +388,42 @@ public class StackServiceResource extends RowResource {
      * which is exactly the deploy-time failure this validation exists to prevent).
      * Only the start period may legitimately be zero.
      */
+    /**
+     * Refuse a capability the create funnel would refuse anyway, so the operator sees it
+     * in the form rather than in a deployment log three clicks later.
+     *
+     * AIDEV-NOTE: this is a SECOND reader of the same allow-list, never a second list.
+     * ContainerHardening.declaring stays THE authority (it runs on the deploy path, which
+     * this resource is not on the way to), and this call exists only to move the moment of
+     * refusal earlier.
+     */
+    private static void validateCapabilities(@NonNull Map<String, Object> coerced) {
+        if (!(coerced.get("capabilities") instanceof List<?> declared)) {
+            return;
+        }
+        List<String> names = new ArrayList<>();
+        for (Object entry : declared) {
+            names.add(String.valueOf(entry));
+        }
+        try {
+            ContainerHardening.declaring(StackDeployer.HARDENING, "this service", names);
+        } catch (IllegalArgumentException notDeclarable) {
+            throw Violations.ofField("capabilities", names,
+                CmsSupport.violationText("capability_not_declarable")
+                    .withArg("capabilities",
+                        String.join(", ", ContainerHardening.DECLARABLE.keySet())));
+        }
+    }
+
+    /** The allow-list as closed form options; the names are policy tokens, never localized. */
+    private static @NonNull List<FieldOption<String>> capabilityOptions() {
+        List<FieldOption<String>> options = new ArrayList<>();
+        for (Map.Entry<String, String> entry : ContainerHardening.DECLARABLE.entrySet()) {
+            options.add(FieldOption.of(entry.getKey(), Microcopy.literal(entry.getKey())));
+        }
+        return options;
+    }
+
     private static void validateHealth(@NonNull Map<String, Object> coerced) {
         for (String key : List.of("health_interval_seconds", "health_timeout_seconds",
                 "health_retries", "health_start_period_seconds")) {

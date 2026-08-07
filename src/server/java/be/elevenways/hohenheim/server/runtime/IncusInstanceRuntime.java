@@ -533,16 +533,81 @@ public final class IncusInstanceRuntime
         boolean running = "Running".equalsIgnoreCase(String.valueOf(state.get("status")));
         // No published port: an Incus container is an addressable system, not a
         // port-mapped process (proxy devices are a later mechanism).
-        //
-        // AIDEV-NOTE: liveness REFUSES BY NAME here. Incus 7.3's instance state carries
-        // no OOM counter at all (memory is usage/peak/swap only), so this driver cannot
-        // tell "running and serving" from "running with its workload OOM-killed inside
-        // it". Answering SERVING would be the reports-success defect; UNKNOWN says the
-        // question was asked and not answered, the same discipline exitCode uses on a
-        // stopped Incus workload. Closing it means reading memory.events out of the
-        // instance's cgroup over exec, which is a per-poll exec on every instance.
         return new InstanceStatus(running ? ContainerState.RUNNING : ContainerState.STOPPED,
-            null, null, WorkloadLiveness.UNKNOWN);
+            null, null, running ? liveness(handle) : WorkloadLiveness.UNKNOWN);
+    }
+
+    /** The cgroup-v2 file that carries the kill counter, as the instance itself sees it. */
+    static final String MEMORY_EVENTS = "/sys/fs/cgroup/memory.events";
+
+    /** Wall-clock cap on the liveness read; a wedged instance must not stall a poll. */
+    private static final long LIVENESS_TIMEOUT_MS = 10_000;
+
+    /**
+     * THE Incus answer to "is the workload inside this running instance still alive":
+     * the {@code oom_kill} counter in the instance's OWN cgroup, read over exec.
+     *
+     * AIDEV-NOTE: this closes what the driver used to refuse by name. Incus 7.3's
+     * instance state carries no OOM counter at all (memory is usage/peak/swap only --
+     * verified against a real daemon, the whole {@code /1.0/instances/x/state} body), so
+     * the signal has to come out of the kernel. A system container gets its OWN cgroup
+     * namespace, so {@code /sys/fs/cgroup/memory.events} inside it IS its payload cgroup
+     * -- measured identical to the host's {@code /sys/fs/cgroup/lxc.payload.<name>/}
+     * view, byte for byte. The cost is one exec per RUNNING instance per poll (~100 ms
+     * measured on daystrom, Incus 7.3); a stopped instance is never exec'd.
+     *
+     * AIDEV-NOTE: PRESSURE IS NOT A KILL, and the same counterfactual that pinned the
+     * Docker side pins this one. Measured on daystrom in a 64 MiB container: 400 MB of
+     * page-cache churn gave {@code max 7168, oom_kill 0} while the workload was perfectly
+     * healthy, and one OOM-killed CHILD gave {@code oom_kill 1} with the instance still
+     * RUNNING. Reading {@code max} would call the first one dead.
+     *
+     * AIDEV-NOTE: a VIRTUAL MACHINE is refused BY DECLARATION, not by letting the read
+     * fail. A VM's guest kernel has no {@code memory.events} at its cgroup root (measured:
+     * "can't open ... No such file or directory"), and its memory ceiling is the
+     * hypervisor's rather than a cgroup's, so there is nothing to read even in principle
+     * -- paying a doomed exec every poll to discover that again would be waste. Every
+     * remaining read failure (agent not up yet, exec refused, a garbled body) lands in the
+     * same place: UNKNOWN, never SERVING.
+     */
+    private @NonNull WorkloadLiveness liveness(@NonNull String handle) {
+        if (this.type != IncusWorkloadType.CONTAINER) {
+            return WorkloadLiveness.UNKNOWN;
+        }
+        IncusClient.ExecResult result;
+        try {
+            result = this.incus.exec(handle, List.of("cat", MEMORY_EVENTS), Map.of(),
+                LIVENESS_TIMEOUT_MS);
+        } catch (IOException | RuntimeException unreadable) {
+            return WorkloadLiveness.UNKNOWN;
+        }
+        if (result.exitCode() != 0) {
+            return WorkloadLiveness.UNKNOWN;
+        }
+        return parseOomKill(result.output());
+    }
+
+    /**
+     * Read the {@code oom_kill} line out of a cgroup-v2 {@code memory.events} body.
+     *
+     * @return WORKLOAD_DEAD on a non-zero kill count, SERVING on zero, UNKNOWN when the
+     *         body carries no {@code oom_kill} line at all -- an absent counter is not a
+     *         zero counter
+     */
+    static @NonNull WorkloadLiveness parseOomKill(@NonNull String events) {
+        for (String line : events.split("\n")) {
+            String trimmed = line.trim();
+            if (!trimmed.startsWith("oom_kill ")) {
+                continue;
+            }
+            try {
+                return Long.parseLong(trimmed.substring("oom_kill ".length()).trim()) > 0
+                    ? WorkloadLiveness.WORKLOAD_DEAD : WorkloadLiveness.SERVING;
+            } catch (NumberFormatException garbled) {
+                return WorkloadLiveness.UNKNOWN;
+            }
+        }
+        return WorkloadLiveness.UNKNOWN;
     }
 
     // -- ConsoleStreamSupport -------------------------------------------------

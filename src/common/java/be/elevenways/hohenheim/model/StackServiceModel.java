@@ -118,6 +118,23 @@ public class StackServiceModel extends Model {
         .help(HohenheimFormCopy.help("service_environment"))
         .build());
 
+    /**
+     * Linux capabilities this service's IMAGE needs on top of the tier's baseline.
+     *
+     * AIDEV-NOTE: an IMAGE-SHAPE declaration, not a trust grant, and the stored value is
+     * not the authority on what is legal -- {@code ContainerHardening.declaring} validates
+     * every name against the closed allow-list at the create funnel, so a row written
+     * before a name left the list (or by anything that bypasses this resource) refuses at
+     * DEPLOY rather than running with a capability nobody would grant today. The resource
+     * validates the same way so the operator sees it in the form instead of in a
+     * deployment log.
+     */
+    public static final ListField<String> CAPABILITIES = SCHEMA.addField(
+        ListField.builder(StringField.builder().name("capability").build()).name("capabilities")
+            .label(HohenheimFormCopy.label("capabilities"))
+            .help(HohenheimFormCopy.help("service_capabilities"))
+            .build());
+
     public static final SchemaField MOUNTS = SCHEMA.addField(
         SchemaField.builder("mounts").subSchema(MOUNT_SCHEMA).list()
             .label(HohenheimFormCopy.label("mounts"))

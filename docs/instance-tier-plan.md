@@ -1858,6 +1858,47 @@ block is what the code does; amend the prose, do not code against it.
     read from INSIDE the running container, not the spec that was sent. STILL OPEN
     from this bullet: per-stack-SERVICE capability declaration (StackSpec.ServiceSpec
     has no field for it) and the host preflight that verifies userns/seccomp/AppArmor.
+  - **CLOSED 2026-08-07, both halves.** (1) PER-SERVICE CAPABILITY DECLARATION shipped:
+    `StackServiceModel.CAPABILITIES` (M082, a CLOSED multi-select over the allow-list in
+    the service form, refused at save AND at the create funnel), `StackSpec.ServiceSpec
+    .capabilities` (snapshot round-tripped, so a rollback redeploys the same declaration),
+    and `ContainerHardening.declaring(base, name, declared)` -- a Profile FACTORY, not a
+    new knob, so the "a caller cannot append a capability, it declares a Profile" rule
+    still holds and `CapAdd` stays an ESCAPE_KEYS refusal. The declarable set is FIVE,
+    enumerated with reasons in `ContainerHardening.DECLARABLE`: NET_RAW, IPC_LOCK,
+    SYS_CHROOT, KILL, AUDIT_WRITE -- all in Docker's own default set or bounded by a
+    cgroup we already cap. Refused WITH the reason, because operators will ask: NET_ADMIN
+    (a service that can change its own address leaves the subnet its policy is keyed on),
+    SYS_NICE (SCHED_FIFO is not bounded by the cpu quota, so it is a host DoS), MKNOD
+    (safe only while the device cgroup stays restrictive, which this class refuses rather
+    than verifies), SETPCAP/SETFCAP, NET_BIND_SERVICE (grants nothing --
+    `ip_unprivileged_port_start=0`), plus SYS_ADMIN/SYS_PTRACE/SYS_MODULE/DAC_READ_SEARCH.
+    An allow-list, so an unknown string is refused too. Nothing a declaration can move:
+    drop-ALL, no-new-privileges, the pids cap, every structural refusal, the network
+    policy. Pinned by `ContainerHardeningTest.aStackServiceDeclaresOneCapabilityAndNever
+    AnEscape` (kernel CapBnd of a declaring service = 0x20cb vs an undeclaring SIBLING in
+    the SAME stack = 0xcb, plus nine refusals each verified to leave no container on the
+    daemon) and `StackAdminTest` at the form. (2) HOST PREFLIGHT: the Docker battery's
+    `userns_remap` and `lsm` checks moved off the daemon's `Info.SecurityOptions` CLAIM
+    onto KERNEL reads inside the probe container that already runs
+    (`/proc/self/uid_map`, `/proc/1/attr/current`); `seccomp` was already kernel-truth and
+    the brief's premise was wrong about that half. Both stay ADVISORY, deliberately:
+    userns-remap is off by default on every Docker distribution and requiring it would
+    refuse both twins, and AppArmor's absence is a distribution fact (daystrom is Arch --
+    measured `/sys/kernel/security/lsm` = capability,landlock,lockdown,yama,bpf and
+    `apparmor/parameters/enabled` = N). The INCUS battery had NO such check at all and now
+    runs a REAL probe INSTANCE (alpine/3.22 off the same simplestreams lane instances use,
+    ~1.5s with a cached image, deleted in a finally): `container_userns` and
+    `container_seccomp` are REQUIRED when the host accepts tenant workloads -- the
+    OPPOSITE of the Docker stance, because unprivileged is the Incus DEFAULT, so a host
+    that hands a workload the host uid range is misconfigured rather than ordinary -- and
+    `lsm` is advisory. There is no daemon-side alternative: Incus 7.3 answers
+    `environment.kernel_features` and `lxc_features` as EMPTY maps (measured). A probe
+    that cannot answer stores UNKNOWN BY NAME as a failing check, never a pass.
+    Trap found and fixed while proving it: the probe's `sh -c` ended in
+    `cat /proc/1/attr/current`, which returns EINVAL on an LSM-less kernel and therefore
+    decided sh's exit code -- the whole probe retried until its window closed and reported
+    UNKNOWN on a perfectly healthy host, which would have made EVERY Incus live test skip.
   - **SUPERSEDED 2026-08-03 (same day, product decision): the instance tier declares
     `SERVICE`, not `STRICT`.** Generic tenant images must work out of the box, and
     `STRICT` rejects the chown-then-drop-privileges entrypoint that is the archetypal
@@ -4392,6 +4433,23 @@ counts, or live re-run). It was built from CODE, not from the STATUS notes above
   STILL OPEN: an Incus-side liveness signal (would cost a per-poll exec of
   `cat /sys/fs/cgroup/memory.events` in every instance), and no notification --
   the dashboard attention item is the whole operator lane today.
+  SUPERSEDED 2026-08-07: the INCUS half SHIPPED, and the per-poll exec is what it
+  costs -- measured at ~100 ms per RUNNING instance on daystrom, and a stopped one is
+  never exec'd. Measured first, decided after: `/1.0/instances/{name}/state` carries no
+  OOM counter anywhere in its body (usage/peak/swap only), a system container's cgroup
+  NAMESPACE makes its own `/sys/fs/cgroup/memory.events` the payload cgroup (byte-identical
+  to the host's `/sys/fs/cgroup/lxc.payload.<name>/` view -- note `lxc.payload`, NOT
+  `incus.payload`), and the same pressure-vs-kill distinction holds: 400 MB of page-cache
+  churn in a 64 MiB container gave `max 7168, oom_kill 0` while healthy, one OOM-killed
+  child gave `oom_kill 1` with the instance still RUNNING. A VIRTUAL MACHINE is refused BY
+  DECLARATION rather than by letting the read fail: a guest kernel has no `memory.events`
+  at its cgroup root (measured: "can't open ... No such file or directory") and its
+  ceiling is the hypervisor's, so there is nothing to read even in principle. Every other
+  read failure lands on UNKNOWN, never SERVING. Pinned by
+  `IncusWorkloadLivenessLiveTest.anOomKilledChildIsReportedDeadWhileItsIncusInstance
+  KeepsRunning` against daystrom, pressure anchor as a first-class step; counterfactual
+  (restore the unconditional UNKNOWN) fails at step 2. STILL OPEN from this bullet: the
+  notification lane, unchanged.
 - LIVE RE-VERIFICATION for this wave, not taken on trust: IncusColdMigrationLiveTest
   RAN and PASSED (1 test, 0 skipped, 632s, daystrom -> nightstrom) and
   IncusVmLiveTest RAN and PASSED (1 test, 0 skipped, 94s). IncusWindowsTemplateLiveTest's

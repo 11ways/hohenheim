@@ -108,12 +108,36 @@ class HostPreflightTest {
             assertThat(report.check("network_headroom").failed())
                 .as("step 5: the probe network was created and removed").isFalse();
 
-            // 6. Advisory checks are RECORDED (pass or warn), never absent and never
-            //    silently green: this machine has no userns-remap, so warn is expected.
+            // 6. The advisory checks are KERNEL reads too, and their details must prove
+            //    it. Both used to come off the daemon's Info.SecurityOptions, which is a
+            //    claim about configuration; the detail now has to carry the literal
+            //    /proc value, which no config-reading implementation could produce.
             assertThat(report.check("userns_remap"))
                 .as("step 6: userns posture is recorded").isNotNull();
+            assertThat(report.check("userns_remap").detail())
+                .withFailMessage("step 6: the userns detail carries no uid_map, so the"
+                    + " check is not reading the container's kernel state: '%s'",
+                    report.check("userns_remap").detail())
+                .contains("uid_map reads '");
+            assertThat(report.check("userns_remap").detail())
+                .withFailMessage("step 6: this machine's daemon has no userns-remap, so"
+                    + " the probe must read the IDENTITY map back: '%s'",
+                    report.check("userns_remap").detail())
+                .contains(HostPreflight.IDENTITY_UID_MAP);
+            assertThat(report.check("userns_remap").required())
+                .as("step 6: userns is advisory -- refusing every ordinary Docker host"
+                    + " over a posture nobody ships is an availability decision")
+                .isFalse();
             assertThat(report.check("lsm"))
                 .as("step 6: LSM posture is recorded").isNotNull();
+            assertThat(report.check("lsm").detail())
+                .withFailMessage("step 6: the LSM detail names neither a confinement label"
+                    + " nor its absence, so nothing was read from pid 1: '%s'",
+                    report.check("lsm").detail())
+                .containsAnyOf("pid 1 runs under LSM confinement '", "pid 1 label: '");
+            assertThat(report.check("lsm").required())
+                .as("step 6: LSM presence is a distribution fact, so it stays advisory")
+                .isFalse();
 
             // 7. The verdict follows the required checks only.
             assertThat(report.passed())

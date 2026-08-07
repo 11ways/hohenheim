@@ -5,10 +5,12 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusClients;
+import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -37,11 +39,18 @@ public final class IncusPreflight {
     private IncusPreflight() {
     }
 
+    /** The stored check name carrying the user-namespace verdict of a real instance. */
+    public static final String USERNS_CHECK = "container_userns";
+
+    /** The stored check name carrying the seccomp verdict of a real instance. */
+    public static final String SECCOMP_CHECK = "container_seccomp";
+
     /** Run the battery against one host record and STORE the outcome. */
     public static HostPreflight.@NonNull Report runAndStore(@NonNull Row server) {
         HostPreflight.Report report;
         try {
-            report = run(IncusClients.forServer(server));
+            IncusClient client = IncusClients.forServer(server);
+            report = withContainerKernelChecks(server, run(client), client);
         } catch (HostKeys.HostTrustException refusal) {
             // Same stance as the ssh lane: an unpinned host cannot be probed at all,
             // and that refusal IS the stored verdict.
@@ -100,6 +109,167 @@ public final class IncusPreflight {
         boolean passed = report.passed() && !(check.required() && check.failed());
         return new HostPreflight.Report(List.copyOf(checks), report.facts(), passed,
             report.at(), report.daemonFailure());
+    }
+
+    /**
+     * PROVE what the kernel does to a real workload on this host, by running one:
+     * user-namespace remapping and seccomp filtering, read out of a probe instance's own
+     * {@code /proc}, plus the LSM label the kernel attached to it.
+     *
+     * AIDEV-NOTE: this is the Incus half of the check the Docker battery has always run
+     * inside its probe container, and it is a probe INSTANCE for the same reason it is a
+     * probe container there -- the daemon's own {@code /1.0} answer is a claim, and in
+     * Incus 7.3 it is not even that: {@code environment.kernel_features} and
+     * {@code lxc_features} come back as EMPTY maps (measured on daystrom), so there is no
+     * daemon-side evidence to relay even if relaying were acceptable. The probe rides the
+     * SAME simplestreams lane real instances use, so a host that cannot answer this also
+     * could not have run a tenant workload.
+     *
+     * AIDEV-NOTE: REQUIRED-ness follows {@link ServerModel#acceptsTenantWorkloads}, the
+     * {@code kernel_isolation_lane} rule, and for the Incus tier the verdict is the
+     * OPPOSITE of the Docker battery's advisory stance on the same question: an
+     * unprivileged (userns-remapped) container is the Incus DEFAULT, so a tenant-accepting
+     * host that hands a workload the host's own uid range is misconfigured, not merely
+     * old-fashioned. A storage-only or operator-only host keeps enrolling, and its probe
+     * still runs and still records what it found -- absence of a verdict is what this
+     * whole battery exists to stop.
+     */
+    private static HostPreflight.@NonNull Report withContainerKernelChecks(
+            @NonNull Row server, HostPreflight.@NonNull Report report,
+            @NonNull IncusClient client) {
+        boolean required = ServerModel.acceptsTenantWorkloads(server);
+        List<HostPreflight.Check> checks = new ArrayList<>(report.checks());
+        checks.addAll(probeInstanceKernel(client, required));
+        boolean passed = report.passed();
+        for (HostPreflight.Check check : checks) {
+            if (check.required() && check.failed()) {
+                passed = false;
+            }
+        }
+        return new HostPreflight.Report(List.copyOf(checks), report.facts(), passed,
+            report.at(), report.daemonFailure());
+    }
+
+    /** The image the kernel probe runs; a system container of the ordinary tenant shape. */
+    static final String PROBE_IMAGE = "alpine/3.22";
+
+    /** How long the probe instance may take to accept its one exec. */
+    private static final long PROBE_EXEC_TIMEOUT_MS = 30_000;
+
+    private static @NonNull List<HostPreflight.Check> probeInstanceKernel(
+            @NonNull IncusClient client, boolean required) {
+        String name = "hohenheim-preflight-" + Long.toHexString(System.nanoTime());
+        try {
+            Map<String, Object> source = new LinkedHashMap<>();
+            source.put("type", "image");
+            source.put("protocol", "simplestreams");
+            source.put("server", IncusInstanceRuntime.IMAGE_SERVER);
+            source.put("alias", PROBE_IMAGE);
+            client.createInstance(Map.of(
+                "name", name,
+                "type", "container",
+                "source", source,
+                "config", Map.of("user.hohenheim.probe", "preflight")));
+            client.changeState(name, "start", 30, false);
+            IncusClient.ExecResult result = awaitProbeExec(client, name);
+            if (result == null) {
+                return List.of(unanswered(USERNS_CHECK, required,
+                        "the probe instance never accepted an exec"),
+                    unanswered(SECCOMP_CHECK, required,
+                        "the probe instance never accepted an exec"),
+                    unanswered("lsm", false, "the probe instance never accepted an exec"));
+            }
+            String[] sections = result.output().split("---");
+            String uidMap = sections.length > 0 ? sections[0].trim() : "";
+            String status = sections.length > 1 ? sections[1].trim() : "";
+            String lsmLabel = sections.length > 2 ? sections[2].trim() : "";
+            return List.of(usernsCheck(uidMap, required), seccompCheck(status, required),
+                HostPreflight.lsmCheck(lsmLabel));
+        } catch (Exception error) {
+            String detail = "the kernel probe instance could not be run ("
+                + error.getMessage() + "), so what this host does to a workload is UNKNOWN";
+            return List.of(unanswered(USERNS_CHECK, required, detail),
+                unanswered(SECCOMP_CHECK, required, detail),
+                unanswered("lsm", false, detail));
+        } finally {
+            try {
+                client.changeState(name, "stop", 10, true);
+            } catch (IOException | RuntimeException alreadyDown) {
+                // never started, or already gone
+            }
+            try {
+                client.deleteInstance(name);
+            } catch (IOException | RuntimeException alreadyGone) {
+                // a stuck probe instance is the reconciler's, not this verdict's, problem
+            }
+        }
+    }
+
+    /**
+     * One exec, retried until the freshly started instance accepts it.
+     *
+     * @return null when the window closed with no answer -- never a fabricated one
+     */
+    private static IncusClient.@Nullable ExecResult awaitProbeExec(@NonNull IncusClient client,
+                                                                   @NonNull String name) {
+        long deadline = System.currentTimeMillis() + PROBE_EXEC_TIMEOUT_MS;
+        do {
+            try {
+                IncusClient.ExecResult result = client.exec(name, List.of("sh", "-c",
+                    "cat /proc/self/uid_map; echo '---';"
+                        + " grep -E '^(Seccomp|NoNewPrivs):' /proc/1/status; echo '---';"
+                        // Trailing "|| true": daystrom's kernel carries no LSM and
+                        // answers this read with EINVAL, and the LAST command decides
+                        // sh's exit code -- without it the probe retried until its
+                        // window closed and reported UNKNOWN on a perfectly good host.
+                        + " cat /proc/1/attr/current 2>/dev/null || true"),
+                    Map.of(), 10_000);
+                if (result.exitCode() == 0) {
+                    return result;
+                }
+            } catch (IOException | RuntimeException notReady) {
+                // the instance is still coming up; the deadline is the only verdict
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
+        } while (System.currentTimeMillis() < deadline);
+        return null;
+    }
+
+    /** A check whose question was asked and NOT answered: a fail, never a silent pass. */
+    private static HostPreflight.@NonNull Check unanswered(@NonNull String name,
+                                                           boolean required,
+                                                           @NonNull String detail) {
+        return new HostPreflight.Check(name, HostPreflight.STATUS_FAIL, required,
+            "UNKNOWN: " + detail);
+    }
+
+    /** The Incus verdict on the same uid_map the Docker battery reads, but REQUIRED. */
+    private static HostPreflight.@NonNull Check usernsCheck(@NonNull String uidMap,
+                                                            boolean required) {
+        HostPreflight.Check advisory = HostPreflight.usernsCheck(uidMap);
+        boolean remapped = HostPreflight.STATUS_PASS.equals(advisory.status());
+        return new HostPreflight.Check(USERNS_CHECK,
+            remapped ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, required,
+            remapped ? advisory.detail()
+                : advisory.detail() + "; an Incus system container is unprivileged by"
+                    + " DEFAULT, so this host is configured to hand workloads the host's"
+                    + " own uid range");
+    }
+
+    /** Seccomp filter mode on the probe instance's pid 1, read from {@code /proc}. */
+    private static HostPreflight.@NonNull Check seccompCheck(@NonNull String status,
+                                                             boolean required) {
+        boolean filtering = status.lines().anyMatch(line ->
+            line.startsWith("Seccomp:") && line.trim().endsWith("2"));
+        return new HostPreflight.Check(SECCOMP_CHECK,
+            filtering ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, required,
+            filtering ? "seccomp filter mode active on the probe instance's pid 1"
+                : "seccomp is NOT filtering inside a workload on this host: " + status);
     }
 
     /** The battery itself, injectable for tests. */

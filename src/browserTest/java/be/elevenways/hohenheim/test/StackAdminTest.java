@@ -19,6 +19,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -295,6 +296,41 @@ class StackAdminTest extends HohenheimTestBase {
         assertThat(Models.get(StackServiceModel.class).find()
             .where(StackServiceModel.NAME.eq("sick")).count())
             .as("a zero healthcheck interval must fail the form, not the deploy")
+            .isEqualTo(0);
+    }
+
+    /**
+     * The capability declaration is a CLOSED choice at the form, not free text: a
+     * declarable name is stored, an escape is refused before it ever reaches a daemon.
+     *
+     * AIDEV-NOTE: the POSITIVE anchor is the whole point. A form that refused every
+     * capability would pass a refusal-only test and quietly make the field useless, which
+     * is the "knob nobody can set is theater" outcome this mechanism was built to avoid.
+     */
+    @Test
+    @Order(14)
+    void aDeclarableCapabilityIsStoredAndAnEscapeIsRefusedAtTheForm() throws Exception {
+        // 1. THE POSITIVE ANCHOR: a name on the allow-list lands on the record.
+        postForm("/admin/stack-services/new",
+            "stack_id=" + stackId + "&name=capok&enabled=false&enabled=true"
+            + "&image=alpine%3Alatest&command=&restart_policy=no"
+            + "&capabilities=NET_RAW&capabilities=");
+        Row stored = Models.get(StackServiceModel.class).find()
+            .where(StackServiceModel.NAME.eq("capok")).first();
+        assertThat(stored)
+            .as("step 1: a declarable capability must not block the save").isNotNull();
+        assertThat((List<String>) stored.get(StackServiceModel.CAPABILITIES))
+            .as("step 1: the declaration is stored as declared")
+            .containsExactly("NET_RAW");
+
+        // 2. THE REFUSAL: an escape never becomes a row at all.
+        postForm("/admin/stack-services/new",
+            "stack_id=" + stackId + "&name=capbad&enabled=false&enabled=true"
+            + "&image=alpine%3Alatest&command=&restart_policy=no"
+            + "&capabilities=SYS_ADMIN&capabilities=");
+        assertThat(Models.get(StackServiceModel.class).find()
+            .where(StackServiceModel.NAME.eq("capbad")).count())
+            .as("step 2: SYS_ADMIN must fail the form, not the deploy")
             .isEqualTo(0);
     }
 
