@@ -1,9 +1,14 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
+import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
+import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -19,12 +24,18 @@ import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
 
@@ -172,9 +183,16 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             HttpResponse<String> manageRestore = post(
                 "/manage/sites/" + aId + "/revision/" + enabledRevA + "/restore",
                 "", operatorSession.id(), operatorCsrf);
+            // 404, not a redirect: ManageSiteResource.subpages() deliberately omits the
+            // revision history, and the revision ROUTES are now bound to that
+            // declaration (they used to consult the model's behaviour alone and served
+            // the delegated tenant regardless). That is a STRICTLY stronger refusal
+            // than the write-pipeline one this test originally pinned -- the request
+            // never reaches the model. The invariant itself is still proven at step 6
+            // through /admin, which does offer the subpage.
             assertThat(manageRestore.statusCode())
-                .as("the /manage restore is refused, never a server error")
-                .isIn(200, 302, 303);
+                .as("the delegated surface does not offer revision restore at all")
+                .isEqualTo(404);
             assertThat((Boolean) siteModel.findById(aId).get(SiteModel.ENABLED))
                 .as("A stays disabled after the /manage restore attempt").isFalse();
             assertThat(enabledOwnersOf(CONTESTED_HOST))
@@ -250,6 +268,187 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             // Tearing live sites down IS a release, so the fixture ledgers quarantine rows
             // that would otherwise refuse another test class's claim on these hostnames.
             Models.get(ReleasedRouteClaimModel.class).find().delete();
+        }
+    }
+
+    private static final String GATED_HOST = "restore-gate.example.com";
+
+    /**
+     * The takeover the read-only audit named: a delegated tenant replaying a revision
+     * that predates the operator's auth gate. {@code access_list_id} and
+     * {@code auth_provider_id} are plain IntegerFields -- not secret, not encrypted,
+     * not lifecycle -- so they ride every snapshot, while ManageSiteResource offers
+     * exactly three ALWAYS_EDITABLE form fields. This walks the attack through the real
+     * HTTP routes AND the live proxy, so both the DB write and the served effect are
+     * settled.
+     */
+    @Test
+    void aDelegatedTenantCannotRewindTheSitesAuthGate() throws Exception {
+        Model siteModel = Models.get(SiteModel.class);
+        var providerModel = Models.get(SiteAuthProviderModel.class);
+
+        HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        upstream.createContext("/", ex -> {
+            byte[] body = "gated-upstream-ok".getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+        });
+        upstream.start();
+
+        Row provider = providerModel.createEmptyRow();
+        provider.set(SiteAuthProviderModel.NAME, "Restore Gate");
+        provider.set(SiteAuthProviderModel.PROVIDER_TYPE, "hohenheim:basic");
+        provider.set(SiteAuthProviderModel.CONFIG, new BasicAuthProviderType()
+            .normalizeConfigForSave(Map.of("credentials", Map.of("alice", "s3cret")), null));
+        providerModel.save(provider);
+        int providerId = provider.get(SiteAuthProviderModel.ID);
+
+        Row accessList = Models.get(AccessListModel.class).createEmptyRow();
+        accessList.set(AccessListModel.NAME, "Restore Gate Allowlist");
+        Models.get(AccessListModel.class).save(accessList);
+        int accessListId = accessList.get(AccessListModel.ID);
+
+        // 1. The tenant's site goes live UNGATED: that save is the revision the
+        //    attacker will later replay.
+        Row site = siteModel.createEmptyRow();
+        site.set(SiteModel.NAME, "Restore Gate Victim");
+        site.set(SiteModel.SLUG, "restore-gate-victim");
+        site.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        site.set(SiteModel.SETTINGS, Map.of("forward_host", "127.0.0.1",
+            "forward_port", upstream.getAddress().getPort()));
+        site.set(SiteModel.STATUS, "active");
+        site.set(SiteModel.ENABLED, true);
+        // Explicit nulls, exactly like the admin create form submits them: a snapshot
+        // only carries keys the saved row actually HAD (Row.has), so a column never
+        // touched at creation is absent from history and cannot be rewound at all.
+        // The gate columns must be present-and-null for the pre-gate revision to mean
+        // "ungated" -- which is the real-world shape and the attackable one.
+        site.set(SiteModel.AUTH_PROVIDER_ID, null);
+        site.set(SiteModel.ACCESS_LIST_ID, null);
+        siteModel.save(site);
+        int siteId = site.get(SiteModel.ID);
+        int ungatedRevision = SiteModel.REVISIONABLE.latestRevisionOf(siteModel, siteId);
+
+        var domainModel = Models.get(SiteDomainModel.class);
+        Row domain = domainModel.createEmptyRow();
+        domain.set(SiteDomainModel.SITE_ID, siteId);
+        domain.set(SiteDomainModel.HOSTNAME, GATED_HOST);
+        domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domainModel.save(domain);
+
+        // 2. The OPERATOR then puts the gate on: basic auth plus an IP allowlist.
+        site.set(SiteModel.AUTH_PROVIDER_ID, providerId);
+        site.set(SiteModel.ACCESS_LIST_ID, accessListId);
+        siteModel.save(site);
+
+        Row operator = AuthModels.users().createEmptyRow();
+        operator.set(UserModel.EMAIL, "restore-gate-operator@hohenheim.local");
+        operator.set(UserModel.DISPLAY_NAME, "Restore Gate Operator");
+        operator.set(UserModel.ENABLED, true);
+        operator.set(UserModel.CREATED_AT, Instant.now());
+        operator.set(UserModel.UPDATED_AT, Instant.now());
+        AuthModels.users().save(operator);
+        int operatorId = operator.get(UserModel.ID);
+        Session tenantSession = Zenit.getSessionStore().create();
+        tenantSession.set(AuthKeys.USER_ID, (long) operatorId);
+        String tenantCsrf = ZenitAuth.randomToken();
+        tenantSession.set(CsrfTokens.TOKEN, tenantCsrf);
+        Zenit.getSessionStore().save(tenantSession);
+        RecordGrants.grant("user", operatorId, SiteModel.MODEL_ID, siteId,
+            HohenheimAccess.MANAGE, true);
+
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        ProxyServer proxy = new ProxyServer();
+        proxy.start();
+        int proxyPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
+
+        try {
+            // 3. The gate is genuinely live on the wire: an unauthenticated request to
+            //    the site's own hostname is challenged, not served.
+            assertThat(proxyStatus(proxyPort, GATED_HOST))
+                .as("step 3: the operator's basic-auth gate answers the open internet")
+                .isEqualTo(401);
+
+            // 4. THE ATTACK: an ordinary manage grant replays the pre-gate revision.
+            HttpResponse<String> attack = post(
+                "/manage/sites/" + siteId + "/revision/" + ungatedRevision + "/restore",
+                "", tenantSession.id(), tenantCsrf);
+
+            // 5. The SERVED effect first, because that is what the attack is FOR: the
+            //    hostname must still be challenged. A refusal that left the site
+            //    reachable would be no refusal at all.
+            proxy.reload();
+            assertThat(proxyStatus(proxyPort, GATED_HOST))
+                .as("step 5: the gate is still up on the wire after the attack")
+                .isEqualTo(401);
+
+            // 6. And the DB write that must not have happened. These are the two
+            //    columns the delegated form never offers, and they are what the gate IS.
+            Row afterAttack = siteModel.findById(siteId);
+            assertThat((Integer) afterAttack.get(SiteModel.AUTH_PROVIDER_ID))
+                .as("step 6: the tenant must not be able to null the site's auth provider")
+                .isEqualTo(providerId);
+            assertThat((Integer) afterAttack.get(SiteModel.ACCESS_LIST_ID))
+                .as("step 6: the tenant must not be able to null the site's IP allowlist")
+                .isEqualTo(accessListId);
+            assertThat(attack.statusCode())
+                .as("step 6: the delegated surface offers no revision route at all")
+                .isEqualTo(404);
+
+            // 7. Positive anchor: an ADMIN restoring the SAME revision through /admin --
+            //    a surface that DOES offer the revisions subpage and whose form exposes
+            //    both columns -- still succeeds, and the effect is real. So step 5
+            //    refused for the declared reason, not because restore stopped working.
+            HttpResponse<String> adminRestore = post(
+                "/admin/sites/" + siteId + "/revision/" + ungatedRevision + "/restore",
+                "", sessionToken, csrfToken);
+            assertThat(adminRestore.statusCode())
+                .as("step 7: the admin restore goes through")
+                .isIn(200, 302, 303);
+            Row afterAdmin = siteModel.findById(siteId);
+            assertThat((Integer) afterAdmin.get(SiteModel.AUTH_PROVIDER_ID))
+                .as("step 7: the admin restore really did rewind the auth provider")
+                .isNull();
+            assertThat((Integer) afterAdmin.get(SiteModel.ACCESS_LIST_ID))
+                .as("step 7: the admin restore really did rewind the access list")
+                .isNull();
+
+            proxy.reload();
+            assertThat(proxyStatus(proxyPort, GATED_HOST))
+                .as("step 7: with the gate rewound by an admin, the hostname serves openly")
+                .isEqualTo(200);
+        } finally {
+            proxy.stop();
+            upstream.stop(0);
+            RecordGrants.revoke("user", operatorId, SiteModel.MODEL_ID, siteId,
+                HohenheimAccess.MANAGE);
+            for (Row d : domainModel.findBySiteId(siteId)) domainModel.delete(d);
+            siteModel.delete(site);
+            providerModel.delete(provider);
+            Models.get(AccessListModel.class).delete(accessList);
+            Models.get(ReleasedRouteClaimModel.class).find().delete();
+        }
+    }
+
+    /** Status code of an unauthenticated GET through the proxy for one Host header. */
+    private static int proxyStatus(int port, String host) throws Exception {
+        try (Socket socket = new Socket("127.0.0.1", port)) {
+            socket.setSoTimeout(5000);
+            String request = "GET / HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\n\r\n";
+            socket.getOutputStream().write(request.getBytes(StandardCharsets.UTF_8));
+            socket.getOutputStream().flush();
+
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            InputStream in = socket.getInputStream();
+            byte[] chunk = new byte[4096];
+            int read;
+            while ((read = in.read(chunk)) != -1) {
+                buffer.write(chunk, 0, read);
+            }
+            String response = buffer.toString(StandardCharsets.UTF_8);
+            int firstSpace = response.indexOf(' ');
+            return Integer.parseInt(response.substring(firstSpace + 1, firstSpace + 4));
         }
     }
 }

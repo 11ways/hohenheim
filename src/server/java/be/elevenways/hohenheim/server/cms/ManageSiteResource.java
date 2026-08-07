@@ -24,6 +24,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The /manage view over sites: grant-scoped list/edit/operate, no create, no
@@ -71,6 +72,17 @@ public final class ManageSiteResource extends SiteResource {
 
     @Override public boolean creatable() { return false; }
     @Override public boolean deletable() { return false; }
+
+    /**
+     * The delegated surface owns NOTHING outside its three form fields, so it
+     * inherits none of SiteResource's declaration. Deliberately explicit: a
+     * silently inherited slug/status ownership would widen exactly the surface
+     * this class exists to narrow.
+     */
+    @Override
+    public @NonNull Set<String> restorableFieldsOutsideForm() {
+        return Set.of();
+    }
 
     /** Apply only the explicit delegated form values; never run the admin source/type normalizers. */
     @Override

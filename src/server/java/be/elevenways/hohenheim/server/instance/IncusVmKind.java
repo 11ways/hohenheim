@@ -69,10 +69,18 @@ public final class IncusVmKind implements InstanceKindHandler {
      * Cloud-init user-data, {@code {{KEY}}} placeholders resolved against the
      * instance's variables at deploy (the config-file substitution shape) -- the
      * template mechanism IS the provisioning vocabulary, secret lane included.
+     *
+     * AIDEV-NOTE: secret() because nothing ENFORCES the placeholder convention this
+     * docblock describes -- the field accepts a literal, and cloud-init user-data is
+     * the canonical carrier of ssh_authorized_keys, chpasswd and runcmd bootstrap
+     * tokens. It is a JSON sub-field of schemaFrom("kind"), so encrypted() is refused
+     * (Schema.refuseEncryptedJsonSubFields) and secret() is the ONLY lever there is:
+     * it redacts the value on every derived surface and rides the FormSecrets
+     * mask/keep-on-blank/__clear lane, exactly like every sibling env-var map.
      */
     public static final TextField CLOUD_INIT = SETTINGS_SCHEMA.addField(
         TextField.builder().name("cloud_init").label(HohenheimFormCopy.label("cloud_init"))
-            .help(HohenheimFormCopy.help("cloud_init")).build());
+            .help(HohenheimFormCopy.help("cloud_init")).secret().build());
 
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("memory_limit_mb").label(HohenheimFormCopy.label("memory_limit"))
