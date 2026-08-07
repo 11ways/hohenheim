@@ -1066,6 +1066,15 @@ public class HohenheimSettings {
                 + "database retention pattern); 0 or less keeps everything")
             .build();
 
+        public static final SettingDefinition<Integer> SNAPSHOT_RETENTION = GROUP
+            .buildSetting("snapshot_retention", Integer.class)
+            .defaultValue(7)
+            .description("Number of completed snapshots to keep per instance, pruned when a "
+                + "new one completes (the same count-based rule as backup retention); 0 or "
+                + "less keeps everything, which on a pool-backed host is a disk-exhaustion "
+                + "path nothing else closes")
+            .build();
+
         public static final SettingDefinition<Integer> MAX_ARCHIVE_MB = GROUP
             .buildSetting("max_archive_mb", Integer.class)
             .defaultValue(1024)
