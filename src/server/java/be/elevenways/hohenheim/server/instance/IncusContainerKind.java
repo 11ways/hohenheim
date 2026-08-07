@@ -128,14 +128,14 @@ public final class IncusContainerKind implements InstanceKindHandler {
         // devices are a later mechanism) -- each absence is structural, not an omission.
         return new InstanceSpec(handle, image, null,
             EnvVars.toMap(settings.get("environment_variables")), Map.of(), null,
-            ResourceLimits.fromSettings(settings, defaultFootprintMb()),
+            ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
             privileged ? PRIVILEGED : UNPRIVILEGED,
             OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
     }
 
     /** A system container shares the host kernel: its floor is its userland, not a guest OS. */
     @Override
-    public int defaultFootprintMb() {
+    public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
         return 512;
     }
 

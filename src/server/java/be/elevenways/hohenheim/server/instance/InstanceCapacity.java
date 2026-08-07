@@ -178,7 +178,7 @@ public final class InstanceCapacity {
     /** The same derivation from a kind and its settings, before any record exists. */
     public static int footprintMbOf(@NonNull InstanceKindHandler handler,
                                     @NonNull Map<String, Object> settings) {
-        return ResourceLimits.fromSettings(settings, handler.defaultFootprintMb())
+        return ResourceLimits.fromSettings(settings, handler.defaultFootprintMb(settings))
             .bookedMemoryMb();
     }
 

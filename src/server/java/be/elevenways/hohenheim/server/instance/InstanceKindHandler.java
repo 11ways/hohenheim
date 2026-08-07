@@ -68,7 +68,7 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     }
 
     /**
-     * The memory (MB) a record of this kind is ADMITTED AS when its settings declare no
+     * The memory (MB) a record of these settings is ADMITTED AS when they declare no
      * {@code memory_limit_mb} -- the host-capacity denominator, and the cgroup/VM cap the
      * driver then actually applies.
      *
@@ -78,12 +78,24 @@ public interface InstanceKindHandler extends InstanceKindInfo {
      * it is one line; forgetting it is a compile error.
      *
      * AIDEV-NOTE: charge == cap is the invariant, not a coincidence. The booking is only
-     * honest because {@code ResourceLimits.fromSettings(settings, defaultFootprintMb())}
+     * honest because {@code ResourceLimits.fromSettings(settings, defaultFootprintMb(settings))}
      * hands the SAME number to the daemon, so a workload cannot quietly grow past what
      * the ledger booked for it. If a kind ever charges one number and caps another, the
      * gate is decoration again.
+     *
+     * AIDEV-NOTE: the SETTINGS are the argument because a kind can handle several
+     * workload SHAPES (DatabaseContainerKind handles all four engines, whose real
+     * startup peaks differ by 250 MiB). A no-argument signature forced such a kind to
+     * answer one flat number for every shape, and because charge == cap that flat number
+     * became a cgroup ceiling BELOW some engines' measured startup peak -- mysql and
+     * mongo spent their whole init pinned against it and were OOM-killed under parallel
+     * load. An implementation that has one shape simply ignores the argument.
+     *
+     * @implSpec must NEVER throw -- {@code InstanceCapacity} calls it from a write hook,
+     *           so an unrecognised settings shape returns the kind's LARGEST footprint
+     *           (over-booking is the safe direction), not a violation
      */
-    int defaultFootprintMb();
+    int defaultFootprintMb(@NonNull Map<String, Object> settings);
 
     /**
      * Refuse a candidate host this kind's DEPLOY would refuse anyway, before placement

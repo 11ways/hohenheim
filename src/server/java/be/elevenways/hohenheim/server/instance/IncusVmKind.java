@@ -180,7 +180,7 @@ public final class IncusVmKind implements InstanceKindHandler {
         // volumes (attached disks are instance_devices rows), no port publication
         // (a VM is an addressable system) -- each absence is structural.
         return new InstanceSpec(handle, image, null, Map.of(), Map.of(), null,
-            ResourceLimits.fromSettings(settings, defaultFootprintMb()), VM,
+            ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)), VM,
             OwnerLabels.of(InstanceModel.MODEL_ID, instanceId), cloudInit, null,
             imageOrigin, secureBoot, guestAgent);
     }
@@ -192,7 +192,7 @@ public final class IncusVmKind implements InstanceKindHandler {
      * hypervisor actually hands out the same figure.
      */
     @Override
-    public int defaultFootprintMb() {
+    public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
         return 1024;
     }
 

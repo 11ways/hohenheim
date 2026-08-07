@@ -578,7 +578,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
         /** Test kinds declare a footprint like any other: the interface has no default. */
         @Override
-        public int defaultFootprintMb() {
+        public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
             return 128;
         }
     }
