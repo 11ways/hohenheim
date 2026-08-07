@@ -108,7 +108,7 @@ public final class ManagePanel extends Panel {
             // in hand. Every model this panel projects belongs in this disjunction.
             AccessContext ctx = RecordSourceGate.accessContextOf(conduit);
             return !HohenheimAccess.managedSiteIds(ctx).isEmpty()
-                || !HohenheimAccess.instanceIdsWith(ctx, HohenheimAccess.MANAGE).isEmpty()
+                || !HohenheimAccess.instanceIdsWith(ctx, HohenheimAccess.VIEW).isEmpty()
                 // PROJECTS join the disjunction for the reason stated above: a member of
                 // a project that owns nothing yet holds no site or instance grant, and
                 // would be 403'd out of the panel that now projects their project.
@@ -218,7 +218,7 @@ public final class ManagePanel extends Panel {
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceModel.class)
             .search(InstanceModel.NAME)
             .baseCriteria(() -> InstanceModel.DELETED_AT.isNull())
-            .accessCriteria(ctx -> HohenheimAccess.instanceScope(ctx, HohenheimAccess.MANAGE))
+            .accessCriteria(ctx -> HohenheimAccess.instanceScope(ctx, HohenheimAccess.VIEW))
             .build());
 
         // Record schedules: same hazard (the admin InstanceScheduleResource and the

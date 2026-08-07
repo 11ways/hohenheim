@@ -41,10 +41,12 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
- * The ONE per-site access policy funnel: v1 uses a SINGLE capability string
- * ({@link #MANAGE}) on the {@code hohenheim:site} model covering view, edit
- * and operate together -- finer verbs can be added later without any schema
- * change, since grants are plain (subject, model, record, capability) tuples.
+ * THE per-record access policy funnel. Sites still use a SINGLE capability string
+ * ({@link #MANAGE}) covering view, edit and operate together; INSTANCES carry the
+ * split vocabulary the Phase 3/5/6 gates need (view/console/power/config/destroy,
+ * plus the file, snapshot, backup, image and exec verbs), with {@link #MANAGE} kept as the
+ * ownership marker and as the umbrella that IMPLIES the first five. Adding a verb
+ * needs no schema change: grants are plain (subject, model, record, capability) tuples.
  * Per-record decisions ride the framework's fixed precedence walk
  * ({@code RecordCapabilities}) through the rules declared in
  * {@link #declareGrantableModels}: {@code hohenheim.admin.access} is the admin
@@ -70,6 +72,40 @@ public final class HohenheimAccess {
 
     /** Order or renew a certificate for names the holder already answers for. */
     public static final String REQUEST = "request";
+
+    /**
+     * Attach to the instance's OWN primary process: the read-only console stream, the
+     * console command lane and the VM framebuffer. ORDINARY per the plan's sensitivity
+     * classes, and deliberately NOT {@link #EXEC}: a console line reaches the workload's
+     * stdin, never an arbitrary program as an arbitrary user.
+     */
+    public static final String CONSOLE = "console";
+
+    /** Start, stop and restart the workload. ORDINARY: it changes runtime state, never content. */
+    public static final String POWER = "power";
+
+    /**
+     * Author what the instance IS: its record fields, its devices, its schedules and an
+     * in-place app update. ELEVATED -- editing what runs is one step from running anything.
+     */
+    public static final String CONFIG = "config";
+
+    /**
+     * Tear the workload down and trash the record. ELEVATED: it is irreversible for the
+     * tenant's own data, but it is authority over their OWN instance only, so it stays
+     * delegable (an operator may hand a tenant lead the right to retire their own boxes).
+     */
+    public static final String DESTROY = "destroy";
+
+    /**
+     * Run an ARBITRARY command as an arbitrary user inside the workload. ADMIN by the
+     * plan's sensitivity classes: it is root-in-container and therefore a host-escape
+     * amplifier, so {@link KnownCapability} makes it structurally non-delegable, never
+     * owner-implied, and (the rule this wave added) impossible to reach through
+     * {@link #MANAGE}'s umbrella. An operator may still grant it deliberately; a tenant
+     * holding it can never pass it on.
+     */
+    public static final String EXEC = "exec";
 
     /** Take and restore driver-level snapshots of an instance (data-destructive on restore). */
     public static final String SNAPSHOTS = "snapshots";
@@ -185,13 +221,29 @@ public final class HohenheimAccess {
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
 
-        // Instances: the SAME single-capability shape as sites, and registering it in the
-        // SAME commit as the model is load-bearing -- without a declared vocabulary,
-        // sameOwner on instances compares two EMPTY subject sets and answers "same owner"
-        // for every pair: a tenancy check that cannot fail. Only "manage" for now; wider
-        // verbs (view/power/console/config/destroy/exec) land WITH the surfaces that
-        // enforce them (declaring one auto-attaches the grant-matrix subpage, so an
-        // unenforced capability would be operator-editable theater).
+        // Instances: registering the vocabulary in the SAME commit as the model is
+        // load-bearing -- without one, sameOwner on instances compares two EMPTY subject
+        // sets and answers "same owner" for every pair: a tenancy check that cannot fail.
+        //
+        // AIDEV-NOTE: the UMBRELLA DECISION (2026-08-08, Phase 3/5/6 gate work). "manage"
+        // is KEPT and stays THE ownership marker (manageSubjectsOf/sameOwner, the quota
+        // bucket, the released-claim ledger, project adoption all read it), and the narrow
+        // verbs are declared as capabilities manage IMPLIES -- the framework's new
+        // KnownCapability.impliedBy row in the precedence walk. The alternative, replacing
+        // manage with a set of narrow rows, was rejected: ownership identity would have had
+        // to move to a second spelling, and the local dev database already holds applied
+        // grant rows that a rewrite would have to migrate.
+        //
+        // Because implication is exactly the set of verbs that rode manage BEFORE this
+        // change, no grant row's effective authority moves and there is therefore NO
+        // migration: an existing manage holder keeps precisely view/console/power/config/
+        // destroy and, as before, does NOT get files.*/snapshots/backups/image_any/exec.
+        // Widening manage to imply those would be a silent privilege grant to every
+        // already-stored row, which is why the umbrella deliberately stops where it does.
+        //
+        // exec cannot be listed as an implier at all: it is ADMIN, and KnownCapability
+        // refuses ADMIN + impliedBy structurally. "manage does not imply exec" is thus an
+        // invariant of the mechanism, not a line someone could edit here by accident.
         RecordGrants.declareGrantable(GrantableModel.of(InstanceModel.MODEL_ID)
             .liveWhen(row -> row.get(InstanceModel.DELETED_AT) == null));
         KnownCapabilities.register(InstanceModel.MODEL_ID,
@@ -199,6 +251,38 @@ public final class HohenheimAccess {
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable(),
+            // Seeing the record is implied by every verb that operates on it: an operator
+            // handing out "console" must not have to remember to hand out "view" too, or
+            // the delegate gets a 404 on the page carrying the console.
+            KnownCapability.of(VIEW)
+                .label(Microcopy.of("view").withFilter("scope", "capability"))
+                .asDelegable()
+                .impliedBy(MANAGE, CONSOLE, POWER, CONFIG, DESTROY),
+            KnownCapability.of(CONSOLE)
+                .label(Microcopy.of("console").withFilter("scope", "capability"))
+                .asDelegable()
+                .impliedBy(MANAGE),
+            KnownCapability.of(POWER)
+                .label(Microcopy.of("power").withFilter("scope", "capability"))
+                .asDelegable()
+                .impliedBy(MANAGE),
+            KnownCapability.of(CONFIG)
+                .label(Microcopy.of("config").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable()
+                .impliedBy(MANAGE),
+            KnownCapability.of(DESTROY)
+                .label(Microcopy.of("destroy").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable()
+                .impliedBy(MANAGE),
+            // ADMIN, so the record enforces non-delegable AND not-owner-implied AND
+            // not-implied-by-anything. An operator may still plant it (admins bypass
+            // GrantAdministration's containment); the holder can never pass it on, mint it
+            // into an API-key scope, or reach it by holding manage.
+            KnownCapability.of(EXEC)
+                .label(Microcopy.of("exec").withFilter("scope", "capability"))
+                .admin(),
             // Phase 4: the snapshot/backup actions now exist (InstanceSnapshots /
             // InstanceBackups behind the admin resources), so their capabilities
             // register per the plan's no-unwired rule. Elevated -- a snapshot
@@ -417,8 +501,19 @@ public final class HohenheimAccess {
      * the installed WebSocket authenticator's precedence walk.
      */
     public static boolean canManageInstance(@NonNull Principal principal, int instanceId) {
+        return hasInstanceCapability(principal, instanceId, MANAGE);
+    }
+
+    /**
+     * The principal-only face of {@link #hasInstanceCapability(AccessContext, int, String)},
+     * for the WebSocket handlers that have no conduit at open or revalidate time. Same
+     * precedence walk, umbrella row included -- a manage holder answers yes to console
+     * here exactly as they do through a conduit.
+     */
+    public static boolean hasInstanceCapability(@NonNull Principal principal, int instanceId,
+                                                @NonNull String capability) {
         return Zenit.getWebSocketAuthenticator()
-            .hasCapability(principal, InstanceModel.MODEL_ID, instanceId, MANAGE);
+            .hasCapability(principal, InstanceModel.MODEL_ID, instanceId, capability);
     }
 
     /**

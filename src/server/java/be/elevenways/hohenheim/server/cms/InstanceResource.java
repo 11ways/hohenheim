@@ -156,6 +156,10 @@ public class InstanceResource extends RowResource {
             new InstanceConsolePage(), new InstanceFramebufferPage(),
             new InstanceProvisioningPage(),
             new InstanceFilesPage(), new InstanceStatsPage(),
+            // The exec tab hides AND 404s itself for anyone without the exec capability
+            // on the record (InstanceExecPage.visibleFor); the admin panel gate is not
+            // the only thing standing between a delegate and an arbitrary command.
+            new InstanceExecPage(),
             new InstanceSchedulesPage(), new InstanceDevicesPage()));
         pages.addAll(this.frameworkSubpages());
         return pages;
@@ -228,7 +232,9 @@ public class InstanceResource extends RowResource {
             .label(Microcopy.of("app_update").withFilter("scope", "instance"))
             .icon(Icon.of("arrow-up-from-bracket"))
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> InstanceAppUpdates.hasUpdateScript(row))
+            .visibleFor((row, ctx) -> InstanceAppUpdates.hasUpdateScript(row)
+                && HohenheimAccess.hasInstanceCapability(
+                    ctx, row.get(InstanceModel.ID), HohenheimAccess.CONFIG))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("app_update").withFilter("scope", "instance"))
                 .body(Microcopy.of("app_update_confirm").withFilter("scope", "instance"))
@@ -302,7 +308,7 @@ public class InstanceResource extends RowResource {
             .label(Microcopy.of("deploy").withFilter("scope", "instance"))
             .icon(Icon.of("play"))
             .visibleFor((row, ctx) -> HohenheimAccess.hasInstanceCapability(
-                ctx, row.get(InstanceModel.ID), HohenheimAccess.MANAGE))
+                ctx, row.get(InstanceModel.ID), HohenheimAccess.POWER))
             .handler((row, ctx) -> {
                 this.instances.deploy(row.get(InstanceModel.ID));
                 return CmsActionResult.refreshWithToast(
@@ -320,7 +326,7 @@ public class InstanceResource extends RowResource {
             .visibleFor((row, ctx) ->
                 InstanceModel.STATUS_RUNNING.equals(row.get(InstanceModel.STATUS))
                     && HohenheimAccess.hasInstanceCapability(
-                        ctx, row.get(InstanceModel.ID), HohenheimAccess.MANAGE))
+                        ctx, row.get(InstanceModel.ID), HohenheimAccess.POWER))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("stop").withFilter("scope", "instance"))
                 .body(Microcopy.of("stop_confirm").withFilter("scope", "instance"))

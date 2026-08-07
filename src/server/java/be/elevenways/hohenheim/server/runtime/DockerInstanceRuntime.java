@@ -46,7 +46,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public final class DockerInstanceRuntime
         implements InstanceRuntime, VolumeSnapshotSupport, FileStagingSupport, InstallSupport,
                    ConsoleStreamSupport, LinkNetworkSupport, InstanceFileSupport,
-                   StatsStreamSupport {
+                   StatsStreamSupport, ExecSupport {
 
     private final @NonNull DockerClient docker;
     private final @NonNull WorkloadNetworkPolicy policy;
@@ -674,6 +674,26 @@ public final class DockerInstanceRuntime
             throw new IOException("REFUSED to " + what + " '" + handle
                 + "': the container is not attributably ours (labels: " + labels + ")");
         }
+    }
+
+    // -- ExecSupport ----------------------------------------------------------
+
+    @Override
+    public ExecSupport.@NonNull ExecOutcome runExec(@NonNull InstanceSpec spec,
+                                                    @NonNull List<String> command,
+                                                    long timeoutMs) throws IOException {
+        DockerClient.ExecResult result;
+        try {
+            result = this.docker.exec(spec.handle(), command, List.of());
+        } catch (DockerClient.ApiException e) {
+            // 409 = not running; 404 on the exec create = no such container. Named, so an
+            // operator can tell "the workload refused" from "the daemon is gone".
+            throw new IOException("Exec inside '" + spec.handle() + "' was refused: "
+                + e.getMessage());
+        }
+        String combined = result.stdout()
+            + (result.stderr().isEmpty() ? "" : result.stderr());
+        return new ExecSupport.ExecOutcome(result.exitCode(), combined);
     }
 
     // -- StatsStreamSupport ---------------------------------------------------

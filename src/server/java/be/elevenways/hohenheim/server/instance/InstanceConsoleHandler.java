@@ -32,10 +32,11 @@ public final class InstanceConsoleHandler implements WebSocketHandler {
     @Override
     public void onOpen() {
         // requiresLogin already refused anonymous handshakes with 401; the per-record
-        // manage capability needs the route param, so it runs here. 1008 = policy.
+        // console capability needs the route param, so it runs here. 1008 = policy.
         Principal principal = this.session.getPrincipal();
         if (principal == null || this.instanceId == null
-                || !HohenheimAccess.canManageInstance(principal, this.instanceId)) {
+                || !HohenheimAccess.hasInstanceCapability(
+                    principal, this.instanceId, HohenheimAccess.CONSOLE)) {
             this.active = false;
             this.session.close(1008, "forbidden");
             return;
@@ -62,12 +63,13 @@ public final class InstanceConsoleHandler implements WebSocketHandler {
         Blast.log("CONSOLE: viewer connected to instance", this.instanceId);
     }
 
-    /** Mid-session re-check of the manage capability (revoked = 1008 by the core). */
+    /** Mid-session re-check of the console capability (revoked = 1008 by the core). */
     @Override
     public boolean revalidate() {
         Principal principal = this.session.getPrincipal();
         return principal != null && this.instanceId != null
-            && HohenheimAccess.canManageInstance(principal, this.instanceId);
+            && HohenheimAccess.hasInstanceCapability(
+                principal, this.instanceId, HohenheimAccess.CONSOLE);
     }
 
     @Override

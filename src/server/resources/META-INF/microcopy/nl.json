@@ -1643,6 +1643,10 @@
     {
       "text": "Framebufferconsole",
       "scope": "instance_framebuffer"
+    },
+    {
+      "text": "Exec",
+      "scope": "instance_exec"
     }
   ],
   "description": [
@@ -1665,6 +1669,10 @@
     {
       "text": "Live VGA-uitvoer van deze VM, opgevangen aan de hypervisorzijde. Werkt voordat de gastagent actief is.",
       "scope": "instance_framebuffer"
+    },
+    {
+      "text": "Voer een opdracht uit in de workload van deze instantie en lees de afsluitcode en uitvoer.",
+      "scope": "instance_exec"
     }
   ],
   "create_site": {
@@ -5828,10 +5836,16 @@
     "text": "Willekeurige images draaien",
     "scope": "capability"
   },
-  "console": {
-    "text": "Console",
-    "scope": "instance"
-  },
+  "console": [
+    {
+      "text": "Console",
+      "scope": "instance"
+    },
+    {
+      "text": "Console",
+      "scope": "capability"
+    }
+  ],
   "console_unsupported": {
     "text": "De runtime van instantie '{$name}' ondersteunt geen consolestreaming",
     "scope": "violations"
@@ -5858,10 +5872,16 @@
       "scope": "help"
     }
   ],
-  "command_placeholder": {
-    "text": "Consolecommando",
-    "scope": "instance_console"
-  },
+  "command_placeholder": [
+    {
+      "text": "Consolecommando",
+      "scope": "instance_console"
+    },
+    {
+      "text": "Uit te voeren opdracht",
+      "scope": "instance_exec"
+    }
+  ],
   "send": {
     "text": "Versturen",
     "scope": "instance_console"
@@ -5878,6 +5898,10 @@
     {
       "text": "VM draait niet",
       "scope": "instance_framebuffer"
+    },
+    {
+      "text": "Niet actief",
+      "scope": "instance_exec"
     }
   ],
   "not_running_description": [
@@ -5892,6 +5916,10 @@
     {
       "text": "Start de VM om de framebufferconsole te openen.",
       "scope": "instance_framebuffer"
+    },
+    {
+      "text": "Start de instantie om er een opdracht in uit te voeren.",
+      "scope": "instance_exec"
     }
   ],
   "runs": {
@@ -5964,10 +5992,16 @@
     "text": "Preview laten vervallen",
     "scope": "schedule_action"
   },
-  "power": {
-    "text": "Stroomactie",
-    "scope": "schedule_action"
-  },
+  "power": [
+    {
+      "text": "Stroomactie",
+      "scope": "schedule_action"
+    },
+    {
+      "text": "Stroom",
+      "scope": "capability"
+    }
+  ],
   "console_line": {
     "text": "Consolecommando",
     "scope": "field"
@@ -7131,5 +7165,43 @@
   "member_kind": {
     "text": "Soort",
     "scope": "project"
+  },
+  "config": {
+    "text": "Configureren",
+    "scope": "capability"
+  },
+  "destroy": {
+    "text": "Vernietigen",
+    "scope": "capability"
+  },
+  "exec": [
+    {
+      "text": "Opdrachten uitvoeren",
+      "scope": "capability"
+    },
+    {
+      "text": "Exec",
+      "scope": "instance"
+    }
+  ],
+  "run": {
+    "text": "Uitvoeren",
+    "scope": "instance_exec"
+  },
+  "exit_code": {
+    "text": "Afsluitcode {$code}",
+    "scope": "instance_exec"
+  },
+  "exec_command_required": {
+    "text": "Geef een uit te voeren opdracht op",
+    "scope": "violations"
+  },
+  "exec_unsupported": {
+    "text": "De runtime van instantie {$name} kan geen opdrachten uitvoeren",
+    "scope": "violations"
+  },
+  "exec_failed": {
+    "text": "Kon de opdracht in {$name} niet uitvoeren: {$reason}",
+    "scope": "violations"
   }
 }

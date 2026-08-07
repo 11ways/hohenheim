@@ -99,11 +99,16 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
         }
     }
 
-    /** The principal-only capability walk (no conduit exists on a channel link). */
+    /**
+     * The principal-only capability walk (no conduit exists on a channel link). Live
+     * stats are OBSERVATION of the tenant's own record, so they ask {@code view} -- the
+     * same capability the page carrying the chart is scoped by.
+     */
     private boolean permitted(int instanceId) {
         WebSocketSession session = this.link.getSession();
         Principal principal = session == null ? null : session.getPrincipal();
-        return principal != null && HohenheimAccess.canManageInstance(principal, instanceId);
+        return principal != null && HohenheimAccess.hasInstanceCapability(
+            principal, instanceId, HohenheimAccess.VIEW);
     }
 
     private static @Nullable Integer parseInstanceId(@Nullable Object openData) {

@@ -40,7 +40,7 @@ public final class ManageInstanceDeviceResource extends InstanceDeviceResource {
             return AccessDecision.allow(QueryPredicate.of(
                 InstanceDeviceModel.INSTANCE_ID.isNotNull()));
         }
-        Set<Integer> managed = HohenheimAccess.instanceIdsWith(ctx, HohenheimAccess.MANAGE);
+        Set<Integer> managed = HohenheimAccess.instanceIdsWith(ctx, HohenheimAccess.VIEW);
         if (managed.isEmpty()) {
             return AccessDecision.allow(QueryPredicate.of(
                 Models.get(InstanceDeviceModel.class).matchNone()));

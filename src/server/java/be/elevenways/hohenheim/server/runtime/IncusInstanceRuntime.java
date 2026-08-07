@@ -48,7 +48,25 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class IncusInstanceRuntime
         implements InstanceRuntime, ConsoleStreamSupport, NativeSnapshotSupport,
-        InstallSupport, AppUpdateSupport, DeviceAttachSupport, RootDiskSizeSupport {
+        InstallSupport, AppUpdateSupport, DeviceAttachSupport, RootDiskSizeSupport,
+        ExecSupport {
+
+    @Override
+    public ExecSupport.@NonNull ExecOutcome runExec(@NonNull InstanceSpec spec,
+                                                    @NonNull List<String> command,
+                                                    long timeoutMs) throws IOException {
+        if (!status(spec.handle()).running()) {
+            throw new IOException("Instance '" + spec.handle() + "' is not running;"
+                + " an exec runs inside the live system");
+        }
+        if (!spec.guestAgent()) {
+            throw new IOException("Instance '" + spec.handle() + "' declares no guest agent"
+                + " (guest_agent=false); its image cannot run an exec");
+        }
+        IncusClient.ExecResult result = this.incus.exec(spec.handle(), command,
+            java.util.Map.of(), timeoutMs);
+        return new ExecSupport.ExecOutcome(result.exitCode(), result.output());
+    }
 
     /** The daemon's name for the one device a workload cannot detach. */
     static final String ROOT_DEVICE = "root";

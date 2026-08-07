@@ -76,7 +76,8 @@ public final class InstanceScheduleStepsPage implements RecordScopedPage<Row> {
         vars.put("runs", runs);
         vars.put("basePath", basePath);
         vars.put("canEdit", HohenheimAccess.isAdmin(accessContext)
-            || HohenheimAccess.canManageInstance(accessContext, instanceId));
+            || HohenheimAccess.hasInstanceCapability(
+                accessContext, instanceId, HohenheimAccess.CONFIG));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-schedule-steps"), vars);
     }

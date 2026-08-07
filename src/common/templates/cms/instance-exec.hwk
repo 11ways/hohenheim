@@ -1,0 +1,54 @@
+{#- Exec tab on an instance: run ONE arbitrary command inside the workload and read
+    its exit code and output. Separate from the console tab on purpose -- the console
+    reaches the workload's own primary process, this starts a new program, and the two
+    answer to different capabilities. -#}
+{% declare title: String %}
+{% declare instanceName: String %}
+{% declare instanceId: Integer %}
+{% declare running: Boolean = false %}
+{% declare execError: String = "" %}
+{% declare execOutput: String = "" %}
+{% declare execExit: String = "" %}
+{% declare returnUrl: String = "" %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+    <section class="cms-resource-list-page">
+        <header class="cms-resource-list-header">
+            <h1>{{ instanceName }}</h1>
+        </header>
+
+        {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+        {% if execError != "" %}
+            <pl-alert variant="destructive">{{ execError }}</pl-alert>
+        {% /if %}
+
+        {% if running %}
+            <pl-card>
+                <pl-card-header>
+                    <pl-card-title>{{ t("title", scope: "instance_exec") }}</pl-card-title>
+                    <pl-card-description>{{ t("description", scope: "instance_exec") }}</pl-card-description>
+                </pl-card-header>
+                <pl-card-content>
+                    <form method="POST">
+                        {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+                        <pl-input name="command" placeholder={% t("command_placeholder", scope: "instance_exec") %}></pl-input>
+                        <pl-button variant="outline" type={% "submit" %}>{{ t("run", scope: "instance_exec") }}</pl-button>
+                    </form>
+                    {% if execExit != "" %}
+                        <p class="instance-exec-exit">{{ t("exit_code", scope: "instance_exec", code: execExit) }}</p>
+                        <pre class="instance-exec-output">{{ execOutput }}</pre>
+                    {% /if %}
+                </pl-card-content>
+            </pl-card>
+        {% else %}
+            <pl-empty-state icon="code">
+                <pl-empty-state-title>{{ t("not_running", scope: "instance_exec") }}</pl-empty-state-title>
+                <pl-empty-state-description>{{ t("not_running_description", scope: "instance_exec") }}</pl-empty-state-description>
+            </pl-empty-state>
+        {% /if %}
+    </section>
+{% /block %}

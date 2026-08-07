@@ -46,7 +46,7 @@ public final class ManageInstanceScheduleResource extends InstanceScheduleResour
         if (HohenheimAccess.isAdmin(ctx)) {
             return AccessDecision.allow(QueryPredicate.of(instanceSchedules));
         }
-        Set<Integer> managed = HohenheimAccess.instanceIdsWith(ctx, HohenheimAccess.MANAGE);
+        Set<Integer> managed = HohenheimAccess.instanceIdsWith(ctx, HohenheimAccess.VIEW);
         if (managed.isEmpty()) {
             return AccessDecision.allow(QueryPredicate.of(
                 Models.get(RecordScheduleModel.class).matchNone()));

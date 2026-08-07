@@ -73,7 +73,8 @@ public final class VmFramebufferHandler implements WebSocketHandler {
     public void onOpen() {
         Principal principal = this.session.getPrincipal();
         if (principal == null || this.instanceId == null
-                || !HohenheimAccess.canManageInstance(principal, this.instanceId)) {
+                || !HohenheimAccess.hasInstanceCapability(
+                    principal, this.instanceId, HohenheimAccess.CONSOLE)) {
             this.session.close(1008, "forbidden");
             return;
         }
@@ -182,12 +183,13 @@ public final class VmFramebufferHandler implements WebSocketHandler {
         return value instanceof Number number ? number.intValue() : 0;
     }
 
-    /** Mid-session re-check of MANAGE; a false return makes core close the socket 1008. */
+    /** Mid-session re-check of CONSOLE; a false return makes core close the socket 1008. */
     @Override
     public boolean revalidate() {
         Principal principal = this.session.getPrincipal();
         return principal != null && this.instanceId != null
-            && HohenheimAccess.canManageInstance(principal, this.instanceId);
+            && HohenheimAccess.hasInstanceCapability(
+                principal, this.instanceId, HohenheimAccess.CONSOLE);
     }
 
     @Override

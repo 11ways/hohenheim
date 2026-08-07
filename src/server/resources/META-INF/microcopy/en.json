@@ -1647,6 +1647,10 @@
     {
       "text": "Framebuffer console",
       "scope": "instance_framebuffer"
+    },
+    {
+      "text": "Exec",
+      "scope": "instance_exec"
     }
   ],
   "description": [
@@ -1669,6 +1673,10 @@
     {
       "text": "Live VGA output of this VM, captured hypervisor-side. Works before the guest agent is up.",
       "scope": "instance_framebuffer"
+    },
+    {
+      "text": "Run one command inside this instance's workload and read its exit code and output.",
+      "scope": "instance_exec"
     }
   ],
   "create_site": {
@@ -5832,10 +5840,16 @@
     "text": "Run arbitrary images",
     "scope": "capability"
   },
-  "console": {
-    "text": "Console",
-    "scope": "instance"
-  },
+  "console": [
+    {
+      "text": "Console",
+      "scope": "instance"
+    },
+    {
+      "text": "Console",
+      "scope": "capability"
+    }
+  ],
   "console_unsupported": {
     "text": "The runtime of instance '{$name}' has no console streaming support",
     "scope": "violations"
@@ -5862,10 +5876,16 @@
       "scope": "help"
     }
   ],
-  "command_placeholder": {
-    "text": "Console command",
-    "scope": "instance_console"
-  },
+  "command_placeholder": [
+    {
+      "text": "Console command",
+      "scope": "instance_console"
+    },
+    {
+      "text": "Command to run",
+      "scope": "instance_exec"
+    }
+  ],
   "send": {
     "text": "Send",
     "scope": "instance_console"
@@ -5882,6 +5902,10 @@
     {
       "text": "VM is not running",
       "scope": "instance_framebuffer"
+    },
+    {
+      "text": "Not running",
+      "scope": "instance_exec"
     }
   ],
   "not_running_description": [
@@ -5896,6 +5920,10 @@
     {
       "text": "Start the VM to open its framebuffer console.",
       "scope": "instance_framebuffer"
+    },
+    {
+      "text": "Start the instance to run a command inside it.",
+      "scope": "instance_exec"
     }
   ],
   "runs": {
@@ -5968,10 +5996,16 @@
     "text": "Expire preview",
     "scope": "schedule_action"
   },
-  "power": {
-    "text": "Power action",
-    "scope": "schedule_action"
-  },
+  "power": [
+    {
+      "text": "Power action",
+      "scope": "schedule_action"
+    },
+    {
+      "text": "Power",
+      "scope": "capability"
+    }
+  ],
   "console_line": {
     "text": "Console command",
     "scope": "field"
@@ -7135,5 +7169,43 @@
   "member_kind": {
     "text": "Kind",
     "scope": "project"
+  },
+  "config": {
+    "text": "Configure",
+    "scope": "capability"
+  },
+  "destroy": {
+    "text": "Destroy",
+    "scope": "capability"
+  },
+  "exec": [
+    {
+      "text": "Run commands",
+      "scope": "capability"
+    },
+    {
+      "text": "Exec",
+      "scope": "instance"
+    }
+  ],
+  "run": {
+    "text": "Run",
+    "scope": "instance_exec"
+  },
+  "exit_code": {
+    "text": "Exit code {$code}",
+    "scope": "instance_exec"
+  },
+  "exec_command_required": {
+    "text": "Enter a command to run",
+    "scope": "violations"
+  },
+  "exec_unsupported": {
+    "text": "The runtime of instance {$name} cannot run commands",
+    "scope": "violations"
+  },
+  "exec_failed": {
+    "text": "Could not run the command inside {$name}: {$reason}",
+    "scope": "violations"
   }
 }
