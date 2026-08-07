@@ -169,7 +169,7 @@ public final class SiteDatabaseNetworks {
             String handle = linkHandle(siteId, databaseId);
             support.ensureLinkNetwork(handle,
                 OwnerLabels.of(SiteDatabaseModel.MODEL_ID, linkId), Egress.NONE);
-            support.connectToLinkNetwork(handle, resolved.spec().handle());
+            support.connectToLinkNetwork(handle, resolved.spec().handle(), List.of());
             if (state == ContainerState.ABSENT) {
                 // Nothing to join yet: the database side is (re)connected by
                 // reattachForDatabase the moment its container is provisioned.
@@ -179,7 +179,7 @@ public final class SiteDatabaseNetworks {
                     "reason", "database_container_absent"));
                 continue;
             }
-            support.connectToLinkNetwork(handle, databaseHandle);
+            support.connectToLinkNetwork(handle, databaseHandle, List.of());
             refreshDatabasePort(resolved.runtime()::status, resolved.serverId(),
                 databaseId, databaseHandle);
         }
@@ -233,8 +233,8 @@ public final class SiteDatabaseNetworks {
                 if (databaseHandle == null) {
                     continue;   // no engine instance: the next provision joins both sides
                 }
-                support.connectToLinkNetwork(handle, databaseHandle);
-                support.connectToLinkNetwork(handle, resolved.spec().handle());
+                support.connectToLinkNetwork(handle, databaseHandle, List.of());
+                support.connectToLinkNetwork(handle, resolved.spec().handle(), List.of());
                 refreshDatabasePort(resolved.runtime()::status, resolved.serverId(),
                     databaseId, databaseHandle);
                 touched = true;

@@ -113,6 +113,14 @@ public final class IncusInstanceRuntime
                 + " mounts declared for '" + spec.handle() + "' (" + spec.tmpfs().keySet()
                 + "); tmpfs mounts are a docker capability");
         }
+        if (spec.healthCheck() != null) {
+            // The honest refusal, same shape: Incus has no in-workload health probe it
+            // runs and reports on, and a declared health gate nobody evaluates always
+            // reports healthy -- which is worse than having no gate at all.
+            throw new IOException("The incus driver cannot run the health check declared"
+                + " for '" + spec.handle() + "'; a runtime-evaluated healthcheck is a"
+                + " docker capability");
+        }
         // The shared isolation ACL, VERIFIED in the daemon, BEFORE any instance is created
         // on it -- an Incus host whose ACL support does not really enforce refuses here,
         // never at the point where a tenant container is already running unisolated.

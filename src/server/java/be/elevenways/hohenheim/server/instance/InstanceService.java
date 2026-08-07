@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.docker.SiteDatabaseNetworks;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostLeases;
+import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.FileStagingSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
@@ -121,6 +122,10 @@ public final class InstanceService {
             // each attached database's link network before it starts, so the health gate
             // probes the candidate WITH its database reachable.
             SiteDatabaseNetworks.attachLinksBeforeStart(resolved, instanceId);
+            // And the third owner of the same seam: a stack service joins its stack's
+            // shared link network under its compose service name, so a sibling that
+            // dials "postgres" resolves it -- and only inside that stack.
+            StackInstances.attachLinksBeforeStart(resolved, instanceId);
             // The console attaches BETWEEN create and start (docker run's own order),
             // so a readiness line printed in the first instant cannot be missed.
             watch = InstanceConsoles.prepare(resolved, instanceId, this.leases);
@@ -138,14 +143,21 @@ public final class InstanceService {
             // fenced write flips it to RUNNING when the line is observed.
             stampGuarded(resolved, fence, watch != null
                 ? watch.initialStatus() : InstanceModel.STATUS_RUNNING);
-            boolean recordAfter = spec.publication() != null
-                && !spec.publication().requiresPreallocation();
-            if (recordAfter && status.publishedPort() != null) {
-                // Record-after ONLY: a pre-allocated claim already exists (written
-                // before create); re-recording it here would rewrite the row without
-                // its mode and turn the stable reservation back into an ephemeral one.
-                PortLedger.recordObserved(resolved.serverId(), BIND_ADDRESS,
-                    status.publishedPort(), "tcp", InstanceModel.MODEL_ID, instanceId, null);
+            for (var publication : spec.publications()) {
+                if (publication.requiresPreallocation()) {
+                    // A pre-allocated claim already exists (written before create);
+                    // re-recording it here would rewrite the row without its mode and
+                    // turn the stable reservation back into an ephemeral one.
+                    continue;
+                }
+                var observed = spec.publications().size() == 1
+                    ? (status.publishedPorts().isEmpty()
+                        ? null : status.publishedPorts().get(0))
+                    : status.publishedFor(publication.containerPort(), publication.protocol());
+                if (observed != null) {
+                    PortLedger.recordObserved(resolved.serverId(), BIND_ADDRESS,
+                        observed.hostPort(), "tcp", InstanceModel.MODEL_ID, instanceId, null);
+                }
             }
             if (watch != null) {
                 InstanceConsoles.arm(watch, instanceId);

@@ -103,6 +103,7 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // standalone at all. One funnel, declared per kind -- see OwnedInstances.
         SiteInstances.install();
         DatabaseInstances.install();
+        be.elevenways.hohenheim.server.stack.StackInstances.install();
         // A generated preview hostname row carries derived attribution: read-only outside
         // the preview system scope, swept by exact attribution, and a hand-authored row
         // with the same hostname is never adopted or deleted.

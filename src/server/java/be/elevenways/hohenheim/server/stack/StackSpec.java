@@ -28,14 +28,20 @@ public record StackSpec(
     @NonNull String name,
     @NonNull String serverName,
     @Nullable String subnet,
-    boolean adoptResources,
     @Nullable String registryServer,
     @Nullable String registryUser,
     @Nullable String registryPassword,
     @NonNull List<ServiceSpec> services) {
 
-    /** One service; {@code dependsOn} conditions gate its start. */
+    /**
+     * One service; {@code dependsOn} conditions gate its start.
+     *
+     * @param serviceId the STACK SERVICE record id -- the row that OWNS this service's
+     *        instance. It rides the snapshot too, because a rollback re-deploys onto the
+     *        same owned instances and an id-less snapshot could not name them.
+     */
     public record ServiceSpec(
+        int serviceId,
         @NonNull String name,
         @NonNull String image,
         @NonNull List<String> command,
@@ -95,7 +101,6 @@ public record StackSpec(
             stack.get(StackModel.NAME),
             ServerModel.nameOf(stack.get(StackModel.SERVER_ID)),
             blankToNull(stack.get(StackModel.SUBNET)),
-            Boolean.TRUE.equals(stack.get(StackModel.ADOPT_RESOURCES)),
             blankToNull(stack.get(StackModel.REGISTRY_SERVER)),
             blankToNull(stack.get(StackModel.REGISTRY_USER)),
             blankToNull(stack.get(StackModel.REGISTRY_PASSWORD)),
@@ -170,6 +175,7 @@ public record StackSpec(
         Map<String, String> environment = serviceRow.get(StackServiceModel.ENVIRONMENT);
 
         return new ServiceSpec(
+            intOr(serviceRow.get(StackServiceModel.ID), 0),
             serviceRow.get(StackServiceModel.NAME),
             serviceRow.get(StackServiceModel.IMAGE),
             command != null ? List.copyOf(command) : List.of(),
@@ -248,7 +254,6 @@ public record StackSpec(
         root.put("name", name);
         root.put("server_name", serverName);
         root.put("subnet", subnet);
-        root.put("adopt_resources", adoptResources);
         root.put("registry_server", registryServer);
         root.put("registry_user", registryUser);
         root.put("registry_password", registryPassword);
@@ -256,6 +261,7 @@ public record StackSpec(
         List<Map<String, Object>> serviceMaps = new ArrayList<>();
         for (ServiceSpec service : services) {
             Map<String, Object> map = new LinkedHashMap<>();
+            map.put("service_id", service.serviceId());
             map.put("name", service.name());
             map.put("image", service.image());
             map.put("command", service.command());
@@ -377,6 +383,7 @@ public record StackSpec(
             }
 
             services.add(new ServiceSpec(
+                intOr(map.get("service_id"), 0),
                 stringOr(map.get("name"), ""),
                 stringOr(map.get("image"), ""),
                 List.copyOf(command),
@@ -398,7 +405,6 @@ public record StackSpec(
             stringOr(root.get("name"), ""),
             stringOr(root.get("server_name"), "local"),
             blankToNull(root.get("subnet")),
-            Boolean.TRUE.equals(root.get("adopt_resources")),
             blankToNull(root.get("registry_server")),
             blankToNull(root.get("registry_user")),
             blankToNull(root.get("registry_password")),

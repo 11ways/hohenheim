@@ -13,7 +13,7 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostProbe;
-import be.elevenways.hohenheim.server.stack.StackDeployer;
+import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.util.PortProbe;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -146,7 +146,7 @@ public final class DockerReconciler {
                 Evidence.OWNER_LABEL, owner, owner.model() + " #" + owner.id());
         }
 
-        if (labels != null && labels.get(StackDeployer.LABEL_STACK) instanceof String stackName
+        if (labels != null && labels.get(StackInstances.LEGACY_LABEL_STACK) instanceof String stackName
             && !stackName.isBlank()) {
             boolean live = records.liveByName(StackModel.MODEL_ID, stackName);
             return new Finding(kind, name, live ? Bucket.OWNED : Bucket.ORPHANED,

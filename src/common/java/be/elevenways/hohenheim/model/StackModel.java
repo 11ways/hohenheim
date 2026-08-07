@@ -12,8 +12,9 @@ import be.elevenways.zenit.common.orm.model.Schema;
  * A managed multi-container Docker stack: one private policied bridge network, named volumes,
  * and an ordered set of services (see {@link StackServiceModel}). The record is the
  * DESIRED state; deploys are explicit (never save-triggered) and live state is read
- * from Docker on demand. Everything the deployer creates carries hohenheim ownership
- * labels; unlabeled same-named resources are refused unless {@code adopt_resources}.
+ * from Docker on demand. Every service IS an owned instance of the
+ * {@code hohenheim:stack_service} kind (see StackInstances); this record owns the shared
+ * link network its services reach each other over.
  */
 public class StackModel extends Model {
 
@@ -62,12 +63,6 @@ public class StackModel extends Model {
         .help(HohenheimFormCopy.help("stack_subnet"))
         .build());
 
-    public static final BooleanField ADOPT_RESOURCES = SCHEMA.addField(BooleanField.builder("adopt_resources")
-        .defaultValue(false)
-        .label(HohenheimFormCopy.label("stack_adopt"))
-        .help(HohenheimFormCopy.help("stack_adopt"))
-        .build());
-
     public static final StringField REGISTRY_SERVER = SCHEMA.addField(StringField.builder().name("registry_server")
         .label(HohenheimFormCopy.label("registry_server"))
         .help(HohenheimFormCopy.help("registry_server"))
@@ -109,21 +104,17 @@ public class StackModel extends Model {
                 row.set(SERVER_ID, ServerModel.localServerId());
             }
         });
-        // A stack save can MOVE the stack to another host; every service's port claims
-        // key on that host, so they are re-synced (and possibly refused) with the save.
-        SCHEMA.addAfterSaveHook(context -> {
-            Row row = context.getRow();
-            Integer stackId = row != null ? row.get(ID) : null;
-            if (stackId != null) {
-                PortLedger.syncStack(stackId);
-            }
-        });
+        // AIDEV-NOTE: a stack save can MOVE the stack to another host, and the port
+        // claims of its services key on that host. Since the tier lowered onto the
+        // instance contract those claims belong to the services' owned INSTANCES and are
+        // re-keyed by the next DEPLOY, which is also the only moment a host move actually
+        // takes effect. Re-syncing them at save time would have written claims for a host
+        // no container runs on yet.
     }
 
     /**
-     * Every stack save is ONE write transaction: the row write and the port-claim
-     * re-sync of its services (afterSave hook) commit or fail together -- the
-     * SiteDomainModel/RouteClaims shape.
+     * Every stack save is ONE write transaction: the row write and whatever a save hook
+     * derives from it commit or fail together -- the SiteDomainModel/RouteClaims shape.
      */
     @Override
     public Row save(Row row) {

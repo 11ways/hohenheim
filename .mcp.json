@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "zenit-dev": {
+      "type": "stdio",
+      "command": "zenit-dev",
+      "args": ["mcp"]
+    }
+  }
+}

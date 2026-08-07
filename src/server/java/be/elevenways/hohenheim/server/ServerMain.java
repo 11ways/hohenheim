@@ -26,6 +26,7 @@ import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
+import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -179,6 +180,11 @@ public class ServerMain {
             // security engine off the wire for it. A monitor tick racing the sweep
             // is safe: both serialize on the per-stack worker.
             JobRunner.startVirtualThread(() -> StackRuntime.get().resetInterruptedDeploys());
+            // The documented migration of the Phase 7 stack lowering: a stack whose
+            // services own no instances is re-deployed under the contract onto its
+            // EXISTING volumes, and its pre-lowering containers are retired one by one
+            // (only where the daemon still attributes them to that stack). Idempotent.
+            JobRunner.startVirtualThread(StackInstances::adoptExisting);
         } else {
             roleSkip(HohenheimRoles.Role.STACKS,
                 "stack runtime not started, interrupted-deploy sweep skipped");

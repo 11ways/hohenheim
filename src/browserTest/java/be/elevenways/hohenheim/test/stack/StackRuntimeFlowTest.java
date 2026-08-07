@@ -6,7 +6,10 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
+import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
@@ -155,10 +158,21 @@ class StackRuntimeFlowTest {
         });
     }
 
-    private String containerRole(String stackName) throws IOException {
-        DockerClient.ExecResult env = docker.exec(ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-app",
+    private String containerRole(int stackId) throws IOException {
+        DockerClient.ExecResult env = docker.exec(appContainer(stackId),
             List.of("sh", "-c", "echo $ROLE"));
         return env.stdout().trim();
+    }
+
+    /** THE daemon-side container name of the stack's "app" service, via its owned instance. */
+    private String appContainer(int stackId) {
+        String[] handle = new String[1];
+        Db.run(datasource, () -> {
+            Row instance = StackInstances.ownedByStack(stackId).values().iterator().next();
+            handle[0] = ControllerScope.handle(ControllerScope.KIND_INSTANCE,
+                instance.get(InstanceModel.ID));
+        });
+        return handle[0];
     }
 
     @Test
@@ -169,7 +183,7 @@ class StackRuntimeFlowTest {
 
         // Deploy from records.
         runtime.deploy(stackId, "test");
-        assertThat(containerRole(stackName)).isEqualTo("one");
+        assertThat(containerRole(stackId)).isEqualTo("one");
 
         Db.run(datasource, () -> {
             Row stack = Models.get(StackModel.class).findById(stackId);
@@ -182,7 +196,7 @@ class StackRuntimeFlowTest {
         });
 
         // The config file (with secret content) landed in the container.
-        DockerClient.ExecResult config = docker.exec(ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-app",
+        DockerClient.ExecResult config = docker.exec(appContainer(stackId),
             List.of("cat", "/etc/hhtest/app.conf"));
         assertThat(config.stdout()).contains("super-secret-token");
 
@@ -204,7 +218,7 @@ class StackRuntimeFlowTest {
         // Change config + redeploy: the container is replaced with the new env.
         setServiceRole(stackId, "two");
         runtime.deploy(stackId, "change");
-        assertThat(containerRole(stackName)).isEqualTo("two");
+        assertThat(containerRole(stackId)).isEqualTo("two");
 
         // Roll back: the PREVIOUS successful snapshot (role=two is newest, so roll
         // back re-deploys the newest successful spec -- which is role=two; to prove
@@ -212,7 +226,7 @@ class StackRuntimeFlowTest {
         // WITHOUT deploying, then roll back and expect two (records ignored).
         setServiceRole(stackId, "three");
         runtime.rollback(stackId);
-        assertThat(containerRole(stackName)).isEqualTo("two");
+        assertThat(containerRole(stackId)).isEqualTo("two");
 
         // Stop: containers halt, status STOPPED.
         runtime.stop(stackId);
@@ -234,7 +248,6 @@ class StackRuntimeFlowTest {
         requireDocker();
         String stackName = "hhflow-purge-" + Long.toHexString(System.nanoTime());
         stackId = createStackRecords(stackName, "one");
-        String container = ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-app";
         String volume = ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-data";
 
         // 1. Give the service a named volume and deploy.
@@ -249,7 +262,7 @@ class StackRuntimeFlowTest {
             services.save(service);
         });
         runtime.deploy(stackId, "with-volume");
-        docker.exec(container, List.of("sh", "-c", "echo marker > /data/marker.txt"));
+        docker.exec(appContainer(stackId), List.of("sh", "-c", "echo marker > /data/marker.txt"));
         assertThat(volumeExists(volume)).as("step 1: the owned volume exists").isTrue();
 
         // 2. Purge: container and volume both go, the stack reads inactive.
@@ -264,7 +277,7 @@ class StackRuntimeFlowTest {
 
         // 3. The next deploy rebuilds from the records, with an EMPTY volume.
         runtime.deploy(stackId, "after-purge");
-        DockerClient.ExecResult listing = docker.exec(container, List.of("ls", "/data"));
+        DockerClient.ExecResult listing = docker.exec(appContainer(stackId), List.of("ls", "/data"));
         assertThat(listing.stdout()).as("step 3: the data did not survive the purge")
             .doesNotContain("marker.txt");
     }
@@ -280,7 +293,7 @@ class StackRuntimeFlowTest {
         requireDocker();
         String stackName = "hhflow-refused-" + Long.toHexString(System.nanoTime());
         stackId = createStackRecords(stackName, "one");
-        String network = ControllerScope.handle(ControllerScope.KIND_STACK, stackName);
+        String network = WorkloadNetworks.networkName(StackInstances.networkHandle(stackName));
 
         // 1. Enforcement off (the pre-enforcement host): the deploy fails BY NAME.
         WorkloadNetworkPolicy.overrideForTest(
@@ -293,10 +306,13 @@ class StackRuntimeFlowTest {
                 refusal = expected;
             }
             assertThat(refusal).as("step 1: the deploy fails").isNotNull();
+            // Since the lowering the FIRST unenforceable thing a deploy touches is the
+            // service's OWN per-workload network, so that is the name in the refusal --
+            // earlier than the shared stack network, which is exactly the right order.
             assertThat(refusal.getMessage())
                 .as("step 1: the refusal names the workload and the cause")
                 .contains("REFUSED to deploy")
-                .contains(network)
+                .contains(WorkloadNetworks.networkName(appContainer(stackId)))
                 .contains("security.nftables_enabled");
 
             // 2. Resulting state: FAILED status, the refusal in the deployment log,
@@ -314,8 +330,7 @@ class StackRuntimeFlowTest {
             });
             assertThat(docker.findNetworkByName(network))
                 .as("step 2: no network was created").isNull();
-            assertThatThrownBy(() -> docker.inspectContainer(
-                ControllerScope.handle(ControllerScope.KIND_STACK, stackName) + "-app"))
+            assertThatThrownBy(() -> docker.inspectContainer(appContainer(stackId)))
                 .as("step 2: no container was created")
                 .isInstanceOf(IOException.class);
         } finally {
@@ -324,7 +339,7 @@ class StackRuntimeFlowTest {
 
         // 3. The recovery: the host gains enforcement and the SAME records deploy.
         runtime.deploy(stackId, "enforced");
-        assertThat(containerRole(stackName)).as("step 3: the stack now runs").isEqualTo("one");
+        assertThat(containerRole(stackId)).as("step 3: the stack now runs").isEqualTo("one");
         assertThat(netns.inHost("nft", "list", "ruleset").stdout())
             .as("step 3: and its kernel chains exist")
             .contains(WorkloadNetworkPolicy.forwardChain(WorkloadNetworkPolicy.chainKey(network)));

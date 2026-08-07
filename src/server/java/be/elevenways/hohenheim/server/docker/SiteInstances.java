@@ -431,7 +431,7 @@ public final class SiteInstances {
             }
             Object port = desired.get("container_port");
             if (!(port instanceof Number number) || number.intValue() <= 0) {
-                return new InstanceStatus(ContainerState.RUNNING, null, null);
+                return new InstanceStatus(ContainerState.RUNNING, null);
             }
             int hostPort = docker.publishedPort(handle, number.intValue());
             return new InstanceStatus(ContainerState.RUNNING, hostPort, "127.0.0.1");

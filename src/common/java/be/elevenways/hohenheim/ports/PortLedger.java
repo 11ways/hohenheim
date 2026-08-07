@@ -427,64 +427,6 @@ public final class PortLedger {
         return held;
     }
 
-    // -- stacks: the first wired consumer ------------------------------------
-
-    /**
-     * Diff-sync one stack service's DECLARED host ports against the ledger: stale claims
-     * released, missing ones claimed, unchanged ones untouched. Runs from the model's
-     * afterSave hook, inside the save's write transaction.
-     *
-     * @throws PortConflict when another owner holds a newly declared port
-     */
-    public static void syncStackService(int serviceId) {
-        Row service = Models.get(StackServiceModel.class).findById(serviceId);
-        if (service == null) {
-            releaseOwner(StackServiceModel.MODEL_ID, serviceId);
-            return;
-        }
-        Integer stackId = service.get(StackServiceModel.STACK_ID);
-        Row stack = stackId != null ? Models.get(StackModel.class).findById(stackId) : null;
-        Integer serverId = stack != null ? stack.get(StackModel.SERVER_ID) : null;
-        int server = serverId != null ? serverId : ServerModel.localServerId();
-
-        Map<String, Row> desired = new LinkedHashMap<>();
-        for (Row port : service.getRecords(StackServiceModel.PORTS)) {
-            Integer host = port.get(StackServiceModel.PORT_HOST);
-            if (host == null) {
-                continue;
-            }
-            desired.putIfAbsent(claimKeyOf(server, port.get(StackServiceModel.PORT_HOST_IP),
-                host, port.get(StackServiceModel.PORT_PROTOCOL)), port);
-        }
-
-        Set<String> held = new HashSet<>();
-        for (Row claim : claimsOf(StackServiceModel.MODEL_ID, serviceId)) {
-            String key = claim.get(PortAllocationModel.CLAIM_KEY);
-            if (desired.containsKey(key)) {
-                held.add(key);
-                if (isReleasing(claim)) {
-                    // Re-declared while parked: the owner wants it again, so it is held.
-                    claim.set(PortAllocationModel.STATUS, PortAllocationModel.STATUS_HELD);
-                    Models.get(PortAllocationModel.class).save(claim);
-                }
-            } else {
-                // An un-declared port is NOT observed free -- the stack may still run its
-                // previous deploy, bound to it. Park it; an observer deletes it.
-                markReleasing(List.of(claim));
-            }
-        }
-        for (Map.Entry<String, Row> entry : desired.entrySet()) {
-            if (held.contains(entry.getKey())) {
-                continue;
-            }
-            Row port = entry.getValue();
-            claim(server, port.get(StackServiceModel.PORT_HOST_IP),
-                port.get(StackServiceModel.PORT_HOST),
-                port.get(StackServiceModel.PORT_PROTOCOL),
-                StackServiceModel.MODEL_ID, serviceId, null);
-        }
-    }
-
     /**
      * A delete carries only CRITERIA -- {@code Model.delete(id)}, a criteria delete and
      * {@code deleteAll} all fire the remove hooks ONCE with a criteria-only context whose
@@ -570,13 +512,6 @@ public final class PortLedger {
             markReleasing(Models.get(PortAllocationModel.class).find()
                 .where(PortAllocationModel.SERVER_ID.in(ids))
                 .all());
-        }
-    }
-
-    /** Re-sync every service of a stack (the server-move path). */
-    public static void syncStack(int stackId) {
-        for (Row service : Models.get(StackServiceModel.class).findByStackId(stackId)) {
-            syncStackService(service.get(StackServiceModel.ID));
         }
     }
 

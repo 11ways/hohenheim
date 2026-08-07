@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.runtime;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -32,9 +33,14 @@ public interface LinkNetworkSupport {
     /**
      * Connect an existing container to the link network; a no-op when already connected,
      * a loud failure when the container does not exist.
+     *
+     * @param aliases extra DNS names this member answers to ON THIS NETWORK ONLY -- the
+     *        compose {@code service} name a sibling dials. Empty for a lane whose members
+     *        already know each other's handles. An alias is scoped to one link network, so
+     *        it can never make a workload resolvable to anything not connected to it.
      */
-    void connectToLinkNetwork(@NonNull String linkHandle, @NonNull String containerHandle)
-            throws IOException;
+    void connectToLinkNetwork(@NonNull String linkHandle, @NonNull String containerHandle,
+                              @NonNull List<String> aliases) throws IOException;
 
     /**
      * Disconnect every member and remove the link network plus its kernel chains;

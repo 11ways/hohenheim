@@ -22,9 +22,8 @@ import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.TenantNetworkRanges;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
-import be.elevenways.hohenheim.server.stack.StackDeployer;
+import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
-import be.elevenways.hohenheim.server.stack.StackSpec;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -177,7 +176,8 @@ class VerifyWorkloadIsolationTest {
                         link.get(SiteDatabaseModel.ID)), Egress.NONE));
                 scratchNetworks.add(WorkloadNetworks.networkName(linkHandle));
 
-                String stackNetwork = StackDeployer.networkName(stackName);
+                String stackNetwork = WorkloadNetworks.networkName(
+                    StackInstances.networkHandle(stackName));
                 String instanceNetwork = WorkloadNetworks.networkName(instanceHandle);
                 String databaseNetwork = WorkloadNetworks.networkName(databaseHandle);
                 String linkNetwork = WorkloadNetworks.networkName(linkHandle);
@@ -224,7 +224,7 @@ class VerifyWorkloadIsolationTest {
                     .as("step 4: nothing needed containment").isEmpty();
                 assertThat(outcome.repaired())
                     .as("step 4: every tier's workload was repaired")
-                    .contains("stack '" + stackName + "'", instanceHandle, databaseHandle,
+                    .contains("link " + StackInstances.networkHandle(stackName), instanceHandle, databaseHandle,
                         "link " + linkHandle);
 
                 // 5. KERNEL truth after the repair: the full deny vocabulary is back
@@ -253,7 +253,7 @@ class VerifyWorkloadIsolationTest {
                     .as("step 6: nothing left to repair on the second tick").isEmpty();
                 assertThat(second.enforced())
                     .as("step 6: every workload reads back enforced")
-                    .contains("stack '" + stackName + "'", instanceHandle, databaseHandle,
+                    .contains("link " + StackInstances.networkHandle(stackName), instanceHandle, databaseHandle,
                         "link " + linkHandle);
 
                 // 7. REAL packets through the repaired chains, on the stack subnet: the
@@ -298,7 +298,7 @@ class VerifyWorkloadIsolationTest {
                 int stackId = stackRecords(stackName);
                 cleanupStack[0] = stackId;
                 io(() -> stacks.deploy(stackId, "containment test"));
-                String container = StackDeployer.containerName(spec(stackId), "app");
+                String container = stackServiceContainer(stackId);
 
                 // 1. Divergence: the stack's chains are gone (the reboot state).
                 io(() -> netns.setup("nft", "delete", "table", "inet", WorkloadNetworkPolicy.table()));
@@ -331,7 +331,7 @@ class VerifyWorkloadIsolationTest {
                 assertThat(unreadable.errors())
                     .as("step 3: the unreadable kernel is reported UNCONFIRMED by name")
                     .anySatisfy(error -> assertThat(error)
-                        .contains("stack '" + stackName + "'")
+                        .contains(StackInstances.networkHandle(stackName))
                         .contains("UNCONFIRMED")
                         .contains("injected read failure"));
                 assertThat(unreadable.contained())
@@ -353,16 +353,22 @@ class VerifyWorkloadIsolationTest {
                     .as("step 4: the refused repair is on the record")
                     .anySatisfy(error -> assertThat(error)
                         .contains("injected write failure"));
+                // Since the Phase 7 lowering there is no bespoke stack containment: the
+                // service's OWN workload network is contained by the INSTANCE lane (which
+                // stops the workload) and the shared stack network is a link, contained
+                // by severing it. Both are named, and the workload really stops.
                 assertThat(contained.contained())
-                    .as("step 4: the stack was contained by name")
-                    .contains("stopped stack '" + stackName + "'");
+                    .as("step 4: the stack service's workload was stopped by name")
+                    .anySatisfy(action -> assertThat(action)
+                        .contains("stopped instance").contains(container));
+                assertThat(contained.contained())
+                    .as("step 4: and the shared stack network was severed by name")
+                    .anySatisfy(action -> assertThat(action)
+                        .contains("severed link network")
+                        .contains(StackInstances.networkHandle(stackName)));
                 assertThat(isRunning(docker, container))
                     .as("step 4: the stack's container is genuinely STOPPED at the daemon")
                     .isFalse();
-                assertThat((String) Models.get(StackModel.class).findById(stackId)
-                    .get(StackModel.STATUS))
-                    .as("step 4: and the record says stopped, not active")
-                    .isEqualTo(StackModel.STATUS_STOPPED);
             });
         } finally {
             WorkloadNetworkPolicy.overrideForTest(netns != null
@@ -392,8 +398,11 @@ class VerifyWorkloadIsolationTest {
         return stack.get(StackModel.ID);
     }
 
-    private static StackSpec spec(int stackId) {
-        return StackSpec.fromRecordsUnordered(Models.get(StackModel.class).findById(stackId));
+    /** THE daemon-side container name of the stack's one service, via its owned instance. */
+    private static String stackServiceContainer(int stackId) {
+        Row instance = StackInstances.ownedByStack(stackId).values().iterator().next();
+        return ControllerScope.handle(ControllerScope.KIND_INSTANCE,
+            instance.get(InstanceModel.ID));
     }
 
     private static int instanceRecord(String name) {

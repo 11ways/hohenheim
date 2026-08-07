@@ -4447,10 +4447,6 @@
     "text": "Deze hostpoort is al geclaimd door {$holder}",
     "scope": "violations"
   },
-  "port_held_race": {
-    "text": "Deze hostpoort werd geclaimd door {$holder} terwijl dit formulier openstond",
-    "scope": "violations"
-  },
   "depends_unknown_service": {
     "text": "Er bestaat geen service met die naam in deze stack",
     "scope": "violations"
@@ -6303,6 +6299,14 @@
   "site_container": {
     "text": "Sitecontainer",
     "scope": "instance_kind"
+  },
+  "stack_service": {
+    "text": "Stackservice",
+    "scope": "instance_kind"
+  },
+  "stack_port_bind_unsupported": {
+    "text": "Service {$service} publiceert op {$address}, dat noch de hele host noch loopback is",
+    "scope": "violations"
   },
   "database_container": {
     "text": "Databasecontainer",

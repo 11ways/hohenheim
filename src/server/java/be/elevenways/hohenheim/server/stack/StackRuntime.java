@@ -4,12 +4,14 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerReclaim;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -22,6 +24,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -102,7 +105,7 @@ public class StackRuntime {
                 if (spec == null) {
                     return;
                 }
-                deployerFor(spec, null).stop(spec);
+                stopServices(spec);
                 setStatus(stackId, StackModel.STATUS_STOPPED);
             } catch (Exception e) {
                 Blast.log("STACK: stop failed for stack", stackId, "-", e.getMessage());
@@ -143,7 +146,7 @@ public class StackRuntime {
             if (spec == null) {
                 throw new IOException("Stack " + stackId + " does not exist");
             }
-            deployerFor(spec, null).stop(spec);
+            stopServices(spec);
             setStatus(stackId, StackModel.STATUS_STOPPED);
             return null;
         });
@@ -169,7 +172,7 @@ public class StackRuntime {
             if (spec == null) {
                 return null;
             }
-            deployerFor(spec, null).destroy(spec, removeVolumes);
+            destroyServices(spec, removeVolumes);
             setStatus(stackId, StackModel.STATUS_INACTIVE);
             return null;
         });
@@ -244,7 +247,7 @@ public class StackRuntime {
             if (spec == null) {
                 throw new IOException("Stack " + stackId + " does not exist");
             }
-            return deployerFor(spec, null).countOwnedContainers(spec);
+            return liveWorkloadCount(spec);
         });
     }
 
@@ -259,7 +262,7 @@ public class StackRuntime {
                     return Map.of();
                 }
                 try {
-                    return deployerFor(spec, null).status(spec);
+                    return serviceStates(spec);
                 } catch (Exception e) {
                     return Map.of();
                 }
@@ -302,7 +305,7 @@ public class StackRuntime {
             // Even a spec with ZERO services runs the live status: the label sweep can
             // still surface orphaned containers of deleted services, and reading such a
             // stack as "inactive" would unlock renaming and orphan them permanently.
-            states = deployerFor(spec, null).status(spec);
+            states = serviceStates(spec);
         } catch (Exception e) {
             Blast.log("STACK: status refresh failed for stack", stackId, "-", e.getMessage());
             return previous != null ? previous : StackModel.STATUS_INACTIVE;
@@ -352,8 +355,7 @@ public class StackRuntime {
             if (spec == null) {
                 throw new IOException("Stack " + stackId + " does not exist");
             }
-            StackDeployer deployer = deployerFor(spec, null);
-            deployer.destroy(spec, true);
+            destroyServices(spec, true);
             setStatus(stackId, StackModel.STATUS_INACTIVE);
             return null;
         });
@@ -489,8 +491,7 @@ public class StackRuntime {
                 throw new IOException("Stack " + stackId + " does not exist");
             }
 
-            StackDeployer deployer = deployerFor(spec, line -> log.append(line).append('\n'));
-            deployer.deploy(spec);
+            runDeployOnWorker(spec, line -> log.append(line).append('\n'));
 
             String specSnapshot = Zenit.DRY.stringify(spec.toMap());
             scoped(() -> {
@@ -517,15 +518,262 @@ public class StackRuntime {
         }
     }
 
+
+    // -- the orchestration half (what did NOT lower) ---------------------------
+
     /**
-     * A deployer whose Docker client AND network-policy applier both target the host
-     * the spec deploys to -- a local applier for a remote daemon would verify rules in
-     * the controller's kernel while the stack runs wide open.
+     * How long a dependency may take to reach its declared condition. Compose semantics,
+     * kept in the PRODUCT tier: an instance answers "is this workload running/healthy",
+     * while "may this workload start yet" is a statement about OTHER records.
      */
-    private @NonNull StackDeployer deployerFor(@NonNull StackSpec spec,
-                                               @Nullable Consumer<String> log) {
-        return new StackDeployer(clientFor.apply(spec.serverName()),
-            WorkloadNetworkPolicy.forServer(spec.serverName()), log);
+    private static final long CONDITION_POLL_MS = 500;
+    private static final long STARTED_WAIT_CAP_MS = 30_000;
+    private static final long HEALTHY_WAIT_BASE_MS = 120_000;
+
+    /**
+     * Deploy every enabled service as an owned instance, in dependency order, gating each
+     * on its declared conditions -- and destroy the workloads of services that left the
+     * records first, so a renamed service's old container cannot hold the host port the
+     * new one is about to claim.
+     */
+    private void runDeployOnWorker(@NonNull StackSpec spec, @NonNull Consumer<String> log)
+            throws IOException {
+        log.accept("Deploying stack '" + spec.name() + "' (" + spec.services().size()
+            + " services)");
+        scoped(() -> {
+            pruneOrphanedWorkloads(spec, log);
+            return null;
+        });
+
+        for (StackSpec.ServiceSpec service : spec.services()) {
+            awaitDependencies(spec, service, log);
+            log.accept("Deploying service '" + service.name() + "' (" + service.image() + ")");
+            IOException failure = scopedThrowing(() -> StackInstances.deploy(spec, service));
+            if (failure != null) {
+                throw failure;
+            }
+            log.accept("Started " + service.name());
+        }
+
+        // Only once every service owns an instance on its own network is the pre-lowering
+        // shared network certainly unused; retiring it earlier would cut a still-running
+        // legacy container off from its siblings.
+        scoped(() -> {
+            StackInstances.retireLegacyNetwork(spec);
+            return null;
+        });
+        log.accept("Stack '" + spec.name() + "' deployed");
+    }
+
+    /**
+     * Destroy the workloads of services this stack no longer declares: disabled ones, and
+     * -- by ATTRIBUTION, across every stack -- ones whose record was deleted, which is the
+     * only evidence left once the row is gone.
+     */
+    private void pruneOrphanedWorkloads(@NonNull StackSpec spec, @NonNull Consumer<String> log) {
+        Set<Integer> wanted = new LinkedHashSet<>();
+        for (StackSpec.ServiceSpec service : spec.services()) {
+            wanted.add(service.serviceId());
+        }
+        for (Row service : Models.get(StackServiceModel.class).findByStackId(spec.stackId())) {
+            Integer serviceId = service.get(StackServiceModel.ID);
+            if (serviceId == null || wanted.contains(serviceId)
+                    || StackInstances.owned(serviceId) == null) {
+                continue;
+            }
+            log.accept("Removing the workload of disabled service '"
+                + service.get(StackServiceModel.NAME) + "'");
+            try {
+                StackInstances.destroyFor(serviceId);
+            } catch (IOException e) {
+                log.accept("Could not remove it: " + e.getMessage());
+            }
+        }
+        for (Row instance : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.GENERATED_FOR_MODEL.eq(StackServiceModel.MODEL_ID.toString()))
+                .where(InstanceModel.DELETED_AT.isNull()).all()) {
+            Integer serviceId = instance.get(InstanceModel.GENERATED_FOR_ID);
+            if (serviceId == null
+                    || Models.get(StackServiceModel.class).findById(serviceId) != null) {
+                continue;
+            }
+            log.accept("Removing the workload of deleted service record " + serviceId);
+            try {
+                StackInstances.destroyFor(serviceId);
+            } catch (IOException e) {
+                log.accept("Could not remove it: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Block until every declared dependency of {@code service} reaches its condition.
+     *
+     * @throws IOException naming the dependency when it turns unhealthy or times out --
+     *         a service whose dependency never came up must not start pretending it did
+     */
+    private void awaitDependencies(@NonNull StackSpec spec, StackSpec.@NonNull ServiceSpec service,
+                                   @NonNull Consumer<String> log) throws IOException {
+        for (StackSpec.DependsSpec dependency : service.dependsOn()) {
+            StackSpec.ServiceSpec target = null;
+            for (StackSpec.ServiceSpec candidate : spec.services()) {
+                if (candidate.name().equals(dependency.service())) {
+                    target = candidate;
+                    break;
+                }
+            }
+            if (target == null) {
+                throw new IOException("Service '" + service.name() + "' depends on unknown"
+                    + " or disabled service '" + dependency.service() + "'");
+            }
+            boolean needHealthy = StackServiceModel.CONDITION_HEALTHY.equals(dependency.condition());
+            if (needHealthy && target.healthCmd() == null) {
+                // A dependency gated on health whose target declares no check would wait
+                // out its whole deadline and then fail: say so immediately, by name.
+                throw new IOException("Service '" + service.name() + "' waits for '"
+                    + dependency.service() + "' to be healthy, but that service declares"
+                    + " no health check");
+            }
+            long deadline = System.currentTimeMillis() + (needHealthy
+                ? HEALTHY_WAIT_BASE_MS + target.healthStartPeriodSeconds() * 1000L
+                : STARTED_WAIT_CAP_MS);
+            log.accept("Waiting for '" + dependency.service() + "' to be "
+                + (needHealthy ? "healthy" : "running"));
+
+            int targetId = target.serviceId();
+            while (true) {
+                InstanceStatus status = scoped(() -> StackInstances.liveStatus(targetId));
+                if (needHealthy
+                    ? status.health() == InstanceStatus.HealthState.HEALTHY
+                    : status.running()) {
+                    break;
+                }
+                if (needHealthy && status.health() == InstanceStatus.HealthState.UNHEALTHY) {
+                    throw new IOException("Dependency '" + dependency.service()
+                        + "' became unhealthy");
+                }
+                if (System.currentTimeMillis() > deadline) {
+                    throw new IOException("Timed out waiting for dependency '"
+                        + dependency.service() + "' to become "
+                        + (needHealthy ? "healthy" : "running") + " (state: "
+                        + stateToken(status) + ")");
+                }
+                try {
+                    Thread.sleep(CONDITION_POLL_MS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Interrupted while waiting for dependency '"
+                        + dependency.service() + "'");
+                }
+            }
+        }
+    }
+
+    /** Stop every service's workload, dependents first (reverse dependency order). */
+    private void stopServices(@NonNull StackSpec spec) throws IOException {
+        List<StackSpec.ServiceSpec> reversed = new ArrayList<>(spec.services());
+        java.util.Collections.reverse(reversed);
+        for (StackSpec.ServiceSpec service : reversed) {
+            IOException failure = scopedThrowing(() -> {
+                StackInstances.stop(service.serviceId());
+                return null;
+            });
+            if (failure != null) {
+                throw failure;
+            }
+        }
+    }
+
+    /**
+     * Verified teardown of the whole stack: every owned workload (services still declared
+     * AND ones whose row was disabled since), then the shared network, then -- only when
+     * asked -- the volumes the stack's name scopes.
+     */
+    private void destroyServices(@NonNull StackSpec spec, boolean removeVolumes)
+            throws IOException {
+        List<StackSpec.ServiceSpec> reversed = new ArrayList<>(spec.services());
+        java.util.Collections.reverse(reversed);
+        Set<Integer> destroyed = new LinkedHashSet<>();
+        for (StackSpec.ServiceSpec service : reversed) {
+            IOException failure = scopedThrowing(() -> {
+                StackInstances.destroyFor(service.serviceId());
+                return null;
+            });
+            if (failure != null) {
+                throw failure;
+            }
+            destroyed.add(service.serviceId());
+        }
+        // Services disabled or removed since the last deploy still own a workload; "destroy
+        // the stack" must mean the whole stack, not just what the current spec declares.
+        for (Map.Entry<Integer, Row> owned : scoped(() ->
+                StackInstances.ownedByStack(spec.stackId())).entrySet()) {
+            if (destroyed.contains(owned.getKey())) {
+                continue;
+            }
+            IOException failure = scopedThrowing(() -> {
+                StackInstances.destroyFor(owned.getKey());
+                return null;
+            });
+            if (failure != null) {
+                throw failure;
+            }
+        }
+        StackInstances.removeNetwork(spec.serverName(), spec.name());
+        if (removeVolumes) {
+            StackInstances.removeOwnedVolumes(spec.serverName(), spec.name());
+        }
+    }
+
+    /** How many of the stack's owned workloads the daemon reports as present. */
+    private int liveWorkloadCount(@NonNull StackSpec spec) {
+        int live = 0;
+        for (Integer serviceId : scoped(() ->
+                StackInstances.ownedByStack(spec.stackId())).keySet()) {
+            ContainerState state = scoped(() -> StackInstances.liveStatus(serviceId)).state();
+            if (state != ContainerState.ABSENT) {
+                live++;
+            }
+        }
+        return live;
+    }
+
+    /**
+     * Live per-service state, best-effort. Services whose record was disabled but whose
+     * workload still exists are reported too, keyed by service id with state "orphaned":
+     * records and reality disagree, and the operator must see that as degraded, not
+     * active (which would also unlock renaming and orphan the workload for good).
+     */
+    private @NonNull Map<String, String> serviceStates(@NonNull StackSpec spec) {
+        Map<String, String> states = new LinkedHashMap<>();
+        Set<Integer> declared = new LinkedHashSet<>();
+        for (StackSpec.ServiceSpec service : spec.services()) {
+            declared.add(service.serviceId());
+            states.put(service.name(),
+                stateToken(scoped(() -> StackInstances.liveStatus(service.serviceId()))));
+        }
+        for (Map.Entry<Integer, Row> owned : scoped(() ->
+                StackInstances.ownedByStack(spec.stackId())).entrySet()) {
+            if (!declared.contains(owned.getKey())) {
+                states.put(String.valueOf(owned.getValue().get(InstanceModel.NAME)), "orphaned");
+            }
+        }
+        return states;
+    }
+
+    /** The UI's state vocabulary, from the typed status the driver reports. */
+    private static @NonNull String stateToken(@NonNull InstanceStatus status) {
+        return switch (status.state()) {
+            case ABSENT -> "missing";
+            case UNREACHABLE -> "unreachable";
+            case STOPPED -> "stopped";
+            case RUNNING -> switch (status.health()) {
+                case HEALTHY -> "healthy";
+                case UNHEALTHY -> "unhealthy";
+                case STARTING -> "starting";
+                case NONE -> "running";
+            };
+        };
     }
 
     private @Nullable StackSpec currentSpec(int stackId) {
@@ -582,6 +830,27 @@ public class StackRuntime {
         // ever-touched stack id must cost next to nothing.
         return workers.computeIfAbsent(stackId, id -> Executors.newSingleThreadExecutor(
             Thread.ofVirtual().name("stack-" + id).factory()));
+    }
+
+    /** A scoped body that may fail the way the daemon work it wraps fails. */
+    @FunctionalInterface
+    private interface ThrowingWork<T> {
+        T run() throws IOException;
+    }
+
+    /**
+     * Run daemon work inside the datasource scope and hand back its failure instead of
+     * throwing through {@link #scoped}, whose Db.run body cannot carry a checked exception.
+     */
+    private <T> @Nullable IOException scopedThrowing(@NonNull ThrowingWork<T> body) {
+        return scoped(() -> {
+            try {
+                body.run();
+                return null;
+            } catch (IOException failure) {
+                return failure;
+            }
+        });
     }
 
     /** Run model access on the injected datasource when one is set (tests). */

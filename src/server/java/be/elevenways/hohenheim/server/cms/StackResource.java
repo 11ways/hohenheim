@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.docker.DockerReclaim;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
@@ -58,7 +57,6 @@ public class StackResource extends RowResource {
         .add(StackModel.ENABLED)
         .add(RelationPick.of(StackModel.SERVER_ID, ServerModel.MODEL_ID).build())
         .add(StackModel.SUBNET)
-        .add(StackModel.ADOPT_RESOURCES)
         .add(StackModel.REGISTRY_SERVER)
         .add(StackModel.REGISTRY_USER)
         .add(StackModel.REGISTRY_PASSWORD)
@@ -110,13 +108,11 @@ public class StackResource extends RowResource {
                           @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, existing);
-        try {
-            super.updateRow(existing, values, accessContext);
-        } catch (PortLedger.PortConflict conflict) {
-            // Moving the stack to another host re-keys every service's port claims;
-            // a contested port on the new host refuses the move, transactionally.
-            throw StackServiceResource.asViolation(conflict);
-        }
+        // AIDEV-NOTE: moving a stack to another host no longer re-keys port claims at
+        // SAVE time -- since the tier lowered, the claims belong to each service's owned
+        // instance and are re-keyed by the next DEPLOY on the new host, which is the only
+        // moment the move is real. A contested port there is a named deploy refusal.
+        super.updateRow(existing, values, accessContext);
     }
 
     /** Names become Docker resource names: enforce the safe shape and uniqueness.
@@ -217,6 +213,10 @@ public class StackResource extends RowResource {
             try {
                 StackRuntime.get().destroy(stackId, false);
             } catch (IOException e) {
+                // The operator sees a stable refusal; the REASON goes to the log, because
+                // "stack_destroy_failed" alone is a bare refusal nobody can act on.
+                be.elevenways.protoblast.common.Blast.log("STACK: delete of stack", stackId,
+                    "refused -- the runtime teardown failed:", e.getMessage());
                 throw Violations.ofForm(CmsSupport.violationText("stack_destroy_failed"));
             }
             // No FK cascades on these tables: files hang off the services and deployment
