@@ -4482,6 +4482,94 @@ records AND labelled them as the same record -- which is why
   but nothing reaps a departed controller's shared objects; a reaper needs a way to
   tell "gone" from "temporarily unreachable", which is a decision, not a patch.
 
+  SUPERSEDED 2026-08-07 (controller-presence wave): CLOSED. The decision is
+  recorded in the STATUS block below.
+
+STATUS (2026-08-07, controller-presence wave): the per-controller SHARED-object
+leak the controller-namespace wave left open is CLOSED, and the decision it was
+waiting on is made.
+
+THE DECISION -- how a controller tells "gone" from "temporarily quiet". Two
+controllers sharing an Incus daemon share nothing else: not a database, not a
+clock, not a network path. So zenit's `Leases` is the right SHAPE (owner token,
+expiry, heartbeat) but the wrong STORE -- its store is our own control-plane
+database, which is exactly the thing the two parties do not share. The liveness
+signal therefore lives ON THE DAEMON: `ControllerPresence` writes a rule-less
+network ACL `hohenheim-<token>-presence` whose `user.hohenheim.seen` config key
+carries the instant its owner was last alive there. Every peer can read it; only
+its owner writes it. It is a SEPARATE object and not a config key on the
+isolation ACL because an ACL update retriggers a device update on every NIC
+referencing it -- heartbeating into it would put the hazard `ensureIsolationAcl`
+writes conditionally to avoid on a timer.
+
+REJECTED, and why: (a) `Leases` as-is -- wrong store, see above; (b) reaping on
+`used_by` emptiness plus age -- an alive-but-idle controller's ACL is
+indistinguishable from a departed one's by that test, which is precisely the
+dangerous case; (c) extending `DockerReconciler` -- it addresses Docker daemons
+only and never an Incus host, and its report-only property is a deliberate
+safety decision that must not change as a side effect of another tier's cleanup.
+
+THE AUTHORITY: `IncusReaper` is new, and copies `OrphanActions`' discipline
+rather than the reconciler's scope -- classify freely, remove narrowly, re-verify
+live truth at the daemon before every removal. Three independent facts must ALL
+agree before anything goes, and each alone would refuse: the object carries
+ANOTHER controller's token; its `used_by` is empty on a read taken at REMOVAL
+time; and its controller left a stamp that has since expired. NO STAMP IS NEVER
+REAPED automatically -- absent evidence is not evidence of absence, which is what
+protects a peer running an older build and what leaves the pre-namespace
+`hohenheim-isolation` alone for ever. `used_by` is the structural guarantee, not
+an advisory one: the daemon itself answers "Cannot delete an ACL that is in use"
+(verified against Incus 7.3.0), so a live controller with workloads cannot lose
+its ACL even to a buggy reaper.
+
+Found by its own test and fixed: a presence marker was itself reapable while its
+controller's other objects survived -- reaping THE EVIDENCE those objects are
+judged by, which would have left them unattributable for ever. The marker is now
+the last thing to go (`Verdict.EVIDENCE`).
+
+- MECHANISM: `server/incus/ControllerPresence` (stamp + read),
+  `server/incus/IncusReaper` (pure `plan`, re-verifying `reap`),
+  `ControllerScope.parseShared`/`parseShortScoped` (the parse counterparts
+  `scoped`/`shortScoped` never had -- `parse` cannot read a shared name and
+  answering null for one reads as "not a hohenheim name at all").
+- SWEEP: `ReapIncusControllers`, every 15 minutes plus boot, over EVERY
+  inventoried Incus host and not only hosts carrying running instances -- an idle
+  controller is exactly the one whose stamp must not lapse. It stamps BEFORE it
+  judges. Settings `hohenheim.incus.reap_departed_controllers` (default on) and
+  `hohenheim.incus.controller_presence_grace_hours` (default 168).
+- OPERATOR: `ServerResource` row action `reap_controller_objects` (confirmed,
+  destructive, Incus hosts only) is the ONLY lane that also takes UNSTAMPED
+  objects. A timer may act on proof; a human looking at one named host may act on
+  judgement. Removals are recorded on the host record's activity log.
+- PREVIEW: every candidate is logged with verdict and reason on every sweep, and
+  the default grace is a week, so an object is named in ~672 reports before it is
+  ever eligible.
+- MEASURED: daystrom carried 72 ACLs and 10 hohenheim bridges before this wave
+  (nightstrom 9 ACLs, 0 bridges) -- the phenomenon, hand-cleaned twice.
+- OPEN, stated as open: the legacy pile is UNSTAMPED by construction, so the
+  automatic sweep will never clear it; the operator action is its only lever.
+  `ReapIncusControllers.reapIncludingUnstamped` (the thin host-wide wiring behind
+  that action) is proven only through the mechanism it delegates to -- the live
+  test scopes its reap to its own handles on purpose, because the host-wide call
+  deletes the unreferenced shared objects of every OTHER live test class sharing
+  the daemon under four parallel forks.
+
+STATUS (2026-08-07, database-footprint wave): `BinaryBackupTest`'s intermittent
+`MongoNetworkError: connect ECONNREFUSED` under the four-fork lane is CLOSED, and
+it was a PRODUCT defect, not a test artifact. `DatabaseContainerKind` declared a
+flat 512 MB footprint for all four engines on the READ claim that
+"Postgres/MySQL/Mongo under load sit in that range". Measured 2026-08-07 under
+the product's own shape, that claim is false: mysql peaks at 620 MiB and mongo at
+531 MiB, so at a 512 MB cap both spend their whole startup pinned against the
+ceiling (memory.max fired 698 and 421 times) and survive only while host reclaim
+keeps up. Under four parallel forks reclaim stalls, the cgroup OOM killer takes
+mongod -- a CHILD of the entrypoint, so the container stays up and status stays
+healthy -- and the next connection is refused. Because charge == cap, the fix is
+the declared footprint: it is now per-ENGINE, declared on `ManagedDatabase.Engine`
+beside `defaultImage`/`port`/`dataPath`, mysql and mongo at 768. Redis (9 MiB)
+and postgres (72 MiB) KEEP 512: an idle measurement can prove a cap too small,
+never justify lowering one that must also survive query load.
+
 STATUS (2026-08-07, trust-state-machine wave): the two coupled host-trust defects
 the Proxmox-use inventory left open are CLOSED. Both were instances of "a step
 does less than it claims and reports success".

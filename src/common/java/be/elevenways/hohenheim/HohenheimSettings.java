@@ -760,6 +760,37 @@ public class HohenheimSettings {
             .build();
     }
 
+    // --- Incus daemons shared with other controllers ---
+    public abstract class Incus {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("incus")
+            .label("Incus hosts")
+            .describe("What this controller may do to the shared objects OTHER hohenheim "
+                + "controllers left on an Incus daemon it also uses")
+            .icon("server");
+
+        public static final SettingDefinition<Boolean> REAP_DEPARTED_CONTROLLERS = GROUP
+            .buildSetting("reap_departed_controllers", Boolean.class)
+            .defaultValue(true)
+            .label("Reap departed controllers' shared objects")
+            .description("Remove the isolation ACL, extra-NIC bridge and presence marker "
+                + "of a controller that left a presence stamp on this daemon, has not "
+                + "refreshed it for the grace period, and has nothing referencing those "
+                + "objects. Objects with NO presence stamp are never removed by this, "
+                + "whatever their age. Off makes every sweep report-only")
+            .build();
+
+        public static final SettingDefinition<Integer> CONTROLLER_PRESENCE_GRACE_HOURS = GROUP
+            .buildSetting("controller_presence_grace_hours", Integer.class)
+            .defaultValue(168)
+            .label("Controller presence grace (hours)")
+            .description("How long another controller's presence stamp may go unrefreshed "
+                + "before its unreferenced shared objects count as abandoned. A live "
+                + "controller refreshes its stamp every 30 minutes, so this is also how "
+                + "many consecutive refresh failures it may survive. 0 or less disables "
+                + "reaping entirely -- expiry can then never be proven")
+            .build();
+    }
+
     // --- Instance networking (public game-port pre-allocation) ---
     public abstract class Instances {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("instances")

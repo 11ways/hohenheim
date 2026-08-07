@@ -49,6 +49,15 @@ public final class ControllerScope {
         }
     }
 
+    /** A parsed per-controller SHARED name: the {@link #scoped}/{@link #shortScoped} shape. */
+    public record SharedScoped(@NonNull String token, @NonNull String suffix) {
+
+        /** @return whether this name was minted by THIS controller */
+        public boolean isOurs() {
+            return this.token.equals(ControllerIdentity.token());
+        }
+    }
+
     private ControllerScope() {
     }
 
@@ -108,6 +117,50 @@ public final class ControllerScope {
             }
         }
         return true;
+    }
+
+    /**
+     * Parse a per-controller SHARED name minted by {@link #scoped} back into its parts.
+     *
+     * AIDEV-NOTE: {@link #parse} deliberately cannot read these. It demands a kind AND a
+     * discriminator ({@code hohenheim-<token>-<kind>-<rest>}), which a shared object does
+     * not have -- it is one object per controller, so there is nothing to discriminate.
+     * Feeding {@code hohenheim-<token>-isolation} to parse() answers null, and a reaper
+     * that read that as "not ours" would be reading it as "not a hohenheim name at all".
+     *
+     * @return null when the name is not {@code hohenheim-<token>-<suffix>} shaped -- a
+     *         pre-namespace name like {@code hohenheim-isolation} included, because that
+     *         one is attributable to NO controller
+     */
+    public static @Nullable SharedScoped parseShared(@NonNull String name) {
+        String prefix = PREFIX + "-";
+        if (!name.startsWith(prefix)) {
+            return null;
+        }
+        String rest = name.substring(prefix.length());
+        int tokenEnd = rest.indexOf('-');
+        if (tokenEnd < 0 || tokenEnd == rest.length() - 1) {
+            return null;
+        }
+        String token = rest.substring(0, tokenEnd);
+        return isTokenShaped(token)
+            ? new SharedScoped(token, rest.substring(tokenEnd + 1)) : null;
+    }
+
+    /**
+     * Parse a length-capped name minted by {@link #shortScoped}.
+     *
+     * @param prefix the same short product marker the name was minted with
+     * @return null when the name is not {@code prefix-<token>} shaped
+     */
+    public static @Nullable SharedScoped parseShortScoped(@NonNull String prefix,
+                                                          @NonNull String name) {
+        String head = prefix + "-";
+        if (!name.startsWith(head)) {
+            return null;
+        }
+        String token = name.substring(head.length());
+        return isTokenShaped(token) ? new SharedScoped(token, prefix) : null;
     }
 
     /**

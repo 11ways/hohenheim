@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.incus.IncusReaper;
+import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
@@ -501,7 +503,44 @@ public final class ServerResource extends RowResource {
         actions.add(this.cordonAction());
         actions.add(this.drainAction());
         actions.add(this.uncordonAction());
+        actions.add(this.reapControllerObjectsAction());
         return actions;
+    }
+
+    /**
+     * THE deliberate half of the shared-object reaper: remove what other controllers left
+     * on this Incus daemon, INCLUDING the objects whose controller never left a presence
+     * stamp -- which the scheduled sweep refuses on principle, because absent evidence is
+     * not evidence of absence.
+     *
+     * AIDEV-NOTE: this is the {@code OrphanActions} bargain, not a shortcut around the
+     * sweep's caution. The sweep may only act on proof (a stamp that expired); an operator
+     * looking at one named host may also act on judgement. What neither can do is take an
+     * object something references -- {@code IncusReaper.reap} re-reads {@code used_by} at
+     * removal time and the daemon refuses it a second time on its own.
+     */
+    private @NonNull RowAction<Row> reapControllerObjectsAction() {
+        return RowAction.Invoke.<Row>builder(
+                Identifier.of("hohenheim", "reap_controller_objects"))
+            .label(serverCopy("reap_controller_objects"))
+            .icon(Icon.of("broom"))
+            .style(ActionStyle.DESTRUCTIVE)
+            .confirmation(ConfirmationSpec.builder()
+                .title(serverCopy("reap_controller_objects"))
+                .body(serverCopy("reap_controller_objects_confirm"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .build())
+            .visibleFor((row, ctx) -> ServerModel.isIncus(row))
+            .handler((row, ctx) -> {
+                IncusReaper.Reaped[] reaped = new IncusReaper.Reaped[1];
+                ActivityLog.withAction(ActivityLog.ACTION_DELETE, "reap_controller_objects",
+                    () -> reaped[0] = ReapIncusControllers.reapIncludingUnstamped(row));
+                return CmsActionResult.refreshWithToast(serverCopy("controller_objects_reaped")
+                    .withArg("name", row.get(ServerModel.NAME))
+                    .withArg("removed", reaped[0].removed().size())
+                    .withArg("refused", reaped[0].refused().size()));
+            })
+            .build();
     }
 
     private static @NonNull Microcopy serverCopy(@NonNull String key) {

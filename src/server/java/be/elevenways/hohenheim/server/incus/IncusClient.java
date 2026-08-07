@@ -464,6 +464,13 @@ public class IncusClient {
         }
     }
 
+    /** All network ACLs (recursed), for callers that SCAN the daemon rather than name one. */
+    @SuppressWarnings("unchecked")
+    public @NonNull List<Map<String, Object>> networkAcls() throws IOException {
+        return (List<Map<String, Object>>) (List<?>) listOf(
+            syncPayload("GET", "/1.0/network-acls?recursion=1", null, DEFAULT_TIMEOUT_MS));
+    }
+
     /** Create a network ACL (sync; {@code POST /1.0/network-acls}). */
     public void createNetworkAcl(@NonNull Map<String, Object> definition) throws IOException {
         syncPayload("POST", "/1.0/network-acls", Json.stringify(definition), DEFAULT_TIMEOUT_MS);

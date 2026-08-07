@@ -7085,5 +7085,17 @@
   "device_attach_incomplete": {
     "text": "Het apparaat is niet aangekoppeld en er is geen rij bewaard",
     "scope": "violations"
+  },
+  "reap_controller_objects": {
+    "text": "Objecten van andere controllers opruimen",
+    "scope": "server"
+  },
+  "reap_controller_objects_confirm": {
+    "text": "Verwijdert de isolatie-ACL, de extra-NIC-brug en de aanwezigheidsmarkering die ANDERE hohenheim-controllers op deze Incus-daemon achterlieten -- ook objecten waarvan de controller helemaal geen aanwezigheidsmarkering achterliet, die de geplande veegbeurt nooit aanraakt. Objecten van deze controller zijn nooit kandidaat, en de daemon zelf weigert een object te verwijderen waar nog een werklast naar verwijst.",
+    "scope": "server"
+  },
+  "controller_objects_reaped": {
+    "text": "{$name}: {$removed} gedeeld(e) object(en) van vertrokken controllers verwijderd, {$refused} geweigerd",
+    "scope": "server"
   }
 }
