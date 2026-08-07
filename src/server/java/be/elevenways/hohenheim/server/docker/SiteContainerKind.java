@@ -180,7 +180,7 @@ public final class SiteContainerKind implements InstanceKindHandler {
 
         return new InstanceSpec(handle, imageRef, cmd,
             EnvVars.toMap(settings.get("environment_variables")), volumes,
-            publication, ResourceLimits.fromSettings(settings, defaultFootprintMb()),
+            publication, ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
             HARDENING, OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
     }
 
@@ -190,7 +190,7 @@ public final class SiteContainerKind implements InstanceKindHandler {
      * authorization, and a host full of sites is full for tenants too.
      */
     @Override
-    public int defaultFootprintMb() {
+    public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
         return 512;
     }
 

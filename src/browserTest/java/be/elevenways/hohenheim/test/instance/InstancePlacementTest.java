@@ -466,8 +466,8 @@ class InstancePlacementTest {
         }
 
         @Override
-        public int defaultFootprintMb() {
-            return this.delegate.defaultFootprintMb();
+        public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
+            return this.delegate.defaultFootprintMb(settings);
         }
 
         @Override

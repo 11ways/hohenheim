@@ -192,13 +192,13 @@ public final class DockerContainerKind implements InstanceKindHandler {
         return new InstanceSpec(handle, imageRef, cmd,
             EnvVars.toMap(settings.get("environment_variables")), volumes,
             publicationOf(settings),
-            ResourceLimits.fromSettings(settings, defaultFootprintMb()), HARDENING,
+            ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)), HARDENING,
             OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
     }
 
     /** An application container: its own userland and heap, nothing underneath it. */
     @Override
-    public int defaultFootprintMb() {
+    public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
         return 512;
     }
 

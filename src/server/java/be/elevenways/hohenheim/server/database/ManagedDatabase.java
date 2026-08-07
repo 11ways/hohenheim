@@ -38,21 +38,59 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public class ManagedDatabase {
 
-    /** Supported engines with their default image, port, data path, and env mapping. */
+    /** Supported engines with their default image, port, data path, footprint, and env mapping. */
     public enum Engine {
-        POSTGRES("postgres:17-alpine", 5432, "/var/lib/postgresql/data"),
-        MYSQL("mysql:8.0", 3306, "/var/lib/mysql"),
-        REDIS("redis:7-alpine", 6379, "/data"),
-        MONGO("mongo:7", 27017, "/data/db");
+        POSTGRES("postgres:17-alpine", 5432, "/var/lib/postgresql/data", 512),
+        MYSQL("mysql:8.0", 3306, "/var/lib/mysql", 768),
+        REDIS("redis:7-alpine", 6379, "/data", 512),
+        MONGO("mongo:7", 27017, "/data/db", 768);
 
         final String defaultImage;
         final int port;
         final String dataPath;
+        final int footprintMb;
 
-        Engine(String defaultImage, int port, String dataPath) {
+        Engine(String defaultImage, int port, String dataPath, int footprintMb) {
             this.defaultImage = defaultImage;
             this.port = port;
             this.dataPath = dataPath;
+            this.footprintMb = footprintMb;
+        }
+
+        /**
+         * This engine's DECLARED memory footprint (MB): both what the capacity ledger
+         * books and, because charge == cap, the cgroup ceiling the daemon applies when
+         * the operator declares no {@code memory_limit_mb}.
+         *
+         * Measured 2026-08-07 against the real Docker daemon under the product's exact
+         * shape (image, tmpfs data path, the cap applied, the product's own readiness
+         * probe polling from inside the same cgroup): peak cgroup usage was redis 9 MiB,
+         * postgres 72 MiB, mysql 620 MiB, mongo 531 MiB. At a 512 MB cap mysql and mongo
+         * never got their peak: they sat pinned against the ceiling for the whole of
+         * init (memory.events "max" fired 698 and 421 times) and survived only while
+         * host reclaim kept up -- under parallel forks it did not, the cgroup OOM killer
+         * took mongod (a child of the entrypoint, so the container stayed up) and the
+         * next connection got ECONNREFUSED.
+         *
+         * AIDEV-NOTE: THE RULE these numbers follow. A measured startup+idle peak can
+         * PROVE a cap is too small -- raising it is then proven-necessary. It can never
+         * justify LOWERING a cap that must also survive QUERY load, which no startup
+         * measurement observes. So redis (9 MiB) and postgres (72 MiB) keep their 512
+         * despite measuring far below it, while mysql and mongo go to 768. These are
+         * measurements with a date, not assumptions; an operator who knows better has
+         * the {@code memory_limit_mb} setting as the escape hatch.
+         */
+        public int footprintMb() {
+            return this.footprintMb;
+        }
+
+        /** The largest footprint any engine declares: what an UNRECOGNISED engine books. */
+        public static int maxFootprintMb() {
+            int max = 0;
+            for (Engine engine : values()) {
+                max = Math.max(max, engine.footprintMb);
+            }
+            return max;
         }
 
         /** The lowercase token this engine is stored as ({@link DatabaseModel#ENGINE}). */

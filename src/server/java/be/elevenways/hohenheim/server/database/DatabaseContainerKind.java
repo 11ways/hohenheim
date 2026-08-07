@@ -167,21 +167,31 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
 
         return new InstanceSpec(handle, image, cmd,
             EnvVars.toMap(settings.get("environment_variables")), volumes,
-            publication, ResourceLimits.fromSettings(settings, defaultFootprintMb()),
+            publication, ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
             engine.hardening(), OwnerLabels.of(InstanceModel.MODEL_ID, instanceId),
             null, null, be.elevenways.hohenheim.server.runtime.ImageOrigin.CATALOG,
             false, true, tmpfs);
     }
 
     /**
-     * A database engine's admitted memory. Deliberately the same 512 MB a site release
-     * books: Postgres/MySQL/Mongo under load sit in that range, and charge == cap means
-     * the number is also the cgroup limit the engine actually gets when the operator
-     * declares none.
+     * A database engine's admitted memory, PER ENGINE
+     * ({@link ManagedDatabase.Engine#footprintMb()}, which carries the measurements and
+     * the rule behind them) -- charge == cap, so this is also the cgroup ceiling the
+     * engine actually gets when the operator declares no {@code memory_limit_mb}.
+     *
+     * AIDEV-NOTE: this deliberately does NOT go through {@link #engineOf}, which throws
+     * Violations on an unknown token. {@code InstanceCapacity} calls this from a write
+     * hook where a throw would refuse the write outright, so an unrecognised engine books
+     * the LARGEST declared footprint instead: over-booking costs a little host budget,
+     * under-booking hands a workload a cgroup ceiling below its own startup peak.
      */
     @Override
-    public int defaultFootprintMb() {
-        return 512;
+    public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
+        try {
+            return engineOf(settings).footprintMb();
+        } catch (Violations unknownEngine) {
+            return ManagedDatabase.Engine.maxFootprintMb();
+        }
     }
 
     /**
