@@ -74,6 +74,20 @@ public final class LiveIncusHost {
      */
     private final List<String> installedKeys = new ArrayList<>();
 
+    /**
+     * Every client certificate this fixture enrolled on the daemon, for the same reason
+     * {@link #installedKeys} exists.
+     *
+     * AIDEV-NOTE: an enrolled certificate is a WORKING ADMIN CREDENTIAL on a real daemon,
+     * and the obvious shape leaks it. Callers used to hold the fingerprint in a static
+     * field assigned by the RETURN of {@link #enrollThroughProduct} -- so an enrollment
+     * that aborted anywhere after the trust step (a preflight assumption, a network blip)
+     * never assigned it and the teardown removed nothing. Observed 2026-08-07: two stale
+     * {@code hohenheim-live-liveness} certificates on daystrom from two aborted runs.
+     * Tracking it HERE makes {@link #releaseTrustEntries} unconditionally correct.
+     */
+    private final List<String> enrolledCertificates = new ArrayList<>();
+
     private LiveIncusHost(String url, String fingerprint, String trustTarget) {
         this.url = url;
         this.fingerprint = fingerprint;
@@ -185,6 +199,30 @@ public final class LiveIncusHost {
     }
 
     /**
+     * Give back every client certificate this fixture enrolled, however the run ended.
+     *
+     * @return one printable outcome per certificate, or "nothing enrolled"
+     */
+    public String releaseTrustEntries() {
+        if (this.enrolledCertificates.isEmpty()) {
+            return "nothing enrolled";
+        }
+        List<String> outcomes = new ArrayList<>();
+        for (String fingerprint : this.enrolledCertificates) {
+            String shortForm = fingerprint.length() > 12
+                ? fingerprint.substring(0, 12) : fingerprint;
+            try {
+                removeTrustEntry(fingerprint);
+                outcomes.add(shortForm + " -> removed");
+            } catch (IOException failed) {
+                outcomes.add(shortForm + " -> NOT removed: " + failed.getMessage());
+            }
+        }
+        this.enrolledCertificates.clear();
+        return String.join(", ", outcomes);
+    }
+
+    /**
      * The FULL product enrollment ceremony for a host that will accept TENANT workloads:
      * daemon trust, the ssh admin kernel-truth lane, preflight, admission -- with no
      * fixture shortcut writing any verdict. Call inside a {@code Db.run} scope.
@@ -224,12 +262,23 @@ public final class LiveIncusHost {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        this.enrolledCertificates.add(fingerprint);
         return fingerprint;
     }
 
     /** Run the real preflight and take the admit transition through the real gate. */
     public void admitThroughProduct(String hostName) {
         HostPreflight.Report report = HostPreflight.runAndStore(hostName);
+        // AIDEV-NOTE: PRINTED, not only carried in the assumption message. A failing
+        // preflight aborts every test in the class, and JUnit's abort reason does not
+        // reach the captured task output -- so the whole class reads as a silent skip
+        // with no way to tell "no host enrolled" from "the host failed a required check".
+        for (HostPreflight.Check check : report.checks()) {
+            if (check.required() && check.failed()) {
+                System.out.println("=== preflight REQUIRED check failed on " + hostName
+                    + ": " + check.name() + " -- " + check.detail());
+            }
+        }
         Assumptions.assumeTrue(report.passed(),
             "incus preflight did not pass: " + report.checks());
         Row ready = Models.get(ServerModel.class).findByName(hostName);

@@ -161,7 +161,7 @@ class StackNetworkIsolationTest {
 
     private static StackSpec.ServiceSpec sleeper(String name) {
         return new StackSpec.ServiceSpec(name, TEST_IMAGE, List.of("sleep", "600"), Map.of(),
-            List.of(), List.of(), List.of(), List.of(), null, 1, 3, 3, 0, "no", null, null);
+            List.of(), List.of(), List.of(), List.of(), null, 1, 3, 3, 0, "no", null, null, List.of());
     }
 
     /**

@@ -1,4 +1,8 @@
 {
+  "capability_not_declarable": {
+    "text": "Only these capabilities can be declared: {$capabilities}",
+    "scope": "violations"
+  },
   "cert_fields_required": {
     "text": "Name, certificate, and private key are required",
     "scope": "violations"
@@ -4067,6 +4071,10 @@
     "text": "Net",
     "scope": "spamservice_reputation"
   },
+  "capabilities": {
+    "text": "Capabilities",
+    "scope": "field"
+  },
   "command": [
     {
       "text": "Command",
@@ -4207,6 +4215,10 @@
   },
   "service_image": {
     "text": "Pinned image reference, e.g. netbirdio/netbird-server:1.2.3.",
+    "scope": "help"
+  },
+  "service_capabilities": {
+    "text": "Extra Linux capabilities this image needs to start. Everything else stays dropped.",
     "scope": "help"
   },
   "service_command": {

@@ -44,17 +44,29 @@ public class StackDeployer {
     public static final String LABEL_SERVICE = "be.elevenways.hohenheim.stack.service";
 
     /**
-     * The DECLARED isolation profile of every stack service container.
+     * The BASELINE isolation profile every stack service container starts from.
      *
      * AIDEV-NOTE: stacks are OPERATOR-authored (the compose-shaped tier), and their
      * services are the ordinary published-image mix -- nginx, postgres, redis -- all of
      * which chown and drop privileges at entrypoint and all of which refuse to start
-     * under STRICT. Tier-level, not per-service, and that is the current honest limit:
-     * StackSpec.ServiceSpec has no capability declaration, so a service needing more than
-     * SERVICE cannot express it. Adding one is a model field + migration, not an
-     * if-chain here, and it must never be reachable by a non-operator author.
+     * under STRICT. Since 2026-08-07 it is a baseline rather than the whole answer: a
+     * service whose image genuinely needs one more capability DECLARES it
+     * ({@code StackServiceModel.CAPABILITIES}) and {@link #hardeningFor} folds it in
+     * through {@link ContainerHardening#declaring}, which refuses anything outside the
+     * closed allow-list. What no declaration can move: drop-ALL as the base,
+     * no-new-privileges, the pids cap, every structural refusal and this stack's own
+     * network policy.
      */
     public static final ContainerHardening.Profile HARDENING = ContainerHardening.SERVICE;
+
+    /**
+     * The profile ONE service actually runs with: the tier baseline plus whatever its
+     * author declared, refused by name if that is not declarable.
+     */
+    static ContainerHardening.Profile hardeningFor(StackSpec.@NonNull ServiceSpec service) {
+        return ContainerHardening.declaring(HARDENING, "service " + service.name(),
+            service.capabilities());
+    }
 
     /**
      * The DECLARED egress posture of every stack service.
@@ -444,7 +456,7 @@ public class StackDeployer {
             docker.removeContainer(idOf(existing), true);
         }
 
-        String id = docker.createContainer(name, containerSpec(spec, service), HARDENING);
+        String id = docker.createContainer(name, containerSpec(spec, service), hardeningFor(service));
         uploadFiles(id, service);
         docker.startContainer(id);
         log.accept("Started " + name);

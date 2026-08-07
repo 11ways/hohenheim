@@ -36,6 +36,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -184,7 +185,7 @@ class ContainerHardeningTest {
             "local", null, false, null, null, null,
             StackSpec.topologicallySorted(List.of(new StackSpec.ServiceSpec("app", TEST_IMAGE,
                 List.of("sleep", "600"), Map.of(), List.of(), List.of(), List.of(), List.of(),
-                null, 1, 3, 3, 0, "no", null, null))));
+                null, 1, 3, 3, 0, "no", null, null, List.of()))));
         // The class-wide netns override backs forServer here, exactly like the database
         // step above: a stack now refuses to deploy where its policy cannot be enforced.
         StackDeployer deployer = new StackDeployer(docker,
@@ -353,6 +354,116 @@ class ContainerHardeningTest {
             assertThat(id).as("step 5: a named network is not an escape").isNotBlank();
         } finally {
             docker.removeContainer(allowed, true);
+        }
+    }
+
+    /**
+     * PER-SERVICE capability declaration, asserted from the KERNEL: a stack service that
+     * declares one capability gets exactly that one more than its sibling, and a service
+     * that reaches for an escape never reaches the daemon at all.
+     *
+     * AIDEV-NOTE: the sibling in the SAME stack is the negative anchor and it is
+     * load-bearing. A declaration mechanism that quietly widened every service would still
+     * pass a test that only looked at the declaring one, and "the whole tier got NET_RAW"
+     * is precisely the failure this allow-list exists to prevent. The refusal half then
+     * needs its own positive anchor, which step 1 and 2 already are: without them a policy
+     * that refused EVERYTHING would look identical.
+     */
+    @Test
+    void aStackServiceDeclaresOneCapabilityAndNeverAnEscape() throws IOException {
+        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        assumeTrue(PrivateNetns.available(), "no private netns: a stack refuses to deploy"
+            + " where its network policy cannot be enforced");
+        int pids = ContainerHardening.pidsLimit();
+
+        String stackName = "hhcap" + Long.toHexString(System.nanoTime());
+        StackSpec stack = new StackSpec(0, stackName, "local", null, false, null, null, null,
+            StackSpec.topologicallySorted(List.of(
+                stackService("plain", List.of()),
+                // Lowercase and CAP_-prefixed on purpose: compose-shaped content spells
+                // capabilities both ways and the funnel normalizes rather than refusing.
+                stackService("raw", List.of("cap_net_raw")))));
+        StackDeployer deployer = new StackDeployer(docker,
+            WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), null);
+        try {
+            deployer.deploy(stack);
+
+            // 1. THE NEGATIVE ANCHOR: the undeclaring sibling is still exactly SERVICE.
+            assertKernelState(docker, StackDeployer.containerName(stack, "plain"),
+                "step 1: undeclaring sibling", SERVICE_CAPS, pids);
+
+            // 2. THE POSITIVE ANCHOR: the declaring service has SERVICE plus NET_RAW and
+            //    nothing else, read out of pid 1's bounding set inside the container.
+            assertKernelState(docker, StackDeployer.containerName(stack, "raw"),
+                "step 2: declaring service", SERVICE_CAPS | NET_RAW, pids);
+
+            // 3. Everything the declaration may NOT move is still in place on the
+            //    declaring container: drop-ALL, no-new-privileges, never privileged.
+            Map<?, ?> hostConfig = hostConfigOf(docker,
+                StackDeployer.containerName(stack, "raw"));
+            assertThat(hostConfig.get("CapDrop"))
+                .as("step 3: a declaration never weakens the drop-ALL base")
+                .isEqualTo(List.of("ALL"));
+            assertThat(String.valueOf(hostConfig.get("SecurityOpt")))
+                .as("step 3: no-new-privileges survives a declaration")
+                .contains("no-new-privileges");
+        } finally {
+            deployer.destroy(stack, true);
+        }
+
+        // 4. THE REFUSAL. Every capability the brief names as a container escape is
+        //    refused BY NAME, and so is an unknown string -- an allow-list, not a
+        //    deny-list, so a capability nobody thought about is refused too.
+        for (String escape : List.of("SYS_ADMIN", "SYS_PTRACE", "DAC_READ_SEARCH",
+                "SYS_MODULE", "NET_ADMIN", "MKNOD", "SETFCAP", "CAP_SYS_RAWIO",
+                "TOTALLY_MADE_UP")) {
+            String refusedStack = "hhcapno" + Long.toHexString(System.nanoTime());
+            StackSpec refused = new StackSpec(0, refusedStack, "local", null, false,
+                null, null, null,
+                List.of(stackService("app", List.of(escape))));
+            StackDeployer refusingDeployer = new StackDeployer(docker,
+                WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), null);
+            Throwable thrown = catchThrowable(() -> refusingDeployer.deploy(refused));
+            try {
+                assertThat(thrown)
+                    .withFailMessage("step 4: declaring %s deployed instead of being"
+                        + " refused", escape)
+                    .isInstanceOf(IllegalArgumentException.class);
+                assertThat(thrown.getMessage())
+                    .as("step 4: the refusal names the capability")
+                    .contains(ContainerHardening.normalizeCapability(escape));
+
+                // 4b. And the daemon never got one: scoped to THIS stack's own container
+                //     name, never a daemon-wide count (four forks share this daemon).
+                assertThat(containerExists(docker,
+                        StackDeployer.containerName(refused, "app")))
+                    .withFailMessage("step 4: a container was created for a refused"
+                        + " capability declaration (%s)", escape)
+                    .isFalse();
+            } finally {
+                // The teardown must survive a FAILING assertion: the counterfactual run
+                // that proves this refusal real DOES create the container, and without
+                // this it stays on the daemon for the next run to inherit (observed).
+                refusingDeployer.destroy(refused, true);
+            }
+        }
+    }
+
+    /** One sleeping stack service with a declared capability set. */
+    private static StackSpec.ServiceSpec stackService(String name, List<String> capabilities) {
+        return new StackSpec.ServiceSpec(name, TEST_IMAGE, List.of("sleep", "600"),
+            Map.of(), List.of(), List.of(), List.of(), List.of(),
+            null, 1, 3, 3, 0, "no", null, null, capabilities);
+    }
+
+    /** Whether ONE named container exists on the daemon right now. */
+    private static boolean containerExists(DockerClient docker, String name) throws IOException {
+        try {
+            return docker.inspectContainer(name) != null;
+        } catch (IOException absent) {
+            return false;
         }
     }
 

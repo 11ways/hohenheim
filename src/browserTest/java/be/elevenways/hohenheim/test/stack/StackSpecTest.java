@@ -18,7 +18,7 @@ class StackSpecTest {
     private static StackSpec.ServiceSpec service(String name, List<StackSpec.DependsSpec> depends) {
         return new StackSpec.ServiceSpec(name, "alpine:latest", List.of(), Map.of(),
             List.of(), List.of(), depends, List.of(),
-            null, 10, 5, 5, 0, "unless-stopped", null, null);
+            null, 10, 5, 5, 0, "unless-stopped", null, null, List.of());
     }
 
     @Test
@@ -70,7 +70,7 @@ class StackSpecTest {
             List.of(new StackSpec.DependsSpec("db", "healthy")),
             List.of(new StackSpec.FileSpec("/etc/app/config.yaml", "key: value\n", "0600")),
             "wget -q -O /dev/null http://127.0.0.1/", 7, 3, 4, 15,
-            "always", 512, 1.5);
+            "always", 512, 1.5, List.of("NET_RAW", "IPC_LOCK"));
         StackSpec.ServiceSpec db = service("db", List.of());
 
         StackSpec original = new StackSpec(42, "mystack", "local", "172.30.9.0/24", true,

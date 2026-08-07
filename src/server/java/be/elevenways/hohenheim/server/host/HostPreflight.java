@@ -122,7 +122,6 @@ public final class HostPreflight {
         Map<String, Object> info = probeDaemon(docker, checks, facts, daemonFailure);
         if (info != null) {
             checkApiVersion(facts, checks);
-            checkDaemonPosture(info, checks);
             probeContainerKernel(docker, checks);
             checkNetworkHeadroom(docker, checks, facts);
         }
@@ -185,29 +184,22 @@ public final class HostPreflight {
             true, "daemon API " + api + " (minimum " + MIN_API_VERSION + ")"));
     }
 
-    /** Daemon-declared posture: userns remap, LSM presence, default-bridge IPv6. Advisory. */
-    private static void checkDaemonPosture(Map<String, Object> info, List<Check> checks) {
-        List<String> securityOptions = new ArrayList<>();
-        if (info.get("SecurityOptions") instanceof List<?> options) {
-            for (Object option : options) {
-                securityOptions.add(String.valueOf(option));
-            }
-        }
-        boolean userns = securityOptions.stream().anyMatch(o -> o.contains("name=userns"));
-        checks.add(new Check("userns_remap", userns ? STATUS_PASS : STATUS_WARN, false,
-            userns ? "daemon runs with userns-remap"
-                   : "no userns-remap: container root is host root (daemon.json userns-remap)"));
-        boolean apparmor = securityOptions.stream().anyMatch(o -> o.contains("name=apparmor"));
-        boolean selinux = securityOptions.stream().anyMatch(o -> o.contains("name=selinux"));
-        checks.add(new Check("lsm", (apparmor || selinux) ? STATUS_PASS : STATUS_WARN, false,
-            apparmor ? "AppArmor active" : selinux ? "SELinux active" : "no AppArmor/SELinux"));
-    }
-
     /**
      * Kernel truth from INSIDE a running hardened probe container: delegated pids
-     * controller, the pids cap actually enforced, seccomp filtering, no_new_privs.
-     * A {@code PidsLimit} a host silently ignores is exactly the reports-success
-     * defect the hardening baseline would otherwise rest on.
+     * controller, the pids cap actually enforced, seccomp filtering, no_new_privs,
+     * user-namespace remapping and LSM confinement. A {@code PidsLimit} a host silently
+     * ignores is exactly the reports-success defect the hardening baseline would
+     * otherwise rest on.
+     *
+     * AIDEV-NOTE: userns and the LSM label moved HERE from the daemon's own
+     * {@code SecurityOptions} list on 2026-08-07, for the reason the
+     * {@code kernel_isolation_lane} check moved the day before: {@code name=userns} in an
+     * Info response is a CLAIM about how the daemon was configured, and this battery's
+     * whole stance is that a claim is not evidence. {@code /proc/self/uid_map} is the
+     * kernel's own answer -- an unremapped container reads {@code 0 0 4294967295}, a
+     * remapped one reads a non-zero host offset with a bounded range -- and
+     * {@code /proc/1/attr/current} is the LSM label the kernel actually attached, which is
+     * empty or unreadable when no LSM confines the container at all.
      */
     private static void probeContainerKernel(DockerClient docker, List<Check> checks) {
         String name = "hohenheim-preflight-" + System.nanoTime();
@@ -221,7 +213,12 @@ public final class HostPreflight {
             DockerClient.ExecResult result = docker.exec(name, List.of("sh", "-c",
                 "cat /sys/fs/cgroup/cgroup.controllers 2>/dev/null; echo '---';"
                     + " cat /sys/fs/cgroup/pids.max 2>/dev/null; echo '---';"
-                    + " grep -E '^(Seccomp|NoNewPrivs):' /proc/1/status"));
+                    + " grep -E '^(Seccomp|NoNewPrivs):' /proc/1/status; echo '---';"
+                    + " cat /proc/self/uid_map 2>/dev/null; echo '---';"
+                    // Trailing "|| true": a kernel with no LSM answers this read with
+                    // EINVAL, and the LAST command decides sh's exit code -- without it
+                    // the whole probe reads as "the exec failed" on every LSM-less host.
+                    + " cat /proc/1/attr/current 2>/dev/null || true"));
             if (result.exitCode() != 0) {
                 checks.add(new Check("container_kernel", STATUS_FAIL, true,
                     "kernel probe exec failed: " + result.output()));
@@ -231,6 +228,10 @@ public final class HostPreflight {
             String controllers = sections.length > 0 ? sections[0].trim() : "";
             String pidsMax = sections.length > 1 ? sections[1].trim() : "";
             String status = sections.length > 2 ? sections[2].trim() : "";
+            String uidMap = sections.length > 3 ? sections[3].trim() : "";
+            String lsmLabel = sections.length > 4 ? sections[4].trim() : "";
+            checks.add(usernsCheck(uidMap));
+            checks.add(lsmCheck(lsmLabel));
 
             boolean pidsDelegated = controllers.contains("pids");
             checks.add(new Check("cgroup_pids_controller",
@@ -265,6 +266,64 @@ public final class HostPreflight {
                 // never created, or already gone
             }
         }
+    }
+
+    /** The uid_map an UNREMAPPED container reads: the whole host uid space, offset zero. */
+    public static final String IDENTITY_UID_MAP = "0 0 4294967295";
+
+    /**
+     * The user-namespace verdict read off a probe workload's own {@code /proc/self/uid_map}.
+     *
+     * AIDEV-NOTE: ADVISORY on purpose, and this is an availability decision, not an
+     * oversight. Docker's {@code userns-remap} is off by default on every distribution and
+     * turning it on changes volume ownership semantics for every existing workload, so a
+     * REQUIRED check here would refuse admission to essentially every Docker host in
+     * existence, both live twins included -- refusing a host that already carries
+     * production workloads over a posture nobody ships is a worse outcome than a warning
+     * nobody can miss. The Incus battery reaches the OPPOSITE conclusion for its own tier
+     * and says why there: unprivileged is the Incus DEFAULT, so a host without it is
+     * misconfigured rather than ordinary.
+     *
+     * @param uidMap the probe container's first uid_map line, or empty when unreadable
+     */
+    static @NonNull Check usernsCheck(@NonNull String uidMap) {
+        String first = uidMap.isEmpty() ? "" : uidMap.lines().findFirst().orElse("").trim()
+            .replaceAll("\\s+", " ");
+        if (first.isEmpty()) {
+            return new Check("userns_remap", STATUS_WARN, false,
+                "the probe container's /proc/self/uid_map could not be read, so whether"
+                    + " container root is host root is UNKNOWN on this host");
+        }
+        boolean remapped = !IDENTITY_UID_MAP.equals(first);
+        return new Check("userns_remap", remapped ? STATUS_PASS : STATUS_WARN, false,
+            remapped ? "user namespace remapped: uid_map reads '" + first + "'"
+                : "no user-namespace remapping: uid_map reads '" + first
+                    + "', so container root IS host root (daemon.json userns-remap)");
+    }
+
+    /**
+     * The LSM verdict read off a probe workload's own {@code /proc/1/attr/current}.
+     *
+     * AIDEV-NOTE: ADVISORY, and daystrom is exactly why -- it runs Arch, whose kernel
+     * carries {@code capability,landlock,lockdown,yama,bpf} and NO AppArmor or SELinux at
+     * all (measured: {@code /sys/module/apparmor/parameters/enabled} reads 'N'). Absence of
+     * an LSM is a distribution fact, not a misconfiguration an operator can fix at
+     * admission time, and refusing on it would make the reference host inadmissible. The
+     * label is still worth reading, because "AppArmor is loaded" and "AppArmor confines
+     * THIS container" are different facts and only the second one is evidence: an
+     * {@code unconfined} label on a host whose daemon advertises apparmor is precisely the
+     * silent gap the Info-based check could never see.
+     *
+     * @param label the probe container's pid-1 LSM label; empty when no LSM confines it
+     */
+    static @NonNull Check lsmCheck(@NonNull String label) {
+        String confinement = label.trim();
+        boolean confined = !confinement.isEmpty() && !confinement.startsWith("unconfined");
+        return new Check("lsm", confined ? STATUS_PASS : STATUS_WARN, false,
+            confined ? "pid 1 runs under LSM confinement '" + confinement + "'"
+                : "no LSM confines the probe container (pid 1 label: '"
+                    + (confinement.isEmpty() ? "<none>" : confinement)
+                    + "'); AppArmor/SELinux add no layer on this host");
     }
 
     /**

@@ -51,7 +51,8 @@ public record StackSpec(
         int healthStartPeriodSeconds,
         @NonNull String restartPolicy,
         @Nullable Integer memoryLimitMb,
-        @Nullable Double cpuLimit) {}
+        @Nullable Double cpuLimit,
+        @NonNull List<String> capabilities) {}
 
     /** A named-volume or tmpfs mount; {@code externalName} adopts an existing volume verbatim. */
     public record MountSpec(@NonNull String type, @NonNull String name,
@@ -165,6 +166,7 @@ public record StackSpec(
         }
 
         List<String> command = serviceRow.get(StackServiceModel.COMMAND);
+        List<String> capabilities = serviceRow.get(StackServiceModel.CAPABILITIES);
         Map<String, String> environment = serviceRow.get(StackServiceModel.ENVIRONMENT);
 
         return new ServiceSpec(
@@ -180,7 +182,8 @@ public record StackSpec(
             intOr(serviceRow.get(StackServiceModel.HEALTH_START_PERIOD_SECONDS), 0),
             stringOr(serviceRow.get(StackServiceModel.RESTART_POLICY), "unless-stopped"),
             serviceRow.get(StackServiceModel.MEMORY_LIMIT_MB),
-            serviceRow.get(StackServiceModel.CPU_LIMIT));
+            serviceRow.get(StackServiceModel.CPU_LIMIT),
+            capabilities != null ? List.copyOf(capabilities) : List.of());
     }
 
     /**
@@ -265,6 +268,7 @@ public record StackSpec(
             map.put("restart_policy", service.restartPolicy());
             map.put("memory_limit_mb", service.memoryLimitMb());
             map.put("cpu_limit", service.cpuLimit());
+            map.put("capabilities", service.capabilities());
 
             List<Map<String, Object>> mounts = new ArrayList<>();
             for (MountSpec mount : service.mounts()) {
@@ -360,6 +364,10 @@ public record StackSpec(
             for (Object arg : (List<Object>) map.getOrDefault("command", List.of())) {
                 command.add(String.valueOf(arg));
             }
+            List<String> capabilities = new ArrayList<>();
+            for (Object capability : (List<Object>) map.getOrDefault("capabilities", List.of())) {
+                capabilities.add(String.valueOf(capability));
+            }
             Map<String, String> environment = new LinkedHashMap<>();
             Object rawEnvironment = map.get("environment");
             if (rawEnvironment instanceof Map<?, ?> environmentMap) {
@@ -381,7 +389,8 @@ public record StackSpec(
                 intOr(map.get("health_start_period_seconds"), 0),
                 stringOr(map.get("restart_policy"), "unless-stopped"),
                 (Integer) map.get("memory_limit_mb"),
-                map.get("cpu_limit") instanceof Number cpu ? cpu.doubleValue() : null));
+                map.get("cpu_limit") instanceof Number cpu ? cpu.doubleValue() : null,
+                List.copyOf(capabilities)));
         }
 
         return new StackSpec(

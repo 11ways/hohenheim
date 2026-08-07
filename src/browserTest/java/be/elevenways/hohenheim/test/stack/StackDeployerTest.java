@@ -71,7 +71,7 @@ class StackDeployerTest {
                                                  String healthCmd) {
         return new StackSpec.ServiceSpec(name, TEST_IMAGE, List.of("sleep", "600"), Map.of("ROLE", name),
             mounts, List.of(), depends, files,
-            healthCmd, 1, 3, 3, 0, "no", null, null);
+            healthCmd, 1, 3, 3, 0, "no", null, null, List.of());
     }
 
     private StackSpec spec(String stackName, boolean adopt, StackSpec.ServiceSpec... services) {
