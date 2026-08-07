@@ -2951,6 +2951,14 @@
     "text": "Dit record is gegenereerd door {$source} en kan hier niet bewerkt of verwijderd worden",
     "scope": "violations"
   },
+  "hostname_invalid": {
+    "text": "Dat is geen geldige hostnaam",
+    "scope": "violations"
+  },
+  "database_name_invalid": {
+    "text": "Een databasenaam mag alleen letters, cijfers, punt, streepje en liggend streepje bevatten, en moet met een letter of cijfer beginnen",
+    "scope": "violations"
+  },
   "tenant_site_not_managed": {
     "text": "Je kan alleen domeinen toevoegen aan sites die je beheert",
     "scope": "violations"

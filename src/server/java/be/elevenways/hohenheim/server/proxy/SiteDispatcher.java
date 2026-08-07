@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.auth.SiteAuthDecision;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
@@ -888,11 +889,24 @@ public class SiteDispatcher implements HttpHandler {
     // Resolution
     // -----------------------------------------------------------------------
 
+    /**
+     * The request's routing host: the Host header minus its port, case-folded and minus the
+     * FQDN root dot.
+     *
+     * AIDEV-NOTE: the root-dot fold is the request half of SiteDomainModel.canonicalHostname
+     * and may not be dropped from either side. Keeping the dot here made {@code victim.test.}
+     * a route table entry of its own that no stored claim intersected, while the TLS
+     * handshake for that same request could only ever carry {@code victim.test} in SNI
+     * (RFC 6066 forbids the trailing dot) -- so the connection got the victim's certificate
+     * and the raider's upstream, with no browser warning. Folding both sides means the two
+     * spellings resolve to ONE route, which is also what DNS says they are.
+     */
     private String extractHostname(HttpServerExchange exchange) {
         String host = exchange.getRequestHeaders().getFirst(HOST);
         if (host == null) return "";
         int colon = host.indexOf(':');
-        return (colon != -1 ? host.substring(0, colon) : host).toLowerCase(Locale.ROOT);
+        return Hostnames.stripTrailingDots(
+            (colon != -1 ? host.substring(0, colon) : host).toLowerCase(Locale.ROOT));
     }
 
     private Resolution resolveEntry(HttpServerExchange exchange, String hostname, RouteTable rt) {

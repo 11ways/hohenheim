@@ -122,8 +122,16 @@ class AcmeAccountEmailTest {
         var domainModel = Models.get(SiteDomainModel.class);
         Row domain = domainModel.createEmptyRow();
         domain.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
-        domain.set(SiteDomainModel.HOSTNAME, hostname);
+        domain.set(SiteDomainModel.HOSTNAME, "acme-email-seed.example.test");
         domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
         domainModel.save(domain);
+        // AIDEV-NOTE: the illegal spelling is written with a SET-BASED update, which runs no
+        // schema hook, because SiteDomainModel.validateHostnameSyntax now refuses it on
+        // every save path. That is the point of this fixture: it is a row predating the
+        // constraint (M079's declared residue), and it is what keeps AcmeService's own
+        // syntax check -- the second gate -- honestly covered.
+        domainModel.find().where(SiteDomainModel.ID.eq(domain.get(SiteDomainModel.ID)))
+            .assign(SiteDomainModel.HOSTNAME, hostname)
+            .updateAll();
     }
 }

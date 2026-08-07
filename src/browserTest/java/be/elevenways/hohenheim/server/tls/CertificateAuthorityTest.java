@@ -58,7 +58,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         seedDomain(ownedSiteId, "*.wild." + ZONE, SiteDomainModel.MATCH_WILDCARD);
         // Served, but not a legal hostname: it gets a request PAST the authority gate
         // without any CA round-trip, which is how the legitimate lane is proven offline.
-        seedDomain(ownedSiteId, "not a legal host", SiteDomainModel.MATCH_EXACT);
+        seedLegacyIllegalDomain(ownedSiteId, ILLEGAL_HOST);
         seedDomain(foreignSiteId, "foreign." + ZONE, SiteDomainModel.MATCH_EXACT);
 
         Row user = AuthModels.users().createEmptyRow();
@@ -184,7 +184,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         // End to end through the service: the gate opens, the order is created and stamped
         // with the requester, and the failure that follows is a HOSTNAME failure -- not an
         // authority refusal -- which is as far as an offline test can honestly go.
-        int certId = acme().requestCertificate(List.of("not a legal host"),
+        int certId = acme().requestCertificate(List.of(ILLEGAL_HOST),
             "Certauth Legit", null, tenant);
         assertThat(certId)
             .describedAs("the order was placed and only then failed on the hostname")
@@ -283,6 +283,32 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         site.set(SiteModel.ENABLED, true);
         siteModel.save(site);
         return site.get(SiteModel.ID);
+    }
+
+    /** The hostname string the ACME layer must refuse on syntax rather than on authority. */
+    private static final String ILLEGAL_HOST = "not a legal host";
+
+    /**
+     * A domain row holding a hostname the WRITE PIPELINE no longer accepts -- seeded legal
+     * and then rewritten with a set-based update, which runs no schema hook.
+     *
+     * AIDEV-NOTE: this is deliberately the shape of a row that predates
+     * {@code SiteDomainModel.validateHostnameSyntax} (M079's declared residue: a hostname
+     * it cannot repair is left alone rather than invented). Keeping it is what still proves
+     * AcmeService's OWN syntax check is load-bearing -- the model refusal is the first
+     * gate, not the only one, and a stored legacy row is exactly the case where the second
+     * one has to answer.
+     */
+    private static void seedLegacyIllegalDomain(int siteId, String hostname) {
+        var domainModel = Models.get(SiteDomainModel.class);
+        Row domain = domainModel.createEmptyRow();
+        domain.set(SiteDomainModel.SITE_ID, siteId);
+        domain.set(SiteDomainModel.HOSTNAME, "legacy-illegal." + ZONE);
+        domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domainModel.save(domain);
+        domainModel.find().where(SiteDomainModel.ID.eq(domain.get(SiteDomainModel.ID)))
+            .assign(SiteDomainModel.HOSTNAME, hostname)
+            .updateAll();
     }
 
     private static void seedDomain(int siteId, String hostname, String matchType) {

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.net.Hostnames;
+
 import java.util.regex.Pattern;
 
 /**
@@ -17,7 +19,7 @@ public final class WildcardHostname {
 
     /** @return whether the pattern contains any glob characters */
     public static boolean isWildcard(String pattern) {
-        return pattern.indexOf('*') >= 0 || pattern.indexOf('?') >= 0;
+        return Hostnames.hasGlobCharacters(pattern);
     }
 
     /**

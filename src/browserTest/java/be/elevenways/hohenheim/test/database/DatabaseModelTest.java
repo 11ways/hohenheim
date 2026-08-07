@@ -8,13 +8,17 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * Isolated round-trip test for {@link DatabaseModel}: builds a temp SQLite with the full
@@ -86,6 +90,60 @@ class DatabaseModelTest {
             model.save(reloaded);
 
             assertThat((String) model.findByName("preview").get(DatabaseModel.IMAGE)).isEqualTo("mysql:8.0");
+        });
+    }
+
+    /**
+     * The name is a filesystem path SEGMENT downstream ({@code BackupDatabases} resolves it
+     * onto the backup root, and the retention prune DELETES files in whatever directory that
+     * lands in), so a traversal spelling has to be refused at the WRITE, not at the reader.
+     *
+     * AIDEV-NOTE: {@code Path.resolve("../../etc")} walks out of the root silently -- it is
+     * not an error, it is the documented behaviour. Fixing it in BackupDatabases alone would
+     * leave every other consumer of the name (container handle, network alias, env injection)
+     * to re-derive the same rule; refusing the spelling is one answer for all of them.
+     */
+    @Test
+    void aTraversalSpellingIsRefusedBeforeItBecomesABackupPath() {
+        Db.run(datasource, () -> {
+            DatabaseModel model = Models.get(DatabaseModel.class);
+            Path backupRoot = Path.of("/var/backups/hohenheim");
+            for (String hostile : List.of("../../etc", "..", "a/b", "/absolute",
+                    "trav../ersal", "", "-leading")) {
+                Violations refused = catchThrowableOfType(() -> {
+                    Row row = model.createEmptyRow();
+                    row.set(DatabaseModel.NAME, hostile);
+                    row.set(DatabaseModel.ENGINE, "postgres");
+                    row.set(DatabaseModel.DB_USER, "appuser");
+                    row.set(DatabaseModel.DB_PASSWORD, "secret123");
+                    row.set(DatabaseModel.DB_NAME, "appdb");
+                    model.save(row);
+                }, Violations.class);
+                assertThat((Throwable) refused)
+                    .as("'%s' is not a storable database name", hostile).isNotNull();
+                assertThat(refused.all().get(0).message().key())
+                    .as("'%s' names its own refusal", hostile).isEqualTo("database_name_invalid");
+                assertThat(refused.all().get(0).fieldName()).isEqualTo(DatabaseModel.NAME.getName());
+                assertThat(model.findByName(hostile))
+                    .as("'%s' left no row", hostile).isNull();
+            }
+
+            // POSITIVE ANCHOR: the ordinary spellings still save, and every one of them
+            // stays INSIDE the backup root once resolved -- which is the property the
+            // refusal exists to guarantee.
+            for (String valid : List.of("blog2", "app-db.primary", "Under_score", "x")) {
+                Row row = model.createEmptyRow();
+                row.set(DatabaseModel.NAME, valid);
+                row.set(DatabaseModel.ENGINE, "postgres");
+                row.set(DatabaseModel.DB_USER, "appuser");
+                row.set(DatabaseModel.DB_PASSWORD, "secret123");
+                row.set(DatabaseModel.DB_NAME, "appdb");
+                model.save(row);
+                assertThat(model.findByName(valid))
+                    .as("'%s' is an ordinary name and still saves", valid).isNotNull();
+                assertThat(backupRoot.resolve(valid).normalize().startsWith(backupRoot))
+                    .as("'%s' resolves inside the backup root", valid).isTrue();
+            }
         });
     }
 

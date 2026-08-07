@@ -845,6 +845,48 @@ enable runs the same conflict invariant as updateRow.
   hook that all resource invariants share. Gate the exact `/manage/.../revision/
   {n}/restore` attack and assert the proxy route table still has one owner.
 
+  STATUS 2026-08-07: the block above is STALE and is superseded here. The
+  invariant IS on the write pipeline, exactly as that block prescribed.
+  `SiteResource.installEnableInvariant` registers a `SiteModel.SCHEMA`
+  beforeValidate refusal plus a beforeWrite claim restamp, and
+  `SiteDomainResource.installRouteInvariant` does the same on
+  `SiteDomainModel.SCHEMA`; both are wired from `HohenheimWriteHooks.init()`
+  (the discovered ZenitModule, MODULES boot stage), so `RevisionableBehaviour
+  .restore -> model.save` funnels through them like every other writer.
+  `RevisionRestoreTakeoverTest` drives the exact `/manage/.../revision/{n}/
+  restore` attack and asserts one route owner afterwards. A false "known open"
+  is how a real one gets ignored; do not re-open this without new evidence.
+
+### 0.10 Hostname spelling versus routed tier (2026-08-07)
+
+Two live tenant-boundary bypasses, both the same shape: a POLICY reasoning about
+a stored COLUMN while a CONSUMER derives the same fact from the CONTENT, with
+nothing validating what could be stored in the first place.
+
+1. `TenantWrites.checkDomainWrite` refused `match_type != exact` by reading the
+   column, but `SiteDispatcher`, `HostnamePatterns.effectiveKind` and
+   `HostnameAuthority.covers` all derive the tier from the hostname's SHAPE.
+   `hostname=*.victim.test` + `match_type=exact` therefore stored a live wildcard
+   route AND made the claiming tenant the sole covering row for every name under
+   the victim's domain, which `TenantWrites.requireRecordAuthority` reads as
+   authority to write DNS inside the victim's zone. Reproduced end to end.
+2. `SiteDomainModel.canonicalHostname` was trim+lowercase only, so `victim.test.`
+   and `victim.test` were two non-intersecting claim keys, while TLS can only
+   carry the dotless form in SNI. Reproduced with real proxy traffic: the raider
+   served `Host: victim.test.` under the victim's certificate.
+
+CLOSED: one hostname-syntax authority (`net.Hostnames`, the promoted body of
+`AcmeService.isValidHostname`) enforced from `SiteDomainModel`'s beforeValidate
+hook -- the only seam every writer passes; one tier authority
+(`SiteDomainModel.effectiveMatchType`) that the tenant refusal, the dispatcher
+and the authority walk all consult; the root dot folded on BOTH the stored and
+the request side; `M079_CanonicalHostnames` heals existing rows first. Covered by
+`TenantHostnameTierTest` and `TrailingDotRouteTest`, each with its counterfactual
+run recorded in the wave report.
+
+Same family, admin-only and also closed: `DatabaseModel.NAME` had no validator
+while `BackupDatabases` resolves it onto the backup root, so `../` escaped it.
+
 ### STATUS: Phase 0 re-verified against code (2026-08-02)
 
 Source-level verification of every item the 2026-07-29 audit reopened, done
