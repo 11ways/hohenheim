@@ -53,6 +53,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import be.elevenways.hohenheim.server.sitetype.types.TlsPassthroughSiteType;
 
@@ -104,6 +105,20 @@ public class SiteResource extends RowResource {
     @Override public int navOrder() { return 10; }
     @Override public @NonNull Icon icon() { return Icon.of("globe"); }
 
+
+    /**
+     * The two columns this resource's OWN write path stages (persistRow derives the
+     * slug from the name, and stamps the status) without offering a form entry for
+     * them. Revision restore is default-deny over everything the surface does not
+     * expose, so the admin panel has to declare what it owns or it would lose the
+     * ability to restore a revision that predates a rename or a status change.
+     * ManageSiteResource overrides this back to empty -- the delegated surface owns
+     * neither.
+     */
+    @Override
+    public @NonNull Set<String> restorableFieldsOutsideForm() {
+        return Set.of(SiteModel.SLUG.getName(), SiteModel.STATUS.getName());
+    }
 
     /** slug/status are staged by persistRow but are not form entries; stamp them here. */
     @Override
