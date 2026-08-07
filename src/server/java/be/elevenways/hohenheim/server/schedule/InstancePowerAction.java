@@ -46,10 +46,9 @@ public class InstancePowerAction extends InstanceScheduleAction {
     @Override public @Nullable Schema getSchema() { return PAYLOAD; }
     @Override public @Nullable Icon getIcon() { return Icon.of("power-off"); }
 
-    /** Power is gated on manage today (no separate power capability exists yet). */
     @Override
     public @NonNull String requiredCapability() {
-        return HohenheimAccess.MANAGE;
+        return HohenheimAccess.POWER;
     }
 
     @Override

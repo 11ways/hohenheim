@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.host.HostLeases;
@@ -271,6 +272,10 @@ public final class InstanceConsoles {
      * @throws Violations {@code console_send_failed} carrying the transport's reason
      */
     public static void sendCommand(int instanceId, @NonNull String command) {
+        // THE console-write gate, on the funnel every surface reaches (CMS form,
+        // automation API, schedule step) -- a per-handler copy is how the API ends up
+        // a wider door than the UI (see HohenheimAccess.requireOperationCapability).
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONSOLE);
         InstanceConsoleSession session = ensureSession(instanceId);
         try {
             session.sendCommand(command);

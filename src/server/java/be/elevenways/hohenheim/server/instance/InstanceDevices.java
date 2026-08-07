@@ -50,7 +50,7 @@ public final class InstanceDevices {
      *         model's name/size invariants
      */
     public void attachDisk(int instanceId, @NonNull String name, int sizeGb) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.MANAGE);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         DeviceAttachSupport support = requireSupport(resolved);
@@ -86,7 +86,7 @@ public final class InstanceDevices {
      *         refusal verbatim (notably "In use": block volumes resize stopped only)
      */
     public void resizeDisk(int instanceId, @NonNull String name, int sizeGb) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.MANAGE);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         DeviceAttachSupport support = requireSupport(resolved);
@@ -126,7 +126,7 @@ public final class InstanceDevices {
      *         {@code nic_quota_reached}, {@code device_attach_failed}
      */
     public void attachNic(int instanceId, @NonNull String name) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.MANAGE);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         DeviceAttachSupport support = requireSupport(resolved);
@@ -158,7 +158,7 @@ public final class InstanceDevices {
      * @throws Violations {@code device_not_found}, {@code device_detach_failed}
      */
     public void detach(int instanceId, @NonNull String name) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.MANAGE);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         DeviceAttachSupport support = requireSupport(resolved);

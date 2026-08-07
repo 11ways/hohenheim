@@ -2722,6 +2722,49 @@ Driver and infrastructure:
   403; add a declarative per-record handshake gate so authorization happens
   BEFORE resource acquisition, not after (today hohenheim completes the upgrade
   and closes 1008 in onOpen).
+
+  STATUS (2026-08-08): the CAPABILITY SPLIT LANDED, and the console/exec
+  distinction with it. `InstanceModel` now declares view/console/power/config/
+  destroy/exec beside the existing files.read/files.write/snapshots/backups/
+  image_any, each enforced at its own surface IN THE SAME COMMIT that declared
+  it (console = the console WebSocket + the VM framebuffer + the
+  `InstanceConsoles.sendCommand` funnel; power = `InstanceService.deploy/stop`
+  and the power schedule step; config = the `TenantWrites` instance write rule,
+  devices, app updates and schedules; destroy = `InstanceService.destroy`;
+  view = every list/detail/API scope and the live-stats stream; exec = the new
+  `InstanceExec` + `InstanceExecPage`). Decisions, all pinned by
+  `InstanceCapabilitySplitTest` and counterfactualed:
+
+  - `manage` is KEPT as the ownership marker (`manageSubjectsOf`/`sameOwner`,
+    the quota bucket, released claims, project adoption) and becomes an
+    UMBRELLA over exactly view/console/power/config/destroy through the new
+    zenit-core `KnownCapability.impliedBy` row in the precedence walk. That set
+    is exactly what rode `manage` before the split, so no stored grant row's
+    effective authority moves and there is NO migration. It deliberately does
+    NOT extend to files/snapshots/backups/image_any -- doing so would silently
+    widen every already-stored `manage` row.
+  - The umbrella row sits AFTER the deny row, so an explicit deny of a narrow
+    verb beats a positive `manage` grant ("manage minus destroy" is expressible).
+  - `exec` is ADMIN sensitivity, which makes non-delegable, not-owner-implied
+    AND not-implied-by-anything STRUCTURAL: `KnownCapability` refuses an ADMIN
+    entry that declares `impliedBy`, so "manage does not imply exec" is an
+    invariant of the mechanism rather than a line a later edit could flip. An
+    operator may still plant an exec grant deliberately (admins bypass
+    `GrantAdministration` containment); the holder can never re-delegate it or
+    mint it into an API-key scope. Same standard, same reasoning, as `dyndns`.
+  - The exec surface is SINGLE-SHOT (run a command, read exit code + output)
+    over a new `ExecSupport` driver seam, implemented by both the Docker and
+    Incus runtimes. The interactive TTY exec this section sketches is a
+    STREAMING contract and stays with the second transport; it is a refinement
+    of a surface that now exists, not a missing gate.
+  - `access.manage` is deliberately NOT a distinct record capability. The
+    per-record grant-administration boundary is zenit-auth's shipped
+    `GrantAdministration.requireAuthorizedRecordDiff` (holding at least one
+    DELEGABLE capability on the record, plus per-capability containment and
+    delegability), which is STRICTLY NARROWER than a dedicated capability would
+    be. The Phase 5 clause "an `access.manage`-only user cannot grant exec" is
+    therefore met in a stronger form: NO non-admin, however broad their
+    authority, can grant exec, because exec is non-delegable.
 - **Per-record scheduling reuses the existing cluster-safe claim protocol.**
   Zenit already has `SystemTaskModel`, `CronExpression`, and atomic cluster
   claiming in `TaskService`. The old plan's "ONE global sweeper ScheduledTask"
@@ -2982,17 +3025,19 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   executor under per-schedule `Leases`, `RunRecordSchedulesTask` sweeper riding
   the TaskService claim, run_as re-authorized per step via the new
   `StoredPrincipalResolver` + `WebSocketAuthenticator.hasCapability` walk).
-  Hohenheim wires the vocabulary (`server/schedule`: console_command/power ->
-  manage, backup -> backups, snapshot -> snapshots), the admin surface
+  Hohenheim wires the vocabulary (`server/schedule`: console_command ->
+  console, power -> power, app_update -> config, backup -> backups,
+  snapshot -> snapshots), the admin surface
   (Schedules tab, schedule/step/run resources) and M061 (backup_enabled ->
   per-instance schedules; `BackupInstances` deleted). Proven by
   `RecordSchedulesTest` (zenit, counterfactualed: revocation, ordering,
   offsets, failure policy, rival fencing) and `InstanceScheduleLiveTest`
   (real daemon: warn-then-restart chain, live grant revocation stops the
   chain in HOST state, backup artifact, schedules die with destroy's
-  SOFT-delete). Console/power steps ride `manage` because no narrower
-  console/power capabilities exist yet -- when those land WITH their
-  enforcing surfaces, the action definitions narrow in one place.
+  SOFT-delete). UPDATED 2026-08-08: the console/power steps no longer ride
+  `manage` -- the narrow capabilities landed with their enforcing surfaces
+  (see the Phase 3 capability-split status note), and the action definitions
+  narrowed in that one place exactly as predicted.
 - Tenant database allocation uses the existing managed-database tier through a
   record-scoped quota and ownership link; it never exposes another tenant's host
   or credentials. Instance transfer between eligible hosts is a durable,

@@ -128,9 +128,9 @@ public final class InstanceApi {
                     ApiConduits.violationText("console_command_required")));
             }
             try {
-                // The console hub owns the manage check for the socket; the command lane
-                // asks the same funnel gate every other write does.
-                HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.MANAGE);
+                // InstanceConsoles.sendCommand IS the console gate now (it asks
+                // requireOperationCapability for CONSOLE itself), so this lane must not
+                // carry a second, drifting copy of it.
                 InstanceConsoles.sendCommand(instanceId, command);
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
@@ -408,7 +408,7 @@ public final class InstanceApi {
 
     /**
      * The instances this context may see: admins everything live, everyone else exactly
-     * the ones they hold {@code manage} on. The SAME scope the /manage list renders,
+     * the ones the walk confirms {@code view} on. The SAME scope the /manage list renders,
      * asked through the same helper -- never a second query shape.
      */
     private static @NonNull List<Row> visibleInstances(@NonNull AccessContext ctx) {
@@ -417,7 +417,7 @@ public final class InstanceApi {
         var query = Models.get(InstanceModel.class).find()
             .where(InstanceModel.DELETED_AT.isNull())
             .where(InstanceModel.GENERATED_BY.isNull());
-        Criteria scope = HohenheimAccess.instanceScope(ctx, HohenheimAccess.MANAGE);
+        Criteria scope = HohenheimAccess.instanceScope(ctx, HohenheimAccess.VIEW);
         if (scope != null) {
             query.where(scope);
         }
@@ -443,7 +443,7 @@ public final class InstanceApi {
             .where(InstanceModel.GENERATED_BY.isNull())
             .first();
         if (row == null || !HohenheimAccess.hasInstanceCapability(ctx, instanceId,
-                HohenheimAccess.MANAGE)) {
+                HohenheimAccess.VIEW)) {
             conduit.notFound();
             return null;
         }

@@ -36,10 +36,9 @@ public class InstanceConsoleCommandAction extends InstanceScheduleAction {
     @Override public @Nullable Schema getSchema() { return PAYLOAD; }
     @Override public @Nullable Icon getIcon() { return Icon.of("terminal"); }
 
-    /** Console access is gated on manage today (no separate console capability exists yet). */
     @Override
     public @NonNull String requiredCapability() {
-        return HohenheimAccess.MANAGE;
+        return HohenheimAccess.CONSOLE;
     }
 
     @Override

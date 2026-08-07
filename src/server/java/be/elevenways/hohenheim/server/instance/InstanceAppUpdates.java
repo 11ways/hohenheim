@@ -50,7 +50,7 @@ public final class InstanceAppUpdates {
      *         {@code app_update_failed}
      */
     public @NonNull String update(int instanceId) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.MANAGE);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
 

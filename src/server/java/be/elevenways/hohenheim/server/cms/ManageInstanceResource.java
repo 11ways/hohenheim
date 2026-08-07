@@ -75,9 +75,10 @@ public final class ManageInstanceResource extends InstanceResource {
     }
 
     /**
-     * Admins see every live instance; everyone else only the ones a walk-confirmed
-     * {@code manage} grant covers. This is what makes an unowned id read as MISSING
-     * (zenit-cms 404s an out-of-scope load) rather than forbidden.
+     * Admins see every live instance; everyone else only the ones the walk confirms
+     * {@code view} on (a manage/console/power/config/destroy grant implies it). This is
+     * what makes an unowned id read as MISSING (zenit-cms 404s an out-of-scope load)
+     * rather than forbidden.
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
@@ -86,7 +87,7 @@ public final class ManageInstanceResource extends InstanceResource {
             // too: their one UI is the owning record's own page.
             Criteria base = new CompositeCriteria(CompositeOperator.AND,
                 InstanceModel.DELETED_AT.isNull(), InstanceModel.GENERATED_BY.isNull());
-            Criteria scope = HohenheimAccess.instanceScope(ctx, HohenheimAccess.MANAGE);
+            Criteria scope = HohenheimAccess.instanceScope(ctx, HohenheimAccess.VIEW);
             if (scope == null) {
                 return AccessDecision.allow(QueryPredicate.of(base));
             }
@@ -124,6 +125,6 @@ public final class ManageInstanceResource extends InstanceResource {
     @Override
     public boolean hasInScopeRecords(@NonNull AccessContext access) {
         return HohenheimAccess.isAdmin(access)
-            || !HohenheimAccess.instanceIdsWith(access, HohenheimAccess.MANAGE).isEmpty();
+            || !HohenheimAccess.instanceIdsWith(access, HohenheimAccess.VIEW).isEmpty();
     }
 }

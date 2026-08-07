@@ -1,11 +1,13 @@
 package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
@@ -170,6 +172,12 @@ public final class TenantWrites {
                 checkRecordWrite(row);
             }
         });
+        InstanceModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null && isTenantOriginated()) {
+                checkInstanceWrite(row);
+            }
+        });
         DnsRecordModel.SCHEMA.addBeforeRemoveHook(context -> {
             if (!isTenantOriginated()) {
                 return;
@@ -277,6 +285,87 @@ public final class TenantWrites {
             }
             Object baseline = stored != null ? stored.get(name) : field.getDefaultValue();
             if (!Objects.equals(row.get(name), baseline)) {
+                throw Violations.ofField(name, row.get(name),
+                    CmsSupport.violationText("tenant_field_frozen"));
+            }
+        }
+    }
+
+    // --- Instances -------------------------------------------------------------------
+
+    /**
+     * The only columns a delegated tenant may author on an instance: exactly what
+     * {@code ManageInstanceResource}'s form offers. Kind, settings (image, command,
+     * environment), the host pick and every lifecycle column are execution and placement
+     * decisions -- authoring one is authoring what runs and where.
+     */
+    private static final Set<String> INSTANCE_TENANT_WRITABLE = Set.of(
+        InstanceModel.NAME.getName(),
+        InstanceModel.CRASH_POLICY.getName());
+
+    /**
+     * Columns the write pipeline DERIVES, plus the one column that has its OWN
+     * capability-aware gate.
+     *
+     * AIDEV-NOTE: {@code settings} is deliberately NOT frozen here. It carries the
+     * image facts, and {@link be.elevenways.hohenheim.server.instance.InstanceImagePolicy}
+     * is the purpose-built gate over exactly those -- including the sanctioned
+     * {@code image_any} override on the record. Freezing the column outright made
+     * that shipped capability unreachable and replaced a precise refusal
+     * ({@code image_requires_capability}) with a blunt one, which is a gate doing
+     * LESS than the one it shadowed. A tenant reaching this column at all still had
+     * to pass the {@code config} check above.
+     */
+    private static final Set<String> INSTANCE_DERIVED = Set.of(
+        InstanceModel.ID.getName(),
+        InstanceModel.CREATED_AT.getName(),
+        InstanceModel.UPDATED_AT.getName(),
+        InstanceModel.SETTINGS.getName());
+
+    /**
+     * Refuse a tenant instance UPDATE that either lacks {@code config} on the record or
+     * reaches past the delegated column set.
+     *
+     * AIDEV-NOTE: this lives on the write pipeline for the reason the class docblock
+     * states -- a form that omits a field is a UX affordance, never a gate, and a direct
+     * POST carries whatever it likes. It is the enforcing half of the Phase 3 gate clause
+     * "a console+power delegate PROVABLY cannot change config".
+     *
+     * AIDEV-NOTE: CREATES are deliberately out of scope here: no record exists to hold a
+     * capability on, and creation authority is the INSTANCES_CREATE permission plus the
+     * transactional quota, InstanceImagePolicy and InstancePlacement. The restore path
+     * (InstanceBackups) also creates rather than updates, which is why it needs no
+     * exemption. Internal UPDATES that belong to an already-authorized operation stamp
+     * status through the fenced, hook-free updateAll; the one that does not is destroy's
+     * deleted_at save, which runs inside {@link #inAuthorizedOperation}.
+     *
+     * @throws Violations {@code instance_not_permitted} (the SAME uniform refusal
+     *         requireOperationCapability raises, so the pair is never a capability
+     *         oracle) or {@code tenant_field_frozen} on the offending column
+     */
+    private static void checkInstanceWrite(@NonNull Row row) {
+        Model model = Models.get(InstanceModel.class);
+        Object idValue = row.has(InstanceModel.ID.getName())
+            ? row.get(InstanceModel.ID) : null;
+        Row stored = idValue != null ? model.findById(idValue) : null;
+        if (stored == null) {
+            return;
+        }
+
+        AccessContext ctx = acting();
+        if (ctx == null || ctx.isAnonymous()
+                || !ctx.hasCapability(InstanceModel.MODEL_ID, idValue, HohenheimAccess.CONFIG)) {
+            throw Violations.ofForm(Microcopy.of("instance_not_permitted")
+                .withFilter("scope", "violations"));
+        }
+
+        for (Field<?, ?> field : model.getSchema().getFields().values()) {
+            String name = field.getName();
+            if (INSTANCE_TENANT_WRITABLE.contains(name) || INSTANCE_DERIVED.contains(name)
+                    || !row.has(name)) {
+                continue;
+            }
+            if (!Objects.equals(row.get(name), stored.get(name))) {
                 throw Violations.ofField(name, row.get(name),
                     CmsSupport.violationText("tenant_field_frozen"));
             }

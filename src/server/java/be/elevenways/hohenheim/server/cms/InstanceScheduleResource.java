@@ -191,9 +191,11 @@ public class InstanceScheduleResource extends RowResource {
         return values;
     }
 
+    /** A schedule declares what runs unattended, so authoring one is a CONFIG act. */
     static void requireManage(@NonNull AccessContext accessContext, int instanceId) {
         if (HohenheimAccess.isAdmin(accessContext)
-                || HohenheimAccess.canManageInstance(accessContext, instanceId)) {
+                || HohenheimAccess.hasInstanceCapability(
+                    accessContext, instanceId, HohenheimAccess.CONFIG)) {
             return;
         }
         throw Violations.ofForm(CmsSupport.violationText("schedule_not_allowed"));

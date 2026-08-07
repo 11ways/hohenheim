@@ -30,10 +30,10 @@ public class InstanceAppUpdateAction extends InstanceScheduleAction {
     @Override public @Nullable Schema getSchema() { return null; }
     @Override public @Nullable Icon getIcon() { return Icon.of("arrow-up-from-bracket"); }
 
-    /** Mutating the installed app is an operate-the-instance act: manage. */
+    /** Mutating the installed app changes what runs: config. */
     @Override
     public @NonNull String requiredCapability() {
-        return HohenheimAccess.MANAGE;
+        return HohenheimAccess.CONFIG;
     }
 
     @Override

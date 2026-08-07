@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.zenit.server.data.RecordSourceGate;
 import be.elevenways.hohenheim.server.files.InstanceFileEndpoints;
 import be.elevenways.hohenheim.server.api.PaasApi;
 import be.elevenways.hohenheim.server.instance.InstanceApi;
@@ -980,7 +981,11 @@ public final class HohenheimHandlers {
 
         HohenheimEndpoints.INSTANCE_CONSOLE_COMMAND.setHandler(conduit -> {
             Integer instanceId = conduit.getParameter(HohenheimEndpoints.INSTANCE_ID);
-            if (instanceId == null || !HohenheimAccess.canManageInstance(conduit, instanceId)) {
+            // The 403 is the UX half; InstanceConsoles.sendCommand asks the same CONSOLE
+            // capability again on the funnel, so a direct POST is refused either way.
+            if (instanceId == null || !HohenheimAccess.hasInstanceCapability(
+                    RecordSourceGate.accessContextOf(conduit), instanceId,
+                    HohenheimAccess.CONSOLE)) {
                 conduit.forbidden();
                 return null;
             }

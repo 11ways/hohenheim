@@ -330,6 +330,13 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
         });
         assertThat(instances.findById(created[0]))
             .as("step 2: the template-sourced create persisted").isNotNull();
+        // The real create-from-template flow plants the owner's manage grant
+        // (InstanceTemplates); this fixture saves the row directly, so it plants the
+        // same grant by hand. Without it the tenant holds no CONFIG on the record and
+        // the step-4 rename below is refused by the tenant-write rule -- correctly,
+        // but for a reason that has nothing to do with the image policy under test.
+        RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, created[0],
+            HohenheimAccess.MANAGE, true);
 
         // 3. An UNAPPROVED template is not an image source for a tenant: pointing
         //    template_id at it does not launder the image in.

@@ -796,14 +796,15 @@ public final class GameDomains {
 
     private static void requireInstanceAuthority(@NonNull AccessContext ctx, int instanceId,
                                                  @NonNull String fieldName) {
-        if (!HohenheimAccess.canManageInstance(ctx, instanceId)) {
+        if (!HohenheimAccess.hasInstanceCapability(ctx, instanceId, HohenheimAccess.CONFIG)) {
             throw Violations.ofField(fieldName, instanceId,
                 CmsSupport.violationText("game_domain_authority_instance"));
         }
     }
 
     private static boolean canManage(@NonNull AccessContext ctx, @Nullable Integer instanceId) {
-        return instanceId != null && HohenheimAccess.canManageInstance(ctx, instanceId);
+        return instanceId != null
+            && HohenheimAccess.hasInstanceCapability(ctx, instanceId, HohenheimAccess.CONFIG);
     }
 
     // -- helpers --------------------------------------------------------------
