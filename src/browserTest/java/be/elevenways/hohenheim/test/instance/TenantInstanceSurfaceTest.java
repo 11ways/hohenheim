@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -36,6 +37,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -635,6 +637,12 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
         row.set(ServerModel.PREFLIGHT_OK, true);
         servers.save(row);
+        // Placement will not CHOOSE a host whose memory nobody measured, so an admitted
+        // host needs the reading a real admit always has (requireAdmittable demands a
+        // passing preflight, and both batteries store mem_total).
+        HostPreflight.store(PREFIX + "host", new HostPreflight.Report(
+            List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
+            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));
         return row.get(ServerModel.ID);
     }
 }

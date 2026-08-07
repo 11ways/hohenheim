@@ -49,4 +49,39 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     default @NonNull String requiredRuntime() {
         return ServerModel.RUNTIME_DOCKER;
     }
+
+    /**
+     * The memory (MB) a record of this kind is ADMITTED AS when its settings declare no
+     * {@code memory_limit_mb} -- the host-capacity denominator, and the cgroup/VM cap the
+     * driver then actually applies.
+     *
+     * AIDEV-NOTE: deliberately abstract, with no interface default. A kind that inherited
+     * a footprint would be charged a number nobody chose, and the whole point of this
+     * declaration is that the capacity gate can never have a zero denominator. Declaring
+     * it is one line; forgetting it is a compile error.
+     *
+     * AIDEV-NOTE: charge == cap is the invariant, not a coincidence. The booking is only
+     * honest because {@code ResourceLimits.fromSettings(settings, defaultFootprintMb())}
+     * hands the SAME number to the daemon, so a workload cannot quietly grow past what
+     * the ledger booked for it. If a kind ever charges one number and caps another, the
+     * gate is decoration again.
+     */
+    int defaultFootprintMb();
+
+    /**
+     * Refuse a candidate host this kind's DEPLOY would refuse anyway, before placement
+     * can choose it.
+     *
+     * AIDEV-NOTE: this exists so the eligible set and the deploy path answer to ONE
+     * authority. It must never re-state a rule -- an implementation calls the same code
+     * the driver calls (IncusInstanceRuntime.requirePreparedImagePresent is the first
+     * one), because a second copy of a refusal is the drift defect this seam removes.
+     * Implementations must stay CHEAP on the common path: the prepared-image check does
+     * no daemon call at all for a catalog image.
+     *
+     * @throws Violations naming the reason this host cannot run these settings
+     */
+    default void requirePlaceableOn(@NonNull String serverName,
+                                    @NonNull Map<String, Object> settings) {
+    }
 }

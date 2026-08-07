@@ -32,7 +32,9 @@ class SettingsGroupCoverageTest {
         // caught 2026-08-04 when "releases" (health-gated releases) was added.
         "builds", "releases",
         // Preview deployments (git-provider wave).
-        "previews");
+        "previews",
+        // Per-host memory capacity (resource-aware placement wave).
+        "capacity");
 
     @Test
     void everyDeclaredSettingsGroupIsGuaranteedBeforeValuesLoad() {

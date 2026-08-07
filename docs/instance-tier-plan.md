@@ -4206,6 +4206,16 @@ counts, or live re-run). It was built from CODE, not from the STATUS notes above
   retention; no host-health heartbeat for Incus hosts; and the kernel-truth ssh
   lane is OPTIONAL, which is the one item that directly weakens "VMs are the
   only strong boundary".
+
+  STATUS 2026-08-07: two of those six are CLOSED and the sentence above is kept
+  as the history it was. The kernel-truth lane is an admission REQUIREMENT
+  (commit 354d149), and placement IS resource-aware -- declared per-kind
+  footprints that double as the applied cap, a host budget off the stored
+  `mem_total` under a freshness bound, a per-host reservation on the core ledger
+  that moves with a migration, and an eligible set that calls the deploy gate
+  instead of imitating it. Device editing also has its operator surface
+  (commit c01c1c3). Three remain: no root-disk size knob, no snapshot retention,
+  no Incus host-health heartbeat.
 - LIVE RE-VERIFICATION for this wave, not taken on trust: IncusColdMigrationLiveTest
   RAN and PASSED (1 test, 0 skipped, 632s, daystrom -> nightstrom) and
   IncusVmLiveTest RAN and PASSED (1 test, 0 skipped, 94s). IncusWindowsTemplateLiveTest's
@@ -4500,6 +4510,30 @@ Each names its home and its first consumer.
   per-host capacity snapshot in Phase 3; Phase 6 live stats refine it
   and detect drift. Placement authority (which creator on which host) is part
   of the create story and reservations prevent concurrent over-placement.
+
+  STATUS 2026-08-07 -- LANDED, and the "snapshot" is the STORED PREFLIGHT REPORT
+  rather than a new structure. `mem_total` was already probed and stored for
+  Docker hosts and read back by nobody; the Incus battery now stores it too
+  (required `resources` check), and `InstanceCapacity` reads it as the
+  denominator, under `capacity.host_memory_reserve_mb`,
+  `capacity.memory_overcommit_ratio` and a freshness bound
+  (`capacity.facts_max_age_hours`, 168h) that an unread measurement did not need
+  and a load-bearing one does. A workload is admitted as its declared
+  `memory_limit_mb`, else its KIND's declared footprint -- and the SAME number is
+  the cap the daemon applies, so the booking is enforced rather than estimated.
+  Reservations are the core `Quotas` ledger keyed per host, adjacent to the
+  instance write and MOBILE (a migration releases the source bucket and books the
+  destination in one write); they book on ANY host and judge only where a
+  measurement exists, because the chooser already refuses to pick an unmeasured
+  one and refusing the write too would have blocked the site tier's own local
+  daemon on a fresh install (found by running the suite, 31 failures, not by
+  reasoning). The chooser's eligible set is now
+  `HostAdmission.requireInstancePlacement` itself plus
+  `InstanceKindHandler.requirePlaceableOn`, never a re-statement of a subset of
+  them, and its score is booked memory rather than a count of rows. Full decision,
+  what was rejected, and the stated limitations: `docs/proxmox-use-inventory.md`
+  item 12, superseding block. **[test]** `InstancePlacementTest`,
+  `InstanceCapacityTest`.
 - **Storage / network models.** Named volumes already exist for stacks and the
   initial instance storage vocabulary reuses them. Full IPAM may wait for a
   concrete multi-host need, but the enforceable Phase 3 network-isolation model

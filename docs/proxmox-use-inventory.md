@@ -480,7 +480,10 @@ silently emptied. There is no docker-tier drain (the pieces exist in
 
 ## 12. Capacity and placement
 
-**IMPLEMENTED as an ADMISSION gate. Resource-aware placement is a GAP.**
+**IMPLEMENTED. Superseded 2026-08-07 -- see the block at the end of this item;
+everything between here and it is the HISTORY it supersedes.**
+
+~~**IMPLEMENTED as an ADMISSION gate. Resource-aware placement is a GAP.**~~
 
 Placement is `InstancePlacement.chooseForBucket`: iterate hosts by id, skip the
 excluded one, skip a runtime mismatch, skip a host that does not
@@ -549,6 +552,151 @@ and settings defaults. **[test]** `InstanceDeviceQuotaTest` (3 tests, RAN),
 **Untested placement behaviour, named:** nothing asserts the fewest-instances
 ordering or the lowest-id tie-break, and nothing asserts `POSTURE_DEDICATED`
 exclusivity -- the posture appears in tests only as a form-edit assertion.
+
+### SUPERSEDED 2026-08-07: resource-aware placement is IMPLEMENTED
+
+The 2026-08-06 deferral above stands as HISTORY and its four reasons were each
+answered rather than waived. What shipped:
+
+**1. The product decision, which is what the deferral was really blocked on.**
+A workload is admitted as its DECLARED `memory_limit_mb`; when it declares none
+it is admitted as its KIND's DECLARED footprint
+(`InstanceKindHandler.defaultFootprintMb()`, abstract with no interface default:
+docker container 512, incus container 512, incus VM 1024, site container 512).
+So the denominator is never zero, which is the exact defect that made a
+limits-summed budget decoration. **[code]**
+`server/instance/InstanceKindHandler.java`, the four kind classes.
+
+The half that makes it a gate rather than a planning number: the SAME number is
+applied as the real cgroup / VM memory cap, through
+`ResourceLimits.fromSettings(settings, defaultFootprintMb())`. Charge == cap. A
+workload physically cannot grow past what the ledger booked for it, so
+"the footprints fit but the host is really full" cannot silently happen for
+booked memory. It can still happen for what is NOT booked -- page cache, the
+daemon itself, a stack container, disk, CPU -- which is what
+`capacity.host_memory_reserve_mb` exists for and is the honest, stated limit of
+this gate.
+
+WHAT WAS REJECTED, and why:
+
+- **A per-TEMPLATE footprint.** Templates are one create surface among several
+  (the CMS create and the site tier author instances with no template at all), so
+  a footprint only some creates carry leaves the others at zero -- the same
+  defect in a smaller box. A template still sets `memory_limit_mb` like any other
+  settings key, which gives per-template sizing without a second mechanism.
+- **"Unbounded workloads do not participate in capacity."** This is the status
+  quo with a rule written next to it. A host full of unbounded workloads would
+  read as empty, and the gate would report success while doing nothing -- the
+  silent-success shape.
+- **Charging CPU as well.** CPU is timeshared and overcommitting it degrades;
+  memory overcommit OOM-kills. One booked dimension, named, beats two where one
+  is decorative. `cpu_limit` is deliberately NOT defaulted for the same reason: a
+  surprise CPU cap would throttle workloads against a budget that does not exist.
+- **Overcommit forbidden.** It is a legitimate operator policy, so it is a
+  setting (`capacity.memory_overcommit_ratio`, default 1.0) whose own description
+  says the kernel OOM killer settles the bet, not this controller.
+
+**2. The eligible set is now the DEPLOY PATH'S OWN AUTHORITY**, which was the
+defect the deferral ranked above the scoring change. `acceptsTenantWorkload` used
+to re-state a SUBSET of `HostAdmission.requireInstancePlacement` inline, so every
+gate added to the deploy path since -- kernel truth most recently -- was missing
+from the chooser and placement could CHOOSE a host whose deploy then refused by
+name. It now CALLS that gate. The prepared-image constraint rides a second seam,
+`InstanceKindHandler.requirePlaceableOn`, whose Incus implementation calls
+`IncusInstanceRuntime.requirePreparedImagePresent` -- the same method `create()`
+calls, extracted rather than copied. A catalog image short-circuits before any
+daemon call, so the common create path pays nothing.
+
+**3. The reservation is the CORE LEDGER, transactional and adjacent to the
+write**: `InstanceCapacity` over zenit `Quotas`, bucket `hohenheim:host_mem_mb:<id>`,
+installed beside `InstanceQuota` on the same beforeWrite hook. It is MOBILE --
+a `server_id` change releases the source bucket and books the destination in the
+same write, so a drain does not drift the budget -- and the booked amount is
+STAMPED on the row (`instances.capacity_mb`, M080) so a release hands back
+exactly what was taken even after the settings change. Every terminating path was
+audited: create, soft delete (the only lane `InstanceService.destroy` takes, and
+the one the remove hooks never fire on), restore, host change, footprint change,
+hard delete.
+
+**4. The input, and its freshness.** The budget is the STORED preflight fact
+`mem_total`, minus `capacity.host_memory_reserve_mb`, times
+`capacity.memory_overcommit_ratio`. The Incus battery never stored it (only
+`ServerService`'s in-memory summary probe read `/1.0/resources`), so it now does,
+under the same fact names as the Docker battery, with a REQUIRED `resources`
+check -- a host whose inventory cannot be read fails preflight rather than
+silently having no budget.
+
+**WHERE the budget is ENFORCED, which is a scope decision and was corrected mid-wave
+against evidence.** The first shape refused every write onto a host with no usable
+reading (`host_capacity_unproven`, the RestoreCapacity stance). Running the full
+suite against it produced 31 failures across 26 classes, and reading them showed
+the stance was wrong rather than the tests: it also refused the site tier's
+lowered containers on the implicit LOCAL daemon, which is never admitted and never
+preflighted, so a fresh install could not run a single site until someone ran
+preflight on the operator's own machine. What ships instead:
+
+- The RESERVATION books on any host and judges against the budget when one exists,
+  against nothing when it does not -- usage is counted either way, exactly the
+  `max_instances_per_owner` semantics, so the ledger holds honest numbers the
+  moment a preflight lands.
+- The CHOOSER never picks an unmeasured host. So the only ways to land on one are
+  an operator naming it explicitly and the site tier's own daemon -- both explicit
+  operator choices about the operator's own machine.
+- Consequence: on every host placement can choose, the denominator is a real
+  measurement and the gate CAN fail. That is the property that was at stake; the
+  unmeasured host is not a passing capacity check, it is a host outside the
+  rationing, said out loud.
+- `host_capacity_unproven` survives as the PLACEMENT refusal: when eligible hosts
+  exist but none is measured, the refusal names the host to preflight instead of
+  the generic "nothing accepts this workload". FOUR named placement refusals now
+  exist and they have four different fixes, checked in this order: the KIND's own
+  refusal (`host_prepared_image_missing` -- publish that image on that host; it is
+  first because such a host passed every admission gate, so it is the one
+  actionable sentence in the walk, and swallowing it is what would have made that
+  microcopy key unreachable), `no_placement_capacity` (free memory or admit a
+  host), `host_capacity_unproven` (run preflight on {name}), and
+  `no_placement_available` (admit a host or widen a posture). A host whose daemon
+  cannot be ASKED is excluded silently and falls to the generic refusal: a
+  transient connection error is not the placement reason.
+
+The last wave's known limitation -- stored preflight verdicts have no freshness
+bound -- was bounded HERE and only here: `capacity.facts_max_age_hours` (default
+168) makes a stale reading unusable for placement, by name, telling the operator
+to re-run preflight; 0 removes the bound as an explicit choice. The ADMISSION
+gate's staleness is deliberately NOT bounded in the same move: that would
+silently cordon hosts already carrying production work, which is an availability
+decision an operator makes, not a wave.
+
+**[code]** `server/instance/InstanceCapacity.java`,
+`server/instance/InstancePlacement.java`, `common/HohenheimSettings.java`
+(`Capacity` group), `server/migration/M080_InstanceCapacity.java`,
+`server/host/IncusPreflight.java`.
+**[test]** `InstancePlacementTest` (3 journeys, RAN 2026-08-07) -- the eligible
+set as HostAdmission's own, the booked-memory score with a positive anchor, the
+capacity-versus-availability refusal split, the unmeasured host, the dedicated
+posture. `InstanceCapacityTest` (2 journeys, RAN 2026-08-07) -- every terminating
+and moving path, six racing creates against one host's last megabyte, both
+refusal identities, the freshness bound and its opt-out.
+
+**Known limitations, stated:**
+
+- The booking is MEMORY only. Disk headroom is still `RestoreCapacity` on the
+  restore/migration paths and is NOT consulted at create; CPU is not booked at all
+  and that is a decision, not an omission (see above).
+- A workload is booked on its RECORD'S EXISTENCE, not on whether it is running. A
+  stopped guest can be started again without asking anyone, so booking only running
+  workloads would move the refusal to START, after the operator already believed the
+  guest existed. Consequence, intended and visible: a fleet of defined-but-stopped
+  guests consumes the host budget, and freeing it means destroying a record or
+  shrinking its declared memory. This is what `IncusWindowsTemplateLiveTest` hit --
+  three 2 GB VM records on a 3907 MB host, only one of which ever ran; the ledger
+  refused the third correctly (`host_capacity_reached needed=2048 free=1280`) and the
+  fixture now sizes the two that never boot honestly.
+- Nothing REBALANCES an existing fleet; the gate decides where the NEXT workload goes.
+  Drain moves the charge with the workload but chooses no better destination than
+  the ordinary chooser would.
+- The stored reading is a MEASUREMENT of the machine, not of what is running on it.
+  Booked memory and actual RSS can differ; the reserve exists for the gap.
 
 ## 13. Node failure recovery
 
@@ -735,30 +883,32 @@ refused connection are still different writers. Pinned by
 The inventory is CLOSED: every item the plan enumerates has a decision and
 evidence.
 
-**Three of the six gaps this document opened are closed.** Device-surface wave,
+**Four of the six gaps this document opened are closed.** Device-surface wave,
 2026-08-06: device editing HAS an operator surface (item 3, panel + API +
 `InstanceDeviceSurfaceTest`), and `RestoreCapacity` has its test plus a fixed
 defect (item 4). Trust-state-machine wave, 2026-08-07: the optional kernel-truth
-lane (item 5) is now an admission REQUIREMENT. Three remain, each with its owning
-slice:
+lane (item 5) is now an admission REQUIREMENT. Capacity wave, 2026-08-07:
+placement is resource-aware (item 12). Three remain, each with its owning slice:
 
 1. **No root-disk size knob** (item 3).
-2. **Placement is not resource-aware** (item 12) -- it counts instances. This is
-   now a RECORDED DEFERRAL with reasons rather than an unexamined gap: the
-   per-workload figures a budget would sum are optional and usually absent, so the
-   missing piece is a DECLARED per-kind footprint, which is a product decision.
-   The chooser's current behaviour is pinned by `InstancePlacementTest`.
-3. **No snapshot retention** (item 7).
-4. **No host-health heartbeat for Incus hosts** (item 13).
-5. ~~**The kernel-truth ssh lane is optional** (item 5)~~ -- CLOSED 2026-08-07:
+2. **No snapshot retention** (item 7).
+3. **No host-health heartbeat for Incus hosts** (item 13).
+4. ~~**The kernel-truth ssh lane is optional** (item 5)~~ -- CLOSED 2026-08-07:
    verification is an admission requirement for any tenant-accepting posture,
    proven at preflight and refused by name at admit and placement. See the
    superseding block under item 5 above.
+5. ~~**Placement is not resource-aware** (item 12)~~ -- CLOSED 2026-08-07: a
+   workload is admitted as its declared memory limit or its KIND's declared
+   footprint, that same number is the cap the daemon applies, the host budget is
+   the measured `mem_total` under a freshness bound, the reservation rides the
+   core ledger and moves with a migration, and the eligible set is
+   HostAdmission's own rather than a copy of a subset of it. See the superseding
+   block under item 12 above.
 
 None of these is a hidden gap; all are written down with an owner. What would
-still block calling this a general Proxmox replacement, in one sentence each:
-placement does not know how big a host is; and clustering, HA, live migration,
-passthrough and ISO install are rejected rather than delivered, which is the right
-answer for the fleet we run and the wrong answer for someone who needs any of
-them. "An operator cannot add a disk or a NIC from the panel" was the third
-sentence here and no longer is.
+still block calling this a general Proxmox replacement, in one sentence: clustering,
+HA, live migration, passthrough and ISO install are rejected rather than delivered,
+which is the right answer for the fleet we run and the wrong answer for someone who
+needs any of them. "An operator cannot add a disk or a NIC from the panel" and
+"placement does not know how big a host is" were the other two sentences here and
+no longer are.

@@ -13,6 +13,8 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Map;
+
 /**
  * WHERE a new instance lands, and who gets to decide.
  *
@@ -24,15 +26,25 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * input reaches placement on any surface, and there is no shape a forged field could
  * take that would matter.
  *
- * The eligible set is the intersection of what already exists: {@code admitted}
- * admission, a VERIFIED identity (re-checked here, not trusted from the stored
- * decision), and a posture that accepts a hostile container. A {@code dedicated} host
- * is additionally exclusive: it accepts a tenant only while every live instance on it
- * already answers to that SAME owner -- the posture claims "the whole host belongs to
- * one tenant", and a chooser that co-located a second one would have made that claim a
- * lie. Selection among the survivors is fewest-live-instances, lowest id as the
- * tie-break: deterministic, so a placement is reproducible and testable, and never a
- * function of anything the caller sent.
+ * THE ELIGIBLE SET IS DECIDED BEFORE THE SCORE, and it is decided by asking the DEPLOY
+ * PATH'S OWN AUTHORITY (2026-08-07). This class used to re-state a subset of
+ * {@link HostAdmission#requireInstancePlacement} inline -- admission, posture, verified
+ * identity -- which meant every gate added to the deploy path since was missing here, and
+ * placement could CHOOSE a host whose deploy then refused by name (the kernel-truth gate
+ * was the live instance of that; the prepared-image constraint was the other). A wrong
+ * eligible set is a worse defect than a wrong score, so the predicate now CALLS the gate
+ * instead of imitating it, and a kind that has host-specific requirements of its own
+ * answers for them through {@link InstanceKindHandler#requirePlaceableOn}.
+ *
+ * Three things stay placement's OWN, because they are not deploy refusals:
+ * the {@code dedicated} posture's exclusivity (a host that accepts this owner would accept
+ * the deploy fine -- it is the CO-LOCATION that placement must not create), the runtime
+ * match, and the exclude argument.
+ *
+ * Selection among the survivors is FEWEST BOOKED MEMORY, lowest id as the tie-break: a
+ * host with 128 GB and two small workloads outranks one with 4 GB and one large VM, which
+ * a count of rows could never express. It is still deterministic, so a placement is
+ * reproducible and testable, and never a function of anything the caller sent.
  *
  * AIDEV-NOTE: the owner label compared on a dedicated host is the QUOTA BUCKET, which
  * is the packed manage-subject set the create charged. It is deliberately the same
@@ -43,6 +55,50 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class InstancePlacement {
 
+    /**
+     * What a create knows about the workload it is placing, beyond its runtime: enough to
+     * ask a host whether it could run THIS, and to price it against the host's budget.
+     *
+     * @param handler the kind, or null when the caller could not resolve one
+     * @param settings the workload's settings, as the record will carry them
+     * @param requiredRuntime the daemon flavour it needs; derived from the kind by
+     *        {@link #of}, and carried explicitly only so a kind-less caller can still
+     *        route by runtime
+     */
+    public record Workload(@Nullable InstanceKindHandler handler,
+                           @NonNull Map<String, Object> settings,
+                           @NonNull String requiredRuntime) {
+
+        /** The workload a create is about: the kind decides the runtime and the price. */
+        public static @NonNull Workload of(@Nullable InstanceKindHandler handler,
+                                           @NonNull Map<String, Object> settings) {
+            return new Workload(handler, settings, handler != null
+                ? handler.requiredRuntime() : ServerModel.RUNTIME_DOCKER);
+        }
+
+        /** The workload an EXISTING record describes (the migration/drain lane). */
+        public static @NonNull Workload of(@Nullable InstanceKindHandler handler,
+                                           @NonNull Row instance) {
+            return of(handler, InstanceCapacity.settingsOf(instance));
+        }
+
+        /**
+         * The runtime-only shape: no kind-specific eligibility and NO priced footprint.
+         *
+         * AIDEV-NOTE: only for a caller that genuinely has no kind (the runtime-routing
+         * tests). It books nothing, so it would be admitted onto a host with no headroom
+         * left -- never reach for it on a create path, where the kind is always known.
+         */
+        public static @NonNull Workload forRuntime(@NonNull String runtime) {
+            return new Workload(null, Map.of(), runtime);
+        }
+
+        int footprintMb() {
+            return this.handler == null ? 0
+                : InstanceCapacity.footprintMbOf(this.handler, this.settings);
+        }
+    }
+
     private InstancePlacement() {
     }
 
@@ -50,34 +106,36 @@ public final class InstancePlacement {
      * The host a create by {@code ctx} lands on.
      *
      * @param requested the caller-supplied host; honoured for admins, IGNORED otherwise
-     * @throws Violations {@code no_placement_available} when no admitted host accepts
-     *         this owner's workload -- named, never a silent fall back to the local daemon
+     * @throws Violations one of three, each naming what to DO: {@code no_placement_capacity}
+     *         (eligible hosts, all out of memory), {@code host_capacity_unproven} (eligible
+     *         hosts, none measured -- run preflight on the named one) or
+     *         {@code no_placement_available} (nothing accepts this owner's workload at all).
+     *         Never a silent fall back to the local daemon
      */
     public static int forActor(@Nullable AccessContext ctx, @Nullable Integer requested,
-                               @NonNull String requiredRuntime) {
+                               @NonNull Workload workload) {
         if (ctx == null || HohenheimAccess.isAdmin(ctx)) {
             if (requested != null) {
                 return requested;
             }
             // The implicit local daemon is a DOCKER host; a kind needing another runtime
             // has no implicit default and walks the same chooser a tenant create does.
-            if (ServerModel.RUNTIME_DOCKER.equals(requiredRuntime)) {
+            if (ServerModel.RUNTIME_DOCKER.equals(workload.requiredRuntime())) {
                 return ServerModel.localServerId();
             }
         }
         return chooseForOwner(HohenheimAccess.packSubjects(
-            HohenheimAccess.creationOwnerSubjects(ctx)), requiredRuntime);
+            HohenheimAccess.creationOwnerSubjects(ctx)), workload);
     }
 
     /**
      * @param packedOwner the packed manage-subject set the new instance will answer to
-     * @param requiredRuntime the kind's declared host runtime; only matching hosts qualify
      * @return the chosen host id
-     * @throws Violations {@code no_placement_available}
+     * @throws Violations {@code no_placement_capacity}, {@code host_capacity_unproven} or
+     *         {@code no_placement_available}
      */
-    public static int chooseForOwner(@NonNull String packedOwner,
-                                     @NonNull String requiredRuntime) {
-        return chooseForBucket(InstanceQuota.bucketKeyOf(packedOwner), requiredRuntime, null);
+    public static int chooseForOwner(@NonNull String packedOwner, @NonNull Workload workload) {
+        return chooseForBucket(InstanceQuota.bucketKeyOf(packedOwner), workload, null);
     }
 
     /**
@@ -87,55 +145,103 @@ public final class InstancePlacement {
      *
      * @param bucket the charged bucket key (a stored {@code InstanceModel.QUOTA_BUCKET})
      * @param excludeServerId a host that may not be chosen, or null
-     * @throws Violations {@code no_placement_available}
+     * @throws Violations {@code no_placement_capacity}, {@code host_capacity_unproven} or
+     *         {@code no_placement_available}
      */
-    public static int chooseForBucket(@NonNull String bucket,
-                                      @NonNull String requiredRuntime,
+    public static int chooseForBucket(@NonNull String bucket, @NonNull Workload workload,
                                       @Nullable Integer excludeServerId) {
         Integer chosen = null;
         long chosenLoad = Long.MAX_VALUE;
+        // Distinguishing "nothing accepts this workload" from "everything is full" is the
+        // whole difference between an operator admitting a host and an operator finding
+        // one that already refused for another reason.
+        boolean somethingWasFull = false;
+        Integer unmeasured = null;
+        // A host that passed every ADMISSION gate and was excluded only by the kind's own
+        // requirement carries the one refusal an operator can act on directly (publish
+        // this image on that host), so it is kept rather than folded into a generic
+        // "nothing accepts this workload".
+        Violations kindRefusal = null;
+        long largestFreeMb = -1;
+        int footprint = workload.footprintMb();
 
         for (Row server : Models.get(ServerModel.class).find()
                 .orderBy(ServerModel.ID, SortOrder.ASC).all()) {
             Integer serverId = server.get(ServerModel.ID);
             if (serverId == null || serverId.equals(excludeServerId)
-                    || !ServerModel.runtimeOf(server).equals(requiredRuntime)
-                    || !acceptsTenantWorkload(server, bucket)) {
+                    || !ServerModel.runtimeOf(server).equals(workload.requiredRuntime())) {
                 continue;
             }
-            long load = liveInstancesOn(serverId);
-            if (load < chosenLoad) {
+            if (!acceptsTenantWorkload(server, serverId, bucket)) {
+                continue;
+            }
+            KindGate gate = kindGateFor(serverId, workload);
+            if (!gate.placeable()) {
+                if (gate.reason() != null) {
+                    kindRefusal = gate.reason();
+                }
+                continue;
+            }
+            Long budget = InstanceCapacity.budgetMbOf(server);
+            if (budget == null) {
+                // Eligible in every other respect, but nothing has measured it: it cannot
+                // be RATIONED, so it is not something to reason about here. The operator
+                // is told which host to preflight rather than left with a bare "nothing
+                // accepts this".
+                unmeasured = serverId;
+                continue;
+            }
+            long booked = InstanceCapacity.bookedMbOn(serverId);
+            if (booked + footprint > budget) {
+                somethingWasFull = true;
+                largestFreeMb = Math.max(largestFreeMb, budget - booked);
+                continue;
+            }
+            if (booked < chosenLoad) {
                 chosen = serverId;
-                chosenLoad = load;
+                chosenLoad = booked;
             }
         }
 
         if (chosen == null) {
-            throw refusal();
+            if (kindRefusal != null) {
+                throw kindRefusal;
+            }
+            if (somethingWasFull) {
+                throw Violations.ofForm(violation("no_placement_capacity")
+                    .withArg("needed", footprint)
+                    .withArg("free", Math.max(0, largestFreeMb)));
+            }
+            if (unmeasured != null) {
+                throw Violations.ofForm(violation("host_capacity_unproven")
+                    .withArg("name", InstanceCapacity.hostLabel(unmeasured)));
+            }
+            throw Violations.ofForm(violation("no_placement_available"));
         }
         return chosen;
     }
 
-    /** Whether this host may receive a workload owned by {@code bucket}. */
-    private static boolean acceptsTenantWorkload(@NonNull Row server, @NonNull String bucket) {
-        if (!ServerModel.ADMISSION_ADMITTED.equals(server.get(ServerModel.ADMISSION))) {
-            return false;
-        }
-        String posture = server.get(ServerModel.POSTURE);
-        if (posture == null || ServerModel.POSTURE_TRUSTED_ONLY.equals(posture)) {
-            return false;
-        }
+    /**
+     * Whether this host may receive a workload owned by {@code bucket}, as far as
+     * ADMISSION is concerned.
+     *
+     * AIDEV-NOTE: the first call IS the deploy gate, not a copy of it. Adding a refusal to
+     * HostAdmission.requireInstancePlacement automatically narrows the eligible set, which
+     * is the property this seam exists to hold -- do NOT re-inline admission, posture or
+     * identity checks here, however convenient the early exit looks.
+     */
+    private static boolean acceptsTenantWorkload(@NonNull Row server, int serverId,
+                                                 @NonNull String bucket) {
         try {
-            HostAdmission.requireVerifiedIdentity(server);
-        } catch (Violations unverified) {
+            HostAdmission.requireInstancePlacement(serverId);
+        } catch (Violations refused) {
             return false;
         }
-        if (!ServerModel.POSTURE_DEDICATED.equals(posture)) {
+        if (!ServerModel.POSTURE_DEDICATED.equals(server.get(ServerModel.POSTURE))) {
             return true;
         }
         // Dedicated: exclusive to one owner. A live instance charged to any OTHER bucket
         // (the operator's empty-set bucket included) makes this host unavailable.
-        Integer serverId = server.get(ServerModel.ID);
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.SERVER_ID.eq(serverId))
                 .where(InstanceModel.DELETED_AT.isNull()).all()) {
@@ -147,15 +253,45 @@ public final class InstancePlacement {
         return true;
     }
 
-    private static long liveInstancesOn(int serverId) {
-        return Models.get(InstanceModel.class).find()
-            .where(InstanceModel.SERVER_ID.eq(serverId))
-            .where(InstanceModel.DELETED_AT.isNull())
-            .count();
+    /**
+     * The kind's verdict on one host: placeable, refused for a reason worth telling an
+     * operator, or simply unaskable.
+     */
+    private record KindGate(boolean placeable, @Nullable Violations reason) {
+
+        static final KindGate OK = new KindGate(true, null);
+
+        /** Excluded, with nothing an operator could act on -- an unreachable daemon. */
+        static final KindGate UNASKABLE = new KindGate(false, null);
     }
 
-    private static @NonNull Violations refusal() {
-        return Violations.ofForm(Microcopy.of("no_placement_available")
-            .withFilter("scope", "violations"));
+    /**
+     * Ask the KIND whether this host could run these settings.
+     *
+     * AIDEV-NOTE: a named refusal is KEPT because this host already passed every admission
+     * gate, so "publish that image here" is the one actionable sentence in the whole walk;
+     * folding it into no_placement_available is what would make
+     * {@code host_prepared_image_missing} unreachable microcopy. An unreachable daemon is
+     * excluded SILENTLY: the deploy there would fail on the same daemon, and pointing the
+     * operator at a transient connection error as though it were the placement reason is
+     * worse than the generic refusal.
+     */
+    private static @NonNull KindGate kindGateFor(int serverId, @NonNull Workload workload) {
+        if (workload.handler() == null) {
+            return KindGate.OK;
+        }
+        try {
+            workload.handler().requirePlaceableOn(
+                ServerModel.nameOf(serverId), workload.settings());
+            return KindGate.OK;
+        } catch (Violations refused) {
+            return new KindGate(false, refused);
+        } catch (RuntimeException unreachable) {
+            return KindGate.UNASKABLE;
+        }
+    }
+
+    private static Microcopy violation(String key) {
+        return Microcopy.of(key).withFilter("scope", "violations");
     }
 }

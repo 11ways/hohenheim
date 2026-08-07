@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
+import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -20,6 +22,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -114,11 +118,22 @@ class HostRuntimeTest {
             admitted.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
             admitted.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
             Models.get(ServerModel.class).save(admitted);
-            assertThat(InstancePlacement.chooseForOwner("", ServerModel.RUNTIME_INCUS))
+            // The eligible set is HostAdmission's own, so this host must satisfy every
+            // gate a deploy would: a PROVEN kernel-truth lane and a measured memory
+            // budget, both stored through the preflight funnel. Placement offering a
+            // host that the deploy then refuses is the defect that seam removed.
+            HostPreflight.store("rt-local", new HostPreflight.Report(List.of(
+                new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok"),
+                new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
+                    HostPreflight.STATUS_PASS, true, "kernel lane proven")),
+                Map.of("mem_total", 4L * 1024 * 1024 * 1024), true, Instant.now(), null));
+            assertThat(InstancePlacement.chooseForOwner("",
+                    InstancePlacement.Workload.forRuntime(ServerModel.RUNTIME_INCUS)))
                 .as("step 4: the incus runtime lands on the admitted incus host")
                 .isEqualTo((int) admitted.get(ServerModel.ID));
             assertThat(catchThrowable(() ->
-                    InstancePlacement.chooseForOwner("", ServerModel.RUNTIME_DOCKER)))
+                    InstancePlacement.chooseForOwner("",
+                        InstancePlacement.Workload.forRuntime(ServerModel.RUNTIME_DOCKER))))
                 .as("step 4: the docker runtime refuses rather than landing there")
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->

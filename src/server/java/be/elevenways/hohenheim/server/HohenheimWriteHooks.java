@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.GeneratedInstanceFiles;
+import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceImagePin;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
@@ -75,6 +76,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // soft-delete transition hands the slot back (the remove hooks never fire on
         // the destroy path -- it soft-deletes through save()).
         InstanceQuota.install();
+        // Per-HOST memory bookings charge adjacent to the same write: a migration moves
+        // the charge between host buckets, and the soft-delete transition hands it back.
+        InstanceCapacity.install();
         // Disk-GB and extra-NIC reservations charge adjacent to the device-row write;
         // hard deletes (detach, destroy cleanup) release through the remove pairing.
         InstanceDeviceQuota.install();

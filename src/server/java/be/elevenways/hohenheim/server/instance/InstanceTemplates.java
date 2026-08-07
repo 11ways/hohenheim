@@ -223,8 +223,12 @@ public final class InstanceTemplates {
         // needs, and only hosts declaring that runtime qualify.
         InstanceKindHandler kindHandler = InstanceKinds.getHandler(
             template.get(InstanceTemplateModel.KIND));
+        Map<String, Object> placedSettings = copiedSettings(template);
+        // The settings travel WITH the runtime: they price the workload against each
+        // host's memory budget and answer the kind's own host requirements (a prepared
+        // image must already be published on the host that gets chosen).
         int placement = InstancePlacement.forActor(ctx, serverId,
-            kindHandler != null ? kindHandler.requiredRuntime() : ServerModel.RUNTIME_DOCKER);
+            InstancePlacement.Workload.of(kindHandler, placedSettings));
         int templateId = template.get(InstanceTemplateModel.ID);
 
         FormSpec spec = variableFormSpec(templateId);
@@ -235,7 +239,7 @@ public final class InstanceTemplates {
         Row instance = instances.createEmptyRow();
         instance.set(InstanceModel.NAME, name.trim());
         instance.set(InstanceModel.KIND, template.get(InstanceTemplateModel.KIND));
-        instance.set(InstanceModel.SETTINGS, copiedSettings(template));
+        instance.set(InstanceModel.SETTINGS, placedSettings);
         instance.set(InstanceModel.TEMPLATE_ID, templateId);
         instance.set(InstanceModel.SERVER_ID, placement);
         if (environmentId != null) {

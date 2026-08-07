@@ -5037,6 +5037,18 @@
     "text": "Host '{$name}' heeft geen BEWEZEN kernelkanaal: de laatste preflight deed geen nftables-transactie op de daemonhost; draai preflight opnieuw en los de kernel_isolation_lane-check op",
     "scope": "violations"
   },
+  "host_capacity_reached": {
+    "text": "Host '{$name}' heeft geen ruimte voor deze workload: er is {$needed} MB nodig en slechts {$free} MB van het geheugenbudget is vrij. Kies een kleinere geheugenlimiet, maak een workload vrij of laat een extra host toe",
+    "scope": "violations"
+  },
+  "host_capacity_unproven": {
+    "text": "Host '{$name}' heeft geen recente geheugenmeting, dus er kan niets op geplaatst worden: draai preflight op deze host, die het totale geheugen vastlegt waartegen elke plaatsing beoordeeld wordt",
+    "scope": "violations"
+  },
+  "host_prepared_image_missing": {
+    "text": "Host '{$name}' bevat de voorbereide image '{$image}' niet: publiceer ze in de imagestore van die host, of kies een host die ze al heeft",
+    "scope": "violations"
+  },
   "host_not_ssh": {
     "text": "Host '{$name}' wordt niet via SSH bereikt en kan dus geen back-ups bewaren; gebruik een bestandssysteemdoel voor de schijf van de controller",
     "scope": "violations"
@@ -6094,6 +6106,10 @@
   },
   "no_placement_available": {
     "text": "Geen enkele toegelaten host aanvaardt deze workload op dit moment",
+    "scope": "violations"
+  },
+  "no_placement_capacity": {
+    "text": "Elke host die deze workload aanvaardt zit vol: er is {$needed} MB nodig en de leegste heeft {$free} MB vrij. Maak een workload vrij of laat een extra host toe",
     "scope": "violations"
   },
   "instance_create_not_permitted": {

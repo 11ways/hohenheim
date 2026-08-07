@@ -145,16 +145,8 @@ public final class IncusInstanceRuntime
         boolean pinned = spec.imageFingerprint() != null && !spec.imageFingerprint().isBlank();
         if (spec.imageOrigin() == ImageOrigin.PREPARED) {
             // No protocol/server: the daemon resolves this in its OWN image store, never
-            // fetched from anywhere. An unpinned alias is verified to EXIST there before
-            // the daemon ever sees a create -- without this preflight, the daemon's own
-            // refusal for a missing local alias reads as a generic create failure and the
-            // operator has no idea the alias is simply absent.
-            if (!pinned && this.incus.imageFingerprintForAlias(spec.image()) == null) {
-                throw new IOException("Prepared image alias '" + spec.image() + "' does not"
-                    + " exist on server '" + (this.serverName != null ? this.serverName
-                    : "(unnamed)") + "'; a prepared image is published into the daemon's own"
-                    + " image store by an operator and is never fetched.");
-            }
+            // fetched from anywhere.
+            requirePreparedImagePresent(spec.image(), spec.imageOrigin(), pinned);
         } else {
             source.put("protocol", "simplestreams");
             source.put("server", IMAGE_SERVER);
@@ -284,6 +276,35 @@ public final class IncusInstanceRuntime
         definition.put("description", existing.get("description") instanceof String text
             ? text : "");
         this.incus.updateInstance(handle, definition);
+    }
+
+    /**
+     * THE prepared-image constraint, in ONE place: an unpinned prepared alias must already
+     * exist in this daemon's own image store.
+     *
+     * AIDEV-NOTE: extracted from create() so PLACEMENT can consult the same rule before
+     * choosing this host (IncusContainerKind/IncusVmKind.requirePlaceableOn). Placement
+     * choosing a host whose deploy then refuses by name was a wrong ELIGIBLE SET, and the
+     * fix is one authority with two callers -- never a second copy of the rule in the
+     * chooser. A CATALOG image returns immediately without touching the daemon, so the
+     * common create path pays nothing for this.
+     *
+     * @throws IOException when the alias is absent, or the daemon cannot be asked
+     */
+    public void requirePreparedImagePresent(@Nullable String image, @NonNull ImageOrigin origin,
+                                            boolean pinned) throws IOException {
+        if (origin != ImageOrigin.PREPARED || pinned || image == null || image.isBlank()) {
+            // A blank image is the create form's refusal to make, not this one's.
+            return;
+        }
+        if (this.incus.imageFingerprintForAlias(image) == null) {
+            // Without this the daemon's own refusal for a missing local alias reads as a
+            // generic create failure, and the operator has no idea the alias is absent.
+            throw new IOException("Prepared image alias '" + image + "' does not"
+                + " exist on server '" + (this.serverName != null ? this.serverName
+                : "(unnamed)") + "'; a prepared image is published into the daemon's own"
+                + " image store by an operator and is never fetched.");
+        }
     }
 
     /** Map the operator's cgroup caps onto Incus's limits vocabulary. */
