@@ -969,10 +969,16 @@
       "scope": "instance_from_template"
     }
   ],
-  "captured": {
-    "text": "Captured",
-    "scope": "site_processes"
-  },
+  "captured": [
+    {
+      "text": "Captured",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Captured",
+      "scope": "instance_console"
+    }
+  ],
   "certificate": [
     {
       "text": "Certificate",
@@ -1279,10 +1285,16 @@
     "text": "Last run failed",
     "scope": "attention_detail"
   },
-  "lines": {
-    "text": "Lines",
-    "scope": "site_processes"
-  },
+  "lines": [
+    {
+      "text": "Lines",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Lines",
+      "scope": "instance_console"
+    }
+  ],
   "match_type": [
     {
       "text": "Match type",
@@ -1307,10 +1319,16 @@
       "scope": "instance_stats"
     }
   ],
-  "no_logs": {
-    "text": "No stored logs yet.",
-    "scope": "site_processes"
-  },
+  "no_logs": [
+    {
+      "text": "No stored logs yet.",
+      "scope": "site_processes"
+    },
+    {
+      "text": "No stored console output yet.",
+      "scope": "instance_console"
+    }
+  ],
   "none": [
     {
       "text": "None",
@@ -1543,14 +1561,26 @@
       "scope": "stack_deployments"
     }
   ],
-  "stored_log": {
-    "text": "Stored log {$title}",
-    "scope": "site_processes"
-  },
-  "stored_logs": {
-    "text": "Stored process logs",
-    "scope": "site_processes"
-  },
+  "stored_log": [
+    {
+      "text": "Stored log {$title}",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Console output of {$title}",
+      "scope": "instance_console"
+    }
+  ],
+  "stored_logs": [
+    {
+      "text": "Stored process logs",
+      "scope": "site_processes"
+    },
+    {
+      "text": "Stored console logs",
+      "scope": "instance_console"
+    }
+  ],
   "task": {
     "text": "Task {$name}",
     "scope": "attention_title"
@@ -7207,5 +7237,13 @@
   "exec_failed": {
     "text": "Could not run the command inside {$name}: {$reason}",
     "scope": "violations"
+  },
+  "stored_logs_description": {
+    "text": "Console output kept from earlier runs of this instance.",
+    "scope": "instance_console"
+  },
+  "workload": {
+    "text": "Workload",
+    "scope": "instance_console"
   }
 }

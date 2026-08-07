@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DeploymentModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.ProclogModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
@@ -145,6 +146,7 @@ public final class HohenheimSources implements ZenitModule {
         // actions: proclogs flush every 30s per process and deployments carry
         // their own history UI. Tracking them would flood zenit_activity.
         ActivityLog.setPolicy(ProclogModel.MODEL_ID, ActivityPolicy.NONE);
+        ActivityLog.setPolicy(InstanceLogModel.MODEL_ID, ActivityPolicy.NONE);
         ActivityLog.setPolicy(DeploymentModel.MODEL_ID, ActivityPolicy.NONE);
 
         // Reconcile findings are a DERIVED CACHE, not a record of anything: every sweep
