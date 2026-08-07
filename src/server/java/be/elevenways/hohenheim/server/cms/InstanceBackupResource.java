@@ -93,6 +93,10 @@ public class InstanceBackupResource extends RowResource {
                 .build())
             .handler((row, ctx) -> {
                 AtomicInteger newId = new AtomicInteger();
+                // AIDEV-NOTE: this wrapper is NOT vacuous, unlike the drain one it
+                // resembled. Traced 2026-08-07: restoreToNew ends in a real
+                // InstanceModel.save() of the new record, so a create hook DOES fire
+                // inside and there is a row for this name to rename.
                 ActivityLog.withAction(ActivityLog.ACTION_CREATE, "restore_backup",
                     () -> newId.set(this.backups.restoreToNew(
                         row.get(InstanceBackupModel.ID), null, null)));

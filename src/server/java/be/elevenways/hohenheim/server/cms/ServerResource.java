@@ -756,23 +756,26 @@ public final class ServerResource extends RowResource {
                 ServerModel.ADMISSION_CORDONED.equals(row.get(ServerModel.ADMISSION)))
             .handler((row, ctx) -> {
                 Integer serverId = row.get(ServerModel.ID);
-                InstanceMigrations.DrainReport[] report = new InstanceMigrations.DrainReport[1];
-                ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "drain",
-                    () -> report[0] = new InstanceMigrations().drain(serverId));
-                if (report[0].complete()) {
+                // AIDEV-NOTE: no ActivityLog.withAction here, deliberately. A drain writes
+                // every instance through fenced updateAll calls, which fire no write hooks,
+                // so the wrapper that used to sit here renamed nothing and recorded nothing.
+                // InstanceMigrations records the per-instance moves and the host-level drain
+                // explicitly instead. Traced 2026-08-07.
+                InstanceMigrations.DrainReport report = new InstanceMigrations().drain(serverId);
+                if (report.complete()) {
                     return CmsActionResult.refreshWithToast(
                         Microcopy.of("host_drained").withFilter("scope", "server")
                             .withArg("name", row.get(ServerModel.NAME))
-                            .withArg("moved", report[0].moved().size()));
+                            .withArg("moved", report.moved().size()));
                 }
-                String held = report[0].refused().stream()
+                String held = report.refused().stream()
                     .map(InstanceMigrations.DrainEntry::name)
                     .collect(Collectors.joining(", "));
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("host_drain_partial").withFilter("scope", "server")
                         .withArg("name", row.get(ServerModel.NAME))
-                        .withArg("moved", report[0].moved().size())
-                        .withArg("refused", report[0].refused().size())
+                        .withArg("moved", report.moved().size())
+                        .withArg("refused", report.refused().size())
                         .withArg("held", held));
             })
             .build();

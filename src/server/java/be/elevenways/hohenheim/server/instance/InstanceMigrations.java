@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport.WorkloadClaim;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -58,6 +59,12 @@ public final class InstanceMigrations {
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter
         .ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
+
+    /** The activity action a completed cold migration is recorded under. */
+    public static final String ACTIVITY_MIGRATE_ACTION = "migrated";
+
+    /** The activity action a host drain is recorded under, on the SERVER record. */
+    public static final String ACTIVITY_DRAIN_ACTION = "drained";
 
     private final @NonNull InstanceService instances;
 
@@ -266,6 +273,7 @@ public final class InstanceMigrations {
 
         Blast.log("MIGRATE: moved", handle, "from",
             ServerModel.nameOf(resolved.serverId()), "to", targetName);
+        recordMigration(instanceId, ServerModel.nameOf(resolved.serverId()), targetName);
         if (wasRunning) {
             TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
         }
@@ -316,7 +324,29 @@ public final class InstanceMigrations {
         boolean complete = instancesOn(serverId).isEmpty();
         Blast.log("DRAIN:", ServerModel.nameOf(serverId), "moved", moved.size(),
             "refused", refused.size(), complete ? "- host holds none" : "- INCOMPLETE");
+        // The drain itself is an operator act on the HOST, distinct from the per-instance
+        // rows recordMigration wrote: an incomplete drain must be as answerable as a
+        // complete one, so this is recorded on both outcomes.
+        ActivityLog.record(Models.get(ServerModel.class), serverId, ACTIVITY_DRAIN_ACTION,
+            "moved " + moved.size() + ", refused " + refused.size()
+                + (complete ? ", host holds none" : ", INCOMPLETE"));
         return new DrainReport(moved, refused, complete);
+    }
+
+    /**
+     * Record the completed move on the INSTANCE record.
+     *
+     * AIDEV-NOTE: explicit, and in the authority rather than in the CMS row action, for
+     * the same reason {@link InstanceSnapshots#recordRestore} is: a migration writes its
+     * whole state through {@code InstanceOperationGuard.stampMigrating}/{@code handoff},
+     * which are set-based {@code updateAll} calls and fire NO write hooks. The
+     * {@code ActivityLog.withAction} wrapper the drain row action used to carry recorded
+     * literally nothing -- withAction only RENAMES hook-written rows, and there were
+     * none. Traced 2026-08-07.
+     */
+    private static void recordMigration(int instanceId, String sourceName, String targetName) {
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId,
+            ACTIVITY_MIGRATE_ACTION, sourceName + " -> " + targetName);
     }
 
     private static @NonNull List<Row> instancesOn(int serverId) {
