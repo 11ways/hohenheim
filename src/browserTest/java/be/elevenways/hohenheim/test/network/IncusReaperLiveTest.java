@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -7,10 +8,13 @@ import be.elevenways.hohenheim.server.incus.ControllerPresence;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusReaper;
+import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
@@ -176,6 +180,29 @@ class IncusReaperLiveTest {
             assertThat(aclExists(ControllerPresence.aclName()))
                 .as("step 6: this controller's own presence marker survives its own sweep")
                 .isTrue();
+
+            // 7. This sweep IS the Incus host heartbeat: the POSITIVE anchor for it, which
+            //    only a real daemon can give. The stamp round trip proves the host answered,
+            //    so the production task records last_seen_at on the host record -- an Incus
+            //    host had no positive liveness signal at all before this.
+            Row before = Models.get(ServerModel.class).findByName(HOST);
+            before.set(ServerModel.LAST_SEEN_AT, (Instant) null);
+            before.set(ServerModel.LAST_ERROR_KIND, "unreachable");
+            before.set(ServerModel.LAST_ERROR, "a stale verdict from an earlier probe");
+            Models.get(ServerModel.class).save(before);
+
+            ReapIncusControllers.HostOutcome outcome =
+                ReapIncusControllers.sweepHost(Models.get(ServerModel.class).findByName(HOST));
+            assertThat(outcome.reachable())
+                .as("step 7: the real daemon answered, so this is the success lane")
+                .isTrue();
+            Row seen = Models.get(ServerModel.class).findByName(HOST);
+            assertThat((Object) seen.get(ServerModel.LAST_SEEN_AT))
+                .as("step 7: a reachable incus host is STAMPED as seen -- the heartbeat")
+                .isNotNull();
+            assertThat((String) seen.get(ServerModel.LAST_ERROR_KIND))
+                .as("step 7: and the stale failure verdict is cleared by the contact")
+                .isNull();
         });
     }
 
