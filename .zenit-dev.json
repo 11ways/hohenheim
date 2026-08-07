@@ -1,0 +1,6 @@
+{
+    "reuse": {
+        "lanes": { "hohenheim": { "unit": false, "browser": true } },
+        "nonHermeticClasses": ["*Incus*", "*Live*"]
+    }
+}
