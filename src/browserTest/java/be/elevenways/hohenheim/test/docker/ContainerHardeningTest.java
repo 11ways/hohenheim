@@ -3,8 +3,12 @@ package be.elevenways.hohenheim.test.docker;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
+import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -151,17 +155,28 @@ class ContainerHardeningTest {
             SiteInstances.destroyFor(siteId);
         }
 
-        // 3. MANAGED DATABASE -- declares SERVICE per engine; redis is the fast one to
+        // 3. MANAGED DATABASE -- declares SERVICE per ENGINE (the kind reads
+        //    Engine.hardening(), not a tier constant); redis is the fast one to
         //    provision, and it genuinely cannot start without those capabilities.
-        ManagedDatabase databases = new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
+        //    Lowered onto the instance contract, so the kernel state is asserted on the
+        //    INSTANCE handle its owned engine runs under.
+        DatabaseService databaseService = new DatabaseService();
         String dbName = "hardening" + System.nanoTime();
         try {
-            databases.provision(dbName, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
-                "appuser", "secret123", "appdb", true, ResourceLimits.none(), 999_103);
-            assertKernelState(docker, ControllerScope.handle(ControllerScope.KIND_DB, dbName), "step 3: managed database",
+            databaseService.create(dbName, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
+                "appuser", "secret123", "appdb", true);
+            String engineHandle = DatabaseInstances.handleOf(
+                Models.get(DatabaseModel.class).findByName(dbName).get(DatabaseModel.ID));
+            assertThat(engineHandle)
+                .as("step 3: the database's engine went through the contract").isNotNull();
+            assertKernelState(docker, engineHandle, "step 3: managed database",
                 SERVICE_CAPS, pids);
         } finally {
-            databases.destroy(dbName, true);
+            try {
+                databaseService.destroy(dbName, true);
+            } catch (IOException ignored) {
+                // best effort
+            }
         }
 
         // 4. STACKS -- operator-authored, declares SERVICE at the tier.

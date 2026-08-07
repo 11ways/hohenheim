@@ -9,7 +9,8 @@ import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
-import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.database.DatabaseContainerKind;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
@@ -153,8 +154,11 @@ class VerifyWorkloadIsolationTest {
                     throw new RuntimeException(e);
                 }
 
+                // The database tier LOWERED: its engine is an owned instance, so its
+                // network is an instance network and the sweep reaches it through the
+                // instance lane with no database-specific collector at all.
                 int databaseId = databaseRecord("vrfy-db-" + suffix);
-                String databaseHandle = ManagedDatabase.containerHandle("vrfy-db-" + suffix);
+                String databaseHandle = databaseInstance(databaseId, "vrfy-db-" + suffix);
                 io(() -> WorkloadNetworks.ensure(docker, netns.enforcingPolicy(),
                     databaseHandle, OwnerLabels.of(DatabaseModel.MODEL_ID, databaseId),
                     Egress.NONE));
@@ -403,6 +407,32 @@ class VerifyWorkloadIsolationTest {
         row.set(InstanceModel.SETTINGS, settings);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
+    }
+
+    /**
+     * The owned {@code database_container} instance of a database record, stamped
+     * RUNNING so the sweep's inventory claims a live workload for it.
+     *
+     * @return the engine container handle its network is named after
+     */
+    private static String databaseInstance(int databaseId, String name) {
+        try {
+            return be.elevenways.hohenheim.server.instance.OwnedInstances.inScope(
+                DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, databaseId, () -> {
+                    Row row = Models.get(InstanceModel.class).createEmptyRow();
+                    row.set(InstanceModel.NAME, "db-" + name);
+                    row.set(InstanceModel.KIND, DatabaseContainerKind.ID.toString());
+                    row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+                    row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
+                    row.set(InstanceModel.SETTINGS, Map.of(
+                        "engine", "redis", "image", "redis:7-alpine", "ephemeral", true));
+                    Models.get(InstanceModel.class).save(row);
+                    return ControllerScope.handle(ControllerScope.KIND_INSTANCE,
+                        row.get(InstanceModel.ID));
+                });
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static int databaseRecord(String name) {

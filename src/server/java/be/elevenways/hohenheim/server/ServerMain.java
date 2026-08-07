@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
@@ -181,6 +182,17 @@ public class ServerMain {
         } else {
             roleSkip(HohenheimRoles.Role.STACKS,
                 "stack runtime not started, interrupted-deploy sweep skipped");
+        }
+        if (HohenheimRoles.enabled(HohenheimRoles.Role.DATABASES)) {
+            // The documented migration of the Phase 7 database lowering: a database
+            // record predating it owns no instance, so it gets one and is re-deployed
+            // onto its EXISTING data volume rather than being abandoned with a running
+            // container nothing tracks. Idempotent, so it is a fast no-op once adopted.
+            // Virtual thread: it does live daemon work per record.
+            JobRunner.startVirtualThread(DatabaseInstances::adoptExisting);
+        } else {
+            roleSkip(HohenheimRoles.Role.DATABASES,
+                "managed-database adoption skipped, no databases run here");
         }
         if (HohenheimRoles.enabled(HohenheimRoles.Role.INSTANCES)) {
             // A controller killed mid-migration leaves a record MIGRATING with its

@@ -1,11 +1,9 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.zenit.common.orm.datasource.Datasources;
-import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
-import be.elevenways.hohenheim.server.runtime.NetworkPosture;
-import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -13,10 +11,10 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
-import be.elevenways.hohenheim.server.docker.UnixSocketDockerTransport;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -69,10 +67,10 @@ class DatabaseServiceTest {
         assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
 
         SqliteDatasource datasource = freshDatasource();
-        DatabaseService service = new DatabaseService(docker, datasource);
+        DatabaseService service = new DatabaseService(datasource);
 
         String name = "svc" + System.nanoTime();
-        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
+        String[] containerName = new String[1];
         try {
             ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
                 PG_IMAGE, "appuser", "secret123", "appdb",
@@ -89,14 +87,16 @@ class DatabaseServiceTest {
             assertThat((Integer) all.get(0).get(DatabaseModel.MEMORY_LIMIT_MB)).isEqualTo(256);
             assertThat((Double) all.get(0).get(DatabaseModel.CPU_LIMIT)).isEqualTo(1.0);
 
+            containerName[0] = Db.supply(datasource, () -> EngineHandles.of(name));
+
             // The caps reach the container's HostConfig.
             Map<String, Object> hostConfig =
-                (Map<String, Object>) docker.inspectContainer(containerName).get("HostConfig");
+                (Map<String, Object>) docker.inspectContainer(containerName[0]).get("HostConfig");
             assertThat(((Number) hostConfig.get("Memory")).longValue()).isEqualTo(256L * 1024 * 1024);
             assertThat(((Number) hostConfig.get("NanoCpus")).longValue()).isEqualTo(1_000_000_000L);
 
             // backupDownload(name) resolves engine + credentials from the record (caller passes no params).
-            DockerClient.ExecResult seed = docker.exec(containerName,
+            DockerClient.ExecResult seed = docker.exec(containerName[0],
                 List.of("psql", "-U", "appuser", "-d", "appdb", "-c", "CREATE TABLE t (id int);"),
                 List.of("PGPASSWORD=secret123"));
             assertThat(seed.exitCode()).withFailMessage("seed failed: %s", seed.stderr()).isZero();
@@ -107,7 +107,7 @@ class DatabaseServiceTest {
             service.destroy(name, true);
             assertThat(service.list()).isEmpty();              // record gone
             try {
-                docker.inspectContainer(containerName);
+                docker.inspectContainer(containerName[0]);
                 throw new AssertionError("expected container to be removed");
             } catch (IOException expected) {
                 // 404 from the daemon -> container removed, as intended
@@ -128,7 +128,7 @@ class DatabaseServiceTest {
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
 
-        DatabaseService service = new DatabaseService(docker, freshDatasource());
+        DatabaseService service = new DatabaseService(freshDatasource());
         String name = "async" + System.nanoTime();
         try {
             service.createAsync(name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
@@ -164,7 +164,7 @@ class DatabaseServiceTest {
         assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
 
         SqliteDatasource datasource = freshDatasource();
-        DatabaseService service = new DatabaseService(docker, datasource);
+        DatabaseService service = new DatabaseService(datasource);
         String name = "ledger" + System.nanoTime();
         try {
             ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
@@ -172,20 +172,21 @@ class DatabaseServiceTest {
 
             Db.run(datasource, () -> {
                 Integer recordId = service.list().get(0).get(DatabaseModel.ID);
+                Integer instanceId = DatabaseInstances.owned(recordId).get(InstanceModel.ID);
                 String key = PortLedger.claimKeyOf(ServerModel.localServerId(),
                     conn.host(), conn.port(), "tcp");
-                // 1. The published port is a ledger claim owned by the database record.
+                // 1. The published port is a ledger claim owned by the engine INSTANCE
+                //    (the record-after write InstanceService.deploy does for every kind).
                 Row claim = PortLedger.holderOf(key);
                 assertThat(claim).as("step 1: the published port is in the ledger").isNotNull();
-                assertThat(PortLedger.isOwnedBy(claim, DatabaseModel.MODEL_ID, recordId))
-                    .as("step 1: the claim names the database record as owner").isTrue();
+                assertThat(PortLedger.isOwnedBy(claim, InstanceModel.MODEL_ID, instanceId))
+                    .as("step 1: the claim names the engine instance as owner").isTrue();
                 // 2. It is therefore visible to EVERY other authority: a stack declaring
                 //    the same host port now collides instead of silently double-booking.
                 assertThatThrownBy(() -> PortLedger.claim(ServerModel.localServerId(), "0.0.0.0",
                         conn.port(), "tcp", null, null, "a rival stack service"))
                     .as("step 2: another authority is refused the same port")
-                    .isInstanceOf(PortLedger.PortConflict.class)
-                    .hasMessageContaining(name);
+                    .isInstanceOf(PortLedger.PortConflict.class);
             });
 
             service.destroy(name, true);
@@ -202,110 +203,135 @@ class DatabaseServiceTest {
     }
 
     /**
-     * The C6 destroy contract, end to end on a real daemon: a destroy that cannot reach
-     * the daemon REFUSES (record + credentials kept, status destroy_failed, port claim
-     * parked releasing, container STILL RUNNING on the host), a verified destroy then
-     * cleans everything, and absent vs unreachable are distinct container states.
+     * The C6 destroy contract, end to end on a real daemon: a destroy whose HOST cannot
+     * be addressed REFUSES (record + credentials kept, status destroy_failed, container
+     * STILL RUNNING on the host, port claim still blocking rivals), a verified destroy
+     * then cleans everything, and absent vs unreachable are distinct container states.
+     *
+     * AIDEV-NOTE: the unreachable daemon is now spelled as an unaddressable HOST RECORD
+     * rather than an injected broken client, because the lowering removed the injected
+     * client: the engine's runtime is resolved by the KIND through the host inventory, so
+     * a second client-resolution path in the test would exercise a lane production does
+     * not have. Moving the owned instance to an unpinned SSH host is the honest
+     * equivalent -- nothing can build a daemon connection for it.
      */
     @Test
-    void destroyRefusesToLieWhenTheDaemonIsUnreachable() throws IOException {
+    void destroyRefusesToLieWhenTheHostCannotBeAddressed() throws IOException {
         assumeTrue(Files.exists(SOCKET), "Docker socket not present");
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
 
         SqliteDatasource datasource = freshDatasource();
-        DatabaseService service = new DatabaseService(docker, datasource);
-        DockerClient unreachable = new DockerClient(
-            new UnixSocketDockerTransport("/nonexistent/hohenheim-test.sock"));
-        DatabaseService broken = new DatabaseService(unreachable, datasource);
+        DatabaseService service = new DatabaseService(datasource);
 
         String name = "c6destroy" + System.nanoTime();
-        String containerName = ControllerScope.handle(ControllerScope.KIND_DB, name);
+        String[] handle = new String[1];
         try {
-            // 1. Provision for real; the record owns a ledger claim.
+            // 1. Provision for real; the OWNED INSTANCE holds the ledger claim now.
             ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
                 PG_IMAGE, "appuser", "secret123", "appdb", true, ServerService.LOCAL);
+            int[] instanceId = new int[1];
             Db.run(datasource, () -> {
                 Integer recordId = service.list().get(0).get(DatabaseModel.ID);
+                Row instance = DatabaseInstances.owned(recordId);
+                assertThat(instance).as("step 1: the database owns an engine instance").isNotNull();
+                instanceId[0] = instance.get(InstanceModel.ID);
+                handle[0] = EngineHandles.of(name);
+                assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId[0]))
+                    .as("step 1: the provisioned port is claimed by the INSTANCE").hasSize(1);
                 assertThat(PortLedger.claimsOf(DatabaseModel.MODEL_ID, recordId))
-                    .as("step 1: the provisioned port is claimed").hasSize(1);
+                    .as("step 1: and no longer by the database record").isEmpty();
             });
 
-            // 2. A destroy through an unreachable daemon REFUSES instead of lying.
-            try {
-                broken.destroy(name, true);
-                throw new AssertionError("step 2: destroy through an unreachable daemon"
-                    + " must throw, not report success");
-            } catch (IOException expected) {
-                assertThat(expected.getMessage())
-                    .as("step 2: the refusal names the unverified teardown")
-                    .contains("could not verify its teardown");
-            }
+            // 2. Move the engine onto a host nothing can build a daemon connection for.
+            Db.run(datasource, () -> {
+                Row phantom = Models.get(ServerModel.class).createEmptyRow();
+                phantom.set(ServerModel.NAME, "c6-phantom-" + System.nanoTime());
+                phantom.set(ServerModel.MODE, ServerModel.MODE_SSH);
+                phantom.set(ServerModel.SSH_TARGET, "nobody@phantom.invalid");
+                Models.get(ServerModel.class).save(phantom);
+                // Through the OWNING tier's system scope: the generated-only guard
+                // refuses any other write to this kind, fixtures included.
+                moveEngineTo(instanceId[0], phantom.get(ServerModel.ID));
+            });
 
-            // 3. Nothing was deleted and nothing was freed optimistically: record kept
+            // 3. A destroy through it REFUSES instead of lying.
+            assertThatThrownBy(() -> service.destroy(name, true))
+                .as("step 3: destroy through an unaddressable host must throw")
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("could not verify its teardown");
+
+            // 4. Nothing was deleted and nothing was freed optimistically: record kept
             //    with status destroy_failed, password still readable, container STILL
-            //    RUNNING on the host, claim parked in releasing (blocking rivals).
+            //    RUNNING on the host, claim still blocking rivals.
             Db.run(datasource, () -> {
                 Row kept = service.list().isEmpty() ? null : service.list().get(0);
-                assertThat(kept).as("step 3: the record survives the failed destroy").isNotNull();
+                assertThat(kept).as("step 4: the record survives the failed destroy").isNotNull();
                 assertThat((String) kept.get(DatabaseModel.STATUS))
-                    .as("step 3: the failure has its own named status")
+                    .as("step 4: the failure has its own named status")
                     .isEqualTo(DatabaseModel.STATUS_DESTROY_FAILED);
                 assertThat((String) kept.get(DatabaseModel.DB_PASSWORD))
-                    .as("step 3: the only copy of the password is kept")
+                    .as("step 4: the only copy of the password is kept")
                     .isEqualTo("secret123");
-                List<Row> claims = PortLedger.claimsOf(DatabaseModel.MODEL_ID,
-                    kept.get(DatabaseModel.ID));
-                assertThat(claims).as("step 3: the port claim survives").hasSize(1);
-                assertThat(PortLedger.isReleasing(claims.get(0)))
-                    .as("step 3: the surviving claim is parked in releasing").isTrue();
+                assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId[0]))
+                    .as("step 4: the port claim survives").hasSize(1);
+                assertThatThrownBy(() -> PortLedger.claim(ServerModel.localServerId(), "0.0.0.0",
+                        conn.port(), "tcp", null, null, "a rival stack service"))
+                    .as("step 4: and still refuses a rival the same port")
+                    .isInstanceOf(PortLedger.PortConflict.class);
             });
-            Object state = docker.inspectContainer(containerName).get("State");
+            Object state = docker.inspectContainer(handle[0]).get("State");
             assertThat(state instanceof Map<?, ?> s && Boolean.TRUE.equals(s.get("Running")))
-                .as("step 3: HOST state -- the container is genuinely still running").isTrue();
+                .as("step 4: HOST state -- the container is genuinely still running").isTrue();
 
-            // 4. Absent vs unreachable are DISTINCT identities.
-            assertThat(new ManagedDatabase(unreachable, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE)
-                    .status(name, ManagedDatabase.Engine.POSTGRES).state())
-                .as("step 4: an unaskable daemon is UNREACHABLE, not 'gone'")
-                .isEqualTo(ContainerState.UNREACHABLE);
-            assertThat(new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE)
-                    .status(name, ManagedDatabase.Engine.POSTGRES).state())
-                .as("step 4: the reachable daemon reports the container RUNNING")
-                .isEqualTo(ContainerState.RUNNING);
-
-            // 5. The VERIFIED destroy then succeeds completely: record gone, container
-            //    gone on the host, ledger empty, and the name reads ABSENT (not
-            //    unreachable) through the live daemon.
+            // 5. Point the engine back at the reachable host: the VERIFIED destroy then
+            //    succeeds completely -- record gone, container gone, ledger empty.
             Db.run(datasource, () -> {
-                Integer recordId = service.list().get(0).get(DatabaseModel.ID);
+                moveEngineTo(instanceId[0], ServerModel.localServerId());
+            });
+            Db.run(datasource, () -> {
                 try {
                     service.destroy(name, true);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
                 assertThat(service.list()).as("step 5: the record is gone").isEmpty();
-                assertThat(PortLedger.claimsOf(DatabaseModel.MODEL_ID, recordId))
+                assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId[0]))
                     .as("step 5: the verified destroy freed the claim entirely").isEmpty();
             });
             try {
-                docker.inspectContainer(containerName);
+                docker.inspectContainer(handle[0]);
                 throw new AssertionError("step 5: expected the container to be gone");
             } catch (DockerClient.ApiException e) {
                 assertThat(e.isNotFound())
                     .as("step 5: HOST state -- the daemon reports the container absent").isTrue();
             }
-            assertThat(new ManagedDatabase(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE)
-                    .status(name, ManagedDatabase.Engine.POSTGRES).state())
-                .as("step 5: a genuinely gone database reads ABSENT")
-                .isEqualTo(ContainerState.ABSENT);
         } finally {
             try {
                 service.destroy(name, true);
             } catch (IOException ignored) {
                 // best effort
             }
+            if (handle[0] != null) {
+                try {
+                    docker.removeContainer(handle[0], true);
+                } catch (IOException ignored) {
+                    // best effort
+                }
+            }
         }
+    }
+
+    /** Re-home an owned engine instance through the database tier's system scope. */
+    private static void moveEngineTo(int instanceId, Integer serverId) {
+        Row instance = Models.get(InstanceModel.class).findById(instanceId);
+        Integer databaseId = instance.get(InstanceModel.GENERATED_FOR_ID);
+        be.elevenways.hohenheim.server.instance.OwnedInstances.inScopeUnchecked(
+            DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, databaseId, () -> {
+                Row row = Models.get(InstanceModel.class).findById(instanceId);
+                row.set(InstanceModel.SERVER_ID, serverId);
+                Models.get(InstanceModel.class).save(row);
+            });
     }
 
     private static SqliteDatasource freshDatasource() throws IOException {

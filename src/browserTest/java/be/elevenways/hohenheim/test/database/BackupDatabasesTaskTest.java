@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
@@ -58,7 +59,7 @@ class BackupDatabasesTaskTest {
         assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
 
         SqliteDatasource datasource = freshDatasource();
-        DatabaseService service = new DatabaseService(docker, datasource);
+        DatabaseService service = new DatabaseService(datasource);
 
         Path backupRoot = Files.createTempDirectory("hohenheim-backups");
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.BACKUP_PATH, backupRoot.toString());
@@ -72,7 +73,7 @@ class BackupDatabasesTaskTest {
                 "appuser", "secret123", "appdb", false);
             service.create(ephemeralName, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
                 "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs
-            DockerClient.ExecResult seed = docker.exec(ControllerScope.handle(ControllerScope.KIND_DB, name),
+            DockerClient.ExecResult seed = docker.exec(Db.supply(datasource, () -> EngineHandles.of(name)),
                 List.of("psql", "-U", "appuser", "-d", "appdb", "-c", "CREATE TABLE notes (id int);"),
                 List.of("PGPASSWORD=secret123"));
             assertThat(seed.exitCode()).withFailMessage("seed failed: %s", seed.stderr()).isZero();

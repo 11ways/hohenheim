@@ -6,11 +6,13 @@ import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
+import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -42,6 +44,9 @@ class DatabaseEnvInjectionTest {
 
     @AfterEach
     void cleanRows() {
+        // Generated rows are read-only outside a system scope, fixtures included -- the
+        // sweeping scope is the lane that exists for "the declaring record is going away".
+        GeneratedRows.sweeping("test", () -> Models.get(InstanceModel.class).find().delete());
         Models.get(SiteDatabaseModel.class).find().delete();
         Models.get(DatabaseModel.class).find().delete();
         Models.get(SiteModel.class).find().delete();
@@ -69,7 +74,11 @@ class DatabaseEnvInjectionTest {
         row.set(DatabaseModel.STATUS, status);
         row.set(DatabaseModel.SERVER_ID, ServerModel.localServerId());
         databases.save(row);
-        return row.get(DatabaseModel.ID);
+        Integer id = row.get(DatabaseModel.ID);
+        // The engine's address IS its owned instance's handle since the lowering, so a
+        // record without one has no address at all -- plant it like production does.
+        EngineHandles.plant(id, name, engine, InstanceModel.STATUS_RUNNING);
+        return id;
     }
 
     private static void link(Integer siteId, Integer databaseId, String prefix) {
@@ -150,17 +159,18 @@ class DatabaseEnvInjectionTest {
             row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, 5544),
             DatabaseEnvInjection.Style.CONTAINER_NETWORK);
         String pgUrl = "postgres://appuser:s3cret@"
-            + ControllerScope.handle(ControllerScope.KIND_DB, "containerdb") + ":5432/appdb";
-        assertThat(env).as("step 1: host is the database's container hostname")
-            .containsEntry("DB_HOST", ControllerScope.handle(ControllerScope.KIND_DB, "containerdb"));
+            + EngineHandles.of("containerdb") + ":5432/appdb";
+        assertThat(env).as("step 1: host is the database ENGINE's container hostname")
+            .containsEntry("DB_HOST", EngineHandles.of("containerdb"));
         assertThat(env).as("step 1: port is the engine's native port, never the published one")
             .containsEntry("DB_PORT", "5432");
         assertThat(env).as("step 1: the primary URL carries the same address")
             .containsEntry("DATABASE_URL", pgUrl).containsEntry("DB_URL", pgUrl);
         assertThat(env).as("step 1: the second family follows its engine's port")
-            .containsEntry("CACHE_HOST", ControllerScope.handle(ControllerScope.KIND_DB, "containercache"))
+            .containsEntry("CACHE_HOST", EngineHandles.of("containercache"))
             .containsEntry("CACHE_PORT", "6379")
-            .containsEntry("CACHE_URL", "redis://:s3cret@" + ControllerScope.handle(ControllerScope.KIND_DB, "containercache") + ":6379");
+            .containsEntry("CACHE_URL",
+                "redis://:s3cret@" + EngineHandles.of("containercache") + ":6379");
         assertThat(env.values()).as("step 1: no variable smuggles a loopback address in")
             .noneMatch(value -> value.contains("127.0.0.1"));
 
@@ -171,7 +181,7 @@ class DatabaseEnvInjectionTest {
             row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, null),
             DatabaseEnvInjection.Style.CONTAINER_NETWORK);
         assertThat(unpublished).as("step 2: container style needs no published port")
-            .containsEntry("DB_HOST", ControllerScope.handle(ControllerScope.KIND_DB, "containerdb"));
+            .containsEntry("DB_HOST", EngineHandles.of("containerdb"));
         assertThat(DatabaseEnvInjection.envForSite(siteId,
             row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, null)))
             .as("step 2: the loopback style still refuses a portless container").isEmpty();

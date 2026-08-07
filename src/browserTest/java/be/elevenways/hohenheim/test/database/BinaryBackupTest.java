@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -63,13 +64,13 @@ class BinaryBackupTest {
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, REDIS_IMAGE), REDIS_IMAGE + " not present locally");
 
-        DatabaseService service = new DatabaseService(docker, freshDatasource());
+        DatabaseService service = new DatabaseService(freshDatasource());
         String name = "redis" + System.nanoTime();
         Path dir = Files.createTempDirectory("hohenheim-redis-bk");
         try {
             service.create(name, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
                 "unused", "unused", "unused", true);   // ephemeral: tmpfs
-            redis(docker, ControllerScope.handle(ControllerScope.KIND_DB, name), "SET", "foo", "bar");
+            redis(docker, EngineHandles.of(name), "SET", "foo", "bar");
 
             Path dump = service.backupToFile(name, dir, "snap");
             assertThat(dump.getFileName().toString()).endsWith(".rdb");
@@ -93,13 +94,13 @@ class BinaryBackupTest {
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, MONGO_IMAGE), MONGO_IMAGE + " not present locally");
 
-        DatabaseService service = new DatabaseService(docker, freshDatasource());
+        DatabaseService service = new DatabaseService(freshDatasource());
         String name = "mongo" + System.nanoTime();
-        String container = ControllerScope.handle(ControllerScope.KIND_DB, name);
         Path dir = Files.createTempDirectory("hohenheim-mongo-bk");
         try {
             service.create(name, ManagedDatabase.Engine.MONGO, MONGO_IMAGE,
                 "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs
+            String container = EngineHandles.of(name);
             mongo(docker, container, "db.getSiblingDB('appdb').things.insertOne({ x: 7 })");
 
             Path dump = service.backupToFile(name, dir, "dump");
@@ -126,13 +127,13 @@ class BinaryBackupTest {
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, REDIS_IMAGE), REDIS_IMAGE + " not present locally");
 
-        DatabaseService service = new DatabaseService(docker, freshDatasource());
+        DatabaseService service = new DatabaseService(freshDatasource());
         String name = "redisrt" + System.nanoTime();
-        String container = ControllerScope.handle(ControllerScope.KIND_DB, name);
         Path dir = Files.createTempDirectory("hohenheim-redis-rt");
         try {
             service.create(name, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
                 "unused", "unused", "unused", false);   // persistent: restore restarts the container
+            String container = EngineHandles.of(name);
             redis(docker, container, "SET", "foo", "bar");
 
             Path dump = service.backupToFile(name, dir, "snap");
@@ -156,7 +157,7 @@ class BinaryBackupTest {
         DockerClient docker = new DockerClient();
         assumeTrue(imagePresent(docker, REDIS_IMAGE), REDIS_IMAGE + " not present locally");
 
-        DatabaseService service = new DatabaseService(docker, freshDatasource());
+        DatabaseService service = new DatabaseService(freshDatasource());
         String name = "redisep" + System.nanoTime();
         Path dir = Files.createTempDirectory("hohenheim-redis-ep");
         try {
@@ -175,12 +176,12 @@ class BinaryBackupTest {
     @Test
     void redisRestoreRejectsNonRdbInput() throws IOException {
         // The RDB magic check runs before any Docker interaction, so no daemon is needed.
-        ManagedDatabase databases = new ManagedDatabase(new DockerClient(), WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), NetworkPosture.SHARED_BRIDGE);
+        ManagedDatabase databases = new ManagedDatabase(new DockerClient());
         Path dummy = Files.createTempFile("hohenheim-redis-restore", ".rdb");
         try {
             Files.writeString(dummy, "not an rdb file", StandardCharsets.UTF_8);
             assertThatThrownBy(() -> databases.restoreFromFile(
-                    "any", ManagedDatabase.Engine.REDIS, "u", "p", "d", dummy))
+                    "any-handle", ManagedDatabase.Engine.REDIS, "u", "p", "d", dummy))
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("REDIS magic");
         } finally {
@@ -190,7 +191,7 @@ class BinaryBackupTest {
 
     /**
      * A redis-cli that AUTHENTICATES. Managed redis containers run
-     * {@code redis-server --requirepass <password>} (ManagedDatabase.containerCommand), so
+     * {@code redis-server --requirepass <password>} (ManagedDatabase.Engine.containerCommandTemplate), so
      * an unauthenticated client gets "NOAUTH Authentication required" -- ON STDOUT, with
      * EXIT CODE 0. Every exitCode-only assertion around a redis-cli call therefore passed
      * while the command did nothing at all; only the round trip, which asserts a VALUE,
@@ -241,6 +242,10 @@ class BinaryBackupTest {
         db.deleteOnExit();
         SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
         new MigrationRunner(ds).migrate().requireSuccess();
+        // The controller identity (and every daemon resource name derived from it) and
+        // the owned-instance lookups both resolve through the CURRENT datasource, so this
+        // one has to BE the current one for the whole test.
+        Datasources.register(Datasources.DEFAULT, ds);
         HohenheimTestRuntime.ensureBooted();
         return ds;
     }

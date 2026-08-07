@@ -454,8 +454,36 @@ public final class InstanceService {
                 .withArg("runtime", hostRuntime)
                 .withArg("required", handler.requiredRuntime()));
         }
-        return new Resolved(row, handler, handler.runtimeFor(serverName), spec, serverId,
+        return new Resolved(row, handler, runtimeFor(handler, serverName), spec, serverId,
             variables);
+    }
+
+    /**
+     * Build the kind's driver for a host, turning an UNADDRESSABLE host into a NAMED
+     * refusal.
+     *
+     * AIDEV-NOTE: found 2026-08-07 while lowering the database tier. Client construction
+     * can throw on its own -- {@code HostKeys.sshArgv} refuses an unpinned host or one
+     * with no client identity with a HostTrustException, which is an IllegalStateException
+     * -- and that escaped {@link #resolve} raw, so deploy/stop/destroy of an instance on
+     * such a host produced a bare 500 instead of telling the operator to scan and confirm
+     * the host key. This class's whole contract is "refusals are named Violations, never a
+     * bare 500", so the gap was a contradiction of its own docblock, not a missing nicety.
+     *
+     * @throws Violations {@code instance_host_unreachable}, naming the host and the reason
+     */
+    private static @NonNull InstanceRuntime runtimeFor(@NonNull InstanceKindHandler handler,
+                                                       @NonNull String serverName) {
+        try {
+            return handler.runtimeFor(serverName);
+        } catch (Violations alreadyNamed) {
+            throw alreadyNamed;
+        } catch (RuntimeException unaddressable) {
+            throw Violations.ofForm(violationText("instance_host_unreachable")
+                .withArg("name", serverName)
+                .withArg("reason", unaddressable.getMessage() != null
+                    ? unaddressable.getMessage() : unaddressable.toString()));
+        }
     }
 
     @SuppressWarnings("unchecked")

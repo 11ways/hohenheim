@@ -116,15 +116,24 @@ public final class DatabaseEnvInjection {
         }
         ManagedDatabase.Engine engine;
         try {
-            engine = ManagedDatabase.Engine.valueOf(
-                String.valueOf(database.get(DatabaseModel.ENGINE)).toUpperCase(Locale.ROOT));
+            engine = ManagedDatabase.engineOf(database);
         } catch (IllegalArgumentException e) {
             unresolved(siteId, databaseId, name, "unknown_engine");
             return;
         }
-        String host = style == Style.CONTAINER_NETWORK
-            ? ManagedDatabase.containerHandle(name) : "127.0.0.1";
-        int port = style == Style.CONTAINER_NETWORK ? engine.port : status.port();
+        String host = "127.0.0.1";
+        if (style == Style.CONTAINER_NETWORK) {
+            // The engine's OWN container handle, resolved from the owned instance -- never
+            // guessed from the record name. A database that owns no instance has no
+            // reachable address at all, which is a skip, not a hostname that resolves to
+            // nothing inside the consumer's network.
+            host = DatabaseInstances.handleOf(databaseId);
+            if (host == null) {
+                unresolved(siteId, databaseId, name, "no_engine_instance");
+                return;
+            }
+        }
+        int port = style == Style.CONTAINER_NETWORK ? engine.port() : status.port();
         String prefix = normalizedPrefix(link.get(SiteDatabaseModel.ENV_PREFIX));
         env.putAll(vars(engine, host, port, database.get(DatabaseModel.DB_USER),
             database.get(DatabaseModel.DB_PASSWORD), database.get(DatabaseModel.DB_NAME),
@@ -200,13 +209,14 @@ public final class DatabaseEnvInjection {
         return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
-    // One DatabaseService per resolve call: handlers spawn rarely, and the service resolves
-    // the database's own target server (local socket or SSH) exactly like the admin pages do.
+    // The owned engine instance's live status, straight off the instance tier.
     private static LiveResolver serviceResolver() {
-        DatabaseService service = new DatabaseService();
         return row -> {
-            DatabaseService.Detail detail = service.detailOf(row);
-            return new ManagedDatabase.LiveStatus(detail.containerState(), detail.port());
+            Integer id = row.get(DatabaseModel.ID);
+            return id == null
+                ? new ManagedDatabase.LiveStatus(
+                    be.elevenways.hohenheim.server.runtime.ContainerState.ABSENT, null)
+                : DatabaseInstances.liveStatus(id);
         };
     }
 }

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.cms.SiteTerminalCsp;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.game.GameDomains;
@@ -90,10 +91,12 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // non-empty project cannot be deleted; an environment can only group records
         // its project OWNS (grouping never disagrees with the grants).
         ProjectGuards.install();
-        // A site-owned instance (a Docker site's lowered running release) carries derived
-        // attribution, is read-only outside the site tier's system scope, and the
-        // site_container kind cannot be authored standalone at all.
+        // An OWNED instance (a Docker site's lowered running release, a managed
+        // database's lowered engine) carries derived attribution, is read-only outside
+        // its owning tier's system scope, and a generatedOnly() kind cannot be authored
+        // standalone at all. One funnel, declared per kind -- see OwnedInstances.
         SiteInstances.install();
+        DatabaseInstances.install();
         // A generated preview hostname row carries derived attribution: read-only outside
         // the preview system scope, swept by exact attribution, and a hand-authored row
         // with the same hostname is never adopted or deleted.

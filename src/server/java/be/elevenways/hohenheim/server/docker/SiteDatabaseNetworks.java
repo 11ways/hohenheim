@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
@@ -149,7 +149,17 @@ public final class SiteDatabaseNetworks {
                     + "'. Cross-host site-to-database links are not supported; move the site or"
                     + " the database so both run on the same server.");
             }
-            String databaseHandle = ManagedDatabase.containerHandle(name);
+            String databaseHandle = DatabaseInstances.handleOf(databaseId);
+            if (databaseHandle == null) {
+                // The database owns no engine instance yet: nothing to join. The link
+                // network is still ensured above so the site side is ready, and
+                // reattachForDatabase joins the engine the moment it is provisioned.
+                Blast.slog("hohenheim.db_link.skipped", Map.of(
+                    "site_id", String.valueOf(siteId),
+                    "database_id", String.valueOf(databaseId),
+                    "reason", "no_engine_instance"));
+                continue;
+            }
             ContainerState state = resolved.runtime().status(databaseHandle).state();
             if (state == ContainerState.UNREACHABLE) {
                 throw new IOException("Cannot verify database container '" + databaseHandle
@@ -219,8 +229,10 @@ public final class SiteDatabaseNetworks {
                 support.ensureLinkNetwork(handle,
                     OwnerLabels.of(SiteDatabaseModel.MODEL_ID, link.get(SiteDatabaseModel.ID)),
                     Egress.NONE);
-                String databaseHandle = ManagedDatabase.containerHandle(
-                    database.get(DatabaseModel.NAME));
+                String databaseHandle = DatabaseInstances.handleOf(databaseId);
+                if (databaseHandle == null) {
+                    continue;   // no engine instance: the next provision joins both sides
+                }
                 support.connectToLinkNetwork(handle, databaseHandle);
                 support.connectToLinkNetwork(handle, resolved.spec().handle());
                 refreshDatabasePort(resolved.runtime()::status, resolved.serverId(),
@@ -293,10 +305,8 @@ public final class SiteDatabaseNetworks {
             runtime.removeLinkNetwork(handle);
             Blast.log("DB-LINK: removed stale link network", network, "of site", siteId);
             // The disconnect re-allocated the database's published port; re-observe it.
-            if (databaseId != null && Models.get(DatabaseModel.class).find()
-                    .where(DatabaseModel.ID.eq(databaseId)).first() instanceof Row database) {
-                refreshDatabasePort(runtime::status, serverId, databaseId,
-                    ManagedDatabase.containerHandle(database.get(DatabaseModel.NAME)));
+            if (databaseId != null && DatabaseInstances.handleOf(databaseId) instanceof String h) {
+                refreshDatabasePort(runtime::status, serverId, databaseId, h);
             }
         }
     }
@@ -333,20 +343,30 @@ public final class SiteDatabaseNetworks {
     }
 
     /**
-     * Re-observe a database's published loopback port after its network membership
+     * Re-observe a database engine's published loopback port after its network membership
      * changed and refresh the ledger claim when it moved (the GameDomains
      * refreshProxyPort shape). Host processes resolve the port live at spawn, so only
      * the ledger's bookkeeping needs the correction.
+     *
+     * AIDEV-NOTE: the claim owner is the INSTANCE, not the database record, since the
+     * database tier lowered onto the runtime contract -- InstanceService.deploy writes
+     * the record-after claim and this correction must rewrite the SAME row, or the
+     * engine would end up holding two claims on one port under two different owners.
      */
     private static void refreshDatabasePort(StatusOf statuses, int serverId, int databaseId,
                                             String databaseHandle) {
+        Row instance = DatabaseInstances.owned(databaseId);
+        if (instance == null) {
+            return;
+        }
+        Integer instanceId = instance.get(InstanceModel.ID);
         InstanceStatus status = statuses.status(databaseHandle);
         Integer fresh = status.publishedPort();
-        if (!status.running() || fresh == null) {
+        if (!status.running() || fresh == null || instanceId == null) {
             return;
         }
         Integer recorded = null;
-        for (Row claim : PortLedger.claimsOf(DatabaseModel.MODEL_ID, databaseId)) {
+        for (Row claim : PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId)) {
             if (!PortLedger.isReleasing(claim)) {
                 recorded = claim.get(PortAllocationModel.PORT);
                 break;
@@ -356,6 +376,6 @@ public final class SiteDatabaseNetworks {
             return;
         }
         PortLedger.recordObserved(serverId, "127.0.0.1", fresh, "tcp",
-            DatabaseModel.MODEL_ID, databaseId, null);
+            InstanceModel.MODEL_ID, instanceId, null);
     }
 }

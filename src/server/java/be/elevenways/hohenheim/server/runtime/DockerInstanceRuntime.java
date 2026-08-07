@@ -877,6 +877,18 @@ public final class DockerInstanceRuntime
                 "Target", containerPath,
                 "VolumeOptions", Map.of("Labels", spec.ownerLabels())));
         });
+        // DECLARED discardable storage: RAM-backed, size-capped, gone with the container.
+        // There is no daemon-side object to attribute and none is needed, which is
+        // exactly why a tmpfs mount can never be orphaned the way a named volume can.
+        spec.tmpfs().forEach((containerPath, sizeBytes) -> {
+            if (containerPath == null || containerPath.isBlank() || sizeBytes == null) {
+                return;
+            }
+            mounts.add(Map.of(
+                "Type", "tmpfs",
+                "Target", containerPath,
+                "TmpfsOptions", Map.of("SizeBytes", sizeBytes)));
+        });
         if (!mounts.isEmpty()) {
             hostConfig.put("Mounts", mounts);
         }
