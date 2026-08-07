@@ -96,7 +96,16 @@ public final class HostProbe {
         return Outcome.failure(kind, message);
     }
 
-    /** Persist a successful daemon contact on the host record. */
+    /**
+     * Persist a successful daemon contact on the host record.
+     *
+     * AIDEV-NOTE: this clears the TRANSIENT probe verdict and nothing else. It used to
+     * clear the quarantine too, because {@code last_error_kind} carried both: a host whose
+     * certificate contradicted its pin was un-quarantined by the next probe that happened
+     * to reach it, with no operator act anywhere. Reaching a daemon is not evidence about
+     * WHICH machine answered -- that is exactly what the pin decides -- so it may not
+     * clear a pin verdict. See {@link ServerModel#QUARANTINED_AT}.
+     */
     public static void recordSuccess(@NonNull String serverName) {
         Row server = Models.get(ServerModel.class).findByName(serverName);
         if (server == null) {
@@ -121,22 +130,31 @@ public final class HostProbe {
         server.set(ServerModel.LAST_ERROR_KIND, outcome.kind().token);
         server.set(ServerModel.LAST_ERROR, outcome.detail());
         if (outcome.kind() == FailureKind.HOST_KEY_CHANGED) {
-            quarantine(server);
+            quarantine(server, outcome.detail());
         }
         Models.get(ServerModel.class).save(server);
     }
 
     /**
      * A host whose identity we can no longer verify stops receiving tenant workloads:
-     * the preflight verdict is dropped (so the admit gate refuses) and an ADMITTED host
-     * falls back to blocked. Running workloads are left alone -- cleanup must stay
-     * possible -- but nothing new lands here until an operator re-pins deliberately.
+     * the verdict is STAMPED in its own column, the preflight verdict is dropped (so the
+     * admit gate refuses) and an ADMITTED host falls back to blocked. Running workloads
+     * are left alone -- cleanup must stay possible -- but nothing new lands here until an
+     * operator re-pins deliberately.
      *
      * AIDEV-NOTE: this is the only automatic admission DOWNgrade in the product. There is
-     * deliberately no matching automatic upgrade: recovery is HostKeys.repin plus a fresh
+     * deliberately no matching automatic upgrade: recovery is HostPins.repin plus a fresh
      * preflight plus a fresh admit, three explicit operator acts.
+     *
+     * AIDEV-NOTE: the FIRST contradiction's timestamp and reason are kept -- a later
+     * contradiction is the same unbroken quarantine, and moving the stamp forward would
+     * hide how long the host has been in it.
      */
-    private static void quarantine(@NonNull Row server) {
+    private static void quarantine(@NonNull Row server, @Nullable String reason) {
+        if (server.get(ServerModel.QUARANTINED_AT) == null) {
+            server.set(ServerModel.QUARANTINED_AT, Instant.now());
+            server.set(ServerModel.QUARANTINE_REASON, reason);
+        }
         server.set(ServerModel.PREFLIGHT_OK, false);
         if (ServerModel.ADMISSION_ADMITTED.equals(server.get(ServerModel.ADMISSION))) {
             server.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);

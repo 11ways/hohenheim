@@ -29,19 +29,25 @@ public final class HostPins {
     /**
      * Whether the host is QUARANTINED on this slot: something observed an identity that
      * cannot be reconciled with the pin, recorded either as a stored OFFER (a rescan
-     * disagreed) or as the typed {@code host_key_changed} verdict of a failed connection.
+     * disagreed) or as the record-wide {@code quarantined_at} stamp of a failed connection.
      *
      * AIDEV-NOTE: the two markers are written by DIFFERENT paths and only one fires per
      * case -- {@link #apply} stores the offer when a rescan disagrees, {@link
-     * HostProbe#recordFailure} stores the kind when a live connection is refused and
-     * nobody rescanned -- so asking about either is the only complete question. Each
-     * clears on its own honest event (a rescan that agrees drops the offer, a reached
-     * daemon drops the error kind, {@link #repin} drops both); a quarantine never
-     * expires by itself. Never re-derive it from admission: quarantine DOWNGRADES
-     * admission, but an operator may also block a perfectly trusted host, and reading
-     * the downgrade as the cause would make those two indistinguishable.
+     * HostProbe#recordFailure} stamps the verdict when a live connection is refused and
+     * nobody rescanned -- so asking about either is the only complete question. NEITHER
+     * clears on a probe outcome: a rescan that AGREES drops the offer (that is a fresh
+     * observation of the identity itself), and only {@link #repin} drops the stamp. A
+     * quarantine never expires by itself. Never re-derive it from admission: quarantine
+     * DOWNGRADES admission, but an operator may also block a perfectly trusted host, and
+     * reading the downgrade as the cause would make those two indistinguishable.
      *
-     * AIDEV-NOTE: the OFFER half is per-slot, the {@code last_error_kind} verdict is
+     * AIDEV-NOTE: the record-wide half was {@code last_error_kind = host_key_changed}
+     * until 2026-08-07, and that was the defect: the same column is the last TRANSIENT
+     * probe outcome, so {@code recordSuccess} and every weaker {@code recordFailure} wiped
+     * a security verdict. {@link ServerModel#QUARANTINED_AT} is written by the quarantine
+     * path and cleared by the repin ceremony, and by nothing else.
+     *
+     * AIDEV-NOTE: the OFFER half is per-slot, the quarantine stamp is
      * record-wide, and that asymmetry is deliberate. The evidence belongs to the wire it
      * was observed on, so a changed ssh host key never touches the pinned daemon
      * certificate or re-pins anything. The CONCLUSION does not: both lanes address the
@@ -54,8 +60,7 @@ public final class HostPins {
         if (!slot.offeredOf(server).isBlank()) {
             return true;
         }
-        return HostProbe.FailureKind.HOST_KEY_CHANGED.token
-            .equals(server.get(ServerModel.LAST_ERROR_KIND));
+        return server.get(ServerModel.QUARANTINED_AT) != null;
     }
 
     /** Quarantine of the host's PRIMARY transport slot. */
@@ -155,6 +160,10 @@ public final class HostPins {
             server.set(ServerModel.PREFLIGHT_OK, false);
             server.set(ServerModel.LAST_ERROR_KIND, null);
             server.set(ServerModel.LAST_ERROR, null);
+            // THE one act that lifts a quarantine, and the reason it is an act: an
+            // operator adopted the material the machine now presents, on purpose.
+            server.set(ServerModel.QUARANTINED_AT, null);
+            server.set(ServerModel.QUARANTINE_REASON, null);
             Models.get(ServerModel.class).save(server);
         });
         Blast.slog("hohenheim.host.key_repinned", Map.of(

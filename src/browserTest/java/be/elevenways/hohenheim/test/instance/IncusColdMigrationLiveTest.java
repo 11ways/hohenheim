@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.BackupTargetModel;
-import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostAdmission;
@@ -59,8 +58,6 @@ class IncusColdMigrationLiveTest {
     private static SqliteDatasource datasource;
     private static String fingerprintA;
     private static String fingerprintB;
-    private static String authorizedKeyA;
-    private static String authorizedKeyB;
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -83,26 +80,23 @@ class IncusColdMigrationLiveTest {
         HohenheimTestRuntime.ensureBooted();
 
         Db.run(datasource, () -> {
+            // The ceremony INCLUDES the ssh admin lane: kernel-truth verification is an
+            // admission requirement for a tenant-accepting host, on both ends of a
+            // migration. The fixture hands back every credential it installs.
             fingerprintA = remoteA.enrollThroughProduct(HOST_A, "hohenheim-live-mig-a");
-            remoteA.enrollSshLaneThroughProduct(HOST_A);
-            authorizedKeyA = Models.get(ServerModel.class).findByName(HOST_A)
-                .get(HostTrustSlot.SSH.clientPublic());
             fingerprintB = remoteB.enrollThroughProduct(HOST_B, "hohenheim-live-mig-b");
-            remoteB.enrollSshLaneThroughProduct(HOST_B);
-            authorizedKeyB = Models.get(ServerModel.class).findByName(HOST_B)
-                .get(HostTrustSlot.SSH.clientPublic());
         });
     }
 
     @AfterAll
     static void tearDown() {
-        if (remoteA != null && authorizedKeyA != null) {
+        if (remoteA != null) {
             System.out.println("live-mig cleanup A key: "
-                + remoteA.deauthorizeKey(authorizedKeyA));
+                + remoteA.releaseAuthorizedKeys());
         }
-        if (remoteB != null && authorizedKeyB != null) {
+        if (remoteB != null) {
             System.out.println("live-mig cleanup B key: "
-                + remoteB.deauthorizeKey(authorizedKeyB));
+                + remoteB.releaseAuthorizedKeys());
         }
         try {
             if (remoteA != null && fingerprintA != null) {

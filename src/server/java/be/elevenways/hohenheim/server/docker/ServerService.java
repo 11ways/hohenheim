@@ -142,8 +142,10 @@ public class ServerService extends DatasourceScoped {
      * AIDEV-NOTE: a Docker-tier sweep must iterate THIS, never {@link #names()}. An Incus
      * host has no Docker daemon at all ({@code transportFor} refuses it by name), so a
      * sweep over every row turns that refusal into a probe FAILURE and stamps the host
-     * UNREACHABLE -- overwriting the host's real last_error, and its sticky
-     * HOST_KEY_CHANGED quarantine verdict with it.
+     * UNREACHABLE, overwriting the host's real last_error. It no longer takes the
+     * QUARANTINE verdict with it -- that moved to its own column (M078), which no probe
+     * path writes -- but a structural non-answer recorded as a probe verdict is still a
+     * lie about a host nobody swept.
      */
     public List<String> dockerNames() {
         List<String> names = new ArrayList<>();

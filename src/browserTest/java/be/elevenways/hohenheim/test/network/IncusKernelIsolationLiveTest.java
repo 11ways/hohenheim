@@ -2,12 +2,13 @@ package be.elevenways.hohenheim.test.network;
 
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
+import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.task.VerifyIncusIsolation;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -15,6 +16,7 @@ import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
@@ -32,6 +34,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -67,7 +70,6 @@ class IncusKernelIsolationLiveTest {
     private static SqliteDatasource datasource;
     private static LiveIncusHost remote;
     private static String enrolledFingerprint;
-    private static String authorizedKey;
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -86,8 +88,11 @@ class IncusKernelIsolationLiveTest {
         Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
 
+        // The DAEMON half only: this class walks the lane-less state on purpose, so it
+        // enrols the trust relationship the daemon needs and stops there. Admission comes
+        // after the kernel-truth lane, in the journey below, through the real gate.
         Db.run(datasource, () -> enrolledFingerprint =
-            remote.enrollThroughProduct(HOST, "hohenheim-live-kernel"));
+            remote.enrollDaemonTrustThroughProduct(HOST, "hohenheim-live-kernel"));
     }
 
     /**
@@ -101,10 +106,8 @@ class IncusKernelIsolationLiveTest {
         if (remote == null) {
             return;
         }
-        if (authorizedKey != null) {
-            System.out.println("=== cleanup: authorized_keys -> "
-                + remote.deauthorizeKey(authorizedKey));
-        }
+        System.out.println("=== cleanup: authorized_keys -> "
+            + remote.releaseAuthorizedKeys());
         if (enrolledFingerprint != null) {
             try {
                 remote.removeTrustEntry(enrolledFingerprint);
@@ -135,13 +138,36 @@ class IncusKernelIsolationLiveTest {
                 .isFalse();
             assertThatInspectRefuses(IncusKernelIsolation.forServer(laneless),
                 ControllerScope.handle(ControllerScope.KIND_INSTANCE, 0));
+            // 1b. And that is now a PLACEMENT REFUSAL, not merely a missing diagnostic:
+            //     a real https daemon with a tenant-accepting posture and no lane cannot
+            //     pass preflight or be admitted, by name.
+            assertThat(ServerModel.acceptsTenantWorkloads(laneless))
+                .as("step 1b: the enrolled host accepts tenant workloads")
+                .isTrue();
+            HostPreflight.Report lanelessReport = HostPreflight.runAndStore(HOST);
+            assertThat(lanelessReport.check("kernel_isolation_lane"))
+                .as("step 1b: the kernel-lane probe ran").isNotNull();
+            assertThat(lanelessReport.check("kernel_isolation_lane").required())
+                .as("step 1b: and is REQUIRED for a tenant-accepting host").isTrue();
+            assertThat(lanelessReport.check("kernel_isolation_lane").status())
+                .as("step 1b: it FAILS with no lane to read the kernel through")
+                .isEqualTo(HostPreflight.STATUS_FAIL);
+            assertThat(lanelessReport.passed())
+                .as("step 1b: so the whole preflight verdict is false")
+                .isFalse();
+            assertThat(catchThrowable(() ->
+                    HostAdmission.requireAdmittable(model.findByName(HOST))))
+                .as("step 1b: and admitting it is refused BY NAME")
+                .isInstanceOfSatisfying(Violations.class, violations ->
+                    assertThat(violations.all()).anySatisfy(violation ->
+                        assertThat(violation.message().key())
+                            .isEqualTo("host_kernel_lane_missing")));
 
             // 2. The operator enrolls the second trust relationship, walking the SAME
             //    ceremony the docker hosts walk (scan, out-of-band compare, confirm) --
             //    and it lands in its OWN columns, next to the daemon certificate.
             String sshFingerprint = remote.enrollSshLaneThroughProduct(HOST);
             Row host = model.findByName(HOST);
-            authorizedKey = host.get(HostTrustSlot.SSH.clientPublic());
             assertThat((String) host.get(ServerModel.HOST_KEY_FINGERPRINT))
                 .as("step 2: the ssh pin is the host's own ssh host key")
                 .isEqualTo(sshFingerprint);
@@ -170,6 +196,23 @@ class IncusKernelIsolationLiveTest {
                 .as("step 4: an unconfirmed ssh pin leaves the host unverifiable")
                 .isFalse();
             HostKeys.confirm(model.findByName(HOST));
+
+            // 4b. With the lane confirmed the kernel-lane probe PROVES itself against
+            //     daystrom's real nftables over ssh, and only then does the host admit --
+            //     the whole point of the requirement, walked end to end.
+            HostPreflight.Report provenReport = HostPreflight.runAndStore(HOST);
+            assertThat(provenReport.check("kernel_isolation_lane").status())
+                .as("step 4b: the probe transacted on the daemon host's own nftables: "
+                    + provenReport.check("kernel_isolation_lane").detail())
+                .isEqualTo(HostPreflight.STATUS_PASS);
+            assertThat(provenReport.passed())
+                .as("step 4b: so the preflight verdict is green")
+                .isTrue();
+            Row admittable = model.findByName(HOST);
+            HostAdmission.requireAdmittable(admittable);
+            admittable.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+            model.save(admittable);
+            HostAdmission.requireKernelTruth(model.findByName(HOST));
 
             int idA = instanceRecord("kernel-tenant-a", 8011);
             int idB = instanceRecord("kernel-tenant-b", 8022);

@@ -7,6 +7,8 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
@@ -38,6 +40,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -84,6 +87,17 @@ class InstanceMigrationTest {
         });
     }
 
+    /**
+     * A daemon-free host record in the state placement demands: admitted, accepting
+     * tenant workloads, and carrying a stored preflight that PROVED its kernel-truth lane.
+     *
+     * AIDEV-NOTE: the stored report is not decoration. Since kernel-truth verification
+     * became an admission requirement, a tenant-accepting host with no proven lane is
+     * refused at placement by name (`host_kernel_lane_unproven`) -- which is what an
+     * ADMITTED record with no preflight at all always was in production: impossible,
+     * because `requireAdmittable` demands `preflight_ok`. It goes through the real store
+     * funnel rather than hand-writing the capabilities shape here.
+     */
     private static int incusHost(String name) {
         Row row = Models.get(ServerModel.class).createEmptyRow();
         row.set(ServerModel.NAME, name);
@@ -91,8 +105,13 @@ class InstanceMigrationTest {
         row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
         row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
         Models.get(ServerModel.class).save(row);
+        HostPreflight.store(name, new HostPreflight.Report(List.of(
+            new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
+            new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
+                HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
+            Map.of(), true, Instant.now(), null));
         DAEMONS.putIfAbsent(name, new ConcurrentHashMap<>());
-        return row.get(ServerModel.ID);
+        return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
     }
 
     private static int instanceRecord(String name, int serverId, String kind) {

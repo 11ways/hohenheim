@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -88,7 +87,6 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
 
     private static LiveIncusHost remote;
     private static String enrolledFingerprint;
-    private static String authorizedKey;
 
     /**
      * AIDEV-NOTE: the ssh ADMIN lane is enrolled here on purpose (see the class
@@ -109,9 +107,6 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
         // collide; this class does not repeat that.
 
         enrolledFingerprint = remote.enrollThroughProduct(HOST, "hohenheim-live-win");
-        remote.enrollSshLaneThroughProduct(HOST);
-        authorizedKey = Models.get(ServerModel.class).findByName(HOST)
-            .get(HostTrustSlot.SSH.clientPublic());
     }
 
     /**
@@ -123,10 +118,8 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
         if (remote == null) {
             return;
         }
-        if (authorizedKey != null) {
-            System.out.println("=== cleanup: authorized_keys -> "
-                + remote.deauthorizeKey(authorizedKey));
-        }
+        System.out.println("=== cleanup: authorized_keys -> "
+            + remote.releaseAuthorizedKeys());
         if (enrolledFingerprint != null) {
             try {
                 remote.removeTrustEntry(enrolledFingerprint);
@@ -352,10 +345,8 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             AuthModels.users().delete(userId);
             // Give back both working credentials borrowed from a real machine, and PRINT
             // the outcome: a cleanup that fails silently leaves root access behind.
-            if (authorizedKey != null) {
-                System.out.println("=== cleanup: authorized_keys -> "
-                    + remote.deauthorizeKey(authorizedKey));
-            }
+            System.out.println("=== cleanup: authorized_keys -> "
+                + remote.releaseAuthorizedKeys());
             try {
                 remote.removeTrustEntry(enrolledFingerprint);
                 System.out.println("=== cleanup: trust entry removed");

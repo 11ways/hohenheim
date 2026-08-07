@@ -108,6 +108,8 @@ class RestoreCapacityLiveTest {
             } finally {
                 if (certificateFingerprint != null) {
                     try {
+                        System.out.println("=== cleanup: authorized_keys -> "
+                            + remote.releaseAuthorizedKeys());
                         remote.removeTrustEntry(certificateFingerprint);
                     } catch (Exception ignored) {
                         // Reported by the next run's trust listing; never masks a failure.

@@ -118,6 +118,10 @@ class IncusSnapshotBackupLiveTest {
 
     @AfterAll
     static void tearDown() {
+        if (remote != null) {
+            System.out.println("=== cleanup: authorized_keys -> "
+                + remote.releaseAuthorizedKeys());
+        }
         if (remote != null && enrolledFingerprint != null) {
             try {
                 remote.removeTrustEntry(enrolledFingerprint);

@@ -5021,6 +5021,14 @@
     "text": "Host '{$name}' bood een SSH-hostsleutel aan die niet met zijn pin overeenkomt en staat in quarantaine; pin hem bewust opnieuw voor je hem weer gebruikt",
     "scope": "violations"
   },
+  "host_kernel_lane_missing": {
+    "text": "Host '{$name}' aanvaardt tenant-workloads maar heeft geen kanaal om zijn eigen kernel te lezen, dus workload-isolatie valt er niet te verifiëren; geef hem een SSH-beheerkanaal en bevestig de hostsleutel, of zet zijn houding op trusted-only",
+    "scope": "violations"
+  },
+  "host_kernel_lane_unproven": {
+    "text": "Host '{$name}' heeft geen BEWEZEN kernelkanaal: de laatste preflight deed geen nftables-transactie op de daemonhost; draai preflight opnieuw en los de kernel_isolation_lane-check op",
+    "scope": "violations"
+  },
   "host_not_ssh": {
     "text": "Host '{$name}' wordt niet via SSH bereikt en kan dus geen back-ups bewaren; gebruik een bestandssysteemdoel voor de schijf van de controller",
     "scope": "violations"
@@ -6965,7 +6973,37 @@
     "scope": "violations"
   },
   "ssh_lane_none": {
-    "text": "Geen SSH-beheerkanaal. Deze host werkt prima zonder, maar de isolatie van zijn workloads is dan alleen uit de configuratie van de daemon te lezen en blijft ONBEVESTIGD in de kernel. Zet een SSH-doel, scan de hostsleutel en bevestig ze om kernelverificatie aan te zetten.",
+    "text": "Geen SSH-beheerkanaal vastgepind. Zet een SSH-doel, scan de hostsleutel en bevestig ze om er een te openen; het veld Kernelisolatie hieronder zegt wat deze host nodig heeft.",
+    "scope": "server"
+  },
+  "kernel_isolation_state": [
+    {
+      "text": "Kernelisolatie",
+      "scope": "field"
+    },
+    {
+      "text": "Of Hohenheim de nftables van deze host zelf kan lezen om te verifiëren dat de isolatie van een workload echt in de kernel staat, in plaats van te vertrouwen op wat de daemon meldt.",
+      "scope": "help"
+    }
+  ],
+  "kernel_isolation_proven": {
+    "text": "Geverifieerd in de kernel: de laatste preflight deed een nftables-transactie op deze host zelf.",
+    "scope": "server"
+  },
+  "kernel_isolation_unproven": {
+    "text": "NIET geverifieerd. Er is een kanaal aangegeven, maar de laatste preflight bewees niet dat het de kernel van deze host bereikt. Draai preflight; er komt geen nieuwe tenant-workload bij tot dat lukt.",
+    "scope": "server"
+  },
+  "kernel_isolation_missing": {
+    "text": "GEEN kanaal. Deze host aanvaardt tenant-workloads maar niets kan zijn kernel lezen, dus er komt geen nieuwe tenant-workload bij. Geef hem een SSH-beheerkanaal en bevestig de hostsleutel, of zet de houding op trusted-only.",
+    "scope": "server"
+  },
+  "kernel_isolation_optional": {
+    "text": "Niet vereist: de trusted-only houding van deze host aanvaardt geen tenant-workloads, dus hier hoeft niets in de kernel geverifieerd te worden.",
+    "scope": "server"
+  },
+  "host_quarantined_state": {
+    "text": "IN QUARANTAINE. Deze machine sprak een vastgepinde identiteit tegen: {$reason}. Elk kanaal wordt geweigerd en er komt niets nieuws bij tot je bewust opnieuw pint.",
     "scope": "server"
   },
   "framebuffer": {

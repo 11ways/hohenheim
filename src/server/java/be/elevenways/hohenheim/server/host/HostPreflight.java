@@ -305,32 +305,76 @@ public final class HostPreflight {
      * NOT prove the host accepts them; this check is that missing proof.
      */
     private static void checkNftables(NftRunner nft, List<Check> checks) {
+        checks.add(nftablesProbe(nft, "nftables", true));
+    }
+
+    /**
+     * ONE nft transaction against whatever kernel the runner reaches, named by the caller.
+     *
+     * AIDEV-NOTE: shared with the Incus battery's {@code kernel_isolation_lane} check
+     * deliberately -- that check has to be EVIDENCE that the daemon host's ruleset is
+     * readable and writable, and "we could have built a runner" is a claim, not evidence.
+     * A probe table is used rather than reading {@code table bridge incus} because that
+     * table does not exist on a daemon that has never run a workload, so its absence would
+     * fail a perfectly healthy new host.
+     *
+     * @param required whether a failure of this probe sinks the whole preflight verdict
+     */
+    static @NonNull Check nftablesProbe(@NonNull NftRunner nft, @NonNull String name,
+                                        boolean required) {
         String table = "hohenheim_preflight_" + Long.toHexString(System.nanoTime());
         try {
             NftRunner.Result added = nft.run(List.of("-f", "-"),
                 "add table inet " + table + "\n");
             if (!added.ok()) {
-                checks.add(new Check("nftables", STATUS_FAIL, true,
-                    "nft add table refused: " + added.failureText()));
-                return;
+                return new Check(name, STATUS_FAIL, required,
+                    "nft add table refused: " + added.failureText());
             }
             NftRunner.Result listed = nft.run(List.of("list", "table", "inet", table), null);
             boolean visible = listed.ok() && listed.stdout().contains(table);
             nft.run(List.of("delete", "table", "inet", table), null);
-            checks.add(new Check("nftables", visible ? STATUS_PASS : STATUS_FAIL, true,
+            return new Check(name, visible ? STATUS_PASS : STATUS_FAIL, required,
                 visible ? "nft transaction applied and read back from the kernel"
                     : "nft add reported success but the table did not read back: "
-                        + listed.failureText()));
+                        + listed.failureText());
         } catch (Exception error) {
-            checks.add(new Check("nftables", STATUS_FAIL, true,
-                "nft probe failed: " + error.getMessage()));
+            return new Check(name, STATUS_FAIL, required,
+                "nft probe failed: " + error.getMessage());
         }
+    }
+
+    /**
+     * The status one named check carried in the host's LAST STORED report, or null when
+     * the host has never been probed or that check never ran.
+     *
+     * AIDEV-NOTE: gates read this instead of re-probing. A gate that ran a live ssh nft
+     * transaction on every instance create would make a momentary network blip refuse
+     * tenant work, and would put a remote command on the hot path of every placement. The
+     * stored status is evidence that the kernel WAS reachable through this exact lane; the
+     * gate pairs it with a LIVE read of whether the record still declares that lane, so a
+     * removed target or a quarantine closes the gate instantly rather than at next probe.
+     */
+    public static @Nullable String storedCheckStatus(@NonNull Row server,
+                                                     @NonNull String checkName) {
+        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
+                || !(capabilities.get("checks") instanceof Map<?, ?> checks)
+                || !(checks.get(checkName) instanceof Map<?, ?> check)) {
+            return null;
+        }
+        Object status = check.get("status");
+        return status != null ? String.valueOf(status) : null;
     }
 
     // -- persistence ----------------------------------------------------------
 
-    /** Store one report on the host record; also refreshes the typed health columns. */
-    static void store(@NonNull String serverName, @NonNull Report report) {
+    /**
+     * Store one report on the host record; also refreshes the typed health columns.
+     *
+     * AIDEV-NOTE: public because it is THE funnel -- both batteries persist through it,
+     * and a fixture that needs a host to carry a realistic stored verdict must go through
+     * it too rather than hand-writing the capabilities shape somewhere else.
+     */
+    public static void store(@NonNull String serverName, @NonNull Report report) {
         Row server = Models.get(ServerModel.class).findByName(serverName);
         if (server == null) {
             return;
