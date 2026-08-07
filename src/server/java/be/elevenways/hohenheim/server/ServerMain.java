@@ -19,8 +19,11 @@ import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.docker.SiteReleases;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.process.PortAllocator;
+import be.elevenways.hohenheim.server.process.ProcessCapacity;
 import be.elevenways.hohenheim.server.process.ProcessInfrastructure;
+import be.elevenways.hohenheim.server.process.ProcessReaper;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
 import be.elevenways.protoblast.common.Blast;
@@ -148,7 +151,15 @@ public class ServerMain {
         // by a child that outlived its controller keeps its claim -- see the sweep's note.
         PortAllocator allocator = ProcessInfrastructure.portAllocator();
         if (allocator != null) {
+            // ORDER: reap, then sweep, then reset the memory bookings. A child that
+            // outlived the previous controller still holds its port and its host-memory
+            // charge; both may only be handed back once it is actually dead. Reaping
+            // FIRST is what turns the sweep's "still bound, kill it by hand" case back
+            // into an ordinary release, and what makes the process-capacity reset honest
+            // instead of a way to over-book a host that is still full.
+            ProcessReaper.reapOrphans();
             allocator.sweepPreviousControllerClaims();
+            ProcessCapacity.resetOn(ServerModel.localServerId());
         }
 
         // Install zenit-auth (session store, CSRF, middleware, /login + /setup + /account + /admin).

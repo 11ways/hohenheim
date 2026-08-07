@@ -2,8 +2,11 @@ package be.elevenways.hohenheim.server.process;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.ProclogModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.ProcessConfinement;
 import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.Alerts;
@@ -62,6 +65,8 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     protected final Map<String, String> environmentVariables;
     /** SHA-256 digests of the site's control-API keys; the plaintext is never held. */
     protected final Set<String> apiKeyDigests;
+    /** The operator-declared per-child cgroup caps; both members null means unbounded. */
+    protected final ResourceLimits limits;
 
     // Process state
     private final CopyOnWriteArrayList<ManagedProcess> processList = new CopyOnWriteArrayList<>();
@@ -200,6 +205,14 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         // Parse environment variables from settings
         this.environmentVariables = EnvVars.toMap(settings.get("environment_variables"));
 
+        // A DECLARED memory limit is a promise this host must be able to keep. Refusing
+        // here (not at spawn) makes it a FaultedSiteHandler 503 naming the reason, the
+        // same shape as an unresolvable run-as user -- never a site that half-starts.
+        this.limits = ResourceLimits.fromSettings(settings);
+        if (this.limits.bookedMemoryMb() > 0 && !ProcessConfinement.availability().enforceable()) {
+            throw new IllegalArgumentException(ProcessConfinement.unenforceableRefusal(siteName));
+        }
+
         monitor.addListener(siteId, this);
 
         this.proclogFlushTask = proclogFlushScheduler.scheduleAtFixedRate(
@@ -304,7 +317,17 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         try {
             for (int attempt = 1; attempt <= MAX_EADDRINUSE_RETRIES; attempt++) {
                 if (destroyed.get()) return null;
-                ManagedProcess managed = startProcessOnce();
+                ManagedProcess managed;
+                try {
+                    managed = startProcessOnce();
+                } catch (CapacityRefused refused) {
+                    // NOT the EADDRINUSE shape: a host that has no room now will have no
+                    // room 150ms later either, so retrying it ten times only delays the
+                    // refusal by half a minute and hides it behind a backoff log.
+                    Blast.log("PROCESS: refusing to start another child of", siteName, "-",
+                        refused.getMessage());
+                    return null;
+                }
 
                 if (managed != null) {
                     spawned = true;
@@ -335,6 +358,16 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         }
     }
 
+    /**
+     * A spawn the host budget refused: permanent for as long as the host is full, so it
+     * must never ride the address-in-use retry loop.
+     */
+    private static final class CapacityRefused extends RuntimeException {
+        CapacityRefused(String message) {
+            super(message);
+        }
+    }
+
     /** Alert the notification channels about a crash loop, at most once per interval. */
     private void notifyCrashLoop(long now) {
         long previous = lastCrashLoopNotified.get();
@@ -356,13 +389,19 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
      * Apply this site's kernel isolation before anything is spawned, or refuse the spawn.
      *
      * AIDEV-NOTE: applied per SPAWN, not once per handler, and that is what closes this
-     * tier's reboot window without a sweep entry doing it: every child is ours, so after a
-     * reboot (or any restart) the children are gone and come back through here, re-applying
-     * a ruleset the kernel lost. The container tiers cannot rely on that -- the Docker
-     * daemon restarts unless-stopped containers with no code path of ours in the loop --
-     * which is why {@code VerifyWorkloadIsolation} exists for THEM and covers this tier
-     * only for the mid-life divergence (something else flushing the table under a
-     * long-running child).
+     * tier's REBOOT window without a sweep entry doing it: a reboot takes every child with
+     * it, so they all come back through here and re-apply a ruleset the kernel lost. It
+     * does NOT close the plain CONTROLLER-RESTART window, and an earlier version of this
+     * note claiming "or any restart" was simply false: a ProcessBuilder child is reparented
+     * to init and keeps running (and keeps its listening socket -- see
+     * {@link PortAllocator}) across a controller restart, so its uid chain is whatever the
+     * previous generation left and no spawn re-applies it. {@link ProcessReaper} is what
+     * makes the claim true now: it kills those survivors at boot, before anything spawns,
+     * so every running child really is one this method admitted. The container tiers cannot
+     * rely on any of it -- the Docker daemon restarts unless-stopped containers with no
+     * code path of ours in the loop -- which is why {@code VerifyWorkloadIsolation} exists
+     * for THEM and covers this tier only for the mid-life divergence (something else
+     * flushing the table under a long-running child).
      *
      * AIDEV-NOTE: a site with no run-as user gets no policy, because the only identity its
      * children have is the DAEMON's own uid and a deny keyed on that would cut the control
@@ -449,6 +488,20 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         }
         String listenTarget = socketMode ? socketPath : String.valueOf(port);
 
+        // Book this child's declared memory on the host budget BEFORE it exists. The unit
+        // booked is the child, not the site, and the cap stamped on the cgroup below is the
+        // same number -- so the auto-scaler stops at the host's real headroom instead of at
+        // its own hard cap of five. A site that declares nothing books nothing.
+        int bookedMb = this.limits.bookedMemoryMb();
+        if (bookedMb > 0) {
+            try {
+                ProcessCapacity.reserve(ServerModel.localServerId(), bookedMb);
+            } catch (RuntimeException full) {
+                releaseUpstream(port, socketPath, null, 0);
+                throw new CapacityRefused(full.getMessage());
+            }
+        }
+
         List<String> command = buildCommand(listenTarget);
         File workDir = getWorkingDirectory();
 
@@ -486,7 +539,16 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             reserved.put("HOME", home != null && !home.isBlank() ? home : null);
             ReservedEnv.stamp(env, reserved, siteName);
 
-            ProcessBuilder pb = SystemUsers.executionBuilder(runAs, env, command, true);
+            // The cgroup scope that makes the booking above honest; empty when nothing is
+            // declared, and a hard refusal when a declaration cannot be enforced here.
+            List<String> confinement = ProcessConfinement.scopePrefix(
+                siteName, this.limits.memoryMb(), this.limits.cpus());
+            if (!confinement.isEmpty()) {
+                ProcessConfinement.contributeEnvironment(env);
+            }
+
+            ProcessBuilder pb = SystemUsers.executionBuilder(runAs, env, command, true,
+                confinement);
             if (workDir != null && workDir.exists()) {
                 pb.directory(workDir);
             }
@@ -497,13 +559,14 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
             Process process = pb.start();
             ManagedProcess managed = new ManagedProcess(process, port, socketPath, siteId, runAs);
+            managed.setBookedMemoryMb(bookedMb);
             List<Thread> outputThreads = captureProcessOutput(managed);
 
             if (process.waitFor(STARTUP_GRACE_MS, TimeUnit.MILLISECONDS)) {
                 awaitProcessOutput(outputThreads);
                 persistProclog(managed);
                 ipc.close();
-                releaseUpstream(port, socketPath, null);
+                releaseUpstream(port, socketPath, null, managed.takeBooking());
 
                 if (managed.hasAddressInUse()) {
                     Blast.log("PROCESS: retrying", siteName, "after EADDRINUSE on", listenTarget);
@@ -529,7 +592,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
                 if (destroyed.get()) {
                     managed.kill();
                     ipc.close();
-                    releaseUpstream(port, socketPath, connection);
+                    releaseUpstream(port, socketPath, connection, managed.takeBooking());
                     return null;
                 }
 
@@ -558,7 +621,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
         } catch (Exception e) {
             if (ipc != null) ipc.close();
-            releaseUpstream(port, socketPath, connection);
+            releaseUpstream(port, socketPath, connection, bookedMb);
             Blast.log("PROCESS: failed to start", siteName, "-", e.getMessage());
             return null;
         }
@@ -566,6 +629,19 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
     /** Release a process's upstream resources: TCP port, socket file, and bridge connection. */
     private void releaseUpstream(int port, String socketPath, UpstreamConnection connection) {
+        releaseUpstream(port, socketPath, connection, 0);
+    }
+
+    /**
+     * The same release, plus the host-memory booking the child was admitted under.
+     *
+     * AIDEV-NOTE: the booking is released on EVERY path a port is, deliberately -- the two
+     * have the identical lifetime (one process instance) and losing one leaks host budget
+     * exactly the way losing the other leaks a port. The amount comes from the child's own
+     * stamp, never re-derived from settings that may have changed since it started.
+     */
+    private void releaseUpstream(int port, String socketPath, UpstreamConnection connection,
+                                 int bookedMb) {
         if (port > 0) {
             portAllocator.release(port);
         }
@@ -574,6 +650,9 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         }
         if (connection != null) {
             connection.close();
+        }
+        if (bookedMb > 0) {
+            ProcessCapacity.release(ServerModel.localServerId(), bookedMb);
         }
     }
 
@@ -756,7 +835,8 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
 
         // Cleanup
         monitor.unregister(pid);
-        releaseUpstream(port, managed.socketPath(), managed.connection());
+        releaseUpstream(port, managed.socketPath(), managed.connection(),
+            managed.takeBooking());
         processMap.remove(pid);
         processList.remove(managed);
 
@@ -1004,6 +1084,17 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
     }
 
     /**
+     * Every child pid this handler still holds, ready or not.
+     *
+     * <p>{@link ProcessReaper} asks THIS rather than {@link #getProcesses()}: a child that
+     * has not signalled ready yet is still a child of the current controller generation,
+     * and reaping it would kill a healthy workload mid-boot.
+     */
+    public Set<Long> livePids() {
+        return Set.copyOf(processMap.keySet());
+    }
+
+    /**
      * The parent-side IPC channel for a given child pid, or null if the
      * child never connected (happens for non-Alchemy Node sites and any
      * custom command-type children without a TCP shim).
@@ -1087,7 +1178,8 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
             remoteCache.clear();
             for (ManagedProcess proc : processMap.values()) {
                 proc.kill();
-                releaseUpstream(proc.port(), proc.socketPath(), proc.connection());
+                releaseUpstream(proc.port(), proc.socketPath(), proc.connection(),
+                    proc.takeBooking());
             }
             processMap.clear();
             processList.clear();

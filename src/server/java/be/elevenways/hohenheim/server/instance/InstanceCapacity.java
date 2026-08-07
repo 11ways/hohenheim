@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.process.ProcessCapacity;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -210,8 +211,11 @@ public final class InstanceCapacity {
         Row server = Models.get(ServerModel.class).findById(serverId);
         Long budget = server == null ? null : budgetMbOf(server);
         try {
-            Quotas.reserve(bucketOf(serverId), amountMb,
-                budget == null ? Long.MAX_VALUE : budget);
+            // The host budget is shared with the managed-process tier, whose children book
+            // their own declared caps in a separate bucket -- see ProcessCapacity for why
+            // it is separate and what the cross-subtraction costs.
+            Quotas.reserve(bucketOf(serverId), amountMb, budget == null ? Long.MAX_VALUE
+                : Math.max(0, budget - ProcessCapacity.bookedMbOn(serverId)));
         } catch (QuotaExceeded full) {
             throw Violations.ofForm(violation("host_capacity_reached")
                 .withArg("name", hostLabel(serverId))
@@ -228,7 +232,7 @@ public final class InstanceCapacity {
     }
 
     /** The host's name, or a bare id spelling -- the refusal path may never itself fail. */
-    static @NonNull String hostLabel(int serverId) {
+    public static @NonNull String hostLabel(int serverId) {
         Row server = Models.get(ServerModel.class).findById(serverId);
         String name = server != null ? server.get(ServerModel.NAME) : null;
         return name != null ? name : "#" + serverId;

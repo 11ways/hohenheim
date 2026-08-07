@@ -365,18 +365,27 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         assertThat(forged.headers().firstValue("Location"))
             .hasValue("/admin/sites/" + siteId + "/page/deployments");
 
-        // The process handlers share the mechanism; a static site has no
-        // managed handler, so start is side-effect-free too.
+        // The process handlers share the return mechanism, and a static site has no
+        // managed handler -- so the action cannot run. It must SAY SO on the page it
+        // returns to: this used to be a plain reload, which is indistinguishable from
+        // "started" to the operator who clicked the button.
         String processTarget = "/manage/sites/" + siteId + "/page/processes";
         var processReturn = postAction("/sites/" + siteId + "/processes/start",
             "_return=" + java.net.URLEncoder.encode(processTarget, java.nio.charset.StandardCharsets.UTF_8));
         assertThat(processReturn.statusCode()).isIn(302, 303);
-        assertThat(processReturn.headers().firstValue("Location")).hasValue(processTarget);
+        assertThat(processReturn.headers().firstValue("Location"))
+            .as("a start that could not run returns to the submitted page WITH a reason")
+            .get(org.assertj.core.api.InstanceOfAssertFactories.STRING)
+            .startsWith(processTarget + "?error=")
+            .contains("no+running+process+handler");
 
         var forgedProcess = postAction("/sites/" + siteId + "/processes/start",
             "_return=" + java.net.URLEncoder.encode("//evil.example/phish", java.nio.charset.StandardCharsets.UTF_8));
         assertThat(forgedProcess.statusCode()).isIn(302, 303);
         assertThat(forgedProcess.headers().firstValue("Location"))
-            .hasValue("/admin/sites/" + siteId + "/page/processes");
+            .as("and a forged return target still falls back to the admin page")
+            .get(org.assertj.core.api.InstanceOfAssertFactories.STRING)
+            .startsWith("/admin/sites/" + siteId + "/page/processes?error=")
+            .doesNotContain("evil.example");
     }
 }

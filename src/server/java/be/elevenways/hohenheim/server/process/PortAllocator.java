@@ -35,7 +35,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * see a consumer no ledger will ever contain -- IpcChannel's per-spawn
  * {@code ServerSocket(0)}, this machine's testcontainers publishing into 32768-60999, or a
  * managed child that OUTLIVED the controller that spawned it (proven: a ProcessBuilder
- * child is reparented to init and keeps its listening socket across a controller crash),
+ * child is reparented to init and keeps its listening socket across a controller crash --
+ * {@link ProcessReaper} kills such survivors at boot BEFORE this sweep runs, but only for
+ * a site whose dedicated uid identifies them, so the probe still answers for the rest),
  * so it may never be skipped. The up-front ledger read and PortLedger.claim's own refusal
  * (unique key plus the whole-host/specific-address overlap rule) are TWO independent
  * refusals of the same thing, deliberately: removing either alone still refuses a taken
@@ -151,7 +153,11 @@ public class PortAllocator {
      * OS probe outranks the ledger here. Managed children are spawned with ProcessBuilder
      * and nothing kills them when the controller exits -- verified on this machine: the
      * child is reparented to init and its listening socket survives a controller halt with
-     * no shutdown hooks run at all. Freeing such a row would hand the port to the next
+     * no shutdown hooks run at all. {@link ProcessReaper} runs BEFORE this sweep and kills
+     * the survivors it can identify, which is why "retained" should now be rare rather than
+     * normal -- but it is not a licence to free a bound port: a site with no dedicated uid
+     * is deliberately reaped by nothing, and a survivor that refuses to die is reported and
+     * left. Freeing such a row would hand the port to the next
      * allocate, whose child then dies with EADDRINUSE -- and startProcess RETRIES on
      * address-in-use, so the whole failure would show up as a slightly slower start and a
      * retry log. A still-bound port must therefore keep its row (it stays unallocatable)

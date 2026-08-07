@@ -440,7 +440,7 @@ public final class InstanceService {
         Map<String, String> variables = instanceVariables.valuesFor(instanceId);
         settings = instanceVariables.applyToSettings(settings, variables);
         InstanceSpec spec = handler.specFor(instanceId, settings);
-        if (spec.image().isEmpty()) {
+        if (spec.image().isBlank()) {
             throw Violations.ofField("settings.image", "", violationText("instance_image_required"));
         }
         // The record's pinned resolved image identity rides the spec: a driver that
