@@ -7,8 +7,11 @@ import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
+import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.options.ServerOptions;
@@ -98,6 +101,18 @@ public final class ServerResource extends RowResource {
         .visibleIn(EditView.EDIT)
         .build();
 
+    /**
+     * Whether this host's workload isolation can be PROVEN in its own kernel -- the
+     * placement requirement {@link HostAdmission#requireKernelTruth} enforces, stated where
+     * the operator can act on it.
+     */
+    private static final StringField KERNEL_ISOLATION_STATE =
+        StringField.builder("kernel_isolation_state")
+            .label(HohenheimFormCopy.label("kernel_isolation_state"))
+            .help(HohenheimFormCopy.help("kernel_isolation_state"))
+            .visibleIn(EditView.EDIT)
+            .build();
+
     /** The Incus daemon's PINNED server certificate, a different trust relationship. */
     private static final StringField INCUS_CERT_STATE = StringField.builder("incus_cert_state")
         .label(HohenheimFormCopy.label("incus_cert_state"))
@@ -140,6 +155,10 @@ public final class ServerResource extends RowResource {
             .build())
         .add(Computed.of(IDENTITY_PUBLIC_KEY,
                 values -> identityPublicKey(String.valueOf(values.get("name"))))
+            .dependsOn("name")
+            .build())
+        .add(Computed.of(KERNEL_ISOLATION_STATE,
+                values -> kernelIsolationState(String.valueOf(values.get("name"))))
             .dependsOn("name")
             .build())
         .add(Computed.of(INCUS_CERT_STATE,
@@ -279,6 +298,28 @@ public final class ServerResource extends RowResource {
             "host_key_none", "host_key_confirmed", "host_key_unconfirmed");
     }
 
+    /**
+     * Whether kernel-truth isolation verification is possible here, PROVEN, or simply not
+     * required -- so an operator never has to infer a placement refusal from a preflight
+     * check buried in the stored capabilities.
+     */
+    private @NonNull String kernelIsolationState(@NonNull String name) {
+        Row row = Models.get(ServerModel.class).findByName(name);
+        if (row == null || !ServerModel.isIncus(row)) {
+            return "";
+        }
+        if (!ServerModel.acceptsTenantWorkloads(row)) {
+            return hostCopy(Microcopy.of("kernel_isolation_optional"));
+        }
+        if (!IncusKernelIsolation.laneAvailable(row)) {
+            return hostCopy(Microcopy.of("kernel_isolation_missing"));
+        }
+        boolean proven = HostPreflight.STATUS_PASS.equals(
+            HostPreflight.storedCheckStatus(row, IncusPreflight.KERNEL_LANE_CHECK));
+        return hostCopy(Microcopy.of(proven
+            ? "kernel_isolation_proven" : "kernel_isolation_unproven"));
+    }
+
     /** The Incus daemon's pinned server certificate, read the same way. */
     private @NonNull String incusCertState(@NonNull String name) {
         Row row = Models.get(ServerModel.class).findByName(name);
@@ -303,6 +344,16 @@ public final class ServerResource extends RowResource {
             return hostCopy(Microcopy.of("host_key_mismatch_state")
                 .withArg("pinned", fingerprint)
                 .withArg("offered", digest.apply(offered)));
+        }
+        // A quarantine with NO offered material: a live connection was refused because the
+        // identity contradicted the pin and nobody rescanned. Without this the form would
+        // report a quarantined host as "confirmed" -- the pin is confirmed, the machine is
+        // the thing that is not.
+        if (HostPins.isQuarantined(row, slot)) {
+            String reason = row.get(ServerModel.QUARANTINE_REASON);
+            return hostCopy(Microcopy.of("host_quarantined_state")
+                .withArg("reason", reason != null && !reason.isBlank()
+                    ? reason : String.valueOf((Object) row.get(ServerModel.LAST_ERROR))));
         }
         return hostCopy(Microcopy.of(Boolean.TRUE.equals(row.get(slot.verified()))
             ? confirmedKey : unconfirmedKey).withArg("fingerprint", fingerprint));

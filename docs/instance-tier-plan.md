@@ -4349,6 +4349,82 @@ records AND labelled them as the same record -- which is why
   but nothing reaps a departed controller's shared objects; a reaper needs a way to
   tell "gone" from "temporarily unreachable", which is a decision, not a patch.
 
+STATUS (2026-08-07, trust-state-machine wave): the two coupled host-trust defects
+the Proxmox-use inventory left open are CLOSED. Both were instances of "a step
+does less than it claims and reports success".
+
+DECISION 1 -- kernel-truth isolation verification is an ADMISSION REQUIREMENT.
+This SUPERSEDES the "the lane is OPTIONAL" clause of the STATUS (2026-08-05,
+trust-split wave) block above and open item 5 of docs/proxmox-use-inventory.md.
+Reasoning: upstream incus 7.3.0's failed NIC detach leaves a workload declaring
+isolation it does not have (measured 2 of 34 VM instances), so verification is
+not a diagnostic, it is the only thing watching the boundary; leaving it optional
+meant a host could accept hostile tenants with nothing reading its kernel, which
+is the shape that turned a real isolation loss into a 1-in-7 "flake".
+
+- The gate is on ADMISSION, never on trust: `HostAdmission.requireKernelTruth`
+  returns immediately for a host whose posture is `trusted_only`, so a
+  storage-only or operator-only host still enrols, confirms, admits and serves as
+  a BACKUP DESTINATION with no lane at all. The backup-target decision does not
+  regress; `requireBackupDestination` deliberately does not call the new gate.
+- A LOCAL daemon satisfies it through `NftRunner.Sudo`: hohenheim running
+  natively on the host it manages (docs/deploy-native.md) is the shipping shape
+  and needs no ssh anywhere.
+- The requirement is PROVEN, not declared. `IncusPreflight`'s
+  `kernel_isolation_lane` check used to report `IncusKernelIsolation.available()`
+  -- a claim that a runner could be CONSTRUCTED -- as a non-required WARN. It now
+  runs the same nft transaction the Docker battery's required `nftables` check
+  runs (add a probe table, read it back, delete it) through the lane the verifier
+  itself uses, and it is REQUIRED exactly when
+  `ServerModel.acceptsTenantWorkloads` answers true. A probe table is used rather
+  than `table bridge incus` because that table does not exist on a daemon that
+  has never run a workload.
+- Gates read the STORED verdict plus a LIVE read of whether the record still
+  declares a trusted lane. A live ssh nft transaction on every instance create
+  would put a remote command on the placement hot path and let a momentary blip
+  refuse tenant work; the stored status proves the kernel WAS reachable through
+  this exact lane, and the live half means a removed ssh target or a quarantine
+  closes the gate instantly instead of at next probe.
+- DOCKER hosts pass through: their required `nftables` preflight check already
+  proves the same kernel access, and a second gate over the same evidence would
+  be theater.
+- EXISTING ADMITTED HOSTS: nothing is migrated and nothing is cordoned. Silently
+  cordoning a running production host is an availability decision no migration
+  may take for an operator. The gate is LIVE at placement, so an already-admitted
+  host that cannot verify takes no NEW tenant workload -- refused by name,
+  `host_kernel_lane_missing` / `host_kernel_lane_unproven`, each saying what to
+  do -- while running workloads and every cleanup path are untouched, the next
+  preflight flips the stored verdict, and the host form carries a
+  `kernel_isolation_state` field stating the position in plain words.
+
+DECISION 2 -- a trust verdict may only be cleared by a trust ACT. `last_error_kind`
+was both the last TRANSIENT probe outcome and the sticky quarantine token, so
+`HostProbe.recordSuccess` (and every weaker `recordFailure`) erased a
+TLS-pin/host-key contradiction. M078 gives the verdict its own columns
+(`quarantined_at` + `quarantine_reason`, backfilled from the old token so nothing
+is silently un-quarantined at deploy). `HostPins.isQuarantined` still asks BOTH
+markers -- the per-slot offer a disagreeing rescan writes, and the record-wide
+stamp a refused connection writes -- because different paths write them; only
+`HostPins.repin` clears either. The pin state on the host form now shows a
+quarantine that carries no offered material, which previously read as "confirmed".
+
+- ALSO FIXED, found while proving the above: the materialised ssh store
+  (`data/host-ssh/`) was keyed on the host record ID alone, and a record id is
+  unique only within one control-plane database. Four parallel test forks, each
+  with its own database and its own `servers.id = 1`, overwrote each other's
+  private identity file; ssh then presented the wrong key and daystrom answered
+  "Permission denied (publickey)". The store is now namespaced by the controller
+  identity token, the same fix and the same reasoning as the daemon resource
+  names of the controller-namespace wave.
+- LIVE: `IncusKernelIsolationLiveTest` now walks the whole requirement on
+  daystrom -- lane-less preflight FAILS required and admit is refused by name,
+  then the confirmed lane makes the probe transact on daystrom's real nftables
+  over ssh and the host admits. Because the lane is part of the shipping
+  ceremony, `LiveIncusHost.enrollThroughProduct` enrols it for every Incus live
+  test; the fixture tracks every authorized_keys line it installs and hands them
+  all back (`releaseAuthorizedKeys`), so no class can leave root access behind.
+
+
 ## Cross-cutting foundations (missing from the old plan, needed for public)
 
 These are not phases; they are models/mechanisms several phases depend on.

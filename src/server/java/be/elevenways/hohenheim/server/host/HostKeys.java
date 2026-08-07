@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.host;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -365,10 +366,24 @@ public final class HostKeys {
         return "hohenheim-host-" + server.get(ServerModel.ID);
     }
 
-    /** Hohenheim's OWN ssh store, never the OS user's ~/.ssh. */
+    /**
+     * Hohenheim's OWN ssh store, never the OS user's ~/.ssh, and namespaced per
+     * CONTROLLER exactly like every daemon resource name.
+     *
+     * AIDEV-NOTE: the namespace is not decoration. Both file names below are keyed on the
+     * host record's ID, and a record id is only unique WITHIN one control-plane database
+     * -- so two controllers sharing a data directory materialise different machines' host
+     * keys and private identities onto the same two paths, and {@code writeFile} rewrites
+     * whichever was there. Observed 2026-08-07 with four parallel test forks, each with
+     * its own database and therefore its own {@code servers.id = 1}: ssh presented the
+     * other fork's private key and daystrom answered "Permission denied (publickey)" --
+     * a credential mix-up that reads as an unrelated auth failure. Same reasoning, same
+     * token, as the per-controller daemon resource names.
+     */
     static @NonNull Path storeDirectory() {
         Path directory = Path.of(HohenheimSettings.VALUES
-            .getValue(HohenheimSettings.Storage.DATA_PATH)).resolve("host-ssh");
+            .getValue(HohenheimSettings.Storage.DATA_PATH))
+            .resolve("host-ssh").resolve(ControllerIdentity.token());
         try {
             Files.createDirectories(directory);
             trySetPermissions(directory, "rwx------");

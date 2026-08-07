@@ -53,11 +53,16 @@ import java.util.Map;
  *
  * AIDEV-NOTE: an Incus daemon addressed over https is verifiable exactly when its record
  * declares a TRUSTED ssh admin lane (M074 gave the ssh trust its own columns, so the TLS
- * pin no longer occupies them). The lane is OPTIONAL: a host without one, or with one
- * that is unconfirmed or quarantined, makes {@link #available} answer false, and every
- * caller must treat that as "not verified" -- never as "verified fine". Refusing to
- * answer is not evidence of a leak, which is why an unverifiable host is reported every
- * sweep and never stopped.
+ * pin no longer occupies them). A host without one, or with one that is unconfirmed or
+ * quarantined, makes {@link #available} answer false, and every caller must treat that as
+ * "not verified" -- never as "verified fine". Refusing to answer is not evidence of a
+ * leak, which is why an unverifiable host is reported every sweep and never stopped.
+ *
+ * AIDEV-NOTE: since 2026-08-07 the lane is only optional for a host that does NOT accept
+ * tenant workloads. {@link HostAdmission#requireKernelTruth} makes it a placement and
+ * admit REQUIREMENT for any posture other than trusted_only, proven by the preflight
+ * probe actually transacting on the daemon host's kernel -- a locally addressed daemon
+ * satisfies it through {@link NftRunner.Sudo} and needs no ssh at all.
  */
 public final class IncusKernelIsolation {
 
@@ -119,7 +124,7 @@ public final class IncusKernelIsolation {
      * runner is that daemon's kernel. An https endpoint needs a declared ssh lane; the
      * local runner would be the controller's kernel and would verify nothing.
      */
-    private static @Nullable NftRunner runnerFor(@NonNull Row server) {
+    static @Nullable NftRunner runnerFor(@NonNull Row server) {
         NftRunner installed = runnerOverride;
         if (installed != null) {
             return installed;
@@ -145,6 +150,22 @@ public final class IncusKernelIsolation {
     /** @return whether kernel truth can be READ for this host at all */
     public boolean available() {
         return this.runner != null;
+    }
+
+    /**
+     * The same question as {@link #available()} asked of a RECORD, without contacting the
+     * daemon: gates run on hosts whose Incus client may not even be constructible.
+     *
+     * <p>It answers whether a lane is DECLARED and trusted, never whether it works -- that
+     * is what the preflight probe is for.
+     */
+    public static boolean laneAvailable(@NonNull Row server) {
+        return kernelRunner(server) != null;
+    }
+
+    /** The nft lane this host's kernel truth is read through, or null when it declares none. */
+    public static @Nullable NftRunner kernelRunner(@NonNull Row server) {
+        return runnerFor(server);
     }
 
     /** What one workload's isolation looks like in the kernel; empty {@code missing} = enforced. */

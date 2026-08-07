@@ -62,6 +62,18 @@ public final class LiveIncusHost {
     private final String fingerprint;
     private final String trustTarget;
 
+    /**
+     * Every authorized_keys line this fixture installed on the remote, so a tearDown can
+     * hand back what it took without every test class tracking it by hand.
+     *
+     * AIDEV-NOTE: these are WORKING ROOT CREDENTIALS on a real machine. Enrollment
+     * installs one for every Incus live test now that the kernel-truth lane is part of the
+     * ceremony, so "the class that forgot its cleanup" would be root access accumulating,
+     * silently. {@link #releaseAuthorizedKeys} is a no-op when nothing was installed, so
+     * calling it unconditionally in a tearDown is always right.
+     */
+    private final List<String> installedKeys = new ArrayList<>();
+
     private LiveIncusHost(String url, String fingerprint, String trustTarget) {
         this.url = url;
         this.fingerprint = fingerprint;
@@ -173,13 +185,32 @@ public final class LiveIncusHost {
     }
 
     /**
-     * The FULL product enrollment ceremony against this host -- identity, pin,
-     * confirm, token enrollment, preflight, admission -- with no fixture shortcut
-     * writing any verdict. Call inside a {@code Db.run} scope.
+     * The FULL product enrollment ceremony for a host that will accept TENANT workloads:
+     * daemon trust, the ssh admin kernel-truth lane, preflight, admission -- with no
+     * fixture shortcut writing any verdict. Call inside a {@code Db.run} scope.
+     *
+     * AIDEV-NOTE: the ssh lane is part of this ceremony since kernel-truth verification
+     * became an admission REQUIREMENT (2026-08-07). It is not fixture convenience: an
+     * https Incus host with a tenant-accepting posture and no lane now FAILS preflight by
+     * design, so a fixture that skipped the lane would turn every Incus live test into a
+     * silent skip -- the exact reports-success shape this wave exists to kill.
      *
      * @return the enrolled client certificate's fingerprint (for trust cleanup)
      */
     public String enrollThroughProduct(String hostName, String clientName) {
+        String fingerprint = enrollDaemonTrustThroughProduct(hostName, clientName);
+        enrollSshLaneThroughProduct(hostName);
+        admitThroughProduct(hostName);
+        return fingerprint;
+    }
+
+    /**
+     * The DAEMON half of the ceremony only -- identity, pin, confirm, token enrollment --
+     * leaving the host unpreflighted, unadmitted and without a kernel-truth lane.
+     *
+     * @return the enrolled client certificate's fingerprint (for trust cleanup)
+     */
+    public String enrollDaemonTrustThroughProduct(String hostName, String clientName) {
         Row host = enrol(hostName);
         IncusTrust.ensureIdentity(host);
         String fingerprint = IncusTrust.fingerprintOf(
@@ -193,6 +224,11 @@ public final class LiveIncusHost {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        return fingerprint;
+    }
+
+    /** Run the real preflight and take the admit transition through the real gate. */
+    public void admitThroughProduct(String hostName) {
         HostPreflight.Report report = HostPreflight.runAndStore(hostName);
         Assumptions.assumeTrue(report.passed(),
             "incus preflight did not pass: " + report.checks());
@@ -200,7 +236,6 @@ public final class LiveIncusHost {
         HostAdmission.requireAdmittable(ready);
         ready.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
         Models.get(ServerModel.class).save(ready);
-        return fingerprint;
     }
 
     /**
@@ -259,10 +294,28 @@ public final class LiveIncusHost {
      */
     public void authorizeKey(String publicKey) throws IOException {
         String line = publicKey.trim().replace("'", "");
+        this.installedKeys.add(line);
         deauthorizeComment(commentOf(line));
         ssh(List.of("sh", "-c", "'mkdir -p ~/.ssh && chmod 700 ~/.ssh &&"
             + " touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys &&"
             + " echo \"" + line + "\" >> ~/.ssh/authorized_keys'"));
+    }
+
+    /**
+     * Give back every authorized_keys line this fixture installed, whoever installed it.
+     *
+     * @return one printable outcome per key, or "nothing installed"
+     */
+    public String releaseAuthorizedKeys() {
+        if (this.installedKeys.isEmpty()) {
+            return "nothing installed";
+        }
+        List<String> outcomes = new ArrayList<>();
+        for (String key : this.installedKeys) {
+            outcomes.add(commentOf(key) + " -> " + deauthorizeKey(key));
+        }
+        this.installedKeys.clear();
+        return String.join(", ", outcomes);
     }
 
     /**

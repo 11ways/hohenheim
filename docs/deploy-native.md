@@ -104,9 +104,13 @@ verify that line before anything else.
 3. Enroll the local Incus daemon as a SECOND host row: runtime `incus`,
    `incus_url` = `unix://` (blank also means the default socket), posture
    `vm_isolated`. No trust ceremony applies -- a unix socket has no wire
-   identity to pin, and `IncusKernelIsolation.available()` is TRUE through the
-   local sudo runner with NO ssh lane (preflight check
-   `kernel_isolation_lane: pass`).
+   identity to pin, and kernel truth is read through the local sudo runner with
+   NO ssh lane. Since 2026-08-07 that lane is a placement REQUIREMENT for any
+   posture other than `trusted_only`, and the preflight check
+   `kernel_isolation_lane` PROVES it by running a real nft
+   add/list/delete on this machine -- so the sudoers line above is what makes
+   `kernel_isolation_lane: pass`, and without it the Incus row cannot be
+   admitted at all.
 4. Preflight + Admit the Incus row, then create instances against either host.
 
 ## Verified on daystrom (2026-08-06)

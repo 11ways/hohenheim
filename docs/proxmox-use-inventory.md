@@ -278,6 +278,16 @@ tenant workloads, and is reported UNVERIFIABLE every sweep. Making the lane a
 placement REQUIREMENT for any posture other than `trusted_only` reverses a
 recorded decision and is an operator fork, not a fix to slip in.
 
+**SUPERSEDED 2026-08-07 (trust-state-machine wave): CLOSED, the fork was taken.**
+Kernel-truth verification is now an ADMISSION requirement for any posture other
+than `trusted_only`, proven by a real nft transaction through the verifier's own
+lane rather than by `available()`, and refused by name at both admit and
+placement. A local daemon satisfies it with no ssh at all, and a host that
+accepts no tenant workloads still enrols, confirms and holds backups without a
+lane. See the dated STATUS block in docs/instance-tier-plan.md for the full
+decision, including what happens to an already-admitted host that cannot
+verify.
+
 ## 6. Cloud-init
 
 **IMPLEMENTED for Linux. Windows guest configuration REJECTED for now.**
@@ -711,6 +721,13 @@ loses its verdict on the next probe. Whether a transient probe outcome may clear
 trust verdict is a security-state-machine decision, not a cleanup -- it belongs to
 whoever owns the host trust slice.
 
+**SUPERSEDED 2026-08-07 (trust-state-machine wave): CLOSED.** M078 gives the
+quarantine verdict its own columns (`quarantined_at` + `quarantine_reason`,
+backfilled), no probe path writes them, and only `HostPins.repin` clears them.
+`isQuarantined` still asks both markers, because a disagreeing rescan and a
+refused connection are still different writers. Pinned by
+`HostQuarantineStickinessTest`.
+
 ---
 
 ## Verdict
@@ -718,10 +735,12 @@ whoever owns the host trust slice.
 The inventory is CLOSED: every item the plan enumerates has a decision and
 evidence.
 
-**Two of the six gaps this document opened are closed** (device-surface wave,
-2026-08-06): device editing HAS an operator surface (item 3, panel + API +
+**Three of the six gaps this document opened are closed.** Device-surface wave,
+2026-08-06: device editing HAS an operator surface (item 3, panel + API +
 `InstanceDeviceSurfaceTest`), and `RestoreCapacity` has its test plus a fixed
-defect (item 4). Four remain, each with its owning slice:
+defect (item 4). Trust-state-machine wave, 2026-08-07: the optional kernel-truth
+lane (item 5) is now an admission REQUIREMENT. Three remain, each with its owning
+slice:
 
 1. **No root-disk size knob** (item 3).
 2. **Placement is not resource-aware** (item 12) -- it counts instances. This is
@@ -731,9 +750,10 @@ defect (item 4). Four remain, each with its owning slice:
    The chooser's current behaviour is pinned by `InstancePlacementTest`.
 3. **No snapshot retention** (item 7).
 4. **No host-health heartbeat for Incus hosts** (item 13).
-5. **The kernel-truth ssh lane is optional** (item 5) -- a host that declines it
-   accepts tenant workloads with no isolation verification, which is the one open
-   item that directly weakens Phase 8's "VMs are the only strong boundary" claim.
+5. ~~**The kernel-truth ssh lane is optional** (item 5)~~ -- CLOSED 2026-08-07:
+   verification is an admission requirement for any tenant-accepting posture,
+   proven at preflight and refused by name at admit and placement. See the
+   superseding block under item 5 above.
 
 None of these is a hidden gap; all are written down with an owner. What would
 still block calling this a general Proxmox replacement, in one sentence each:

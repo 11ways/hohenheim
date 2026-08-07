@@ -165,6 +165,25 @@ public class ServerModel extends Model {
         TextField.builder().name("last_error").nullable(true).build());
 
     /**
+     * When this host's identity was found to CONTRADICT a pin; null means never, and only
+     * a repin clears it.
+     *
+     * AIDEV-NOTE: this column exists because {@link #LAST_ERROR_KIND} used to carry the
+     * quarantine verdict as well as the last transient probe outcome, and one column
+     * cannot be both. Every {@code HostProbe.recordSuccess} and every weaker
+     * {@code recordFailure} overwrites the transient half by design, so a host quarantined
+     * by a TLS-pin or host-key contradiction had a SECURITY verdict erased by the next
+     * unrelated probe that happened to reach it. A trust verdict may only be cleared by a
+     * trust act, so it gets a column no probe path writes.
+     */
+    public static final DateTimeField QUARANTINED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("quarantined_at").build());
+
+    /** Why the host was quarantined, kept after {@link #LAST_ERROR} is overwritten. */
+    public static final TextField QUARANTINE_REASON = SCHEMA.addField(
+        TextField.builder().name("quarantine_reason").nullable(true).build());
+
+    /**
      * The operator-facing digest of {@link #HOST_KEY} ({@code SHA256:...}, exactly what
      * {@code ssh-keygen -lf} prints), derived at pin time and never entered by hand.
      *
@@ -424,6 +443,22 @@ public class ServerModel extends Model {
     public static boolean hasSshLane(@NonNull Row server) {
         String target = server.get(SSH_TARGET);
         return target != null && !target.isBlank();
+    }
+
+    /**
+     * Whether this host's declared posture accepts TENANT workloads at all -- anything
+     * other than {@code trusted_only}, including {@code dedicated} (one tenant owning the
+     * whole machine is still a tenant).
+     *
+     * AIDEV-NOTE: THE single predicate behind every "does hostile code run here" gate, so
+     * two gates cannot drift apart over the same question: placement refuses a
+     * trusted_only host outright, and kernel-truth isolation verification is REQUIRED
+     * exactly when this answers true. A null posture folds to trusted_only, the column's
+     * own default.
+     */
+    public static boolean acceptsTenantWorkloads(@NonNull Row server) {
+        String posture = server.get(POSTURE);
+        return posture != null && !POSTURE_TRUSTED_ONLY.equals(posture);
     }
 
     /**

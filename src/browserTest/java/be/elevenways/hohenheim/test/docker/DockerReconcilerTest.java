@@ -559,12 +559,12 @@ class DockerReconcilerTest {
             incus.set(ServerModel.NAME, "sweep-incus");
             incus.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
             incus.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-            // The verdict a contradicted identity leaves behind: sticky by design.
-            incus.set(ServerModel.LAST_ERROR_KIND,
-                HostProbe.FailureKind.HOST_KEY_CHANGED.token);
-            incus.set(ServerModel.LAST_ERROR, "incus tls identity changed");
             Models.get(ServerModel.class).save(incus);
             Integer incusId = incus.get(ServerModel.ID);
+            // The verdict a contradicted identity leaves behind, written through the
+            // PRODUCTION path so the quarantine stamp lands the way it really does.
+            HostProbe.recordFailure("sweep-incus", HostProbe.Outcome.failure(
+                HostProbe.FailureKind.HOST_KEY_CHANGED, "incus tls identity changed"));
 
             // 1. The Docker host inventory names the docker hosts and ONLY those --
             //    a fix that simply swept nothing would pass everything below.
@@ -592,7 +592,11 @@ class DockerReconcilerTest {
                 .as("step 2: the docker sweep never claims to have SEEN an incus host")
                 .isNull();
 
-            // 3. The quarantine the token stands for is therefore still in force.
+            // 3. The quarantine itself is still in force, and it lives in its OWN column
+            //    now -- so even a sweep that did restamp the transient verdict could no
+            //    longer erase it.
+            assertThat((Object) after.get(ServerModel.QUARANTINED_AT))
+                .as("step 3: the quarantine stamp survives the sweep").isNotNull();
             assertThat(HostPins.isQuarantined(after, HostTrustSlot.transportOf(after)))
                 .as("step 3: the incus host is still quarantined after the sweep")
                 .isTrue();

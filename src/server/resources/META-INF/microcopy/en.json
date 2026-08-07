@@ -5025,6 +5025,14 @@
     "text": "Host '{$name}' offered an SSH host key that disagrees with its pin and is quarantined; re-pin it deliberately before using it again",
     "scope": "violations"
   },
+  "host_kernel_lane_missing": {
+    "text": "Host '{$name}' accepts tenant workloads but declares no lane to read its own kernel, so workload isolation cannot be verified there; give it an SSH admin lane and confirm the host key, or set its posture to trusted-only",
+    "scope": "violations"
+  },
+  "host_kernel_lane_unproven": {
+    "text": "Host '{$name}' has no PROVEN kernel-truth lane: its last preflight did not transact on the daemon host's nftables; run preflight again and fix the kernel_isolation_lane check",
+    "scope": "violations"
+  },
   "host_not_ssh": {
     "text": "Host '{$name}' is not reached over SSH, so it cannot hold backups; use a filesystem target for the controller's own disk",
     "scope": "violations"
@@ -6969,7 +6977,37 @@
     "scope": "violations"
   },
   "ssh_lane_none": {
-    "text": "No SSH admin lane. This host runs fine without one, but its workload isolation can only be read from the daemon's own configuration and stays UNCONFIRMED in the kernel. To enable kernel verification, set an SSH target, scan the host key and confirm it.",
+    "text": "No SSH admin lane pinned. Set an SSH target, scan the host key and confirm it to open one; the Kernel isolation field below says what this host needs.",
+    "scope": "server"
+  },
+  "kernel_isolation_state": [
+    {
+      "text": "Kernel isolation",
+      "scope": "field"
+    },
+    {
+      "text": "Whether Hohenheim can read this host's own nftables to verify that a workload's isolation really landed in the kernel, instead of trusting what the daemon reports.",
+      "scope": "help"
+    }
+  ],
+  "kernel_isolation_proven": {
+    "text": "Verified in the kernel: the last preflight transacted on this host's own nftables.",
+    "scope": "server"
+  },
+  "kernel_isolation_unproven": {
+    "text": "NOT verified. A lane is declared but the last preflight did not prove it reaches this host's kernel. Run preflight; no new tenant workload is placed here until it passes.",
+    "scope": "server"
+  },
+  "kernel_isolation_missing": {
+    "text": "NO lane. This host accepts tenant workloads but nothing can read its kernel, so no new tenant workload is placed here. Give it an SSH admin lane and confirm the host key, or set the posture to trusted-only.",
+    "scope": "server"
+  },
+  "kernel_isolation_optional": {
+    "text": "Not required: this host's trusted-only posture accepts no tenant workloads, so nothing here needs kernel verification.",
+    "scope": "server"
+  },
+  "host_quarantined_state": {
+    "text": "QUARANTINED. This machine contradicted a pinned identity: {$reason}. Every lane is refused and nothing new is placed here until you re-pin deliberately.",
     "scope": "server"
   },
   "framebuffer": {

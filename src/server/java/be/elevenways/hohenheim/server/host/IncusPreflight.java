@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusClients;
+import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -30,6 +31,9 @@ import java.util.Map;
  */
 public final class IncusPreflight {
 
+    /** The stored check name every kernel-truth gate reads its evidence from. */
+    public static final String KERNEL_LANE_CHECK = "kernel_isolation_lane";
+
     private IncusPreflight() {
     }
 
@@ -53,35 +57,48 @@ public final class IncusPreflight {
     }
 
     /**
-     * Report whether kernel-truth isolation verification can READ this host at all, so
-     * "UNCONFIRMED every sweep" is visible on the record instead of only in a log line.
+     * PROVE, by transacting on it, that kernel-truth isolation verification can read this
+     * host's own kernel -- and make that proof REQUIRED for a host whose posture accepts
+     * tenant workloads.
      *
-     * AIDEV-NOTE: NON-required on purpose. The ssh admin lane is optional -- an Incus host
-     * without one runs workloads perfectly well and is merely unverifiable -- so making
-     * this block admission would turn a missing diagnostic into an outage. It warns, and
-     * the warning says exactly what is lost.
+     * AIDEV-NOTE: this used to report {@code IncusKernelIsolation.available()} as a
+     * non-required WARN, which was two defects in one line. It reported a CLAIM (a runner
+     * could be constructed) as if it were evidence, and it let a host accept hostile
+     * tenants with no isolation verification at all -- the exact silent-skip that turned a
+     * real isolation loss into a 1-in-7 "flake" nobody was watching. It now runs the same
+     * nft transaction the Docker battery's required {@code nftables} check runs, through
+     * the lane the verifier itself would use, and its REQUIRED-ness follows
+     * {@link ServerModel#acceptsTenantWorkloads}: a storage-only or operator-only host
+     * still enrols, confirms, admits and holds backups with no lane, which is the recorded
+     * backup-target decision and must not regress.
+     *
+     * AIDEV-NOTE: a LOCALLY addressed daemon satisfies this through the plain sudo runner
+     * -- hohenheim running natively on the host it manages is the shipping configuration
+     * (docs/deploy-native.md), and demanding an ssh lane to reach the machine we are
+     * already on would be nonsense. What the probe proves there is the thing that actually
+     * varies: that passwordless {@code sudo nft} is really granted.
      */
     private static HostPreflight.@NonNull Report withKernelLaneCheck(
             @NonNull Row server, HostPreflight.@NonNull Report report) {
-        boolean readable;
-        String detail;
+        boolean required = ServerModel.acceptsTenantWorkloads(server);
+        HostPreflight.Check check;
         try {
-            IncusKernelIsolation isolation = IncusKernelIsolation.forServer(server);
-            readable = isolation.available();
-            detail = readable
-                ? "the daemon host's nftables are readable, so workload isolation is"
-                    + " verified in the kernel every sweep"
-                : "no trusted ssh admin lane on this record, so this host's workload"
-                    + " isolation can only be read from the daemon's own configuration"
-                    + " and stays UNCONFIRMED in the kernel";
+            NftRunner nft = IncusKernelIsolation.kernelRunner(server);
+            check = nft == null
+                ? new HostPreflight.Check(KERNEL_LANE_CHECK, HostPreflight.STATUS_FAIL, required,
+                    "no trusted ssh admin lane on this record, so this host's workload"
+                        + " isolation can only be read from the daemon's own configuration"
+                        + " and stays UNCONFIRMED in the kernel; declare an ssh target and"
+                        + " confirm its host key, or set the posture to trusted-only")
+                : HostPreflight.nftablesProbe(nft, KERNEL_LANE_CHECK, required);
         } catch (RuntimeException unreachable) {
-            readable = false;
-            detail = "could not build the kernel-truth verifier: " + unreachable.getMessage();
+            check = new HostPreflight.Check(KERNEL_LANE_CHECK, HostPreflight.STATUS_FAIL, required,
+                "could not build the kernel-truth verifier: " + unreachable.getMessage());
         }
         List<HostPreflight.Check> checks = new ArrayList<>(report.checks());
-        checks.add(new HostPreflight.Check("kernel_isolation_lane",
-            readable ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_WARN, false, detail));
-        return new HostPreflight.Report(List.copyOf(checks), report.facts(), report.passed(),
+        checks.add(check);
+        boolean passed = report.passed() && !(check.required() && check.failed());
+        return new HostPreflight.Report(List.copyOf(checks), report.facts(), passed,
             report.at(), report.daemonFailure());
     }
 

@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -68,7 +67,6 @@ class IncusVmLiveTest {
     private static SqliteDatasource datasource;
     private static LiveIncusHost remote;
     private static String enrolledFingerprint;
-    private static String authorizedKey;
 
     /**
      * AIDEV-NOTE: the ssh ADMIN lane is enrolled here on purpose, and it is not a
@@ -99,9 +97,6 @@ class IncusVmLiveTest {
 
         Db.run(datasource, () -> {
             enrolledFingerprint = remote.enrollThroughProduct(HOST, "hohenheim-live-vm");
-            remote.enrollSshLaneThroughProduct(HOST);
-            authorizedKey = Models.get(ServerModel.class).findByName(HOST)
-                .get(HostTrustSlot.SSH.clientPublic());
         });
     }
 
@@ -114,10 +109,8 @@ class IncusVmLiveTest {
         if (remote == null) {
             return;
         }
-        if (authorizedKey != null) {
-            System.out.println("=== cleanup: authorized_keys -> "
-                + remote.deauthorizeKey(authorizedKey));
-        }
+        System.out.println("=== cleanup: authorized_keys -> "
+            + remote.releaseAuthorizedKeys());
         if (enrolledFingerprint != null) {
             try {
                 remote.removeTrustEntry(enrolledFingerprint);

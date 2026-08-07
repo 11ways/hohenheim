@@ -79,7 +79,15 @@ class IncusHostLiveTest {
         Db.run(datasource, () -> {
             ServerService servers = new ServerService();
             ServerModel model = Models.get(ServerModel.class);
-            Row host = remote.enrol(HOST);
+            Row enrolled = remote.enrol(HOST);
+            // This class is about TRUST, not placement, so the record declares the
+            // operator-only posture it actually has: no tenant workload ever lands here.
+            // That is also the live proof of the OTHER half of the kernel-truth decision
+            // (2026-08-07) -- a host accepting no tenant workloads needs no lane to read
+            // its kernel through, and still enrols, confirms, preflights and admits.
+            enrolled.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
+            model.save(enrolled);
+            Row host = model.findByName(HOST);
             String enrolledFingerprint = null;
             try {
                 // 1. The Docker lane REFUSES this host by name: its declared runtime is
@@ -179,6 +187,11 @@ class IncusHostLiveTest {
                     .as("step 8: a managed bridge exists: %s",
                         report.check("managed_network").detail())
                     .isEqualTo(HostPreflight.STATUS_PASS);
+                assertThat(report.check("kernel_isolation_lane").required())
+                    .as("step 8: the kernel-truth lane is NOT required of a host that"
+                        + " accepts no tenant workloads: %s",
+                        report.check("kernel_isolation_lane").detail())
+                    .isFalse();
                 assertThat(report.passed()).as("step 8: the battery passes").isTrue();
 
                 // 9. Admission is now legitimately reachable, and the live probe reads
