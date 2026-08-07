@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.incus.ControllerPresence;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusClients;
@@ -118,7 +119,7 @@ public class ReapIncusControllers extends ScheduledTask {
         try {
             incus = IncusClients.forServer(server);
         } catch (RuntimeException unreachable) {
-            return unreachable(name, unreachable.getMessage());
+            return unreachable(name, "could not address the daemon", unreachable);
         }
 
         try {
@@ -127,7 +128,7 @@ public class ReapIncusControllers extends ScheduledTask {
             // A host we cannot stamp is a host we may not judge: our own liveness there is
             // now as unprovable as anyone else's, and reaping on that footing would be
             // reaping on evidence we just failed to produce ourselves.
-            return unreachable(name, "presence stamp failed: " + unstamped.getMessage());
+            return unreachable(name, "presence stamp failed", unstamped);
         }
 
         List<IncusReaper.Candidate> plan;
@@ -135,8 +136,14 @@ public class ReapIncusControllers extends ScheduledTask {
             plan = IncusReaper.plan(incus.networkAcls(), incus.networks(),
                 ControllerIdentity.token(), Instant.now(), graceDuration());
         } catch (Exception unlistable) {
-            return unreachable(name, "could not list shared objects: " + unlistable.getMessage());
+            return unreachable(name, "could not list shared objects", unlistable);
         }
+        // The stamp round trip IS a successful daemon contact, so this sweep doubles as
+        // the Incus host heartbeat -- the Docker tier's reconcile has done exactly this
+        // for Docker hosts all along, and an Incus host had no positive signal at all.
+        // Recorded only after the daemon actually ANSWERED (stamp written, objects
+        // listed), never off a client object that merely constructed.
+        HostProbe.recordSuccess(name);
 
         if (!reapingEnabled()) {
             return new HostOutcome(name, true, plan, List.of(), List.of(), List.of());
@@ -218,8 +225,20 @@ public class ReapIncusControllers extends ScheduledTask {
             && !graceDuration().isZero();
     }
 
-    private static HostOutcome unreachable(String name, String error) {
+    /**
+     * A host this sweep could not reach: the typed verdict lands on the host record, so
+     * an Incus host that stops answering is visible in the admin surface rather than only
+     * in a log line.
+     *
+     * AIDEV-NOTE: scoped to Incus hosts by the caller ({@code ServerModel.isIncus}), and
+     * it must stay that way. The hourly Docker reconcile once iterated EVERY host row and
+     * stamped every Incus host UNREACHABLE because its client factory refuses an Incus
+     * host by construction -- a structural non-answer recorded as a probe verdict. Never
+     * widen either sweep to hosts of the other runtime.
+     */
+    private static HostOutcome unreachable(String name, String context, Exception error) {
+        HostProbe.recordFailure(name, HostProbe.classify(error));
         return new HostOutcome(name, false, List.of(), List.of(), List.of(),
-            List.of(String.valueOf(error)));
+            List.of(context + ": " + error.getMessage()));
     }
 }

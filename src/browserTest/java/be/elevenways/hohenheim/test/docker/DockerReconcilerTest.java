@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostProbe;
+import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.hohenheim.server.stack.StackDeployer;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -599,6 +600,36 @@ class DockerReconcilerTest {
                 .as("step 3: the quarantine stamp survives the sweep").isNotNull();
             assertThat(HostPins.isQuarantined(after, HostTrustSlot.transportOf(after)))
                 .as("step 3: the incus host is still quarantined after the sweep")
+                .isTrue();
+
+            // 4. The OTHER half of the same story: an incus host is not simply
+            //    unheartbeated. Its own 15-minute sweep probes it and records the verdict,
+            //    so "no docker sweep touches it" does not mean "nothing watches it". This
+            //    host addresses no daemon, so the probe FAILS -- and a failing probe must
+            //    still land, or an unreachable incus host would stay silently green.
+            ReapIncusControllers.HostOutcome outcome = ReapIncusControllers.sweepHost(after);
+            assertThat(outcome.reachable())
+                .as("step 4: there is no daemon behind this record, so the probe fails")
+                .isFalse();
+            Row probed = Models.get(ServerModel.class).findById(incusId);
+            // Asserted as a CHANGE, not as "not null": step 2 left a verdict on this row,
+            // so a not-null assertion here passed with the recording removed entirely --
+            // it was vacuous, and this is the strengthened form.
+            assertThat((String) probed.get(ServerModel.LAST_ERROR_KIND))
+                .as("step 4: the incus sweep records its OWN typed verdict, replacing the"
+                    + " stale one -- this is a real probe of this host, unlike the docker"
+                    + " sweep's structural refusal")
+                .isNotNull()
+                .isNotEqualTo(HostProbe.FailureKind.HOST_KEY_CHANGED.token);
+            assertThat((String) probed.get(ServerModel.LAST_ERROR))
+                .as("step 4: and the stored detail is the probe's, not the stale text")
+                .isNotEqualTo("incus tls identity changed");
+            assertThat((Object) probed.get(ServerModel.LAST_SEEN_AT))
+                .as("step 4: and it never claims to have SEEN a host that did not answer")
+                .isNull();
+            assertThat(HostPins.isQuarantined(probed, HostTrustSlot.transportOf(probed)))
+                .as("step 4: the quarantine lives in its own column and survives this"
+                    + " probe too -- only a repin clears it")
                 .isTrue();
         });
     }
