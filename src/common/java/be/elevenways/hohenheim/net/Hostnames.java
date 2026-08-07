@@ -60,6 +60,48 @@ public final class Hostnames {
     }
 
     /**
+     * Fold an HTTP {@code Host} header (an RFC 3986 authority) down to the bare name the
+     * route table is keyed on: port removed, IPv6 brackets removed, case-folded, root dot
+     * folded like every other spelling.
+     *
+     * AIDEV-NOTE: the naive {@code host.indexOf(':')} this replaces turned {@code [::1]:80}
+     * into {@code "["}, because an IPv6 literal's port separator is the colon AFTER the
+     * closing bracket, not the first colon in the string. Two dispatchers carried their own
+     * copy of that parse (SiteDispatcher and DevNamespaceSiteType); there is ONE here now.
+     * A malformed authority yields "" -- an empty hostname resolves to no route at all,
+     * which is the only safe answer to a Host header we could not read.
+     *
+     * NOTE this does NOT make an IPv6 literal a reachable route: an exact-tier site domain
+     * must pass {@link #isValidLabelSequence}, which admits no colon, so no stored claim can
+     * ever spell one. The parse being correct means the lookup MISSES honestly instead of
+     * probing the route table under a garbage key.
+     */
+    public static @NonNull String fromHostHeader(@Nullable String host) {
+        if (host == null) {
+            return "";
+        }
+        String value = host.trim();
+        if (value.isEmpty()) {
+            return "";
+        }
+        if (value.charAt(0) == '[') {
+            int close = value.indexOf(']');
+            // Anything after the bracket must be nothing or ":port"; otherwise it is not
+            // an authority we can read, and guessing at one is how a wrong route gets picked.
+            if (close < 0 || (close + 1 < value.length() && value.charAt(close + 1) != ':')) {
+                return "";
+            }
+            value = value.substring(1, close);
+        } else {
+            int colon = value.indexOf(':');
+            if (colon >= 0) {
+                value = value.substring(0, colon);
+            }
+        }
+        return stripTrailingDots(BlastString.lower(value));
+    }
+
+    /**
      * Whether the value is a syntactically valid RFC-1123 name, WITHOUT requiring a dot --
      * a single-label proxy route ({@code localhost}, an internal short name) is legitimate.
      */

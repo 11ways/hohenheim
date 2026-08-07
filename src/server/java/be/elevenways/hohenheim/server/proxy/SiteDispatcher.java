@@ -902,11 +902,7 @@ public class SiteDispatcher implements HttpHandler {
      * spellings resolve to ONE route, which is also what DNS says they are.
      */
     private String extractHostname(HttpServerExchange exchange) {
-        String host = exchange.getRequestHeaders().getFirst(HOST);
-        if (host == null) return "";
-        int colon = host.indexOf(':');
-        return Hostnames.stripTrailingDots(
-            (colon != -1 ? host.substring(0, colon) : host).toLowerCase(Locale.ROOT));
+        return Hostnames.fromHostHeader(exchange.getRequestHeaders().getFirst(HOST));
     }
 
     private Resolution resolveEntry(HttpServerExchange exchange, String hostname, RouteTable rt) {

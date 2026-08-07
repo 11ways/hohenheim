@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.sitetype.types;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.hohenheim.server.devtunnel.DevLease;
 import be.elevenways.hohenheim.server.devtunnel.DevLeases;
 import be.elevenways.hohenheim.server.proxy.ErrorPages;
@@ -112,12 +113,7 @@ public class DevNamespaceSiteType implements SiteTypeHandler {
         }
 
         private static String hostnameOf(HttpServerExchange exchange) {
-            String host = exchange.getRequestHeaders().getFirst(Headers.HOST);
-            if (host == null) {
-                return "";
-            }
-            int colon = host.indexOf(':');
-            return (colon != -1 ? host.substring(0, colon) : host).toLowerCase(Locale.ROOT);
+            return Hostnames.fromHostHeader(exchange.getRequestHeaders().getFirst(Headers.HOST));
         }
     }
 }
