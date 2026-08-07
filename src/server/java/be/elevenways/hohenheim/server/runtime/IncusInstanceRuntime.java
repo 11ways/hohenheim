@@ -430,8 +430,16 @@ public final class IncusInstanceRuntime
         boolean running = "Running".equalsIgnoreCase(String.valueOf(state.get("status")));
         // No published port: an Incus container is an addressable system, not a
         // port-mapped process (proxy devices are a later mechanism).
+        //
+        // AIDEV-NOTE: liveness REFUSES BY NAME here. Incus 7.3's instance state carries
+        // no OOM counter at all (memory is usage/peak/swap only), so this driver cannot
+        // tell "running and serving" from "running with its workload OOM-killed inside
+        // it". Answering SERVING would be the reports-success defect; UNKNOWN says the
+        // question was asked and not answered, the same discipline exitCode uses on a
+        // stopped Incus workload. Closing it means reading memory.events out of the
+        // instance's cgroup over exec, which is a per-poll exec on every instance.
         return new InstanceStatus(running ? ContainerState.RUNNING : ContainerState.STOPPED,
-            null);
+            null, null, WorkloadLiveness.UNKNOWN);
     }
 
     // -- ConsoleStreamSupport -------------------------------------------------

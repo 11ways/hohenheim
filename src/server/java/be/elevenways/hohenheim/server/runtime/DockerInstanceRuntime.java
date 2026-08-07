@@ -237,7 +237,23 @@ public final class DockerInstanceRuntime
         }
         Object[] binding = firstPublishedBinding(inspect);
         return new InstanceStatus(ContainerState.RUNNING,
-            (Integer) binding[0], (String) binding[1]);
+            (Integer) binding[0], (String) binding[1], liveness(state));
+    }
+
+    /**
+     * THE Docker answer to "is the workload inside this running container still alive":
+     * {@code State.OOMKilled}, which the daemon sets from runc's cgroup-v2 watcher on an
+     * {@code oom_kill} increment -- NOT on {@code max} -- and clears on the next start.
+     *
+     * AIDEV-NOTE: it costs no extra daemon call (the inspect is already in hand) and it
+     * catches the case the container's own state cannot: a database engine killed as a
+     * CHILD of the entrypoint leaves the container Running and this flag true. Measured
+     * on Docker 29.6 / cgroup v2: one OOM-killed child gave Running=true, OOMKilled=true,
+     * oom_kill=1; 400 MB of reclaim pressure gave max=6091, oom_kill=0, OOMKilled=false.
+     */
+    private static @NonNull WorkloadLiveness liveness(Object state) {
+        return state instanceof Map<?, ?> s && Boolean.TRUE.equals(s.get("OOMKilled"))
+            ? WorkloadLiveness.WORKLOAD_DEAD : WorkloadLiveness.SERVING;
     }
 
     // -- VolumeSnapshotSupport ------------------------------------------------

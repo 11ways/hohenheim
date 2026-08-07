@@ -419,9 +419,14 @@ public final class SiteInstances {
                     ? labels : null);
             boolean ours = owner != null && owner.model().equals(InstanceModel.MODEL_ID)
                 && owner.id().equals(String.valueOf(instanceId));
-            boolean running = inspect.get("State") instanceof Map<?, ?> state
-                && Boolean.TRUE.equals(state.get("Running"));
-            if (!ours || !running) {
+            Map<?, ?> state = inspect.get("State") instanceof Map<?, ?> s ? s : Map.of();
+            boolean running = Boolean.TRUE.equals(state.get("Running"));
+            // A container whose cgroup lost a process to the OOM killer is NOT reusable,
+            // however running it looks: reuse would hand the proxy an upstream whose
+            // workload is already dead. Redeploying is the honest answer, and it is also
+            // what clears the daemon's flag (see WorkloadLiveness).
+            boolean oomKilled = Boolean.TRUE.equals(state.get("OOMKilled"));
+            if (!ours || !running || oomKilled) {
                 return null;
             }
             Object port = desired.get("container_port");

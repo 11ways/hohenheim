@@ -12,8 +12,13 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 /**
  * Shared helpers for the CMS resources: proxy reload and coerced-map copies.
  * Record-tab strips come from the framework (RecordScopedPage.recordTabs);
- * audit writes ride the framework activity log; mutation-driven reloads ride
- * {@code ProxyReloadHooks}.
+ * mutation-driven reloads ride {@code ProxyReloadHooks}.
+ *
+ * AIDEV-NOTE: this used to state "audit writes ride the framework activity log" as an
+ * invariant. It is a CONVENTION, not a guarantee: an action whose whole effect is a
+ * {@code updateAll()} or a daemon call writes no activity row at all, however it is
+ * wrapped (ActivityLog.withAction only RENAMES rows the model hooks already write).
+ * An action that must be accountable records itself explicitly.
  */
 public final class CmsSupport {
 

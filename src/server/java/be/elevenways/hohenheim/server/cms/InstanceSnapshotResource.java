@@ -96,8 +96,11 @@ public class InstanceSnapshotResource extends RowResource {
                 .requireTypedConfirmation(instanceNameOf(row))
                 .build())
             .handler((row, ctx) -> {
-                ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "restore_snapshot",
-                    () -> this.snapshots.restore(row.get(InstanceSnapshotModel.ID)));
+                // No withAction wrapper: InstanceSnapshots.restore records itself on
+                // the instance record. Wrapping it recorded nothing at all -- its whole
+                // state write is an updateAll, which fires no hooks for withAction to
+                // rename.
+                this.snapshots.restore(row.get(InstanceSnapshotModel.ID));
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("restored").withFilter("scope", "instance_snapshot")
                         .withArg("name", instanceNameOf(row)));

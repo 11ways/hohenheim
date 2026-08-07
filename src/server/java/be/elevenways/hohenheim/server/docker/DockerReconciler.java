@@ -45,7 +45,8 @@ import java.util.Set;
  * VOLUME is the one unrecoverable resource (DockerReclaim refuses volumes for the
  * same reason), so removal stays an explicit operator action -- which now EXISTS as
  * OrphanActions.removeOrphan (containers/networks, re-verified live, ActivityLog-
- * recorded, surfaced on ReconcileFindingResource). Labelling: stamping a label on a
+ * recorded on the HOST record by OrphanActions itself, surfaced on
+ * ReconcileFindingResource). Labelling: stamping a label on a
  * NAME match would convert "looks like ours" into "is ours"; label ADOPTION still
  * does not exist because Docker cannot relabel a container or volume in place --
  * adoption means recreate-under-labels, which only the owning tier can do.

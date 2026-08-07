@@ -296,13 +296,18 @@ public final class AttentionCollector {
                     "name", database.get(DatabaseModel.NAME), "status", status);
             } else {
                 var live = safeDetail(databases, database);
-                unavailable = live == null || !live.running();
+                boolean workloadDead = live != null && live.workloadDead();
+                unavailable = live == null || !live.running() || workloadDead;
                 boolean unreachable = live == null
                     || live.containerState() == ContainerState.UNREACHABLE;
-                // "Gone/stopped" and "the daemon could not be asked" are different
-                // operator problems; conflating them was the C6 status defect.
-                detail = copy(unreachable ? "database_unreachable" : "database_not_running",
-                    "attention_detail", "name", database.get(DatabaseModel.NAME));
+                // "Gone/stopped", "the daemon could not be asked" and "the container runs
+                // but the engine inside it was OOM-killed" are three different operator
+                // problems; conflating the first two was the C6 status defect, and
+                // reporting the third as healthy was its instance-tier twin.
+                String key = workloadDead ? "database_workload_dead"
+                    : unreachable ? "database_unreachable" : "database_not_running";
+                detail = copy(key, "attention_detail",
+                    "name", database.get(DatabaseModel.NAME));
             }
             if (unavailable) {
                 items.add(item("warning", "database",

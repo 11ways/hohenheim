@@ -295,7 +295,15 @@ public final class BanService {
         return existing != null && !isExpired(existing) ? existing : null;
     }
 
-    /** Lift an active ban: audit-stamps the row and removes the kernel element. */
+    /**
+     * Lift an active ban: stamps the lift columns on the ban row and removes the kernel
+     * element.
+     *
+     * AIDEV-NOTE: "audit" here means the BAN ROW ITSELF, which is the trail (BanResource
+     * makes the list unupdatable and undeletable). It is deliberately NOT the framework
+     * activity log: this is an {@code updateAll()}, which fires no per-row write hooks,
+     * so no {@code zenit_activity} row is written. {@code lifted_by} carries the actor.
+     */
     public synchronized void lift(@NonNull Row ban, @Nullable String liftedBy) {
         BanModel bans = Models.get(BanModel.class);
         Integer id = ban.get(BanModel.ID);

@@ -1049,6 +1049,10 @@
     "text": "Gekoppelde database {$name} draait niet",
     "scope": "attention_detail"
   },
+  "database_workload_dead": {
+    "text": "Gekoppelde database {$name} draait, maar de engine is gestopt wegens geheugentekort",
+    "scope": "attention_detail"
+  },
   "database_status": {
     "text": "Gekoppelde database {$name} is {$status}",
     "scope": "attention_detail"
@@ -4855,6 +4859,10 @@
   },
   "orphan_not_orphaned": {
     "text": "{$name} is geen verweesde resource",
+    "scope": "violations"
+  },
+  "orphan_server_unknown": {
+    "text": "Host {$name} heeft geen record; de bevinding is verouderd en de verwijdering kan niet toegewezen worden",
     "scope": "violations"
   },
   "orphan_volume_refused": {

@@ -48,6 +48,8 @@ instance tier.
       public/cms.js            (+ cms.js.map, optional)
       settings/default.dry     copy of the repo's settings/default.dry
       settings/hohenheim.dry   the role + security declaration, see below
+                               (GITIGNORED in the repo -- it is per-deployment;
+                                start from settings/hohenheim.dry.example)
       data/                    storage.data_path (created empty)
       hohenheim.db             created by the first boot (104+ migrations)
       settings/field-encryption.keys   auto-generated 0600 on first boot

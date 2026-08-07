@@ -9,9 +9,12 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OrphanActions;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
@@ -82,6 +85,27 @@ class OrphanActionsTest {
                         .findById(orphanFinding.get(ReconcileFindingModel.ID)))
                     .as("step 2: and the acted-on finding row is gone").isNull();
 
+                // 2b. The removal is ACCOUNTABLE: an activity row on the HOST record
+                //     naming what was destroyed. The class docblock claimed
+                //     "ActivityLog-recorded" while the only trace was a Blast.log line,
+                //     and the CMS row action's withAction wrapper recorded nothing about
+                //     the container at all -- withAction only renames rows the model
+                //     hooks already write.
+                assertThat(ActivityLog.isInstalled())
+                    .as("step 2b: the activity log must be installed or this proves nothing")
+                    .isTrue();
+                Row removal = Models.get(ActivityModel.class).find()
+                    .where(ActivityModel.MODEL.eq(ServerModel.MODEL_ID.toString()))
+                    .where(ActivityModel.ACTION.eq(OrphanActions.ACTIVITY_ACTION))
+                    .orderBy(ActivityModel.ID, SortOrder.DESC).first();
+                assertThat(removal)
+                    .as("step 2b: the daemon-side removal is recorded on the host record")
+                    .isNotNull();
+                assertThat((String) removal.get(ActivityModel.DETAIL))
+                    .withFailMessage("step 2b: the record must name WHAT was removed;"
+                        + " detail was '%s'", removal.get(ActivityModel.DETAIL))
+                    .contains(orphanName);
+
                 // 3. A VOLUME finding is refused categorically -- the one unrecoverable
                 //    resource never gets a delete button.
                 Row volumeFinding = finding("volume", "hohenheim-instance-987654-vol-data",
@@ -120,6 +144,20 @@ class OrphanActionsTest {
                 assertThat(catchThrowable(() -> OrphanActions.removeOrphan(ownedFinding)))
                     .as("step 5: only orphans are removable")
                     .isInstanceOf(Violations.class);
+
+                // 6. A finding naming a host with no record is refused BEFORE the daemon
+                //    is touched: a destructive act nobody can be held to account for is
+                //    not something to discover after the container is gone.
+                Row hostlessFinding = finding("container", orphanName,
+                    ReconcileFindingModel.BUCKET_ORPHANED);
+                hostlessFinding.set(ReconcileFindingModel.SERVER_NAME, "no-such-host");
+                Models.get(ReconcileFindingModel.class).save(hostlessFinding);
+                assertThat(catchThrowable(() -> OrphanActions.removeOrphan(hostlessFinding)))
+                    .as("step 6: an unattributable removal is refused by name")
+                    .isInstanceOfSatisfying(Violations.class, violations ->
+                        assertThat(violations.all()).anySatisfy(violation ->
+                            assertThat(violation.message().key())
+                                .isEqualTo("orphan_server_unknown")));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             } finally {

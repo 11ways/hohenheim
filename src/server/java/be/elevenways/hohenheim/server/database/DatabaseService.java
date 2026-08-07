@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -254,16 +255,30 @@ public class DatabaseService extends DatasourceScoped {
     /** A persisted database plus its live container status, for the admin list.
      *  {@code status} is the provisioning lifecycle (provisioning/active/failed/destroy_failed);
      *  {@code containerState} is the daemon's answer (running/stopped/absent/unreachable --
-     *  absent and unreachable are DISTINCT identities, see ContainerState). */
+     *  absent and unreachable are DISTINCT identities, see ContainerState);
+     *  {@code liveness} is whether the ENGINE inside a running container is still alive. */
     public record Summary(String name, String engine, String image, String database, String user,
                           boolean ephemeral, String server, String status, boolean running,
-                          ContainerState containerState, Integer port) {}
+                          ContainerState containerState, Integer port,
+                          WorkloadLiveness liveness) {
+
+        /** The container runs but the kernel killed the engine inside it. */
+        public boolean workloadDead() {
+            return running && liveness == WorkloadLiveness.WORKLOAD_DEAD;
+        }
+    }
 
     /** Full detail for one database, including the password (admin detail page only). */
     public record Detail(String name, String engine, String image, String database, String user,
                          String password, boolean ephemeral, String server, String status,
                          boolean running, ContainerState containerState,
-                         Integer port) {}
+                         Integer port, WorkloadLiveness liveness) {
+
+        /** The container runs but the kernel killed the engine inside it. */
+        public boolean workloadDead() {
+            return running && liveness == WorkloadLiveness.WORKLOAD_DEAD;
+        }
+    }
 
     /** Full detail for one database by name with live status, or null if there is no such record. */
     public Detail detail(String name) {
@@ -291,7 +306,8 @@ public class DatabaseService extends DatasourceScoped {
             statusOf(row),
             live.running(),
             live.state(),
-            live.port());
+            live.port(),
+            live.liveness());
     }
 
     /** All databases with live status (running + published port), best-effort per record. */
@@ -312,7 +328,8 @@ public class DatabaseService extends DatasourceScoped {
                 statusOf(row),
                 live.running(),
                 live.state(),
-                live.port()
+                live.port(),
+                live.liveness()
             ));
         }
         return result;

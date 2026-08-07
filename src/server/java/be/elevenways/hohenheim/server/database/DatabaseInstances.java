@@ -99,7 +99,8 @@ public final class DatabaseInstances {
         try {
             InstanceStatus status = new InstanceService()
                 .liveStatus(instance.get(InstanceModel.ID));
-            return new ManagedDatabase.LiveStatus(status.state(), status.publishedPort());
+            return new ManagedDatabase.LiveStatus(status.state(), status.publishedPort(),
+                status.liveness());
         } catch (RuntimeException unresolvable) {
             // An unaskable host (unknown server, untrusted SSH pin) is UNREACHABLE, never
             // "gone": absent and unreachable stay distinct identities.

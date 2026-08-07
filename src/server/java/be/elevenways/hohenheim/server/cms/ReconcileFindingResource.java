@@ -16,7 +16,6 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -30,7 +29,9 @@ import java.util.List;
  * The reconciler's stored findings as an operator surface: read-only rows, with the
  * EXPLICIT remove-orphan authority ({@link OrphanActions}) as a confirmed row action.
  * Adoption/quarantine stops being a side effect of classification here and becomes a
- * decision an operator takes, recorded in the activity log.
+ * decision an operator takes. The activity record is written by {@link OrphanActions}
+ * itself, on the host record -- this surface must not be the only place the removal is
+ * accountable, because it is not the only possible caller.
  */
 public final class ReconcileFindingResource extends RowResource {
 
@@ -93,8 +94,7 @@ public final class ReconcileFindingResource extends RowResource {
                 .style(ActionStyle.DESTRUCTIVE)
                 .build())
             .handler((row, ctx) -> {
-                ActivityLog.withAction(ActivityLog.ACTION_DELETE, "remove_orphan",
-                    () -> OrphanActions.removeOrphan(row));
+                OrphanActions.removeOrphan(row);
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("orphan_removed").withFilter("scope", "reconcile_finding")
                         .withArg("name", row.get(ReconcileFindingModel.RESOURCE_NAME)));
