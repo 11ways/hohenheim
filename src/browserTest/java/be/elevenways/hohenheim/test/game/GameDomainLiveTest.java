@@ -241,10 +241,11 @@ class GameDomainLiveTest {
                 //    (Velocity fronts everything); a third, unmapped instance cannot
                 //    reach the backend at all.
                 linkHandle = ControllerScope.handle(ControllerScope.KIND_GAMELINK, proxyId) + "-" + backendId;
-                DockerClient.ExecResult reach = docker.exec(proxyHandle, List.of(
-                    "wget", "-T", "3", "-qO-", "http://" + backendHandle + ":80/"));
+                DockerClient.ExecResult reach = awaitFetch(docker, proxyHandle,
+                    "http://" + backendHandle + ":80/", "nginx");
                 assertThat(reach.exitCode())
-                    .as("step 6: the proxy reaches its backend over the link network")
+                    .as("step 6: the proxy reaches its backend over the link network"
+                        + " (stdout=" + reach.stdout() + ")")
                     .isZero();
                 assertThat(reach.stdout())
                     .as("step 6: the backend actually answered")
@@ -532,6 +533,32 @@ class GameDomainLiveTest {
             return false;
         }
         return false;
+    }
+
+    /**
+     * Fetch a URL from inside a container until the expected body arrives, bounded.
+     *
+     * AIDEV-NOTE: a SINGLE 3-second wget was the whole budget here, and
+     * browserTestIsolated runs maxParallelForks=4 over ~640 isolated tests -- the
+     * backend's nginx is still binding when the proxy first asks, so step 6 failed in
+     * three full-suite runs while passing solo every time. The poll is on the BODY, not
+     * the exit code (an exit code alone proves nothing about what answered), and it
+     * returns the LAST attempt so a link network that never comes up still fails the
+     * assertion loudly with the real output. Never replace this with a fixed sleep.
+     */
+    private static DockerClient.ExecResult awaitFetch(DockerClient docker, String fromHandle,
+                                                      String url, String expectedBody)
+            throws IOException {
+        long deadline = System.currentTimeMillis() + 45_000L;
+        DockerClient.ExecResult last;
+        while (true) {
+            last = docker.exec(fromHandle, List.of("wget", "-T", "5", "-qO-", url));
+            if ((last.exitCode() == 0 && last.stdout().contains(expectedBody))
+                    || System.currentTimeMillis() >= deadline) {
+                return last;
+            }
+            sleep(500);
+        }
     }
 
     private static boolean await(long timeoutMs, java.util.function.Supplier<Boolean> condition) {
