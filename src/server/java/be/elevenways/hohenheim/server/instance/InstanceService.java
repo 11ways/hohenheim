@@ -5,11 +5,9 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.docker.SiteDatabaseNetworks;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostLeases;
-import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.FileStagingSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
@@ -115,17 +113,10 @@ public final class InstanceService {
             new InstanceDevices(this).reconcile(resolved, instanceId);
             stageConfigFiles(resolved, instanceId);
             // Deploy recreates the container, dropping every non-primary network: the
-            // game-domain link networks re-attach here, BEFORE start, with their policy
-            // enforced -- a backend must never serve a window without its links.
-            GameDomains.attachLinksBeforeStart(resolved, instanceId);
-            // Same seam for a Docker site's database links: the release container joins
-            // each attached database's link network before it starts, so the health gate
-            // probes the candidate WITH its database reachable.
-            SiteDatabaseNetworks.attachLinksBeforeStart(resolved, instanceId);
-            // And the third owner of the same seam: a stack service joins its stack's
-            // shared link network under its compose service name, so a sibling that
-            // dials "postgres" resolves it -- and only inside that stack.
-            StackInstances.attachLinksBeforeStart(resolved, instanceId);
+            // owning tiers re-establish their link networks here, BEFORE start, with
+            // their policy enforced -- a workload must never serve without its links.
+            // Every registered hook, in declared weight order; each gates itself.
+            InstancePreStartHooks.run(resolved, instanceId);
             // The console attaches BETWEEN create and start (docker run's own order),
             // so a readiness line printed in the first instant cannot be missed.
             watch = InstanceConsoles.prepare(resolved, instanceId, this.leases);
