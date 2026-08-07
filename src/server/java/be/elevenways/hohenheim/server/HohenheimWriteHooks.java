@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceImagePin;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
+import be.elevenways.hohenheim.server.instance.InstanceRootDiskQuota;
 import be.elevenways.hohenheim.server.process.ReservedEnv;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.hohenheim.server.process.SiteApiKeys;
@@ -83,6 +84,11 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // Disk-GB and extra-NIC reservations charge adjacent to the device-row write;
         // hard deletes (detach, destroy cleanup) release through the remove pairing.
         InstanceDeviceQuota.install();
+        // The ROOT disk charges the SAME owner disk-GB bucket the attached devices do:
+        // a cap that rationed only attached disks would ignore the one disk every
+        // workload already has. Also the surface that refuses an unusable or
+        // unenforceable root-disk declaration by name.
+        InstanceRootDiskQuota.install();
         // A change to the DECLARED image invalidates the pinned resolved fingerprint,
         // so a recreate after an image change resolves fresh instead of silently
         // reviving the old pin.

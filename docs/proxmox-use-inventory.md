@@ -172,6 +172,71 @@ device surface above deliberately does NOT grow one, because a root disk is not 
 `instance_devices` row and pretending it is would give it the wrong quota, the
 wrong detach semantics and the wrong reconcile.
 
+STATUS (2026-08-07, root-disk wave): the GAP paragraph above is CLOSED and kept as
+the history it is. The knob ships as `settings.root_disk_gb`, `InstanceSpec
+.rootDiskGb`, the `RootDiskSizeSupport` capability and `InstanceRootDiskQuota`.
+The root disk is still NOT an `instance_devices` row -- that judgement was right
+and is unchanged; it is a SETTING with its own charge into the SAME owner disk-GB
+bucket, which is how `diskLimitFor` came to cover it.
+
+MEASURED on daystrom (Incus 7.3, btrfs pool on a real 40G partition), not read
+anywhere -- every tier's answer is an experiment:
+
+- **Incus VM: ENFORCES.** A 6GiB declaration is a real block volume; the GUEST
+  reads 12582912 sectors from `/sys/block/sda/size` and the host-side `root.img`
+  is 6442450944 bytes. A create BELOW the image's own volume size is refused by
+  the daemon verbatim ("Source image size (4294967296) exceeds specified volume
+  size").
+- **Incus system container: ENFORCES.** The size becomes a btrfs qgroup limit
+  (`Max referenced 2.00GiB`); `dd` of 2500MB into a 2GiB root stopped at exactly
+  1937MB. `df` INSIDE the container still shows the whole pool -- the enforcement
+  is real and invisible to the guest's own statfs.
+- **Docker (all three docker kinds): CANNOT.** `docker run --storage-opt size=2G`
+  on overlayfs over ext4 exits 0 and then accepts a 2.5GB write into the "2G"
+  root. There is no xfs-with-pquota backing to require. So the docker kinds do not
+  OFFER the field, the write funnel refuses the declaration by name
+  (`root_disk_unsupported`), and `DockerInstanceRuntime.create` refuses a
+  programmatic spec that carries one. Three gates, no paper limit.
+
+DECISION 1 -- a root grow is STOPPED-ONLY, and that is not a nicety. Growing a
+RUNNING VM's root device on Incus 7.3 returns success and updates the daemon's
+config while the backing volume and the guest's block device stay at the old size.
+Worse, Incus then keys the work off that config value, so the correct retry to the
+same size WHILE STOPPED is silently skipped -- the lie is permanent. Worse still,
+every daemon read-back agrees with the lie: `GET /1.0/instances/x`, its
+`/state` `disk.root.total`, and `incus storage volume info` all echo the config.
+Only the guest disagrees. The product therefore refuses a running grow by name
+before the daemon can accept it, and the live test's load-bearing assertion is the
+GUEST's own `/sys/block/sda/size`, never a daemon read-back.
+
+DECISION 2 -- a root disk can only GROW, refused at the WRITE and not only at
+deploy. Incus refuses a block-volume shrink itself ("Block volumes cannot be
+shrunk"), but the reason the product refuses it a layer earlier is the ledger: a
+record allowed to declare less than the daemon already gave it would release the
+difference while the storage stays occupied, so the owner's cap would then permit
+more than the host holds. Clearing the field counts as a shrink for the same
+reason.
+
+DECISION 3 -- charge equals cap, the InstanceCapacity doctrine applied to storage.
+The GB charged into `hohenheim:disk_gb:<owner>` is the same number the driver hands
+the daemon as the root device size. Only the BUCKET is stamped
+(`instances.root_disk_bucket`, M081), not the amount: the amount IS
+`settings.root_disk_gb` and every write reconciles the delta, so the two cannot
+drift -- while ownership can move through grants without touching the row.
+
+Pinned by `RootDiskSizeTest` (daemon-free: which tiers offer it, the create-body
+wire shape, the three refusals, the full quota journey, each with a positive
+anchor) and `IncusVmLiveTest.aDeclaredRootDiskIsTheSizeTheGuestActuallyGets`
+(daystrom: guest-side size at create, running-grow refusal, stopped grow the guest
+really receives, shrink refusal, reclaim on destroy).
+
+STILL OPEN, named rather than half-built: there is no operator action to grow a
+root disk WITHOUT a redeploy -- the setting is the declaration and `deploy`
+applies it, which is honest but means a grow costs a stop and a deploy. And
+nothing grows the guest's PARTITION and filesystem into the new space; the guest
+sees a bigger block device and must extend itself (cloud-init's growpart does this
+on first boot only). Both are guest-lifecycle slices, not control-plane gaps.
+
 ## 4. Storage pools: placement and capacity
 
 **Pool SELECTION rejected. Pool CAPACITY partially implemented (restore-side only).**
@@ -937,6 +1002,11 @@ refused connection are still different writers. Pinned by
 The inventory is CLOSED: every item the plan enumerates has a decision and
 evidence.
 
+STATUS (2026-08-07, root-disk wave): the count below is HISTORY. With item 3's
+root-disk knob closed, ALL SIX gaps this document opened are now closed, each with
+its own test. The sentence and list are kept as written; item 1 carries its own
+superseding entry.
+
 **Five of the six gaps this document opened are closed** (four as of 2026-08-06/07,
 plus snapshot retention and the Incus heartbeat in the 2026-08-07 retention/heartbeat
 wave). Device-surface wave,
@@ -946,15 +1016,18 @@ defect (item 4). Trust-state-machine wave, 2026-08-07: the optional kernel-truth
 lane (item 5) is now an admission REQUIREMENT. Capacity wave, 2026-08-07:
 placement is resource-aware (item 12). Three remain, each with its owning slice:
 
-1. **No root-disk size knob** (item 3) -- **STILL OPEN, assessed 2026-08-07 and
-   deliberately not started.** It is a VM-spec slice, not a cleanup: a size on
-   `InstanceSpec`, a knob on `IncusVmKind`, the daemon-side root device override at
-   create AND a stopped-only grow path, a REFUSAL BY NAME on the Docker tier (which
-   cannot express a per-container root quota at all, and must not accept a number it
-   would ignore -- that is precisely why the community-scripts wave dropped `var_disk`
-   by name), plus its interaction with `InstanceDeviceQuota.diskLimitFor`, which today
-   counts only attached `instance_devices`. Half of that is a paper knob, which is worse
-   than the visible gap.
+1. ~~**No root-disk size knob** (item 3)~~ -- CLOSED 2026-08-07 (root-disk wave).
+   Every part the 2026-08-07 assessment named landed: the size on `InstanceSpec`, the
+   knob on both Incus kinds, the root device override in the CREATE body, a
+   stopped-only grow path, a refusal by name on the Docker tier at three
+   independent gates, and the charge into the SAME `InstanceDeviceQuota` disk-GB
+   bucket so `diskLimitFor` covers it. Each tier's answer is an experiment on
+   daystrom, not a reading: Incus VM enforces (proven inside the guest), Incus
+   container enforces (btrfs qgroup, proven by a write that stopped at the cap),
+   Docker cannot and therefore does not offer it. Two things stay open and are
+   NAMED rather than half-built: a grow needs a stop plus a deploy, and nothing
+   grows the guest's partition into the new space. See the superseding block under
+   item 3.
 2. ~~**No snapshot retention** (item 7)~~ -- CLOSED 2026-08-07: `snapshot_retention`
    prunes on capture through the backup lane's own rule, plus a native-snapshot name
    collision fixed and the first daemon-free `InstanceSnapshots` test. See the

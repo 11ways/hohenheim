@@ -214,6 +214,15 @@ public final class InstanceDeviceQuota {
         return bucket.startsWith(prefix) ? bucket.substring(prefix.length()) : bucket;
     }
 
+    /**
+     * The packed subject set behind a disk bucket -- what {@link #diskLimitFor} wants.
+     * Shared with {@link InstanceRootDiskQuota}, which charges the SAME bucket, so the
+     * prefix stripping can never drift between the two halves of one cap.
+     */
+    static @NonNull String packOfDiskBucket(@NonNull String bucket) {
+        return packOf(bucket, DISK_PREFIX);
+    }
+
     /** The bucket a stored row was charged to; a stampless row falls to the operator's. */
     private static @NonNull String chargedBucketOf(@NonNull Row stored) {
         String bucket = stored.get(InstanceDeviceModel.QUOTA_BUCKET);

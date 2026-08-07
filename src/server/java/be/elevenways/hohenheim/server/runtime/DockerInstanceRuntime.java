@@ -93,6 +93,19 @@ public final class DockerInstanceRuntime
                 + " declared for '" + spec.handle() + "'; cloud-init provisioning is an"
                 + " incus capability");
         }
+        if (spec.rootDiskGb() != null) {
+            // The honest refusal, the cloud-init shape again -- and the one this whole
+            // knob exists to make impossible to get wrong. MEASURED on daystrom
+            // 2026-08-07: Docker's overlayfs on ext4 ACCEPTS --storage-opt size=2G with
+            // exit 0 and then lets 2.5GB be written into the "2G" root. A per-container
+            // root quota needs an xfs-with-pquota (or devicemapper/btrfs) backing this
+            // driver cannot require, so it declares the gap instead of shipping a number
+            // that reports success while enforcing nothing.
+            throw new IOException("The docker driver cannot deliver the "
+                + spec.rootDiskGb() + "GB root disk declared for '" + spec.handle()
+                + "'; a per-container root-disk quota is an incus capability. Docker"
+                + " would accept the size and enforce nothing.");
+        }
         if (spec.imageOrigin() == ImageOrigin.PREPARED) {
             // The honest refusal, same shape as the cloud-init one: Docker has no image
             // store of the prepared kind, so treating the alias as a docker image

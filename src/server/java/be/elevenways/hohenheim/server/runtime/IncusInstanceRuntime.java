@@ -48,7 +48,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class IncusInstanceRuntime
         implements InstanceRuntime, ConsoleStreamSupport, NativeSnapshotSupport,
-        InstallSupport, AppUpdateSupport, DeviceAttachSupport {
+        InstallSupport, AppUpdateSupport, DeviceAttachSupport, RootDiskSizeSupport {
+
+    /** The daemon's name for the one device a workload cannot detach. */
+    static final String ROOT_DEVICE = "root";
 
     /** The public image server system-container aliases resolve against. */
     public static final String IMAGE_SERVER = "https://images.linuxcontainers.org";
@@ -136,6 +139,11 @@ public final class IncusInstanceRuntime
             }
             converge(spec, existing, nic);
             verifyIsolated(spec.handle());
+            // A root-size change on an EXISTING workload is never folded into the
+            // converge PUT: a running grow is accepted and not performed (see
+            // RootDiskSizeSupport), so it goes through the stopped-only path, which
+            // refuses by name rather than reporting a success it did not deliver.
+            reconcileRootDisk(spec);
             return spec.handle();
         }
 
@@ -172,11 +180,106 @@ public final class IncusInstanceRuntime
         definition.put("config", config);
         // The isolating NIC override is in the CREATE body: there is no instant at which
         // an instance of ours exists on the bridge without it.
-        definition.put("devices", Map.of(IncusNetworkPolicy.NIC, nic));
+        Map<String, Object> devices = new LinkedHashMap<>();
+        devices.put(IncusNetworkPolicy.NIC, nic);
+        // The root quota rides the CREATE body too: the daemon sizes the volume while it
+        // makes it, so the workload never exists at an unquotaed size. (A VM whose
+        // declared size is under the image's own volume is refused by the daemon here,
+        // verbatim -- that is a real constraint, not something to paper over.)
+        if (spec.rootDiskGb() != null) {
+            devices.put(ROOT_DEVICE, rootDevice(spec.rootDiskGb()));
+        }
+        definition.put("devices", devices);
         definition.put("profiles", List.of("default"));
         this.incus.createInstance(definition);
         verifyIsolated(spec.handle());
+        verifyRootDiskDeclared(spec);
         return spec.handle();
+    }
+
+    /** The root disk device override: the default profile's pool, our declared size. */
+    private @NonNull Map<String, Object> rootDevice(int sizeGb) throws IOException {
+        Map<String, Object> device = new LinkedHashMap<>();
+        device.put("type", "disk");
+        device.put("path", "/");
+        device.put("pool", managedPoolName());
+        device.put("size", sizeGb + "GiB");
+        return device;
+    }
+
+    /** Read back what the daemon DECLARES for the root device after a write that set it. */
+    private void verifyRootDiskDeclared(@NonNull InstanceSpec spec) throws IOException {
+        Integer declared = spec.rootDiskGb();
+        if (declared == null) {
+            return;
+        }
+        Integer actual = rootDiskGb(spec);
+        if (actual == null || !actual.equals(declared)) {
+            throw new IOException("Root disk of '" + spec.handle() + "' was accepted at "
+                + declared + "GiB but the daemon reports " + actual + "GiB");
+        }
+    }
+
+    @Override
+    public @Nullable Integer rootDiskGb(@NonNull InstanceSpec spec) throws IOException {
+        Map<String, Object> instance = this.incus.instance(spec.handle());
+        if (instance.get("devices") instanceof Map<?, ?> devices
+                && devices.get(ROOT_DEVICE) instanceof Map<?, ?> root) {
+            return parseSizeGb(root.get("size"));
+        }
+        return null;
+    }
+
+    @Override
+    public void resizeRootDisk(@NonNull InstanceSpec spec, int sizeGb) throws IOException {
+        ContainerState state = status(spec.handle()).state();
+        if (state != ContainerState.STOPPED) {
+            // The load-bearing guard, not a convenience: a running grow is ACCEPTED and
+            // not performed, and the accepted config then blocks the correct retry.
+            throw new IOException("REFUSED to resize the root disk of '" + spec.handle()
+                + "': the workload is " + state + " and a root disk can only be resized"
+                + " while it is STOPPED. Stop it and deploy again.");
+        }
+        Integer current = rootDiskGb(spec);
+        if (current != null && sizeGb < current) {
+            throw new IOException("REFUSED to shrink the root disk of '" + spec.handle()
+                + "' from " + current + "GiB to " + sizeGb + "GiB: a root disk can only"
+                + " grow. Create a smaller workload and migrate the data instead.");
+        }
+        Map<String, Object> instance = this.incus.instance(spec.handle());
+        putDevice(spec.handle(), instance, ROOT_DEVICE, rootDevice(sizeGb));
+        Integer actual = rootDiskGb(spec);
+        if (actual == null || actual != sizeGb) {
+            throw new IOException("Resize of the root disk of '" + spec.handle() + "' to "
+                + sizeGb + "GiB did not take: the daemon reports " + actual + "GiB");
+        }
+    }
+
+    /**
+     * Bring an EXISTING workload's root disk to its declared size, or refuse by name.
+     *
+     * A declaration that already matches costs one read and does nothing; a declaration
+     * that is absent leaves the daemon alone entirely (the knob is opt-in, and clearing
+     * it must not silently shrink anything).
+     *
+     * AIDEV-NOTE: known limitation, and it belongs to the daemon rather than to us. If
+     * something OUTSIDE this product grows a RUNNING instance's root device, Incus 7.3
+     * records the new size and does not apply it, and every API read-back then echoes
+     * the recorded value. This reconcile would see "already at the declared size" and
+     * skip -- correctly, by every fact it can obtain. Refusing a running grow HERE is
+     * what keeps the product from creating that state; it cannot repair one it did not
+     * create. The only detection is inside the guest.
+     */
+    private void reconcileRootDisk(@NonNull InstanceSpec spec) throws IOException {
+        Integer declared = spec.rootDiskGb();
+        if (declared == null) {
+            return;
+        }
+        Integer current = rootDiskGb(spec);
+        if (current != null && current.equals(declared)) {
+            return;
+        }
+        resizeRootDisk(spec, declared);
     }
 
     /** Read one instance back and require EVERY NIC to carry the isolation just written. */

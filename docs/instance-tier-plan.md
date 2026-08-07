@@ -4298,6 +4298,39 @@ counts, or live re-run). It was built from CODE, not from the STATUS notes above
   (commit c01c1c3). Three remain: no root-disk size knob, no snapshot retention,
   no Incus host-health heartbeat.
 
+  STATUS 2026-08-07 (root-disk wave): the last of those three is CLOSED and the
+  sentence above stays as the history it is. An instance's ROOT disk now has a
+  size (`settings.root_disk_gb` -> `InstanceSpec.rootDiskGb` -> the root device in
+  the Incus CREATE body), and every tier's ability to enforce one was MEASURED on
+  daystrom rather than assumed.
+
+  DECISION 1 -- only a tier that can enforce a root quota OFFERS one. Incus VM
+  (real block volume, verified inside the guest) and Incus system container (btrfs
+  qgroup, verified by a write that stopped at the cap) declare the field; the
+  Docker kinds do not, because `--storage-opt size` on overlayfs/ext4 is accepted
+  and enforced NOWHERE. Declaring the field IS the capability declaration -- there
+  is no second boolean to drift from it -- and the write funnel plus
+  `DockerInstanceRuntime.create` refuse a declaration on any other tier by name.
+
+  DECISION 2 -- a root grow is refused unless the workload is STOPPED, because
+  Incus 7.3 accepts a running grow, does nothing, and then makes the correct
+  stopped retry a no-op by keying off the config it just updated. Every daemon
+  read-back echoes that config, so the guest's own block device is the only honest
+  witness and is what the live test asserts on.
+
+  DECISION 3 -- a root disk only grows, refused at the WRITE, so the charge can
+  never fall below what the host already handed out.
+
+  DECISION 4 -- the root disk charges the SAME owner disk-GB bucket the attached
+  `instance_devices` do, closing the hole where a cap rationed only the disks an
+  owner attached and ignored the one every workload already has. Charge equals
+  cap: the charged GB is the number the daemon is given.
+
+  Pinned by `RootDiskSizeTest` and
+  `IncusVmLiveTest.aDeclaredRootDiskIsTheSizeTheGuestActuallyGets`. Still open and
+  NAMED: a grow costs a stop plus a deploy, and nothing grows the guest's own
+  partition into the new space.
+
   STATUS 2026-08-07 (later, liveness wave): the instance tier now answers a
   SECOND question beside `ContainerState` -- `WorkloadLiveness`
   (SERVING / WORKLOAD_DEAD / UNKNOWN) on `InstanceStatus`. A workload killed by
