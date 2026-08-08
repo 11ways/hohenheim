@@ -1360,6 +1360,86 @@ restore onto a fresh controller, and read every value. Missing keyring, permissi
 permissions, interrupted backfill, concurrent key creation, tampered envelope and
 DB-only restore all fail loudly without making records unsaveable.
 
+**STATUS 2026-08-08 -- the two OPEN clauses closed: off-host control-plane
+backup, and key retirement with a resumable re-encryption pass.**
+
+- **Off-host is now REAL and REQUIRED.** `ControlPlaneBackups` no longer writes
+  to `database.backup_path`; it uploads through the `BackupTarget` seam to the
+  record named by the new setting `database.control_plane_backup_target`. The
+  local file is STAGING and is deleted in a `finally` block, including on a
+  failed upload -- a "backup" indistinguishable from a real one on the doomed
+  disk is worse than none. DECIDED, breaking, no compatibility shim (nobody is
+  deployed): the destination is REQUIRED. Unset means `requireDestination`
+  refuses by name, the 02:30 task FAILS (which the existing failed-task
+  collector already surfaces), and a NEW role-free attention collector
+  (`AttentionCollector.controlPlaneBackupDestination`) shows it on the
+  dashboard before 02:30 rather than after. Retention prunes ON THE TARGET via
+  a new `BackupTarget.list(prefix)` (both kinds implement it) -- deliberately
+  not a local ledger, because a table on the dead disk is the wrong authority
+  over what the surviving host holds. Archive ordering is unchanged: DB first,
+  keyring second.
+- **NOT fixed, stated instead of implied:** the archive still carries the
+  MASTER KEYS IN THE CLEAR and its manifest is still UNSIGNED. "Off-host" here
+  therefore means the destination host can decrypt every secret in the database
+  and could substitute an archive we would restore. Said out loud in the class
+  docblock and in the setting's admin help. Follow-up if wanted: an
+  operator-passphrase-wrapped keyring half plus a signed manifest.
+- **LIMITATION, deliberate:** `restoreFromTarget` (and
+  `--restore-control-plane <key>`) resolves the destination from a
+  backup-target row and its `servers` host record, so it needs a READABLE
+  control-plane database. It covers a lost keyring or a bad upgrade, NOT a lost
+  host; a total loss is `--restore-control-plane <path>` after the operator
+  copies the artifact down. Making the destination resolvable without the
+  database would mean a second, weaker authority over which remote host we
+  trust, which the host-record design refuses on purpose.
+- **Rotate + re-encrypt + retire landed in ZENIT CORE**, where the keyring and
+  field encryption live: `EncryptionRekey` (`server/orm/crypto`) plus
+  `EncryptionKeyring.retire`, a `FieldEncryption` envelope-observer seam and
+  `zenit_encryption_rekeys` (core migration M002). The pass rewrites through the
+  ordinary write path, so the envelope shape a field DECLARES is preserved --
+  a row-bound field re-encrypts row-bound (proven by re-grafting the rewritten
+  bytes into another row and watching it still refuse). Column-bound models take
+  the atomic `assign(...).updateAll()` lane (no app write hooks, no activity log,
+  `updated_at` re-assigned to its stored value); row-bound models take the save
+  pipeline, which is the only path carrying the row identity the AAD needs.
+  Resumable from a durable per-(key, model) cursor; soft-deleted rows included
+  (`withTrashed`).
+- **Retirement is gated on a REAL QUERY, never a flag:** it surveys every
+  datasource with encrypted fields by decrypting every stored value and counting
+  the key ids it read, and refuses by name with the count and the offending
+  `model.field` list while anything remains. It also SYNCS the keyring marker to
+  the active key before shrinking the ring -- the marker only advances at boot,
+  so retiring a key the marker still named would refuse the very next boot on a
+  keyring that is in fact complete. Coverage is DECLARED: a model whose encrypted
+  values live in a translations table or a schema child table is refused by name
+  rather than skipped (hohenheim has none -- every one of its ~20 `.encrypted()`
+  declarations is a main-table column, and it has NO `encryptedBoundTo` field,
+  contrary to an earlier note).
+- **Operator lane (the wired consumer):** `--rotate-encryption-key`,
+  `--reencrypt-secrets`, `--retire-encryption-key <id>`,
+  `--encryption-key-survey`, plus `--list-control-plane-backups`. Three separate
+  arguments on purpose: one combined command would hide the only irreversible
+  step behind the two that are not.
+- **TESTS (all RAN, 0 skipped):** zenit `EncryptionRekeyTest` (1) -- 250 rows
+  over several pages plus a row-bound model, a real mid-pass crash (the second
+  model's table renamed away), resume, the graft refusal, marker sync, and the
+  active-key refusal. hohenheim `EncryptionRekeyJourneyTest` (1) over the real
+  webhook-URL / TSIG-secret / git-token columns; `ControlPlaneBackupTest` (4);
+  `LiveControlPlaneOffHostBackupTest` (1) against the real remote host
+  (independent ssh re-hash + `uname -n`, local staging asserted empty, restore
+  from bytes that only existed on the other machine). Regression: BackupTargetsTest
+  2, BackupArchiveTest 4, MigrationIntegrityTest 9, InstanceSnapshotRetentionTest 1,
+  HohenheimTaskBootstrapTest 3, zenit KeyringGuardTest 2 + EncryptedFieldTest 66 +
+  EncryptionKeyringTest 7.
+- **COUNTERFACTUALS run and reverted:** dropping the survey gate makes the
+  retirement refusal test fail ("Expected java.lang.IllegalStateException to be
+  thrown, but nothing was thrown"); making `rewriteRow` report success without
+  writing leaves 251 values under the old key; skipping the marker sync trips the
+  retirement's own post-check; and restoring the OLD local-only backup shape fails
+  the live test with "Expecting empty but was:
+  [/tmp/hh-offhost-control-plane.../staging/control-plane-....zrec]" -- a
+  "successful" backup with every byte still on the same disk.
+
 ### Phase 2 parallel gate -- tenant authority over domains, DNS and certificates
 
 ADDED 2026-07-29. The "combined product boundary" section at the top of this
@@ -2188,6 +2268,9 @@ block is what the code does; amend the prose, do not code against it.
   LOCAL directory and it explicitly does not claim off-host transfer, while the
   prerequisite below says "off-host target". Either meet it or amend it -- do
   not let the existence of the class close the gate.
+  RESOLVED 2026-08-08: MET, not amended. The destination is now a required
+  `BackupTarget` record and the local file is staging only; see the dated STATUS
+  block under the Phase 2 parallel gate for what is closed and what is not.
 - **Still accurate in the plan:** `RecordTabs` hardcodes Edit first, so the
   Overview-home mechanism still needs building; `stack_health` is raised but
   absent from the routable notification vocabulary, so it reaches only channels

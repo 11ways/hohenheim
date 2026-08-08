@@ -7269,5 +7269,15 @@
       "text": "{$percent}% of the {$limit} GB root disk is in use.",
       "scope": "attention_detail"
     }
+  ],
+  "control_plane_backup": [
+    {
+      "text": "No off-host backup destination",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Control-plane recovery archives (database + encryption keyring) have nowhere to go. Set database.control_plane_backup_target.",
+      "scope": "attention_detail"
+    }
   ]
 }

@@ -13,6 +13,9 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Backup target over a directory: staging {@code .part} write, fsync, atomic rename.
@@ -92,6 +95,27 @@ public final class FilesystemBackupTarget implements BackupTarget {
     @Override
     public boolean exists(@NonNull String key) throws IOException {
         return Files.isRegularFile(resolve(key));
+    }
+
+    @Override
+    public @NonNull List<String> list(@NonNull String prefix) throws IOException {
+        Path base = this.root.normalize();
+        if (!Files.isDirectory(base)) {
+            return List.of();
+        }
+        List<String> keys = new ArrayList<>();
+        try (Stream<Path> walk = Files.walk(base)) {
+            for (Path path : walk.toList()) {
+                if (!Files.isRegularFile(path)) {
+                    continue;
+                }
+                String key = base.relativize(path).toString();
+                if (key.startsWith(prefix) && !key.endsWith(STAGING_SUFFIX)) {
+                    keys.add(key);
+                }
+            }
+        }
+        return keys;
     }
 
     @Override

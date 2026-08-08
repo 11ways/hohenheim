@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
@@ -87,6 +88,7 @@ public final class AttentionCollector {
             stuckReleasingPorts(items, Instant.now().minus(RELEASING_STUCK_AFTER));
         }
         failedTasks(items);
+        controlPlaneBackupDestination(items);
         if (HohenheimRoles.enabled(Role.DNS)) {
             dnsIssues(items);
         }
@@ -241,6 +243,23 @@ public final class AttentionCollector {
         } catch (IllegalArgumentException gone) {
             return "removed host #" + serverId;
         }
+    }
+
+    /**
+     * No off-host destination for the control-plane recovery archive.
+     *
+     * Role-FREE, like the task itself: every node has a control-plane database. Surfaced here
+     * rather than left to the nightly task's failure, because 02:30 is a poor moment to learn
+     * that the one backup covering this host's own database and keyring was never configured.
+     */
+    public static void controlPlaneBackupDestination(List<AttentionItem> items) {
+        if (ControlPlaneBackups.configuredDestinationName() != null) {
+            return;
+        }
+        items.add(item("error", "box-archive",
+            copy("control_plane_backup", "attention_title"),
+            copy("control_plane_backup", "attention_detail"),
+            "/admin/settings"));
     }
 
     /** A stacks node whose boot probe found no Docker daemon: a red item, not silence. */
