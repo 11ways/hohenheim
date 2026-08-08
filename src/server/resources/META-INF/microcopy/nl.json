@@ -7241,5 +7241,29 @@
   "workload": {
     "text": "Workload",
     "scope": "instance_console"
-  }
+  },
+  "instance_crashed": [
+    {
+      "text": "Instantie {$name} vraagt aandacht",
+      "scope": "attention_title"
+    },
+    {
+      "text": "De workload is onverwacht gestopt en is niet herstart.",
+      "scope": "attention_detail"
+    }
+  ],
+  "instance_backup": {
+    "text": "Back-up van {$name} is mislukt",
+    "scope": "attention_title"
+  },
+  "instance_disk": [
+    {
+      "text": "Schijf bijna vol op {$name}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "{$percent}% van de {$limit} GB rootschijf is in gebruik.",
+      "scope": "attention_detail"
+    }
+  ]
 }

@@ -49,7 +49,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public final class IncusInstanceRuntime
         implements InstanceRuntime, ConsoleStreamSupport, NativeSnapshotSupport,
         InstallSupport, AppUpdateSupport, DeviceAttachSupport, RootDiskSizeSupport,
-        ExecSupport {
+        RootDiskUsageSupport, ExecSupport {
 
     @Override
     public ExecSupport.@NonNull ExecOutcome runExec(@NonNull InstanceSpec spec,
@@ -254,6 +254,41 @@ public final class IncusInstanceRuntime
             return parseSizeGb(root.get("size"));
         }
         return null;
+    }
+
+    /**
+     * The daemon's OBSERVED root-disk figures, straight out of the instance state.
+     *
+     * AIDEV-NOTE: {@code total} is 0 when the workload declares no root size, and it is
+     * passed through as 0 rather than substituted with the pool's capacity. A workload with
+     * no enforced ceiling genuinely has no percentage, and inventing one would produce a
+     * reassuring "3% used" for storage nothing is rationing.
+     */
+    @Override
+    public RootDiskUsageSupport.@Nullable DiskUsage rootDiskUsage(@NonNull InstanceSpec spec)
+            throws IOException {
+        Map<String, Object> state;
+        try {
+            state = this.incus.instanceState(spec.handle());
+        } catch (IncusClient.ApiException e) {
+            if (e.isNotFound()) {
+                return null;   // observed absent: no workload to measure
+            }
+            throw e;
+        }
+        if (!"Running".equalsIgnoreCase(String.valueOf(state.get("status")))) {
+            return null;
+        }
+        if (!(state.get("disk") instanceof Map<?, ?> disks
+                && disks.get(ROOT_DEVICE) instanceof Map<?, ?> root)) {
+            return null;
+        }
+        Object usage = root.get("usage");
+        if (!(usage instanceof Number used)) {
+            return null;   // no figure is not a zero figure
+        }
+        long total = root.get("total") instanceof Number number ? number.longValue() : 0;
+        return new RootDiskUsageSupport.DiskUsage(used.longValue(), Math.max(0, total));
     }
 
     @Override
