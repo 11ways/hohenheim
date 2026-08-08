@@ -270,8 +270,9 @@ public final class SiteReleases {
                     serving.get(InstanceModel.SERVER_ID))) {
             // The source fingerprint drifted (legacy row, new derivation input) but the
             // SPEC did not: adopt the fingerprint so the fast lane hits from now on.
-            serving.set(InstanceModel.SETTINGS, desired);
-            Models.get(InstanceModel.class).save(serving);
+            Row adopting = reload(servingId);
+            adopting.set(InstanceModel.SETTINGS, desired);
+            Models.get(InstanceModel.class).save(adopting);
             SiteVolumes.heal(siteId, desired);
             finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null,
                 "spec unchanged; fingerprint adopted without a deploy");
@@ -286,9 +287,10 @@ public final class SiteReleases {
             // Nothing serving traffic (or a portless workload the proxy cannot probe):
             // replace in place, today's semantics -- the step log says so.
             step(op, "prior release not serving traffic; replacing in place without a probe gate");
-            serving.set(InstanceModel.SETTINGS, desired);
-            serving.set(InstanceModel.SERVER_ID, serverId);
-            Models.get(InstanceModel.class).save(serving);
+            Row replacing = reload(servingId);
+            replacing.set(InstanceModel.SETTINGS, desired);
+            replacing.set(InstanceModel.SERVER_ID, serverId);
+            Models.get(InstanceModel.class).save(replacing);
             SiteVolumes.heal(siteId, desired);
             transition(op, ReleaseOperationModel.STATUS_DEPLOYING, "deploying in place");
             try {
@@ -385,6 +387,7 @@ public final class SiteReleases {
                                                                 @NonNull Map<String, Object> desired) {
         int servingId = serving.get(InstanceModel.ID);
         Integer candidateId = null;
+        InstanceService instances = new InstanceService();
         try {
             Row candidate = newInstanceRow(siteId, siteName, serverId, desired,
                 InstanceModel.ROLE_CANDIDATE);
@@ -393,7 +396,7 @@ public final class SiteReleases {
             transition(op, ReleaseOperationModel.STATUS_DEPLOYING,
                 "candidate instance " + candidateId + " created beside serving instance "
                     + servingId);
-            InstanceStatus candidateStatus = new InstanceService().deploy(candidateId);
+            InstanceStatus candidateStatus = instances.deploy(candidateId);
             Integer port = candidateStatus.publishedPort();
             if (port == null) {
                 throw Violations.ofForm(Microcopy.of("release_no_published_port")
@@ -412,14 +415,17 @@ public final class SiteReleases {
             op.set(ReleaseOperationModel.RETIRED_INSTANCE_ID, servingId);
             op.set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image")));
             transition(op, ReleaseOperationModel.STATUS_SWITCHING, "switching traffic");
+            // AIDEV-NOTE: both flips are FENCED SINGLE-COLUMN writes, never Models.save of
+            // the Row objects held here. Those objects are stale by construction -- the
+            // candidate's was built before its deploy stamped status/fence/fingerprint, and
+            // the serving one was loaded before the spec was resolved (a sandbox build, so
+            // possibly minutes ago). A whole-row save would rewrite every column back to
+            // its load-time value; that is what silently undid the volume heal and could
+            // rewind claim_fence. See InstanceOperationGuard.stampRole.
+            instances.assignRuntimeRole(candidateId, InstanceModel.ROLE_SERVING);
             candidate.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
-            Models.get(InstanceModel.class).save(candidate);
+            instances.assignRuntimeRole(servingId, InstanceModel.ROLE_RETIRED);
             serving.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_RETIRED);
-            Models.get(InstanceModel.class).save(serving);
-            // AIDEV-NOTE: the volume-name heal runs HERE, after the role flip, because that
-            // flip saves the row from a Row object loaded BEFORE the spec was resolved and
-            // Models.save writes the WHOLE row -- healing earlier was silently clobbered by
-            // it, and the rollback target kept pointing at the old volume.
             SiteVolumes.heal(siteId, desired);
             transition(op, ReleaseOperationModel.STATUS_DRAINING,
                 "instance " + candidateId + " now serving; instance " + servingId
@@ -590,8 +596,8 @@ public final class SiteReleases {
                 Row old = Models.get(InstanceModel.class).findById(retiredId);
                 if (old != null && InstanceModel.ROLE_SERVING.equals(
                         old.get(InstanceModel.RUNTIME_ROLE))) {
-                    old.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_RETIRED);
-                    Models.get(InstanceModel.class).save(old);
+                    new InstanceService().assignRuntimeRole(retiredId,
+                        InstanceModel.ROLE_RETIRED);
                     step(op, "boot recovery completed the half-flipped switch");
                 }
                 transition(op, ReleaseOperationModel.STATUS_DRAINING,
@@ -696,6 +702,29 @@ public final class SiteReleases {
     }
 
     // -- internals ------------------------------------------------------------
+
+    /**
+     * Re-read an instance row immediately before a WHOLE-ROW save.
+     *
+     * AIDEV-NOTE: {@code Models.save} writes every column PRESENT on the Row, and a row
+     * loaded from the database carries all of them -- so saving a Row loaded before the
+     * spec was resolved (a sandbox build, so possibly minutes ago) rewrites status,
+     * claim_fence and image_fingerprint back to their load-time values. Rewinding
+     * claim_fence would erase a rival controller's authority over the record. Unlike the
+     * role flip, a SETTINGS write cannot become a hook-free {@code updateAll}: the
+     * image-change hook that clears the fingerprint pin ({@code InstanceImagePin}) lives
+     * in the save pipeline, so the fix here is a reload, not a targeted assign.
+     *
+     * @throws Violations when the release's own row vanished mid-operation
+     */
+    private static @NonNull Row reload(int instanceId) {
+        Row fresh = Models.get(InstanceModel.class).findById(instanceId);
+        if (fresh == null) {
+            throw Violations.ofForm(Microcopy.of("release_no_serving_release")
+                .withFilter("scope", "violations"));
+        }
+        return fresh;
+    }
 
     /** A fresh instance row of the site_container kind, in the given role. */
     private static @NonNull Row newInstanceRow(int siteId, @Nullable String siteName,

@@ -174,7 +174,7 @@ public final class SiteContainerKind implements InstanceKindHandler {
         // defect being fixed (a release mints a new instance row, so an instance-keyed
         // volume is empty on every gated swap). The one instance-keyed spelling still
         // honoured is a PRE-FIX row's logical key, which a rollback can reach before the
-        // site's next converge heals it (SiteVolumes.healStoredNames): its data genuinely
+        // site's next converge heals it (SiteVolumes.heal): its data genuinely
         // lives under the old name, so mounting anything else would lose it.
         Map<String, String> volumes = new LinkedHashMap<>();
         EnvVars.toMap(settings.get("volumes")).forEach((name, path) -> {
