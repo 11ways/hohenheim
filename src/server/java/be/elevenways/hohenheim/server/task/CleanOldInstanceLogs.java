@@ -43,9 +43,20 @@ public class CleanOldInstanceLogs extends ScheduledTask {
         clean();
     }
 
-    /** Delete instance console log rows older than the retention window. */
+    /**
+     * Delete instance console log rows whose last write is past the retention window.
+     *
+     * AIDEV-NOTE: SAVED_AT, not CREATED_AT, and this is the one place the shared sweeper's
+     * usual column is wrong. An instance log row is UPSERTED for the whole life of ONE
+     * console episode (InstanceConsoleLogs.sinkFor), so on a workload that has been
+     * streaming for a month CREATED_AT is the age of the EPISODE, never the age of its
+     * text: sweeping by it deleted a row still being written to, and the sink's next flush
+     * silently started a new row -- losing the history the retention window was supposed to
+     * still be holding. SAVED_AT retires an episode 30 days after its LAST line, which is
+     * what "logs older than 30 days" means for both a finished and a live episode.
+     */
     public static void clean() {
         RetentionSweep.clean("CleanOldInstanceLogs", Models.get(InstanceLogModel.class),
-            InstanceLogModel.CREATED_AT, RETENTION_DAYS);
+            InstanceLogModel.SAVED_AT, RETENTION_DAYS);
     }
 }
