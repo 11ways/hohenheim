@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
+import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.runtime.ImageIdentity;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
@@ -200,11 +201,16 @@ public final class InstanceBackups {
                 throw new IOException("Stored artifact does not match what was uploaded"
                     + " (local sha256 " + localSha + ", target holds " + storedSha + ")");
             }
-            backup.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_COMPLETE);
-            backup.set(InstanceBackupModel.SHA256, storedSha);
-            backup.set(InstanceBackupModel.SIZE_BYTES, size);
-            backup.set(InstanceBackupModel.SUMMARY, manifest.toSummary());
-            Models.get(InstanceBackupModel.class).save(backup);
+            // AIDEV-NOTE: a NARROW write, never Models.save of the row held here. The row
+            // was created before the archive/encrypt/upload/verify phase, which is a
+            // network transfer measured in minutes; a whole-row save rewrites every
+            // column back to its creation-time value and reports the backup complete.
+            RecordStamp.on(Models.get(InstanceBackupModel.class), backup)
+                .set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_COMPLETE)
+                .set(InstanceBackupModel.SHA256, storedSha)
+                .set(InstanceBackupModel.SIZE_BYTES, size)
+                .set(InstanceBackupModel.SUMMARY, manifest.toSummary())
+                .write();
         } catch (IOException | RuntimeException error) {
             // Cleanup must leave NOTHING a later restore would accept: remove the
             // artifact (and its staging debris) and leave the row FAILED.
@@ -221,9 +227,10 @@ public final class InstanceBackups {
                 Blast.log("BACKUP: could not remove partial artifact", key, ":",
                     InstanceSnapshots.describe(cleanupFailed));
             }
-            backup.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_FAILED);
-            backup.set(InstanceBackupModel.ERROR, InstanceSnapshots.describe(error));
-            Models.get(InstanceBackupModel.class).save(backup);
+            RecordStamp.on(Models.get(InstanceBackupModel.class), backup)
+                .set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_FAILED)
+                .set(InstanceBackupModel.ERROR, InstanceSnapshots.describe(error))
+                .write();
             if (error instanceof Violations refused) {
                 throw refused;
             }

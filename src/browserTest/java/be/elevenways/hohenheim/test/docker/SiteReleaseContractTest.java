@@ -457,6 +457,74 @@ class SiteReleaseContractTest {
     // -- fixture plumbing -----------------------------------------------------
 
     /** The site record the engine's fingerprint, activity and ownership all resolve to. */
+    /**
+     * The operation record's WRITE DISCIPLINE, the {@code stampRole} lesson applied to
+     * the record the engine holds open: a step may never carry the rest of a stale
+     * operation Row back to the database.
+     *
+     * The Row is minted before the daemon work and lives for the whole operation, so
+     * every {@code Models.save} of it used to rewrite the kind, the owner and both
+     * fingerprints back to their creation-time values -- and report success. The rival
+     * writer here is injected at the daemon, which is exactly where the real window is.
+     */
+    @Test
+    void anOperationStepNeverCarriesAStaleOperationRowBackToTheDatabase() {
+        Db.run(datasource, () -> {
+            int siteId = site("stale-op-site");
+            try {
+                // 1. A release whose deploy admits a rival writer: by the time the daemon
+                //    is asked to start the workload the operation row already exists, is
+                //    recorded DEPLOYING, and the engine holds its Row open for the rest of
+                //    the operation -- the same window the snapshot tier's operator-editable
+                //    note is exposed through today.
+                int[] touched = new int[1];
+                daemon.duringNextStart(() -> {
+                    Row inFlight = latestOp(siteId);
+                    touched[0] = inFlight.get(ReleaseOperationModel.ID);
+                    Models.get(ReleaseOperationModel.class).find()
+                        .where(ReleaseOperationModel.ID.eq(touched[0]))
+                        .assign(ReleaseOperationModel.SITE_FINGERPRINT, "rival-site-print")
+                        .assign(ReleaseOperationModel.SPEC_FINGERPRINT, "rival-spec-print")
+                        .updateAll();
+                });
+                SiteInstances.ensureRunning(siteId, "stale-op-site", settingsFor("v1"));
+
+                // 2. The POSITIVE anchor: the operation did finish, and its own terminal
+                //    columns really landed. A write that persisted nothing at all would
+                //    otherwise satisfy step 3 for free.
+                Row op = latestOp(siteId);
+                assertThat(op.get(ReleaseOperationModel.ID))
+                    .as("step 2: the rival wrote the operation the engine is holding")
+                    .isEqualTo(touched[0]);
+                assertThat(Map.of(
+                        "status", String.valueOf((Object) op.get(ReleaseOperationModel.STATUS)),
+                        "image", String.valueOf((Object) op.get(ReleaseOperationModel.IMAGE_ID))))
+                    .as("step 2: the operation's own outcome columns landed")
+                    .isEqualTo(Map.of("status", ReleaseOperationModel.STATUS_SUCCEEDED,
+                        "image", FakeDockerDaemon.digestOf("fake/app:v1")));
+                assertThat((String) op.get(ReleaseOperationModel.STEP_LOG))
+                    .as("step 2: including the step log the terminal write appends to")
+                    .contains("deployed");
+
+                // 3. STATE, read back from the database: neither column the finish is NOT
+                //    about was restated. Both in ONE assertion -- a whole-row save loses
+                //    both, and a per-value assertion would only report whichever it
+                //    reached first.
+                assertThat(Map.of(
+                        "site_fingerprint",
+                        String.valueOf((Object) op.get(ReleaseOperationModel.SITE_FINGERPRINT)),
+                        "spec_fingerprint",
+                        String.valueOf((Object) op.get(ReleaseOperationModel.SPEC_FINGERPRINT))))
+                    .as("step 3: every write made to the operation between its creation and"
+                        + " its finish SURVIVED it")
+                    .isEqualTo(Map.of("site_fingerprint", "rival-site-print",
+                        "spec_fingerprint", "rival-spec-print"));
+            } finally {
+                SiteInstances.destroyFor(siteId);
+            }
+        });
+    }
+
     private static int site(String slug) {
         Row site = Models.get(SiteModel.class).createEmptyRow();
         site.set(SiteModel.NAME, "Release contract " + slug);

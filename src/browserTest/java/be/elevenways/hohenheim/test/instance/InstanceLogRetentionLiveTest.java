@@ -170,8 +170,11 @@ class InstanceLogRetentionLiveTest {
                 //    both, which is why the second half of this assertion exists.
                 List<Row> both = logs.findByInstanceId(id, 50);
                 Integer oldest = both.get(both.size() - 1).get(InstanceLogModel.ID);
+                // SAVED_AT is the age the sweeper answers to -- an episode retires 30 days
+                // after its LAST line, never after it opened (CleanOldInstanceLogs). Aging
+                // created_at here made this step unfalsifiable: the sweep never reads it.
                 logs.find().where(InstanceLogModel.ID.eq(oldest))
-                    .assign(InstanceLogModel.CREATED_AT,
+                    .assign(InstanceLogModel.SAVED_AT,
                         Instant.now().minus(40, ChronoUnit.DAYS))
                     .updateAll();
                 CleanOldInstanceLogs.clean();

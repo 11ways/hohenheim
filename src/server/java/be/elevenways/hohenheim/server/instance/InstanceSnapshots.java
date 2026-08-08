@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
+import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
@@ -116,14 +117,20 @@ public final class InstanceSnapshots {
                 inventory.put(volume.name(), entry);
                 total += volume.size();
             }
-            snapshot.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE);
-            snapshot.set(InstanceSnapshotModel.VOLUMES, inventory);
-            snapshot.set(InstanceSnapshotModel.TOTAL_BYTES, total);
-            Models.get(InstanceSnapshotModel.class).save(snapshot);
+            // AIDEV-NOTE: a NARROW write, never Models.save of the row held here. The row
+            // was created before the capture, which takes minutes, and the note is
+            // operator-editable through InstanceSnapshotResource for that whole window --
+            // a whole-row save rewinds the edit while reporting the capture complete.
+            RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
+                .set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE)
+                .set(InstanceSnapshotModel.VOLUMES, inventory)
+                .set(InstanceSnapshotModel.TOTAL_BYTES, total)
+                .write();
         } catch (IOException error) {
             deleteRecursively(directory);
-            snapshot.set(InstanceSnapshotModel.ERROR, describe(error));
-            Models.get(InstanceSnapshotModel.class).save(snapshot);
+            RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
+                .set(InstanceSnapshotModel.ERROR, describe(error))
+                .write();
             // A failed CAPTURE changed no volume data: hand the workload back rather
             // than leaving it down over a snapshot that did not happen.
             InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
@@ -171,15 +178,18 @@ public final class InstanceSnapshots {
         // the other row's snapshot with it. That is why the row is saved first.
         String nativeName = "hib-" + STAMP.format(Instant.now())
             + "-" + snapshot.get(InstanceSnapshotModel.ID);
-        snapshot.set(InstanceSnapshotModel.NATIVE_NAME, nativeName);
-        Models.get(InstanceSnapshotModel.class).save(snapshot);
+        RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
+            .set(InstanceSnapshotModel.NATIVE_NAME, nativeName)
+            .write();
         try {
             support.createSnapshot(resolved.spec(), nativeName);
-            snapshot.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE);
-            Models.get(InstanceSnapshotModel.class).save(snapshot);
+            RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
+                .set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE)
+                .write();
         } catch (IOException error) {
-            snapshot.set(InstanceSnapshotModel.ERROR, describe(error));
-            Models.get(InstanceSnapshotModel.class).save(snapshot);
+            RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
+                .set(InstanceSnapshotModel.ERROR, describe(error))
+                .write();
             InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
                 resolved.serverId(), fence, prior, resolved.row().get(InstanceModel.NAME));
             throw refusal("instance_snapshot_failed", resolved.row(), error);

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.build;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -136,8 +137,7 @@ public final class SandboxedBuilds {
         BuildOperationModel model = Models.get(BuildOperationModel.class);
         Row row = model.findById(buildId);
         if (row != null) {
-            row.set(BuildOperationModel.DETECTION, detection);
-            model.save(row);
+            RecordStamp.on(model, row).set(BuildOperationModel.DETECTION, detection).write();
         }
     }
 
@@ -169,17 +169,21 @@ public final class SandboxedBuilds {
         Row row = model.findById(buildId);
         if (row != null) {
             Instant finished = Instant.now();
-            row.set(BuildOperationModel.STATUS, status);
-            row.set(BuildOperationModel.IMAGE_ID, imageId);
-            row.set(BuildOperationModel.EXIT_CODE, exitCode);
-            row.set(BuildOperationModel.FAILURE_REASON, reason);
-            row.set(BuildOperationModel.LOG, log.text());
-            row.set(BuildOperationModel.PEAK_DISK_BYTES, peakDisk);
-            row.set(BuildOperationModel.ARTIFACT_BYTES, artifactBytes);
-            row.set(BuildOperationModel.FINISHED_AT, finished);
-            row.set(BuildOperationModel.DURATION_MS,
-                (int) (finished.toEpochMilli() - startedAt));
-            model.save(row);
+            // A NARROW write: the row is fully loaded, so a save would rewrite the
+            // quotas, the request identity and the detection this build already
+            // recorded -- columns this outcome has no business restating.
+            RecordStamp.on(model, row)
+                .set(BuildOperationModel.STATUS, status)
+                .set(BuildOperationModel.IMAGE_ID, imageId)
+                .set(BuildOperationModel.EXIT_CODE, exitCode)
+                .set(BuildOperationModel.FAILURE_REASON, reason)
+                .set(BuildOperationModel.LOG, log.text())
+                .set(BuildOperationModel.PEAK_DISK_BYTES, peakDisk)
+                .set(BuildOperationModel.ARTIFACT_BYTES, artifactBytes)
+                .set(BuildOperationModel.FINISHED_AT, finished)
+                .set(BuildOperationModel.DURATION_MS,
+                    (int) (finished.toEpochMilli() - startedAt))
+                .write();
             prune(model, request);
         }
         boolean succeeded = BuildOperationModel.STATUS_SUCCEEDED.equals(status);
