@@ -389,7 +389,7 @@
       "scope": "field"
     },
     {
-      "text": "Maximum build duration in seconds before the deployment is cancelled.",
+      "text": "Maximum build duration in seconds before the deployment is cancelled; the host's build time quota still applies.",
       "scope": "help"
     }
   ],
