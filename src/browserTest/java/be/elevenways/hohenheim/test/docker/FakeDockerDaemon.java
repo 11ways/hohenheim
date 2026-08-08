@@ -102,6 +102,9 @@ final class FakeDockerDaemon implements DockerTransport {
     /** Consumed by the next create: the status that workload's responder will answer. */
     private @Nullable Integer nextHealth;
 
+    /** Consumed by the next start: a writer that appears while the daemon is working. */
+    private @Nullable Runnable duringNextStart;
+
     // -- scripting ------------------------------------------------------------
 
     /**
@@ -111,6 +114,15 @@ final class FakeDockerDaemon implements DockerTransport {
      */
     void answerWithForNextWorkload(int httpStatus) {
         this.nextHealth = httpStatus;
+    }
+
+    /**
+     * Run {@code work} INSIDE the next start, on the caller's thread and inside its
+     * datasource scope: the only honest way to place a rival writer in the middle of an
+     * operation, where a real one lands while the daemon spends its minutes.
+     */
+    void duringNextStart(@NonNull Runnable work) {
+        this.duringNextStart = work;
     }
 
     /** Report this workload as RUNNING with a dead process inside (the OOM-kill shape). */
@@ -209,6 +221,11 @@ final class FakeDockerDaemon implements DockerTransport {
             }
             workload.running = true;
             FakeDockerDaemon.this.calls.add("start:" + handle);
+            Runnable during = FakeDockerDaemon.this.duringNextStart;
+            FakeDockerDaemon.this.duringNextStart = null;
+            if (during != null) {
+                during.run();
+            }
         }
 
         @Override

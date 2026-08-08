@@ -38,6 +38,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The shared in-memory "daemons" every daemon-free instance journey runs against: two
@@ -104,6 +105,14 @@ final class FakeNativeDaemons {
 
     /** handle -> what the one-shot console tail answers. */
     static final Map<String, String> TAILS = new ConcurrentHashMap<>();
+
+    /**
+     * Consumed by the next {@code createSnapshot}: a writer that appears while the
+     * daemon is taking the capture, on the caller's thread and datasource scope. That
+     * window is minutes long in production and the snapshot's note is editable through
+     * the admin form for all of it.
+     */
+    static final AtomicReference<Runnable> DURING_SNAPSHOT = new AtomicReference<>();
 
     /** Forget every scripted stream and failure; call between journeys. */
     static void resetStreams() {
@@ -262,6 +271,10 @@ final class FakeNativeDaemons {
         @Override
         public void createSnapshot(@NonNull InstanceSpec spec, @NonNull String name)
                 throws IOException {
+            Runnable during = DURING_SNAPSHOT.getAndSet(null);
+            if (during != null) {
+                during.run();
+            }
             require(spec.handle()).snapshots.add(name);
         }
 

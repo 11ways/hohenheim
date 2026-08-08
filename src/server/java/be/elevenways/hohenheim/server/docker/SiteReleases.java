@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.build.BuildArtifacts;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
@@ -216,12 +217,12 @@ public final class SiteReleases {
             Row instance = newInstanceRow(siteId, siteName, serverId, desired,
                 InstanceModel.ROLE_SERVING);
             int instanceId = instance.get(InstanceModel.ID);
-            op.set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, instanceId);
-            transition(op, ReleaseOperationModel.STATUS_DEPLOYING,
+            transition(stamp(op).set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, instanceId),
+                ReleaseOperationModel.STATUS_DEPLOYING,
                 "instance " + instanceId + " created");
             InstanceStatus status = new InstanceService().deploy(instanceId);
-            op.set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image")));
-            finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null, "deployed");
+            finish(stamp(op).set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image"))),
+                ReleaseOperationModel.STATUS_SUCCEEDED, null, "deployed");
             SiteVolumes.heal(siteId, desired);
             return new SiteInstances.SiteRuntime(instanceId, status);
         } catch (RuntimeException e) {
@@ -305,8 +306,8 @@ public final class SiteReleases {
             transition(op, ReleaseOperationModel.STATUS_DEPLOYING, "deploying in place");
             try {
                 InstanceStatus status = new InstanceService().deploy(servingId);
-                op.set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image")));
-                finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null, "deployed");
+                finish(stamp(op).set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image"))),
+                    ReleaseOperationModel.STATUS_SUCCEEDED, null, "deployed");
                 return new SiteInstances.SiteRuntime(servingId, status);
             } catch (RuntimeException e) {
                 finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(e), "deploy failed");
@@ -402,8 +403,8 @@ public final class SiteReleases {
             Row candidate = newInstanceRow(siteId, siteName, serverId, desired,
                 InstanceModel.ROLE_CANDIDATE);
             candidateId = candidate.get(InstanceModel.ID);
-            op.set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, candidateId);
-            transition(op, ReleaseOperationModel.STATUS_DEPLOYING,
+            transition(stamp(op).set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, candidateId),
+                ReleaseOperationModel.STATUS_DEPLOYING,
                 "candidate instance " + candidateId + " created beside serving instance "
                     + servingId);
             InstanceStatus candidateStatus = instances.deploy(candidateId);
@@ -422,9 +423,10 @@ public final class SiteReleases {
             // leaves the NEWEST serving row winning ownedServing (and boot recovery
             // completes the flip). Traffic follows atomically via the routing
             // generation swap -- see the class AIDEV-NOTE.
-            op.set(ReleaseOperationModel.RETIRED_INSTANCE_ID, servingId);
-            op.set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image")));
-            transition(op, ReleaseOperationModel.STATUS_SWITCHING, "switching traffic");
+            transition(stamp(op)
+                    .set(ReleaseOperationModel.RETIRED_INSTANCE_ID, servingId)
+                    .set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image"))),
+                ReleaseOperationModel.STATUS_SWITCHING, "switching traffic");
             // AIDEV-NOTE: both flips are FENCED SINGLE-COLUMN writes, never Models.save of
             // the Row objects held here. Those objects are stale by construction -- the
             // candidate's was built before its deploy stamped status/fence/fingerprint, and
@@ -807,33 +809,63 @@ public final class SiteReleases {
         return op;
     }
 
-    /** Append a timestamped step line and persist the row. */
+    /**
+     * Start a NARROW write against the operation record.
+     *
+     * AIDEV-NOTE: every write to an operation row goes through here, for the reason
+     * {@code InstanceOperationGuard.stampRole} exists on the instance row. An operation
+     * is held open across minutes of daemon work -- a sandbox build, a probe window, a
+     * drain -- and the drain's own row is LOADED (every column present) before that
+     * work starts. {@code Models.save} writes every column present, so a step recording
+     * one log line used to rewrite the kind, the owner, the fingerprints and the
+     * candidate/retired pointers back to their load-time values, and report success. A
+     * step that changes two columns writes two columns; a caller with more to record
+     * stages it on the same stamp.
+     */
+    private static @NonNull RecordStamp stamp(@NonNull Row op) {
+        return RecordStamp.on(Models.get(ReleaseOperationModel.class), op);
+    }
+
+    /** Append a timestamped step line and persist it with whatever else is staged. */
     private static void step(@NonNull Row op, @NonNull String line) {
-        String existing = op.get(ReleaseOperationModel.STEP_LOG);
-        op.set(ReleaseOperationModel.STEP_LOG,
-            (existing == null ? "" : existing) + Instant.now() + " " + line + "\n");
-        Models.get(ReleaseOperationModel.class).save(op);
+        step(stamp(op), line);
+    }
+
+    private static void step(@NonNull RecordStamp stamp, @NonNull String line) {
+        String existing = stamp.row().get(ReleaseOperationModel.STEP_LOG);
+        stamp.set(ReleaseOperationModel.STEP_LOG,
+                (existing == null ? "" : existing) + Instant.now() + " " + line + "\n")
+            .write();
     }
 
     private static void transition(@NonNull Row op, @NonNull String status,
                                    @NonNull String line) {
-        op.set(ReleaseOperationModel.STATUS, status);
-        step(op, line);
+        transition(stamp(op), status, line);
+    }
+
+    private static void transition(@NonNull RecordStamp stamp, @NonNull String status,
+                                   @NonNull String line) {
+        step(stamp.set(ReleaseOperationModel.STATUS, status), line);
     }
 
     private static void finish(@NonNull Row op, @NonNull String status,
                                @Nullable String failureReason, @NonNull String line) {
+        finish(stamp(op), status, failureReason, line);
+    }
+
+    private static void finish(@NonNull RecordStamp stamp, @NonNull String status,
+                               @Nullable String failureReason, @NonNull String line) {
         Instant finished = Instant.now();
-        op.set(ReleaseOperationModel.STATUS, status);
-        op.set(ReleaseOperationModel.FAILURE_REASON, failureReason);
-        op.set(ReleaseOperationModel.FINISHED_AT, finished);
-        Instant started = op.get(ReleaseOperationModel.STARTED_AT);
+        stamp.set(ReleaseOperationModel.STATUS, status)
+            .set(ReleaseOperationModel.FAILURE_REASON, failureReason)
+            .set(ReleaseOperationModel.FINISHED_AT, finished);
+        Instant started = stamp.row().get(ReleaseOperationModel.STARTED_AT);
         if (started != null) {
-            op.set(ReleaseOperationModel.DURATION_MS,
+            stamp.set(ReleaseOperationModel.DURATION_MS,
                 (int) (finished.toEpochMilli() - started.toEpochMilli()));
         }
-        step(op, line);
-        prune(op);
+        step(stamp, line);
+        prune(stamp.row());
     }
 
     /** Keep the newest N operations per owning record; older rows go. */

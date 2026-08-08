@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
@@ -27,9 +28,11 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Snapshot retention as a daemon-free journey over the shared fake native daemons:
- * completed captures beyond the configured count are pruned from the row AND from the
- * daemon, the newest survive, and a retention of 0 prunes nothing.
+ * Snapshot retention and the snapshot record's write discipline, as daemon-free
+ * journeys over the shared fake native daemons: completed captures beyond the
+ * configured count are pruned from the row AND from the daemon, the newest survive, a
+ * retention of 0 prunes nothing, and a completing capture never rewinds a row someone
+ * else wrote while it ran.
  *
  * AIDEV-NOTE: this is also the first daemon-free coverage of {@code InstanceSnapshots}
  * at all -- every other snapshot test needs a live Incus or Docker daemon, which the
@@ -114,6 +117,66 @@ class InstanceSnapshotRetentionTest {
             assertThat(Models.get(InstanceSnapshotModel.class).find()
                     .where(InstanceSnapshotModel.INSTANCE_ID.eq(instanceId)).count())
                 .as("step 4: a retention of 0 prunes nothing").isEqualTo(5);
+
+            HohenheimSettings.VALUES.setValue(
+                HohenheimSettings.Backup.SNAPSHOT_RETENTION, 7);
+            service.destroy(instanceId);
+        });
+    }
+
+    /**
+     * The snapshot record's WRITE DISCIPLINE: a capture may never carry the rest of a
+     * stale snapshot Row back to the database.
+     *
+     * The row is created BEFORE the capture and completed after it, and the note is
+     * editable through {@code InstanceSnapshotResource} for that whole window -- so the
+     * completion's {@code Models.save} used to rewind an operator's edit while reporting
+     * the capture complete. This walks a row through exactly that interleaving and
+     * asserts the PERSISTED values.
+     */
+    @Test
+    void aCaptureNeverCarriesAStaleSnapshotRowBackToTheDatabase() {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceSnapshots snapshots = new InstanceSnapshots();
+            int instanceId = instanceRecord("snap-stale-row", hostId);
+            service.deploy(instanceId);
+            HohenheimSettings.VALUES.setValue(
+                HohenheimSettings.Backup.SNAPSHOT_RETENTION, 0);
+
+            // 1. The operator renames the capture WHILE the daemon is taking it -- the
+            //    admin form is open on the row for the whole window.
+            int[] edited = new int[1];
+            FakeNativeDaemons.DURING_SNAPSHOT.set(() -> {
+                Row inFlight = Models.get(InstanceSnapshotModel.class).find()
+                    .where(InstanceSnapshotModel.INSTANCE_ID.eq(instanceId))
+                    .orderBy(InstanceSnapshotModel.ID, SortOrder.DESC)
+                    .first();
+                edited[0] = inFlight.get(InstanceSnapshotModel.ID);
+                Models.get(InstanceSnapshotModel.class).find()
+                    .where(InstanceSnapshotModel.ID.eq(edited[0]))
+                    .assign(InstanceSnapshotModel.NOTE, "renamed while capturing")
+                    .updateAll();
+            });
+            int snapshotId = snapshots.create(instanceId, "before 1.20 upgrade");
+            assertThat(edited[0])
+                .as("step 1: the edit reached the very row the capture is completing")
+                .isEqualTo(snapshotId);
+
+            // 2. STATE, read back from the database. The POSITIVE half first: the capture
+            //    really completed and its daemon-side name really landed, so this cannot
+            //    pass by writing nothing. The note survived beside it -- before the fix
+            //    the persisted note was the capture's own creation-time value.
+            Row persisted = Models.get(InstanceSnapshotModel.class).findById(snapshotId);
+            assertThat(Map.of(
+                    "status", String.valueOf((Object) persisted.get(InstanceSnapshotModel.STATUS)),
+                    "named", String.valueOf(persisted.get(InstanceSnapshotModel.NATIVE_NAME) != null),
+                    "note", String.valueOf((Object) persisted.get(InstanceSnapshotModel.NOTE))))
+                .as("step 2: the capture completed AND the concurrent edit survived it")
+                .isEqualTo(Map.of(
+                    "status", InstanceSnapshotModel.STATUS_COMPLETE,
+                    "named", "true",
+                    "note", "renamed while capturing"));
 
             HohenheimSettings.VALUES.setValue(
                 HohenheimSettings.Backup.SNAPSHOT_RETENTION, 7);
