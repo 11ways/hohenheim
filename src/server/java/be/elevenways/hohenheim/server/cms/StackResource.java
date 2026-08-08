@@ -209,6 +209,18 @@ public class StackResource extends RowResource {
         super.deleteRow(row, accessContext);
     }
 
+    /**
+     * AIDEV-NOTE: NAMED GAP, 2026-08-08 -- none of these actions is ActivityLog-recorded,
+     * and neither is StackRuntime. Unlike the instance and site tiers (whose panel/API
+     * asymmetry was closed by recording inside InstanceService and SiteReleases), the
+     * stack tier is silent on EVERY surface, so there is no asymmetry to mislead an
+     * operator -- but deploy, stop, rollback and the data-destroying volume purge are
+     * all unanswerable. The fix is not a record call in these handlers: every one of
+     * them is *Async, and Accountability is a ThreadLocal, so the row would be written
+     * by the worker as system work with no actor unless the entry point snapshots the
+     * attribution and the job re-enters it with Accountability.runAs. Tracked as an OPEN
+     * item in docs/coolify-use-inventory.md.
+     */
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());

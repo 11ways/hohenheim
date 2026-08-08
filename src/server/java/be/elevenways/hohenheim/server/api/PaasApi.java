@@ -188,8 +188,9 @@ public final class PaasApi {
                 } catch (Violations refused) {
                     return ApiConduits.refusal(conduit, refused);
                 }
-                ActivityLog.record(Models.get(SiteModel.class), siteId, "rollback_triggered",
-                    ApiConduits.ORIGIN);
+                // SiteReleases.rollback records the settled rollback itself (the panel
+                // row action gets the same row); the activity origin column already
+                // says "api". A second record here would double-count this lane only.
                 return ApiConduits.json(Map.of("id", siteId, "status", "rolled_back"));
             }
             GitSiteRequestHandler git = SiteHandlers.git(siteId);

@@ -31,7 +31,6 @@ import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -132,9 +131,9 @@ public class InstanceResource extends RowResource {
      */
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
-        Integer id = existing.get(InstanceModel.ID);
-        ActivityLog.withAction(ActivityLog.ACTION_DELETE, "destroy",
-            () -> this.instances.destroy(id));
+        // No accountability wrapper here: InstanceService.destroy owns it now, so the
+        // release engine, preview expiry and database teardown record the same verb.
+        this.instances.destroy(existing.get(InstanceModel.ID));
     }
 
     @Override
