@@ -17,10 +17,17 @@ import java.util.Map;
 
 /**
  * The one construction funnel of provider clients, and the derivation of the per-clone
- * credential environment. Kinds: {@link GithubProviderClient} (PAT or App-minted
- * installation tokens) and {@link GitlabProviderClient} (v4 API, clone user
- * {@code oauth2}); webhook verification is kind-agnostic in GitWebhookHandler
- * (X-Hub-Signature-256 / X-Gitea-Signature HMAC, X-Gitlab-Token shared secret).
+ * credential environment. There are exactly TWO provider kinds:
+ * {@link GithubProviderClient} (PAT or App-minted installation tokens) and
+ * {@link GitlabProviderClient} (v4 API, clone user {@code oauth2}). Anything else is
+ * refused by name below.
+ *
+ * AIDEV-NOTE: Gitea is NOT a provider kind, and this docblock used to read as though
+ * it were (corrected 2026-08-08). Gitea appears only in the INBOUND webhook path,
+ * whose signature verification is kind-agnostic in GitWebhookHandler
+ * (X-Hub-Signature-256 / X-Gitea-Signature HMAC, X-Gitlab-Token shared secret) -- so a
+ * Gitea push can trigger a deploy, while repo listing, branch listing, clone-credential
+ * minting and commit-status reporting are unavailable for it.
  */
 public final class GitProviders {
 

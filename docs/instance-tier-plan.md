@@ -67,6 +67,17 @@ corresponding public claim, the operator-facing inventory of features we actuall
 use from the replaced product must be checked into this document and every item
 must either have a passing gate or be an explicit non-goal.
 
+STATUS (2026-08-08, inventory wave): all THREE inventories this rule demands now
+exist and are closed, each in its own file rather than inline here (an inventory
+inside a 5500-line plan is an inventory nobody reads):
+`docs/proxmox-use-inventory.md`, `docs/pterodactyl-use-inventory.md` and
+`docs/coolify-use-inventory.md`. Each carries the same verdict vocabulary --
+IMPLEMENTED requires a test that asserts STATE, code with no such test is CLAIMED,
+and `[live]` marks any row whose only proof is a daemon-gated test that skips
+green. NONE of the three currently permits its public claim; the blocking items
+are enumerated in each file's Verdict section and mirrored in the two phase-gate
+STATUS blocks below.
+
 ### Coolify / Dokploy-class PaaS
 
 The existing site, git deployment, database and stack tiers are the foundation,
@@ -3618,6 +3629,24 @@ symlink escape, oversized upload, bounded console ring).
   error is localized" sweep and the Pterodactyl replacement inventory
   close-out were not audited or closed here.
 
+  STATUS (2026-08-08, inventory wave): SUPERSEDES the paragraph above. The
+  Pterodactyl replacement inventory is now CHECKED IN and CLOSED at
+  `docs/pterodactyl-use-inventory.md` -- 22 numbered items, every clause of the
+  minimum claim at lines 82-91 carrying a verdict and its evidence at file:line,
+  with `[live]` marked on every row whose only proof is a daemon-gated test that
+  can skip green. CLOSED IS NOT MET: that document names three clauses and one
+  gate clause still blocking the public claim -- per-instance database
+  allocation is per-TENANT only (there is no instance-to-database link at all;
+  `ccd1bd5` did not close this clause, contrary to how it reads), resource quotas
+  have no memory dimension, and live stats has exactly ONE test which assumes
+  three times. The localization sweep is also still open and is now COUNTED: TEN
+  page classes across eleven call sites, not the nine this block's predecessor
+  named -- `InstanceDevicesPage` was written after that list and inherited the
+  defect. Three docblocks that asserted properties the code lacked were corrected
+  in the same pass (`HohenheimAccess` ordinary-capability count,
+  `InstanceInstalls` clear-reinstall scope, `InstanceQuotaModel` dimension
+  count). Do not re-derive any of this from the plan: the inventory is the record.
+
 ---
 
 ## Phase 7 -- PaaS / Coolify-class completion
@@ -4111,6 +4140,26 @@ cannot reach runtime secrets/control plane/other project; project quota holds
 under concurrent builds; domain/DNS/certificate cleanup is ownership-safe; the
 same flow works through UI and API. Close every item in the Coolify replacement
 inventory before using that claim publicly.
+
+STATUS (2026-08-08, inventory wave): the Coolify replacement inventory is now
+CHECKED IN and CLOSED at `docs/coolify-use-inventory.md` -- 13 numbered clauses
+plus four argued rejections, each with its evidence at file:line and a `[live]`
+mark wherever the only proof is a daemon-gated test. CLOSED IS NOT MET, and here
+unlike the game-panel inventory the blocker is not only coverage: **two clauses
+of the minimum claim above are FALSE as written.** (1) "Build isolation away from
+the control plane and tenant runtime credentials" holds for the sandboxed image
+lane and NOT for `GitDeployment.runBuild`, which runs a shell command as a host
+process on the controller AND merges the site's runtime `environment_variables`
+into it; an AIDEV-NOTE now sits on that method. (2) "Persistent storage" loses a
+named volume across a health-gated release: the volume name is derived from the
+instance id and `SiteReleases.gatedSwap` mints a new instance row, so the new
+release mounts an empty volume and the old one is orphaned -- a docblock claiming
+it "survives redeploys" has been corrected, the behaviour has not. Also unproven
+rather than false: nothing in the repository ever obtains a certificate (no ACME
+test server exists), and the rollout and rollback have NO hermetic coverage at
+all. Two further docblocks were corrected (`InstanceQuota`'s stale "disk out of
+scope", `GitProviders` reading as though Gitea were a supported provider kind).
+The inventory is the record; do not re-derive it from this block.
 
 ---
 

@@ -27,10 +27,17 @@ import java.util.Map;
  * writes), an interrupted run leaves {@code installing} behind as visible evidence and
  * a leftover owned install container that the next attempt replaces (resume), a failed
  * run stamps {@code failed} with the output tail (rollback to a retryable state) --
- * and NO path here ever touches the instance's variable rows or volumes, except the
- * volume wipe an explicit {@code clear} reinstall policy plus a typed confirmation
- * demanded. Losing a tenant's only copy of variables/credentials to an interrupted
- * install is the failure class this class exists to make impossible.
+ * and NO path here ever touches the instance's VARIABLE ROWS. Losing a tenant's only
+ * copy of variables/credentials to an interrupted install is the failure class this
+ * class exists to make impossible.
+ *
+ * AIDEV-NOTE: corrected 2026-08-08 -- this docblock used to say no path touches
+ * "variable rows or volumes, except the volume wipe" a clear policy demanded, and to
+ * credit a typed confirmation. Both understated it. The {@code clear} branch DESTROYS
+ * THE WORKLOAD and then removes its volumes (see the inline comments at the branch),
+ * and the typed confirmation is a property of the CALLER
+ * ({@code InstanceResource#reinstallAction}), not of this class -- nothing here checks
+ * for one, which is why every future caller must supply its own interlock.
  */
 public final class InstanceInstalls {
 
