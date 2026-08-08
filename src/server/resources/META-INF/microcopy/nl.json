@@ -389,7 +389,7 @@
       "scope": "field"
     },
     {
-      "text": "Maximale buildduur in seconden voordat de deployment wordt geannuleerd.",
+      "text": "Maximale buildduur in seconden voordat de deployment wordt geannuleerd; het buildtijdquotum van de host blijft gelden.",
       "scope": "help"
     }
   ],

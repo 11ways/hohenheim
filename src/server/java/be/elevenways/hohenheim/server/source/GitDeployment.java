@@ -1,7 +1,11 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.ProcessConfinement;
 import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.build.BuildQuota;
 import be.elevenways.hohenheim.server.process.ProcessGroupSupport;
+import be.elevenways.hohenheim.server.security.ProcessNetworkPolicy;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
@@ -238,21 +242,38 @@ public class GitDeployment {
     }
 
     /**
-     * The LEGACY build lane: a shell command on the control-plane host.
+     * The HOST build lane of the non-docker git site types (static, node): the operator's
+     * {@code build_command} run as the site's own uid, under the managed-process tier's
+     * confinement.
      *
-     * AIDEV-NOTE: this lane does NOT satisfy the plan's "build isolation away from the
-     * control plane and tenant runtime credentials" clause, and that clause is
-     * therefore false as written (recorded 2026-08-08 in
-     * docs/coolify-use-inventory.md item 2, ranked its first OPEN item). Two reasons.
-     * It runs as a HOST PROCESS on the controller -- isolation here is a uid drop, a
-     * timeout and a process-group kill, with no container, no network policy, no cgroup
-     * quota and no capability drop. And the mergeEnvVars call below hands the build the
-     * SITE'S RUNTIME environment_variables, which is exactly what BuildSandbox's
-     * BuildRequest is shaped to make impossible for the docker lane. Docker-typed git
-     * sites go through BuildSandbox instead; only the non-docker types (static, node)
-     * reach here. Fixing it means routing this through BuildSandbox too, or declaring
-     * the non-docker git site types operator-trust-only IN THE PLAN. Do not read the
-     * uid drop as isolation.
+     * AIDEV-NOTE: DECIDED 2026-08-08 -- this lane stays a host process and is CONFINED
+     * LIKE THE TIER IT BELONGS TO, rather than being routed through BuildSandbox. The
+     * evidence for that choice: (1) BuildSandbox produces a docker IMAGE from a declared
+     * builder image, and these site types declare no image and need the checkout's FILES
+     * back in the slot -- routing them there is a redesign of the types, not a fix; (2) the
+     * command is OPERATOR-authored, never tenant-authored (ManageSiteResource.fieldBindings
+     * hands a delegated tenant name/enabled/description only, and the API has no
+     * source_settings write), which is the same trust class as CommandSiteType's command,
+     * i.e. the managed-process tier; (3) the REPO CONTENT is not operator-authored, so a
+     * postinstall script in a tenant's repository is hostile-capable code -- which is why
+     * confinement here is not optional.
+     *
+     * Two things therefore changed with this note. The site's RUNTIME
+     * {@code environment_variables} are no longer merged in: {@code build_environment_variables}
+     * (GitSourceSchema, declared {@code .secret()}) is the build-time channel, and the
+     * deploy log this method captures is readable by any tenant holding site manage over
+     * the PaaS API, so a dependency's install script had a straight path from the site's
+     * DATABASE_PASSWORD to a tenant-readable log. And the spawn now carries the tier's own
+     * isolation: {@link ProcessNetworkPolicy} keyed on the build's run-as uid (the same
+     * chain the runtime process of this very site is refused without) plus the
+     * {@link ProcessConfinement} cgroup scope sized by the build quota both lanes share.
+     * A build that cannot be confined is REFUSED -- BuildSandbox's own doctrine, "a build
+     * that starts unprotected is worse than a build that does not start".
+     *
+     * What this lane still does NOT have, stated so nobody reads more into it: no
+     * container, no filesystem namespace and no capability BOUNDING set (see
+     * SystemUsers.executionBuilder for why no_new_privs is the reachable half). It is the
+     * host-process tier's floor, not the sandbox's.
      */
     boolean runBuild(File targetDir, String buildCommand) throws InterruptedException {
         String buildDir = (String) sourceSettings.get("build_directory");
@@ -261,8 +282,15 @@ public class GitDeployment {
             workDir = new File(targetDir, buildDir);
         }
 
+        // AIDEV-NOTE: the per-site build_timeout may TIGHTEN the host's build time quota,
+        // never widen it -- the same "a quota may tighten the baseline, it may never widen
+        // it" rule BuildQuota.effectivePidsLimit states for PIDs. A site-declared 24h
+        // timeout used to make the operator's builds.timeout_seconds cap nothing at all on
+        // this lane while the sandboxed lane honoured it.
+        int quotaSec = BuildQuota.fromSettings().timeoutSeconds();
         Object timeoutObj = sourceSettings.get("build_timeout");
-        int timeoutSec = timeoutObj instanceof Integer t && t > 0 ? t : 600;
+        int declaredSec = timeoutObj instanceof Integer t && t > 0 ? t : 600;
+        int timeoutSec = Math.min(declaredSec, quotaSec);
 
         Blast.log("GIT: site", siteId, "build started");
         log("Build started");
@@ -274,7 +302,9 @@ public class GitDeployment {
             List<String> build = List.of("sh", "-c", buildCommand);
             Map<String, String> env = new LinkedHashMap<>(SystemUsers.safeEnvironment(
                 runAs != null ? runAs.home() : System.getProperty("user.home")));
-            mergeEnvVars(env, typeSettings.get("environment_variables"));
+            // BUILD-time variables only. The site's runtime environment_variables are
+            // deliberately absent -- see the method note; this is the same separation
+            // BuildRequest makes structural for the sandboxed lane.
             mergeEnvVars(env, sourceSettings.get("build_environment_variables"));
             if (runAs != null) {
                 if (runAs.home() != null && !runAs.home().isBlank()) {
@@ -283,7 +313,16 @@ public class GitDeployment {
                     env.remove("HOME");
                 }
             }
-            ProcessBuilder pb = SystemUsers.executionBuilder(runAs, env, build, true);
+
+            List<String> confinement = confinementPrefix();
+            if (confinement == null || !isolateBuild()) {
+                return false;
+            }
+            if (!confinement.isEmpty()) {
+                ProcessConfinement.contributeEnvironment(env);
+            }
+            ProcessBuilder pb = SystemUsers.executionBuilder(runAs, env, build, true,
+                confinement);
             pb.directory(workDir);
             pb.redirectErrorStream(true);
 
@@ -348,6 +387,65 @@ public class GitDeployment {
 
     private void mergeEnvVars(Map<String, String> env, Object envVarsObj) {
         env.putAll(EnvVars.toMap(envVarsObj));
+    }
+
+    /**
+     * The cgroup scope the build runs in, sized by the quota BOTH build lanes share.
+     *
+     * @return the spawn prefix (empty when nothing is declared), or null when a declared
+     *         quota cannot be enforced on this host -- the build is then refused
+     */
+    private @Nullable List<String> confinementPrefix() {
+        BuildQuota quota = BuildQuota.fromSettings();
+        try {
+            return ProcessConfinement.scopePrefix("build-site-" + siteId,
+                quota.memoryMb(), quota.cpus());
+        } catch (IllegalStateException unenforceable) {
+            Blast.log("GIT: build refused for site", siteId, "-", unenforceable.getMessage());
+            log("Build refused: the build quota cannot be enforced on this host. "
+                + unenforceable.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Deny the build the tenant-network vocabulary its own runtime process is denied.
+     *
+     * AIDEV-NOTE: this is the SAME uid chain ManagedProcessSiteHandler.isolate() applies
+     * (idempotent, so build and runtime share one chain), and the no-uid case takes the
+     * same warn-and-allow shape for the same reason recorded there -- the only identity
+     * the build would have is the DAEMON's own, and a deny keyed on that cuts the control
+     * plane off from itself. A site whose runtime cannot be isolated cannot spawn either,
+     * so this refusal never removes a lane the site otherwise had.
+     *
+     * @return false when the policy cannot be applied -- the build is refused
+     */
+    private boolean isolateBuild() {
+        if (runAs == null) {
+            Blast.log("GIT: site", siteId, "has no system user, so its build runs as the",
+                "Hohenheim daemon and CANNOT be network-isolated; configure a system user");
+            log("Warning: this site has no system user, so the build runs as the Hohenheim"
+                + " daemon and is NOT network-isolated. Configure a system user for it.");
+            return true;
+        }
+        try {
+            ProcessNetworkPolicy.current().apply(runAs.uid(), siteLabel());
+            return true;
+        } catch (IOException | RuntimeException refused) {
+            // RuntimeException included deliberately: an applier that cannot resolve its
+            // own table (no controller identity) failed to isolate just as completely as
+            // one nft refused, and the generic "Build failed" this used to become named
+            // neither the lane nor the reason.
+            Blast.log("GIT: build refused for site", siteId, "-", refused.getMessage());
+            log("Build refused: " + refused.getMessage());
+            return false;
+        }
+    }
+
+    /** The site's name for a refusal an operator has to act on; never an identity. */
+    private String siteLabel() {
+        Object name = site == null ? null : site.get(SiteModel.NAME);
+        return name == null || name.toString().isBlank() ? "site-" + siteId : name.toString();
     }
 
     /**
