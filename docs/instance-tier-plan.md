@@ -3343,6 +3343,65 @@ actual disk growth trips quota/attention without corrupting the instance; every
 page and error is localized. Close the Pterodactyl replacement inventory here:
 each remaining item is passing or an explicit non-goal.
 
+STATUS (2026-08-08): the three clauses an audit found genuinely OPEN are now
+CLOSED; the phase gate's file-manager half was already met (`files.read` /
+`files.write` distinct and service-enforced, traversal in every spelling,
+symlink escape, oversized upload, bounded console ring).
+
+- TENANT-SAFE REDACTION landed (`ConsoleRedaction`). The mechanism is
+  redaction BY KNOWN VALUE -- the `instance_variables` rows of kind `secret`
+  belonging to the instance and to its environment -- and deliberately NOT
+  pattern-guessing at secret shapes, which produces both the false negatives
+  that matter and false positives that corrupt legitimate output. Minimum
+  length 8: a shorter value collides with ordinary text by coincidence, and
+  the accepted consequence is stated rather than hidden (something that short
+  is not a secret). Chunk boundaries are HANDLED, not assumed away: the
+  redactor holds back exactly the longest buffer suffix that is a proper
+  prefix of some secret, so a value split across websocket frames is still
+  caught while ordinary output is never delayed. Redaction runs AT INGEST, on
+  the one session ring every viewer and the stored log share, which settles
+  the operator question: an ADMIN sees the redacted stream too, because a
+  viewer-dependent stream would require keeping the raw text somewhere, and
+  that stored copy IS the leak. Cloud-init user-data is deliberately not a
+  redaction subject -- it is a document, not a value, and the secrets inside
+  it arrive through `{{KEY}}` substitution from the very variables that are
+  matched. The one-shot logs API (`InstanceConsoles.tail`) and the deferred
+  attach's seeded backlog carry their own redaction, so no lane is a wider
+  door than the WebSocket. `InstanceVariables` tells a LIVE session about a
+  secret written mid-stream. COUNTERFACTUAL: with the ingest wiring removed,
+  a planted secret echoed by a real alpine workload reached the viewer
+  verbatim (`"token=hh-deploy-secret-4a91c7f2 ready"`).
+- LOG RETENTION landed (`InstanceLogModel`, M085, `CleanOldInstanceLogs`).
+  Deliberately the `ProclogModel` shape and not a third one: one UPSERTED row
+  per workload episode carrying the rolling buffer, a periodic flush plus a
+  final flush at exit, and the shared `RetentionSweep` at 30 days. Separate
+  TABLE only because the owner column differs and the sweeper is gated on a
+  different role. What is stored is the ring, which redaction already passed
+  through -- a stored secret is a leak even if every reader redacts, so
+  redaction may never move to the read path. The console tab renders the
+  history, so retention prunes something a human can actually read.
+- ATTENTION COLLECTORS + THE MISSING DISK SIGNAL landed. The signal is a new
+  `RootDiskUsageSupport` capability seam, and DECLARING it is the capability
+  statement (the `RootDiskSizeSupport` doctrine): Incus implements it (btrfs
+  qgroup, `disk.root.usage` / `.total` from instance state -- measured on
+  daystrom: a 2GiB declaration reads back `total 2147483648`, an undeclared
+  root reads back `total 0`), Docker does NOT, because it accepts
+  `--storage-opt size=2G` and enforces nothing. `ObserveInstanceDisk` stamps
+  M086's nullable columns; NULL means NOT MEASURED, never zero, so the Docker
+  tier is silent by construction instead of alarming about a limit that does
+  not exist. Collectors: crashed (the status crash detection already stamped),
+  backup-failed (latest attempt only), disk-high (85% warning / 95% error
+  against a REAL ceiling). All read STORED facts -- no per-render daemon
+  probes. COUNTERFACTUALS: dropping the Incus capability made the live disk
+  test fail with "the driver answered at all: Expecting actual not to be
+  null"; no-op collectors made the crashed item absent; an always-firing disk
+  collector fired on two unmeasured instances, which is why the negative
+  halves are load-bearing.
+
+  STILL OPEN in this phase, deliberately unclaimed: the gate's "every page and
+  error is localized" sweep and the Pterodactyl replacement inventory
+  close-out were not audited or closed here.
+
 ---
 
 ## Phase 7 -- PaaS / Coolify-class completion
