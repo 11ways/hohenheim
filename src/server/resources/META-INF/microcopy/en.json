@@ -271,6 +271,14 @@
     {
       "text": "One Basic Auth username and password per row. Passwords are stored and shown as editable text.",
       "scope": "help"
+    },
+    {
+      "text": "Credentials",
+      "scope": "capability"
+    },
+    {
+      "text": "Credentials",
+      "scope": "database"
     }
   ],
   "key": [
@@ -1375,6 +1383,10 @@
     {
       "text": "Port",
       "scope": "site_processes"
+    },
+    {
+      "text": "Port",
+      "scope": "database_tab"
     }
   ],
   "primary": {
@@ -7283,5 +7295,25 @@
       "text": "Control-plane recovery archives (database + encryption keyring) have nowhere to go. Set database.control_plane_backup_target.",
       "scope": "attention_detail"
     }
-  ]
+  ],
+  "credentials_title": {
+    "text": "Credentials for {$name}",
+    "scope": "database_tab"
+  },
+  "container_host": {
+    "text": "Container hostname",
+    "scope": "database_tab"
+  },
+  "database_not_permitted": {
+    "text": "You are not allowed to perform this action on this database",
+    "scope": "violations"
+  },
+  "tenant_database_not_allocatable": {
+    "text": "Databases can only be created through the allocation form",
+    "scope": "violations"
+  },
+  "databases_not_permitted": {
+    "text": "You are not allowed to create databases",
+    "scope": "violations"
+  }
 }

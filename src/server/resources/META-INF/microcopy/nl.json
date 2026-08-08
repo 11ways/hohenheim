@@ -271,6 +271,14 @@
     {
       "text": "Eén Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden als bewerkbare tekst opgeslagen en getoond.",
       "scope": "help"
+    },
+    {
+      "text": "Inloggegevens",
+      "scope": "capability"
+    },
+    {
+      "text": "Inloggegevens",
+      "scope": "database"
     }
   ],
   "key": [
@@ -1375,6 +1383,10 @@
     {
       "text": "Poort",
       "scope": "site_processes"
+    },
+    {
+      "text": "Poort",
+      "scope": "database_tab"
     }
   ],
   "primary": {
@@ -7279,5 +7291,25 @@
       "text": "Herstelarchieven van het controlevlak (database + versleutelingssleutels) kunnen nergens heen. Stel database.control_plane_backup_target in.",
       "scope": "attention_detail"
     }
-  ]
+  ],
+  "credentials_title": {
+    "text": "Inloggegevens voor {$name}",
+    "scope": "database_tab"
+  },
+  "container_host": {
+    "text": "Containernaam",
+    "scope": "database_tab"
+  },
+  "database_not_permitted": {
+    "text": "Je mag deze actie niet uitvoeren op deze database",
+    "scope": "violations"
+  },
+  "tenant_database_not_allocatable": {
+    "text": "Databases kunnen alleen via het toewijzingsformulier worden aangemaakt",
+    "scope": "violations"
+  },
+  "databases_not_permitted": {
+    "text": "Je mag geen databases aanmaken",
+    "scope": "violations"
+  }
 }

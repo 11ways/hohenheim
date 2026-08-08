@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
@@ -109,6 +110,10 @@ public final class ManagePanel extends Panel {
             AccessContext ctx = RecordSourceGate.accessContextOf(conduit);
             return !HohenheimAccess.managedSiteIds(ctx).isEmpty()
                 || !HohenheimAccess.instanceIdsWith(ctx, HohenheimAccess.VIEW).isEmpty()
+                // DATABASES join the disjunction for the same reason instances did: a
+                // tenant who rents only a database holds no site or instance grant and
+                // would be 403'd out of the panel that now projects their database.
+                || !HohenheimAccess.databaseIdsWith(ctx, HohenheimAccess.VIEW).isEmpty()
                 // PROJECTS join the disjunction for the reason stated above: a member of
                 // a project that owns nothing yet holds no site or instance grant, and
                 // would be 403'd out of the panel that now projects their project.
@@ -134,6 +139,9 @@ public final class ManagePanel extends Panel {
             new ManageInstanceSnapshotResource(),
             new ManageInstanceBackupResource(), new ManageInstanceTemplateResource(),
             new InstanceFromTemplatePage(),
+            // The managed-database tier's tenant projection: allocate, read credentials
+            // (its own capability, its own tab), back up and destroy your OWN databases.
+            new ManageDatabaseResource(),
             // The project tier's tenant projection: which projects the principal is a
             // MEMBER of, and who else is in them. Both read-only -- see
             // ManageProjectResource for why a membership editor here could only refuse.
@@ -237,6 +245,19 @@ public final class ManagePanel extends Panel {
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(ProjectModel.class)
             .search(ProjectModel.NAME)
             .accessCriteria(Projects::visibleScope)
+            .build());
+
+        // Managed databases: the common registration (HohenheimSources) is ADMIN_ACCESS
+        // with no accessCriteria, which the browser registry legitimately keeps. Here the
+        // model is exposed by a SECOND RowResource (ManageDatabaseResource beside the
+        // admin DatabaseResource), so without this the widest of the two derived defaults
+        // decides -- and it would name every tenant's database to whoever a picker
+        // rendered for, starting with the site-database attachment picker. override, not
+        // register: the manage panel deliberately serves a WIDER audience than the
+        // databases panel's own permission, scoped to what each principal was granted.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(DatabaseModel.class)
+            .search(DatabaseModel.NAME)
+            .accessCriteria(ctx -> HohenheimAccess.databaseScope(ctx, HohenheimAccess.VIEW))
             .build());
 
         // Instance devices: same two-derived-defaults hazard again, and the widest one

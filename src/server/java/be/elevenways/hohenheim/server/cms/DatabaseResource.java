@@ -51,7 +51,7 @@ import java.util.Map;
  * the background; records are immutable afterwards (all fields read-only on
  * edit) with backup/restore/destroy as actions.
  */
-public final class DatabaseResource extends RowResource {
+public class DatabaseResource extends RowResource {
 
     private final DatabaseService databaseService = new DatabaseService();
 

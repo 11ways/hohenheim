@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.database.DatabaseContainerKind;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
+import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
@@ -282,8 +283,22 @@ class ManagedDatabaseTest {
                 ContainerHardening.STRICT);
 
             // 3. Re-provisioning over it is a named refusal, not a silent replace.
-            assertThatThrownBy(() -> service.create(name, ManagedDatabase.Engine.POSTGRES,
-                    PG_IMAGE, "appuser", "secret123", "appdb", true))
+            //    AIDEV-NOTE: this used to re-call service.create, which no longer reaches
+            //    the runtime at all -- the create lane is INSERT-only and refuses a taken
+            //    name (database_name_taken) before any daemon call. That refusal is a
+            //    DIFFERENT and much earlier gate, so asserting it here would have quietly
+            //    stopped exercising the attribution one. The re-provision path is
+            //    DatabaseInstances.deploy over the EXISTING record, which is what every
+            //    real re-deploy runs.
+            Row record = Db.supply(datasource,
+                () -> Models.get(DatabaseModel.class).findByName(name));
+            assertThatThrownBy(() -> Db.supply(datasource, () -> {
+                    try {
+                        return DatabaseInstances.deploy(record, ResourceLimits.none());
+                    } catch (IOException e) {
+                        throw new IllegalStateException(e.getMessage(), e);
+                    }
+                }))
                 .as("step 3: the refusal is loud and names the attribution failure")
                 .hasMessageContaining("not attributably ours");
 

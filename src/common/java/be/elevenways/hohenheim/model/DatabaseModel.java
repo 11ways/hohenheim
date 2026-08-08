@@ -108,18 +108,27 @@ public class DatabaseModel extends Model {
      * and the retention prune (which deletes every file past the newest N in that
      * directory) both landed wherever the name pointed. The rule is Docker's own
      * {@code [a-zA-Z0-9][a-zA-Z0-9_.-]*}: no separator can occur, so no traversal can be
-     * spelled, and the name stays usable as a container handle. Admin-reachable only today
-     * (the databases panel is HohenheimPanel, not /manage), which is why this is a
-     * containment fix rather than a tenant-boundary one.
+     * spelled, and the name stays usable as a container handle.
      *
-     * AIDEV-NOTE: still admin-reachable only -- DatabaseService's INSERT-only create
-     * (2026-08-08) did not change that, and this note's containment reasoning stands
-     * unaltered. What it DID change is that the name is now an identity a create cannot
-     * take over: the name is also the container handle (ControllerScope.KIND_DB), the
-     * backup directory and DatabaseInstances.dataVolumeOf's data volume, so a create that
-     * converged onto an existing record remounted that record's DATA under new
-     * credentials. The day tenant database allocation ships, per-owner namespacing of this
-     * name is the recorded direction and the refusal needs no change to follow it.
+     * AIDEV-NOTE: SUPERSEDED 2026-08-08, second half. The two earlier notes both rested on
+     * "admin-reachable only" -- that premise is GONE: ManageDatabaseResource lets a
+     * delegated tenant allocate, so this validator is now a tenant boundary and not merely
+     * a containment fix. Nothing about the RULE had to change (it already refuses every
+     * separator, so no traversal can be spelled by anyone), but two things around it did.
+     *
+     * First, the name a tenant submits is a LABEL, not the stored name:
+     * {@code TenantDatabases.storedNameFor} prefixes it per OWNER, because the stored name
+     * is simultaneously the container handle (ControllerScope.KIND_DB), the data volume
+     * ({@code DatabaseInstances.dataVolumeOf}) and the backup directory, and it is unique
+     * installation-wide -- so an un-namespaced tenant name would deny that label to every
+     * other tenant forever and turn the create form into an oracle over their names. The
+     * label passes through this validator BEFORE the prefix is added, and the prefix
+     * itself is legal here by construction ({@code u<id>-} or {@code o<8 hex>-}).
+     *
+     * Second, the INSERT-only create (also 2026-08-08) is what stops a create from
+     * SEIZING a taken name: it used to converge onto the existing record and remount that
+     * record's data volume under attacker-chosen credentials. The refusal is on the stored
+     * name verbatim, so it now fires only within one owner's own namespace.
      */
     public static boolean isValidName(String name) {
         if (name == null || name.isEmpty() || name.length() > MAX_NAME_LENGTH) {

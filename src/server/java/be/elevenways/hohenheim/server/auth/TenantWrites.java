@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
@@ -191,6 +193,51 @@ public final class TenantWrites {
             }
             for (Row doomed : doomedRows(context)) {
                 requireVariableConfig(doomed.get(InstanceVariableModel.INSTANCE_ID));
+            }
+        });
+        DatabaseModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null && isTenantOriginated()) {
+                checkDatabaseWrite(row);
+            }
+        });
+        DatabaseModel.SCHEMA.addBeforeRemoveHook(context -> {
+            if (!isTenantOriginated()) {
+                return;
+            }
+            for (Row doomed : doomedRows(context)) {
+                Object id = doomed.get(DatabaseModel.ID);
+                if (id == null) {
+                    throw HohenheimAccess.databaseRefusal();
+                }
+                HohenheimAccess.requireDatabaseCapability(
+                    (Integer) id, HohenheimAccess.DESTROY);
+            }
+        });
+        SiteDatabaseModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row == null || !isTenantOriginated()) {
+                return;
+            }
+            Row stored = row.has(SiteDatabaseModel.ID.getName())
+                ? Models.get(SiteDatabaseModel.class).findById(row.get(SiteDatabaseModel.ID))
+                : null;
+            requireLinkAuthority(effective(row, stored, SiteDatabaseModel.SITE_ID),
+                effective(row, stored, SiteDatabaseModel.DATABASE_ID));
+            if (stored != null) {
+                // Moving a link off a side needs authority over the side being LEFT too,
+                // or "re-point my link at your database" launders into a detach.
+                requireLinkAuthority(stored.get(SiteDatabaseModel.SITE_ID),
+                    stored.get(SiteDatabaseModel.DATABASE_ID));
+            }
+        });
+        SiteDatabaseModel.SCHEMA.addBeforeRemoveHook(context -> {
+            if (!isTenantOriginated()) {
+                return;
+            }
+            for (Row doomed : doomedRows(context)) {
+                requireLinkAuthority(doomed.get(SiteDatabaseModel.SITE_ID),
+                    doomed.get(SiteDatabaseModel.DATABASE_ID));
             }
         });
         DnsRecordModel.SCHEMA.addBeforeRemoveHook(context -> {
@@ -384,6 +431,130 @@ public final class TenantWrites {
                 throw Violations.ofField(name, row.get(name),
                     CmsSupport.violationText("tenant_field_frozen"));
             }
+        }
+    }
+
+    // --- Managed databases -------------------------------------------------------------
+
+    /**
+     * The only columns a delegated tenant may author on a managed database: NONE. A
+     * database record DESCRIBES a provisioned container, is immutable after create
+     * ({@code DatabaseResource.updatable() == false}), and every column on it is either a
+     * placement/execution decision or a credential the runtime must agree with.
+     *
+     * Why each of the load-bearing ones is frozen, so a future reader does not "helpfully"
+     * open one:
+     *
+     * {@code server_id} is placement, and placement is operator authority
+     * (InstancePlacement exists because a tenant naming a host is the thing it prevents).
+     * {@code image} is the {@code image_any} threat one tier over -- DatabaseContainerKind
+     * declares {@code tenantAuthored() == false} and therefore has no InstanceImagePolicy
+     * equivalent to catch an attacker-chosen engine image. {@code memory_limit_mb} and
+     * {@code cpu_limit} ARE the capacity booking (charge == cap), so writing one is
+     * writing your own host budget. {@code ephemeral} flips the data directory to a tmpfs:
+     * a silent total data loss on the next deploy. {@code db_user}/{@code db_password}/
+     * {@code db_name} are mirrored into the RUNNING engine's secrets
+     * (DatabaseInstances.writeEngineSecrets) -- rotation is a real operation, but it is a
+     * SERVICE op that rewrites both sides, never a column write, because a raw write
+     * desynchronizes the record from the engine and locks everyone out.
+     */
+    private static final Set<String> DATABASE_TENANT_WRITABLE = Set.of();
+
+    /** Columns the write pipeline DERIVES; comparing them would refuse ordinary saves. */
+    private static final Set<String> DATABASE_DERIVED = Set.of(
+        DatabaseModel.ID.getName(),
+        DatabaseModel.CREATED_AT.getName(),
+        DatabaseModel.UPDATED_AT.getName());
+
+    /** Nesting depth of {@link #inDatabaseAllocation} on this thread. */
+    private static final ThreadLocal<Integer> DATABASE_ALLOCATION =
+        ThreadLocal.withInitial(() -> 0);
+
+    /**
+     * Run the ONE funnel that may insert a managed-database row on a tenant's behalf
+     * ({@code TenantDatabases.allocate}), which DERIVES every column of it: the stored
+     * name, the credentials, the engine image, the placement and the limits.
+     *
+     * AIDEV-NOTE: a create is admitted by SCOPE rather than by a column whitelist, and
+     * that is the stronger rule, not a shortcut. A whitelist would have to name the
+     * columns the funnel itself writes, which are exactly the dangerous ones -- so it
+     * would admit a direct POST carrying them. Outside this scope no tenant-originated
+     * write reaches {@code managed_databases} at all, which also makes a column added
+     * later frozen by DEFAULT, the property the domain whitelist exists for.
+     */
+    public static void inDatabaseAllocation(@NonNull Runnable body) {
+        DATABASE_ALLOCATION.set(DATABASE_ALLOCATION.get() + 1);
+        try {
+            body.run();
+        } finally {
+            int depth = DATABASE_ALLOCATION.get() - 1;
+            if (depth <= 0) {
+                DATABASE_ALLOCATION.remove();
+            } else {
+                DATABASE_ALLOCATION.set(depth);
+            }
+        }
+    }
+
+    /**
+     * Refuse a tenant database write: a create outside the allocation funnel, or any
+     * column change at all on a stored record.
+     *
+     * @throws Violations {@code tenant_database_not_allocatable} or
+     *         {@code tenant_field_frozen} on the offending column
+     */
+    private static void checkDatabaseWrite(@NonNull Row row) {
+        Model model = Models.get(DatabaseModel.class);
+        Object idValue = row.has(DatabaseModel.ID.getName()) ? row.get(DatabaseModel.ID) : null;
+        Row stored = idValue != null ? model.findById(idValue) : null;
+
+        if (stored == null) {
+            if (DATABASE_ALLOCATION.get() <= 0) {
+                throw Violations.ofForm(
+                    CmsSupport.violationText("tenant_database_not_allocatable"));
+            }
+            return;
+        }
+
+        for (Field<?, ?> field : model.getSchema().getFields().values()) {
+            String name = field.getName();
+            if (DATABASE_TENANT_WRITABLE.contains(name) || DATABASE_DERIVED.contains(name)
+                    || !row.has(name)) {
+                continue;
+            }
+            if (!Objects.equals(row.get(name), stored.get(name))) {
+                throw Violations.ofField(name, row.get(name),
+                    CmsSupport.violationText("tenant_field_frozen"));
+            }
+        }
+    }
+
+    /**
+     * Attaching a database to a site injects that database's CREDENTIALS into that site's
+     * runtime, so it needs authority over BOTH records -- the two-sided
+     * {@code GameDomains.requireAuthority} shape, and for the same reason: a one-sided
+     * check turns a link row into a way to read a credential you were never granted (point
+     * your own site at my database) or to hand your database to a runtime you do not
+     * control (point my site at your database).
+     *
+     * Deliberately NOT a capability of its own: there is no join record to hold one on
+     * before it exists, and a third authority over a pair is a third authority that can
+     * disagree with the two it sits between.
+     *
+     * @throws Violations {@code tenant_site_not_managed} or the uniform database refusal
+     */
+    private static void requireLinkAuthority(@Nullable Object siteIdValue,
+                                             @Nullable Object databaseIdValue) {
+        AccessContext ctx = acting();
+        if (!(siteIdValue instanceof Integer siteId) || ctx == null || ctx.isAnonymous()
+                || !HohenheimAccess.canManageSite(ctx, siteId)) {
+            throw Violations.ofField(SiteDatabaseModel.SITE_ID.getName(), siteIdValue,
+                CmsSupport.violationText("tenant_site_not_managed"));
+        }
+        if (!(databaseIdValue instanceof Integer databaseId)
+                || !HohenheimAccess.hasDatabaseCapability(ctx, databaseId,
+                    HohenheimAccess.MANAGE)) {
+            throw HohenheimAccess.databaseRefusal();
         }
     }
 

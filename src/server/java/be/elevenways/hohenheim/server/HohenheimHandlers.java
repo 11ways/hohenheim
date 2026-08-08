@@ -767,10 +767,26 @@ public final class HohenheimHandlers {
 
         HohenheimEndpoints.DATABASES_BACKUP.setHandler(conduit -> {
             String name = conduit.getParameter(HohenheimEndpoints.DATABASE_NAME);
+            if (Models.get(DatabaseModel.class).find()
+                    .where(DatabaseModel.NAME.eq(name)).first() == null) {
+                // Absence answers exactly like refusal below -- see the note there.
+                conduit.notFound();
+                return null;
+            }
             DatabaseService.BackupDownload dump;
             try {
                 dump = databaseService.backupDownload(name);
+            } catch (Violations refused) {
+                // AIDEV-NOTE: absence and refusal are ONE answer here. The URL is keyed by
+                // NAME, so distinguishing them would turn this endpoint into an oracle
+                // over every other tenant's database names -- exactly what the /manage
+                // list scope refuses to leak. 404, never 403, never a redirect that says
+                // which panel the caller does not belong to.
+                conduit.notFound();
+                return null;
             } catch (IOException e) {
+                // A real failure for a caller who PASSED the gate (daemon down, no engine
+                // instance yet): they may know, so this stays the operator's redirect.
                 Blast.log("DB: backup of", name, "failed -", e.getMessage());
                 return redirectUntyped("/admin/databases");
             }
