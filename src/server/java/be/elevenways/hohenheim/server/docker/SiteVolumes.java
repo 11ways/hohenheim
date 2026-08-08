@@ -262,12 +262,17 @@ public final class SiteVolumes {
      * would mount a different volume than the release that replaced it -- the same defect
      * one generation later.
      *
-     * AIDEV-NOTE: it runs AFTER the release has written its own rows, and that ordering is
-     * load-bearing (measured, not assumed: healing during spec resolution was silently
-     * undone). {@code gatedSwap} flips the superseded row's role with the Row object it
-     * loaded BEFORE the spec was resolved, and {@code Models.save} writes the whole row --
-     * so a heal that ran first was clobbered by that stale settings map, reported as
-     * success, and left the rollback target pointing at the old volume.
+     * AIDEV-NOTE: the call sites used to have to run this AFTER the release wrote its own
+     * rows, and nothing enforced that ordering. {@code gatedSwap} flipped the superseded
+     * row's role with the Row object it had loaded BEFORE the spec was resolved, and
+     * {@code Models.save} writes every column present on a Row -- so a heal that ran
+     * first was clobbered by that stale settings map, reported success, and left the
+     * rollback target pointing at the old volume. FIXED AT THE ROOT 2026-08-08: the role
+     * flip is now a fenced single-column write ({@code InstanceOperationGuard.stampRole})
+     * and the remaining whole-row saves reload first ({@code SiteReleases.reload}), so
+     * no release write can carry a stale settings map back over this heal. The call sites
+     * stay where they are because that is where {@code desired} is known good, not
+     * because the order still matters.
      *
      * @param desired the release's resolved kind settings (its {@code volumes} map decides)
      * @return how many rows were rewritten

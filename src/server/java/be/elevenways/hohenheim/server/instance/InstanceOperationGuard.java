@@ -91,6 +91,42 @@ final class InstanceOperationGuard {
     }
 
     /**
+     * THE fenced runtime-role write ({@link #stamp}'s guard, assigning only the release
+     * role). Zero rows is the same hard fenced-out failure.
+     *
+     * AIDEV-NOTE: this exists because the release engine used to flip a role with
+     * {@code Models.save(row)}, and {@code Models.save} writes EVERY column present on
+     * the Row -- a row loaded from the database carries all of them, so the flip
+     * rewrote status, claim_fence and image_fingerprint back to whatever they were at
+     * load time. It silently undid the volume-name heal (the rollback target kept
+     * pointing at the old volume) and, worse, could rewind claim_fence, which is the
+     * one column the whole two-controller discipline depends on. A role transition is
+     * ONE column; write ONE column.
+     *
+     * @throws Violations {@code instance_fenced_out}
+     */
+    static void stampRole(@NonNull HostLeases leases, int instanceId, int serverId, long fence,
+                          @NonNull String role, @NonNull Object instanceName) {
+        int matched = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(instanceId))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .where(hostScope(serverId))
+            .where(Criteria.or(
+                InstanceModel.CLAIM_FENCE.isNull(),
+                InstanceModel.CLAIM_FENCE.lte(fence)))
+            .assign(InstanceModel.RUNTIME_ROLE, role)
+            .assign(InstanceModel.CLAIM_FENCE, fence)
+            .updateAll();
+        if (matched == 0) {
+            leases.fencedOut(serverId);
+            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
+                .withFilter("scope", "violations")
+                .withArg("name", String.valueOf(instanceName))
+                .withArg("server", ServerModel.nameOf(serverId)));
+        }
+    }
+
+    /**
      * The fenced image-identity write ({@link #stamp}'s guard, assigning only the
      * pinned fingerprint). Zero rows is the same hard fenced-out failure.
      *

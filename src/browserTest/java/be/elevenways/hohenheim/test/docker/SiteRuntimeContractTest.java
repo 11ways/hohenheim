@@ -6,7 +6,9 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.docker.SiteContainerKind;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
+import be.elevenways.hohenheim.server.docker.SiteVolumes;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
+import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
@@ -163,5 +165,87 @@ class SiteRuntimeContractTest {
             .as("step 5: the resource predicate shows the ordinary instance only")
             .extracting(row -> (String) row.get(InstanceModel.NAME))
             .containsExactly("contract-ordinary");
+    }
+
+    /**
+     * The release engine's WRITE DISCIPLINE, no daemon needed: a role transition may
+     * never carry the rest of a stale Row back to the database.
+     *
+     * The engine loads the serving row early (before a sandbox build that can take
+     * minutes), and everything that writes that row in between -- the volume-name heal,
+     * the fenced status stamp of a deploy -- used to be silently reverted by the
+     * role-flip's whole-row {@code Models.save}, while the operation reported success.
+     * This walks a row through exactly that interleaving and asserts the PERSISTED
+     * values, not a status.
+     */
+    @Test
+    void aRoleFlipNeverCarriesAStaleRowBackToTheDatabase() throws Exception {
+        int siteId = 998_003;
+        String legacyVolume = "instance-legacy-vol-data";
+        String siteVolume = SiteVolumes.volumeOf(siteId, "data");
+        int[] created = new int[1];
+
+        // 1. A serving release exists, holding the pre-fix (instance-keyed) volume name.
+        GeneratedRows.as(new GeneratedRows.Attribution(SiteInstances.SOURCE,
+                SiteModel.MODEL_ID.toString(), siteId), () -> {
+            Row row = Models.get(InstanceModel.class).createEmptyRow();
+            row.set(InstanceModel.NAME, "contract-flip");
+            row.set(InstanceModel.KIND, SiteContainerKind.ID.toString());
+            row.set(InstanceModel.SETTINGS, Map.of("image", "alpine",
+                "volumes", Map.of(legacyVolume, "/data")));
+            row.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
+            row.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
+            Models.get(InstanceModel.class).save(row);
+            created[0] = row.get(InstanceModel.ID);
+        });
+        int instanceId = created[0];
+
+        // 2. The engine's OWN reference to that row, taken before the spec is resolved.
+        //    Every column is present on it, which is what makes a later save a rewrite.
+        Row stale = Models.get(InstanceModel.class).findById(instanceId);
+        assertThat((String) stale.get(InstanceModel.RUNTIME_ROLE))
+            .as("step 2: the engine starts from a serving row")
+            .isEqualTo(InstanceModel.ROLE_SERVING);
+
+        // 3. While the release is still resolving its spec, two OTHER writers touch that
+        //    same record: the volume heal rewrites the stored name onto the site-keyed
+        //    spelling, and the deploy stamps a fenced status.
+        int healed = SiteVolumes.heal(siteId, Map.of("volumes", Map.of(siteVolume, "/data")));
+        assertThat(healed).as("step 3: the heal rewrote exactly this row").isEqualTo(1);
+        Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(instanceId))
+            .assign(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING)
+            .updateAll();
+
+        // 4. THE SWITCH: the engine flips the role through the production seam. No
+        //    GeneratedRows scope is needed (and none is claimed): the fenced write is a
+        //    set-based update, so the owned-row write guard -- a save-pipeline hook --
+        //    does not run. That is the same trade every other fenced outcome write makes.
+        new InstanceService().assignRuntimeRole(instanceId, InstanceModel.ROLE_RETIRED);
+
+        // 5. STATE, read back from the database: the role moved AND neither concurrent
+        //    write was lost. Before the fix, the persisted volume name was the stale
+        //    instance-keyed one and the status was back to 'stopped' -- with the release
+        //    reporting success and the rollback target pointing at an empty volume.
+        Row persisted = Models.get(InstanceModel.class).findById(instanceId);
+        assertThat((String) persisted.get(InstanceModel.RUNTIME_ROLE))
+            .as("step 5: the role transition landed").isEqualTo(InstanceModel.ROLE_RETIRED);
+        // Both surviving writes in ONE assertion: a pre-fix flip loses both, and a
+        // per-value assertion would only ever report whichever one it reached first.
+        assertThat(Map.of(
+                "volumes", storedVolumeNames(persisted),
+                "status", String.valueOf((Object) persisted.get(InstanceModel.STATUS))))
+            .as("step 5: every write made to the row between load and flip SURVIVED it")
+            .isEqualTo(Map.of(
+                "volumes", List.of(siteVolume),
+                "status", InstanceModel.STATUS_RUNNING));
+    }
+
+    private static List<String> storedVolumeNames(Row instance) {
+        Object settings = instance.get(InstanceModel.SETTINGS);
+        if (!(settings instanceof Map<?, ?> map) || !(map.get("volumes") instanceof Map<?, ?> vols)) {
+            return List.of();
+        }
+        return vols.keySet().stream().map(String::valueOf).toList();
     }
 }

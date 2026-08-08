@@ -346,6 +346,35 @@ public final class InstanceService {
         }
     }
 
+    /**
+     * THE release-role transition: a fenced SINGLE-COLUMN write, never a whole-row save.
+     *
+     * AIDEV-NOTE: deliberately does NOT go through {@link #resolve}. A role flip is
+     * control-plane bookkeeping that must not acquire preconditions it does not need --
+     * resolve() refuses a blank image and an unknown kind, and the switch half of a
+     * gated release cannot afford to fail on a spec question after the candidate is
+     * already taking traffic. It reads the host off the row and stamps under the host
+     * fence, so a stale controller's flip matches zero rows exactly like every other
+     * outcome write. No capability gate: the role is not a request-reachable verb, and
+     * the operation that owns it (a site release) gated itself at the site tier.
+     *
+     * @throws Violations {@code instance_not_found} or {@code instance_fenced_out}
+     */
+    public void assignRuntimeRole(int instanceId, @NonNull String role) {
+        Row row = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(instanceId))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .first();
+        if (row == null) {
+            throw Violations.ofForm(violationText("instance_not_found")
+                .withArg("id", instanceId));
+        }
+        int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
+        long fence = this.leases.requireFence(serverId);
+        InstanceOperationGuard.stampRole(this.leases, instanceId, serverId, fence, role,
+            String.valueOf((Object) row.get(InstanceModel.NAME)));
+    }
+
     /** Typed live status straight off the daemon; never throws. */
     public @NonNull InstanceStatus liveStatus(int instanceId) {
         Resolved resolved = resolve(instanceId);
