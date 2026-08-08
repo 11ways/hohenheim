@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.variable.SecretVariableType;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypeHandler;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypes;
@@ -77,11 +78,12 @@ public final class InstanceVariables {
      * model's owner hook re-checks); existing rows for the same key are replaced so
      * one key never answers twice. Secret values enter the encrypted carrier only.
      *
-     * @throws Violations {@code variable_key_required}, {@code variable_kind_unknown},
-     *         plus the model's carrier/owner invariants
+     * @throws Violations {@code instance_not_permitted}, {@code variable_key_required},
+     *         {@code variable_kind_unknown}, plus the model's carrier/owner invariants
      */
     public void setValue(@Nullable Integer instanceId, @Nullable Integer environmentId,
                          @NonNull String key, @NonNull String kind, @NonNull String value) {
+        requireVariableAuthority(instanceId);
         if (key.isBlank()) {
             throw Violations.ofField("key", key,
                 Microcopy.of("variable_key_required").withFilter("scope", "violations"));
@@ -121,10 +123,12 @@ public final class InstanceVariables {
     /**
      * Remove one direct value by key from an instance or an environment.
      *
+     * @throws Violations {@code instance_not_permitted}
      * @return whether a row existed for the key
      */
     public boolean removeValue(@Nullable Integer instanceId, @Nullable Integer environmentId,
                                @NonNull String key) {
+        requireVariableAuthority(instanceId);
         InstanceVariableModel model = Models.get(InstanceVariableModel.class);
         boolean removed = false;
         for (Row existing : rowsForKey(model, instanceId, environmentId, key)) {
@@ -132,6 +136,34 @@ public final class InstanceVariables {
             removed = true;
         }
         return removed;
+    }
+
+    /**
+     * THE capability gate on a direct variable write: {@code config} on the owning
+     * instance, asked on the SERVICE so every surface answers to it.
+     *
+     * AIDEV-NOTE: a variable write IS a config write, and this is the enforcement the
+     * automation API shipped without. {@link #applyToSettings} substitutes {@code {{KEY}}}
+     * into {@code command} and {@code cloud_init}, so a written variable becomes part of
+     * WHAT THE WORKLOAD RUNS at the next deploy -- and view/console/power all reach the
+     * same endpoint through InstanceApi's shared visibility resolver, which checks
+     * {@code view} alone. Requiring config moves no boundary: a config holder already
+     * rewrites {@code settings.command} through ManageInstanceResource, so this enforces
+     * the line HohenheimAccess.CONFIG already declares rather than drawing a new one. A
+     * separate {@code variables} verb was rejected for exactly that reason -- it would add
+     * a grant-matrix column carrying authority config already covers.
+     *
+     * AIDEV-NOTE: ENVIRONMENT-owned values (instanceId null) are deliberately NOT gated
+     * here. They hang off a project, not an instance, and there is no instance capability
+     * to ask about; PaasApi.visibleEnvironment (project membership AND an API key covering
+     * the instance vocabulary) is their gate, and EnvironmentVariableResource is admin-only.
+     *
+     * @throws Violations {@code instance_not_permitted}
+     */
+    private static void requireVariableAuthority(@Nullable Integer instanceId) {
+        if (instanceId != null) {
+            HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+        }
     }
 
     private static @NonNull List<Row> rowsForKey(@NonNull InstanceVariableModel model,

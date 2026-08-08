@@ -30,13 +30,21 @@ import java.util.Map;
  *
  * Three rules hold this file together, and each one is a rule about what is NOT here:
  *
- * 1. NO authorization decisions of its own. Power, snapshot and backup authority live in
- *    InstanceService / InstanceSnapshots / InstanceBackups behind
+ * 1. NO authorization decisions of its own. Power, snapshot, backup, console, log-tail,
+ *    device and variable authority live in InstanceService / InstanceSnapshots /
+ *    InstanceBackups / InstanceConsoles / InstanceDevices / InstanceVariables behind
  *    HohenheimAccess.requireOperationCapability, and creation authority lives in
  *    InstanceTemplates.createFromTemplate. A handler here that re-implemented any of them
  *    would be a second policy, and a second policy is how an API becomes a wider door
  *    than the UI it claims to mirror. The only check the handlers make themselves is the
  *    per-record VISIBILITY test, and that one is shared with the list scope.
+ *
+ *    AIDEV-NOTE: {@link #visibleInstance} checks {@code view} and NOTHING ELSE, by design
+ *    -- it answers "may you see this record", never "may you do this to it". Every
+ *    MUTATING handler below therefore has to reach a service that asks its own capability;
+ *    the variable and log lanes once did not, and a view-only delegate could write the
+ *    secrets that substitute into {@code command} at the next deploy. When adding a
+ *    handler here, name the service gate it rides or it does not ship.
  *
  * 2. NO existence oracle. "You may not touch this instance", "this instance is trashed"
  *    and "there is no such id" produce the byte-identical 404 that conduit.notFound()
@@ -274,7 +282,17 @@ public final class InstanceApi {
             }
             int instanceId = row.get(InstanceModel.ID);
             String key = ApiConduits.formValue(conduit, "key");
-            boolean removed = new InstanceVariables().removeValue(instanceId, null, key);
+            boolean removed;
+            try {
+                // AIDEV-NOTE: this lane alone used to run the service call OUTSIDE a
+                // Violations catch, so a typed refusal escaped the handler and came back
+                // as the framework's generic error render instead of this API's named
+                // refusal -- the same act, two different answer shapes, and the one that
+                // escaped carried resolved prose where every sibling carries the key.
+                removed = new InstanceVariables().removeValue(instanceId, null, key);
+            } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            }
             if (!removed) {
                 return ApiConduits.refusal(conduit, Violations.ofField("key", key,
                     ApiConduits.violationText("variable_not_found")));

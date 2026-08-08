@@ -111,6 +111,15 @@ public class DatabaseModel extends Model {
      * spelled, and the name stays usable as a container handle. Admin-reachable only today
      * (the databases panel is HohenheimPanel, not /manage), which is why this is a
      * containment fix rather than a tenant-boundary one.
+     *
+     * AIDEV-NOTE: still admin-reachable only -- DatabaseService's INSERT-only create
+     * (2026-08-08) did not change that, and this note's containment reasoning stands
+     * unaltered. What it DID change is that the name is now an identity a create cannot
+     * take over: the name is also the container handle (ControllerScope.KIND_DB), the
+     * backup directory and DatabaseInstances.dataVolumeOf's data volume, so a create that
+     * converged onto an existing record remounted that record's DATA under new
+     * credentials. The day tenant database allocation ships, per-owner namespacing of this
+     * name is the recorded direction and the refusal needs no change to follow it.
      */
     public static boolean isValidName(String name) {
         if (name == null || name.isEmpty() || name.length() > MAX_NAME_LENGTH) {

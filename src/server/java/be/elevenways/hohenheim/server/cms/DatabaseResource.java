@@ -154,17 +154,17 @@ public final class DatabaseResource extends RowResource {
             coerced.get("memory_limit_mb") instanceof Integer mb ? mb : null,
             coerced.get("cpu_limit") instanceof Double cpus ? cpus : null);
 
-        // The service persists the record itself (status=provisioning) and
-        // provisions the container in the background.
-        this.databaseService.createAsync(name, engine, image.isEmpty() ? null : image,
-            user, password, database, ephemeral, server, limits);
-
-
-        Row created = this.model().find().where(DatabaseModel.NAME.eq(name)).first();
-        if (created == null) {
-            throw new IllegalStateException("Provisioning did not create a record for '" + name + "'");
-        }
-        return rowKey(created);
+        // The service persists the record itself (status=provisioning) and provisions the
+        // container in the background. It REFUSES a name that is already taken
+        // (database_name_taken) rather than converging onto the existing record.
+        //
+        // AIDEV-NOTE: the returned row is the one the service inserted, not the answer to
+        // a re-query by name. The old code looked the name back up and called whatever it
+        // found "created" -- which, on the pre-fix upsert path, was how a colliding create
+        // reported success while it had actually overwritten someone else's database and
+        // handed its id back as the new record's.
+        return rowKey(this.databaseService.createAsync(name, engine,
+            image.isEmpty() ? null : image, user, password, database, ephemeral, server, limits));
     }
 
     /** Refuses while live sites still depend on the database's injected credentials. */

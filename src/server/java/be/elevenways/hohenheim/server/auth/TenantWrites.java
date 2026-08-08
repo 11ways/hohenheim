@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
@@ -178,13 +179,27 @@ public final class TenantWrites {
                 checkInstanceWrite(row);
             }
         });
+        InstanceVariableModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null && isTenantOriginated()) {
+                requireVariableConfig(instanceOwnerOf(row));
+            }
+        });
+        InstanceVariableModel.SCHEMA.addBeforeRemoveHook(context -> {
+            if (!isTenantOriginated()) {
+                return;
+            }
+            for (Row doomed : doomedRows(context)) {
+                requireVariableConfig(doomed.get(InstanceVariableModel.INSTANCE_ID));
+            }
+        });
         DnsRecordModel.SCHEMA.addBeforeRemoveHook(context -> {
             if (!isTenantOriginated()) {
                 return;
             }
             AccessContext ctx = acting();
             HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
-            for (Row doomed : doomedRecords(context)) {
+            for (Row doomed : doomedRows(context)) {
                 refuseForeignRecordType(doomed.get(DnsRecordModel.TYPE));
                 // Removing a row is authority over the row, so it asks the SAME question a
                 // write does -- minus the claim half, since a delete claims no new name. An
@@ -372,6 +387,57 @@ public final class TenantWrites {
         }
     }
 
+    // --- Instance variables ----------------------------------------------------------
+
+    /**
+     * The owning instance of a variable row a write is about to land, reading the stored
+     * row when the submit carries no owner column (a partial update).
+     */
+    private static @Nullable Object instanceOwnerOf(@NonNull Row row) {
+        if (row.has(InstanceVariableModel.INSTANCE_ID.getName())) {
+            return row.get(InstanceVariableModel.INSTANCE_ID);
+        }
+        Object id = row.has(InstanceVariableModel.ID.getName())
+            ? row.get(InstanceVariableModel.ID) : null;
+        Row stored = id == null ? null
+            : Models.get(InstanceVariableModel.class).findById(id);
+        return stored == null ? null : stored.get(InstanceVariableModel.INSTANCE_ID);
+    }
+
+    /**
+     * Refuse a tenant write to an INSTANCE-owned variable value without {@code config}
+     * on that instance.
+     *
+     * AIDEV-NOTE: this is the model-layer half of the same decision
+     * InstanceVariables.requireVariableAuthority makes on the service. Both exist on
+     * purpose: the service gate is the one that produces the refusal on the funnels, and
+     * this one holds when a future surface writes the row directly -- which is precisely
+     * how the /api/v1 variable lane came to be the copy that lost the check. A variable
+     * substitutes into {@code command}/{@code cloud_init} at deploy, so authoring one is
+     * authoring what runs, which is what {@link HohenheimAccess#CONFIG} means.
+     *
+     * AIDEV-NOTE: ENVIRONMENT-owned rows (a null instance owner) pass here. They belong to
+     * a project, hold no instance capability to ask about, and are gated by
+     * PaasApi.visibleEnvironment; EnvironmentVariableResource is admin-only. Do not
+     * "helpfully" refuse them -- that would break the shipped project env lane while
+     * protecting nothing this hook can decide.
+     *
+     * @throws Violations {@code instance_not_permitted}, the SAME uniform refusal
+     *         requireOperationCapability raises, so the pair is never a capability oracle
+     */
+    private static void requireVariableConfig(@Nullable Object instanceId) {
+        if (instanceId == null) {
+            return;
+        }
+        AccessContext ctx = acting();
+        if (ctx == null || ctx.isAnonymous()
+                || !ctx.hasCapability(InstanceModel.MODEL_ID, instanceId,
+                    HohenheimAccess.CONFIG)) {
+            throw Violations.ofForm(Microcopy.of("instance_not_permitted")
+                .withFilter("scope", "violations"));
+        }
+    }
+
     // --- DNS records -----------------------------------------------------------------
 
     /**
@@ -517,13 +583,13 @@ public final class TenantWrites {
     }
 
     /**
-     * The rows a criteria delete is about to remove.
+     * The rows a criteria delete is about to remove, whatever model it targets.
      *
      * AIDEV-NOTE: a remove context carries CRITERIA, not rows -- the same re-query idiom
      * GeneratedDnsRecords.doomedRows uses, and for the same reason: enforcing on the
      * resource's delete method would leave every criteria delete outside the guard.
      */
-    private static @NonNull List<Row> doomedRecords(@NonNull RemoveFromDatasource context) {
+    private static @NonNull List<Row> doomedRows(@NonNull RemoveFromDatasource context) {
         Model model = context.getModel();
         QueryContext queryContext = context.getQueryContext();
         if (model == null || queryContext == null) {
