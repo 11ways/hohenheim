@@ -917,6 +917,21 @@ public class AcmeService {
         return normalized;
     }
 
+    /**
+     * The ACME directory every order and account registration goes to.
+     *
+     * @param staging whether the Let's Encrypt staging directory is asked for; ignored
+     *                when an explicit directory URL is configured
+     */
+    static String directoryUri(boolean staging) {
+        String configured = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Ssl.ACME_DIRECTORY_URL);
+        if (configured != null && !configured.isBlank()) {
+            return configured.trim();
+        }
+        return staging ? "acme://letsencrypt.org/staging" : "acme://letsencrypt.org";
+    }
+
     private synchronized Account ensureAccount(String normalizedEmail) throws Exception {
         Account existing = accounts.get(normalizedEmail);
         if (existing != null) return existing;
@@ -924,9 +939,7 @@ public class AcmeService {
         boolean staging = Boolean.TRUE.equals(
             HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_STAGING));
 
-        String serverUri = staging
-            ? "acme://letsencrypt.org/staging"
-            : "acme://letsencrypt.org";
+        String serverUri = directoryUri(staging);
 
         String email = normalizedEmail.isEmpty()
             ? HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL)
