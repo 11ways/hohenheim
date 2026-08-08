@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -624,6 +625,74 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         } finally {
             Models.get(InstanceTemplateModel.class)
                 .delete(introduced.get(InstanceTemplateModel.ID));
+        }
+    }
+
+    /**
+     * COUNTERFACTUAL: the Console tab answers to {@code console}, not to the view scope
+     * that decides whether the RECORD is visible.
+     *
+     * The tab does two things a view-only delegate must not reach: it fronts the live
+     * terminal socket (whose handshake demands console) and it renders the RETAINED
+     * console episodes straight out of InstanceLogModel. The second one shipped ungated,
+     * so the page handed out the very output the socket refused -- which is why the
+     * assertions below are on the stored TEXT and not on the tab's status alone.
+     */
+    @Test
+    @Order(9)
+    void theConsoleTabAnswersToConsoleAndNotToTheViewScope() throws Exception {
+        int consoleInstanceId = instance(PREFIX + "console-scope");
+        Model logs = Models.get(InstanceLogModel.class);
+        String marker = "RETAINED-CONSOLE-" + PREFIX + "secret-line";
+        Row log = logs.createEmptyRow();
+        log.set(InstanceLogModel.INSTANCE_ID, consoleInstanceId);
+        log.set(InstanceLogModel.HANDLE, PREFIX + "console-handle");
+        log.set(InstanceLogModel.LOG_TEXT, marker);
+        log.set(InstanceLogModel.LINE_COUNT, 1);
+        log.set(InstanceLogModel.SAVED_AT, Instant.now());
+        logs.save(log);
+        Integer logId = log.get(InstanceLogModel.ID);
+        String tabUrl = "/manage/instances/" + consoleInstanceId + "/page/console";
+
+        try {
+            // 1. A VIEW-only delegate. The record itself is genuinely visible, so every
+            //    refusal below is about the ACT and not about the record being hidden.
+            RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, consoleInstanceId,
+                HohenheimAccess.VIEW, true);
+            assertThat(tenantGet("/manage/instances/" + consoleInstanceId).statusCode())
+                .as("step 1: the view delegate really can open the record")
+                .isEqualTo(200);
+
+            // 2. THE ATTACK: the tab itself. zenit-cms 404s a slug the page does not
+            //    offer, so hiding it IS the gate on the route.
+            HttpResponse<String> tab = tenantGet(tabUrl);
+            assertThat(tab.statusCode())
+                .as("step 2: a view-only delegate has no console tab").isEqualTo(404);
+            assertThat(tab.body())
+                .as("step 2: and no retained console output leaked with the refusal")
+                .doesNotContain(marker);
+
+            // 3. And the deep link that selects a stored episode by id -- the actual leak
+            //    shape, since the listing alone would only name the episodes.
+            HttpResponse<String> deepLink = tenantGet(tabUrl + "?log=" + logId);
+            assertThat(deepLink.statusCode())
+                .as("step 3: selecting a stored log by id is refused too").isEqualTo(404);
+            assertThat(deepLink.body())
+                .as("step 3: the workload's captured output never reaches a view delegate")
+                .doesNotContain(marker);
+
+            // 4. POSITIVE ANCHOR: the console holder gets the tab AND the stored text.
+            //    Without this the test would pass on a tab that is simply broken.
+            RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, consoleInstanceId,
+                HohenheimAccess.CONSOLE, true);
+            HttpResponse<String> allowed = tenantGet(tabUrl + "?log=" + logId);
+            assertThat(allowed.statusCode())
+                .as("step 4: the console delegate opens the tab").isEqualTo(200);
+            assertThat(allowed.body())
+                .as("step 4: and reads the retained episode it is entitled to")
+                .contains(marker);
+        } finally {
+            logs.find().where(InstanceLogModel.INSTANCE_ID.eq(consoleInstanceId)).delete();
         }
     }
 

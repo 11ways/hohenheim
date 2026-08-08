@@ -241,9 +241,19 @@ public final class InstanceConsoles {
      * too (the daemon keeps its log); a workload the daemon cannot answer for is a
      * named refusal, never an empty success.
      *
-     * @throws Violations {@code console_unsupported}, {@code logs_unavailable}
+     * AIDEV-NOTE: this asks for CONSOLE, exactly as the streaming socket does at
+     * handshake (InstanceConsoleHandler) -- it hands back the SAME captured output. It
+     * shipped ungated while /api/v1/instances/{id}/logs resolved its record through
+     * InstanceApi's view-only visibility helper, which made the one-shot read a wider
+     * door than the stream: a view-only delegate got the console the WebSocket refused
+     * them. Redaction below is not a substitute for the gate; it only keeps stored
+     * secrets out of output the caller is already entitled to.
+     *
+     * @throws Violations {@code instance_not_permitted}, {@code console_unsupported},
+     *         {@code logs_unavailable}
      */
     public static @NonNull String tail(int instanceId, int lines) {
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONSOLE);
         InstanceService.Resolved resolved = new InstanceService().resolve(instanceId);
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
             throw Violations.ofForm(Microcopy.of("console_unsupported")

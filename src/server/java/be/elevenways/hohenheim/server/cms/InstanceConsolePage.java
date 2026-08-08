@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -35,6 +36,23 @@ public final class InstanceConsolePage implements RecordScopedPage<Row>, Termina
     @Override public @NonNull Microcopy label() { return Microcopy.of("console").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("terminal"); }
+
+    /**
+     * The tab exists only for a principal that may actually attach to THIS record's
+     * console -- the per-record half of the hide-and-enforce pair (zenit-cms 404s an
+     * unoffered slug, so this is a gate on the route as well as on the nav).
+     *
+     * AIDEV-NOTE: this shipped ungated, which made the page a wider door than the socket
+     * it fronts: the live terminal's handshake demands CONSOLE (InstanceConsoleHandler)
+     * and the command form's POST demands it too, but {@link #addStoredLogs} reads
+     * InstanceLogModel directly and rendered every RETAINED console episode to anyone the
+     * resource's view-only scope let through. Same output, same capability.
+     */
+    @Override
+    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return HohenheimAccess.hasInstanceCapability(
+            accessContext, record.get(InstanceModel.ID), HohenheimAccess.CONSOLE);
+    }
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit,

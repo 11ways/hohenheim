@@ -13,6 +13,8 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -113,7 +115,7 @@ public class DatabaseService extends DatasourceScoped {
                                              String user, String password, String database,
                                              boolean ephemeral, String serverName,
                                              ResourceLimits limits) throws IOException {
-        upsertRecord(name, engine, image, user, password, database, ephemeral,
+        insertRecord(name, engine, image, user, password, database, ephemeral,
             serverName, limits, STATUS_PROVISIONING);
         try {
             ManagedDatabase.Connection connection = provisionRuntime(name, engine, user,
@@ -176,9 +178,10 @@ public class DatabaseService extends DatasourceScoped {
     }
 
     /** Provision asynchronously on the local host; see the server-aware overload. */
-    public void createAsync(String name, ManagedDatabase.Engine engine, String image,
-                            String user, String password, String database, boolean ephemeral) {
-        createAsync(name, engine, image, user, password, database, ephemeral, ServerService.LOCAL);
+    public Row createAsync(String name, ManagedDatabase.Engine engine, String image,
+                           String user, String password, String database, boolean ephemeral) {
+        return createAsync(name, engine, image, user, password, database, ephemeral,
+            ServerService.LOCAL);
     }
 
     /**
@@ -186,18 +189,28 @@ public class DatabaseService extends DatasourceScoped {
      * background, flipping the status to active or failed when done -- so a slow image pull (or a
      * remote SSH round-trip) doesn't block the request.
      */
-    public void createAsync(String name, ManagedDatabase.Engine engine, String image,
-                            String user, String password, String database, boolean ephemeral,
-                            String serverName) {
-        createAsync(name, engine, image, user, password, database, ephemeral, serverName,
+    public Row createAsync(String name, ManagedDatabase.Engine engine, String image,
+                           String user, String password, String database, boolean ephemeral,
+                           String serverName) {
+        return createAsync(name, engine, image, user, password, database, ephemeral, serverName,
             ResourceLimits.none());
     }
 
-    /** Async create with optional container resource caps. */
-    public void createAsync(String name, ManagedDatabase.Engine engine, String image,
-                            String user, String password, String database, boolean ephemeral,
-                            String serverName, ResourceLimits limits) {
-        upsertRecord(name, engine, image, user, password, database, ephemeral,
+    /**
+     * Async create with optional container resource caps.
+     *
+     * AIDEV-NOTE: this RETURNS the row it inserted. Callers used to re-query by name to
+     * find out what they had just created, which is an inference and not an observation:
+     * on the pre-fix upsert path that lookup happily handed back somebody ELSE's record
+     * and reported it as "created". Return what you wrote.
+     *
+     * @throws Violations {@code database_name_taken}
+     * @return the persisted record, already stored as {@code provisioning}
+     */
+    public Row createAsync(String name, ManagedDatabase.Engine engine, String image,
+                           String user, String password, String database, boolean ephemeral,
+                           String serverName, ResourceLimits limits) {
+        Row created = insertRecord(name, engine, image, user, password, database, ephemeral,
             serverName, limits, STATUS_PROVISIONING);
         PROVISION_EXECUTOR.submit(() -> {
             try {
@@ -208,19 +221,44 @@ public class DatabaseService extends DatasourceScoped {
                 Blast.log("DB: provisioning failed for", name, "-", e.getMessage());
             }
         });
+        return created;
     }
 
-    /** @return the persisted record's id, so provisioning can label its resources */
-    private Integer upsertRecord(String name, ManagedDatabase.Engine engine, String image, String user,
-                                 String password, String database, boolean ephemeral, String serverName,
-                                 ResourceLimits limits, String status) {
+    /**
+     * Persist a BRAND NEW database record, refusing a name that is already taken.
+     *
+     * AIDEV-NOTE: this was a find-by-name-then-overwrite ("upsertRecord"), and that made
+     * create a SEIZURE primitive. {@code M015_CreateManagedDatabases} declares
+     * {@code unique("name")}, but the index was never consulted because the write was an
+     * UPDATE: creating "app-db" when one existed silently rewrote the victim's engine,
+     * image, user, password and host, and {@link DatabaseInstances#dataVolumeOf} keys the
+     * data volume on the record's NAME, so the following provision remounted the VICTIM'S
+     * DATA under attacker-chosen credentials while the UI reported a successful create.
+     * Admin-only today, so it read as an operator typo silently redeploying a production
+     * database; it becomes cross-tenant data seizure the day tenant database allocation
+     * ships. Neither create caller ever wanted upsert semantics -- there were exactly two,
+     * both create lanes -- so there is no second entry point to preserve. A retry after a
+     * FAILED provision is now an explicit destroy-then-create, not an accidental converge.
+     *
+     * AIDEV-NOTE: the refusal is on the stored name verbatim, so future per-owner
+     * namespacing needs no change here: whatever spelling becomes the record's name is the
+     * one this refuses to collide with.
+     *
+     * @throws Violations {@code database_name_taken}
+     * @return the row that was created
+     */
+    private Row insertRecord(String name, ManagedDatabase.Engine engine, String image, String user,
+                             String password, String database, boolean ephemeral, String serverName,
+                             ResourceLimits limits, String status) {
         return query(() -> {
             DatabaseModel model = model();
-            Row row = model.findByName(name);
-            if (row == null) {
-                row = model.createEmptyRow();
-                row.set(DatabaseModel.NAME, name);
+            if (model.findByName(name) != null) {
+                throw Violations.ofField(DatabaseModel.NAME.getName(), name,
+                    Microcopy.of("database_name_taken").withFilter("scope", "violations")
+                        .withArg("name", name));
             }
+            Row row = model.createEmptyRow();
+            row.set(DatabaseModel.NAME, name);
             row.set(DatabaseModel.ENGINE, engine.token());
             row.set(DatabaseModel.IMAGE, image);
             row.set(DatabaseModel.DB_USER, user);
@@ -232,7 +270,7 @@ public class DatabaseService extends DatasourceScoped {
             row.set(DatabaseModel.STATUS, status);
             row.set(DatabaseModel.SERVER_ID, ServerModel.canonicalServerId(serverName));
             model.save(row);
-            return row.get(DatabaseModel.ID);
+            return row;
         });
     }
 

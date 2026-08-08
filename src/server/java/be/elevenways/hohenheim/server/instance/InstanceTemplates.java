@@ -254,9 +254,15 @@ public final class InstanceTemplates {
         instances.save(instance);
         int instanceId = instance.get(InstanceModel.ID);
 
+        // AIDEV-NOTE: ownership is planted BEFORE the variable and file writes, not after.
+        // Those writes are per-record authored content and answer to the record's own
+        // capabilities (TenantWrites gates instance variables on `config`), so a tenant
+        // create that granted itself manage only at the end refused its OWN template
+        // variables halfway through. The creator is the owner from the moment the row
+        // exists; nothing between the save and here reads the grant.
+        grantCreatorManage(instanceId, ctx);
         this.variables.writeForInstance(instanceId, declaredVariables(templateId), coerced);
         copyFiles(templateId, instanceId);
-        grantCreatorManage(instanceId, ctx);
         return instanceId;
     }
 
