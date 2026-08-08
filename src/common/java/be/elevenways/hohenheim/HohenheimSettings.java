@@ -784,6 +784,29 @@ public class HohenheimSettings {
                 + "Instance Quota record overrides this. 0 or less means NO cap; usage "
                 + "is counted either way")
             .build();
+
+        public static final SettingDefinition<Integer> MAX_SITES_PER_OWNER = GROUP
+            .buildSetting("max_sites_per_owner", Integer.class)
+            .defaultValue(0)
+            .label("Max sites per owner")
+            .description("Default cap on the number of live sites one owner may hold. "
+                + "Counted per site RECORD, not per container: eight of the eleven site "
+                + "types run no workload at all, so the instance cap cannot bound them. "
+                + "A per-owner Instance Quota record overrides this. 0 or less means NO "
+                + "cap; usage is counted either way")
+            .build();
+
+        public static final SettingDefinition<Integer> MAX_DATABASES_PER_OWNER = GROUP
+            .buildSetting("max_databases_per_owner", Integer.class)
+            .defaultValue(0)
+            .label("Max managed databases per owner")
+            .description("Default cap on the number of managed databases one owner may "
+                + "hold. This is charged ON TOP of the instance slot the engine container "
+                + "already spends -- an instance slot is a workload slot an owner also "
+                + "spends on game servers and stacks, so it cannot express a database "
+                + "count. A per-owner Instance Quota record overrides this. 0 or less "
+                + "means NO cap; usage is counted either way")
+            .build();
     }
 
     // --- Per-HOST memory capacity (the placement side of the same ledger) ---

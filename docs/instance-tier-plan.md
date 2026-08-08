@@ -103,6 +103,29 @@ sweep that deleted console episodes still being written to, and the hardcoded AC
 directory. No assumption gate was REMOVED; the cross-cutting `@Tag`-separated live
 lane remains open and is now safer to enforce.
 
+STATUS (2026-08-08, quota-dimension wave -- supersedes the count of blockers in the
+block above, not its rule). BOTH remaining clauses are closed, and both were missing
+CAPABILITIES rather than coverage gaps:
+
+- Pterodactyl item 11, the per-owner MEMORY budget (M088). An owner is charged for
+  every live workload at the memory its driver actually caps it to -- its declared
+  `memory_limit_mb`, else its KIND's declared footprint -- so the budget cannot read
+  empty while a host fills, and `charge == cap` holds because that number is the one
+  handed to the cgroup / VM. This is exactly the delta-reserving path Phase 3 warned
+  would be needed "the moment MEMORY becomes a dimension"; the CMS update submit
+  reserves and releases the difference.
+- Coolify item 12, per-owner SITE and managed-DATABASE counts (M089). Counted per
+  RECORD, because eight of eleven site types run no container and a managed database
+  costs a workload slot an owner also spends elsewhere. The database count was
+  verified NOT redundant with the engine container's instance slot rather than
+  assumed either way.
+
+Both are transactional reservations on the write funnel (never a create-surface
+boolean), every release path is proven including the two that fire no remove hook,
+and each gate has a reverted-and-observed counterfactual. The 191-char bucket fold,
+the override/default limit rule and the named refusal now live once, in
+`server/quota/OwnerQuota`, instead of once per dimension.
+
 ### Coolify / Dokploy-class PaaS
 
 The existing site, git deployment, database and stack tiers are the foundation,
@@ -1972,6 +1995,16 @@ block is what the code does; amend the prose, do not code against it.
     becomes a dimension, the CMS update submit
     (`ResourcePageEndpoints.updateRowInScope` -> `Model.save`) is a
     consumption-increasing path and must reserve deltas too.
+  - **STATUS 2026-08-08 (quota-dimension wave):** five of the six dimensions this
+    bullet listed as out of scope are now wired, and the warning above was RIGHT.
+    Memory (M088) is a per-owner budget charged at the enforced cap, and its
+    live-row-stays-live branch reserves or releases the DELTA on exactly the CMS
+    update path named here; disk and extra NICs landed earlier (`InstanceDeviceQuota`,
+    `InstanceRootDiskQuota`); sites and databases landed with M089
+    (`SiteQuota`/`DatabaseQuota`). Still out of scope, deliberately: CPU (timeshared,
+    overcommit degrades rather than OOM-kills, so nothing enforces a booking) and
+    ports (the port LEDGER already refuses collisions; a per-owner count is not the
+    scarce thing).
 - **Container hardening is ZERO.** No `CapDrop`, `SecurityOpt`,
   `no-new-privileges`, `Privileged`, `UsernsMode`, `ReadonlyRootfs` or
   `PidsLimit` anywhere in any non-test file. Every container hohenheim runs

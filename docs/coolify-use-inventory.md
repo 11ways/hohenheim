@@ -45,10 +45,10 @@ Thirteen numbered clauses, plus three argued rejections and one cross-reference:
 
 | verdict | count | items |
 | --- | --- | --- |
-| IMPLEMENTED | 10 | 1, 2, 4, 6, 7, 8, 9, 10, 11, 13 |
-| PARTIAL | 3 | 3, 5, 12 |
+| IMPLEMENTED | 11 | 1, 2, 4, 6, 7, 8, 9, 10, 11, 12, 13 |
+| PARTIAL | 2 | 3, 5 |
 | REJECTED | 3 | A (compose runtime), C (large service marketplace), D (multi-server orchestration) |
-| OPEN | 0 as a row | two OPEN SLICES remain, named inside rows: site/database count quotas (12), the CLI test wiring (13) |
+| OPEN | 0 as a row | ONE OPEN SLICE remains, named inside a row: the CLI test wiring (13). Item 12's site/database count quotas CLOSED 2026-08-08 |
 | CLAIMED | 0 sub-verdicts | ACME acquisition (item 9) moved CLAIMED -> IMPLEMENTED 2026-08-08; Gitea (item 3) did the same |
 
 Counts updated 2026-08-08: items 2 and 10 moved PARTIAL -> IMPLEMENTED when the
@@ -638,8 +638,10 @@ at `:28-42`), release operations (`model/ReleaseOperationModel.java:117`
 
 ## 12. Quotas
 
-**PARTIAL.** Instance count and disk GB are enforced and proven hermetically.
-Per-owner caps on SITES and on the NUMBER OF MANAGED DATABASES do not exist.
+**IMPLEMENTED as of 2026-08-08** (was PARTIAL: no site or database count). Instance
+count, instance MEMORY, disk GB, extra NICs, SITES and managed DATABASES are all
+per-owner dimensions on one transactional ledger -- see the STATUS block at the end
+of this item.
 
 - Instance count: `server/instance/InstanceQuota.java:66`, bucket prefix at
   `:69`. Test `src/browserTest/java/be/elevenways/hohenheim/test/instance/InstanceQuotaTest.java:86`
@@ -663,6 +665,52 @@ not expressible.
 of scope". Disk IS enforced, with a passing test. The docblock was stale in the
 conservative direction, which is the safer direction but still misleads an
 auditor counting quota dimensions.
+
+**STATUS 2026-08-08: DONE, and the row moves PARTIAL -> IMPLEMENTED.** Both counts
+exist as transactional reservations on the write funnel, not as surface checks.
+
+- Code: `src/server/java/be/elevenways/hohenheim/server/quota/SiteQuota.java:51`
+  and `DatabaseQuota.java:51`, both over the shared
+  `server/quota/OwnerQuota.java` (the one owner of the bucket FOLD, the
+  override/default limit rule and the named refusal). Caps at
+  `InstanceQuotaModel.java:89` (`MAX_SITES`) and `:96` (`MAX_DATABASES`),
+  settings `hohenheim.quota.max_sites_per_owner`
+  (`HohenheimSettings.java:788`) and `max_databases_per_owner` (`:799`),
+  charged-bucket stamps `SiteModel.QUOTA_BUCKET` / `DatabaseModel.QUOTA_BUCKET`,
+  migration `M089_SiteAndDatabaseQuotas` (columns + a heal that seeds the
+  existing population), installed in `HohenheimWriteHooks`, both caps on the
+  admin form (`cms/InstanceQuotaResource.java`). **[code]**
+- Test: `src/browserTest/java/be/elevenways/hohenheim/test/quota/SiteAndDatabaseQuotaTest.java:81`
+  and `:180` -- hermetic, 0 skipped. Sites: a CONTAINERLESS proxy site still
+  spends a slot (the whole point), two racing creates through the real
+  `/admin/sites/new` submit cannot both spend the last one (state: one live row,
+  `used == limit`), the loser gets the named `site_quota_reached`, the trash write
+  `SiteResource.deleteRow` performs hands the slot back, the freed slot admits
+  exactly one replacement, reviving a trashed site over the cap is refused, and the
+  hard-delete pairing releases too. Databases: the dimension has its own bucket
+  namespace, a record spends a slot and is stamped, an over-cap create is refused
+  by name with NOTHING persisted while the instance cap is wide open, the hard
+  delete (the only release lane -- databases have no `deleted_at`) hands the slot
+  back, and the freed slot admits a new allocation. **[test]**
+
+**IS A SEPARATE DATABASE COUNT NEEDED? YES, and the instance charge was verified
+rather than assumed.** `TenantDatabases.allocate` -> `DatabaseInstances
+.reserveEngineRow` really does charge the engine container to the DATABASE's owner
+(the `ce8ccb5` attribution), so a database already costs one instance slot. That
+does not make a database count redundant: an instance slot is a WORKLOAD slot the
+same owner also spends on game servers, stacks and site containers, so "three
+databases per tenant" cannot be expressed through it at any cap -- and a database
+carries costs the instance count knows nothing about (credentials, a data volume,
+backups, a restore surface). The two are charged together and both must fit.
+
+**ONE HONEST LIMIT of the site count today:** the only lane that creates a site is
+the ADMIN panel (`ManageSiteResource.creatable()` is false and the PaaS API has no
+site create), so today every site charges the operator bucket. The gate is on the
+write funnel anyway, which is the point: the tenant lane that arrives later
+inherits it with no second copy of the rule, and it already uses the same
+`HohenheimAccess.creationOwnerSubjects` derivation the charge does. The inventory's
+original wording -- "so a tenant can create unbounded sites" -- was WRONG about
+today: a tenant cannot create a site at all.
 
 ## 13. A supported API or CLI for automation
 
@@ -795,6 +843,11 @@ Value against effort, with prerequisites, for the PaaS claim specifically.
    "five sites, three databases" is not expressible, and a database only charges
    an instance slot indirectly. Effort: low-medium on the existing ledger.
    Prerequisite: none.
+   **DONE 2026-08-08** -- both dimensions on the same ledger (M089, `SiteQuota`,
+   `DatabaseQuota`, the shared `OwnerQuota`), each with a race, a named refusal and
+   every release path proven, and the database count argued NOT redundant with the
+   instance slot its engine spends. Kept in place with its number: the ranking is
+   history, not a worklist. See item 12's STATUS block.
 6. **Git provider provisioning: deploy keys and webhook registration** (item 3).
    Value: medium -- it converts connecting a repository from a manual paste into a
    flow, which is most of Coolify's perceived polish. Effort: medium per provider.
@@ -952,12 +1005,23 @@ coverage before they got it. A verdict wrong about what is closed is exactly how
 real gap gets ignored -- which is the reason this document exists. The original text
 is kept below it as history.
 
-**Current standing: ONE clause of the minimum claim is still unmet.**
+**VERDICT SUPERSEDED AGAIN 2026-08-08 (third block of the day), and this one moves
+the standing rather than only correcting it.**
 
-- item 12, quotas, cannot express a site or database count. This is the only
-  remaining blocker, and it is a missing capability rather than a coverage gap.
+**Current standing: NO clause of the minimum claim is unmet.** The last one, item
+12's site and database counts, closed with M089 -- two transactional dimensions on
+the existing ledger, each proven against a race, a named refusal and every release
+path, plus the argued finding that a database count is NOT redundant with the
+instance slot its engine container spends. One limitation is stated in that row and
+not hidden here: sites can only be created by an admin today, so the site cap
+currently binds the operator bucket; the gate lives on the write funnel so the
+tenant lane inherits it.
 
 Closed since the original verdict, each with a dated STATUS block in its own row:
+
+- item 12, quotas: CLOSED 2026-08-08 -- per-owner SITE and managed-DATABASE counts
+  (`SiteQuota`, `DatabaseQuota`, `OwnerQuota`, M089), beside the per-owner MEMORY
+  budget that closed the Pterodactyl inventory's last blocker the same day. **[test]**
 
 - item 2, build isolation: FIXED `5d3a0ed` -- both lanes name their boundary and
   neither receives the workload's runtime credentials. **[test]**

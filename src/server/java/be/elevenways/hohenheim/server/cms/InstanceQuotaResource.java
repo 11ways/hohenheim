@@ -33,6 +33,8 @@ public final class InstanceQuotaResource extends RowResource {
         .add(InstanceQuotaModel.MAX_MEMORY_MB)
         .add(InstanceQuotaModel.MAX_DISK_GB)
         .add(InstanceQuotaModel.MAX_NICS)
+        .add(InstanceQuotaModel.MAX_SITES)
+        .add(InstanceQuotaModel.MAX_DATABASES)
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -41,6 +43,8 @@ public final class InstanceQuotaResource extends RowResource {
         .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_MEMORY_MB).build())
         .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_DISK_GB).build())
         .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_NICS).build())
+        .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_SITES).build())
+        .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_DATABASES).build())
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_quota"); }

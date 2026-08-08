@@ -108,6 +108,18 @@ public class SiteModel extends Model {
     public static final StringField SECURITY_REPORT_TOKEN = SCHEMA.addField(
         StringField.builder().name("security_report_token").secret().encrypted().build());
 
+    /**
+     * The owner site-count bucket this record's reservation was charged to, stamped by
+     * SiteQuota at the write that took it.
+     *
+     * AIDEV-NOTE: bookkeeping of the reservation, NEVER an ownership authority -- ownership
+     * stays grant-derived (the InstanceModel.QUOTA_BUCKET note verbatim). Releasing against
+     * the CHARGED bucket rather than the current derivation is what keeps the counts exact
+     * when grants move a record between owners.
+     */
+    public static final StringField QUOTA_BUCKET = SCHEMA.addField(
+        StringField.builder().name("quota_bucket").filterable(false).build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());

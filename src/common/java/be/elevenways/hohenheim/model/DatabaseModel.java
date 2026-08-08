@@ -95,6 +95,14 @@ public class DatabaseModel extends Model {
         .label(HohenheimFormCopy.label("server"))
         .help(HohenheimFormCopy.help("server"))
         .build());
+    /**
+     * The owner database-count bucket this record's reservation was charged to, stamped by
+     * DatabaseQuota at the write that took it; bookkeeping only, never an ownership
+     * authority (the InstanceModel.QUOTA_BUCKET note applies unchanged).
+     */
+    public static final StringField QUOTA_BUCKET = SCHEMA.addField(
+        StringField.builder().name("quota_bucket").filterable(false).build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

@@ -16,16 +16,17 @@ import be.elevenways.zenit.common.validation.Violations;
  * Per-owner quota overrides: one row per packed manage-grant subject set (the
  * DatabaseModel.MEMORY_LIMIT_MB precedent -- real nullable columns, never
  * settings-map keys), each consulted by its reserve hook ahead of the matching
- * {@code hohenheim.quota.*_per_owner} default. FOUR dimensions:
- * {@link #MAX_INSTANCES}, {@link #MAX_MEMORY_MB}, {@link #MAX_DISK_GB} and
- * {@link #MAX_NICS}.
+ * {@code hohenheim.quota.*_per_owner} default. SIX dimensions:
+ * {@link #MAX_INSTANCES}, {@link #MAX_MEMORY_MB}, {@link #MAX_DISK_GB},
+ * {@link #MAX_NICS}, {@link #MAX_SITES} and {@link #MAX_DATABASES}.
  *
  * AIDEV-NOTE: the table is still called {@code instance_quotas} and the model is still
  * called InstanceQuota, and both names are now narrower than the thing: this is THE
- * per-owner quota row for every dimension hohenheim rations, instances included. One row
- * per owner is the point -- an operator sets a tenant's whole budget on one form instead of
- * hunting three tables -- so the alternative was a second override table with the same key
- * and the same semantics, which is worse than a historical name. Do not add a parallel one.
+ * per-owner quota row for every dimension hohenheim rations -- instances, their memory,
+ * their disks and NICs, SITES and managed DATABASES. One row per owner is the point -- an
+ * operator sets a tenant's whole budget on one form instead of hunting three tables -- so
+ * the alternative was a second override table with the same key and the same semantics,
+ * which is worse than a historical name. Do not add a parallel one.
  *
  * AIDEV-NOTE: memory here is the per-OWNER budget, which is a different question from
  * {@code InstanceCapacity}'s per-HOST budget: the host asks "does this machine have the
@@ -84,6 +85,20 @@ public class InstanceQuotaModel extends Model {
             .help(HohenheimFormCopy.help("max_nics"))
             .build());
 
+    /** Live-site cap (count over the owner's non-trashed sites); same 0/null semantics. */
+    public static final IntegerField MAX_SITES = SCHEMA.addField(
+        IntegerField.builder().name("max_sites")
+            .label(HohenheimFormCopy.label("max_sites"))
+            .help(HohenheimFormCopy.help("max_sites"))
+            .build());
+
+    /** Managed-database cap (count over the owner's database records); same 0/null semantics. */
+    public static final IntegerField MAX_DATABASES = SCHEMA.addField(
+        IntegerField.builder().name("max_databases")
+            .label(HohenheimFormCopy.label("max_databases"))
+            .help(HohenheimFormCopy.help("max_databases"))
+            .build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
@@ -97,7 +112,7 @@ public class InstanceQuotaModel extends Model {
                 return;
             }
             for (IntegerField cap : new IntegerField[] {MAX_INSTANCES, MAX_MEMORY_MB, MAX_DISK_GB,
-                    MAX_NICS}) {
+                    MAX_NICS, MAX_SITES, MAX_DATABASES}) {
                 if (!row.has(cap.getName())) {
                     continue;
                 }
