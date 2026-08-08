@@ -6522,6 +6522,10 @@
     "text": "Git provider kind '{$kind}' is declared but not yet implemented",
     "scope": "violations"
   },
+  "git_provider_base_url_required": {
+    "text": "A Gitea provider needs its own base URL; there is no public default host",
+    "scope": "violations"
+  },
   "preview_site_required": {
     "text": "A preview needs an existing site",
     "scope": "violations"
@@ -6578,7 +6582,7 @@
       "scope": "field"
     },
     {
-      "text": "The provider API dialect. GitLab is declared but not yet implemented.",
+      "text": "The provider API dialect: GitHub, GitLab or Gitea.",
       "scope": "help"
     }
   ],
@@ -6588,7 +6592,7 @@
       "scope": "field"
     },
     {
-      "text": "Leave blank for the public host (github.com); set for self-hosted installations.",
+      "text": "Leave blank for the public host (github.com, gitlab.com); required for Gitea and for self-hosted installations.",
       "scope": "help"
     }
   ],

@@ -33,7 +33,8 @@ import java.util.Map;
  * unknown site, non-git site, missing secret, wrong signature -- is the SAME 404, so a
  * probe learns nothing about which sites exist or which carry secrets. A delivery id is
  * claimed BEFORE any action (the replay ledger), a payload that names a repository must
- * name the bound one, and only a branch-matching push deploys.
+ * name the bound one, and only a branch-matching push deploys -- an event carrying no
+ * {@code ref} is not a push and is ignored rather than deployed.
  */
 public class GitWebhookHandler {
 
@@ -45,6 +46,8 @@ public class GitWebhookHandler {
     private static final HttpString X_GITLAB_EVENT_UUID = new HttpString("X-Gitlab-Event-UUID");
     private static final HttpString X_GITHUB_EVENT = new HttpString("X-GitHub-Event");
     private static final HttpString X_GITLAB_EVENT = new HttpString("X-Gitlab-Event");
+    private static final HttpString X_GITEA_EVENT = new HttpString("X-Gitea-Event");
+    private static final HttpString X_GITEA_DELIVERY = new HttpString("X-Gitea-Delivery");
 
     /** The {@code X-Gitlab-Event} value of a Merge Request Hook (spaces and all). */
     private static final String GITLAB_MERGE_REQUEST_EVENT = "Merge Request Hook";
@@ -171,7 +174,21 @@ public class GitWebhookHandler {
             configuredBranch = "main";
         }
         String pushedRef = payload instanceof Map<?, ?> map ? str(map.get("ref")) : "";
-        if (!pushedRef.isEmpty() && !pushedRef.equals("refs/heads/" + configuredBranch)) {
+        // AIDEV-NOTE: a MISSING ref means this is not a push payload at all, and it must
+        // never fall through to a production deploy. Every provider's push payload
+        // carries `ref` (GitHub/Gitea `refs/heads/x`, GitLab Push Hook the same), so the
+        // only deliveries reaching here without one are the events this handler does not
+        // model -- issues, releases, stars, repository, a review comment. Before this
+        // check an empty ref SKIPPED the branch comparison, so every such delivery queued
+        // a production deploy of the default branch: the exact shape the GitLab
+        // merge-request mapping was added to fix, still open for every unmapped event on
+        // all three providers. An unmodelled event is ignored, loudly and idempotently.
+        if (pushedRef.isEmpty()) {
+            WebhookDeliveries.stampAction(claimed, "ignored_not_a_push");
+            sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"not a push\"}");
+            return;
+        }
+        if (!pushedRef.equals("refs/heads/" + configuredBranch)) {
             WebhookDeliveries.stampAction(claimed, "ignored_branch");
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"branch\"}");
             return;
@@ -266,9 +283,10 @@ public class GitWebhookHandler {
     /**
      * Lower a provider's change-request event onto the preview lifecycle.
      *
-     * The two providers agree on nothing but the concept: GitHub nests the branch and
+     * The providers agree on nothing but the concept: GitHub nests the branch and
      * sha under {@code pull_request.head} and names its actions
-     * opened/reopened/synchronize/closed; GitLab puts them in
+     * opened/reopened/synchronize/closed; Gitea uses the same nesting but spells the
+     * commit action {@code synchronized}; GitLab puts them in
      * {@code object_attributes} ({@code source_branch}, {@code last_commit.id},
      * {@code iid}) and names them open/reopen/update/close/merge. Mapping by shape
      * rather than by header would be a guess -- the header decides which reader runs,
@@ -294,8 +312,14 @@ public class GitWebhookHandler {
         if (ref.isEmpty()) {
             return null;
         }
+        // AIDEV-NOTE: `synchronized` (with the d) is GITEA's word for GitHub's
+        // `synchronize` -- HookIssueSynchronized in modules/structs/hook.go. Gitea folds
+        // pull_request_sync onto the `pull_request` event and reaches this reader through
+        // the GitHub-compatible X-GitHub-Event header it also sends, so without the second
+        // spelling a new commit on a Gitea pull request answered 200 and rebuilt nothing:
+        // the preview stayed pinned at the sha it was opened with.
         PreviewIntent intent = switch (str(map.get("action"))) {
-            case "opened", "reopened", "synchronize" -> PreviewIntent.DEPLOY;
+            case "opened", "reopened", "synchronize", "synchronized" -> PreviewIntent.DEPLOY;
             case "closed" -> PreviewIntent.TEARDOWN;
             default -> PreviewIntent.IGNORE;
         };
@@ -361,7 +385,16 @@ public class GitWebhookHandler {
         return false;
     }
 
-    /** Provider delivery id when sent, else the body hash: replays fold either way. */
+    /**
+     * Provider delivery id when sent, else the body hash: replays fold either way.
+     *
+     * AIDEV-NOTE: Gitea sends X-GitHub-Delivery as well as its own header (its
+     * addDefaultHeaders emits the Gitea, Gogs AND GitHub-compatible sets), so the first
+     * branch already answers for it. The Gitea branch matters for a forge or a reverse
+     * proxy that forwards only the vendor headers -- without it such a delivery folded on
+     * the body hash, which makes two identical retries of one event look like one delivery
+     * and two DIFFERENT events with identical bodies look like a replay.
+     */
     private static @NonNull String deliveryKeyOf(HttpServerExchange exchange, String body) {
         String github = exchange.getRequestHeaders().getFirst(X_GITHUB_DELIVERY);
         if (github != null && !github.isBlank()) {
@@ -370,6 +403,10 @@ public class GitWebhookHandler {
         String gitlab = exchange.getRequestHeaders().getFirst(X_GITLAB_EVENT_UUID);
         if (gitlab != null && !gitlab.isBlank()) {
             return "gl:" + gitlab.trim();
+        }
+        String gitea = exchange.getRequestHeaders().getFirst(X_GITEA_DELIVERY);
+        if (gitea != null && !gitea.isBlank()) {
+            return "gt:" + gitea.trim();
         }
         return "body:" + SecureTokens.sha256Hex(body);
     }
@@ -380,7 +417,13 @@ public class GitWebhookHandler {
             return github.trim();
         }
         String gitlab = exchange.getRequestHeaders().getFirst(X_GITLAB_EVENT);
-        return gitlab != null && !gitlab.isBlank() ? gitlab.trim() : null;
+        if (gitlab != null && !gitlab.isBlank()) {
+            return gitlab.trim();
+        }
+        // Gitea's own event header carries the same vocabulary as GitHub's ("push",
+        // "pull_request"), so no folding is needed once it is read.
+        String gitea = exchange.getRequestHeaders().getFirst(X_GITEA_EVENT);
+        return gitea != null && !gitea.isBlank() ? gitea.trim() : null;
     }
 
     /**

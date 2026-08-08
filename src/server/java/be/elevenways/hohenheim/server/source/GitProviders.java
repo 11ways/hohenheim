@@ -17,17 +17,23 @@ import java.util.Map;
 
 /**
  * The one construction funnel of provider clients, and the derivation of the per-clone
- * credential environment. There are exactly TWO provider kinds:
- * {@link GithubProviderClient} (PAT or App-minted installation tokens) and
- * {@link GitlabProviderClient} (v4 API, clone user {@code oauth2}). Anything else is
+ * credential environment. There are exactly THREE provider kinds:
+ * {@link GithubProviderClient} (PAT or App-minted installation tokens),
+ * {@link GitlabProviderClient} (v4 API, clone user {@code oauth2}) and
+ * {@link GiteaProviderClient} (v1 API, token in the password position). Anything else is
  * refused by name below.
  *
- * AIDEV-NOTE: Gitea is NOT a provider kind, and this docblock used to read as though
- * it were (corrected 2026-08-08). Gitea appears only in the INBOUND webhook path,
- * whose signature verification is kind-agnostic in GitWebhookHandler
- * (X-Hub-Signature-256 / X-Gitea-Signature HMAC, X-Gitlab-Token shared secret) -- so a
- * Gitea push can trigger a deploy, while repo listing, branch listing, clone-credential
- * minting and commit-status reporting are unavailable for it.
+ * ADDING A KIND is three edits and no more: a {@code KIND_*} constant plus an enum value
+ * on {@link GitProviderModel#KIND}, an {@link ApiProviderClient} subclass, and one branch
+ * here. Everything downstream is kind-agnostic on purpose -- the repository/branch
+ * pickers, the credential environment below, the connection test and the webhook receiver
+ * all route through this funnel or through provider-neutral headers.
+ *
+ * AIDEV-NOTE: Gitea was webhook-only until 2026-08-08 -- the inbound path accepted its
+ * signature while {@code clientFor} refused the kind by name, so a Gitea repository could
+ * not be picked or cloned with managed credentials. That half-wiring is closed; the
+ * INBOUND path stays kind-agnostic (it verifies headers, it does not consult this funnel),
+ * which is why a Gitea webhook worked at all without a client.
  */
 public final class GitProviders {
 
@@ -72,6 +78,17 @@ public final class GitProviders {
         }
         if (GitProviderModel.KIND_GITLAB.equals(kind)) {
             return new GitlabProviderClient(baseUrl,
+                provider.get(GitProviderModel.ACCESS_TOKEN));
+        }
+        if (GitProviderModel.KIND_GITEA.equals(kind)) {
+            // No public default host: a blank base URL would aim an operator's stored
+            // token at gitea.com, a third party they never named. Refuse instead.
+            if (baseUrl == null || baseUrl.isBlank()) {
+                throw Violations.ofField("base_url", baseUrl,
+                    Microcopy.of("git_provider_base_url_required")
+                        .withFilter("scope", "violations"));
+            }
+            return new GiteaProviderClient(baseUrl,
                 provider.get(GitProviderModel.ACCESS_TOKEN));
         }
         throw Violations.ofField("kind", kind,

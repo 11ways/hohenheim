@@ -327,6 +327,145 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
     }
 
     /**
+     * An event this handler does not model must never fall through to a PRODUCTION
+     * deploy. Before the {@code ref} check, a correctly signed delivery of ANY unmapped
+     * event -- an issue comment, a release, a star -- carried no {@code ref}, skipped the
+     * branch comparison entirely and queued a deploy of the site's bound branch. Same
+     * shape as the GitLab merge-request defect, one layer further out: that fix mapped one
+     * event, it did not close the fall-through.
+     */
+    @Test
+    @org.junit.jupiter.api.Order(8)
+    void anEventCarryingNoRefIsNotAPushAndNeverQueuesAProductionDeploy() throws Exception {
+        assertThat(deploymentsOf(siteCId, "webhook"))
+            .as("baseline: site C has never been deployed by a webhook").isEmpty();
+
+        // 1. GitHub `issues`: signed, bound to the right repository, and carrying no ref.
+        //    The stamp must say it was not a push -- not "deploy_queued".
+        String issuesUuid = UUID.randomUUID().toString();
+        String issues = "{\"action\":\"opened\",\"issue\":{\"number\":3,\"title\":\"bug\"},"
+            + "\"repository\":{\"full_name\":\"acme/repo-c\"}}";
+        String issuesResponse = post("/api/webhooks/git/hook-c", issues,
+            "X-GitHub-Event: issues", "X-GitHub-Delivery: " + issuesUuid,
+            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, issues));
+        assertThat(issuesResponse).as("step 1: an issue event is acknowledged, not acted on")
+            .startsWith("HTTP/1.1 200").contains("not a push");
+        assertThat(stampedAction("gh:" + issuesUuid))
+            .as("step 1: an issue event is stamped as not-a-push")
+            .isEqualTo("ignored_not_a_push");
+
+        // 2. A Gitea `release` event: same shape through the other provider's headers, so
+        //    the gate is the PAYLOAD's missing ref and not one provider's header set.
+        String releaseUuid = UUID.randomUUID().toString();
+        String release = "{\"action\":\"published\",\"release\":{\"tag_name\":\"v1\"},"
+            + "\"repository\":{\"full_name\":\"acme/repo-c\"}}";
+        post("/api/webhooks/git/hook-c", release,
+            "X-Gitea-Event: release", "X-Gitea-Delivery: " + releaseUuid,
+            "X-Gitea-Signature: " + SecureTokens.hmacSha256Hex(SECRET_C, release));
+        assertThat(stampedAction("gt:" + releaseUuid))
+            .as("step 2: a Gitea release event is stamped as not-a-push")
+            .isEqualTo("ignored_not_a_push");
+
+        // 3. THE counterfactual that matters: neither delivery deployed anything. A
+        //    status-only assertion would have passed against the defect too, because the
+        //    old fall-through answered 200 with "queued" and then really did deploy.
+        Thread.sleep(500);
+        assertThat(deploymentsOf(siteCId, "webhook"))
+            .as("step 3: an unmodelled event deploys NOTHING")
+            .isEmpty();
+
+        // 4. Positive anchor: a genuine push on the bound branch still deploys, so step 3
+        //    is a discrimination and not a handler that stopped working.
+        String pushUuid = UUID.randomUUID().toString();
+        String push = pushPayload("acme/repo-c", "refs/heads/main", "cafeaaaa");
+        post("/api/webhooks/git/hook-c", push,
+            "X-GitHub-Event: push", "X-GitHub-Delivery: " + pushUuid,
+            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, push));
+        assertThat(stampedAction("gh:" + pushUuid))
+            .as("step 4: a real push on the bound branch still queues a deploy")
+            .isEqualTo("deploy_queued");
+        await("step 4: the anchor deploy is recorded",
+            () -> deploymentsOf(siteCId, "webhook").size() == 1);
+    }
+
+    /**
+     * Gitea is a first-class provider now, so its deliveries must reach the same lanes.
+     * Two things were missing: its vendor headers were unread (only the GitHub-compatible
+     * set it also sends kept it working at all), and its pull-request commit action is
+     * spelled {@code synchronized} -- so a new commit on a Gitea pull request answered 200
+     * and rebuilt nothing, leaving the preview pinned at the sha it opened with.
+     */
+    @Test
+    @org.junit.jupiter.api.Order(9)
+    void giteaDeliveriesReachTheSameLanesUnderItsOwnHeadersAndSpellings() throws Exception {
+        // 1. Counterfactual first: Gitea's raw-hex signature is verified, so a WRONG
+        //    secret under the Gitea header is the same silent 404 as everywhere else.
+        String rejected = "{\"action\":\"opened\","
+            + "\"repository\":{\"full_name\":\"acme/repo-c\"},"
+            + "\"pull_request\":{\"number\":11,\"head\":{\"ref\":\"feat-gt\",\"sha\":\"beef1111\"}}}";
+        String refusal = post("/api/webhooks/git/hook-c", rejected,
+            "X-Gitea-Event: pull_request", "X-Gitea-Delivery: " + UUID.randomUUID(),
+            "X-Gitea-Signature: " + SecureTokens.hmacSha256Hex("not-the-secret", rejected));
+        assertThat(refusal).as("step 1: a wrong Gitea signature is refused")
+            .startsWith("HTTP/1.1 404");
+
+        // 2. `opened` under Gitea's OWN headers only: the delivery is claimed under the
+        //    Gitea delivery id (not the body hash) and reaches the preview lane. Without
+        //    the vendor-header branches the event read as null and fell to the push lane.
+        String openedUuid = UUID.randomUUID().toString();
+        assertThat(giteaPullRequest(openedUuid, "opened", "beef2222"))
+            .as("step 2: an opened Gitea pull request queues a preview")
+            .isEqualTo("preview_queued");
+        assertThat(deliveryRowsOf(siteCId, "gt:" + openedUuid))
+            .as("step 2: claimed under the Gitea delivery id, never the body hash")
+            .hasSize(1);
+
+        // 3. THE defect: `synchronized` is Gitea's `synchronize`. A new commit on the
+        //    pull request must rebuild the preview, not be filed as an unknown action.
+        assertThat(giteaPullRequest(UUID.randomUUID().toString(), "synchronized", "beef3333"))
+            .as("step 3: a new commit on a Gitea pull request rebuilds the preview")
+            .isEqualTo("preview_queued");
+
+        // 4. Discrimination anchor: the spelling was ADDED, so Gitea's cosmetic actions
+        //    still do nothing -- `synchronized` did not become a catch-all.
+        assertThat(giteaPullRequest(UUID.randomUUID().toString(), "label_updated", "beef4444"))
+            .as("step 4: a label edit is not a deployment trigger")
+            .isEqualTo("ignored_pr_action");
+        assertThat(giteaPullRequest(UUID.randomUUID().toString(), "closed", "beef5555"))
+            .as("step 4: a closed Gitea pull request tears the preview down")
+            .isEqualTo("preview_teardown_queued");
+
+        // 5. Gitea's push lane under its own headers deploys, proving the header branches
+        //    serve BOTH lanes and not only the preview one.
+        int before = deploymentsOf(siteCId, "webhook").size();
+        String pushUuid = UUID.randomUUID().toString();
+        String push = pushPayload("acme/repo-c", "refs/heads/main", "beef6666");
+        String accepted = post("/api/webhooks/git/hook-c", push,
+            "X-Gitea-Event: push", "X-Gitea-Delivery: " + pushUuid,
+            "X-Gitea-Signature: " + SecureTokens.hmacSha256Hex(SECRET_C, push));
+        assertThat(accepted).as("step 5: the Gitea push is accepted")
+            .startsWith("HTTP/1.1 200").contains("queued");
+        await("step 5: the Gitea-triggered deploy is recorded",
+            () -> deploymentsOf(siteCId, "webhook").size() == before + 1);
+    }
+
+    /**
+     * Deliver one Gitea pull_request event under Gitea's own headers (vendor delivery id,
+     * raw-hex signature) and report what the handler stamped.
+     */
+    private static String giteaPullRequest(String uuid, String action, String sha)
+            throws Exception {
+        String body = "{\"action\":\"" + action + "\",\"number\":11,"
+            + "\"repository\":{\"full_name\":\"acme/repo-c\"},"
+            + "\"pull_request\":{\"number\":11,\"head\":{\"ref\":\"feat-gt\","
+            + "\"sha\":\"" + sha + "\"}}}";
+        post("/api/webhooks/git/hook-c", body,
+            "X-Gitea-Event: pull_request", "X-Gitea-Delivery: " + uuid,
+            "X-Gitea-Signature: " + SecureTokens.hmacSha256Hex(SECRET_C, body));
+        return stampedAction("gt:" + uuid);
+    }
+
+    /**
      * Deliver one GitLab Merge Request Hook and report what the handler stamped.
      *
      * @param oldrev the source branch's previous head, or null for an update that
