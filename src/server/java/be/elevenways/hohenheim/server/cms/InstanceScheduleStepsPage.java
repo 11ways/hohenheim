@@ -69,7 +69,8 @@ public final class InstanceScheduleStepsPage implements RecordScopedPage<Row> {
             schedule.get(RecordScheduleModel.RECORD_ID));
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", schedule.get(RecordScheduleModel.NAME) + " - Steps");
+        vars.put("title", CmsSupport.pageTitle(conduit, "schedule_step",
+            schedule.get(RecordScheduleModel.NAME)));
         vars.put("scheduleId", scheduleId);
         vars.put("scheduleName", schedule.get(RecordScheduleModel.NAME));
         vars.put("steps", steps);

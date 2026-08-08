@@ -80,7 +80,8 @@ public final class SiteDatabasesPage implements RecordScopedPage<Row> {
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", site.get(SiteModel.NAME) + " - Databases");
+        vars.put("title", CmsSupport.pageTitle(conduit, "site_databases",
+            site.get(SiteModel.NAME)));
         vars.put("siteId", siteId);
         vars.put("siteName", site.get(SiteModel.NAME));
         vars.put("links", links);

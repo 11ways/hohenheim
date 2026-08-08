@@ -188,6 +188,9 @@ dependencies {
     browserTestImplementation ('be.elevenways:spamservice-client:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:zenit-cms-server:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation ('be.elevenways:zenit-comms-server:0.1.0-SNAPSHOT') { changing = true }
+    // The shared source-guard scanner: PageTitleLocalizationTest declares its own rule
+    // (a repo-specific mechanism, so not a BuiltInRules entry) and drives the same walk.
+    browserTestImplementation ('be.elevenways:protoblast-source-guard:0.1.0-SNAPSHOT') { changing = true }
     browserTestImplementation 'org.xerial:sqlite-jdbc:3.45.1.0'
     browserTestImplementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
     browserTestImplementation 'org.shredzone.acme4j:acme4j-client:3.4.0'

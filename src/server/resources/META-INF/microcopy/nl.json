@@ -1570,6 +1570,10 @@
     },
     {
       "text": "Status",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Status",
       "scope": "stack_deployments"
     }
   ],
@@ -2997,18 +3001,6 @@
       "scope": "help"
     }
   ],
-  "processes_title": {
-    "text": "{$name} - Processen",
-    "scope": "site"
-  },
-  "deployments_title": {
-    "text": "{$name} - Deployments",
-    "scope": "site"
-  },
-  "domains_title": {
-    "text": "{$name} - Domeinen",
-    "scope": "site"
-  },
   "dns_generated_readonly": {
     "text": "Dit record is gegenereerd door {$source} en kan hier niet bewerkt of verwijderd worden",
     "scope": "violations"
@@ -6389,7 +6381,10 @@
     "scope": "violations"
   },
   "site_volumes_unavailable": [
-    {"text": "De permanente volumes van deze site konden niet worden voorbereid: {$reason}", "scope": "violations"}
+    {
+      "text": "De permanente volumes van deze site konden niet worden voorbereid: {$reason}",
+      "scope": "violations"
+    }
   ],
   "site_image_build_failed": {
     "text": "Het bouwen van de site-image is mislukt: {$reason}",
@@ -7314,5 +7309,87 @@
   "databases_not_permitted": {
     "text": "Je mag geen databases aanmaken",
     "scope": "violations"
+  },
+  "page_title": [
+    {
+      "text": "{$name} - Apparaten",
+      "scope": "instance_device"
+    },
+    {
+      "text": "{$name} - Planningen",
+      "scope": "instance_schedule"
+    },
+    {
+      "text": "{$name} - Stappen",
+      "scope": "schedule_step"
+    },
+    {
+      "text": "{$name} - Secundairen",
+      "scope": "dns_secondaries"
+    },
+    {
+      "text": "{$name} - Zonebestand",
+      "scope": "dns_zone_file"
+    },
+    {
+      "text": "{$name} - Records",
+      "scope": "dns_zone_records"
+    },
+    {
+      "text": "{$name} - Dev-sessies",
+      "scope": "dev_sessions"
+    },
+    {
+      "text": "{$name} - Databases",
+      "scope": "site_databases"
+    },
+    {
+      "text": "{$name} herstellen",
+      "scope": "database_restore"
+    },
+    {
+      "text": "Sample {$name}",
+      "scope": "spamservice_sample"
+    },
+    {
+      "text": "{$name} - Processen",
+      "scope": "site_processes"
+    },
+    {
+      "text": "{$name} - Deployments",
+      "scope": "site_deployments"
+    },
+    {
+      "text": "{$name} - Domeinen",
+      "scope": "site_domains"
+    }
+  ],
+  "stored_log_heading": {
+    "text": "PID {$pid} ({$created})",
+    "scope": "site_processes"
+  },
+  "not_found_title": {
+    "text": "Geen site geconfigureerd",
+    "scope": "proxy_error"
+  },
+  "not_found_message": {
+    "text": "Er is geen site geconfigureerd voor dit domein.",
+    "scope": "proxy_error"
+  },
+  "bad_gateway_title": {
+    "text": "Ongeldige gateway",
+    "scope": "proxy_error"
+  },
+  "unreachable_message": {
+    "text": "De achterliggende server antwoordt niet.",
+    "scope": "proxy_error"
+  },
+  "dev_offline_title": {
+    "text": "Dev-site offline",
+    "scope": "proxy_error"
+  },
+  "dev_offline_message": {
+    "text": "Er is momenteel geen dev-server geregistreerd voor '{$name}'. Start hem met de dev-tunnel ingeschakeld en herlaad.",
+    "scope": "proxy_error"
   }
 }

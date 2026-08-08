@@ -41,7 +41,8 @@ public final class SpamserviceSampleAnalysisPage implements RecordScopedPage<Sam
                                            @NonNull SampleSummary record) {
         SampleDetail detail = this.resource.requireClient().sample(record.id());
         Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("title", "Sample " + value(record.ip(), record.id()));
+        vars.put("title", CmsSupport.pageTitle(conduit, "spamservice_sample",
+            value(record.ip(), record.id())));
         vars.put("summary", summary(detail));
         vars.put("location", entries(detail.location()));
         vars.put("asn", entries(detail.asn()));

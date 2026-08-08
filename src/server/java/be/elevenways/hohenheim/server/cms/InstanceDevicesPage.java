@@ -54,7 +54,8 @@ public final class InstanceDevicesPage implements RecordScopedPage<Row> {
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", instance.get(InstanceModel.NAME) + " - Devices");
+        vars.put("title", CmsSupport.pageTitle(conduit, "instance_device",
+            instance.get(InstanceModel.NAME)));
         vars.put("instanceId", instanceId);
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("devices", devices);

@@ -50,9 +50,8 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
                                            @NonNull Row site) {
         Integer siteId = site.get(SiteModel.ID);
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", Microcopy.of("deployments_title").withFilter("scope", "site")
-            .withArg("name", String.valueOf((Object) site.get(SiteModel.NAME)))
-            .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+        vars.put("title", CmsSupport.pageTitle(conduit, "site_deployments",
+            site.get(SiteModel.NAME)));
         vars.put("siteId", siteId);
         vars.put("siteName", site.get(SiteModel.NAME));
 

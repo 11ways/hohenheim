@@ -55,9 +55,8 @@ public final class SiteProcessesPage implements RecordScopedPage<Row>, TerminalC
                                            @NonNull Row site) {
         Integer siteId = site.get(SiteModel.ID);
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", Microcopy.of("processes_title").withFilter("scope", "site")
-            .withArg("name", String.valueOf((Object) site.get(SiteModel.NAME)))
-            .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+        vars.put("title", CmsSupport.pageTitle(conduit, "site_processes",
+            site.get(SiteModel.NAME)));
         vars.put("siteId", siteId);
         vars.put("siteName", site.get(SiteModel.NAME));
 
@@ -116,8 +115,12 @@ public final class SiteProcessesPage implements RecordScopedPage<Row>, TerminalC
                     // render.
                     String text = log.get(ProclogModel.LOG_HTML);
                     selectedLogText = text != null ? text : "";
-                    selectedLogTitle = "PID " + log.get(ProclogModel.PID)
-                        + " (" + log.get(ProclogModel.CREATED_AT) + ")";
+                    selectedLogTitle = Microcopy.of("stored_log_heading")
+                        .withFilter("scope", "site_processes")
+                        .withArg("pid", String.valueOf((Object) log.get(ProclogModel.PID)))
+                        .withArg("created", String.valueOf(
+                            (Object) log.get(ProclogModel.CREATED_AT)))
+                        .resolve(conduit.getLocales(), conduit.getMessageResolver());
                 }
             } catch (NumberFormatException ignored) {
                 // Bad id: just render the page without a selected log.

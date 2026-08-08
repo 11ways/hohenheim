@@ -56,7 +56,8 @@ public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", zone.get(DnsZoneModel.ORIGIN) + " - Secondaries");
+        vars.put("title", CmsSupport.pageTitle(conduit, "dns_secondaries",
+            zone.get(DnsZoneModel.ORIGIN)));
         vars.put("origin", zone.get(DnsZoneModel.ORIGIN));
         vars.put("zoneId", zoneId);
         vars.put("links", links);
