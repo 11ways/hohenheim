@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.quota.OwnerQuota;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -16,7 +17,6 @@ import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.orm.quota.QuotaExceeded;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -43,11 +43,7 @@ public final class PreviewQuota {
     }
 
     public static @NonNull String bucketKeyOf(@NonNull String packedSubjects) {
-        String key = BUCKET_PREFIX + packedSubjects;
-        if (key.length() > 191) {
-            key = BUCKET_PREFIX + "sha256:" + SecureTokens.sha256Hex(packedSubjects);
-        }
-        return key;
+        return OwnerQuota.bucketOf(BUCKET_PREFIX, packedSubjects);
     }
 
     /** @return the cap, or null for uncapped (0 or less in settings) */

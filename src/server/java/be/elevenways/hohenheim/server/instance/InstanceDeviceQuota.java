@@ -5,8 +5,8 @@ import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.quota.OwnerQuota;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -14,10 +14,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
-import be.elevenways.zenit.common.orm.quota.QuotaExceeded;
 import be.elevenways.zenit.common.orm.quota.Quotas;
-import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -65,11 +62,7 @@ public final class InstanceDeviceQuota {
     }
 
     private static @NonNull String fold(@NonNull String prefix, @NonNull String packedSubjects) {
-        String key = prefix + packedSubjects;
-        if (key.length() > 191) {
-            key = prefix + "sha256:" + SecureTokens.sha256Hex(packedSubjects);
-        }
-        return key;
+        return OwnerQuota.bucketOf(prefix, packedSubjects);
     }
 
     /** Install the reserve/release hooks on the device write funnel (MODULES stage). */
@@ -104,33 +97,14 @@ public final class InstanceDeviceQuota {
      * semantics exactly).
      */
     public static @Nullable Integer diskLimitFor(@NonNull String packedSubjects) {
-        Integer override = overrideOf(packedSubjects, InstanceQuotaModel.MAX_DISK_GB);
-        if (override != null) {
-            return override;
-        }
-        Integer fallback = HohenheimSettings.VALUES.getValue(
+        return OwnerQuota.limitOf(packedSubjects, InstanceQuotaModel.MAX_DISK_GB,
             HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER);
-        return fallback != null && fallback > 0 ? fallback : null;
     }
 
     /** The extra-NIC cap for one owner; same override/default semantics. */
     public static @Nullable Integer nicLimitFor(@NonNull String packedSubjects) {
-        Integer override = overrideOf(packedSubjects, InstanceQuotaModel.MAX_NICS);
-        if (override != null) {
-            return override;
-        }
-        Integer fallback = HohenheimSettings.VALUES.getValue(
+        return OwnerQuota.limitOf(packedSubjects, InstanceQuotaModel.MAX_NICS,
             HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER);
-        return fallback != null && fallback > 0 ? fallback : null;
-    }
-
-    private static @Nullable Integer overrideOf(
-            @NonNull String packedSubjects,
-            be.elevenways.zenit.common.orm.field.@NonNull IntegerField column) {
-        Row override = Models.get(InstanceQuotaModel.class).find()
-            .where(InstanceQuotaModel.SUBJECTS.eq(packedSubjects))
-            .first();
-        return override != null ? override.get(column) : null;
     }
 
     // -- hook internals -------------------------------------------------------
@@ -175,17 +149,7 @@ public final class InstanceDeviceQuota {
 
     private static void reserve(@NonNull String bucket, long amount, @Nullable Integer limit,
                                 @NonNull String violationKey) {
-        if (amount <= 0) {
-            return;
-        }
-        try {
-            Quotas.reserve(bucket, amount, limit == null ? Long.MAX_VALUE : limit);
-        } catch (QuotaExceeded full) {
-            throw Violations.ofForm(Microcopy.of(violationKey)
-                .withFilter("scope", "violations")
-                .withArg("used", full.getUsed())
-                .withArg("limit", full.getLimit()));
-        }
+        OwnerQuota.reserve(bucket, amount, limit, violationKey);
     }
 
     /**
@@ -211,7 +175,7 @@ public final class InstanceDeviceQuota {
     }
 
     private static @NonNull String packOf(@NonNull String bucket, @NonNull String prefix) {
-        return bucket.startsWith(prefix) ? bucket.substring(prefix.length()) : bucket;
+        return OwnerQuota.packOf(prefix, bucket);
     }
 
     /**

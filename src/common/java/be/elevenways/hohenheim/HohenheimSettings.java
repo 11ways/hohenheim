@@ -753,6 +753,20 @@ public class HohenheimSettings {
                 + "immediately")
             .build();
 
+        public static final SettingDefinition<Integer> MAX_MEMORY_MB_PER_OWNER = GROUP
+            .buildSetting("max_memory_mb_per_owner", Integer.class)
+            .defaultValue(0)
+            .label("Max workload memory per owner (MB)")
+            .suffix("MB")
+            .description("Default cap on the total workload memory one owner may hold, summed "
+                + "over their live instances. Each workload is charged the memory its "
+                + "driver actually caps it to: its declared memory limit, or its kind's "
+                + "declared footprint when it declares none -- so a tenant running only "
+                + "unbounded workloads is charged honestly rather than nothing. A per-owner "
+                + "Instance Quota record overrides this. 0 or less means NO cap; usage is "
+                + "counted either way")
+            .build();
+
         public static final SettingDefinition<Integer> MAX_DISK_GB_PER_OWNER = GROUP
             .buildSetting("max_disk_gb_per_owner", Integer.class)
             .defaultValue(0)

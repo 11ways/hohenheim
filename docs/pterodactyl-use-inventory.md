@@ -44,8 +44,8 @@ twenty-third row:
 
 | verdict | count | items |
 | --- | --- | --- |
-| IMPLEMENTED | 7 | 2, 4, 6, 7, 8, 12, 14 |
-| PARTIAL | 7 | 1, 3, 5, 9, 10, 11, 13 |
+| IMPLEMENTED | 9 | 2, 4, 6, 7, 8, 11, 12, 13, 14 |
+| PARTIAL | 5 | 1, 3, 5, 9, 10 |
 | REJECTED | 8 | 15, 16, 17, 18, 19, 20, 21, 22 |
 | OPEN | 0 | (was 1: the localization clause, CLOSED 2026-08-08) |
 | | | Ranked-open #4, instance-to-database linkage, CLOSED 2026-08-08 (item 10) |
@@ -478,8 +478,9 @@ twin is the honest next slice.
 
 ## 11. Resource quotas
 
-**PARTIAL.** Instance count, disk GB and extra NICs are enforced and proven.
-There is NO per-owner memory cap.
+**IMPLEMENTED as of 2026-08-08** (was PARTIAL: no per-owner memory cap). Instance
+count, MEMORY, disk GB and extra NICs are all enforced and proven -- see the
+STATUS block at the end of this item.
 
 - Code: `src/common/java/be/elevenways/hohenheim/model/InstanceQuotaModel.java:23`
   -- `SUBJECTS` :35, `MAX_INSTANCES` :42, `MAX_DISK_GB` :49, `MAX_NICS` :56.
@@ -505,6 +506,50 @@ Also stated: `InstanceQuotaModel`'s class docblock (`:16-20`) still describes th
 table as a per-owner INSTANCE-COUNT override and names only the one setting,
 three caps after the fact. Understated rather than overstated, but it is drift.
 
+**STATUS 2026-08-08: DONE, and the row moves PARTIAL -> IMPLEMENTED.** The memory
+dimension exists, is transactional, and books only what is enforced.
+
+- Code: `src/common/java/be/elevenways/hohenheim/model/InstanceQuotaModel.java:67`
+  (`MAX_MEMORY_MB`), setting `hohenheim.quota.max_memory_mb_per_owner`
+  (`HohenheimSettings.java:756`), the reserve/release/delta dimension in
+  `src/server/java/be/elevenways/hohenheim/server/instance/InstanceQuota.java`
+  (bucket prefix `:100`, `memoryLimitFor` `:144`, `reserveMemory` `:303`,
+  `rebookMemory` `:321`), the booked-amount stamp
+  `InstanceModel.QUOTA_MEMORY_MB` (`InstanceModel.java:253`), migration
+  `M088_OwnerMemoryQuota` (columns + a heal that prices every live instance into
+  its owner's bucket), and the cap on the admin form
+  (`cms/InstanceQuotaResource.java`). The 191-char bucket FOLD now has one owner,
+  `server/quota/OwnerQuota.java`, which the instance, device and preview
+  dimensions all call -- a per-dimension copy of that derivation is how a charge
+  and its release end up in different buckets. **[code]**
+- Test: `src/browserTest/java/be/elevenways/hohenheim/test/instance/InstanceMemoryQuotaTest.java:82`
+  -- one hermetic journey, no daemon, 0 skipped: an UNBOUNDED workload is stamped
+  and charged at its kind footprint (512 for `docker_container`), a declared limit
+  at what it declares, two racing creates through the real create submit cannot
+  both spend the last workload of budget (state: one live row, `used == limit`),
+  the loser is refused by the named `memory_quota_reached`, a declared limit over
+  the budget is refused with nothing persisted, the soft-delete transition (the
+  write `InstanceService.destroy` performs) hands the STAMPED megabytes back, the
+  freed budget admits exactly one replacement, a shrink frees the delta and
+  re-stamps, a refused grow keeps the old stamp, and the hard-delete pairing
+  releases both dimensions. **[test]**
+
+**THE DECISION, since this was deferred once on it:** an unbounded workload
+participates AT ITS KIND'S DECLARED FOOTPRINT. `defaultFootprintMb` is not a
+per-kind extra to be added -- it is an ABSTRACT method on `InstanceKindHandler`
+with no interface default, so every kind already declares one (docker 512, incus
+container 512, incus VM 1024, site container 512, stack service 512, managed
+database per engine 512..1280) and forgetting it is a compile error. Charging only
+DECLARED limits was rejected for the recorded reason: `ResourceLimits` treats
+memory as optional, so that budget sums to ZERO for the common workload and a
+tenant filling a host reads as holding nothing. Charge == cap survives intact,
+because the number booked is the one
+`ResourceLimits.fromSettings(settings, defaultFootprintMb(settings))` hands the
+driver as the cgroup / VM cap -- the same call the host ledger books through, now
+shared as `InstanceCapacity.effectiveFootprintMb` so the two can never disagree.
+A kind whose handler class is gone prices at 0 and books nothing, which is the
+`ProcessCapacity.reserve` rule: never book what nothing enforces.
+
 ## 12. Transfer between eligible hosts
 
 **IMPLEMENTED.**
@@ -529,7 +574,9 @@ moved to a host that lacks it. Placement does not know this and cannot avoid it.
 
 ## 13. Live stats and logs
 
-**PARTIAL, and this is the single largest evidence gap in this document.**
+**IMPLEMENTED as of 2026-08-08** (was: PARTIAL, and the single largest evidence gap
+in this document -- the STATUS block at the end of this item is what closed it; the
+heading itself was still stale on 2026-08-08 and is corrected here).
 
 Stats: `src/server/java/be/elevenways/hohenheim/server/instance/InstanceStats.java:34`,
 `InstanceStatsHandler.java:32`, `cms/InstanceStatsPage.java`. **[code]**
@@ -832,6 +879,11 @@ Value against effort, with prerequisites, for the game-panel claim specifically.
    Pterodactyl's own quota unit. Effort: low-medium: a column, a setting, one more
    reserve dimension on an existing ledger at an existing hook site.
    Prerequisite: none.
+   **DONE 2026-08-08** -- exactly that shape (M088, `MAX_MEMORY_MB`,
+   `max_memory_mb_per_owner`, the dimension inside `InstanceQuota`), with the
+   deferred question answered: an unbounded workload is charged its KIND's declared
+   footprint, which is also the cap its driver applies. Kept in place with its
+   number: the ranking is history, not a worklist. See item 11's STATUS block.
 4. **Instance-to-database linkage with credential injection** (item 10). Value:
    high for this claim -- a plugin wanting MySQL is the common game case. Effort:
    medium. Prerequisite: `SiteDatabaseModel`'s two-sided authority rule as the
@@ -982,14 +1034,17 @@ live class skips no longer risks hiding a whole capability behind one missing im
 The inventory is CLOSED: every clause of the minimum claim has a decision and its
 evidence.
 
-**The Pterodactyl replacement claim is NOT yet usable publicly**, on ONE remaining
-clause. The list below is kept with its original numbering; two of its three
-clauses closed on 2026-08-08 and say so:
+**The Pterodactyl replacement claim has NO remaining blocking clause** as of
+2026-08-08. The list below is kept with its original numbering; all three of its
+clauses are now closed and say so:
 
 - item 10, per-instance database allocation, was per-TENANT only -- **CLOSED
   2026-08-08** (`instance_databases`, M087; see item 10's STATUS block);
-- item 11, resource quotas, has no memory dimension -- **STILL OPEN, and now the
-  only blocker on this claim**;
+- item 11, resource quotas, had no memory dimension -- **CLOSED 2026-08-08**: a
+  per-owner memory budget (M088) charged at the number the driver caps, proven
+  hermetically against races, refusals and every release path. This was the last
+  blocker on this claim; see item 11's STATUS block, including the argued decision
+  that an unbounded workload participates at its kind's declared footprint;
 - item 13, live stats and logs, had one test that assumed three times -- **CLOSED
   2026-08-08**: a hermetic fake for both streams, 34 state assertions with no
   daemon, beside the live classes which stay because a fake cannot discover an

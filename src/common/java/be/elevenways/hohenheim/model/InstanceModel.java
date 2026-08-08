@@ -239,6 +239,21 @@ public class InstanceModel extends Model {
         IntegerField.builder().name("capacity_mb").filterable(false).build());
 
     /**
+     * The memory (MB) booked for this workload against its OWNER's memory budget, stamped
+     * by InstanceQuota at the write that took it.
+     *
+     * AIDEV-NOTE: a SECOND amount stamp beside CAPACITY_MB, holding the same number today,
+     * and deliberately not shared with it. CAPACITY_MB is the HOST booking and is 0 (or
+     * absent) whenever the row has no host -- a hostless instance books nothing on any
+     * machine, but it still declares memory its owner is charged for. Reading the host
+     * stamp for the owner release would hand back 0 for exactly those rows and lock the
+     * owner out one workload at a time, which is the accounting drift both stamps exist to
+     * prevent.
+     */
+    public static final IntegerField QUOTA_MEMORY_MB = SCHEMA.addField(
+        IntegerField.builder().name("quota_memory_mb").filterable(false).build());
+
+    /**
      * The owner disk-GB bucket this workload's ROOT disk reservation was charged to,
      * stamped by InstanceRootDiskQuota at the write that took it.
      *
