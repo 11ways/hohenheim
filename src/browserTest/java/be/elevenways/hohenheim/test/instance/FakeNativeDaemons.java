@@ -7,6 +7,8 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.runtime.ConsoleStream;
+import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.ImageIdentity;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
@@ -14,21 +16,28 @@ import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport.WorkloadClaim;
+import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The shared in-memory "daemons" every daemon-free instance journey runs against: two
@@ -73,8 +82,114 @@ final class FakeNativeDaemons {
         String ownerId;
     }
 
+    // -- the observability lanes ----------------------------------------------
+    // AIDEV-NOTE: stats and console live HERE rather than in a second fake because they
+    // are DRIVER CAPABILITIES of the same workload, exactly as they are on the real
+    // drivers: the hub asks the resolved runtime whether it implements the lane, so a
+    // separate harness would have to re-fake the whole runtime to be asked at all.
+    // FakeVolumeKind deliberately keeps exposing neither, which is what makes "a driver
+    // without the lane is refused BY NAME" testable.
+
+    /** handle -> the stream {@code openStats} last handed out; the test pushes into it. */
+    static final Map<String, ScriptedStream> STATS_STREAMS = new ConcurrentHashMap<>();
+
+    /** handle -> the stream {@code openConsole} last handed out. */
+    static final Map<String, ScriptedStream> CONSOLE_STREAMS = new ConcurrentHashMap<>();
+
+    /** handles whose stats open must FAIL: a stats read that never answers. */
+    static final Set<String> STATS_FAILS = ConcurrentHashMap.newKeySet();
+
+    /** handles whose one-shot console tail must FAIL: the daemon cannot be asked. */
+    static final Set<String> TAIL_FAILS = ConcurrentHashMap.newKeySet();
+
+    /** handle -> what the one-shot console tail answers. */
+    static final Map<String, String> TAILS = new ConcurrentHashMap<>();
+
+    /** Forget every scripted stream and failure; call between journeys. */
+    static void resetStreams() {
+        STATS_STREAMS.values().forEach(ScriptedStream::close);
+        CONSOLE_STREAMS.values().forEach(ScriptedStream::close);
+        STATS_STREAMS.clear();
+        CONSOLE_STREAMS.clear();
+        STATS_FAILS.clear();
+        TAIL_FAILS.clear();
+        TAILS.clear();
+    }
+
+    /**
+     * A driver stream whose frames the TEST writes: {@link #push} delivers one chunk to
+     * whoever is blocked in {@link #next()}, and {@link #close()} unblocks it the way the
+     * real streams do.
+     */
+    static final class ScriptedStream implements ConsoleStream {
+
+        private final BlockingQueue<byte[]> frames = new LinkedBlockingQueue<>();
+        private final List<String> stdinWrites = new ArrayList<>();
+        private volatile boolean closed;
+
+        /** Deliver one output frame verbatim, chunk boundaries included. */
+        void push(@NonNull String text) {
+            this.frames.add(text.getBytes(StandardCharsets.UTF_8));
+        }
+
+        boolean isClosed() {
+            return this.closed;
+        }
+
+        @Override
+        public ConsoleStream.@Nullable Chunk next() {
+            while (!this.closed) {
+                byte[] frame;
+                try {
+                    frame = this.frames.poll(50, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return null;
+                }
+                if (frame == null) {
+                    continue;
+                }
+                if (frame.length == 0) {
+                    return null;   // endFromDaemon / loseDaemon
+                }
+                return new ConsoleStream.Chunk(false, frame);
+            }
+            return null;
+        }
+
+        @Override
+        public void writeStdin(byte @NonNull [] data) throws IOException {
+            if (this.closed) {
+                throw new IOException("stream closed");
+            }
+            this.stdinWrites.add(new String(data, StandardCharsets.UTF_8));
+        }
+
+        /**
+         * Always CONSUMER_CLOSED: nothing here asserts the crash-detection policy that
+         * ENDED and DAEMON_LOST drive, and a termination no test exercises would be a
+         * fake answering a question nobody asked.
+         */
+        @Override
+        public ConsoleStream.@NonNull Termination termination() {
+            return ConsoleStream.Termination.CONSUMER_CLOSED;
+        }
+
+        @Override
+        public @NonNull String detail() {
+            return "";
+        }
+
+        @Override
+        public void close() {
+            this.closed = true;
+            this.frames.add(new byte[0]);
+        }
+    }
+
     static final class FakeNativeRuntime
-            implements InstanceRuntime, NativeSnapshotSupport {
+            implements InstanceRuntime, NativeSnapshotSupport, StatsStreamSupport,
+                       ConsoleStreamSupport {
 
         private final Map<String, FakeWorkload> daemon;
 
@@ -217,6 +332,52 @@ final class FakeNativeDaemons {
         @Override
         public @NonNull ImageIdentity imageIdentity(@NonNull InstanceSpec spec) {
             return new ImageIdentity(spec.image(), "fake-fingerprint");
+        }
+
+        // -- StatsStreamSupport -----------------------------------------------
+
+        @Override
+        public @NonNull ConsoleStream openStats(@NonNull String handle) throws IOException {
+            if (STATS_FAILS.contains(handle)) {
+                throw new IOException("the stats stream of " + handle + " did not answer");
+            }
+            requireRunning(handle);
+            ScriptedStream stream = new ScriptedStream();
+            STATS_STREAMS.put(handle, stream);
+            return stream;
+        }
+
+        // -- ConsoleStreamSupport ---------------------------------------------
+
+        @Override
+        public @NonNull Console openConsole(@NonNull String handle) throws IOException {
+            require(handle);
+            ScriptedStream stream = new ScriptedStream();
+            CONSOLE_STREAMS.put(handle, stream);
+            return new Console(stream, true);
+        }
+
+        @Override
+        public @NonNull String consoleTail(@NonNull String handle, int lines)
+                throws IOException {
+            if (TAIL_FAILS.contains(handle)) {
+                throw new IOException("the console of " + handle + " cannot be read");
+            }
+            return TAILS.getOrDefault(handle, "");
+        }
+
+        @Override
+        public @Nullable Integer exitCode(@NonNull String handle) throws IOException {
+            return require(handle).running ? null : 0;
+        }
+
+        private @NonNull FakeWorkload requireRunning(@NonNull String handle)
+                throws IOException {
+            FakeWorkload workload = require(handle);
+            if (!workload.running) {
+                throw new IOException("workload " + handle + " is not running");
+            }
+            return workload;
         }
     }
 
