@@ -554,6 +554,51 @@ are proven only by `InstanceLogRetentionLiveTest` (`assumeTrue` at `:80`, `:82`,
 The fix is not more live tests: it is a hermetic fake for the stats stream, the
 same shape `FakeNativeDaemons` already provides for the migration journeys.
 
+**STATUS 2026-08-08: DONE, in exactly that shape, and the row moves PARTIAL ->
+IMPLEMENTED.** `FakeNativeDaemons` grew the two missing driver CAPABILITIES --
+`StatsStreamSupport` and `ConsoleStreamSupport` over a `ScriptedStream` whose frames
+the test writes -- because the hub asks the resolved RUNTIME whether it has the
+lane, so a separate harness would have had to re-fake the whole runtime to be asked
+at all. `FakeVolumeKind` still exposes neither, which is what makes "a driver
+without the lane is refused BY NAME" testable.
+
+`src/browserTest/java/be/elevenways/hohenheim/test/instance/InstanceObservabilityContractTest.java`
+-- 4 journeys, 34 assertions, under a second, no daemon:
+
+- stats: the decode, one shared stream for many viewers with the ring replayed to a
+  joiner, the bounded ring, and the teardown of the DRIVER stream when the last
+  viewer leaves (asserted on the fake stream's own closed flag, not on a status).
+- the refusals: a driver with no stats lane, a stats read that does not answer, and
+  a STOPPED workload are three NAMED failures -- never an empty chart, which reads
+  as an idle workload.
+- console: redaction AT INGEST (the declared secret reaches neither a viewer nor the
+  stored row), one UPSERTED row per episode however often it flushes, a secret
+  declared MID-STREAM redacted from there on, and the retention sweep.
+- the console refusals: no lane, and an unreadable console -> `logs_unavailable`,
+  plus the one-shot tail carrying its own redaction so the automation API is not the
+  wider door.
+
+Scripting the frames buys assertions the live test structurally CANNOT make, which
+is the point rather than a side effect: exact CPU arithmetic from known counters
+(usageDelta/systemDelta * cores * 100 -- a live container cannot be asked for a
+round number), a sample SPLIT across a chunk boundary decoding to one sample, an
+unparseable line skipped without ending the stream, and the ring bound reached on
+purpose. **[test]**
+
+What it CANNOT prove, so `InstanceStatsLiveTest` and `InstanceLogRetentionLiveTest`
+both stay: that a REAL daemon's `/stats` stream carries these keys in this NDJSON
+framing, and that a container really burning a core reports non-zero CPU. A fake
+cannot discover an Engine API change; it can only prove that what we do with the
+bytes is right.
+
+**Behaviour defect found by writing it, FIXED: console log retention swept the wrong
+column.** `CleanOldInstanceLogs` swept by `created_at`, but an instance log row is
+UPSERTED for the whole life of ONE console episode -- so on a workload streaming for
+a month, `created_at` is the age of the EPISODE and never the age of its text. The
+sweep deleted a row still being written to and the sink's next flush silently started
+a new one, losing exactly the history the 30-day window was supposed to still hold.
+It now sweeps by `saved_at`, which retires an episode 30 days after its LAST line.
+
 ## 14. A tenant-facing API
 
 **IMPLEMENTED.**
@@ -771,6 +816,12 @@ Value against effort, with prerequisites, for the game-panel claim specifically.
    live stats has exactly ONE test, that test assumes three times, and a
    regression in it is invisible. Effort: medium. Prerequisite: none;
    `FakeNativeDaemons` is the pattern and it already lives in the same package.
+   **DONE 2026-08-08** -- `FakeNativeDaemons` grew the stats and console lanes as
+   driver capabilities and `InstanceObservabilityContractTest` covers decode,
+   sharing, ring bound, teardown, ingest redaction, the upserted history row, the
+   retention sweep and every refusal. It also found and fixed a retention sweep that
+   deleted live episodes. Kept in place with its number: the ranking is history, not
+   a worklist. See item 13's STATUS block.
 2. **Localize the ten page titles** (above). DONE 2026-08-08 -- thirteen call
    sites resolved through one `CmsSupport.pageTitle` seam, the public-facing proxy
    errors negotiated off Accept-Language, and a source guard that fails on the
@@ -915,6 +966,15 @@ gates; **67** files contain an assume call at all. Several gates sit in
 PRE-PULLED IMAGE, so a host with a working daemon and a cold cache still reports
 green.
 
+**Update 2026-08-08:** those figures are unchanged -- no gate was removed, because a
+live class that proves something a fake cannot must keep running where a daemon
+exists. What changed is that the three capabilities whose ONLY proof sat behind
+those gates (the release state machine, live stats and logs, ACME acquisition) now
+also have hermetic twins: three new classes, 11 journeys, ~116 state assertions that
+execute on any machine. The cross-cutting `@Tag`-separated live lane is still open,
+and is now MORE worth doing, not less: with twins in place, a CI that fails when a
+live class skips no longer risks hiding a whole capability behind one missing image.
+
 ---
 
 ## Verdict
@@ -922,12 +982,19 @@ green.
 The inventory is CLOSED: every clause of the minimum claim has a decision and its
 evidence.
 
-**The Pterodactyl replacement claim is NOT yet usable publicly**, on three
-clauses:
+**The Pterodactyl replacement claim is NOT yet usable publicly**, on ONE remaining
+clause. The list below is kept with its original numbering; two of its three
+clauses closed on 2026-08-08 and say so:
 
-- item 10, per-instance database allocation, was per-TENANT only (CLOSED 2026-08-08);
-- item 11, resource quotas, has no memory dimension;
-- item 13, live stats and logs, has one test and it assumes three times.
+- item 10, per-instance database allocation, was per-TENANT only -- **CLOSED
+  2026-08-08** (`instance_databases`, M087; see item 10's STATUS block);
+- item 11, resource quotas, has no memory dimension -- **STILL OPEN, and now the
+  only blocker on this claim**;
+- item 13, live stats and logs, had one test that assumed three times -- **CLOSED
+  2026-08-08**: a hermetic fake for both streams, 34 state assertions with no
+  daemon, beside the live classes which stay because a fake cannot discover an
+  Engine API change. It also fixed a retention sweep that deleted live episodes.
+  See item 13's STATUS block for what the hermetic half cannot prove.
 
 The fourth blocker, the Phase 6 gate's localization clause, is MET as of
 2026-08-08 (see its section above): thirteen call sites resolved through one

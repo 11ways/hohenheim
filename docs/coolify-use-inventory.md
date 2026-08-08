@@ -45,11 +45,11 @@ Thirteen numbered clauses, plus three argued rejections and one cross-reference:
 
 | verdict | count | items |
 | --- | --- | --- |
-| IMPLEMENTED | 9 | 1, 2, 4, 6, 7, 8, 10, 11, 13 |
-| PARTIAL | 4 | 3, 5, 9, 12 |
+| IMPLEMENTED | 10 | 1, 2, 4, 6, 7, 8, 9, 10, 11, 13 |
+| PARTIAL | 3 | 3, 5, 12 |
 | REJECTED | 3 | A (compose runtime), C (large service marketplace), D (multi-server orchestration) |
-| OPEN | 0 as a row | three OPEN SLICES remain, named inside PARTIAL rows: ACME issuance proof (9), site/database count quotas (12), the CLI test wiring (13) |
-| CLAIMED | 1 sub-verdict | ACME certificate acquisition (item 9). Gitea (item 3) moved CLAIMED -> IMPLEMENTED 2026-08-08 |
+| OPEN | 0 as a row | two OPEN SLICES remain, named inside rows: site/database count quotas (12), the CLI test wiring (13) |
+| CLAIMED | 0 sub-verdicts | ACME acquisition (item 9) moved CLAIMED -> IMPLEMENTED 2026-08-08; Gitea (item 3) did the same |
 
 Counts updated 2026-08-08: items 2 and 10 moved PARTIAL -> IMPLEMENTED when the
 two defects this document found were fixed (build isolation, and a named volume
@@ -57,9 +57,12 @@ surviving a health-gated release). Each row keeps the original finding as histor
 above its resolution -- do not delete those paragraphs, they are why the fix looks
 the way it does.
 
-Of the 9 IMPLEMENTED rows, **four are proven only `[live]`** (1, 6, 7, 10) -- and
-two of those are the rollout and rollback that are the product's centrepiece.
-Item 2 is now the rare one proven `[test]` (hermetic). Section B is a
+Of the 10 IMPLEMENTED rows, **one is proven only `[live]`** (1, the buildpack
+build). Items 6 and 7 -- the rollout and rollback that are the product's
+centrepiece -- gained a hermetic STATE-MACHINE twin on 2026-08-08 beside their live
+class, item 9 gained hermetic ACME issuance against an in-JVM CA, and items 2 and
+10 were already `[test]`. Where a row now carries BOTH marks, both classes are
+load-bearing and each row says what the hermetic half cannot prove. Section B is a
 cross-reference, not a rejection.
 
 ---
@@ -367,6 +370,42 @@ referencing it seeds operation rows rather than releasing. On a machine without
 Docker or with a cold image cache, the entire rollout claim rests on zero
 executed assertions.
 
+**STATUS 2026-08-08 (supersedes the paragraph above): the state machine now has a
+hermetic twin, and the live class STAYS.**
+`src/browserTest/java/be/elevenways/hohenheim/test/docker/SiteReleaseContractTest.java`
+runs the whole engine with NO daemon, NO netns and NO image, against
+`test/docker/FakeDockerDaemon.java` -- one in-memory daemon with two faces onto the
+same state (an `InstanceRuntime` the site kind deploys through, and a
+`DockerTransport` every `new DockerClient()` speaks raw HTTP/1.1 to, because
+`SiteInstances.reusableStatus` reads the daemon directly while the deploy goes
+through the runtime). A running fake container really listens on loopback, so the
+engine's health probe is a genuine HTTP round trip and an unhealthy candidate is a
+real 503. 54 assertions, 4 journeys, ~5 seconds. **[test]**
+
+What the hermetic twin adds over the live one: the refused candidate's whole life
+at the daemon as a recorded CALL SEQUENCE (create, start, destroy -- never
+stopped-and-kept the way a RETAINED release is), the reuse lane not minting an
+operation for an unchanged site, and boot recovery's **half-flipped switch**
+branch (`recoverOne`, candidate already serving and the superseded row still
+serving) -- which had NO coverage at all, live or hermetic.
+
+What it CANNOT prove, and therefore what keeps `SiteReleaseLiveTest` mandatory:
+zero dropped requests across the swap (no proxy, no traffic), `DockerInstanceRuntime`
+/ `WorkloadNetworks` / the nftables workload policy (the fake stands in for the
+kind's runtime), the image fingerprint pin, and that a real registry produced the
+digest. Both classes are load-bearing; neither replaces the other.
+
+**Behaviour defect found by writing that twin, FIXED: a serving release whose
+WORKLOAD was killed inside a running container was reported converged forever.**
+`SiteInstances.reusableStatus` already refused to reuse an OOM-killed container,
+but `SiteReleases.release` then computed `protecting` from `running() &&
+publishedPort() != null` alone, took the fingerprint-adopt branch, and returned the
+same dead release with the operation stamped SUCCEEDED ("spec unchanged;
+fingerprint adopted without a deploy"). The refusal one layer up achieved nothing.
+`protecting` now also requires `!oldLive.workloadDead()`, so the honest thing
+happens instead: redeploy in place, no probe gate, because there is no live traffic
+to gate against.
+
 ## 7. Rollback
 
 **IMPLEMENTED, proven only `[live]`.**
@@ -389,6 +428,14 @@ Accountability note (2026-08-08): the panel row action recorded no activity row
 while the API lane did. Recording moved into `SiteReleases.rollback` itself
 (`ACTIVITY_ROLLBACK_ACTION`, `:71`) so both surfaces answer identically. That
 change is `[live]`-covered only, for the same reason this row is.
+
+**STATUS 2026-08-08: rollback and its pin are hermetically covered too.**
+`SiteReleaseContractTest.aHealthySwapDrainsRetainsRollsBackAndReclaims` walks
+release -> swap -> drain -> retain-exactly-one -> rollback -> reclaim -> pin held
+across an unchanged converge -> pin dissolved by a source change, asserting
+PERSISTED roles and settings rather than a status, and asserting that the rollback
+pulled NOTHING (the fake CA of images counts `/images/create` calls: an artifact
+addressed by content needs no registry). The API lane is still refusal-only. **[test]**
 
 ## 8. Managed databases and credential injection
 
@@ -459,6 +506,44 @@ HTTP-01 and one DNS-01 wildcard certificate end to end. Until then "automatic
 TLS" is a mechanism we believe rather than a property we have measured, and it
 is the highest-value untested mechanism in the product -- an ACME regression is
 silent until a certificate expires.
+
+**STATUS 2026-08-08: CLOSED, and NOT with Pebble.** The OPEN slice above named a
+Pebble container; that was rejected on the evidence this document itself collects,
+because a container puts the proof behind a Docker socket and a pre-pulled image --
+the exact gate that made ACME unmeasured in the first place. What shipped instead
+is `src/browserTest/java/be/elevenways/hohenheim/test/tls/FakeAcmeServer.java`: a
+real RFC 8555 CA IN THIS JVM (directory, nonces, account, orders, authorizations,
+challenge validation, finalize, and a chain signed by its own throwaway CA from the
+client's REAL PKCS#10 CSR). The client half is entirely genuine -- acme4j signs real
+JWS, and the product parses a real X.509 chain and reads its notAfter.
+
+`test/tls/AcmeIssuanceContractTest.java` issues one HTTP-01 certificate and one
+WILDCARD DNS-01 certificate, and asserts the stored row: status active, a parsed
+leaf whose SANs are exactly the ordered names, the expiry read OFF the certificate,
+the account key persisted once and REUSED by the second order (a new account per
+order is how a CA rate-limits you out), and for DNS-01 that the TXT record is
+published under the fully qualified BASE identifier
+(`_acme-challenge.wild.test.`, wildcard label dropped, 43-char base64url digest)
+and REMOVED again. The refusals are covered too: a validation the CA fails and an
+order the CA rejects at finalize both leave no certificate, a row stamped error,
+the CA's own problem detail recorded and a backed-off retry. 31 assertions, ~20
+seconds, no daemon. **[test]**
+
+**This required a production change, and it is a product feature rather than a test
+seam:** the ACME directory was hardcoded to `acme://letsencrypt.org` inside
+`ensureAccount`, so an internal ACME CA (step-ca, an enterprise CA) was unreachable
+at any amount of configuration. It is now `ssl.acme_directory_url` (blank = Let's
+Encrypt, production or staging per the existing switch), read through
+`AcmeService.directoryUri`.
+
+What this CANNOT prove, so nothing reads it as total coverage: that the REAL Let's
+Encrypt accepts our requests (a fake directory cannot discover a tightened
+validation, a new required field or a rate limit -- only a staging order can, and
+that is deliberately not a test), that the CA can REACH us (the HTTP-01 validator
+calls the challenge responder in-process, so DNS, port 80 and the proxy's
+`.well-known` route are untouched), that a DNS-01 value is queryable on the
+internet, and certificate TRUST. The row therefore moves CLAIMED -> IMPLEMENTED for
+the ACQUISITION mechanism, not for interoperability with a specific public CA.
 
 ## 10. Persistent storage
 
@@ -674,21 +759,38 @@ Value against effort, with prerequisites, for the PaaS claim specifically.
    answer is to declare the non-docker git site types operator-only and say so.
    Prerequisite: a decision on which of those two it is. This is the only item
    here that is a correctness claim rather than a coverage gap.
+   **DONE 2026-08-08** (`5d3a0ed`) -- see item 2's row: both lanes now state their
+   boundary by name and neither receives the workload's runtime credentials. Kept
+   in place with its number: the ranking is history, not a worklist.
 2. **Key volume identity to the SITE, not the instance row** (item 10). Value:
    highest -- a named volume silently comes back EMPTY after a health-gated
    release, which is data loss presented as a successful deploy. Effort: medium: a
    naming change plus adoption of the existing volume, and a hermetic-plus-live
    test that writes, releases and reads back. Prerequisite: none -- there are no
    live installations, so a rename is free.
+   **DONE 2026-08-08** (`f357bbf`) -- volumes are keyed to the SITE and the existing
+   one is adopted; see item 10's row. Kept in place with its number.
 3. **Issue one real certificate in a test** (item 9). Value: high -- ACME is the
    highest-value entirely unmeasured mechanism in the product, and an ACME
    regression stays silent until an expiry. Effort: medium: a Pebble container in
    the browser lane, one HTTP-01 and one DNS-01 wildcard order. Prerequisite: none.
+   **DONE 2026-08-08, and the Pebble half of that plan was REJECTED** -- a container
+   puts the proof behind the very gate that made ACME unmeasured. An in-JVM RFC 8555
+   CA (`FakeAcmeServer`) issues both certificates instead, and the hardcoded
+   directory became `ssl.acme_directory_url`. See item 9's STATUS block for what it
+   deliberately does not prove. Kept in place with its number.
 4. **A hermetic test of the release engine** (items 6, 7). Value: high -- the
    zero-downtime swap, the drain and the rollback have NO non-live coverage at
    all. Effort: medium-high; it needs a fake docker runtime the way
    `FakeNativeDaemons` fakes the native one. Prerequisite: none, and it would pay
    for item 2's test as well.
+   **DONE 2026-08-08, exactly that shape** -- `FakeDockerDaemon` fakes the
+   site_container kind's runtime (and the local daemon's HTTP transport, because the
+   reuse lane reads the daemon directly), and `SiteReleaseContractTest` covers the
+   state machine including boot recovery's half-flipped switch, which nothing
+   covered before. The live class stays: see items 6 and 7 for the split. Writing it
+   found and fixed a converge-reports-success-over-a-dead-workload defect. Kept in
+   place with its number.
 5. **Per-owner site and database count quotas** (item 12). Value: medium-high --
    "five sites, three databases" is not expressible, and a database only charges
    an instance slot indirectly. Effort: low-medium on the existing ledger.
@@ -842,23 +944,61 @@ the claim is the thing this inventory gates.
 The inventory is CLOSED: every clause of the minimum claim has a decision and its
 evidence.
 
-**The Coolify replacement claim is NOT yet usable publicly**, and unlike the
-Pterodactyl inventory the blocker is not only coverage:
+**VERDICT SUPERSEDED 2026-08-08 (second block of the day).** The list below was
+written before that day's fixes and then went STALE IN THE UNDERSTATING DIRECTION:
+it kept naming items 2 and 10 as blockers after both had been fixed and their ROWS
+updated (`5d3a0ed`, `f357bbf`), and it named items 6, 7 and 9 as having no hermetic
+coverage before they got it. A verdict wrong about what is closed is exactly how a
+real gap gets ignored -- which is the reason this document exists. The original text
+is kept below it as history.
 
-- item 2, build isolation, is FALSE for the git `build_command` lane, which also
-  receives the site's runtime environment variables. The claim as written is
-  wrong, not merely unproven.
-- item 10, persistent storage, silently loses a named volume across a
-  health-gated release.
-- item 9, automatic TLS, has no test that ever obtains a certificate.
-- items 6 and 7, the rollout and rollback that are the product's centrepiece, have
-  no hermetic coverage at all -- every assertion about them sits behind a Docker
-  socket and a pre-pulled image.
-- item 12, quotas, cannot express a site or database count.
+**Current standing: ONE clause of the minimum claim is still unmet.**
+
+- item 12, quotas, cannot express a site or database count. This is the only
+  remaining blocker, and it is a missing capability rather than a coverage gap.
+
+Closed since the original verdict, each with a dated STATUS block in its own row:
+
+- item 2, build isolation: FIXED `5d3a0ed` -- both lanes name their boundary and
+  neither receives the workload's runtime credentials. **[test]**
+- item 10, persistent storage: FIXED `f357bbf` -- volumes are keyed to the SITE and
+  the existing one is adopted. **[test]**
+- items 6 and 7, the rollout and rollback: a hermetic STATE-MACHINE twin now runs
+  with no daemon (`SiteReleaseContractTest` over `FakeDockerDaemon`), BESIDE the
+  live class, which stays because zero-dropped-requests through a real proxy is not
+  something a fake can assert. Writing it found and fixed a converge that reported
+  success over a workload the daemon had killed. **[test] + [live]**
+- item 9, automatic TLS: a real RFC 8555 CA in the test JVM issues one HTTP-01 and
+  one wildcard DNS-01 certificate, refusals included; the hardcoded Let's Encrypt
+  directory became `ssl.acme_directory_url`, which also makes an internal ACME CA
+  reachable in production. Never touches the real Let's Encrypt. **[test]**
+
+Each of those rows states, in its own words, what the hermetic half CANNOT prove.
+Read none of them as total coverage: three of them keep a `[live]` class precisely
+because a fake cannot discover a daemon or a public CA changing under us.
 
 What IS solid, with hermetic state-asserting proof: projects and environments,
 the webhook receiver, per-deployment logs, credential derivation, the API
-projection and scope narrowing, and the preview expiry mechanics. What would
-block calling this a general Coolify replacement for someone else, in one
+projection and scope narrowing, the preview expiry mechanics, build isolation,
+persistent storage, the release state machine and certificate acquisition. What
+would block calling this a general Coolify replacement for someone else, in one
 sentence: there is no compose runtime and no provider provisioning flow -- both
 argued, both real adoption costs.
+
+---
+
+The original verdict of 2026-08-08, kept as history:
+
+> **The Coolify replacement claim is NOT yet usable publicly**, and unlike the
+> Pterodactyl inventory the blocker is not only coverage:
+>
+> - item 2, build isolation, is FALSE for the git `build_command` lane, which also
+>   receives the site's runtime environment variables. The claim as written is
+>   wrong, not merely unproven.
+> - item 10, persistent storage, silently loses a named volume across a
+>   health-gated release.
+> - item 9, automatic TLS, has no test that ever obtains a certificate.
+> - items 6 and 7, the rollout and rollback that are the product's centrepiece, have
+>   no hermetic coverage at all -- every assertion about them sits behind a Docker
+>   socket and a pre-pulled image.
+> - item 12, quotas, cannot express a site or database count.

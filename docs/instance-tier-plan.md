@@ -78,6 +78,31 @@ green. NONE of the three currently permits its public claim; the blocking items
 are enumerated in each file's Verdict section and mirrored in the two phase-gate
 STATUS blocks below.
 
+STATUS (2026-08-08, hermetic-coverage wave -- supersedes the count of blockers in
+the block above, not its rule). The Coolify claim is down to ONE unmet clause
+(item 12, site/database count quotas) and the Pterodactyl claim to ONE (item 11,
+a per-owner memory quota). What closed in between: build isolation and persistent
+storage (fixed earlier the same day), and then the three capabilities whose only
+proof was a daemon-gated test that could skip green --
+
+- the health-gated rollout and rollback (Coolify items 6, 7) gained
+  `SiteReleaseContractTest` over `FakeDockerDaemon`: the state machine with no
+  daemon, including boot recovery's half-flipped switch, which nothing covered;
+- live stats and console logs (Pterodactyl item 13) gained
+  `InstanceObservabilityContractTest` over `FakeNativeDaemons`' new stats/console
+  driver lanes;
+- ACME acquisition (Coolify item 9) gained `AcmeIssuanceContractTest` over an
+  in-JVM RFC 8555 CA, plus the `ssl.acme_directory_url` setting that makes an
+  internal ACME CA reachable at all.
+
+Every live class STAYS, and each inventory row now states what its hermetic half
+cannot prove (zero dropped requests through a real proxy; the real Engine API; a
+real public CA). Three defects surfaced from writing those twins and are fixed: a
+converge that reported success over a workload the daemon had killed, a retention
+sweep that deleted console episodes still being written to, and the hardcoded ACME
+directory. No assumption gate was REMOVED; the cross-cutting `@Tag`-separated live
+lane remains open and is now safer to enforce.
+
 ### Coolify / Dokploy-class PaaS
 
 The existing site, git deployment, database and stack tiers are the foundation,
@@ -4157,6 +4182,19 @@ network, quota, ownership, secret and durable-operation mechanisms.
   interrupted, a half-flipped switch completes, a lost drain finishes. NOT here:
   releases for stacks/databases/processes (their lowering waves), preview
   deployments, per-project quotas.
+
+  HERMETICALLY PROVEN 2026-08-08 (supersedes "every assertion sits behind a Docker
+  socket"). `SiteReleaseContractTest` runs the state machine against
+  `FakeDockerDaemon` -- an in-memory daemon with an `InstanceRuntime` face and a
+  `DockerTransport` face over the SAME state, whose running containers really listen
+  on loopback so the health probe is a genuine HTTP round trip. It asserts the
+  refused candidate's whole life at the daemon as a call sequence, the retained
+  lineage, the reclaim, the rollback pulling nothing, and the half-flipped-switch
+  recovery branch that nothing covered before. The live class STAYS: zero dropped
+  requests through a real proxy, `DockerInstanceRuntime`, `WorkloadNetworks` and the
+  nftables policy are not reachable from a fake. Writing it found and fixed a
+  converge that returned a workload the daemon had killed and stamped the operation
+  succeeded (`protecting` ignored `workloadDead()`).
 - Per-deployment build/runtime logs, environment/secret editing, persistent
   storage, managed database links, domains/TLS/DNS and notifications all use the
   existing generated/resource surfaces and shared authorization. Cross-tier
