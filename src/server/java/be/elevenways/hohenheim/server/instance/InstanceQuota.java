@@ -5,8 +5,10 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -34,7 +36,9 @@ import java.util.Set;
  * The owner is the grant-derived manage-subject SET packed by
  * {@link HohenheimAccess#packSubjects} -- the same derivation sameOwner and the released
  * -claim quarantine answer from, never a principal column. The empty set is the
- * operator, so EVERY operator-owned instance shares one bucket, deliberately.
+ * operator, so EVERY operator-owned instance shares one bucket, deliberately. An OWNED
+ * instance (a site's container, a managed database's engine) answers to the owner of the
+ * record that OWNS it -- see {@link #creationOwnerOf}.
  *
  * AIDEV-NOTE: enforcement rides a beforeWrite hook and the hook is ADJACENT to the
  * write, not transactional -- Model.save opens a transaction only for revisionable
@@ -127,10 +131,9 @@ public final class InstanceQuota {
             boolean willBeLive = effectiveDeletedAt(row, stored) == null;
 
             if (stored == null) {
-                // CREATE (no stored row; covers the explicit-PK insert fallback too). No
-                // record id exists yet, so no manage grant can exist yet either: the
-                // charge goes to the owner the create is ABOUT TO HAVE, derived from the
-                // acting principal.
+                // CREATE (no stored row; covers the explicit-PK insert fallback too). The
+                // instance itself holds no grant yet, so the charge goes to the owner it
+                // is ABOUT TO HAVE -- see creationOwnerOf for the two ways that is derived.
                 //
                 // AIDEV-NOTE: this used to charge the operator bucket unconditionally,
                 // with a comment saying that was "always" the owner because grants land
@@ -142,14 +145,7 @@ public final class InstanceQuota {
                 // with the grant that follows (HohenheimAccess.creationOwnerSubjects), so
                 // the charged bucket and the record's real owner are one answer.
                 if (willBeLive) {
-                    // System work (GeneratedRows scope: a site tier converging its owned
-                    // instance) charges the operator bucket even when a tenant's request
-                    // thread triggered the convergence -- the tenant authored the SITE
-                    // write, the instance write is its system consequence. Tenant- and
-                    // admin-originated creates are unchanged.
-                    reserveInto(row, HohenheimAccess.packSubjects(
-                        HohenheimAccess.creationOwnerSubjects(
-                            TenantWrites.isTenantOriginated() ? TenantWrites.acting() : null)));
+                    reserveInto(row, HohenheimAccess.packSubjects(creationOwnerOf()));
                 }
             } else if (storedLive && !willBeLive) {
                 // The soft-delete transition: hand the CHARGED bucket back.
@@ -176,6 +172,53 @@ public final class InstanceQuota {
     }
 
     // -- hook internals -------------------------------------------------------
+
+    /**
+     * WHO a brand-new instance is charged to.
+     *
+     * An OWNED instance (a site's lowered release container, a managed database's engine)
+     * answers to the OWNER OF THE RECORD THAT OWNS IT -- read from the active
+     * {@link GeneratedRows} attribution, which is the same fact the row's
+     * {@code generated_for_*} columns are stamped from. Everything else answers to the
+     * creation owner derived from the acting principal.
+     *
+     * AIDEV-NOTE: this used to charge the AMBIENT WRITE SCOPE -- operator for anything
+     * inside a GeneratedRows scope, on the reasoning that "the tenant authored the SITE
+     * write, the instance write is its system consequence". That reasoning is only ever
+     * right by accident: it is the same answer as the owner's for an OPERATOR-owned site,
+     * and the wrong one for every tenant-held record. The moment a tenant may allocate a
+     * managed database of their own, the ambient rule let them mint unlimited engine
+     * instances -- each one really booked on a host, each one charged to the OPERATOR's
+     * bucket -- so the per-owner cap could not bind the thing it exists for. Ownership is
+     * a property of the owning RECORD, never of whichever thread happens to be writing.
+     *
+     * AIDEV-NOTE: the owning record's manage grants must already exist when its first
+     * owned instance is written -- the InstanceTemplates.createFromTemplate lesson one tier
+     * up: plant ownership BEFORE the writes that answer to it. A funnel that granted after
+     * converging the runtime would charge the operator and then hand the record to a
+     * tenant, leaving the reservation attributed to a bucket nobody will ever release.
+     *
+     * @return the manage-subject set to charge; empty IS the operator, never an error
+     */
+    private static @NonNull Set<String> creationOwnerOf() {
+        GeneratedRows.Attribution attribution = GeneratedRows.currentAttribution();
+        if (attribution != null && attribution.forModel() != null && attribution.forId() != null) {
+            Identifier ownerModel = Identifier.tryParse(attribution.forModel());
+            if (ownerModel != null) {
+                Set<String> owner =
+                    HohenheimAccess.manageSubjectsOf(ownerModel, attribution.forId());
+                if (owner != null) {
+                    return owner;
+                }
+                // Unreadable grants: fall through to the ambient derivation and say so,
+                // rather than silently inventing an owner for a record we cannot read.
+                Blast.log("QUOTA: cannot read the manage grants of", attribution.forModel(),
+                    attribution.forId(), "- charging the owned instance by write scope");
+            }
+        }
+        return HohenheimAccess.creationOwnerSubjects(
+            TenantWrites.isTenantOriginated() ? TenantWrites.acting() : null);
+    }
 
     private static void reserveInto(@NonNull Row row, @NonNull String packedSubjects) {
         reserveIntoBucket(row, bucketKeyOf(packedSubjects));

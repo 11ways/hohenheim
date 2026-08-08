@@ -119,6 +119,20 @@ public final class GeneratedRows {
         return scope != null ? scope.attribution() : null;
     }
 
+    /**
+     * The attribution the active scope stamps onto guarded rows, or null when no scope is
+     * active (or when the active one is a {@link #sweeping} removal, which authors nothing).
+     *
+     * AIDEV-NOTE: public so a policy hook can read WHO a system write is being performed FOR
+     * without depending on hook ORDER. The alternative -- reading the stamped columns off the
+     * row -- only works if the stamping beforeWrite hook happens to have run first, and both
+     * are beforeWrite hooks on the same schema. The ambient scope is the SOURCE those columns
+     * are derived from, so reading it is reading the same answer one step earlier.
+     */
+    public static @Nullable Attribution currentAttribution() {
+        return stamping();
+    }
+
     /** The four attribution columns of one guarded model. */
     public record Columns(@NonNull StringField by, @NonNull StringField forModel,
                           @NonNull IntegerField forId, @NonNull DateTimeField at) {
