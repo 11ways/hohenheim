@@ -7265,5 +7265,15 @@
       "text": "{$percent}% van de {$limit} GB rootschijf is in gebruik.",
       "scope": "attention_detail"
     }
+  ],
+  "control_plane_backup": [
+    {
+      "text": "Geen externe back-upbestemming",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Herstelarchieven van het controlevlak (database + versleutelingssleutels) kunnen nergens heen. Stel database.control_plane_backup_target in.",
+      "scope": "attention_detail"
+    }
   ]
 }

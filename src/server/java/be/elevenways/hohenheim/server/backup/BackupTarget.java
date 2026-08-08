@@ -4,6 +4,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * The backup-target seam: where an instance export lands and how it comes back.
@@ -51,6 +52,17 @@ public interface BackupTarget {
 
     /** Whether a committed artifact exists under {@code key}. */
     boolean exists(@NonNull String key) throws IOException;
+
+    /**
+     * Every COMMITTED key under a prefix, staging debris excluded.
+     *
+     * Retention lives here rather than in a local ledger on purpose: a control-plane backup
+     * exists for the case where this host's disk is gone, so a table listing what was uploaded
+     * is exactly the wrong authority over what the target actually holds.
+     *
+     * @return the keys, in no defined order; empty when the prefix holds nothing
+     */
+    @NonNull List<String> list(@NonNull String prefix) throws IOException;
 
     /** Remove the committed artifact AND any staging debris for {@code key}; absent is success. */
     void delete(@NonNull String key) throws IOException;

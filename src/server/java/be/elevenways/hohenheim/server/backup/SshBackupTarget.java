@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -162,6 +163,32 @@ public final class SshBackupTarget implements BackupTarget {
             throw new IOException("Remote existence probe answered unexpectedly: " + answer);
         }
         return "YES".equals(answer);
+    }
+
+    /**
+     * AIDEV-NOTE: the remote command is guarded by {@code test -d} and exits 0 on an absent
+     * base directory, so "nothing uploaded yet" is an empty list while an unreachable host is
+     * still an IOException. Filtering happens HERE, on full keys, rather than through a remote
+     * glob: a shell glob would be one quoting mistake away from listing the whole filesystem.
+     */
+    @Override
+    public @NonNull List<String> list(@NonNull String prefix) throws IOException {
+        String base = quoted(this.basePath);
+        String output = new String(
+            run("if [ -d " + base + " ]; then find " + base + " -type f; fi", null, null),
+            StandardCharsets.UTF_8);
+        List<String> keys = new ArrayList<>();
+        for (String line : output.split("\n")) {
+            String path = line.trim();
+            if (path.isEmpty() || !path.startsWith(this.basePath + "/")) {
+                continue;
+            }
+            String key = path.substring(this.basePath.length() + 1);
+            if (key.startsWith(prefix) && !key.endsWith(STAGING_SUFFIX)) {
+                keys.add(key);
+            }
+        }
+        return keys;
     }
 
     @Override

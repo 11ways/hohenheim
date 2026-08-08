@@ -45,6 +45,8 @@ import be.elevenways.zenit.auth.server.identity.IdentityProviderRegistry;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusIdentityProvider;
 import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.server.orm.crypto.EncryptionRekey;
+import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.server.task.TaskService;
@@ -96,11 +98,50 @@ public class ServerMain {
             if (restoreFlag >= 0) {
                 if (restoreFlag + 1 >= args.length) {
                     throw new IllegalArgumentException(
-                        "--restore-control-plane needs the archive path as its next argument");
+                        "--restore-control-plane needs the archive path (or the key of an"
+                        + " archive on the configured backup target) as its next argument");
                 }
                 HohenheimSettingsFiles.load();
                 ServerSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
-                ControlPlaneBackups.restore(java.nio.file.Path.of(args[restoreFlag + 1]));
+                String pointer = args[restoreFlag + 1];
+                java.nio.file.Path local = java.nio.file.Path.of(pointer);
+                if (java.nio.file.Files.isRegularFile(local)) {
+                    ControlPlaneBackups.restore(local);
+                    return;
+                }
+                // Not a local file: it is a key on the target. Resolving the target needs the
+                // backup_targets table, so the database is opened READ-ONLY-in-spirit here --
+                // the restore itself still replaces the file only after the archive verified.
+                var restoreSource = HohenheimDatabase.openDatasource();
+                try {
+                    ControlPlaneBackups.restoreFromTarget(pointer);
+                } catch (java.io.IOException error) {
+                    throw new java.io.UncheckedIOException(
+                        "Control-plane restore from target failed", error);
+                } finally {
+                    restoreSource.close();
+                }
+                return;
+            }
+
+            if (argList.contains("--list-control-plane-backups")) {
+                HohenheimSettingsFiles.load();
+                ServerSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
+                var listSource = HohenheimDatabase.openDatasource();
+                try {
+                    for (String key : ControlPlaneBackups.listBackups()) {
+                        Blast.log("control-plane archive:", key);
+                    }
+                } catch (java.io.IOException error) {
+                    throw new java.io.UncheckedIOException(
+                        "Cannot list control-plane backups", error);
+                } finally {
+                    listSource.close();
+                }
+                return;
+            }
+
+            if (runEncryptionKeyCommand(argList)) {
                 return;
             }
         }
@@ -279,6 +320,65 @@ public class ServerMain {
             roleSkip(HohenheimRoles.Role.DNS,
                 "zone store, federation and DNS listeners not started");
         }
+    }
+
+    /**
+     * The operator lane for the three halves of a key rotation, each its own deliberate step.
+     *
+     * They are separate arguments on purpose: rotating is instant, re-encrypting walks every
+     * encrypted row and may be re-run after a crash, and retiring is irreversible. One
+     * "--rotate-everything" would hide the only step that can destroy data behind the two that
+     * cannot. Every one of them exits without booting a server.
+     *
+     * @return whether one of the commands ran (the caller must then stop)
+     */
+    private static boolean runEncryptionKeyCommand(@NonNull List<String> argList) {
+        boolean rotate = argList.contains("--rotate-encryption-key");
+        boolean reencrypt = argList.contains("--reencrypt-secrets");
+        boolean survey = argList.contains("--encryption-key-survey");
+        int retireFlag = argList.indexOf("--retire-encryption-key");
+        if (!rotate && !reencrypt && !survey && retireFlag < 0) {
+            return false;
+        }
+        if (retireFlag >= 0 && retireFlag + 1 >= argList.size()) {
+            throw new IllegalArgumentException(
+                "--retire-encryption-key needs the key id as its next argument");
+        }
+
+        HohenheimSettingsFiles.load();
+        ServerSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
+        HohenheimAccess.declareGrantableModels();
+        var datasource = HohenheimDatabase.openDatasource();
+        try {
+            if (rotate) {
+                String minted = FieldEncryption.requireKeyring().rotate();
+                Blast.log("Rotated the field-encryption keyring; the new active key is", minted,
+                    "-- NOTHING already stored is safer yet. Run --reencrypt-secrets, then"
+                    + " --retire-encryption-key <old id>");
+            }
+            if (reencrypt) {
+                EncryptionRekey.Report report = EncryptionRekey.reencrypt(datasource);
+                Blast.log("Re-encrypted under key", report.activeKeyId() + ":",
+                    report.rowsRewritten(), "of", report.rowsScanned(),
+                    "rows rewritten across", report.models().size(), "models");
+            }
+            if (survey || reencrypt) {
+                EncryptionRekey.Survey result = EncryptionRekey.survey(datasource);
+                for (var entry : result.valuesByKeyId().entrySet()) {
+                    Blast.log("field-encryption key", entry.getKey() + ":", entry.getValue(),
+                        "stored value(s) still read under it");
+                }
+            }
+            if (retireFlag >= 0) {
+                String keyId = argList.get(retireFlag + 1);
+                EncryptionRekey.retire(keyId);
+                Blast.log("Retired field-encryption key", keyId,
+                    "-- it can no longer decrypt anything, and nothing needed it");
+            }
+        } finally {
+            datasource.close();
+        }
+        return true;
     }
 
     /** A skipped role must never be silent: name the role and what did not start. */

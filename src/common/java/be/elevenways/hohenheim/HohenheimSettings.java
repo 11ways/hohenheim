@@ -461,6 +461,25 @@ public class HohenheimSettings {
             .description("Number of dumps to keep per managed database")
             .build();
 
+        /**
+         * The backup TARGET record (by name) control-plane recovery archives are uploaded to.
+         *
+         * Required, with no default: a control-plane archive exists for the case where this
+         * host is gone, and a local directory does not survive that. Unset means the nightly
+         * task FAILS -- loudly, and visibly on the dashboard -- rather than writing an archive
+         * to the same disk it is supposed to outlive.
+         */
+        public static final SettingDefinition<String> CONTROL_PLANE_BACKUP_TARGET =
+            GROUP.buildSetting("control_plane_backup_target", String.class)
+                .description("Name of the backup target that receives control-plane recovery "
+                    + "archives (database + field-encryption keyring). REQUIRED: pick a target "
+                    + "in a different failure domain, because a local copy dies with the disk "
+                    + "it was protecting against. The archive carries the MASTER KEYS IN THE "
+                    + "CLEAR and its manifest is unsigned -- whoever can read the destination "
+                    + "can decrypt every secret in the database, so treat it exactly like the "
+                    + "keyring file")
+                .build();
+
         public static final SettingDefinition<Integer> MAX_DUMP_MB = GROUP.buildSetting("max_dump_mb", Integer.class)
             .defaultValue(2048)
             .description("Upper bound in MiB for one binary managed-database dump (Redis RDB, "

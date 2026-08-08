@@ -406,6 +406,9 @@ class InstanceSnapshotBackupLiveTest {
                 @Override public void retrieve(String key, Path destination) throws IOException {
                     real.retrieve(key, destination);
                 }
+                @Override public java.util.List<String> list(String prefix) throws IOException {
+                    return real.list(prefix);
+                }
                 @Override public boolean exists(String key) throws IOException {
                     return real.exists(key);
                 }
