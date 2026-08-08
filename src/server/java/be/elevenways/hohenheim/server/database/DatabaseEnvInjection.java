@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -16,9 +17,11 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Derives the environment variables a site's processes receive for each attached managed
- * database, resolved at spawn time so the published port and credentials are always current
- * (nothing is baked into stored site settings). A database that is not active-and-running
+ * Derives the environment variables a WORKLOAD receives for each attached managed
+ * database -- a site's processes ({@link #envForSite}) or an instance's container
+ * ({@link #envForInstance}) -- resolved at spawn time so the published port and the
+ * credentials are always current (nothing is ever baked into stored settings). A database
+ * that is not active-and-running
  * contributes NO variables: the skip is logged as {@code hohenheim.db_injection.unresolved}
  * and the dashboard attention panel surfaces it.
  *
@@ -47,9 +50,38 @@ public final class DatabaseEnvInjection {
     private DatabaseEnvInjection() {
     }
 
+    /**
+     * Which workload tier a set of links belongs to: only the LOOKUP and the log's owner
+     * word differ, so the derivation below stays one code path.
+     */
+    private enum Owner {
+        SITE("site_id"),
+        INSTANCE("instance_id");
+
+        private final @NonNull String logKey;
+
+        Owner(@NonNull String logKey) {
+            this.logKey = logKey;
+        }
+    }
+
     /** Injected environment for a site using live Docker state; empty when nothing is attached. */
     public static @NonNull Map<String, String> envForSite(int siteId) {
         return envForSite(siteId, null, Style.PUBLISHED_LOOPBACK);
+    }
+
+    /**
+     * Injected environment for an INSTANCE: the same families a site gets, resolved the
+     * same way at the same moment (never stored), for the workloads the instance tier owns
+     * directly. Always the CONTAINER_NETWORK style -- an instance workload's 127.0.0.1 is
+     * itself, and {@code InstanceDatabaseNetworks} joins it to each attached database's
+     * link network between container create and start.
+     *
+     * @see #envForSite(int, LiveResolver, Style)
+     */
+    public static @NonNull Map<String, String> envForInstance(int instanceId,
+                                                              @Nullable LiveResolver resolver) {
+        return envFor(Owner.INSTANCE, instanceId, resolver, Style.CONTAINER_NETWORK);
     }
 
     /** {@link #envForSite(int, LiveResolver, Style)} in the host-process (loopback) style. */
@@ -63,13 +95,24 @@ public final class DatabaseEnvInjection {
      */
     public static @NonNull Map<String, String> envForSite(int siteId, @Nullable LiveResolver resolver,
                                                           @NonNull Style style) {
+        return envFor(Owner.SITE, siteId, resolver, style);
+    }
+
+    /**
+     * The one derivation both tiers use: read the owner's links oldest-first, resolve each
+     * database live, and emit its variable family. Fail-soft by design -- a spawn must
+     * never die on injection plumbing, so any resolution error degrades to "no variables"
+     * with a log.
+     */
+    private static @NonNull Map<String, String> envFor(@NonNull Owner owner, int ownerId,
+                                                       @Nullable LiveResolver resolver,
+                                                       @NonNull Style style) {
         try {
-            SiteDatabaseModel links = Models.get(SiteDatabaseModel.class);
             DatabaseModel databases = Models.get(DatabaseModel.class);
-            if (links == null || databases == null) {
+            if (databases == null) {
                 return Map.of();
             }
-            List<Row> linkRows = links.findBySiteId(siteId);
+            List<Row> linkRows = linksOf(owner, ownerId);
             if (linkRows.isEmpty()) {
                 return Map.of();
             }
@@ -79,30 +122,53 @@ public final class DatabaseEnvInjection {
             // primary must never silently hand the bare name to a different database.
             boolean primary = true;
             for (Row link : linkRows) {
-                Row database = databases.find()
-                    .where(DatabaseModel.ID.eq(link.get(SiteDatabaseModel.DATABASE_ID)))
-                    .first();
-                appendLink(env, siteId, link, database, live, primary, style);
+                Integer databaseId = databaseIdOf(owner, link);
+                Row database = databaseId == null ? null
+                    : databases.find().where(DatabaseModel.ID.eq(databaseId)).first();
+                appendLink(env, owner, ownerId, databaseId, prefixOf(owner, link),
+                    database, live, primary, style);
                 primary = false;
             }
             return env;
         } catch (Exception e) {
-            Blast.log("DB-INJECT: env resolution failed for site", siteId, "-", e.getMessage());
+            Blast.log("DB-INJECT: env resolution failed for", owner.logKey, ownerId,
+                "-", e.getMessage());
             return Map.of();
         }
     }
 
-    private static void appendLink(Map<String, String> env, int siteId, Row link,
+    private static @NonNull List<Row> linksOf(@NonNull Owner owner, int ownerId) {
+        if (owner == Owner.SITE) {
+            SiteDatabaseModel links = Models.get(SiteDatabaseModel.class);
+            return links == null ? List.of() : links.findBySiteId(ownerId);
+        }
+        InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
+        return links == null ? List.of() : links.findByInstanceId(ownerId);
+    }
+
+    private static @Nullable Integer databaseIdOf(@NonNull Owner owner, @NonNull Row link) {
+        return owner == Owner.SITE
+            ? link.get(SiteDatabaseModel.DATABASE_ID)
+            : link.get(InstanceDatabaseModel.DATABASE_ID);
+    }
+
+    private static @Nullable String prefixOf(@NonNull Owner owner, @NonNull Row link) {
+        return owner == Owner.SITE
+            ? link.get(SiteDatabaseModel.ENV_PREFIX)
+            : link.get(InstanceDatabaseModel.ENV_PREFIX);
+    }
+
+    private static void appendLink(Map<String, String> env, Owner owner, int ownerId,
+                                   @Nullable Integer databaseId, @Nullable String rawPrefix,
                                    @Nullable Row database, LiveResolver live, boolean primary,
                                    Style style) {
-        Integer databaseId = link.get(SiteDatabaseModel.DATABASE_ID);
         if (database == null) {
-            unresolved(siteId, databaseId, null, "record_missing");
+            unresolved(owner, ownerId, databaseId, null, "record_missing");
             return;
         }
         String name = database.get(DatabaseModel.NAME);
         if (!DatabaseModel.STATUS_ACTIVE.equals(database.get(DatabaseModel.STATUS))) {
-            unresolved(siteId, databaseId, name, "not_active");
+            unresolved(owner, ownerId, databaseId, name, "not_active");
             return;
         }
         ManagedDatabase.LiveStatus status = live.resolve(database);
@@ -111,14 +177,14 @@ public final class DatabaseEnvInjection {
         // credentials for a dead database are the silent-success shape, not a favour.
         if (!status.running()
                 || (style == Style.PUBLISHED_LOOPBACK && status.port() == null)) {
-            unresolved(siteId, databaseId, name, "container_not_running");
+            unresolved(owner, ownerId, databaseId, name, "container_not_running");
             return;
         }
         ManagedDatabase.Engine engine;
         try {
             engine = ManagedDatabase.engineOf(database);
         } catch (IllegalArgumentException e) {
-            unresolved(siteId, databaseId, name, "unknown_engine");
+            unresolved(owner, ownerId, databaseId, name, "unknown_engine");
             return;
         }
         String host = "127.0.0.1";
@@ -129,21 +195,21 @@ public final class DatabaseEnvInjection {
             // nothing inside the consumer's network.
             host = DatabaseInstances.handleOf(databaseId);
             if (host == null) {
-                unresolved(siteId, databaseId, name, "no_engine_instance");
+                unresolved(owner, ownerId, databaseId, name, "no_engine_instance");
                 return;
             }
         }
         int port = style == Style.CONTAINER_NETWORK ? engine.port() : status.port();
-        String prefix = normalizedPrefix(link.get(SiteDatabaseModel.ENV_PREFIX));
+        String prefix = normalizedPrefix(rawPrefix);
         env.putAll(vars(engine, host, port, database.get(DatabaseModel.DB_USER),
             database.get(DatabaseModel.DB_PASSWORD), database.get(DatabaseModel.DB_NAME),
             prefix, primary));
     }
 
-    private static void unresolved(int siteId, @Nullable Integer databaseId,
+    private static void unresolved(Owner owner, int ownerId, @Nullable Integer databaseId,
                                    @Nullable String name, String reason) {
         Blast.slog("hohenheim.db_injection.unresolved", Map.of(
-            "site_id", String.valueOf(siteId),
+            owner.logKey, String.valueOf(ownerId),
             "database_id", databaseId != null ? String.valueOf(databaseId) : "(none)",
             "database", name != null ? name : "(unknown)",
             "reason", reason));

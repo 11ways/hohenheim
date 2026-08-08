@@ -37,6 +37,14 @@ public final class ControllerScope {
     public static final String KIND_BUILD = "build";
     public static final String KIND_PREVIEW = "preview";
     public static final String KIND_DBLINK = "dblink";
+
+    /**
+     * An INSTANCE-to-database link network. Deliberately its own word rather than reusing
+     * {@link #KIND_DBLINK}: both handles are {@code <ownerId>-<databaseId>}, so one kind
+     * would let instance 5 and site 5 mint the same network name for the same database and
+     * each lane's sweep would tear down the other's.
+     */
+    public static final String KIND_INSTANCE_DBLINK = "idblink";
     public static final String KIND_GAMELINK = "gamelink";
 
     /** A parsed managed name. */

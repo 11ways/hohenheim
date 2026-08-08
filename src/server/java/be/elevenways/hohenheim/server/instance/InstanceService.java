@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
+import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostLeases;
@@ -310,6 +312,11 @@ public final class InstanceService {
         // cleanup shape as schedules: generated DNS rows and forced-hosts entries come
         // down rather than dangle at a dead backend.
         GameDomains.deleteForInstance(instanceId);
+        // Database attachments die with the instance for the same reason, and their link
+        // networks come down with them: a soft-deleted record fires no remove hooks, so a
+        // surviving row would keep a dead workload named in the database's in-use refusal
+        // and keep its link network at the daemon forever.
+        InstanceDatabaseLinks.deleteForInstance(instanceId);
         Blast.log("INSTANCE: destroyed", resolved.spec().handle(),
             "- container removed, volumes kept, record soft-deleted");
     }
@@ -507,8 +514,16 @@ public final class InstanceService {
         Map<String, Object> settings = row.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
             ? castSettings(map) : Map.of();
         InstanceVariables instanceVariables = new InstanceVariables();
-        Map<String, String> variables = instanceVariables.valuesFor(instanceId);
-        settings = instanceVariables.applyToSettings(settings, variables);
+        Map<String, String> declared = instanceVariables.valuesFor(instanceId);
+        // An attached managed database's connection family is DERIVED here, at resolve
+        // time, and stored nowhere -- the property DatabaseEnvInjection exists to keep, and
+        // the reason a rotated credential needs no rewrite of any settings map. It sits
+        // UNDER everything the operator authored (see applyToSettings) and rides
+        // Resolved.variables(), so it substitutes into command, cloud_init and staged
+        // config files exactly like a declared variable does.
+        Map<String, String> derived = DatabaseEnvInjection.envForInstance(instanceId, null);
+        Map<String, String> variables = InstanceVariables.layered(derived, declared);
+        settings = instanceVariables.applyToSettings(settings, declared, derived);
         InstanceSpec spec = handler.specFor(instanceId, settings);
         if (spec.image().isBlank()) {
             throw Violations.ofField("settings.image", "", violationText("instance_image_required"));

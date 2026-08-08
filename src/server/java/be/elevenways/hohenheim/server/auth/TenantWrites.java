@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -238,6 +239,33 @@ public final class TenantWrites {
             for (Row doomed : doomedRows(context)) {
                 requireLinkAuthority(doomed.get(SiteDatabaseModel.SITE_ID),
                     doomed.get(SiteDatabaseModel.DATABASE_ID));
+            }
+        });
+        InstanceDatabaseModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row == null || !isTenantOriginated()) {
+                return;
+            }
+            Row stored = row.has(InstanceDatabaseModel.ID.getName())
+                ? Models.get(InstanceDatabaseModel.class).findById(row.get(InstanceDatabaseModel.ID))
+                : null;
+            requireInstanceLinkAuthority(
+                effective(row, stored, InstanceDatabaseModel.INSTANCE_ID),
+                effective(row, stored, InstanceDatabaseModel.DATABASE_ID));
+            if (stored != null) {
+                // Moving a link off a side needs authority over the side being LEFT too,
+                // or "re-point my link at your database" launders into a detach.
+                requireInstanceLinkAuthority(stored.get(InstanceDatabaseModel.INSTANCE_ID),
+                    stored.get(InstanceDatabaseModel.DATABASE_ID));
+            }
+        });
+        InstanceDatabaseModel.SCHEMA.addBeforeRemoveHook(context -> {
+            if (!isTenantOriginated()) {
+                return;
+            }
+            for (Row doomed : doomedRows(context)) {
+                requireInstanceLinkAuthority(doomed.get(InstanceDatabaseModel.INSTANCE_ID),
+                    doomed.get(InstanceDatabaseModel.DATABASE_ID));
             }
         });
         DnsRecordModel.SCHEMA.addBeforeRemoveHook(context -> {
@@ -550,6 +578,48 @@ public final class TenantWrites {
                 || !HohenheimAccess.canManageSite(ctx, siteId)) {
             throw Violations.ofField(SiteDatabaseModel.SITE_ID.getName(), siteIdValue,
                 CmsSupport.violationText("tenant_site_not_managed"));
+        }
+        if (!(databaseIdValue instanceof Integer databaseId)
+                || !HohenheimAccess.hasDatabaseCapability(ctx, databaseId,
+                    HohenheimAccess.MANAGE)) {
+            throw HohenheimAccess.databaseRefusal();
+        }
+    }
+
+    /**
+     * Attaching a database to an INSTANCE injects that database's CREDENTIALS into that
+     * workload's environment, so it needs authority over BOTH records -- the same
+     * two-sided rule {@link #requireLinkAuthority} applies to sites, and for the same
+     * reason: a one-sided check turns a link row into a way to read a credential you were
+     * never granted (point your own instance at my database) or to hand your database to a
+     * runtime you do not control (point my instance at your database).
+     *
+     * The instance side asks {@code config}, NOT {@code manage}, and that is the narrower
+     * of the two rather than a weaker one. {@code CONFIG} is declared as "author what the
+     * instance IS", {@code GameDomains.requireInstanceAuthority} already asks exactly it
+     * for the other instance-side join, and {@code InstanceVariables} asks it for a
+     * variable write with the argument that a variable write IS a config write -- an attach
+     * is precisely a variable write, performed by proxy. {@code MANAGE} implies
+     * {@code CONFIG}, so an owner passes either way; a config-only delegate now passes too,
+     * deliberately.
+     *
+     * The database side asks {@code manage}, not {@code credentials}, even though the
+     * attach hands out a credential. A {@code credentials} holder can already READ the
+     * password (ManageDatabaseCredentialsPage) and type it anywhere; what they cannot do is
+     * make the engine REACHABLE from another workload, which is exactly what the link
+     * network the attach creates does. Widening exposure is a manage-level act, and
+     * DatabaseModel has no {@code config} verb by deliberate declaration.
+     *
+     * @throws Violations {@code tenant_instance_not_managed} or the uniform database refusal
+     */
+    private static void requireInstanceLinkAuthority(@Nullable Object instanceIdValue,
+                                                     @Nullable Object databaseIdValue) {
+        AccessContext ctx = acting();
+        if (!(instanceIdValue instanceof Integer instanceId) || ctx == null || ctx.isAnonymous()
+                || !HohenheimAccess.hasInstanceCapability(ctx, instanceId,
+                    HohenheimAccess.CONFIG)) {
+            throw Violations.ofField(InstanceDatabaseModel.INSTANCE_ID.getName(), instanceIdValue,
+                CmsSupport.violationText("tenant_instance_not_managed"));
         }
         if (!(databaseIdValue instanceof Integer databaseId)
                 || !HohenheimAccess.hasDatabaseCapability(ctx, databaseId,

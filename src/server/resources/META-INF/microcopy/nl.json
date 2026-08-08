@@ -20,11 +20,15 @@
     "scope": "violations"
   },
   "database_in_use": {
-    "text": "Databank '{$name}' is gekoppeld aan {$sites}; koppel ze eerst los van die sites",
+    "text": "Databank '{$name}' is gekoppeld aan {$workloads}; koppel ze daar eerst los",
     "scope": "violations"
   },
   "database_missing": {
     "text": "Die databank bestaat niet",
+    "scope": "violations"
+  },
+  "database_instance_server_mismatch": {
+    "text": "Databank '{$name}' loopt op {$server} terwijl de instantie op {$instance_server} loopt; een linknetwerk bestaat enkel op de daemon die ze delen",
     "scope": "violations"
   },
   "database_name_required": {
@@ -2017,6 +2021,10 @@
     {
       "text": "Gekoppelde databanken",
       "scope": "site_database"
+    },
+    {
+      "text": "Gekoppelde databanken",
+      "scope": "instance_database"
     },
     {
       "text": "Sitedomeinen",
@@ -7395,5 +7403,21 @@
   "dev_offline_message": {
     "text": "Er is momenteel geen dev-server geregistreerd voor '{$name}'. Start hem met de dev-tunnel ingeschakeld en herlaad.",
     "scope": "proxy_error"
+  },
+  "instance_required": {
+    "text": "Een koppeling vereist een instantie",
+    "scope": "violations"
+  },
+  "instance_missing": {
+    "text": "Die instantie bestaat niet",
+    "scope": "violations"
+  },
+  "instance_kind_no_injection": {
+    "text": "Instantiesoort '{$kind}' heeft geen linknetwerken, dus er kan geen databank aan gekoppeld worden",
+    "scope": "violations"
+  },
+  "tenant_instance_not_managed": {
+    "text": "Je hebt geen config-rechten op die instantie",
+    "scope": "violations"
   }
 }

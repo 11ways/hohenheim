@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.protoblast.common.http.Uri;
@@ -167,7 +168,15 @@ public class DatabaseResource extends RowResource {
             image.isEmpty() ? null : image, user, password, database, ephemeral, server, limits));
     }
 
-    /** Refuses while live sites still depend on the database's injected credentials. */
+    /**
+     * Refuses while any live WORKLOAD still depends on the database's injected credentials.
+     *
+     * AIDEV-NOTE: both tiers, and the instance half is not decoration. Since 2026-08-08 a
+     * database can be attached to an instance, and a refusal that only counted SITES would
+     * have let a tenant destroy the engine out from under their own running game server --
+     * the workload keeps its derived environment until it next resolves and then simply
+     * cannot connect, with nothing anywhere saying why.
+     */
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
         String name = existing.get(DatabaseModel.NAME);
@@ -181,10 +190,11 @@ public class DatabaseResource extends RowResource {
                 attachedTo.add(String.valueOf(site.get(SiteModel.NAME)));
             }
         }
+        attachedTo.addAll(InstanceDatabaseLinks.liveInstanceNames(id));
         if (!attachedTo.isEmpty()) {
             throw Violations.ofForm(CmsSupport.violationText("database_in_use")
                 .withArg("name", name)
-                .withArg("sites", String.join(", ", attachedTo)));
+                .withArg("workloads", String.join(", ", attachedTo)));
         }
         try {
             this.databaseService.destroy(name, true);
@@ -195,8 +205,9 @@ public class DatabaseResource extends RowResource {
                 .withArg("name", name)
                 .withArg("reason", e.getMessage()));
         }
-        // Links to soft-deleted sites are debris once the database is gone.
+        // Links to soft-deleted owners are debris once the database is gone.
         links.find().where(SiteDatabaseModel.DATABASE_ID.eq(id)).delete();
+        InstanceDatabaseLinks.deleteForDatabase(id);
     }
 
     @Override
@@ -249,6 +260,7 @@ public class DatabaseResource extends RowResource {
                     this.databaseService.forceDestroyRecord(name);
                     Models.get(SiteDatabaseModel.class).find()
                         .where(SiteDatabaseModel.DATABASE_ID.eq(id)).delete();
+                    InstanceDatabaseLinks.deleteForDatabase(id);
                 });
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("force_delete_done").withFilter("scope", "database")

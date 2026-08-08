@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.docker.SiteDatabaseNetworks;
 import be.elevenways.hohenheim.server.game.GameDomains;
@@ -408,9 +409,9 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
     }
 
     /**
-     * Link networks of both owners: site-to-database pairs (egress NONE, the database's
-     * declaration must not widen through a second interface) and game-domain
-     * proxy-to-backend pairs (egress OPEN, the proxy lane's declaration).
+     * Link networks of every owner: site-to-database and instance-to-database pairs
+     * (egress NONE, the database's declaration must not widen through a second interface)
+     * and game-domain proxy-to-backend pairs (egress OPEN, the proxy lane's declaration).
      */
     private static void collectLinks(@NonNull Map<Integer, List<Expected>> inventory) {
         if (HohenheimRoles.enabled(HohenheimRoles.Role.PROXY)) {
@@ -418,6 +419,10 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
         }
         if (HohenheimRoles.enabled(HohenheimRoles.Role.INSTANCES)) {
             addLinks(inventory, GameDomains.liveLinkHandles(), Egress.OPEN);
+            // Instance-to-database pairs: egress NONE for the same reason the site lane
+            // is, and enumerated here or the sweep would read every one of them as an
+            // unexpected network and sever a running workload from its database.
+            addLinks(inventory, InstanceDatabaseNetworks.liveLinkHandles(), Egress.NONE);
         }
         // A lowered stack's shared network IS a link network, so it needs no lane of its
         // own: the per-service workload networks ride collectInstances, and severing this

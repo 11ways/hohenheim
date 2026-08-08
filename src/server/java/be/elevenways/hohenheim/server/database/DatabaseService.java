@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.SiteDatabaseNetworks;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.util.DatasourceScoped;
@@ -134,7 +135,7 @@ public class DatabaseService extends DatasourceScoped {
      * Converge the record's owned engine instance and hand back its connection details.
      *
      * A deploy REPLACES the container, so the fresh one must rejoin the link networks of
-     * every Docker site attached to this record -- and joining a running container
+     * every Docker site AND every instance attached to this record -- and joining a running container
      * re-allocates its published port, so the port is re-observed AFTER the joins and
      * the returned connection carries the final number.
      */
@@ -145,7 +146,13 @@ public class DatabaseService extends DatasourceScoped {
         Row row = require(name);
         Integer recordId = row.get(DatabaseModel.ID);
         int port = scoped(() -> DatabaseInstances.deploy(row, limits));
-        if (recordId != null && query(() -> SiteDatabaseNetworks.reattachForDatabase(recordId))) {
+        // Both consumer tiers rejoin: a site's release container and any instance the
+        // record is attached to. Either rejoin can move the published port, so the
+        // re-observation below runs if EITHER touched something.
+        boolean rejoined = recordId != null
+            && (query(() -> SiteDatabaseNetworks.reattachForDatabase(recordId))
+                | query(() -> InstanceDatabaseNetworks.reattachForDatabase(recordId)));
+        if (rejoined) {
             ManagedDatabase.LiveStatus fresh = query(() -> DatabaseInstances.liveStatus(recordId));
             if (fresh.running() && fresh.port() != null) {
                 port = fresh.port();
