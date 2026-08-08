@@ -13,10 +13,13 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.validation.Violations;
 
 /**
- * Per-owner instance-count override: one row per packed manage-grant subject set
- * (the DatabaseModel.MEMORY_LIMIT_MB precedent -- a real nullable column, never a
- * settings-map key), consulted by the reserve hook ahead of the
- * {@code hohenheim.quota.max_instances_per_owner} default.
+ * Per-owner quota overrides: one row per packed manage-grant subject set (the
+ * DatabaseModel.MEMORY_LIMIT_MB precedent -- real nullable columns, never
+ * settings-map keys), each consulted by its reserve hook ahead of the matching
+ * {@code hohenheim.quota.*_per_owner} default. THREE dimensions:
+ * {@link #MAX_INSTANCES}, {@link #MAX_DISK_GB} and {@link #MAX_NICS}. There is
+ * deliberately no memory dimension yet -- memory is booked per HOST
+ * ({@code InstanceCapacity}), which is a different question.
  *
  * @author Jelle De Loecker
  */

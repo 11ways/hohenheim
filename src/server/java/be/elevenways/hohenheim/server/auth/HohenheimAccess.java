@@ -317,9 +317,12 @@ public final class HohenheimAccess {
             // backups already surface, so declaring them adds two columns to a page that is
             // already reachable and designed -- not a new unreachable surface.
             //
-            // AIDEV-NOTE: read is the only ORDINARY capability on this model. It is NOT
-            // owner-implied and NOT implied by write: InstanceFiles asks for exactly one of
-            // the two on every call, so an operator can hand out a read-only file browser.
+            // AIDEV-NOTE: files.read is ORDINARY, alongside view/console/power (four of
+            // them; KnownCapability defaults to ORDINARY, so an absent .elevated()/.admin()
+            // IS the declaration -- corrected 2026-08-08, this note used to claim read was
+            // the only one). What is specific to read: it is NOT owner-implied and NOT
+            // implied by write. InstanceFiles asks for exactly one of the two on every
+            // call, so an operator can hand out a read-only file browser.
             KnownCapability.of(FILES_READ)
                 .label(Microcopy.of("files_read").withFilter("scope", "capability"))
                 .asDelegable(),

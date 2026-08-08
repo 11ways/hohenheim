@@ -237,6 +237,23 @@ public class GitDeployment {
         return true;
     }
 
+    /**
+     * The LEGACY build lane: a shell command on the control-plane host.
+     *
+     * AIDEV-NOTE: this lane does NOT satisfy the plan's "build isolation away from the
+     * control plane and tenant runtime credentials" clause, and that clause is
+     * therefore false as written (recorded 2026-08-08 in
+     * docs/coolify-use-inventory.md item 2, ranked its first OPEN item). Two reasons.
+     * It runs as a HOST PROCESS on the controller -- isolation here is a uid drop, a
+     * timeout and a process-group kill, with no container, no network policy, no cgroup
+     * quota and no capability drop. And the mergeEnvVars call below hands the build the
+     * SITE'S RUNTIME environment_variables, which is exactly what BuildSandbox's
+     * BuildRequest is shaped to make impossible for the docker lane. Docker-typed git
+     * sites go through BuildSandbox instead; only the non-docker types (static, node)
+     * reach here. Fixing it means routing this through BuildSandbox too, or declaring
+     * the non-docker git site types operator-trust-only IN THE PLAN. Do not read the
+     * uid drop as isolation.
+     */
     boolean runBuild(File targetDir, String buildCommand) throws InterruptedException {
         String buildDir = (String) sourceSettings.get("build_directory");
         File workDir = targetDir;

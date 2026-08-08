@@ -29,9 +29,13 @@ import java.util.Set;
 
 /**
  * The instance-count quota: hohenheim's policy layer over the core reservation ledger
- * (zenit {@code Quotas}). ONE dimension for now -- live instances per owner; memory,
- * cpu, disk, ports, sites and databases are explicitly out of scope (see
- * docs/instance-tier-plan.md Phase 3).
+ * (zenit {@code Quotas}). THIS class owns one dimension -- live instances per owner.
+ *
+ * AIDEV-NOTE: corrected 2026-08-08 -- this used to say disk was "explicitly out of
+ * scope". Per-owner DISK GB is enforced, by {@link InstanceDeviceQuota} and
+ * {@link InstanceRootDiskQuota} into the same owner bucket, and extra NICs alongside
+ * it. Still genuinely out of scope, per owner: memory (booked per HOST by
+ * {@code InstanceCapacity}), cpu, ports, sites and databases.
  *
  * The owner is the grant-derived manage-subject SET packed by
  * {@link HohenheimAccess#packSubjects} -- the same derivation sameOwner and the released
