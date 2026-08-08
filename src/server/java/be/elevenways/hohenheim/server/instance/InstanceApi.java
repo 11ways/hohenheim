@@ -114,8 +114,10 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "power_" + action,
-                ApiConduits.ORIGIN);
+            // No record call here: InstanceService.deploy/stop record every settled power
+            // operation themselves, and the row's own origin column already says "api".
+            // A restart therefore lands as the TWO rows it actually is -- a stop and a
+            // deploy, separately fenced, with a window between them.
             return ApiConduits.json(Map.of("id", instanceId, "action", action,
                 "status", String.valueOf((Object) reload(instanceId).get(InstanceModel.STATUS))));
         });

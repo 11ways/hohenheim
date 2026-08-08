@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -48,11 +49,34 @@ import java.util.Map;
  * we mint changes that); what the fence guarantees is that a stale controller's
  * operation cannot STICK -- the database refuses the outcome and the winner's next
  * deploy reconciles the daemon through the owner labels (removeIfOwnedBy).
+ *
+ * AIDEV-NOTE: power accountability lives HERE, in the one funnel, not on the surfaces.
+ * Two reasons, both structural. First, the outcome write is {@code stampGuarded}, a
+ * set-based updateAll that fires NO model hooks -- so nothing is recorded unless it is
+ * recorded explicitly (the same trap {@link InstanceMigrations#recordMigration} and
+ * {@link InstanceSnapshots#recordRestore} document; {@code ActivityLog.withAction} only
+ * RENAMES hook-written rows and would record literally nothing here). Second, until
+ * 2026-08-08 only the automation API recorded power actions, so the SAME operation was
+ * audited over /api/v1 and silent from the admin panel and from /manage -- an audit
+ * trail with a hole in it, read by operators as complete. Recording in the service
+ * means every caller inherits it: panel row action, API, schedule chain, release
+ * engine, crash restart. WHICH surface it was stays answerable through the activity
+ * row's own {@code origin} column (web/api/system), which is why the API lane no
+ * longer carries a second, hand-written row of its own.
  */
 public final class InstanceService {
 
     /** Publications bind loopback (DockerInstanceRuntime.HOST_BIND_ADDRESS's ledger spelling). */
     private static final String BIND_ADDRESS = "127.0.0.1";
+
+    /** The activity action a SETTLED deploy is recorded under. */
+    public static final String ACTIVITY_DEPLOY_ACTION = "deployed";
+
+    /** The activity action a SETTLED stop is recorded under. */
+    public static final String ACTIVITY_STOP_ACTION = "stopped";
+
+    /** The activity detail a verified destroy renames its soft-delete row with. */
+    public static final String ACTIVITY_DESTROY_DETAIL = "destroy";
 
     private final HostLeases leases;
 
@@ -157,6 +181,7 @@ public final class InstanceService {
             // The published port is fresh (loopback publications are ephemeral), so any
             // generated SRV rows riding this proxy re-reconcile now.
             GameDomains.afterInstanceDeploy(instanceId);
+            recordPower(instanceId, ACTIVITY_DEPLOY_ACTION, resolved);
             return status;
         } catch (IOException e) {
             InstanceConsoles.closeSession(instanceId);
@@ -206,6 +231,7 @@ public final class InstanceService {
             this.beforeOutcomeWrite.run();
             stampGuarded(resolved, fence, InstanceModel.STATUS_STOPPED);
             PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
+            recordPower(instanceId, ACTIVITY_STOP_ACTION, resolved);
         } catch (IOException e) {
             stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
@@ -265,7 +291,15 @@ public final class InstanceService {
         // The deleted_at write is the CONTINUATION of a destroy whose capability gate ran
         // at the funnel; TenantWrites' instance rule would otherwise read it as a tenant
         // authoring a frozen column (see inAuthorizedOperation's contract).
-        TenantWrites.inAuthorizedOperation(() -> Models.get(InstanceModel.class).save(row));
+        //
+        // This save is the ONE hook-firing write in the whole teardown, so the withAction
+        // rename belongs around it rather than around the caller's call: the CMS row
+        // action used to own that wrapper, which left every OTHER destroy caller (the
+        // release engine, preview expiry, database teardown) recording a bare "update"
+        // for an irreversible teardown.
+        ActivityLog.withAction(ActivityLog.ACTION_DELETE, ACTIVITY_DESTROY_DETAIL,
+            () -> TenantWrites.inAuthorizedOperation(
+                () -> Models.get(InstanceModel.class).save(row)));
         // Schedules must die with their record, and destroy SOFT-deletes (remove hooks
         // never fire here), so the cleanup is explicit -- nothing else will do it.
         Datasource scheduleStore = Db.current() != null ? Db.current() : Datasources.getDefault();
@@ -278,6 +312,17 @@ public final class InstanceService {
         GameDomains.deleteForInstance(instanceId);
         Blast.log("INSTANCE: destroyed", resolved.spec().handle(),
             "- container removed, volumes kept, record soft-deleted");
+    }
+
+    /**
+     * Record a settled power operation on the INSTANCE record, naming the daemon handle
+     * it settled against; a failed operation is answered by the {@code error} status
+     * stamp and its named refusal, not by an activity row claiming it happened.
+     */
+    private static void recordPower(int instanceId, @NonNull String action,
+                                    @NonNull Resolved resolved) {
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, action,
+            resolved.spec().handle());
     }
 
     /** Remove a mid-migration destination copy the daemon attributes to this record. */

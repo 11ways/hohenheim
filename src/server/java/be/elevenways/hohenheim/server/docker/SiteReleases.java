@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -65,6 +66,9 @@ import java.util.TreeMap;
  * are pruned down to the serving digest. Site delete destroys all of it (destroyFor).
  */
 public final class SiteReleases {
+
+    /** The activity action a SETTLED docker-site rollback is recorded under. */
+    public static final String ACTIVITY_ROLLBACK_ACTION = "rolled_back";
 
     /** Keys of {@code adjustPaths}-injected checkout paths: per-slot, never source identity. */
     private static final List<String> VOLATILE_SETTINGS =
@@ -355,6 +359,13 @@ public final class SiteReleases {
         if (proxy != null) {
             proxy.reload();
         }
+        // AIDEV-NOTE: recorded HERE, in the engine, not on the surfaces. The admin row
+        // action (SiteResource#rollbackAction) recorded nothing while the automation API
+        // recorded "rollback_triggered" -- the same one-surface-audited asymmetry the
+        // instance power path had. The engine writes its state through role saves and
+        // ReleaseOperation rows, neither of which is an activity row about the SITE.
+        ActivityLog.record(Models.get(SiteModel.class), siteId, ACTIVITY_ROLLBACK_ACTION,
+            null);
     }
 
     /**
