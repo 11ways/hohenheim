@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.util.EnvVars;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DoubleField;
@@ -106,8 +107,10 @@ public final class SiteContainerKind implements InstanceKindHandler {
             .label(HohenheimFormCopy.label("environment_variables"))
             .help(HohenheimFormCopy.help("environment_variables")).secret().build());
 
-    // Persistent named volumes: logical name -> container path, materialized as
-    // hohenheim-instance-{id}-vol-{name}, owner-labelled at birth.
+    // Persistent named volumes: REAL volume name -> container path, minted by SiteVolumes
+    // off the SITE id (hohenheim-{token}-site-{siteId}-vol-{name}). The site writes this
+    // map; a rollback re-deploys whatever it stored, which is why specFor mounts these
+    // names verbatim instead of deriving them.
     public static final StringMapField VOLUMES = SETTINGS_SCHEMA.addField(
         StringMapField.builder("volumes").label(HohenheimFormCopy.label("volumes"))
             .help(HohenheimFormCopy.help("volumes")).build());
@@ -166,11 +169,25 @@ public final class SiteContainerKind implements InstanceKindHandler {
         String command = str(settings.get("command"));
         List<String> cmd = command.isEmpty() ? null : List.of(command.split("\\s+"));
 
+        // AIDEV-NOTE: the keys are REAL volume names, minted by SiteVolumes off the SITE id,
+        // and this method may never re-derive them from the instance handle -- that is the
+        // defect being fixed (a release mints a new instance row, so an instance-keyed
+        // volume is empty on every gated swap). The one instance-keyed spelling still
+        // honoured is a PRE-FIX row's logical key, which a rollback can reach before the
+        // site's next converge heals it (SiteVolumes.healStoredNames): its data genuinely
+        // lives under the old name, so mounting anything else would lose it.
         Map<String, String> volumes = new LinkedHashMap<>();
         EnvVars.toMap(settings.get("volumes")).forEach((name, path) -> {
-            if (path != null && !path.isBlank()) {
-                volumes.put(handle + "-vol-" + name, path);
+            if (path == null || path.isBlank()) {
+                return;
             }
+            boolean materialized = ControllerScope.parse(name) != null;
+            if (!materialized) {
+                Blast.log("SITE: instance", instanceId, "still stores the pre-fix volume name",
+                    name, "-- mounting the instance-keyed volume its data is in;",
+                    "the site's next converge rewrites it to the site-keyed name");
+            }
+            volumes.put(materialized ? name : handle + "-vol-" + name, path);
         });
 
         Object port = settings.get("container_port");

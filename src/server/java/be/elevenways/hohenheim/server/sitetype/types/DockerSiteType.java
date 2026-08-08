@@ -77,17 +77,15 @@ public class DockerSiteType implements SiteTypeHandler {
             .help(HohenheimFormCopy.help("environment_variables")).secret().build());
 
     // Persistent named volumes: logical name -> container path. Each entry mounts the
-    // owned instance's named volume (hohenheim-instance-{id}-vol-{name}).
+    // SITE's named volume (hohenheim-{token}-site-{siteId}-vol-{name}).
     //
-    // AIDEV-NOTE: this comment used to claim the volume "survives redeploys". It does
-    // NOT survive a health-gated RELEASE (corrected 2026-08-08). The name is derived
-    // from the INSTANCE id, and SiteReleases.gatedSwap mints a NEW instance row for the
-    // candidate, so the new release mounts a DIFFERENT, EMPTY volume while the old one
-    // is orphaned (OrphanActions/DockerReclaim refuse volumes by design, so nothing
-    // reclaims it either). The in-place replacement path reuses the serving row and
-    // therefore does keep the volume, which is why this hid for so long. Volume
-    // identity needs to be keyed to the SITE; tracked as an OPEN item in
-    // docs/coolify-use-inventory.md item 10.
+    // AIDEV-NOTE: this comment claimed the volume "survives redeploys", which was false
+    // for a health-gated RELEASE until 2026-08-08: the name was derived from the INSTANCE
+    // id and SiteReleases.gatedSwap mints a NEW instance row per candidate, so a release
+    // mounted a DIFFERENT, EMPTY volume and orphaned the old one (nothing reclaims a
+    // volume by design). Volume identity is now keyed to the SITE (SiteVolumes) and a
+    // release, a rollback and an in-place replacement all mount the same volume. Keep the
+    // history: the reason it hid was that the in-place path reuses the serving row.
     public static final StringMapField VOLUMES = SETTINGS_SCHEMA.addField(
         StringMapField.builder("volumes").label(HohenheimFormCopy.label("volumes"))
             .help(HohenheimFormCopy.help("volumes")).build());
