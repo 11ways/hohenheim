@@ -285,7 +285,12 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME)
             .addDelimiter().addStatic("backup").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        // requiresLogin, NOT the admin permission: a delegated tenant holding the
+        // `backups` capability on their own database reaches this. The gate moved onto
+        // the SERVICE (DatabaseService.backupDownload -> requireDatabaseCapability), so
+        // the /manage row action, this URL and any later caller answer to one policy;
+        // the handler renders both "no such database" and "not yours" as one 404.
+        .requiresLogin()
         .rateLimit(DATABASE_IO_LIMIT)
         .build();
 

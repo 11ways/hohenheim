@@ -463,11 +463,12 @@ class ManagePanelTest extends HohenheimTestBase {
 
         // Every installation-wide source is admin-gated. Unauthorized and unknown
         // refuse IDENTICALLY with 404 (RecordSourceGate: no existence oracle).
-        // hohenheim.certificate and hohenheim.dns_record deliberately LEFT OUT: they carry a
-        // capability vocabulary now, so they are grant-scoped like the site source rather
-        // than admin-gated. They are asserted below, as EMPTY rather than as 404.
+        // hohenheim.certificate, hohenheim.dns_record and hohenheim.database deliberately
+        // LEFT OUT: they carry a capability vocabulary now, so they are grant-scoped like
+        // the site source rather than admin-gated. They are asserted below, as EMPTY
+        // rather than as 404.
         List<String> adminOnly = List.of(
-            "hohenheim.access_list", "hohenheim.database",
+            "hohenheim.access_list",
             "hohenheim.site_auth_provider", "hohenheim.system_user",
             "hohenheim.spamservice_system_users", "hohenheim.dns_zone",
             "hohenheim.ban", "zenit.activity");
@@ -497,10 +498,11 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(dryPost("/zn/records/hohenheim.site/buckets", buckets, outsiderSession, csrf).statusCode())
             .isEqualTo(400);
 
-        // The two capability-scoped sources answer the same way: reachable, and empty. A
-        // login with no grant and no requested certificate holds nothing, so "open to a
-        // grant holder" must not mean "open".
-        for (String token : List.of("hohenheim.certificate", "hohenheim.dns_record")) {
+        // The capability-scoped sources answer the same way: reachable, and empty. A
+        // login with no grant, no requested certificate and no allocated database holds
+        // nothing, so "open to a grant holder" must not mean "open".
+        for (String token : List.of("hohenheim.certificate", "hohenheim.dns_record",
+                "hohenheim.database")) {
             HttpResponse<String> scoped =
                 dryPost("/zn/records/" + token + "/query", query, outsiderSession, csrf);
             assertThat(scoped.statusCode()).as("query on %s", token).isEqualTo(200);

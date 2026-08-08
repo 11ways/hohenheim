@@ -3190,6 +3190,72 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   Pinned by `DatabaseAdminTest.creatingADatabaseWithATakenNameRefusesInsteadOf
   SeizingTheExistingOne`, counterfactualed on the VICTIM'S columns.
 
+  STATUS (2026-08-08): LANDED. `ManageDatabaseResource` on /manage (list + detail
+  scoped by `view`, allocate, backup, destroy) plus `ManageDatabaseCredentialsPage`.
+
+  THE VOCABULARY. `DatabaseModel` is grantable for the first time, on the instance
+  -tier template: `manage` KEPT as the ownership identity (there is no owner column,
+  and manageSubjectsOf/sameOwner/the quota derivation all read it) and the narrow
+  verbs `impliedBy` it -- `view` (implied by every verb), `credentials`, `backups`
+  (the instance-tier spelling reused, never a `db_backup`), `destroy`. REFUSED and
+  recorded in `HohenheimAccess.declareGrantableModels` beside the DnsZoneModel
+  non-goal: `restore` (an uploaded dump is arbitrary SQL as the engine superuser and
+  the only page offering it also renders the credentials -- no delegated surface, so
+  nothing to enforce the verb ON), `config` (the resource is `updatable() == false`),
+  `power` (the engine is a `generatedOnly()` kind and ManageInstanceResource excludes
+  generated rows) and `exec` (backup and restore ARE exec).
+
+  THE PREREQUISITE, landed first and separately (commit "Charge an owned instance to
+  its owning record's owner"). `InstanceQuota` charged a create by the AMBIENT WRITE
+  SCOPE, so every instance a TENANT-held record owned was booked on a host and
+  charged to the OPERATOR. It now charges the owner of the record that OWNS it, read
+  off the active `GeneratedRows` attribution. That is what makes the answer to the
+  quota question "no second dimension": a database's engine IS an instance, it is
+  charged to the allocating tenant, and the reservation is transactional adjacent to
+  the engine-row write. `DatabaseInstances.reserveEngineRow` was split out of
+  `deploy` so the funnel takes that refusal INLINE (it also fixed a silent-success on
+  the admin path: a create used to answer "created" and discover the capacity refusal
+  on a pool thread).
+
+  THE FUNNEL. `TenantDatabases.allocate` is one derivation for the stored name, the
+  credentials, the image, the placement, the creator's manage grant and the quota
+  charge; the container work is scheduled `afterCommit`. Naming is PER-OWNER
+  namespaced (`u{userId}-{label}`, `o{digest}-{label}` for a project owner, bare for
+  the operator) because the stored name is the container handle, the data volume and
+  the backup directory and is unique installation-wide -- un-namespaced it would deny
+  a label to every other tenant and answer "taken", an oracle. The DatabaseModel
+  traversal AIDEV-NOTE is superseded in place: its "admin-reachable only" premise is
+  gone.
+
+  THE WRITE PIPELINE. `TenantWrites` now hooks `DatabaseModel` (a tenant CREATE is
+  admitted by allocation SCOPE, not by a column whitelist -- strictly stronger, since
+  a whitelist would have to admit the very columns the funnel derives; a stored record
+  is fully frozen; a delete demands `destroy`) and `SiteDatabaseModel` (the
+  GameDomains two-sided shape: manage on the SITE and manage on the DATABASE, on
+  attach, on re-point and on detach). `HohenheimSources`' admin-gated DatabaseModel
+  source is overridden in `ManagePanel.registerSiteSource` with the `view` scope, and
+  database grants join panel eligibility.
+
+  CREDENTIAL INJECTION (the Coolify clause). Unchanged and deliberately so:
+  `DatabaseEnvInjection` resolves credentials AT SPAWN from the record, so nothing is
+  baked into stored settings, and a Docker site reaches the engine by container
+  hostname over the per-link network. What a tenant database attached to a tenant
+  INSTANCE injects is NOT wired yet and is the honest gap: `SiteDatabaseModel` joins
+  a SITE to a database, there is no instance-to-database join, and the private-network
+  posture would need a fourth `WorkloadNetworks.attachLinksBeforeStart` consumer to
+  reach one. The Credentials tab is what a tenant uses meanwhile.
+
+  Proven by `TenantDatabaseSurfaceTest` (8 journeys, every gate counterfactualed with
+  the ATTACK SUCCEEDING: the list leaks the other tenant's name; a view-only teammate
+  opens the credentials tab; another tenant's dump download passes the gate; a tenant
+  writes server_id/image/memory_limit_mb/ephemeral with no refusal at all; a tenant
+  attaches another tenant's database to their own site; a tenant destroys another
+  tenant's database) and `InstanceQuotaAttributionTest`. Fixed in passing:
+  `ManagedDatabaseTest.provisionRefusesToReplaceAForeignSameNamedContainer` had been
+  silently re-aimed at the wrong gate by the INSERT-only create of the previous
+  commit -- it asserted `database_name_taken` while believing it asserted the
+  attribution refusal, so the re-provision path it exists for stopped being exercised.
+
   Instance transfer between eligible hosts is a durable,
   capacity-reserved operation with rollback and port reallocation; cold transfer
   is the required floor, live migration is not implied.

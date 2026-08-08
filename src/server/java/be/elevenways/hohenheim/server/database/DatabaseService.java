@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.docker.SiteDatabaseNetworks;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.util.DatasourceScoped;
@@ -247,7 +249,7 @@ public class DatabaseService extends DatasourceScoped {
      * @throws Violations {@code database_name_taken}
      * @return the row that was created
      */
-    private Row insertRecord(String name, ManagedDatabase.Engine engine, String image, String user,
+    public Row insertRecord(String name, ManagedDatabase.Engine engine, String image, String user,
                              String password, String database, boolean ephemeral, String serverName,
                              ResourceLimits limits, String status) {
         return query(() -> {
@@ -271,6 +273,25 @@ public class DatabaseService extends DatasourceScoped {
             row.set(DatabaseModel.SERVER_ID, ServerModel.canonicalServerId(serverName));
             model.save(row);
             return row;
+        });
+    }
+
+    /**
+     * Converge an ALREADY PERSISTED record's runtime on the provisioning pool, flipping
+     * its status to active or failed. The half of {@link #createAsync} that talks to the
+     * daemon, for callers ({@link TenantDatabases}) that persisted the record and reserved
+     * its engine instance row themselves and only owe the container work.
+     */
+    public void provisionInBackground(String name, ManagedDatabase.Engine engine, String user,
+                                      String password, String database, ResourceLimits limits) {
+        PROVISION_EXECUTOR.submit(() -> {
+            try {
+                provisionRuntime(name, engine, user, password, database, limits);
+                setStatus(name, STATUS_ACTIVE);
+            } catch (Exception e) {
+                setStatus(name, STATUS_FAILED);
+                Blast.log("DB: provisioning failed for", name, "-", e.getMessage());
+            }
         });
     }
 
@@ -412,7 +433,7 @@ public class DatabaseService extends DatasourceScoped {
      * (RDB / mongodump archive) engines.
      */
     public Path backupToFile(String name, Path directory, String baseName) throws IOException {
-        Row row = require(name);
+        Row row = requireWith(name, HohenheimAccess.BACKUPS);
         ManagedDatabase.Engine engine = engineOf(row);
         Files.createDirectories(directory);
         Path target = directory.resolve(baseName + "." + engine.dumpExtension());
@@ -431,7 +452,7 @@ public class DatabaseService extends DatasourceScoped {
      * databases.
      */
     public BackupDownload backupDownload(String name) throws IOException {
-        Row row = require(name);
+        Row row = requireWith(name, HohenheimAccess.BACKUPS);
         ManagedDatabase.Engine engine = engineOf(row);
         Path directory = Files.createTempDirectory("hohenheim-backup");
         Path dump = directory.resolve(name + "." + engine.dumpExtension());
@@ -449,7 +470,10 @@ public class DatabaseService extends DatasourceScoped {
 
     /** Restore a dump file (text or binary) into a persisted database by name. */
     public void restoreFromFile(String name, Path source) throws IOException {
-        Row row = require(name);
+        // No `restore` capability exists: an uploaded dump is arbitrary SQL run as the
+        // engine superuser and no delegated surface offers it, so this stays an operator
+        // act. A tenant-originated call is refused outright rather than silently allowed.
+        Row row = requireWith(name, null);
         String user = row.get(DatabaseModel.DB_USER);
         String password = row.get(DatabaseModel.DB_PASSWORD);
         String database = row.get(DatabaseModel.DB_NAME);
@@ -478,6 +502,10 @@ public class DatabaseService extends DatasourceScoped {
     public void destroy(String name, boolean removeData) throws IOException {
         Row row = query(() -> model().findByName(name));
         if (row != null) {
+            Integer recordId = row.get(DatabaseModel.ID);
+            if (recordId != null) {
+                HohenheimAccess.requireDatabaseCapability(recordId, HohenheimAccess.DESTROY);
+            }
             try {
                 scoped(() -> {
                     DatabaseInstances.destroyFor(row, removeData);
@@ -516,6 +544,30 @@ public class DatabaseService extends DatasourceScoped {
             }
             model().find().where(DatabaseModel.NAME.eq(name)).delete();
         });
+    }
+
+    /**
+     * The record, plus the capability gate a TENANT-ORIGINATED call must pass for this
+     * operation. Operator and system work (the nightly backup task, the reconciler) never
+     * reaches the gate; see {@code HohenheimAccess.requireDatabaseCapability}.
+     *
+     * @param capability the capability required, or null when NO tenant may perform this
+     *        operation at all (there is no verb for it)
+     */
+    private Row requireWith(String name, @org.checkerframework.checker.nullness.qual.Nullable
+                            String capability) throws IOException {
+        Row row = require(name);
+        if (capability == null) {
+            if (TenantWrites.isTenantOriginated()) {
+                throw HohenheimAccess.databaseRefusal();
+            }
+            return row;
+        }
+        Integer recordId = row.get(DatabaseModel.ID);
+        if (recordId != null) {
+            HohenheimAccess.requireDatabaseCapability(recordId, capability);
+        }
+        return row;
     }
 
     private Row require(String name) throws IOException {

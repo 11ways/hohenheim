@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -106,6 +107,14 @@ public final class HohenheimAccess {
      * holding it can never pass it on.
      */
     public static final String EXEC = "exec";
+
+    /**
+     * Read a managed database's CREDENTIALS -- the plaintext {@code db_password} the
+     * record stores encrypted. ELEVATED and deliberately separate from {@link #VIEW}: a
+     * read-only teammate may see that a database exists, its engine and its status, and
+     * still not hold the credential that connects to it as its owner.
+     */
+    public static final String CREDENTIALS = "credentials";
 
     /** Take and restore driver-level snapshots of an instance (data-destructive on restore). */
     public static final String SNAPSHOTS = "snapshots";
@@ -319,6 +328,70 @@ public final class HohenheimAccess {
                 .elevated()
                 .asDelegable());
         RecordGrantCapabilityChecker.declareRules(InstanceModel.MODEL_ID,
+            RecordCapabilityRules.create()
+                .gate(ManagePanel.ACCESS)
+                .admin(HohenheimPanel.ACCESS));
+
+        // Managed databases: the tenant-allocation tier (Phase 5). MANAGE stays THE
+        // ownership identity for exactly the reason it does on instances -- there is no
+        // owner column on managed_databases, and manageSubjectsOf/sameOwner, the instance
+        // quota bucket the engine is charged to (InstanceQuota.creationOwnerOf reads the
+        // OWNING DATABASE's manage grants) and creationOwnerSubjects all read it. The
+        // narrow verbs are what manage IMPLIES, exactly the instance-tier template.
+        //
+        // AIDEV-NOTE: this vocabulary is deliberately SHORTER than the operations the
+        // tier has, because a verb lands WITH its enforcing surface and never ahead of
+        // it -- declaring one attaches a subjects x capabilities grant matrix, so a
+        // declared-but-unenforced verb ships an operator-editable delegation surface over
+        // something nothing checks. The refusals, each with its reason:
+        //
+        // - restore: DatabaseService.restoreFromFile runs an UPLOADED dump as the engine
+        //   superuser, and the only page that offers it (DatabaseRestorePage) also renders
+        //   the plaintext credentials. Neither the arbitrary-SQL lane nor a credential-free
+        //   variant of that page is built here, so there is nothing to enforce a `restore`
+        //   grant ON. It stays operator-only and is the first candidate when a delegated
+        //   restore surface is actually designed.
+        // - config: DatabaseResource is updatable() == false -- the record is immutable
+        //   after create by design (it describes a provisioned container), so no edit
+        //   operation exists for the verb to gate.
+        // - power: the engine is a generatedOnly() DatabaseContainerKind instance, and
+        //   ManageInstanceResource excludes generated rows, so no tenant path reaches a
+        //   start/stop of it at all. A database is allocated and destroyed, not powered.
+        // - exec: NEVER. Backup and restore are IMPLEMENTED by exec'ing into the engine
+        //   container; offering the verb would be offering a superuser shell on the host.
+        RecordGrants.declareGrantable(GrantableModel.of(DatabaseModel.MODEL_ID));
+        KnownCapabilities.register(DatabaseModel.MODEL_ID,
+            KnownCapability.of(MANAGE)
+                .label(Microcopy.of("manage").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable(),
+            KnownCapability.of(VIEW)
+                .label(Microcopy.of("view").withFilter("scope", "capability"))
+                .asDelegable()
+                .impliedBy(MANAGE, CREDENTIALS, BACKUPS, DESTROY),
+            KnownCapability.of(CREDENTIALS)
+                .label(Microcopy.of("credentials").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable()
+                .impliedBy(MANAGE),
+            // AIDEV-NOTE: backups IS implied by manage here while it is NOT on instances,
+            // and the difference is deliberate rather than an oversight. On instances the
+            // umbrella had to stop where it did because widening it would have silently
+            // handed the capability to every ALREADY-STORED manage grant. This model has
+            // no stored grants to widen -- the vocabulary ships with the surface -- so the
+            // umbrella is chosen on the merits: a database's owner backing up their own
+            // database is the ordinary case, not a delegation.
+            KnownCapability.of(BACKUPS)
+                .label(Microcopy.of("backups").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable()
+                .impliedBy(MANAGE),
+            KnownCapability.of(DESTROY)
+                .label(Microcopy.of("destroy").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable()
+                .impliedBy(MANAGE));
+        RecordGrantCapabilityChecker.declareRules(DatabaseModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
@@ -553,6 +626,63 @@ public final class HohenheimAccess {
     }
 
     /**
+     * Whether the context holds {@code capability} on the managed database -- the SAME
+     * precedence walk every other tier rides, over the database vocabulary.
+     */
+    public static boolean hasDatabaseCapability(@NonNull AccessContext ctx, int databaseId,
+                                                @NonNull String capability) {
+        return ctx.hasCapability(DatabaseModel.MODEL_ID, databaseId, capability);
+    }
+
+    /**
+     * THE operation-funnel gate for a capability-sensitive managed-database act (backup,
+     * destroy). It sits on the SERVICE for the reason {@link #requireOperationCapability}
+     * spells out one tier over: the row action, the download endpoint and any later caller
+     * all reach the service, and a second copy per surface is how one of them ends up a
+     * wider door than the others. Operator and system work (the nightly backup task, the
+     * reconciler, seeds) passes untouched.
+     *
+     * AIDEV-NOTE: the refusal never names the missing capability and is the SAME text a
+     * caller gets for a database they cannot see at all -- the instance tier's uniform
+     * refusal, for the same reason: a refusal that distinguishes the two is an oracle.
+     *
+     * @throws Violations {@code database_not_permitted}
+     */
+    public static void requireDatabaseCapability(int databaseId, @NonNull String capability) {
+        if (!TenantWrites.isTenantOriginated()) {
+            return;
+        }
+        AccessContext ctx = TenantWrites.acting();
+        if (ctx == null || ctx.isAnonymous()
+                || !hasDatabaseCapability(ctx, databaseId, capability)) {
+            throw databaseRefusal();
+        }
+    }
+
+    /** THE uniform managed-database refusal; visibility, absence and denial are one answer. */
+    public static @NonNull Violations databaseRefusal() {
+        return Violations.ofForm(Microcopy.of("database_not_permitted")
+            .withFilter("scope", "violations"));
+    }
+
+    /**
+     * @return null for admins, else {@code ID IN (the database ids the context holds
+     *         {@code capability} on)}, matching NOTHING when there are none
+     */
+    public static @Nullable Criteria databaseScope(@NonNull AccessContext ctx,
+                                                   @NonNull String capability) {
+        return grantScope(ctx, Models.get(DatabaseModel.class), DatabaseModel.MODEL_ID,
+            capability, DatabaseModel.ID::in);
+    }
+
+    /** Every database id the context holds {@code capability} on (walk-confirmed). */
+    @NonNull
+    public static Set<Integer> databaseIdsWith(@NonNull AccessContext ctx,
+                                               @NonNull String capability) {
+        return grantedRecordIds(ctx, DatabaseModel.MODEL_ID, capability);
+    }
+
+    /**
      * @return null for admins (no extra constraint), else {@code ID IN (the instance ids
      *         the context holds {@code capability} on)}, matching NOTHING when there are none
      */
@@ -716,6 +846,26 @@ public final class HohenheimAccess {
         Set<Integer> ids = enumerateGrantedIds(ctx, model, capability);
         cache.put(key, ids);
         return ids;
+    }
+
+    /**
+     * Drop the request memo because THIS request just changed the grants it caches.
+     *
+     * AIDEV-NOTE: the memo is deliberately "grants written mid-request stay
+     * next-request-effective" -- correct for an operator editing somebody else's grants,
+     * and WRONG for a creation funnel that plants the creator's own manage grant, because
+     * the very next thing that happens is zenit-cms verifying the new row against the
+     * caller's scope predicate. Without this the scoped create refuses itself with
+     * {@code out_of_scope} and rolls back a perfectly legitimate allocation. Call it from
+     * the funnel that planted the grant, never speculatively.
+     */
+    public static void forgetGrantedRecordIds(@NonNull AccessContext ctx) {
+        Conduit conduit = ctx.conduit();
+        Map<String, Set<Integer>> cache = conduit == null ? null
+            : conduit.getAttribute(GRANTED_RECORD_IDS);
+        if (cache != null) {
+            cache.clear();
+        }
     }
 
     private static @NonNull Set<Integer> enumerateGrantedIds(@NonNull AccessContext ctx,

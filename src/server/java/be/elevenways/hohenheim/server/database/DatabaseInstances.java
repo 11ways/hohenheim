@@ -130,20 +130,7 @@ public final class DatabaseInstances {
         String dbName = database.get(DatabaseModel.DB_NAME);
 
         try {
-            int instanceId = OwnedInstances.inScope(SOURCE, DatabaseModel.MODEL_ID, recordId,
-                () -> {
-                    Row instance = owned(recordId);
-                    if (instance == null) {
-                        instance = Models.get(InstanceModel.class).createEmptyRow();
-                    }
-                    instance.set(InstanceModel.NAME, instanceNameOf(name));
-                    instance.set(InstanceModel.KIND, DatabaseContainerKind.ID.toString());
-                    instance.set(InstanceModel.SERVER_ID, serverId);
-                    instance.set(InstanceModel.SETTINGS,
-                        desiredSettings(database, engine, user, dbName, limits));
-                    Models.get(InstanceModel.class).save(instance);
-                    return (int) (Integer) instance.get(InstanceModel.ID);
-                });
+            int instanceId = reserveEngineRow(database, limits);
 
             // Secrets AFTER the row exists (they key on its id) and BEFORE the deploy
             // reads them: applyToSettings merges them into the container environment.
@@ -176,6 +163,44 @@ public final class DatabaseInstances {
         } catch (Exception e) {
             throw new IOException(e);
         }
+    }
+
+    /**
+     * Converge the database's owned engine INSTANCE ROW, and nothing else: no daemon call,
+     * no image pull, no readiness wait. This is the half that is TRANSACTIONAL and can be
+     * refused -- the owner's instance quota and the host's memory booking both charge on
+     * this write -- which is why the tenant allocation funnel runs it INLINE while the
+     * container work stays in the background.
+     *
+     * AIDEV-NOTE: splitting it out fixed a silent-success shape on the admin path too.
+     * createAsync used to answer "created" and then discover the refusal on a pool thread,
+     * so an operator whose host was out of memory got a record that quietly flipped to
+     * FAILED instead of a named refusal on the form they were looking at.
+     *
+     * @return the id of the engine instance row
+     * @throws Violations quota, capacity, fence or attribution refusals, unwrapped, so the
+     *         funnel can render them on the field they belong to
+     */
+    public static int reserveEngineRow(@NonNull Row database, @NonNull ResourceLimits limits)
+            throws Exception {
+        int recordId = database.get(DatabaseModel.ID);
+        String name = database.get(DatabaseModel.NAME);
+        int serverId = ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID));
+        ManagedDatabase.Engine engine = ManagedDatabase.engineOf(database);
+        return OwnedInstances.inScope(SOURCE, DatabaseModel.MODEL_ID, recordId, () -> {
+            Row instance = owned(recordId);
+            if (instance == null) {
+                instance = Models.get(InstanceModel.class).createEmptyRow();
+            }
+            instance.set(InstanceModel.NAME, instanceNameOf(name));
+            instance.set(InstanceModel.KIND, DatabaseContainerKind.ID.toString());
+            instance.set(InstanceModel.SERVER_ID, serverId);
+            instance.set(InstanceModel.SETTINGS, desiredSettings(database, engine,
+                database.get(DatabaseModel.DB_USER), database.get(DatabaseModel.DB_NAME),
+                limits));
+            Models.get(InstanceModel.class).save(instance);
+            return (int) (Integer) instance.get(InstanceModel.ID);
+        });
     }
 
     /**
