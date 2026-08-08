@@ -7419,5 +7419,19 @@
   "tenant_instance_not_managed": {
     "text": "Je hebt geen config-rechten op die instantie",
     "scope": "violations"
+  },
+  "max_memory_mb": [
+    {
+      "text": "Max geheugen (MB)",
+      "scope": "field"
+    },
+    {
+      "text": "Limiet op het totale werklastgeheugen van deze eigenaar; 0 weigert elke werklast, leeg valt terug op het globale standaardmaximum",
+      "scope": "help"
+    }
+  ],
+  "memory_quota_reached": {
+    "text": "Geheugenquotum bereikt: {$used} van {$limit} MB in gebruik",
+    "scope": "violations"
   }
 }

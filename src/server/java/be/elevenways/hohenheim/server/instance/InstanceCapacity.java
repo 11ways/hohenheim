@@ -363,8 +363,13 @@ public final class InstanceCapacity {
      * The footprint the write will END UP being charged -- a partial CMS update carries
      * only the changed keys (the SiteDomainModel.effective idiom), so pricing the staged
      * row alone would charge a settings-less edit as a zero-footprint workload.
+     *
+     * AIDEV-NOTE: package-visible because {@link InstanceQuota}'s per-OWNER memory budget
+     * must book the very same number this host budget does. Two derivations of "how much
+     * memory is this write worth" is how one ledger ends up charging what the other does
+     * not, and charge == cap only holds while there is ONE answer.
      */
-    private static int effectiveFootprintMb(@NonNull Row row, @Nullable Row stored) {
+    static int effectiveFootprintMb(@NonNull Row row, @Nullable Row stored) {
         String kind = row.has(InstanceModel.KIND.getName()) || stored == null
             ? row.get(InstanceModel.KIND) : stored.get(InstanceModel.KIND);
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);

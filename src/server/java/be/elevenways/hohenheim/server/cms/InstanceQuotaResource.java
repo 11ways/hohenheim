@@ -15,8 +15,8 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
- * Per-owner instance-quota overrides: a plain generated resource (the floor IS the
- * page -- list, forms, CRUD), because a quota override offers nothing beyond its two
+ * Per-owner quota overrides: a plain generated resource (the floor IS the page --
+ * list, forms, CRUD), because a quota override offers nothing beyond its cap
  * columns. The subject-set key is admin-entered for now; a picker over known owners
  * arrives with the tenant-facing /manage instance surface.
  */
@@ -30,6 +30,7 @@ public final class InstanceQuotaResource extends RowResource {
     private final FormSpec formSpec = FormSpec.builder()
         .add(InstanceQuotaModel.SUBJECTS)
         .add(InstanceQuotaModel.MAX_INSTANCES)
+        .add(InstanceQuotaModel.MAX_MEMORY_MB)
         .add(InstanceQuotaModel.MAX_DISK_GB)
         .add(InstanceQuotaModel.MAX_NICS)
         .build();
@@ -37,6 +38,7 @@ public final class InstanceQuotaResource extends RowResource {
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(InstanceQuotaModel.SUBJECTS).filterable().build())
         .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_INSTANCES).build())
+        .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_MEMORY_MB).build())
         .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_DISK_GB).build())
         .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_NICS).build())
         .build();
