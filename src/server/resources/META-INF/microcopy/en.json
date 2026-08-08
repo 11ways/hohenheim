@@ -7433,5 +7433,33 @@
   "memory_quota_reached": {
     "text": "Memory quota reached: {$used} of {$limit} MB in use",
     "scope": "violations"
+  },
+  "max_sites": [
+    {
+      "text": "Max sites",
+      "scope": "field"
+    },
+    {
+      "text": "Cap on this owner's live sites; 0 refuses every new site, empty falls back to the global default",
+      "scope": "help"
+    }
+  ],
+  "max_databases": [
+    {
+      "text": "Max databases",
+      "scope": "field"
+    },
+    {
+      "text": "Cap on this owner's managed databases; 0 refuses every new one, empty falls back to the global default",
+      "scope": "help"
+    }
+  ],
+  "site_quota_reached": {
+    "text": "Site quota reached: {$used} of {$limit} in use",
+    "scope": "violations"
+  },
+  "database_quota_reached": {
+    "text": "Database quota reached: {$used} of {$limit} in use",
+    "scope": "violations"
   }
 }

@@ -18,6 +18,8 @@ import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceRootDiskQuota;
 import be.elevenways.hohenheim.server.process.ReservedEnv;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
+import be.elevenways.hohenheim.server.quota.DatabaseQuota;
+import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.hohenheim.server.process.SiteApiKeys;
 import be.elevenways.zenit.common.ZenitModule;
 
@@ -111,5 +113,13 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // Concurrent preview creates cannot both spend an owner's last preview slot, and
         // the soft-delete transition (destroy/expiry) hands the slot back.
         be.elevenways.hohenheim.server.preview.PreviewQuota.install();
+        // A site RECORD is one owner slot whether or not it lowers a container (eight of
+        // eleven site types run none), released on the deleted_at transition SiteResource
+        // stamps -- there is no hard site delete outside tests.
+        SiteQuota.install();
+        // A managed database is one owner slot ON TOP of the instance slot its engine
+        // container spends; databases have no deleted_at, so the remove pairing is the one
+        // release lane (TenantDatabases.abandon's compensating delete included).
+        DatabaseQuota.install();
     }
 }

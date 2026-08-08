@@ -7433,5 +7433,33 @@
   "memory_quota_reached": {
     "text": "Geheugenquotum bereikt: {$used} van {$limit} MB in gebruik",
     "scope": "violations"
+  },
+  "max_sites": [
+    {
+      "text": "Max sites",
+      "scope": "field"
+    },
+    {
+      "text": "Limiet op de actieve sites van deze eigenaar; 0 weigert elke nieuwe site, leeg valt terug op het globale standaardmaximum",
+      "scope": "help"
+    }
+  ],
+  "max_databases": [
+    {
+      "text": "Max databanken",
+      "scope": "field"
+    },
+    {
+      "text": "Limiet op de beheerde databanken van deze eigenaar; 0 weigert elke nieuwe, leeg valt terug op het globale standaardmaximum",
+      "scope": "help"
+    }
+  ],
+  "site_quota_reached": {
+    "text": "Sitequotum bereikt: {$used} van {$limit} in gebruik",
+    "scope": "violations"
+  },
+  "database_quota_reached": {
+    "text": "Databankquotum bereikt: {$used} van {$limit} in gebruik",
+    "scope": "violations"
   }
 }
