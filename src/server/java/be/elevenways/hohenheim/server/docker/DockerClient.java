@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.docker;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.dry.Dry;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
@@ -18,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 import java.util.concurrent.TimeUnit;
 
@@ -79,9 +81,34 @@ public class DockerClient {
     private final DockerTransport transport;
     private final long timeoutMillis;
 
+    /**
+     * AIDEV-NOTE: TEST SEAM and the only one, the {@code WorkloadNetworkPolicy
+     * .overrideForTest} precedent exactly. Production code never calls
+     * {@link #overrideLocalTransportForTest}; it exists because the local daemon is
+     * reached through a CONSTANT path from a dozen call sites ({@code new DockerClient()}
+     * inside the release engine, the artifact prune, the volume resolver), so without one
+     * seam here every test of those paths must skip on a machine without a Docker socket
+     * -- and a skipped test is a green test. One seam, so a hermetic harness stands in for
+     * the whole local daemon rather than each caller growing an injection point.
+     */
+    private static volatile @Nullable Supplier<DockerTransport> localTransportOverride;
+
+    /** The transport addressing the LOCAL daemon; the test override when one is installed. */
+    public static DockerTransport localTransport() {
+        Supplier<DockerTransport> installed = localTransportOverride;
+        return installed != null ? installed.get()
+            : new UnixSocketDockerTransport(DEFAULT_SOCKET);
+    }
+
+    /** @param supplier the transport {@link #localTransport()} answers with, null to restore */
+    public static void overrideLocalTransportForTest(
+            @Nullable Supplier<DockerTransport> supplier) {
+        localTransportOverride = supplier;
+    }
+
     /** Talk to the local daemon over its default unix socket. */
     public DockerClient() {
-        this(new UnixSocketDockerTransport(DEFAULT_SOCKET), DEFAULT_TIMEOUT_MS);
+        this(localTransport(), DEFAULT_TIMEOUT_MS);
     }
 
     public DockerClient(DockerTransport transport) {

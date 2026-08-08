@@ -221,7 +221,7 @@ public class ServerService extends DatasourceScoped {
             return new ProcessDockerTransport(
                 HostKeys.sshArgv(row, ProcessDockerTransport.DIAL_STDIO));
         }
-        return new UnixSocketDockerTransport(DockerClient.DEFAULT_SOCKET);
+        return DockerClient.localTransport();
     }
 
     /** One live daemon probe with a TYPED outcome; never a silent null. */
