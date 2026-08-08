@@ -7245,5 +7245,29 @@
   "workload": {
     "text": "Workload",
     "scope": "instance_console"
-  }
+  },
+  "instance_crashed": [
+    {
+      "text": "Instance {$name} needs attention",
+      "scope": "attention_title"
+    },
+    {
+      "text": "The workload exited unexpectedly and was not restarted.",
+      "scope": "attention_detail"
+    }
+  ],
+  "instance_backup": {
+    "text": "Backup of {$name} failed",
+    "scope": "attention_title"
+  },
+  "instance_disk": [
+    {
+      "text": "Disk almost full on {$name}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "{$percent}% of the {$limit} GB root disk is in use.",
+      "scope": "attention_detail"
+    }
+  ]
 }

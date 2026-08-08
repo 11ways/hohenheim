@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DeploymentModel;
+import be.elevenways.hohenheim.model.InstanceBackupModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
@@ -26,6 +28,7 @@ import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.task.TaskStatus;
 import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -93,7 +96,104 @@ public final class AttentionCollector {
         if (HohenheimRoles.enabled(Role.PROCESSES)) {
             identityIssues(items);
         }
+        if (HohenheimRoles.enabled(Role.INSTANCES)) {
+            crashedInstances(items);
+            failedInstanceBackups(items);
+            instancesLowOnDisk(items);
+        }
         return items;
+    }
+
+    // AIDEV-NOTE: the three instance collectors are PUBLIC for the same reason
+    // stuckReleasingPorts is -- a test proves each projection directly, positive and
+    // negative, instead of asserting against whatever the whole dashboard happens to hold.
+
+    /**
+     * Instances the runtime gave up on: the status CRASH DETECTION already stamped
+     * (an unobserved exit under crash policy none, or a crash loop that tripped flap
+     * protection). A stored fact, deliberately -- asking every daemon whether each
+     * workload is alive is what the class-level rule about per-render probes forbids.
+     */
+    public static void crashedInstances(List<AttentionItem> items) {
+        for (Row instance : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.DELETED_AT.isNull())
+                .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_ERROR))
+                .all()) {
+            items.add(item("error", "box",
+                copy("instance_crashed", "attention_title",
+                    "name", instance.get(InstanceModel.NAME)),
+                copy("instance_crashed", "attention_detail"),
+                "/admin/instances/" + instance.get(InstanceModel.ID) + "/page/console"));
+        }
+    }
+
+    /**
+     * Instances whose LATEST backup failed -- the failedDeployments shape: only the most
+     * recent attempt per instance speaks, so one old failure followed by successes is not
+     * an alarm and a currently-failing schedule is.
+     */
+    public static void failedInstanceBackups(List<AttentionItem> items) {
+        var backups = Models.get(InstanceBackupModel.class);
+        for (Row instance : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.DELETED_AT.isNull())
+                .all()) {
+            Integer id = instance.get(InstanceModel.ID);
+            if (id == null) {
+                continue;
+            }
+            Row latest = backups.find()
+                .where(InstanceBackupModel.INSTANCE_ID.eq(id))
+                .orderBy(InstanceBackupModel.ID, SortOrder.DESC)
+                .first();
+            if (latest == null || !InstanceBackupModel.STATUS_FAILED
+                    .equals(latest.get(InstanceBackupModel.STATUS))) {
+                continue;
+            }
+            items.add(item("error", "box-archive",
+                copy("instance_backup", "attention_title",
+                    "name", instance.get(InstanceModel.NAME)),
+                literal(latest.get(InstanceBackupModel.ERROR)),
+                "/admin/instances/" + id + "/page/backups"));
+        }
+    }
+
+    /** Above this fraction of an ENFORCED root-disk ceiling an instance needs attention. */
+    private static final double DISK_HIGH = 0.85;
+
+    /** ... and above this it is about to break rather than merely worth watching. */
+    private static final double DISK_CRITICAL = 0.95;
+
+    /**
+     * Instances close to filling their root disk, from the STORED observation
+     * ({@code ObserveInstanceDisk}).
+     *
+     * AIDEV-NOTE: a null observation is silence, never zero, and a zero LIMIT is silence
+     * too. Both mean "nothing is rationing this disk, or nothing measured it" -- Docker's
+     * whole tier is in that state by design, because it enforces no root quota at all. An
+     * item here therefore always names a real ceiling a real number is approaching.
+     */
+    public static void instancesLowOnDisk(List<AttentionItem> items) {
+        for (Row instance : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.DELETED_AT.isNull())
+                .where(InstanceModel.DISK_OBSERVED_AT.isNotNull())
+                .all()) {
+            Long used = instance.get(InstanceModel.DISK_USED_BYTES);
+            Long limit = instance.get(InstanceModel.DISK_LIMIT_BYTES);
+            if (used == null || limit == null || limit <= 0) {
+                continue;
+            }
+            double fraction = (double) used / limit;
+            if (fraction < DISK_HIGH) {
+                continue;
+            }
+            items.add(item(fraction >= DISK_CRITICAL ? "error" : "warning", "hard-drive",
+                copy("instance_disk", "attention_title",
+                    "name", instance.get(InstanceModel.NAME)),
+                copy("instance_disk", "attention_detail",
+                    "percent", Math.round(fraction * 100),
+                    "limit", Math.round(limit / (1024.0 * 1024 * 1024))),
+                "/admin/instances/" + instance.get(InstanceModel.ID)));
+        }
     }
 
     /** How long a claim may sit in {@code releasing} before it is an alarm: two hourly

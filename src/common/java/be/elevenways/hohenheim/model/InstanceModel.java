@@ -251,6 +251,25 @@ public class InstanceModel extends Model {
         StringField.builder().name("root_disk_bucket").filterable(false).build());
 
     /**
+     * OBSERVED root-disk bytes in use, stamped by the disk sweeper.
+     *
+     * AIDEV-NOTE: NULL means NOT MEASURED, never empty. Only a driver implementing
+     * {@code RootDiskUsageSupport} stamps these -- Docker enforces no root quota and
+     * measures none, so its instances keep null forever and every consumer must read null
+     * as "no news" instead of computing a percentage from zeros.
+     */
+    public static final LongField DISK_USED_BYTES = SCHEMA.addField(
+        LongField.builder("disk_used_bytes").filterable(false).build());
+
+    /** The ENFORCED root-disk ceiling the daemon reports, or 0 when there is none. */
+    public static final LongField DISK_LIMIT_BYTES = SCHEMA.addField(
+        LongField.builder("disk_limit_bytes").filterable(false).build());
+
+    /** When the two figures above were last observed; null while never measured. */
+    public static final DateTimeField DISK_OBSERVED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("disk_observed_at").build());
+
+    /**
      * The RESOLVED image identity the workload actually runs (incus: the image
      * fingerprint behind {@code volatile.base_image}), recorded at deploy. A mutable
      * alias is not a deployment identity: recreating an absent workload uses this pin,
