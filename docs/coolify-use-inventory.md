@@ -34,9 +34,10 @@ Verification legend: **[code]** = source read at the cited file:line;
 **[test]** = hermetic test, asserts state, no assumption gate; **[live]** = the
 only proof is a daemon-gated test that can skip green.
 
-**Two clauses of the plan's minimum claim are currently OVERCLAIMED by that
-sentence and are corrected here: item 2 (build isolation) and item 3 (provider
-flows).** Read those two first.
+**Two clauses of the plan's minimum claim were OVERCLAIMED by that sentence when
+this document was written: item 2 (build isolation) and item 3 (provider flows).**
+Item 2 was FIXED on 2026-08-08 and now states the boundary of each build lane by
+name; item 3 is still the correction it was. Read those two first.
 
 ### The counts
 
@@ -44,15 +45,22 @@ Thirteen numbered clauses, plus three argued rejections and one cross-reference:
 
 | verdict | count | items |
 | --- | --- | --- |
-| IMPLEMENTED | 7 | 1, 4, 6, 7, 8, 11, 13 |
-| PARTIAL | 6 | 2, 3, 5, 9, 10, 12 |
+| IMPLEMENTED | 9 | 1, 2, 4, 6, 7, 8, 10, 11, 13 |
+| PARTIAL | 4 | 3, 5, 9, 12 |
 | REJECTED | 3 | A (compose runtime), C (large service marketplace), D (multi-server orchestration) |
-| OPEN | 0 as a row | but five OPEN SLICES are named inside PARTIAL rows: the git build lane (2), ACME issuance proof (9), site-keyed volumes (10), site/database count quotas (12), the CLI test wiring (13) |
+| OPEN | 0 as a row | three OPEN SLICES remain, named inside PARTIAL rows: ACME issuance proof (9), site/database count quotas (12), the CLI test wiring (13) |
 | CLAIMED | 2 sub-verdicts | Gitea webhook support (item 3), ACME certificate acquisition (item 9) |
 
-Of the 7 IMPLEMENTED rows, **three are proven only `[live]`** (1, 6, 7) -- and
-two of those three are the rollout and rollback that are the product's
-centrepiece. Section B is a cross-reference, not a rejection.
+Counts updated 2026-08-08: items 2 and 10 moved PARTIAL -> IMPLEMENTED when the
+two defects this document found were fixed (build isolation, and a named volume
+surviving a health-gated release). Each row keeps the original finding as history
+above its resolution -- do not delete those paragraphs, they are why the fix looks
+the way it does.
+
+Of the 9 IMPLEMENTED rows, **four are proven only `[live]`** (1, 6, 7, 10) -- and
+two of those are the rollout and rollback that are the product's centrepiece.
+Item 2 is now the rare one proven `[test]` (hermetic). Section B is a
+cross-reference, not a rejection.
 
 ---
 
@@ -85,9 +93,12 @@ codes are not a detection signal, and `:139` implements exactly that.
 
 ## 2. Build isolation away from the control plane and from tenant runtime credentials
 
-**PARTIAL, and the plan's clause as written is FALSE.** There are TWO build
-lanes in this product and only one of them is isolated. This is the most
-important correction in this document.
+**IMPLEMENTED as of 2026-08-08, with the boundary of each lane NAMED.** There are
+TWO build lanes in this product; they are isolated DIFFERENTLY and deliberately,
+and neither one hands a build the workload's runtime credentials any more. The
+paragraphs below keep the original finding as history -- when this row said
+PARTIAL, lane 2 ran a shell command on the controller with the site's runtime
+`environment_variables` merged in.
 
 ### Lane 1, the sandboxed image build -- isolated, as claimed
 
@@ -116,29 +127,45 @@ field list backs it. **[code]**
   `src/browserTest/java/be/elevenways/hohenheim/test/build/BuildCredentialsTest.java:17`
   -- a rival token resolves to null (`:28`). **[test]**
 
-### Lane 2, the legacy git `build_command` -- NOT isolated
+### Lane 2, the git `build_command` -- a HOST process, confined as one
 
-`server/source/GitDeployment.java:240` (`runBuild`) executes
-`List.of("sh", "-c", buildCommand)` (`:257`) as a HOST PROCESS ON THE CONTROL
-PLANE (`SystemUsers.executionBuilder(...)`, `pb.start()` at `:269`, `:273`).
-Isolation is a uid drop, a timeout and a process-group kill: no container, no
-network policy, no cgroup quota, no capability drop.
+Reached by the non-docker git site types (static, node); docker-typed git sites
+go to lane 1. It executes `List.of("sh", "-c", buildCommand)` as a host process
+under the site's uid (`server/source/GitDeployment.java`, `runBuild`), and the
+DECISION recorded there is that it stays one: BuildSandbox produces a docker image
+from a declared builder image, while these types declare no image and need the
+checkout's FILES in their slot. What it gained on 2026-08-08:
 
-Worse for the second half of the clause: `:260` merges the SITE'S RUNTIME
-`environment_variables` into that command's environment. That is exactly
-"tenant runtime credentials reaching the build", in the opposite direction from
-the guarantee `BuildRequest` makes. This lane is reached for non-docker git site
-types (static, node); docker-typed git sites go to lane 1.
+- The site's runtime `environment_variables` are no longer merged in at all. Only
+  `build_environment_variables` (`GitSourceSchema.java:78-80`, declared
+  `.secret()`) reaches a build. This mattered even though the command is
+  operator-authored: the REPO is not, and a dependency's postinstall script had a
+  path from the site's `DATABASE_PASSWORD` into a deploy log any tenant holding
+  site `manage` can read over the PaaS API.
+- `ProcessNetworkPolicy.apply` on the build's run-as uid -- the same chain
+  `ManagedProcessSiteHandler.isolate` applies for the site's runtime process, so
+  the build is denied the tenant network vocabulary (metadata service, RFC1918)
+  its own workload is denied. A build that cannot be isolated is REFUSED.
+- The `ProcessConfinement` cgroup scope (memory/cpu/TasksMax) sized by
+  `BuildQuota.fromSettings` -- the same quota lane 1 uses. Unenforceable host =
+  refusal, which is BuildSandbox's own doctrine ("a build that starts unprotected
+  is worse than a build that does not start").
+- `build_timeout` may only TIGHTEN `builds.timeout_seconds`. It used to override
+  it, so the operator's global build time cap enforced nothing on this lane.
 
-Its tests (`src/browserTest/.../source/GitDeploymentTest.java:73`, `:118`,
-`:141`) assert timeouts and log redaction, not isolation -- because there is no
-isolation to assert.
+Still NOT true of this lane, and stated on the method so nobody reads more into
+it: no container, no filesystem namespace, no capability bounding set (sudo has
+already dropped CAP_SETPCAP by the time the child could ask). It is the
+host-process tier's floor, not the sandbox's.
 
-**OPEN slice, ranked first in this document:** either route the git
-`build_command` through `BuildSandbox` like the docker lane, or declare the
-non-docker git site types a trusted-operator-only tier and say so in the plan.
-Nothing today carves this out as a non-goal, so the plan sentence is simply
-wrong.
+- Test: `src/browserTest/java/be/elevenways/hohenheim/server/source/GitDeploymentTest.java`
+  -- `theBuildSeesBuildTimeVariablesOnlyAndIsRefusedWhenItCannotBeConfined` reads
+  the build's OWN environment back off disk (a build-time variable arrives as the
+  positive control; the runtime secret is absent), then proves both refusals
+  (unenforceable quota, unenforceable network policy) leave the command unrun, and
+  that the applied ruleset denies the tenant ranges for THAT uid;
+  `aSiteDeclaredBuildTimeoutCannotOutlastTheHostsBuildTimeQuota` is killed at the
+  host's 10s, not the site's 600s. Hermetic, no assumption gate. **[test]**
 
 ## 3. GitHub/GitLab-compatible provider AND webhook flows
 
@@ -362,7 +389,8 @@ silent until a certificate expires.
 
 ## 10. Persistent storage
 
-**PARTIAL, and a real defect is recorded here rather than in a docblock.**
+**IMPLEMENTED as of 2026-08-08 (the defect recorded below is FIXED; the finding
+stays as history).**
 
 Named volumes are declared as logical-name-to-container-path on the site type
 (`sitetype/types/DockerSiteType.java:82`), lowered onto the kind
@@ -379,8 +407,8 @@ non-goal, and it was not recorded as one anywhere until this document.
   asserts the named volume is genuinely mounted at `/data`, read off the real
   daemon's `Mounts` (`:237`). Gated at `:210`, `:212`. **[live]**
 
-**DEFECT (found by writing this document, verified at file:line, NOT fixed
-here): a named volume does not survive a health-gated release.** The volume name
+**DEFECT (found by writing this document, FIXED 2026-08-08 -- see the resolution
+below): a named volume did not survive a health-gated release.** The volume name
 is derived from the INSTANCE id. A gated release mints a NEW instance row
 (`SiteReleases.newInstanceRow`, `:692-706`), so the candidate computes a
 DIFFERENT volume name and mounts an EMPTY volume. The old volume is neither
@@ -396,9 +424,40 @@ sentence has been corrected in this pass; the behaviour has not. No test covers
 "write to a volume, release, read it back": `DockerSiteHandlerTest:209` never
 performs a release swap, and `SiteReleaseLiveTest` declares no volumes.
 
-**OPEN slice, ranked second in this document:** volume identity must be keyed to
-the SITE (or to a declared volume record), not to the instance row that happens
-to be serving. There are no live installations, so a rename is free.
+**RESOLUTION (2026-08-08).** Volume identity is keyed to the SITE:
+`server/docker/SiteVolumes.java` mints
+`hohenheim-{token}-site-{siteId}-vol-{mount}` (the `DatabaseInstances.dataVolumeOf`
+precedent), `SiteInstances.desiredSettings` resolves the declared mounts through
+it, and `SiteContainerKind.specFor` mounts the stored names VERBATIM instead of
+re-deriving them from the instance handle. Two consequences worth stating:
+
+- The volume is CREATED by `SiteVolumes`, not by the mount's `VolumeOptions`, so
+  its owner labels name the SITE. Docker labels a volume at birth only, so a
+  mount-created volume stayed attributed to whichever release row happened to
+  create it -- and once that row is reclaimed the reconciler reads live site data
+  as an orphan. `DockerReconciler.classifyByNamingScheme` already had a
+  `site-{id}-vol-{mount}` branch with nothing minting it; it is live now.
+- ADOPTION is performed, not assumed away: when the site volume is absent and one
+  of the site's OWN live instance rows names an existing instance-keyed volume,
+  its data is copied in (entries counted on both sides from inside the copy
+  container, refusing and removing the half-copy rather than deploying an empty
+  volume). The legacy volume is left in place on purpose -- autonomous volume
+  removal is a declared non-primitive here. Every live instance row of the site is
+  then rewritten to the resolved name AFTER the release writes its own rows: that
+  ordering is load-bearing and was measured, because `gatedSwap` flips the
+  superseded row's role from a Row loaded BEFORE spec resolution and
+  `Models.save` writes the whole row, so an earlier heal was clobbered while
+  reporting success.
+
+- Test: `src/browserTest/java/be/elevenways/hohenheim/test/docker/SiteVolumeLiveTest.java`
+  -- `tenantStateInANamedVolumeSurvivesAGatedReleaseAndARollback` writes state
+  into the volume, releases forward through the health gate, rolls back, and reads
+  every byte back from INSIDE the container that is serving (plus: exactly one
+  site volume, no instance-keyed volume, every row storing the site-keyed name);
+  `aLegacyInstanceKeyedVolumeIsAdoptedWithItsDataAndTheRowIsHealed` covers the
+  adoption and the row heal. Counterfactual (naming reverted): the swap answers
+  `cat: can't open '/data/state.txt': No such file or directory`. Gated on the
+  socket and a local alpine image. **[live]**
 
 ## 11. Per-deployment logs
 

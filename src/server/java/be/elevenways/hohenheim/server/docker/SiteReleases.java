@@ -222,6 +222,7 @@ public final class SiteReleases {
             InstanceStatus status = new InstanceService().deploy(instanceId);
             op.set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image")));
             finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null, "deployed");
+            SiteVolumes.heal(siteId, desired);
             return new SiteInstances.SiteRuntime(instanceId, status);
         } catch (RuntimeException e) {
             finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(e), "deploy failed");
@@ -271,6 +272,7 @@ public final class SiteReleases {
             // SPEC did not: adopt the fingerprint so the fast lane hits from now on.
             serving.set(InstanceModel.SETTINGS, desired);
             Models.get(InstanceModel.class).save(serving);
+            SiteVolumes.heal(siteId, desired);
             finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null,
                 "spec unchanged; fingerprint adopted without a deploy");
             if (protecting) {
@@ -287,6 +289,7 @@ public final class SiteReleases {
             serving.set(InstanceModel.SETTINGS, desired);
             serving.set(InstanceModel.SERVER_ID, serverId);
             Models.get(InstanceModel.class).save(serving);
+            SiteVolumes.heal(siteId, desired);
             transition(op, ReleaseOperationModel.STATUS_DEPLOYING, "deploying in place");
             try {
                 InstanceStatus status = new InstanceService().deploy(servingId);
@@ -413,6 +416,11 @@ public final class SiteReleases {
             Models.get(InstanceModel.class).save(candidate);
             serving.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_RETIRED);
             Models.get(InstanceModel.class).save(serving);
+            // AIDEV-NOTE: the volume-name heal runs HERE, after the role flip, because that
+            // flip saves the row from a Row object loaded BEFORE the spec was resolved and
+            // Models.save writes the WHOLE row -- healing earlier was silently clobbered by
+            // it, and the rollback target kept pointing at the old volume.
+            SiteVolumes.heal(siteId, desired);
             transition(op, ReleaseOperationModel.STATUS_DRAINING,
                 "instance " + candidateId + " now serving; instance " + servingId
                     + " retained as the rollback target, draining");

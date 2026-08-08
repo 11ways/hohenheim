@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.docker.DockerSiteRequestHandler;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.SiteContainerKind;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
+import be.elevenways.hohenheim.server.docker.SiteVolumes;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
@@ -97,7 +98,7 @@ class DockerSiteHandlerTest {
 
         Integer instanceId = handler.getInstanceId();
         String containerName = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-        String volumeName = containerName + "-vol-data";
+        String volumeName = SiteVolumes.volumeOf(siteId, "data");
         try {
             // 1. The site's running release IS an owned instance: the row exists, is
             //    attributed to the site, and carries the site_container kind.
@@ -123,8 +124,10 @@ class DockerSiteHandlerTest {
             assertThat(upstream.getHost()).isEqualTo("127.0.0.1");
             assertThat(upstream.getPort()).isGreaterThan(0);
 
-            // 3. HOST state: the container runs under the INSTANCE identity -- labels on
-            //    the container and on the volume (born labelled, never relabelled).
+            // 3. HOST state: the container runs under the INSTANCE identity, and the
+            //    volume under the SITE's -- born labelled, never relabelled. The split is
+            //    deliberate: a release container dies with its instance row, the volume
+            //    must outlive every release (SiteVolumes).
             Map<String, Object> info = docker.inspectContainer(containerName);
             Map<String, Object> state = (Map<String, Object>) info.get("State");
             assertThat(state.get("Running")).as("step 3").isEqualTo(Boolean.TRUE);
@@ -138,8 +141,9 @@ class DockerSiteHandlerTest {
             OwnerLabels.Owner volumeOwner =
                 OwnerLabels.parse((Map<?, ?>) volume.get("Labels"));
             assertThat(volumeOwner).as("step 3: volume owner labels from birth").isNotNull();
-            assertThat(volumeOwner.model()).isEqualTo(InstanceModel.MODEL_ID);
-            assertThat(volumeOwner.id()).isEqualTo(String.valueOf(instanceId));
+            assertThat(volumeOwner.model()).as("step 3: the volume belongs to the SITE")
+                .isEqualTo(SiteModel.MODEL_ID);
+            assertThat(volumeOwner.id()).isEqualTo(String.valueOf(siteId));
 
             // 4. Record-after: the port the KERNEL picked is in the ledger, owned by the
             //    INSTANCE record -- one authority, visible to every other one.
@@ -222,7 +226,7 @@ class DockerSiteHandlerTest {
             "cpu_limit", 0.5
         ));
         String containerName = ControllerScope.handle(ControllerScope.KIND_INSTANCE, handler.getInstanceId());
-        String volumeName = containerName + "-vol-data";
+        String volumeName = SiteVolumes.volumeOf(siteId, "data");
         try {
             Map<String, Object> info = docker.inspectContainer(containerName);
             Map<String, Object> hostConfig = (Map<String, Object>) info.get("HostConfig");

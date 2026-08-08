@@ -6388,6 +6388,9 @@
     "text": "De eigendomsattributie van een instance wordt door het systeem gezet, nooit ingediend",
     "scope": "violations"
   },
+  "site_volumes_unavailable": [
+    {"text": "De permanente volumes van deze site konden niet worden voorbereid: {$reason}", "scope": "violations"}
+  ],
   "site_image_build_failed": {
     "text": "Het bouwen van de site-image is mislukt: {$reason}",
     "scope": "violations"

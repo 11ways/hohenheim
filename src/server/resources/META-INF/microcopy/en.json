@@ -6392,6 +6392,9 @@
     "text": "Instance ownership attribution is set by the system, never submitted",
     "scope": "violations"
   },
+  "site_volumes_unavailable": [
+    {"text": "The site's persistent volumes could not be prepared: {$reason}", "scope": "violations"}
+  ],
   "site_image_build_failed": {
     "text": "Building the site image failed: {$reason}",
     "scope": "violations"

@@ -4161,6 +4161,57 @@ all. Two further docblocks were corrected (`InstanceQuota`'s stale "disk out of
 scope", `GitProviders` reading as though Gitea were a supported provider kind).
 The inventory is the record; do not re-derive it from this block.
 
+STATUS (2026-08-08, later the same day -- both FALSE clauses of the block above
+are now CLOSED; that block stays as the history of what was wrong):
+
+(1) BUILD ISOLATION. Decided by evidence rather than by routing everything
+through the sandbox: `GitDeployment.runBuild` stays a HOST process and is now
+confined like the tier it belongs to. The evidence for that choice, recorded on
+the method: BuildSandbox produces a docker IMAGE from a declared builder image
+while the non-docker git types declare no image and need the checkout's FILES
+back in their slot (routing them there is a redesign of the types, not a fix);
+the `build_command` is OPERATOR-authored, never tenant-authored
+(`ManageSiteResource.fieldBindings` gives a delegated tenant name/enabled/
+description only, and the API has no `source_settings` write), which is the same
+trust class as `CommandSiteType`'s command; but the REPO CONTENT is not
+operator-authored, so a dependency's postinstall script is hostile-capable code
+and confinement is not optional. Concretely: the site's runtime
+`environment_variables` are GONE from the build environment
+(`build_environment_variables`, declared `.secret()`, is the build-time channel
+-- and the shipped microcopy already said so, only the code disagreed); the spawn
+carries `ProcessNetworkPolicy` keyed on the build's run-as uid (the same chain
+the site's own runtime process is refused without) plus the `ProcessConfinement`
+cgroup scope sized by the build quota BOTH lanes share; a build that cannot be
+confined is REFUSED by name. The per-site `build_timeout` now only TIGHTENS
+`builds.timeout_seconds` -- it used to make the operator's cap enforce nothing on
+this lane. What this lane still does NOT have is stated on the method: no
+container, no filesystem namespace, no capability bounding set. The gate clause
+reads true now for "runtime secrets" (deleted), "control plane" (uid-keyed nft
+denies of the tenant vocabulary) and "other project" (uid exclusivity), NOT as
+"the build runs in a sandbox".
+
+(2) PERSISTENT STORAGE. Volume identity moved to the SITE
+(`SiteVolumes.volumeOf` = `hohenheim-{token}-site-{siteId}-vol-{mount}`,
+following `DatabaseInstances.dataVolumeOf`), the volume is created by
+`SiteVolumes` so its owner labels name the SITE (Docker labels at birth only, so
+a mount-created volume would be attributed to a release row that gets reclaimed),
+and `SiteContainerKind.specFor` mounts the stored names VERBATIM instead of
+re-deriving them. `DockerReconciler.classifyByNamingScheme` already had a
+`site-{id}-vol-{mount}` branch that nothing minted -- it is live now. Adoption is
+handled, not assumed: a pre-existing instance-keyed volume of the site's own rows
+has its DATA copied into the site volume, entry-counted on both sides from inside
+the copy container, refusing (and removing the half-copy) rather than deploying an
+empty volume; the legacy volume is deliberately left in place because autonomous
+volume removal is a declared non-primitive here. Every live instance row of the
+site is rewritten to the resolved name AFTER the release writes its own rows --
+that ordering is load-bearing and was measured: `gatedSwap` flips the superseded
+row's role from a Row loaded BEFORE spec resolution, and `Models.save` writes the
+whole row, so an earlier heal was silently clobbered and the rollback target kept
+pointing at the old volume. Proven live in `SiteVolumeLiveTest` (write state,
+health-gated release, rollback, all read back from INSIDE the serving container;
+plus the adoption journey), with the counterfactual showing
+`cat: can't open '/data/state.txt'` after the swap without the fix.
+
 ---
 
 ## Phase 8 -- VMs (deferred until Jelle green-lights)

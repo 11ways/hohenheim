@@ -382,9 +382,19 @@ public final class SiteInstances {
             desired.put("environment_variables", env);
         }
 
-        Map<String, String> volumes = EnvVars.toMap(settings.get("volumes"));
-        if (!volumes.isEmpty()) {
-            desired.put("volumes", volumes);
+        // Site-KEYED volume names, resolved (and adopted) against the daemon here rather
+        // than derived from the instance handle in the kind: a release mints a new instance
+        // row, and the volume must outlive it. See SiteVolumes.
+        try {
+            SiteVolumes.Resolution volumes = SiteVolumes.resolve(docker, siteId,
+                EnvVars.toMap(settings.get("volumes")));
+            if (!volumes.volumes().isEmpty()) {
+                desired.put("volumes", volumes.volumes());
+            }
+        } catch (IOException failed) {
+            throw Violations.ofField("settings.volumes", "",
+                Microcopy.of("site_volumes_unavailable").withFilter("scope", "violations")
+                    .withArg("reason", String.valueOf(failed.getMessage())));
         }
 
         Object memory = settings.get("memory_limit_mb");
