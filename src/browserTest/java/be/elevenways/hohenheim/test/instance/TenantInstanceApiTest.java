@@ -200,7 +200,7 @@ class TenantInstanceApiTest extends HohenheimTestBase {
             ? (Map<String, Object>) map : Map.of();
         InstanceVariables variables = new InstanceVariables();
         Object applied = variables.applyToSettings(settings,
-            variables.valuesFor(instanceId)).get("command");
+            variables.valuesFor(instanceId), Map.of()).get("command");
         return applied == null ? "" : String.valueOf(applied);
     }
 

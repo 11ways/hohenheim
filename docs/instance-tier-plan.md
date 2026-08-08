@@ -101,6 +101,30 @@ tenant-facing API. SFTP may remain a stated non-goal only if the browser/API fil
 surface covers our real workflows. One Minecraft+Velocity journey proves the
 architecture, not the replacement claim by itself.
 
+**STATUS 2026-08-08 -- "per-instance database allocation" is now MET; it was half
+met, and the half that was missing was the half a tenant notices.** Supersedes
+nothing above (the clause is unchanged); this records what it now cites.
+
+Allocation had been per-TENANT since `ccd1bd5`, but there was no instance-to-database
+join at all, so a database attached to a game server injected NOTHING and the
+credentials never appeared in that server's panel -- Pterodactyl's actual shape.
+`M087_CreateInstanceDatabases` adds the join with a two-sided authority rule
+(`config` on the instance, `manage` on the database, both re-asked when a stored
+link is re-pointed), derivation at `InstanceService.resolve` that is stored NOWHERE
+and substitutes into `command`, `cloud_init` and staged config files, its own
+`idblink` link-network lane registered as a discovered `InstancePreStartHook`, and an
+in-use refusal on database delete that now counts WORKLOADS rather than only sites.
+Argued in full -- including why it is a second join model rather than a
+generalization of `SiteDatabaseModel`, and why the instance side asks `config`
+rather than `manage` -- as item 10 of `docs/pterodactyl-use-inventory.md`.
+
+Known gap, stated rather than implied: nothing asserts the attachment from INSIDE a
+running container on the instance tier. The site tier's
+`docker/SiteDatabaseLinkLiveTest` proves that end to end over the same
+`LinkNetworkSupport` calls this lane makes, and `InstanceService.destroy`'s call to
+the attachment cleanup has the same live-only coverage
+`GameDomains.deleteForInstance` does. An instance-tier live twin is the next slice.
+
 ### Proxmox replacement
 
 "Everything we use Proxmox for" must be enumerated before the VM phase starts.

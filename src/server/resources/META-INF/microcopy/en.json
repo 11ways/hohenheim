@@ -20,11 +20,15 @@
     "scope": "violations"
   },
   "database_in_use": {
-    "text": "Database '{$name}' is attached to {$sites}; detach it from those sites first",
+    "text": "Database '{$name}' is attached to {$workloads}; detach it there first",
     "scope": "violations"
   },
   "database_missing": {
     "text": "That database does not exist",
+    "scope": "violations"
+  },
+  "database_instance_server_mismatch": {
+    "text": "Database '{$name}' runs on {$server} while the instance runs on {$instance_server}; a link network only exists on the daemon both share",
     "scope": "violations"
   },
   "database_name_required": {
@@ -2017,6 +2021,10 @@
     {
       "text": "Attached databases",
       "scope": "site_database"
+    },
+    {
+      "text": "Attached databases",
+      "scope": "instance_database"
     },
     {
       "text": "Site Domains",
@@ -7395,5 +7403,21 @@
   "dev_offline_message": {
     "text": "No dev server is currently registered for '{$name}'. Start it with the dev tunnel enabled and reload.",
     "scope": "proxy_error"
+  },
+  "instance_required": {
+    "text": "An attachment needs an instance",
+    "scope": "violations"
+  },
+  "instance_missing": {
+    "text": "That instance does not exist",
+    "scope": "violations"
+  },
+  "instance_kind_no_injection": {
+    "text": "Instance kind '{$kind}' has no link networks, so a database cannot be attached to it",
+    "scope": "violations"
+  },
+  "tenant_instance_not_managed": {
+    "text": "You do not have config authority over that instance",
+    "scope": "violations"
   }
 }

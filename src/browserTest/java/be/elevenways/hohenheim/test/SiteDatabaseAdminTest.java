@@ -177,9 +177,11 @@ class SiteDatabaseAdminTest extends HohenheimTestBase {
 
         var refused = postForm("/admin/databases/" + localDbId + "/delete", "");
         assertThat(refused.statusCode()).isEqualTo(200);   // rerender, not the post-delete redirect
-        // The refusal names the dependent site ({$sites} arg resolved).
+        // The refusal names the dependent WORKLOAD ({$workloads} arg resolved). The
+        // message stopped saying "sites" on 2026-08-08: the in-use gate counts attached
+        // instances too, so a site-only wording would have been a lie in half the cases.
         assertThat(refused.body()).contains("linkable");
-        assertThat(refused.body()).contains("detach it from those sites first");
+        assertThat(refused.body()).contains("detach it there first");
         assertThat(Models.get(DatabaseModel.class).find()
             .where(DatabaseModel.ID.eq(localDbId)).first()).isNotNull();
 

@@ -416,6 +416,15 @@ Tenant self-service allocation landed 2026-08-08 (`ccd1bd5`) and is covered in
 detail as item 10 of `pterodactyl-use-inventory.md`, with its hermetic
 664-line journey test. Not on the API: managed-database CRUD.
 
+**STATUS 2026-08-08 -- the "credential injection" half of this clause now covers
+INSTANCES too, which is what it was missing.** Injection was site-only: a database
+attached to a game server injected NOTHING, so half of Coolify's clause was met by
+one workload tier and unmet by the other. `instance_databases` (M087) closes it with
+the two-sided authority rule, resolve-time derivation into command/cloud-init/config
+files, its own `idblink` link-network lane, and an in-use refusal that now counts
+workloads rather than sites. Full argument (including why it is a SECOND join model
+and not a generalization) is item 10 of `pterodactyl-use-inventory.md`.
+
 ## 9. Domains and TLS
 
 **PARTIAL.** Serving and issuance AUTHORIZATION are implemented and proven

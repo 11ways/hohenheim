@@ -48,6 +48,7 @@ twenty-third row:
 | PARTIAL | 7 | 1, 3, 5, 9, 10, 11, 13 |
 | REJECTED | 8 | 15, 16, 17, 18, 19, 20, 21, 22 |
 | OPEN | 0 | (was 1: the localization clause, CLOSED 2026-08-08) |
+| | | Ranked-open #4, instance-to-database linkage, CLOSED 2026-08-08 (item 10) |
 | CLAIMED | 0 as a row | but three sub-verdicts are CLAIMED inside PARTIAL rows: `InstanceBackups.restoreToNew` (item 9), the durability contract of install (item 3), the file-capability enforcement matrix (item 5) |
 
 Of the 7 IMPLEMENTED rows, all 7 rest on hermetic state-asserting tests. Of the
@@ -407,6 +408,74 @@ credentials appear in that server's panel. **OPEN slice:** an
 `SiteDatabaseModel` already has, plus injection into the instance variable
 mechanism.
 
+**STATUS 2026-08-08 -- the clause is now CLOSED, and the OPEN slice above landed
+essentially as described.** Supersedes the PARTIAL verdict; the finding stays as
+the history that produced it.
+
+- `InstanceDatabaseModel` + `M087_CreateInstanceDatabases` (`instance_databases`:
+  instance_id, database_id, env_prefix). **A SECOND model, not a generalization of
+  `SiteDatabaseModel`, and the argument is evidence rather than symmetry** (the
+  model's own docblock carries it): `site_databases` has fourteen production
+  consumers and most are structurally site-shaped -- `SiteReleases` folds the links
+  into the release FINGERPRINT, `ProxyReloadHooks` reloads the proxy on a link
+  change, `DockerReconciler` resolves orphan ownership by that model id,
+  `AttentionCollector`/`DatabaseRestorePage` name the SITE, `SiteModel`'s remove
+  hook cascades. An owner-kind column would make every one of them branch. The
+  lifetimes differ too (a site link must outlive the release instances a gated
+  release mints; an instance link keys the instance), and the link-network handle
+  `dblink-<ownerId>-<dbId>` would COLLIDE across owner kinds (site 5 + db 3 versus
+  instance 5 + db 3), which is why the instance lane mints `idblink`. What IS
+  shared is the derivation: `DatabaseEnvInjection.vars`/`connectionUrl` were already
+  owner-agnostic and both lanes now enter through one `envFor`. **[code]**
+- Authority: `TenantWrites.requireInstanceLinkAuthority` -- `config` on the
+  INSTANCE and `manage` on the DATABASE, both sides re-asked when a stored link is
+  re-pointed, enforced on the model write pipeline (never the resource, for the
+  reason that class documents). `config` rather than `manage` on the instance is the
+  NARROWER reading and is argued from three existing declarations:
+  `HohenheimAccess.CONFIG` is "author what the instance IS",
+  `GameDomains.requireInstanceAuthority` already asks exactly it for the other
+  instance-side join, and `InstanceVariables.requireVariableAuthority` asks it for a
+  variable write with the argument that a variable write IS a config write -- an
+  attach is a variable write by proxy. On the database side `manage` rather than
+  `credentials`: a credentials holder can already READ the password, but only manage
+  may make the engine REACHABLE from another workload, which is what the link
+  network does. **[code]**
+- Injection: `DatabaseEnvInjection.envForInstance` derives the family at
+  `InstanceService.resolve`, stored NOWHERE, and rides `Resolved.variables()` so it
+  substitutes into `command`, `cloud_init` AND staged config files -- the Pterodactyl
+  shape (a start command naming its database). `applyToSettings` grew a third layer:
+  derived baseline < settings' own `environment_variables` < declared variables, the
+  same "operator-authored overrides" order `SiteInstances` documents for sites. **[code]**
+- Network + lifecycle: `InstanceDatabaseNetworks` (one `Egress.NONE` link network per
+  pair) REGISTERS as an `InstancePreStartHook` rather than adding a line to
+  `deploy`, so the existing completeness test covers it; `DatabaseLinkNetworks`
+  extracts what the two tiers share (the published-port correction a membership
+  change forces was too subtle to copy); `VerifyWorkloadIsolation` enumerates the new
+  handles or the sweep would sever them; `DatabaseService.provisionRuntime` rejoins
+  both tiers after a reprovision; `InstanceService.destroy` calls
+  `InstanceDatabaseLinks.deleteForInstance` explicitly because destroy SOFT-deletes
+  and fires no remove hooks. **[code]**
+- The in-use refusal on database delete now counts INSTANCES as well as sites
+  (`DatabaseResource.deleteRow`), so a tenant cannot destroy the engine out from
+  under their own running server. Without it the workload keeps its derived
+  environment until it next resolves and then simply cannot connect. **[code]**
+- Test: `src/browserTest/java/be/elevenways/hohenheim/test/database/InstanceDatabaseAttachTest.java`
+  -- 4 ordered journeys, hermetic, no assumption gate. Attacks first: a tenant
+  attaching a database they do not own, attaching to an instance they do not own, a
+  read-only teammate with VIEW on BOTH ends, and an auth ADMINISTRATOR holding no
+  hohenheim grant (the layered-enforcer check, so the refusal cannot be zenit-auth's
+  panel baseline answering). Every refusal asserts the ROW COUNT, and the credential
+  counterfactual asserts the password is absent from `instances.settings` and from
+  the instance-variable carrier while present in the derived map. Five gates were
+  reverted and observed failing. **[test]**
+
+Still open, and named rather than glossed: nothing asserts the attachment from
+INSIDE a running container. The site lane's `docker/SiteDatabaseLinkLiveTest` proves
+that end-to-end over the same `LinkNetworkSupport` calls, and the instance lane's
+own `InstanceService.destroy` CALL SITE for the cleanup is covered only by the same
+kind of live path that `GameDomains.deleteForInstance` is -- an instance-tier live
+twin is the honest next slice.
+
 ## 11. Resource quotas
 
 **PARTIAL.** Instance count, disk GB and extra NICs are enforced and proven.
@@ -716,6 +785,11 @@ Value against effort, with prerequisites, for the game-panel claim specifically.
    high for this claim -- a plugin wanting MySQL is the common game case. Effort:
    medium. Prerequisite: `SiteDatabaseModel`'s two-sided authority rule as the
    template and the instance variable mechanism as the injection target.
+   **DONE 2026-08-08** -- `instance_databases` (M087) with the two-sided rule
+   (`config` on the instance, `manage` on the database), derived-at-resolve
+   injection, its own `idblink` link-network lane on the discovered pre-start hook,
+   and the in-use refusal widened to workloads. Kept in place with its number: the
+   ranking is history, not a worklist. See item 10's STATUS block.
 5. **Close the `TenantInstanceSurfaceTest` status-only hole** (item 5). Value:
    medium-high against its cost -- it is the exact shape this document exists to
    flag, sitting in our own suite. Effort: trivial, one absence assertion.
@@ -827,7 +901,8 @@ the behaviour changes this pass DID make are in the activity-log commit, not her
    clear policy's wipe; the clear branch destroys the WORKLOAD too. Corrected.
 3. `InstanceQuotaModel.java:16-20` described the table as an instance-count
    override; it carries three caps. Corrected.
-4. The plan's minimum-claim sentence lists "per-instance database allocation" as a
+4. (CLOSED 2026-08-08 -- see item 10's STATUS block.) The plan's minimum-claim
+   sentence lists "per-instance database allocation" as a
    flat clause. What shipped in `ccd1bd5` is per-TENANT allocation with site-side
    injection and no instance-to-database link at all. Recorded as item 10 PARTIAL
    rather than quietly counted as met.
@@ -850,7 +925,7 @@ evidence.
 **The Pterodactyl replacement claim is NOT yet usable publicly**, on three
 clauses:
 
-- item 10, per-instance database allocation, is per-TENANT only;
+- item 10, per-instance database allocation, was per-TENANT only (CLOSED 2026-08-08);
 - item 11, resource quotas, has no memory dimension;
 - item 13, live stats and logs, has one test and it assumes three times.
 

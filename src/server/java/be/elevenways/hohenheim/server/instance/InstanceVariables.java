@@ -234,15 +234,28 @@ public final class InstanceVariables {
      * template's, so a substitutable image would let a variable value change the
      * effective image while the comparison still passes -- the exact laundering the
      * gate exists to refuse.
+     *
+     * AIDEV-NOTE: THREE layers, in this order: the derived baseline, then the settings'
+     * own {@code environment_variables}, then the declared variables. Anything the
+     * operator authored therefore overrides an attached database's derived family, which
+     * is the SAME order the site lane documents at {@code SiteInstances}
+     * ("injected database variables first, operator-authored ones override"). One rule
+     * across both tiers, and the safe direction: attaching a database can never clobber a
+     * value the workload already depends on.
+     *
+     * @param declared the instance's (and its environment's) own variable values
+     * @param derived  values derived at resolve time and stored NOWHERE -- an attached
+     *                 managed database's connection family
      */
     public @NonNull Map<String, Object> applyToSettings(@NonNull Map<String, Object> settings,
-                                                        @NonNull Map<String, String> variables) {
-        if (variables.isEmpty()) {
+                                                        @NonNull Map<String, String> declared,
+                                                        @NonNull Map<String, String> derived) {
+        if (declared.isEmpty() && derived.isEmpty()) {
             return settings;
         }
         Map<String, Object> applied = new LinkedHashMap<>(settings);
 
-        Map<String, String> env = new LinkedHashMap<>();
+        Map<String, String> env = new LinkedHashMap<>(derived);
         if (settings.get("environment_variables") instanceof Map<?, ?> baseline) {
             baseline.forEach((name, value) -> {
                 if (name != null && value != null) {
@@ -250,19 +263,34 @@ public final class InstanceVariables {
                 }
             });
         }
-        env.putAll(variables);
+        env.putAll(declared);
         applied.put("environment_variables", env);
 
+        Map<String, String> substitutions = layered(derived, declared);
         if (settings.get("command") instanceof String command && !command.isEmpty()) {
-            applied.put("command", substitute(command, variables));
+            applied.put("command", substitute(command, substitutions));
         }
         // Cloud-init user-data is CONTENT like a config file, so it takes the same
         // {{KEY}} substitution (secret variables included) -- never image/tag, which
         // the image policy compares verbatim.
         if (settings.get("cloud_init") instanceof String cloudInit && !cloudInit.isEmpty()) {
-            applied.put("cloud_init", substitute(cloudInit, variables));
+            applied.put("cloud_init", substitute(cloudInit, substitutions));
         }
         return applied;
+    }
+
+    /**
+     * The substitution view a deploy renders {@code {{KEY}}} tokens from: derived values
+     * underneath, declared values on top.
+     */
+    public static @NonNull Map<String, String> layered(@NonNull Map<String, String> derived,
+                                                       @NonNull Map<String, String> declared) {
+        if (derived.isEmpty()) {
+            return declared;
+        }
+        Map<String, String> layered = new LinkedHashMap<>(derived);
+        layered.putAll(declared);
+        return layered;
     }
 
     /** Replace every {@code {{KEY}}} token with its variable value (missing keys stay verbatim). */

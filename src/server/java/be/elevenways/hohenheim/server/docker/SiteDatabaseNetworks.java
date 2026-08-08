@@ -2,26 +2,19 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
-import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
-import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.LinkNetworkSupport;
-import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -29,7 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -180,8 +172,8 @@ public final class SiteDatabaseNetworks {
                 continue;
             }
             support.connectToLinkNetwork(handle, databaseHandle, List.of());
-            refreshDatabasePort(resolved.runtime()::status, resolved.serverId(),
-                databaseId, databaseHandle);
+            DatabaseLinkNetworks.refreshDatabasePort(resolved.runtime()::status,
+                resolved.serverId(), databaseId, databaseHandle);
         }
     }
 
@@ -235,8 +227,8 @@ public final class SiteDatabaseNetworks {
                 }
                 support.connectToLinkNetwork(handle, databaseHandle, List.of());
                 support.connectToLinkNetwork(handle, resolved.spec().handle(), List.of());
-                refreshDatabasePort(resolved.runtime()::status, resolved.serverId(),
-                    databaseId, databaseHandle);
+                DatabaseLinkNetworks.refreshDatabasePort(resolved.runtime()::status,
+                    resolved.serverId(), databaseId, databaseHandle);
                 touched = true;
             } catch (Exception e) {
                 Blast.log("DB-LINK: could not rejoin link network for site", siteId,
@@ -281,101 +273,16 @@ public final class SiteDatabaseNetworks {
 
     private static void sweepOnServer(int siteId, String serverName, int serverId,
                                       boolean everything) throws IOException {
-        DockerClient docker = new ServerService().clientFor(serverName);
-        DockerInstanceRuntime runtime = new DockerInstanceRuntime(docker,
-            WorkloadNetworkPolicy.forServer(serverName));
         String prefix = ControllerScope.kindPrefix(ControllerScope.KIND_DBLINK) + siteId + "-";
         SiteDatabaseModel links = Models.get(SiteDatabaseModel.class);
-        for (String network : linkNetworksOf(docker, prefix)) {
-            String handle = network.substring(0,
-                network.length() - WorkloadNetworks.SUFFIX.length());
-            Integer databaseId = trailingInt(handle);
-            boolean live = false;
-            if (!everything && databaseId != null) {
+        DatabaseLinkNetworks.sweepOnServer(prefix, serverName, serverId, everything,
+            databaseId -> {
                 for (Row link : links.findBySiteId(siteId)) {
-                    if (databaseId.equals(link.get(SiteDatabaseModel.DATABASE_ID))) {
-                        live = true;
-                        break;
+                    if (Integer.valueOf(databaseId).equals(link.get(SiteDatabaseModel.DATABASE_ID))) {
+                        return true;
                     }
                 }
-            }
-            if (live) {
-                continue;
-            }
-            runtime.removeLinkNetwork(handle);
-            Blast.log("DB-LINK: removed stale link network", network, "of site", siteId);
-            // The disconnect re-allocated the database's published port; re-observe it.
-            if (databaseId != null && DatabaseInstances.handleOf(databaseId) instanceof String h) {
-                refreshDatabasePort(runtime::status, serverId, databaseId, h);
-            }
-        }
-    }
-
-    /** Names of this site's link networks at the daemon, matched on the naming scheme. */
-    private static List<String> linkNetworksOf(DockerClient docker, String handlePrefix)
-            throws IOException {
-        List<String> names = new ArrayList<>();
-        for (Object entry : docker.listNetworks()) {
-            if (entry instanceof Map<?, ?> network
-                    && network.get("Name") instanceof String name
-                    && name.startsWith(handlePrefix) && name.endsWith(WorkloadNetworks.SUFFIX)) {
-                names.add(name);
-            }
-        }
-        return names;
-    }
-
-    /** The digits after the last dash, or null when the handle is not scheme-shaped. */
-    private static @Nullable Integer trailingInt(String handle) {
-        int dash = handle.lastIndexOf('-');
-        if (dash < 0 || dash == handle.length() - 1) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(handle.substring(dash + 1));
-        } catch (NumberFormatException notOurs) {
-            return null;
-        }
-    }
-
-    private interface StatusOf {
-        @NonNull InstanceStatus status(@NonNull String handle);
-    }
-
-    /**
-     * Re-observe a database engine's published loopback port after its network membership
-     * changed and refresh the ledger claim when it moved (the GameDomains
-     * refreshProxyPort shape). Host processes resolve the port live at spawn, so only
-     * the ledger's bookkeeping needs the correction.
-     *
-     * AIDEV-NOTE: the claim owner is the INSTANCE, not the database record, since the
-     * database tier lowered onto the runtime contract -- InstanceService.deploy writes
-     * the record-after claim and this correction must rewrite the SAME row, or the
-     * engine would end up holding two claims on one port under two different owners.
-     */
-    private static void refreshDatabasePort(StatusOf statuses, int serverId, int databaseId,
-                                            String databaseHandle) {
-        Row instance = DatabaseInstances.owned(databaseId);
-        if (instance == null) {
-            return;
-        }
-        Integer instanceId = instance.get(InstanceModel.ID);
-        InstanceStatus status = statuses.status(databaseHandle);
-        Integer fresh = status.publishedPort();
-        if (!status.running() || fresh == null || instanceId == null) {
-            return;
-        }
-        Integer recorded = null;
-        for (Row claim : PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId)) {
-            if (!PortLedger.isReleasing(claim)) {
-                recorded = claim.get(PortAllocationModel.PORT);
-                break;
-            }
-        }
-        if (Objects.equals(recorded, fresh)) {
-            return;
-        }
-        PortLedger.recordObserved(serverId, "127.0.0.1", fresh, "tcp",
-            InstanceModel.MODEL_ID, instanceId, null);
+                return false;
+            });
     }
 }

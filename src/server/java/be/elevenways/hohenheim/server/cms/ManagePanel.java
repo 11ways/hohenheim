@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProjectModel;
@@ -141,7 +142,7 @@ public final class ManagePanel extends Panel {
             new InstanceFromTemplatePage(),
             // The managed-database tier's tenant projection: allocate, read credentials
             // (its own capability, its own tab), back up and destroy your OWN databases.
-            new ManageDatabaseResource(),
+            new ManageDatabaseResource(), new ManageInstanceDatabaseResource(),
             // The project tier's tenant projection: which projects the principal is a
             // MEMBER of, and who else is in them. Both read-only -- see
             // ManageProjectResource for why a membership editor here could only refuse.
@@ -266,6 +267,14 @@ public final class ManagePanel extends Panel {
             .search(InstanceDeviceModel.NAME)
             .accessCriteria(ManagePanel::instanceDeviceScope)
             .build());
+
+        // Instance-database attachments: the same hazard once more. The row names both a
+        // workload and a credential store, so an unscoped source would tell any principal
+        // a picker rendered for which databases every other tenant's servers run on.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDatabaseModel.class)
+            .title()
+            .accessCriteria(ManagePanel::instanceDatabaseScope)
+            .build());
     }
 
     /** @return null for admins, else the devices of instances the principal manages */
@@ -276,6 +285,16 @@ public final class ManagePanel extends Panel {
         QueryPredicate predicate = ManageInstanceDeviceResource.decide(ctx).predicate();
         return predicate != null ? predicate.criteria()
             : Models.get(InstanceDeviceModel.class).matchNone();
+    }
+
+    /** @return null for admins, else the attachments of instances the principal manages */
+    static @Nullable Criteria instanceDatabaseScope(@NonNull AccessContext ctx) {
+        if (HohenheimAccess.isAdmin(ctx)) {
+            return null;
+        }
+        QueryPredicate predicate = ManageInstanceDatabaseResource.decide(ctx).predicate();
+        return predicate != null ? predicate.criteria()
+            : Models.get(InstanceDatabaseModel.class).matchNone();
     }
 
     /** @return null for admins, else the schedules of instances the principal manages */
