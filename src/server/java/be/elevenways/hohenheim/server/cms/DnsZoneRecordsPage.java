@@ -68,7 +68,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", origin + " - Records");
+        vars.put("title", CmsSupport.pageTitle(conduit, "dns_zone_records", origin));
         vars.put("zoneId", zoneId);
         vars.put("origin", origin);
         vars.put("records", records);
@@ -134,7 +134,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", origin + " - Records");
+        vars.put("title", CmsSupport.pageTitle(conduit, "dns_zone_records", origin));
         vars.put("zoneId", zoneId);
         vars.put("origin", origin);
         vars.put("peerName", peer != null ? String.valueOf(peer.get(DnsPeerModel.NAME)) : "");

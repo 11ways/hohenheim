@@ -47,7 +47,7 @@ twenty-third row:
 | IMPLEMENTED | 7 | 2, 4, 6, 7, 8, 12, 14 |
 | PARTIAL | 7 | 1, 3, 5, 9, 10, 11, 13 |
 | REJECTED | 8 | 15, 16, 17, 18, 19, 20, 21, 22 |
-| OPEN | 1 | the localization clause |
+| OPEN | 0 | (was 1: the localization clause, CLOSED 2026-08-08) |
 | CLAIMED | 0 as a row | but three sub-verdicts are CLAIMED inside PARTIAL rows: `InstanceBackups.restoreToNew` (item 9), the durability contract of install (item 3), the file-capability enforcement matrix (item 5) |
 
 Of the 7 IMPLEMENTED rows, all 7 rest on hermetic state-asserting tests. Of the
@@ -650,6 +650,48 @@ circulation.
 fixed in the 2026-08-04 wave are the template -- and until it lands the Phase 6
 gate is not met no matter what the rest of this document says.
 
+**STATUS (2026-08-08, later the same day): the clause is now MET, and the sweep
+is ENFORCED rather than merely done.** All eleven call sites above plus the two
+adjacent ones resolve through `CmsSupport.pageTitle(conduit, scope, name)` --
+microcopy key `page_title` in each page's OWN scope, en AND nl. The three pages
+the 2026-08-04 wave fixed were converted with them: their
+`{page}_title`-in-scope-`site` spelling is DELETED, because two pages of one
+record type (a zone's records and its zone file) cannot share a scope, and a
+half-converted namespace is exactly what this document exists to refuse.
+`SiteProcessesPage`'s `"PID " + ...` panel heading became `stored_log_heading`.
+
+`ErrorPages` -- the public-facing one, and therefore the one that mattered -- is
+localized off the visitor's own `Accept-Language`, parsed by the SAME
+`AcceptLanguageMiddleware.parse` the framework middleware uses (there is no
+Conduit on the proxy's raw Undertow exchange), falling back to the default
+content locale. The two operator-authored `proxy.*_message` settings still WIN
+when set -- a site owner's own copy is not translatable -- but their shipped
+English DEFAULTS are gone: blank now means "use the localized text", which is
+what a Dutch visitor to a misconfigured domain was previously denied.
+
+The SECOND bucket (nine pages whose title is a bare record name) is DECIDED, not
+deferred: those are COMPLIANT. A title that is nothing but the record's own name
+carries no translatable copy, and an instance/site/zone name is user data that is
+never translated -- the plan's own localization rule. The guard encodes exactly
+that: a title with no string literal at all passes, any literal mixed into one
+does not.
+
+Enforcement, because the eleven call sites prove a sweep does not hold on its own
+(`InstanceDevicesPage` was written after the nine-page list and inherited the
+defect from its neighbours):
+
+- `src/browserTest/java/be/elevenways/hohenheim/test/PageTitleLocalizationTest.java`
+  -- a declared `protoblast-source-guard` rule (judge mode) over the whole
+  `server/cms` package plus `ErrorPages.java`, and a second test resolving all
+  thirteen title scopes and all six proxy-error keys in en AND nl. Hermetic. **[test]**
+- `MicrocopyCatalogParsesTest.theEnglishAndDutchCatalogsCoverTheSameKeysAndScopes`
+  -- en/nl symmetry per (key, FILTER SET), not per bare key. It immediately found
+  a pre-existing asymmetry (`status`, scope `spamservice`, en only), now fixed. **[test]**
+- COUNTERFACTUALS: restoring `name + " - Devices"` on `InstanceDevicesPage` and
+  `"Bad Gateway"` in `ErrorPages` fails the guard, naming both at file:line;
+  deleting one nl entry fails both the resolution test (`nl
+  page_title[scope=dns_zone_file] -> 'page_title'`) and the symmetry test.
+
 ---
 
 ## Genuinely OPEN items, ranked
@@ -660,9 +702,11 @@ Value against effort, with prerequisites, for the game-panel claim specifically.
    live stats has exactly ONE test, that test assumes three times, and a
    regression in it is invisible. Effort: medium. Prerequisite: none;
    `FakeNativeDaemons` is the pattern and it already lives in the same package.
-2. **Localize the ten page titles** (above). Value: high -- a named gate clause,
-   and the game audience is the least English-safe. Effort: low, mechanical.
-   Prerequisite: microcopy keys in en AND nl.
+2. **Localize the ten page titles** (above). DONE 2026-08-08 -- thirteen call
+   sites resolved through one `CmsSupport.pageTitle` seam, the public-facing proxy
+   errors negotiated off Accept-Language, and a source guard that fails on the
+   next concatenated title. Kept in place with its number: the ranking is history,
+   not a worklist. See the localization section above.
 3. **A per-owner memory quota** (item 11). Value: high -- without it the
    instance-count cap does not bound what one tenant consumes, and memory is
    Pterodactyl's own quota unit. Effort: low-medium: a column, a setting, one more
@@ -765,8 +809,8 @@ effort:
 
 8. **Localization as a hard requirement.** Every operator-facing string is a
    microcopy key with en+nl catalogs, scored and filtered. Pterodactyl has
-   translations; Coolify is English-first. The gap here is our own (see the
-   localization row) but the mechanism is present everywhere rather than retrofitted.
+   translations; Coolify is English-first. The gap that used to sit here (page
+   titles built by concatenation) is closed and source-guarded as of 2026-08-08.
 
 ---
 
@@ -804,12 +848,16 @@ The inventory is CLOSED: every clause of the minimum claim has a decision and it
 evidence.
 
 **The Pterodactyl replacement claim is NOT yet usable publicly**, on three
-clauses and one gate:
+clauses:
 
 - item 10, per-instance database allocation, is per-TENANT only;
 - item 11, resource quotas, has no memory dimension;
-- item 13, live stats and logs, has one test and it assumes three times;
-- the Phase 6 gate's localization clause is unmet in ten page classes.
+- item 13, live stats and logs, has one test and it assumes three times.
+
+The fourth blocker, the Phase 6 gate's localization clause, is MET as of
+2026-08-08 (see its section above): thirteen call sites resolved through one
+microcopy seam, the public-facing proxy errors negotiated off Accept-Language,
+and a source guard that fails on the next concatenated title.
 
 Everything else is either IMPLEMENTED with a hermetic state-asserting test, or a
 REJECTION argued from evidence about this product's shape. What would block

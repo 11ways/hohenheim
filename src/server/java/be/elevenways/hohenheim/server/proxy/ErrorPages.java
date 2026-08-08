@@ -3,8 +3,13 @@ package be.elevenways.hohenheim.server.proxy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hawkeye.common.Hawkeye;
 import be.elevenways.hawkeye.common.render.RenderBlock;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.setting.ContentLocales;
+import be.elevenways.zenit.common.setting.SettingDefinition;
+import be.elevenways.zenit.server.http.AcceptLanguageMiddleware;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 
@@ -13,30 +18,43 @@ import java.util.Map;
 
 /**
  * Renders error responses for the reverse proxy using Hawkeye templates.
+ *
+ * AIDEV-NOTE: these pages ARE localized, and they are the only public-facing ones in the
+ * product -- an anonymous visitor to a misconfigured domain sees them. There is no
+ * Conduit here (the proxy answers on the raw Undertow exchange, before any Zenit
+ * request), so the locale chain is negotiated from the request's own Accept-Language
+ * through the SAME parser the framework middleware uses, falling back to the site's
+ * default content locale. The operator-authored {@code proxy.*_message} settings still
+ * WIN when set: their whole point is a site owner's own copy, which no catalog can
+ * translate. Blank (the shipped default) means "use the localized text".
  */
 public final class ErrorPages {
 
     private static final Identifier ERROR_TEMPLATE =
         Identifier.of("hohenheim", "hohenheim/error");
 
+    /** The microcopy scope every proxy error string lives in. */
+    private static final String SCOPE = "proxy_error";
+
     static void send404(HttpServerExchange exchange, String hostname) {
-        String msg = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.NOT_FOUND_MESSAGE);
-        String html = render("404", "No site configured", msg, hostname);
+        LocaleChain locales = localesOf(exchange);
+        String html = render("404", text(locales, "not_found_title"),
+            override(HohenheimSettings.Proxy.NOT_FOUND_MESSAGE, locales, "not_found_message"),
+            hostname);
 
         exchange.setStatusCode(404);
         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html; charset=UTF-8");
         exchange.getResponseSender().send(html);
     }
 
-    /**
-     * 503 for a dev-namespace subdomain with no live registration. Deliberately
-     * non-localized, matching the proxy's other error pages (they render before
-     * any locale context exists).
-     */
+    /** 503 for a dev-namespace subdomain with no live registration. */
     public static void sendDevOffline(HttpServerExchange exchange, String name) {
-        String html = render("503", "Dev site offline",
-            "No dev server is currently registered for '" + name + "'."
-                + " Start it with the dev tunnel enabled and reload.", name);
+        LocaleChain locales = localesOf(exchange);
+        String html = render("503", text(locales, "dev_offline_title"),
+            Microcopy.of("dev_offline_message").withFilter("scope", SCOPE)
+                .withArg("name", name)
+                .resolve(locales, Zenit.getMessageResolver()),
+            name);
 
         exchange.setStatusCode(503);
         exchange.getResponseHeaders().put(Headers.RETRY_AFTER, "5");
@@ -45,15 +63,39 @@ public final class ErrorPages {
     }
 
     static void send502(HttpServerExchange exchange, String message) {
-        String msg = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.UNREACHABLE_MESSAGE);
-        String html = render("502", "Bad Gateway", msg, null);
+        LocaleChain locales = localesOf(exchange);
+        String html = render("502", text(locales, "bad_gateway_title"),
+            override(HohenheimSettings.Proxy.UNREACHABLE_MESSAGE, locales,
+                "unreachable_message"),
+            null);
 
         exchange.setStatusCode(502);
         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html; charset=UTF-8");
         exchange.getResponseSender().send(html);
     }
 
-    private static String render(String statusCode, String title, String message, String hostname) {
+    /** The visitor's negotiated locale chain; a header-less client gets the site default. */
+    private static LocaleChain localesOf(HttpServerExchange exchange) {
+        LocaleChain chain = AcceptLanguageMiddleware.parse(
+            exchange.getRequestHeaders().getFirst(Headers.ACCEPT_LANGUAGE));
+        return chain.isEmpty() ? LocaleChain.of(ContentLocales.getDefault()) : chain;
+    }
+
+    /** An argument-less proxy-error string. */
+    private static String text(LocaleChain locales, String key) {
+        return Microcopy.of(key).withFilter("scope", SCOPE)
+            .resolve(locales, Zenit.getMessageResolver());
+    }
+
+    /** The operator's own copy when they set one, else the localized default. */
+    private static String override(SettingDefinition<String> setting, LocaleChain locales,
+                                  String key) {
+        String configured = HohenheimSettings.VALUES.getValue(setting);
+        return configured != null && !configured.isBlank() ? configured : text(locales, key);
+    }
+
+    private static String render(String statusCode, String title, String message,
+                                 String hostname) {
         try {
             Hawkeye hawkeye = Zenit.getHawkeye();
             var engine = hawkeye.createRenderEngine();

@@ -38,7 +38,7 @@ public final class DatabaseRestorePage implements RecordScopedPage<Row> {
                                            @NonNull Row record) {
         String name = record.get(DatabaseModel.NAME);
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", "Restore " + name);
+        vars.put("title", CmsSupport.pageTitle(conduit, "database_restore", name));
         vars.put("name", name);
         vars.put("dbUser", record.get(DatabaseModel.DB_USER));
         vars.put("dbPassword", record.get(DatabaseModel.DB_PASSWORD));

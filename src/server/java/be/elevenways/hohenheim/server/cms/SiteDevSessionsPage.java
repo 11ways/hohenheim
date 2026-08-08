@@ -53,7 +53,8 @@ public final class SiteDevSessionsPage implements RecordScopedPage<Row> {
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", site.get(SiteModel.NAME) + " - Dev sessions");
+        vars.put("title", CmsSupport.pageTitle(conduit, "dev_sessions",
+            site.get(SiteModel.NAME)));
         vars.put("siteName", site.get(SiteModel.NAME));
         vars.put("sessions", sessions);
         vars.put("recordTabs", recordTabs(conduit));

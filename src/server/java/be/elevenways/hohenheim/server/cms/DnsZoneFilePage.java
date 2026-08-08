@@ -35,7 +35,7 @@ public final class DnsZoneFilePage implements RecordScopedPage<Row> {
                                            @NonNull Row zone) {
         Map<String, Object> vars = new HashMap<>();
         String origin = zone.get(DnsZoneModel.ORIGIN);
-        vars.put("title", origin + " - Zone file");
+        vars.put("title", CmsSupport.pageTitle(conduit, "dns_zone_file", origin));
         vars.put("zoneId", zone.get(DnsZoneModel.ID));
         vars.put("origin", origin);
         vars.put("zoneText", DnsZoneFiles.export(zone));

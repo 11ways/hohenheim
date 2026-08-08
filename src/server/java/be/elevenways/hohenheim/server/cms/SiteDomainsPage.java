@@ -55,9 +55,8 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", Microcopy.of("domains_title").withFilter("scope", "site")
-            .withArg("name", String.valueOf((Object) site.get(SiteModel.NAME)))
-            .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+        vars.put("title", CmsSupport.pageTitle(conduit, "site_domains",
+            site.get(SiteModel.NAME)));
         vars.put("siteId", siteId);
         vars.put("siteName", site.get(SiteModel.NAME));
         vars.put("domains", domains);

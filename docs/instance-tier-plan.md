@@ -3418,6 +3418,14 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   `InstanceSchedulesPage`, `InstanceScheduleStepsPage`,
   `SpamserviceSampleAnalysisPage` -- admin-only pages, deliberately out of this
   wave's scope; sweep them when their surfaces are next touched.
+
+  SUPERSEDED (2026-08-08): that sweep is DONE and guarded, and the three pages
+  this block fixed were re-spelled onto the shared `CmsSupport.pageTitle` seam --
+  the `{page}_title`-in-scope-`site` keys named above no longer exist. See the
+  Phase 6 localization-wave STATUS block. "Sweep them when their surfaces are next
+  touched" is exactly what failed: `InstanceDevicesPage` was written afterwards
+  and inherited the defect, which is why the replacement is a source guard rather
+  than another list.
 - Velocity's player-info forwarding secret rides the Phase 3 secret-variable
   mechanism (an encrypted instance variable materialized into both configs),
   never a plaintext config literal.
@@ -3646,6 +3654,37 @@ symlink escape, oversized upload, bounded console ring).
   in the same pass (`HohenheimAccess` ordinary-capability count,
   `InstanceInstalls` clear-reinstall scope, `InstanceQuotaModel` dimension
   count). Do not re-derive any of this from the plan: the inventory is the record.
+
+  STATUS (2026-08-08, localization wave): the gate's "every page and error is
+  localized" clause is MET; the other three inventory blockers (per-instance
+  database allocation, a memory quota dimension, hermetic stats/log coverage) are
+  UNCHANGED and still block the public claim. What landed:
+
+  - ONE seam for record-subpage titles, `CmsSupport.pageTitle(conduit, scope,
+    name)` -> microcopy `page_title` in the page's OWN scope, en AND nl. Thirteen
+    call sites use it, which includes CONVERTING the three pages the 2026-08-04
+    block fixed: their `{page}_title`-in-scope-`site` spelling is deleted, because
+    two pages of one record type (a zone's records and its zone file) cannot share
+    a scope and a half-converted namespace is worse than either end state.
+  - `ErrorPages` is the one that actually mattered: an anonymous visitor to a
+    misconfigured domain sees it. It negotiates the locale from the request's own
+    Accept-Language through `AcceptLanguageMiddleware.parse` (no Conduit exists on
+    the proxy's raw Undertow exchange). The two `proxy.*_message` settings keep
+    operator precedence but no longer ship an English default: blank means "use
+    the localized text".
+  - The second bucket -- nine pages whose title is a BARE record name -- is
+    DECIDED COMPLIANT, not deferred. A record's own name is user data and is never
+    translated (this plan's own rule), so such a title contains no translatable
+    copy. The guard encodes the decision: no literal at all passes, any literal
+    mixed into a title does not.
+  - The sweep is ENFORCED, which is the part worth more than the edits:
+    `PageTitleLocalizationTest` declares a `protoblast-source-guard` rule over
+    `server/cms` plus `ErrorPages`, resolves every title scope and proxy-error key
+    in en and nl, and `MicrocopyCatalogParsesTest` now asserts en/nl symmetry per
+    (key, filter set) -- which immediately found and fixed a pre-existing
+    en-only entry. COUNTERFACTUALS: reintroducing `name + " - Devices"` and
+    `"Bad Gateway"` fails the guard at file:line; deleting one nl entry fails both
+    the resolution and the symmetry test.
 
 ---
 

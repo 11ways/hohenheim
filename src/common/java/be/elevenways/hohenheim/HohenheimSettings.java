@@ -130,14 +130,18 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<String> NOT_FOUND_MESSAGE = GROUP.buildSetting("not_found_message", String.class)
-            .defaultValue("There is no site configured for this domain.")
-            .description("Error message for unmatched domains")
+            .defaultValue("")
+            .description("Error message for unmatched domains. Leave blank for the "
+                + "localized default; a value here is the operator's own copy and is "
+                + "shown to every visitor in every language")
             .multiline()
             .build();
 
         public static final SettingDefinition<String> UNREACHABLE_MESSAGE = GROUP.buildSetting("unreachable_message", String.class)
-            .defaultValue("The upstream server is not responding.")
-            .description("Error message for unreachable upstreams")
+            .defaultValue("")
+            .description("Error message for unreachable upstreams. Leave blank for the "
+                + "localized default; a value here is the operator's own copy and is "
+                + "shown to every visitor in every language")
             .multiline()
             .build();
 

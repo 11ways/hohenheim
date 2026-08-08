@@ -712,8 +712,9 @@ effort:
 
 8. **Localization as a hard requirement.** Every operator-facing string is a
    microcopy key with en+nl catalogs, scored and filtered. Pterodactyl has
-   translations; Coolify is English-first. The gap here is our own (see the
-   localization row) but the mechanism is present everywhere rather than retrofitted.
+   translations; Coolify is English-first. The gap that used to sit here (page
+   titles built by concatenation) is closed and source-guarded as of 2026-08-08 --
+   see the localization section of the Pterodactyl inventory.
 
 ---
 
