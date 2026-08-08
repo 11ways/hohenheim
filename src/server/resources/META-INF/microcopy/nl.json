@@ -6522,6 +6522,10 @@
     "text": "Git-providersoort '{$kind}' is gedeclareerd maar nog niet geimplementeerd",
     "scope": "violations"
   },
+  "git_provider_base_url_required": {
+    "text": "Een Gitea-provider heeft zijn eigen basis-URL nodig; er is geen publieke standaardhost",
+    "scope": "violations"
+  },
   "preview_site_required": {
     "text": "Een preview vereist een bestaande site",
     "scope": "violations"
@@ -6578,7 +6582,7 @@
       "scope": "field"
     },
     {
-      "text": "Het API-dialect van de provider. GitLab is gedeclareerd maar nog niet geimplementeerd.",
+      "text": "Het API-dialect van de provider: GitHub, GitLab of Gitea.",
       "scope": "help"
     }
   ],
@@ -6588,7 +6592,7 @@
       "scope": "field"
     },
     {
-      "text": "Leeg voor de publieke host (github.com); instellen voor zelfgehoste installaties.",
+      "text": "Leeg voor de publieke host (github.com, gitlab.com); verplicht voor Gitea en voor zelfgehoste installaties.",
       "scope": "help"
     }
   ],

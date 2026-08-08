@@ -49,7 +49,7 @@ Thirteen numbered clauses, plus three argued rejections and one cross-reference:
 | PARTIAL | 4 | 3, 5, 9, 12 |
 | REJECTED | 3 | A (compose runtime), C (large service marketplace), D (multi-server orchestration) |
 | OPEN | 0 as a row | three OPEN SLICES remain, named inside PARTIAL rows: ACME issuance proof (9), site/database count quotas (12), the CLI test wiring (13) |
-| CLAIMED | 2 sub-verdicts | Gitea webhook support (item 3), ACME certificate acquisition (item 9) |
+| CLAIMED | 1 sub-verdict | ACME certificate acquisition (item 9). Gitea (item 3) moved CLAIMED -> IMPLEMENTED 2026-08-08 |
 
 Counts updated 2026-08-08: items 2 and 10 moved PARTIAL -> IMPLEMENTED when the
 two defects this document found were fixed (build isolation, and a named volume
@@ -221,6 +221,68 @@ GitLab as though it were a supported provider; the class two lines below refuses
 it by name. Anyone auditing "which providers do we support" from that docblock
 gets the wrong answer.
 
+**STATUS 2026-08-08 -- CLOSED, and the half-wiring turned out to hide a
+PRODUCTION-DEPLOY defect that was never Gitea-specific.** Supersedes the two
+paragraphs above; they stay as the finding that led here.
+
+- Gitea is now a real provider kind: `GitProviderModel.KIND_GITEA` with its enum
+  value, `server/source/GiteaProviderClient.java` on the shared
+  `ApiProviderClient`, and one branch in `GitProviders.clientFor`. Everything
+  downstream was already kind-agnostic, so the repository/branch pickers, the
+  connection test and `credentialEnv` needed NO change -- which is the evidence
+  that the gap really was one missing branch. Wire shapes were taken from the
+  Gitea source, not assumed from GitHub's: `page`+`limit` pagination (not
+  `per_page`), `/api/v1/user/repos`, plain (never percent-encoded) `owner/repo`
+  segments with a THIRD segment refused because Gitea has no subgroups, and
+  `CommitStatusState` = pending/success/error/failure/warning so FAILURE is
+  `"failure"` (GitHub's word, not GitLab's `"failed"`). **[code]**
+- A blank `base_url` is a NAMED refusal (`git_provider_base_url_required`), not a
+  default. github.com and gitlab.com are hosts an operator obviously meant;
+  gitea.com is not, so defaulting would aim a stored token at a third-party forge
+  nobody named. **[code]**
+- The clone credential puts the token in the PASSWORD position with a fixed
+  username, per `services/auth/basic.go` ("Assume password is token": any
+  non-empty password that is not the literal `x-oauth-basic` is looked up as an
+  access token, whatever the username). **[code]**
+- **Correction to this document:** the claim above that "a Gitea delivery folds
+  for replay on `body:` + sha256(body)" and that `eventOf` cannot see its events
+  was WRONG for any current Gitea. `services/webhook/deliver.go`'s
+  `addDefaultHeaders` emits the Gitea, Gogs AND GitHub-compatible header sets on
+  every delivery -- `X-GitHub-Event`, `X-GitHub-Delivery` and
+  `X-Hub-Signature-256: sha256=<hex>` included -- so Gitea deliveries already rode
+  the GitHub branches of `validateSignature`, `deliveryKeyOf` and `eventOf`, and
+  `X-Gitea-Signature` (raw hex, no prefix -- that part of the claim IS right) was
+  effectively unreachable. The vendor headers are now read anyway, for a forge or
+  a proxy that forwards only its own set. **[code]**
+- **Live defect found and FIXED (this is the important half): any event whose
+  payload carries no `ref` queued a PRODUCTION deploy.** `handlePush` gated the
+  branch comparison on `!pushedRef.isEmpty()`, so a correctly signed delivery of
+  an unmodelled event -- an issue, a release, a star, a review comment -- skipped
+  the branch check entirely and reached `enqueueDeploy("webhook")`. Reachable on
+  ALL THREE providers (GitHub `issues`, GitLab `Issue Hook`, Gitea `release`), so
+  the GitLab merge-request mapping recorded at item 5 closed one event and left the
+  fall-through open. A missing `ref` is now `ignored_not_a_push`: every provider's
+  push payload carries one, so its absence means "not a push", never "any branch".
+  **[code]**
+- **Second defect FIXED: Gitea's pull-request commit action is spelled
+  `synchronized`**, not GitHub's `synchronize` (`HookIssueSynchronized`), so a new
+  commit on a Gitea pull request answered 200 `ignored_pr_action` and rebuilt
+  nothing -- the preview stayed pinned at the sha it was opened with. Silent
+  success, the same shape as the unmapped-event defect one layer down. **[code]**
+- Test: `src/browserTest/java/be/elevenways/hohenheim/test/source/GiteaProviderClientTest.java`
+  (7 tests, fake v1 API, asserted on captured traffic; `everyDeclaredProviderKindConstructsAClient`
+  is the anti-drift guard that makes "declared in the dropdown, refused by the
+  funnel" fail from now on) plus two journeys in `GitWebhookSecurityTest`
+  (`anEventCarryingNoRefIsNotAPushAndNeverQueuesAProductionDeploy` asserting the
+  deployment table stayed EMPTY, and
+  `giteaDeliveriesReachTheSameLanesUnderItsOwnHeadersAndSpellings`). Every gate has
+  a reverted-and-observed counterfactual; the no-ref one answered
+  `{"status":"queued"}` before the fix. All hermetic, none skipped. **[test]**
+
+The item-3 sub-verdict for Gitea therefore moves CLAIMED -> IMPLEMENTED. Still
+genuinely OPEN in item 3, unchanged: outbound PROVISIONING (deploy keys, webhook
+registration) for every provider.
+
 ## 4. Projects and environments
 
 **IMPLEMENTED.** The cleanest capability in this document, and its test is not
@@ -260,7 +322,9 @@ create.**
 
 The only automatic trigger is a change-request event -- `pull_request`
 (GitHub/Gitea) or `Merge Request Hook` (GitLab),
-`GitWebhookHandler.java:387-390`. A PUSH to a branch never creates a preview
+`GitWebhookHandler.java:387-390`. (2026-08-08: Gitea's `pull_request` reached this
+lane but its REDEPLOY action, spelled `synchronized`, did not; see item 3's STATUS
+block. Previews on Gitea were created once and never rebuilt.) A PUSH to a branch never creates a preview
 (`:213-249`). Previews are opt-in per site (`previews_enabled`, `:218`) and
 refused for anything but `hohenheim:docker` (`PreviewDeployments.java:75`). The
 only non-webhook call sites are teardown.
@@ -744,7 +808,18 @@ Documentation defects, all corrected in place:
 4. `server/source/GitProviders.java:18-24` lists Gitea alongside GitHub and GitLab
    as though it were a supported provider; the class two lines below refuses
    `gitea` by name. Anyone auditing provider support from that docblock gets the
-   wrong answer.
+   wrong answer. **CLOSED 2026-08-08 the other way round: rather than narrow the
+   docblock, Gitea became a real kind (see item 3's STATUS block). Hunting for the
+   half-wiring is what surfaced defect 5 below.**
+
+**Defect 5 (behaviour, FIXED 2026-08-08, found while closing item 3's Gitea gap):
+an event carrying no `ref` queued a PRODUCTION deploy.** `GitWebhookHandler`'s
+push lane compared the branch only `if (!pushedRef.isEmpty())`, so a correctly
+signed delivery of any event this handler does not model -- GitHub `issues`,
+GitLab `Issue Hook`, Gitea `release` -- fell through to `enqueueDeploy("webhook")`
+on the site's bound branch. The GitLab merge-request mapping (item 5) had closed
+exactly one event of this family and left the fall-through itself open. Fixed with
+a test whose counterfactual observed the pre-fix `{"status":"queued"}`.
 
 And the plan sentence itself (`instance-tier-plan.md:71-80`) lists "build
 isolation ...", "domains/TLS" and "persistent storage" as flat clauses when all

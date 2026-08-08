@@ -33,6 +33,14 @@ public class GitProviderModel extends Model {
     /** {@link #KIND} of a GitLab-compatible provider (gitlab.com or self-hosted). */
     public static final String KIND_GITLAB = "gitlab";
 
+    /**
+     * {@link #KIND} of a Gitea-compatible provider (Gitea, Forgejo, Gogs descendants).
+     * Unlike the other two this kind has NO public default host: {@link #BASE_URL} is
+     * required, because defaulting would send a stored token to a third-party forge the
+     * operator never named.
+     */
+    public static final String KIND_GITEA = "gitea";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     /** Never localized: a provider name is operator data. */
@@ -44,6 +52,7 @@ public class GitProviderModel extends Model {
     public static final EnumField KIND = SCHEMA.addField(EnumField.builder("kind")
         .value(KIND_GITHUB, v -> v.displayName("GitHub").icon("github").color("info"))
         .value(KIND_GITLAB, v -> v.displayName("GitLab").icon("gitlab").color("warning"))
+        .value(KIND_GITEA, v -> v.displayName("Gitea").icon("gitea").color("success"))
         .defaultValue(KIND_GITHUB)
         .label(HohenheimFormCopy.label("provider_kind"))
         .help(HohenheimFormCopy.help("provider_kind"))
