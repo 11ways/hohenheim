@@ -265,6 +265,22 @@ public class HohenheimSettings {
             .description("Use Let's Encrypt staging server")
             .build();
 
+        /**
+         * The ACME directory to order from; blank means Let's Encrypt (staging when
+         * {@link #LETSENCRYPT_STAGING} is on).
+         *
+         * AIDEV-NOTE: this exists because the directory used to be a hardcoded
+         * {@code acme://letsencrypt.org} in AcmeService.ensureAccount, which made an
+         * internal ACME CA (step-ca, an enterprise CA, a Pebble in CI) unreachable at any
+         * amount of configuration -- and made every test of issuance either impossible or
+         * a request to the real Let's Encrypt. One setting serves both.
+         */
+        public static final SettingDefinition<String> ACME_DIRECTORY_URL = GROUP
+            .buildSetting("acme_directory_url", String.class)
+            .description("ACME directory URL of the certificate authority; empty uses "
+                + "Let's Encrypt (production or staging per the staging switch)")
+            .build();
+
         public static final SettingDefinition<String> DNS_HOOK_COMMAND = GROUP.buildSetting("dns_hook_command", String.class)
             .description("Executable DNS-01 hook; called as: command present|cleanup record-name record-value")
             .restartRequired()
