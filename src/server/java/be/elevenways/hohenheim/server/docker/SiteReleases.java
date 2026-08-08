@@ -245,7 +245,17 @@ public final class SiteReleases {
                                                       @NonNull String siteFingerprint) {
         int servingId = serving.get(InstanceModel.ID);
         InstanceStatus oldLive = new InstanceService().liveStatus(servingId);
-        boolean protecting = oldLive.running() && oldLive.publishedPort() != null;
+        // AIDEV-NOTE: workloadDead() is part of this test, not decoration. A container the
+        // daemon reports RUNNING whose process was OOM-killed has NOTHING worth protecting:
+        // with it counted as "protecting", an unchanged converge took the fingerprint-adopt
+        // branch below, returned the same dead release and recorded the operation SUCCEEDED
+        // ("spec unchanged; ... without a deploy"), so the reuse lane's own OOMKilled
+        // refusal (SiteInstances.reusableStatus) achieved nothing and the site kept
+        // pointing at a dead workload forever. Not protecting means the honest thing
+        // happens instead: redeploy in place, no probe gate, because there is no live
+        // traffic to gate against.
+        boolean protecting = oldLive.running() && oldLive.publishedPort() != null
+            && !oldLive.workloadDead();
 
         Row op = newOperation(ReleaseOperationModel.KIND_RELEASE, siteId,
             siteFingerprint, siteFingerprint);
